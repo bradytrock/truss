@@ -62,13 +62,53 @@ export const ACTIVITY_TYPES = [
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 
+export const SEAT_ROLES = [
+  "company_admin",
+  "business_development",
+  "team_lead",
+  "team_admin",
+  "project_manager",
+  "estimator",
+  "superintendent",
+] as const;
+
+export type SeatRole = (typeof SEAT_ROLES)[number];
+
+export const SEAT_ROLE_LABELS: Record<SeatRole, string> = {
+  company_admin: "Company admin",
+  business_development: "Business development",
+  team_lead: "Team lead",
+  team_admin: "Team administrator",
+  project_manager: "Project manager",
+  estimator: "Estimator",
+  superintendent: "Superintendent",
+};
+
 export interface CurrentUser {
   id: string;
   companyId: string;
+  staffId: string;
   name: string;
   title: string;
   company: string;
   initials: string;
+  role: SeatRole;
+  teamId: string | null;
+}
+
+export interface StaffMember {
+  id: string;
+  name: string;
+  title: string;
+  role: SeatRole;
+  teamId: string | null;
+  initials: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  leadStaffId: string;
 }
 
 export interface Client {
@@ -87,6 +127,8 @@ export interface Contact {
   title: string;
   email: string;
   phone: string;
+  ownerStaffId: string;
+  isReferralPartner: boolean;
 }
 
 export interface Opportunity {
@@ -106,6 +148,7 @@ export interface Opportunity {
   nextStep: string;
   createdAt: string;
   lostReason?: string;
+  ownerStaffId: string;
 }
 
 export interface Job {
@@ -120,6 +163,7 @@ export interface Job {
   superintendent: string;
   projectManager: string;
   location: string;
+  ownerStaffId: string;
 }
 
 export interface Activity {
@@ -275,6 +319,8 @@ export interface JobPhoto {
 }
 
 export interface CrmState {
+  staff: StaffMember[];
+  teams: Team[];
   clients: Client[];
   contacts: Contact[];
   opportunities: Opportunity[];
@@ -393,11 +439,69 @@ export const PHOTO_CATEGORY_LABELS: Record<PhotoCategory, string> = {
   issue: "Issue",
 };
 
-export const TEAM = [
-  "Jordan Hale",
-  "Maya Chen",
-  "Priya Shah",
-  "Luis Ortega",
-  "Elena Voss",
-  "Tom Brennan",
-] as const;
+export const NORTHLINE_TEAMS: Team[] = [
+  { id: "team_field", name: "Field operations", leadStaffId: "staff_luis" },
+  { id: "team_pursuits", name: "Healthcare & interiors", leadStaffId: "staff_maya" },
+];
+
+export const NORTHLINE_STAFF: StaffMember[] = [
+  {
+    id: "staff_jordan",
+    name: "Jordan Hale",
+    title: "Company admin",
+    role: "company_admin",
+    teamId: null,
+    initials: "JH",
+  },
+  {
+    id: "staff_priya",
+    name: "Priya Shah",
+    title: "Director of Business Development",
+    role: "business_development",
+    teamId: null,
+    initials: "PS",
+  },
+  {
+    id: "staff_luis",
+    name: "Luis Ortega",
+    title: "Team lead, Field operations",
+    role: "team_lead",
+    teamId: "team_field",
+    initials: "LO",
+  },
+  {
+    id: "staff_maya",
+    name: "Maya Chen",
+    title: "Team administrator, Healthcare & interiors",
+    role: "team_admin",
+    teamId: "team_pursuits",
+    initials: "MC",
+  },
+  {
+    id: "staff_elena",
+    name: "Elena Voss",
+    title: "Project manager",
+    role: "project_manager",
+    teamId: "team_field",
+    initials: "EV",
+  },
+  {
+    id: "staff_tom",
+    name: "Tom Brennan",
+    title: "Superintendent",
+    role: "superintendent",
+    teamId: "team_field",
+    initials: "TB",
+  },
+];
+
+export const TEAM = NORTHLINE_STAFF.map((member) => member.name);
+
+export function staffByName(name: string, roster: StaffMember[] = NORTHLINE_STAFF) {
+  return roster.find((member) => member.name === name);
+}
+
+export function initialsFromName(name: string) {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "TR";
+}

@@ -1,0 +1,211 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo } from "react";
+import { BarChart3 } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
+import { JobStatusBadge } from "@/components/status-badge";
+import { useCrm } from "@/lib/crm-store";
+import { formatCurrency, formatCurrencyFull, formatRelative } from "@/lib/format";
+import { buildReports } from "@/lib/reports";
+import { SEAT_ROLE_LABELS } from "@/lib/types";
+import { accessScope, canViewReports } from "@/lib/visibility";
+
+export default function ReportsPage() {
+  const crm = useCrm();
+  const viewer = crm.viewer;
+
+  const report = useMemo(() => {
+    if (!viewer) return null;
+    return buildReports(crm.book, viewer);
+  }, [crm.book, viewer]);
+
+  if (!crm.hydrated) return <LoadingScreen />;
+
+  if (!viewer || !canViewReports(viewer.role)) {
+    return (
+      <EmptyState
+        icon={<BarChart3 className="size-5" />}
+        title="Reports are restricted"
+        description="Project managers and field seats work from their own jobs. Company admin, business development, and team leads run reports."
+        action={
+          <Link href="/" className="text-sm font-medium text-primary hover:underline">
+            Back to home
+          </Link>
+        }
+      />
+    );
+  }
+
+  if (!report) return <LoadingScreen />;
+
+  const scope = accessScope(viewer.role);
+  const isBd = viewer.role === "business_development";
+  const showTeamActivity = scope === "team" || scope === "company";
+
+  return (
+    <div className="space-y-5">
+      {crm.hydrateError ? (
+        <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.resetDemo()} />
+      ) : null}
+      <PageHeader
+        eyebrow="Reporting"
+        title={isBd ? "Business development" : scope === "team" ? "Team reports" : "Company reports"}
+        description={
+          isBd
+            ? `Restricted view for ${report.year}: open jobs, closed jobs year-to-date, referral partners in each PM’s book, and YTD revenue.`
+            : scope === "team"
+              ? "Every job owned by your team, plus activity from people assigned to you. Login As a teammate to inspect their book."
+              : "Company-wide jobs, revenue, and team activity."
+        }
+      />
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Kpi label="Open jobs" value={String(report.openJobs.length)} hint="Precon, in progress, punch" />
+        <Kpi
+          label={`Closed jobs ${report.year}`}
+          value={String(report.closedYtd.length)}
+          hint="Substantial completion this year"
+        />
+        <Kpi
+          label="Referral partners"
+          value={String(report.referralByPm.reduce((sum, row) => sum + row.referralPartners, 0))}
+          hint="In project managers’ books"
+        />
+        <Kpi label={`YTD revenue`} value={formatCurrency(report.ytdRevenue)} hint="Payments received this year" />
+      </div>
+
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Referral partners by PM</CardTitle>
+          <CardDescription>
+            Count of people marked as referral partners in each project manager’s contact book.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Project manager</TableHead>
+                <TableHead>Team</TableHead>
+                <TableHead className="text-right">Contacts</TableHead>
+                <TableHead className="text-right">Referral partners</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {report.referralByPm.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-muted-foreground">
+                    No project managers in this company yet.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                report.referralByPm.map((row) => {
+                  const team = crm.book.teams.find((item) => item.id === row.staff.teamId);
+                  return (
+                    <TableRow key={row.staff.id}>
+                      <TableCell>
+                        <p className="font-medium">{row.staff.name}</p>
+                        <p className="text-xs text-muted-foreground">{SEAT_ROLE_LABELS[row.staff.role]}</p>
+                      </TableCell>
+                      <TableCell>{team?.name ?? "—"}</TableCell>
+                      <TableCell className="text-right tabular-nums">{row.contacts}</TableCell>
+                      <TableCell className="text-right tabular-nums">{row.referralPartners}</TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>{isBd ? "Open jobs" : "Jobs in this view"}</CardTitle>
+          <CardDescription>
+            {isBd
+              ? "Business development sees every job. Detail below is the open book."
+              : "Jobs this seat is allowed to report on."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Job</TableHead>
+                <TableHead>PM</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Contract</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(isBd ? report.openJobs : report.jobs).map((job) => (
+                <TableRow key={job.id}>
+                  <TableCell>
+                    <Link href={`/jobs/${job.id}`} className="font-medium hover:underline">
+                      {job.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell>{job.projectManager}</TableCell>
+                  <TableCell>
+                    <JobStatusBadge status={job.status} />
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatCurrencyFull(job.contractValue)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {showTeamActivity && !isBd ? (
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Team activity</CardTitle>
+            <CardDescription>Notes, calls, and stage changes from people assigned to this team.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {report.activity.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No activity logged for this team yet.</p>
+            ) : (
+              <ul className="divide-y">
+                {report.activity.slice(0, 12).map((item) => (
+                  <li key={item.id} className="py-3 first:pt-0">
+                    <p className="text-sm">{item.body}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {item.author} · {formatRelative(item.createdAt)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
+  );
+}
+
+function Kpi({ label, value, hint }: { label: string; value: string; hint: string }) {
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <CardTitle className="text-xl tabular-nums">{value}</CardTitle>
+        <CardDescription>{hint}</CardDescription>
+      </CardHeader>
+    </Card>
+  );
+}

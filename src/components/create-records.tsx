@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -248,11 +249,12 @@ export function CreateClientDialog({
   const [contactName, setContactName] = useState("");
   const [contactTitle, setContactTitle] = useState("");
   const [notes, setNotes] = useState("");
+  const [referral, setReferral] = useState(false);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!name.trim()) {
-      toast.error("Company name is required.");
+    if (!contactName.trim() || !name.trim()) {
+      toast.error("A person and company are required.");
       return;
     }
     try {
@@ -262,14 +264,16 @@ export function CreateClientDialog({
         city,
         state,
         notes,
-        contactName: contactName.trim() || undefined,
+        contactName: contactName.trim(),
         contactTitle: contactTitle.trim() || undefined,
+        isReferralPartner: referral,
       });
-      toast.success(`Client added: ${name.trim()}`);
+      toast.success(`Contact added: ${contactName.trim()}`);
       onOpenChange(false);
       setName("");
       setContactName("");
       setNotes("");
+      setReferral(false);
     } catch {
       // Store already toasted the error.
     }
@@ -279,9 +283,9 @@ export function CreateClientDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>New client</DialogTitle>
+          <DialogTitle>New contact</DialogTitle>
           <DialogDescription>
-            Owners, developers, agencies, and the architects who put you on the list.
+            Add a person to the contact book. We keep the company on file so jobs and invoices still have an owner.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-3">
@@ -327,12 +331,12 @@ export function CreateClientDialog({
             </Field>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Primary contact" htmlFor="cli-contact">
+            <Field label="Name" htmlFor="cli-contact">
               <Input
                 id="cli-contact"
                 value={contactName}
                 onChange={(event) => setContactName(event.target.value)}
-                placeholder="Optional"
+                placeholder="e.g. Ava Lindstrom"
               />
             </Field>
             <Field label="Title" htmlFor="cli-title">
@@ -340,10 +344,17 @@ export function CreateClientDialog({
                 id="cli-title"
                 value={contactTitle}
                 onChange={(event) => setContactTitle(event.target.value)}
-                placeholder="Optional"
+                placeholder="VP of Development"
               />
             </Field>
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={referral}
+              onCheckedChange={(value) => setReferral(Boolean(value))}
+            />
+            Referral partner — counts in the PM’s book for BD reports
+          </label>
           <Field label="Notes" htmlFor="cli-notes">
             <Textarea
               id="cli-notes"
@@ -356,7 +367,7 @@ export function CreateClientDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit">Add client</Button>
+            <Button type="submit">Add contact</Button>
           </DialogFooter>
         </form>
       </DialogContent>

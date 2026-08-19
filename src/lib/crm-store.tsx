@@ -36,10 +36,14 @@ import {
   opportunityPatch,
 } from "@/lib/supabase/mappers";
 import {
+  NORTHLINE_STAFF,
   STAGE_LABELS,
   STAGE_PROBABILITY,
+  initialsFromName,
+  staffByName,
   type ActivityType,
   type Client,
+  type Contact,
   type CrmState,
   type CurrentUser,
   type Estimate,
@@ -50,10 +54,14 @@ import {
   type PhotoCategory,
   type PipelineStage,
   type ScheduleEvent,
-  TEAM,
+  type SeatRole,
+  type StaffMember,
 } from "@/lib/types";
+import { canLoginAs, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 
 const emptyState: CrmState = {
+  staff: [],
+  teams: [],
   clients: [],
   contacts: [],
   opportunities: [],
@@ -70,23 +78,42 @@ const emptyState: CrmState = {
   photos: [],
 };
 
+function userFromStaff(
+  staff: StaffMember,
+  extras: { id: string; companyId: string; company: string }
+): CurrentUser {
+  return {
+    id: extras.id,
+    companyId: extras.companyId,
+    staffId: staff.id,
+    name: staff.name,
+    title: staff.title,
+    company: extras.company,
+    initials: staff.initials || initialsFromName(staff.name),
+    role: staff.role,
+    teamId: staff.teamId,
+  };
+}
+
 const guestUser: CurrentUser = {
   id: "",
   companyId: "",
+  staffId: "",
   name: "Guest",
   title: "",
   company: "Truss",
   initials: "TR",
+  role: "project_manager",
+  teamId: null,
 };
 
-const northlineUser: CurrentUser = {
+const northlineUser = userFromStaff(NORTHLINE_STAFF[0], {
   id: "local",
   companyId: "local",
-  name: "Jordan Hale",
-  title: "VP, Preconstruction",
   company: "Northline Construction",
-  initials: "JH",
-};
+});
+
+const DEMO_STAFF_KEY = "truss.demoStaffId";
 
 function requireClient() {
   if (!isSupabaseConfigured()) {
@@ -98,12 +125,21 @@ function requireClient() {
 
 type CrmContextValue = CrmState & {
   user: CurrentUser;
+  viewer: StaffMember | undefined;
+  effectiveStaff: StaffMember | undefined;
+  impersonatedStaff: StaffMember | undefined;
+  loginAsOptions: StaffMember[];
+  scopeLabel: string;
   teamMembers: string[];
+  book: CrmState;
   configured: boolean;
   hydrated: boolean;
   hydrateError: string | null;
+  switchSeat: (staffId: string) => void;
+  loginAs: (staffId: string) => void;
+  stopLoginAs: () => void;
   getClient: (id: string) => Client | undefined;
-  getContact: (id: string) => CrmState["contacts"][number] | undefined;
+  getContact: (id: string) => Contact | undefined;
   getOpportunity: (id: string) => Opportunity | undefined;
   getJob: (id: string) => Job | undefined;
   getEstimate: (id: string) => Estimate | undefined;
@@ -117,12 +153,19 @@ type CrmContextValue = CrmState & {
   updateOpportunity: (id: string, patch: Partial<Opportunity>) => Promise<void>;
   updateJob: (id: string, patch: Partial<Job>) => Promise<void>;
   addOpportunity: (
-    input: Omit<Opportunity, "id" | "createdAt" | "winProbability">
+    input: Omit<Opportunity, "id" | "createdAt" | "winProbability" | "ownerStaffId"> & {
+      ownerStaffId?: string;
+    }
   ) => Promise<Opportunity>;
   addClient: (
-    input: Omit<Client, "id"> & { contactName?: string; contactTitle?: string }
+    input: Omit<Client, "id"> & {
+      contactName?: string;
+      contactTitle?: string;
+      isReferralPartner?: boolean;
+    }
   ) => Promise<Client>;
-  addJob: (input: Omit<Job, "id">) => Promise<Job>;
+  addContact: (input: Omit<Contact, "id">) => Promise<Contact>;
+  addJob: (input: Omit<Job, "id" | "ownerStaffId"> & { ownerStaffId?: string }) => Promise<Job>;
   addActivity: (input: {
     entityType: "opportunity" | "job" | "client";
     entityId: string;
@@ -193,7 +236,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured();
   const [state, setState] = useState<CrmState>(configured ? emptyState : structuredClone(seedState));
   const [user, setUser] = useState<CurrentUser>(configured ? guestUser : northlineUser);
-  const [teamMembers, setTeamMembers] = useState<string[]>(configured ? [] : [...TEAM]);
+  const [impersonatedStaffId, setImpersonatedStaffId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(!configured);
   const [hydrateError, setHydrateError] = useState<string | null>(null);
   const seeding = useRef(false);
@@ -249,15 +292,24 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      const roster = book.state.staff;
+      const matched =
+        roster.find((member) => member.name === profile.full_name) ||
+        roster.find((member) => member.role === ((profile.role as SeatRole | undefined) ?? "company_admin")) ||
+        roster.find((member) => member.role === "company_admin") ||
+        roster[0];
+      const role = (profile.role as SeatRole | undefined) ?? matched?.role ?? "company_admin";
       setUser({
         id: profile.id,
         companyId,
+        staffId: matched?.id ?? "",
         name: profile.full_name,
         title: profile.title,
         company: company?.name ?? "Truss",
         initials: profile.initials,
+        role,
+        teamId: matched?.teamId ?? null,
       });
-      setTeamMembers(book.team);
       setState(book.state);
       setHydrateError(null);
       setHydrated(true);
@@ -286,6 +338,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       "activities",
       "tasks",
       "team_members",
+      "teams",
       "catalog_items",
       "estimates",
       "estimate_lines",
@@ -323,34 +376,136 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     };
   }, [configured, load, user.companyId, user.id]);
 
+  useEffect(() => {
+    if (configured) return;
+    const timer = window.setTimeout(() => {
+      try {
+        const saved = window.localStorage.getItem(DEMO_STAFF_KEY);
+        const member = state.staff.find((item) => item.id === saved) ?? state.staff[0];
+        if (!member) return;
+        setUser((current) =>
+          current.staffId === member.id
+            ? current
+            : userFromStaff(member, {
+                id: current.id || "local",
+                companyId: current.companyId || "local",
+                company: current.company || "Northline Construction",
+              })
+        );
+      } catch {
+        // ignore storage
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once from seed
+  }, [configured]);
+
+  const viewer = useMemo(
+    () =>
+      state.staff.find((member) => member.id === user.staffId) ??
+      state.staff.find((member) => member.name === user.name) ??
+      state.staff[0],
+    [state.staff, user.name, user.staffId]
+  );
+  const impersonatedStaff = useMemo(
+    () => state.staff.find((member) => member.id === impersonatedStaffId),
+    [impersonatedStaffId, state.staff]
+  );
+  const effectiveStaff = impersonatedStaff ?? viewer;
+  const scoped = useMemo(() => scopeBook(state, effectiveStaff), [effectiveStaff, state]);
+  const loginAsOptions = useMemo(
+    () => (viewer ? loginAsTargets(viewer, state.staff) : []),
+    [state.staff, viewer]
+  );
+  const teamMembers = useMemo(() => state.staff.map((member) => member.name), [state.staff]);
+  const displayUser = useMemo(() => {
+    if (!effectiveStaff) return user;
+    return {
+      ...user,
+      staffId: effectiveStaff.id,
+      name: effectiveStaff.name,
+      title: impersonatedStaff
+        ? `${effectiveStaff.title} · via ${viewer?.name ?? user.name}`
+        : effectiveStaff.title,
+      initials: effectiveStaff.initials,
+      role: effectiveStaff.role,
+      teamId: effectiveStaff.teamId,
+    };
+  }, [effectiveStaff, impersonatedStaff, user, viewer]);
+
+  const switchSeat = useCallback(
+    (staffId: string) => {
+      const member = state.staff.find((item) => item.id === staffId);
+      if (!member) return;
+      setImpersonatedStaffId(null);
+      setUser(
+        userFromStaff(member, {
+          id: user.id || "local",
+          companyId: user.companyId || "local",
+          company: user.company || "Northline Construction",
+        })
+      );
+      try {
+        window.localStorage.setItem(DEMO_STAFF_KEY, member.id);
+      } catch {
+        // ignore
+      }
+      toast.success(`Viewing as ${member.name}`);
+    },
+    [state.staff, user.company, user.companyId, user.id]
+  );
+
+  const loginAs = useCallback(
+    (staffId: string) => {
+      if (!viewer || !canLoginAs(viewer)) {
+        toast.error("Your seat cannot log in as another user.");
+        return;
+      }
+      const allowed = loginAsTargets(viewer, state.staff).some((member) => member.id === staffId);
+      if (!allowed) {
+        toast.error("You can only log in as someone on your team.");
+        return;
+      }
+      const member = state.staff.find((item) => item.id === staffId);
+      if (!member) return;
+      setImpersonatedStaffId(member.id);
+      toast.success(`Logged in as ${member.name}`);
+    },
+    [state.staff, viewer]
+  );
+
+  const stopLoginAs = useCallback(() => {
+    setImpersonatedStaffId(null);
+  }, []);
+
   const getClient = useCallback(
-    (id: string) => state.clients.find((client) => client.id === id),
-    [state.clients]
+    (id: string) => scoped.clients.find((client) => client.id === id),
+    [scoped.clients]
   );
   const getContact = useCallback(
-    (id: string) => state.contacts.find((contact) => contact.id === id),
-    [state.contacts]
+    (id: string) => scoped.contacts.find((contact) => contact.id === id),
+    [scoped.contacts]
   );
   const getOpportunity = useCallback(
-    (id: string) => state.opportunities.find((opportunity) => opportunity.id === id),
-    [state.opportunities]
+    (id: string) => scoped.opportunities.find((opportunity) => opportunity.id === id),
+    [scoped.opportunities]
   );
   const getJob = useCallback(
-    (id: string) => state.jobs.find((job) => job.id === id),
-    [state.jobs]
+    (id: string) => scoped.jobs.find((job) => job.id === id),
+    [scoped.jobs]
   );
   const getEstimate = useCallback(
-    (id: string) => state.estimates.find((estimate) => estimate.id === id),
-    [state.estimates]
+    (id: string) => scoped.estimates.find((estimate) => estimate.id === id),
+    [scoped.estimates]
   );
   const getInvoice = useCallback(
-    (id: string) => state.invoices.find((invoice) => invoice.id === id),
-    [state.invoices]
+    (id: string) => scoped.invoices.find((invoice) => invoice.id === id),
+    [scoped.invoices]
   );
   const jobForOpportunity = useCallback(
     (opportunityId: string) =>
-      state.jobs.find((job) => job.opportunityId === opportunityId),
-    [state.jobs]
+      scoped.jobs.find((job) => job.opportunityId === opportunityId),
+    [scoped.jobs]
   );
 
   const addActivity = useCallback(
@@ -361,8 +516,21 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       body: string;
     }) => {
       const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
-      const author = user.name;
+      if (!supabase) {
+        setState((prev) => ({
+          ...prev,
+          activities: [
+            {
+              id: crypto.randomUUID(),
+              ...input,
+              createdAt: new Date().toISOString(),
+              author: user.name,
+            },
+            ...prev.activities,
+          ],
+        }));
+        return;
+      }
       const { data, error } = await supabase
         .from("activities")
         .insert({
@@ -371,7 +539,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           entity_id: input.entityId,
           type: input.type,
           body: input.body,
-          author,
+          author: user.name,
         })
         .select("*")
         .single();
@@ -394,7 +562,61 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (!current || current.stage === stage) return null;
 
       const supabase = requireClient();
-      if (!supabase) return null;
+      if (!supabase) {
+        setState((prev) => {
+          const jobs = [...prev.jobs];
+          let nextJobs = jobs;
+          if (stage === "awarded" && !jobs.some((job) => job.opportunityId === id)) {
+            nextJobs = [
+              {
+                id: crypto.randomUUID(),
+                opportunityId: id,
+                name: current.name,
+                clientId: current.clientId,
+                status: "precon",
+                contractValue: current.value,
+                startDate: new Date().toISOString().slice(0, 10),
+                substantialCompletion: null,
+                superintendent: "Tom Brennan",
+                projectManager: user.name || "Luis Ortega",
+                location: current.location,
+                ownerStaffId: user.staffId,
+              },
+              ...jobs,
+            ];
+            createdJob = nextJobs[0];
+          }
+          return {
+            ...prev,
+            opportunities: prev.opportunities.map((opportunity) =>
+              opportunity.id === id
+                ? {
+                    ...opportunity,
+                    stage,
+                    winProbability: STAGE_PROBABILITY[stage],
+                    lostReason: stage === "lost" ? lostReason ?? opportunity.lostReason : opportunity.lostReason,
+                  }
+                : opportunity
+            ),
+            jobs: nextJobs,
+            activities: [
+              {
+                id: crypto.randomUUID(),
+                entityType: "opportunity" as const,
+                entityId: id,
+                type: "stage_change" as const,
+                body: `Moved from ${STAGE_LABELS[current.stage]} to ${STAGE_LABELS[stage]}.${
+                  stage === "lost" && lostReason ? ` ${lostReason}` : ""
+                }`,
+                createdAt: new Date().toISOString(),
+                author: user.name,
+              },
+              ...prev.activities,
+            ],
+          };
+        });
+        return createdJob;
+      }
       const { error } = await supabase
         .from("opportunities")
         .update({
@@ -431,8 +653,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               contract_value: current.value,
               start_date: new Date().toISOString().slice(0, 10),
               superintendent: "Tom Brennan",
-              project_manager: "Luis Ortega",
+              project_manager: user.name || "Luis Ortega",
               location: current.location,
+              owner_staff_id: user.staffId || null,
             })
             .select("*")
             .single();
@@ -453,13 +676,21 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       await load();
       return createdJob;
     },
-    [addActivity, load, state.jobs, state.opportunities, user.companyId]
+    [addActivity, load, state.jobs, state.opportunities, user.companyId, user.name, user.staffId]
   );
 
   const updateOpportunity = useCallback(
     async (id: string, patch: Partial<Opportunity>) => {
       const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      if (!supabase) {
+        setState((prev) => ({
+          ...prev,
+          opportunities: prev.opportunities.map((opportunity) =>
+            opportunity.id === id ? { ...opportunity, ...patch } : opportunity
+          ),
+        }));
+        return;
+      }
       const { error } = await supabase.from("opportunities").update(opportunityPatch(patch)).eq("id", id);
       if (error) {
         toast.error(error.message);
@@ -477,7 +708,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const updateJob = useCallback(async (id: string, patch: Partial<Job>) => {
     const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
+    if (!supabase) {
+      setState((prev) => ({
+        ...prev,
+        jobs: prev.jobs.map((job) => (job.id === id ? { ...job, ...patch } : job)),
+      }));
+      return;
+    }
     const { error } = await supabase.from("jobs").update(jobPatch(patch)).eq("id", id);
     if (error) {
       toast.error(error.message);
@@ -490,9 +727,27 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addOpportunity = useCallback(
-    async (input: Omit<Opportunity, "id" | "createdAt" | "winProbability">) => {
+    async (
+      input: Omit<Opportunity, "id" | "createdAt" | "winProbability" | "ownerStaffId"> & {
+        ownerStaffId?: string;
+      }
+    ) => {
+      const ownerStaffId =
+        input.ownerStaffId ||
+        staffByName(input.estimator, state.staff)?.id ||
+        user.staffId;
       const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      if (!supabase) {
+        const opportunity: Opportunity = {
+          ...input,
+          id: crypto.randomUUID(),
+          createdAt: new Date().toISOString(),
+          winProbability: STAGE_PROBABILITY[input.stage],
+          ownerStaffId,
+        };
+        setState((prev) => ({ ...prev, opportunities: [opportunity, ...prev.opportunities] }));
+        return opportunity;
+      }
       const { data, error } = await supabase
         .from("opportunities")
         .insert({
@@ -508,6 +763,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           project_type: input.projectType,
           delivery_method: input.deliveryMethod,
           estimator: input.estimator,
+          owner_staff_id: ownerStaffId || null,
           win_probability: STAGE_PROBABILITY[input.stage],
           next_step: input.nextStep,
         })
@@ -527,14 +783,40 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       return opportunity;
     },
-    [addActivity, user.companyId]
+    [addActivity, state.staff, user.companyId, user.staffId]
   );
 
   const addClient = useCallback(
-    async (input: Omit<Client, "id"> & { contactName?: string; contactTitle?: string }) => {
-      const { contactName, contactTitle, ...clientInput } = input;
+    async (input: Omit<Client, "id"> & {
+      contactName?: string;
+      contactTitle?: string;
+      isReferralPartner?: boolean;
+    }) => {
+      const { contactName, contactTitle, isReferralPartner, ...clientInput } = input;
       const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      if (!supabase) {
+        const client: Client = { ...clientInput, id: crypto.randomUUID() };
+        const contacts = contactName
+          ? [
+              {
+                id: crypto.randomUUID(),
+                clientId: client.id,
+                name: contactName,
+                title: contactTitle || "Primary contact",
+                email: "",
+                phone: "",
+                ownerStaffId: user.staffId,
+                isReferralPartner: Boolean(isReferralPartner),
+              } satisfies Contact,
+            ]
+          : [];
+        setState((prev) => ({
+          ...prev,
+          clients: [client, ...prev.clients],
+          contacts: [...contacts, ...prev.contacts],
+        }));
+        return client;
+      }
       const { data, error } = await supabase
         .from("clients")
         .insert({
@@ -557,6 +839,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             client_id: client.id,
             name: contactName,
             title: contactTitle || "Primary contact",
+            owner_staff_id: user.staffId || null,
+            is_referral_partner: Boolean(isReferralPartner),
           })
           .select("*")
           .single();
@@ -567,13 +851,59 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       return client;
     },
-    [user.companyId]
+    [user.companyId, user.staffId]
+  );
+
+  const addContact = useCallback(
+    async (input: Omit<Contact, "id">) => {
+      const contact: Contact = {
+        id: "",
+        ...input,
+        ownerStaffId: input.ownerStaffId || user.staffId,
+      };
+      const supabase = requireClient();
+      if (!supabase) {
+        const created = { ...contact, id: crypto.randomUUID() };
+        setState((prev) => ({ ...prev, contacts: [created, ...prev.contacts] }));
+        return created;
+      }
+      const { data, error } = await supabase
+        .from("contacts")
+        .insert({
+          company_id: user.companyId,
+          client_id: contact.clientId,
+          name: contact.name,
+          title: contact.title,
+          email: contact.email,
+          phone: contact.phone,
+          owner_staff_id: contact.ownerStaffId || null,
+          is_referral_partner: contact.isReferralPartner,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        toast.error(error?.message ?? "Could not add the contact.");
+        throw error ?? new Error("Could not add the contact.");
+      }
+      const mapped = mapContact(data);
+      setState((prev) => ({ ...prev, contacts: [mapped, ...prev.contacts] }));
+      return mapped;
+    },
+    [user.companyId, user.staffId]
   );
 
   const addJob = useCallback(
-    async (input: Omit<Job, "id">) => {
+    async (input: Omit<Job, "id" | "ownerStaffId"> & { ownerStaffId?: string }) => {
+      const ownerStaffId =
+        input.ownerStaffId ||
+        staffByName(input.projectManager, state.staff)?.id ||
+        user.staffId;
       const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      if (!supabase) {
+        const job: Job = { ...input, id: crypto.randomUUID(), ownerStaffId };
+        setState((prev) => ({ ...prev, jobs: [job, ...prev.jobs] }));
+        return job;
+      }
       const { data, error } = await supabase
         .from("jobs")
         .insert({
@@ -588,6 +918,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           superintendent: input.superintendent,
           project_manager: input.projectManager,
           location: input.location,
+          owner_staff_id: ownerStaffId || null,
         })
         .select("*")
         .single();
@@ -605,14 +936,22 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       return job;
     },
-    [addActivity, user.companyId]
+    [addActivity, state.staff, user.companyId, user.staffId]
   );
 
   const toggleTask = useCallback(async (id: string) => {
     const current = state.tasks.find((task) => task.id === id);
     if (!current) return;
     const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
+    if (!supabase) {
+      setState((prev) => ({
+        ...prev,
+        tasks: prev.tasks.map((task) =>
+          task.id === id ? { ...task, completed: !task.completed } : task
+        ),
+      }));
+      return;
+    }
     const { error } = await supabase.from("tasks").update({ completed: !current.completed }).eq("id", id);
     if (error) {
       toast.error(error.message);
@@ -1230,12 +1569,23 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<CrmContextValue>(
     () => ({
-      ...state,
-      user,
+      ...scoped,
+      user: displayUser,
+      viewer,
+      effectiveStaff,
+      impersonatedStaff,
+      loginAsOptions,
+      scopeLabel: viewer
+        ? scopeDescription(effectiveStaff ?? viewer, viewer, Boolean(impersonatedStaff), state.teams)
+        : "",
       teamMembers,
+      book: state,
       configured,
       hydrated,
       hydrateError,
+      switchSeat,
+      loginAs,
+      stopLoginAs,
       getClient,
       getContact,
       getOpportunity,
@@ -1248,6 +1598,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateJob,
       addOpportunity,
       addClient,
+      addContact,
       addJob,
       addActivity,
       toggleTask,
@@ -1272,12 +1623,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       signOut,
     }),
     [
+      scoped,
+      displayUser,
+      viewer,
+      effectiveStaff,
+      impersonatedStaff,
+      loginAsOptions,
       state,
-      user,
       teamMembers,
       configured,
       hydrated,
       hydrateError,
+      switchSeat,
+      loginAs,
+      stopLoginAs,
       getClient,
       getContact,
       getOpportunity,
@@ -1290,6 +1649,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateJob,
       addOpportunity,
       addClient,
+      addContact,
       addJob,
       addActivity,
       toggleTask,

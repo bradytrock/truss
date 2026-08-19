@@ -11,9 +11,10 @@ The hosted MCP at `https://mcp.supabase.com/mcp` is online. This cloud agent can
 To attach a project that is already running:
 
 1. Open [http://localhost:3847/login](http://localhost:3847/login) and paste the project URL plus the **publishable** (or anon) key from Settings → API. Truss checks that the project is reachable, then stores the keys for this browser and writes `.env.local`.
-2. In the SQL editor, run both migrations, in order:
+2. In the SQL editor, run the migrations, in order:
    - [`supabase/migrations/20260819170000_truss_crm.sql`](supabase/migrations/20260819170000_truss_crm.sql) — companies, profiles, pipeline, jobs, RLS, signup trigger, Realtime
    - [`supabase/migrations/20260819180000_estimates_invoices_schedule.sql`](supabase/migrations/20260819180000_estimates_invoices_schedule.sql) — price book, estimates, invoices, payments, schedule, job photos, Storage bucket
+   - [`supabase/migrations/20260819190000_seats_contacts.sql`](supabase/migrations/20260819190000_seats_contacts.sql) — seats, teams, contact-book ownership, referral partners
 3. In Authentication → URL configuration, add `http://localhost:3847/auth/callback`. For local work you can turn off “Confirm email”.
 4. Create an account. Signup opens a company, a profile, and the Northline sample book in Postgres.
 
@@ -27,6 +28,9 @@ npm run dev
 
 ## What you can do
 
+- **Contacts** — people-first contact book. Companies still sit behind each person for jobs and invoices
+- **Seats** — company admin sees everything; business development sees all jobs with a restricted report; team leads/admins see their team and can Login As; project managers and supers see only their own book
+- **Reports** — open jobs, closed jobs YTD, referral partners in each PM’s book, YTD revenue, and team activity
 - **Pipeline** — pursuits from pursuing through award; awarding opens a precon job
 - **Price book** — CSI-style labor, material, equipment, allowance, and subcontract items
 - **Estimates** — build a proposal from the catalog, send it, mark it accepted, convert it to an invoice
@@ -37,7 +41,7 @@ npm run dev
 ## What lives in Supabase
 
 - **Auth** — email/password; each signup creates a `companies` row and a `profiles` row
-- **Postgres** — clients, pursuits, jobs, catalog, estimates, invoices, payments, schedule, photos
+- **Postgres** — contacts, companies, pursuits, jobs, catalog, estimates, invoices, payments, schedule, photos, teams, seats
 - **RLS** — every query is limited to `current_company_id()`
 - **Realtime** — the board and records refresh when anyone in the company writes
 - **Storage** — `job-photos` bucket, files stored as `{companyId}/{jobId}/{uuid}`

@@ -13,7 +13,9 @@ import type {
   Opportunity,
   Payment,
   ScheduleEvent,
+  StaffMember,
   Task,
+  Team,
 } from "@/lib/types";
 
 type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
@@ -30,6 +32,27 @@ type InvoiceLineRow = Database["public"]["Tables"]["invoice_lines"]["Row"];
 type PaymentRow = Database["public"]["Tables"]["payments"]["Row"];
 type EventRow = Database["public"]["Tables"]["schedule_events"]["Row"];
 type PhotoRow = Database["public"]["Tables"]["job_photos"]["Row"];
+type StaffRow = Database["public"]["Tables"]["team_members"]["Row"];
+type TeamRow = Database["public"]["Tables"]["teams"]["Row"];
+
+export function mapStaff(row: StaffRow): StaffMember {
+  return {
+    id: row.id,
+    name: row.name,
+    title: row.title,
+    role: row.role ?? "project_manager",
+    teamId: row.team_id,
+    initials: row.initials || row.name.slice(0, 2).toUpperCase(),
+  };
+}
+
+export function mapTeam(row: TeamRow): Team {
+  return {
+    id: row.id,
+    name: row.name,
+    leadStaffId: row.lead_staff_id ?? "",
+  };
+}
 
 export function mapClient(row: ClientRow): Client {
   return {
@@ -50,6 +73,8 @@ export function mapContact(row: ContactRow): Contact {
     title: row.title,
     email: row.email,
     phone: row.phone,
+    ownerStaffId: row.owner_staff_id ?? "",
+    isReferralPartner: row.is_referral_partner,
   };
 }
 
@@ -71,6 +96,7 @@ export function mapOpportunity(row: OpportunityRow): Opportunity {
     nextStep: row.next_step,
     createdAt: row.created_at,
     lostReason: row.lost_reason ?? undefined,
+    ownerStaffId: row.owner_staff_id ?? "",
   };
 }
 
@@ -87,6 +113,7 @@ export function mapJob(row: JobRow): Job {
     superintendent: row.superintendent,
     projectManager: row.project_manager,
     location: row.location,
+    ownerStaffId: row.owner_staff_id ?? "",
   };
 }
 
@@ -132,6 +159,7 @@ export function opportunityPatch(patch: Partial<Opportunity>) {
   if (patch.winProbability !== undefined) row.win_probability = patch.winProbability;
   if (patch.nextStep !== undefined) row.next_step = patch.nextStep;
   if (patch.lostReason !== undefined) row.lost_reason = patch.lostReason ?? null;
+  if (patch.ownerStaffId !== undefined) row.owner_staff_id = patch.ownerStaffId || null;
   return row;
 }
 
@@ -149,6 +177,7 @@ export function jobPatch(patch: Partial<Job>) {
   if (patch.superintendent !== undefined) row.superintendent = patch.superintendent;
   if (patch.projectManager !== undefined) row.project_manager = patch.projectManager;
   if (patch.location !== undefined) row.location = patch.location;
+  if (patch.ownerStaffId !== undefined) row.owner_staff_id = patch.ownerStaffId || null;
   return row;
 }
 

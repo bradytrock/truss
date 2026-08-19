@@ -13,12 +13,27 @@ import {
   mapOpportunity,
   mapPayment,
   mapScheduleEvent,
+  mapStaff,
   mapTask,
+  mapTeam,
 } from "@/lib/supabase/mappers";
 import type { Database } from "@/lib/supabase/database.types";
-import type { CrmState } from "@/lib/types";
+import { NORTHLINE_STAFF, NORTHLINE_TEAMS, initialsFromName, type CrmState, type SeatRole } from "@/lib/types";
 
 type Client = SupabaseClient<Database>;
+
+function inferRole(name: string, title: string): SeatRole {
+  const fromSeed = NORTHLINE_STAFF.find((member) => member.name === name);
+  if (fromSeed) return fromSeed.role;
+  const lower = title.toLowerCase();
+  if (lower.includes("admin") && lower.includes("team")) return "team_admin";
+  if (lower.includes("lead")) return "team_lead";
+  if (lower.includes("business")) return "business_development";
+  if (lower.includes("super")) return "superintendent";
+  if (lower.includes("estimat")) return "estimator";
+  if (lower.includes("admin")) return "company_admin";
+  return "project_manager";
+}
 
 export async function fetchCompanyBook(supabase: Client, companyId: string) {
   const [
@@ -29,6 +44,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     activitiesRes,
     tasksRes,
     teamRes,
+    teamsRes,
     catalogRes,
     estimatesRes,
     estimateLinesRes,
@@ -52,7 +68,8 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       .eq("company_id", companyId)
       .order("created_at", { ascending: false }),
     supabase.from("tasks").select("*").eq("company_id", companyId).order("due_at"),
-    supabase.from("team_members").select("name").eq("company_id", companyId).order("name"),
+    supabase.from("team_members").select("*").eq("company_id", companyId).order("name"),
+    supabase.from("teams").select("*").eq("company_id", companyId).order("name"),
     supabase.from("catalog_items").select("*").eq("company_id", companyId).order("cost_code"),
     supabase.from("estimates").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("estimate_lines").select("*").eq("company_id", companyId).order("sort_order"),
@@ -63,6 +80,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     supabase.from("job_photos").select("*").eq("company_id", companyId).order("taken_at", { ascending: false }),
   ]);
 
+  const missingTeams = Boolean(teamsRes.error);
   const error =
     clientsRes.error ||
     contactsRes.error ||
@@ -81,9 +99,46 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     photosRes.error;
   if (error) throw error;
 
+  const staff = (teamRes.data ?? []).map((row) => {
+    try {
+      return mapStaff(row);
+    } catch {
+      return {
+        id: row.id,
+        name: row.name,
+        title: row.title,
+        role: inferRole(row.name, row.title),
+        teamId: NORTHLINE_STAFF.find((member) => member.name === row.name)?.teamId ?? null,
+        initials: initialsFromName(row.name),
+      };
+    }
+  });
+
+  const teams = missingTeams
+    ? structuredClone(NORTHLINE_TEAMS)
+    : (teamsRes.data ?? []).map(mapTeam);
+
   const state: CrmState = {
+    staff: staff.length > 0 ? staff : structuredClone(NORTHLINE_STAFF),
+    teams: teams.length > 0 ? teams : structuredClone(NORTHLINE_TEAMS),
     clients: (clientsRes.data ?? []).map(mapClient),
-    contacts: (contactsRes.data ?? []).map(mapContact),
+    contacts: (contactsRes.data ?? []).map((row) => {
+      try {
+        return mapContact(row);
+      } catch {
+        const seed = NORTHLINE_STAFF.find((member) => member.name === "Jordan Hale");
+        return {
+          id: row.id,
+          clientId: row.client_id,
+          name: row.name,
+          title: row.title,
+          email: row.email,
+          phone: row.phone,
+          ownerStaffId: seed?.id ?? "",
+          isReferralPartner: false,
+        };
+      }
+    }),
     opportunities: (oppsRes.data ?? []).map(mapOpportunity),
     jobs: (jobsRes.data ?? []).map(mapJob),
     activities: (activitiesRes.data ?? []).map(mapActivity),
@@ -100,6 +155,6 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
 
   return {
     state,
-    team: (teamRes.data ?? []).map((row) => row.name),
+    team: state.staff.map((member) => member.name),
   };
 }

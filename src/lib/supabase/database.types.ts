@@ -16,6 +16,7 @@ export type Database = {
           full_name: string;
           title: string;
           initials: string;
+          role: Database["public"]["Enums"]["seat_role"];
           created_at: string;
         };
         Insert: {
@@ -24,6 +25,7 @@ export type Database = {
           full_name: string;
           title?: string;
           initials: string;
+          role?: Database["public"]["Enums"]["seat_role"];
           created_at?: string;
         };
         Update: {
@@ -32,13 +34,50 @@ export type Database = {
           full_name?: string;
           title?: string;
           initials?: string;
+          role?: Database["public"]["Enums"]["seat_role"];
         };
         Relationships: [];
       };
+      teams: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          lead_staff_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          lead_staff_id?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["teams"]["Insert"]>;
+        Relationships: [];
+      };
       team_members: {
-        Row: { id: string; company_id: string; name: string; title: string; created_at: string };
-        Insert: { id?: string; company_id: string; name: string; title?: string; created_at?: string };
-        Update: { name?: string; title?: string };
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          title: string;
+          role: Database["public"]["Enums"]["seat_role"];
+          team_id: string | null;
+          initials: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          title?: string;
+          role?: Database["public"]["Enums"]["seat_role"];
+          team_id?: string | null;
+          initials?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["team_members"]["Insert"]>;
         Relationships: [];
       };
       clients: {
@@ -74,6 +113,8 @@ export type Database = {
           title: string;
           email: string;
           phone: string;
+          owner_staff_id: string | null;
+          is_referral_partner: boolean;
         };
         Insert: {
           id?: string;
@@ -83,6 +124,8 @@ export type Database = {
           title?: string;
           email?: string;
           phone?: string;
+          owner_staff_id?: string | null;
+          is_referral_partner?: boolean;
         };
         Update: Partial<Database["public"]["Tables"]["contacts"]["Insert"]>;
         Relationships: [];
@@ -105,6 +148,7 @@ export type Database = {
           win_probability: number;
           next_step: string;
           lost_reason: string | null;
+          owner_staff_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -124,6 +168,7 @@ export type Database = {
           win_probability?: number;
           next_step?: string;
           lost_reason?: string | null;
+          owner_staff_id?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["opportunities"]["Insert"]>;
@@ -143,6 +188,7 @@ export type Database = {
           superintendent: string;
           project_manager: string;
           location: string;
+          owner_staff_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -158,6 +204,7 @@ export type Database = {
           superintendent?: string;
           project_manager?: string;
           location?: string;
+          owner_staff_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["jobs"]["Insert"]>;
         Relationships: [];
@@ -455,6 +502,14 @@ export type Database = {
       client_type: "owner" | "developer" | "public" | "healthcare_system" | "architect";
       activity_type: "note" | "call" | "email" | "meeting" | "site_walk" | "stage_change";
       entity_kind: "opportunity" | "job" | "client";
+      seat_role:
+        | "company_admin"
+        | "business_development"
+        | "team_lead"
+        | "team_admin"
+        | "project_manager"
+        | "estimator"
+        | "superintendent";
       catalog_kind: "labor" | "material" | "equipment" | "allowance" | "subcontract";
       estimate_status: "draft" | "sent" | "viewed" | "accepted" | "declined";
       invoice_status: "draft" | "sent" | "partial" | "paid" | "overdue" | "void";

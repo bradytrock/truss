@@ -41,8 +41,8 @@ export default function JobDetailPage() {
     return (
       <EmptyState
         icon={<span className="text-sm font-medium">?</span>}
-        title="Job not found"
-        description="It may have been removed when demo data was reset."
+        title="Job not in this book"
+        description="This job belongs to another seat. Team leads can Login As the project manager; company admin sees every job."
         action={
           <Button nativeButton={false} render={<Link href="/jobs" />}>
             Back to jobs

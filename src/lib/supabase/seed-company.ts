@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { seedState } from "@/lib/seed";
 import { insertOperations, wipeOperations } from "@/lib/supabase/ops-seed";
-import { TEAM } from "@/lib/types";
+import { NORTHLINE_STAFF, NORTHLINE_TEAMS } from "@/lib/types";
 import type { Database } from "@/lib/supabase/database.types";
 
 type Client = SupabaseClient<Database>;
@@ -33,22 +33,38 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
   if (wipeClients) throw wipeClients;
   const { error: wipeTeam } = await supabase.from("team_members").delete().eq("company_id", companyId);
   if (wipeTeam) throw wipeTeam;
+  await supabase.from("teams").delete().eq("company_id", companyId);
+
+  const { error: teamTableError } = await supabase.from("teams").insert(
+    NORTHLINE_TEAMS.map((team) => ({
+      id: remap(team.id, ids),
+      company_id: companyId,
+      name: team.name,
+      lead_staff_id: null,
+    }))
+  );
+  if (teamTableError) throw teamTableError;
 
   const { error: teamError } = await supabase.from("team_members").insert(
-    TEAM.map((name) => ({
+    NORTHLINE_STAFF.map((member) => ({
+      id: remap(member.id, ids),
       company_id: companyId,
-      name,
-      title:
-        name === "Jordan Hale"
-          ? "VP, Preconstruction"
-          : name === "Tom Brennan"
-            ? "Superintendent"
-            : name.includes("Ortega") || name.includes("Voss")
-              ? "Project manager"
-              : "Estimator",
+      name: member.name,
+      title: member.title,
+      role: member.role,
+      team_id: member.teamId ? remap(member.teamId, ids) : null,
+      initials: member.initials,
     }))
   );
   if (teamError) throw teamError;
+
+  for (const team of NORTHLINE_TEAMS) {
+    const { error: leadError } = await supabase
+      .from("teams")
+      .update({ lead_staff_id: remap(team.leadStaffId, ids) })
+      .eq("id", remap(team.id, ids));
+    if (leadError) throw leadError;
+  }
 
   const { error: clientError } = await supabase.from("clients").insert(
     seed.clients.map((client) => ({
@@ -72,6 +88,8 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
       title: contact.title,
       email: contact.email,
       phone: contact.phone,
+      owner_staff_id: contact.ownerStaffId ? remap(contact.ownerStaffId, ids) : null,
+      is_referral_partner: contact.isReferralPartner,
     }))
   );
   if (contactError) throw contactError;
@@ -93,6 +111,7 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
       project_type: opportunity.projectType,
       delivery_method: opportunity.deliveryMethod,
       estimator: opportunity.estimator,
+      owner_staff_id: opportunity.ownerStaffId ? remap(opportunity.ownerStaffId, ids) : null,
       win_probability: opportunity.winProbability,
       next_step: opportunity.nextStep,
       lost_reason: opportunity.lostReason ?? null,
@@ -115,6 +134,7 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
       superintendent: job.superintendent,
       project_manager: job.projectManager,
       location: job.location,
+      owner_staff_id: job.ownerStaffId ? remap(job.ownerStaffId, ids) : null,
     }))
   );
   if (jobError) throw jobError;

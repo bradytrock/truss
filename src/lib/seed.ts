@@ -1,7 +1,9 @@
-import type { CrmState } from "@/lib/types";
+import { NORTHLINE_STAFF, NORTHLINE_TEAMS, type CrmState } from "@/lib/types";
 import { demoOps } from "@/lib/demo-ops";
 
 export const seedState: CrmState = {
+  staff: structuredClone(NORTHLINE_STAFF),
+  teams: structuredClone(NORTHLINE_TEAMS),
   clients: [
     {
       id: "cli_meridian",
@@ -81,6 +83,8 @@ export const seedState: CrmState = {
       title: "VP of Development",
       email: "ava.lindstrom@meridianprop.com",
       phone: "(303) 555-0142",
+      ownerStaffId: "staff_elena",
+      isReferralPartner: false,
     },
     {
       id: "con_meridian_nate",
@@ -89,6 +93,18 @@ export const seedState: CrmState = {
       title: "Owner's Rep",
       email: "nate.crowley@meridianprop.com",
       phone: "(303) 555-0188",
+      ownerStaffId: "staff_elena",
+      isReferralPartner: true,
+    },
+    {
+      id: "con_meridian_brook",
+      clientId: "cli_meridian",
+      name: "Brook Ellison",
+      title: "Development broker",
+      email: "brook@ellisoncre.com",
+      phone: "(303) 555-0194",
+      ownerStaffId: "staff_elena",
+      isReferralPartner: true,
     },
     {
       id: "con_luke_renee",
@@ -97,6 +113,8 @@ export const seedState: CrmState = {
       title: "Director of Facilities",
       email: "rokonkwo@stlukes.org",
       phone: "(720) 555-2210",
+      ownerStaffId: "staff_maya",
+      isReferralPartner: false,
     },
     {
       id: "con_luke_dan",
@@ -105,6 +123,8 @@ export const seedState: CrmState = {
       title: "Project Executive",
       email: "dpfeiffer@stlukes.org",
       phone: "(720) 555-2218",
+      ownerStaffId: "staff_maya",
+      isReferralPartner: false,
     },
     {
       id: "con_dps_marisol",
@@ -113,6 +133,8 @@ export const seedState: CrmState = {
       title: "Capital Projects Manager",
       email: "mvega@dpsk12.org",
       phone: "(720) 555-4401",
+      ownerStaffId: "staff_luis",
+      isReferralPartner: false,
     },
     {
       id: "con_peak_jon",
@@ -121,6 +143,8 @@ export const seedState: CrmState = {
       title: "Principal",
       email: "jon@peakwest.capital",
       phone: "(303) 555-7720",
+      ownerStaffId: "staff_priya",
+      isReferralPartner: true,
     },
     {
       id: "con_copper_helen",
@@ -129,6 +153,8 @@ export const seedState: CrmState = {
       title: "Director of Construction",
       email: "helen@copperline.com",
       phone: "(303) 555-0914",
+      ownerStaffId: "staff_jordan",
+      isReferralPartner: false,
     },
     {
       id: "con_front_wes",
@@ -137,6 +163,8 @@ export const seedState: CrmState = {
       title: "Owner",
       email: "wes@frindustrial.com",
       phone: "(720) 555-8333",
+      ownerStaffId: "staff_maya",
+      isReferralPartner: false,
     },
     {
       id: "con_aurora_kim",
@@ -145,6 +173,8 @@ export const seedState: CrmState = {
       title: "Facilities Procurement",
       email: "krhodes@auroragov.org",
       phone: "(303) 555-6002",
+      ownerStaffId: "staff_luis",
+      isReferralPartner: false,
     },
     {
       id: "con_hale_sam",
@@ -153,6 +183,18 @@ export const seedState: CrmState = {
       title: "Partner",
       email: "smoss@halemoss.com",
       phone: "(303) 555-3309",
+      ownerStaffId: "staff_maya",
+      isReferralPartner: true,
+    },
+    {
+      id: "con_dps_pat",
+      clientId: "cli_dps",
+      name: "Pat Nguyen",
+      title: "Owner's representative",
+      email: "pnguyen@civicpm.co",
+      phone: "(720) 555-4418",
+      ownerStaffId: "staff_luis",
+      isReferralPartner: true,
     },
   ],
   opportunities: [
@@ -169,6 +211,7 @@ export const seedState: CrmState = {
       projectType: "healthcare",
       deliveryMethod: "cm_at_risk",
       estimator: "Maya Chen",
+      ownerStaffId: "staff_maya",
       winProbability: 45,
       nextStep: "Follow up with Renee after bid tab — they want a GMP by Labor Day.",
       createdAt: "2026-06-12T15:00:00.000Z",
@@ -186,6 +229,7 @@ export const seedState: CrmState = {
       projectType: "multifamily",
       deliveryMethod: "cm_at_risk",
       estimator: "Priya Shah",
+      ownerStaffId: "staff_priya",
       winProbability: 65,
       nextStep: "VE workshop Thursday. Bring wood-frame vs. podium cost delta.",
       createdAt: "2026-05-03T18:20:00.000Z",
@@ -203,6 +247,7 @@ export const seedState: CrmState = {
       projectType: "education",
       deliveryMethod: "design_bid_build",
       estimator: "Maya Chen",
+      ownerStaffId: "staff_maya",
       winProbability: 30,
       nextStep: "Finish civil takeoff. Confirm phasing around occupied classrooms.",
       createdAt: "2026-07-22T14:10:00.000Z",
@@ -220,6 +265,7 @@ export const seedState: CrmState = {
       projectType: "hospitality",
       deliveryMethod: "gc_mp",
       estimator: "Priya Shah",
+      ownerStaffId: "staff_priya",
       winProbability: 30,
       nextStep: "Get millwork lead times from two finish carpenters before pricing.",
       createdAt: "2026-08-01T16:40:00.000Z",
@@ -237,6 +283,7 @@ export const seedState: CrmState = {
       projectType: "industrial",
       deliveryMethod: "design_build",
       estimator: "Maya Chen",
+      ownerStaffId: "staff_maya",
       winProbability: 15,
       nextStep: "Attend owner walk Wednesday. Confirm freezer panel vendor.",
       createdAt: "2026-08-11T13:00:00.000Z",
@@ -254,6 +301,7 @@ export const seedState: CrmState = {
       projectType: "civic",
       deliveryMethod: "design_bid_build",
       estimator: "Priya Shah",
+      ownerStaffId: "staff_priya",
       winProbability: 15,
       nextStep: "Pull bid docs when they post. Hale + Moss is the design team.",
       createdAt: "2026-08-15T17:30:00.000Z",
@@ -271,6 +319,7 @@ export const seedState: CrmState = {
       projectType: "tenant_improvement",
       deliveryMethod: "gc_mp",
       estimator: "Jordan Hale",
+      ownerStaffId: "staff_jordan",
       winProbability: 70,
       nextStep: "Send staffing plan and 14-week look-ahead. Helen wants to start Labor Day.",
       createdAt: "2026-07-30T19:00:00.000Z",
@@ -288,6 +337,7 @@ export const seedState: CrmState = {
       projectType: "healthcare",
       deliveryMethod: "cm_at_risk",
       estimator: "Maya Chen",
+      ownerStaffId: "staff_maya",
       winProbability: 100,
       nextStep: "Job is in the field — Elena has weekly OAC.",
       createdAt: "2026-01-08T15:00:00.000Z",
@@ -305,6 +355,7 @@ export const seedState: CrmState = {
       projectType: "civic",
       deliveryMethod: "cm_at_risk",
       estimator: "Priya Shah",
+      ownerStaffId: "staff_priya",
       winProbability: 100,
       nextStep: "Precon buyout of aquatics package.",
       createdAt: "2026-03-02T16:00:00.000Z",
@@ -322,6 +373,7 @@ export const seedState: CrmState = {
       projectType: "civic",
       deliveryMethod: "design_bid_build",
       estimator: "Maya Chen",
+      ownerStaffId: "staff_maya",
       winProbability: 0,
       nextStep: "Lost on price. Debrief with Sam for the next civic bid.",
       lostReason: "Second low. $410K over apparent low bidder.",
@@ -341,6 +393,7 @@ export const seedState: CrmState = {
       superintendent: "Tom Brennan",
       projectManager: "Elena Voss",
       location: "Cherry Creek, Denver, CO",
+      ownerStaffId: "staff_elena",
     },
     {
       id: "job_rec",
@@ -354,6 +407,7 @@ export const seedState: CrmState = {
       superintendent: "Tom Brennan",
       projectManager: "Luis Ortega",
       location: "Aurora, CO",
+      ownerStaffId: "staff_luis",
     },
     {
       id: "job_mixed",
@@ -367,6 +421,7 @@ export const seedState: CrmState = {
       superintendent: "Tom Brennan",
       projectManager: "Elena Voss",
       location: "LoDo, Denver, CO",
+      ownerStaffId: "staff_elena",
     },
     {
       id: "job_parking",
@@ -380,6 +435,7 @@ export const seedState: CrmState = {
       superintendent: "Tom Brennan",
       projectManager: "Luis Ortega",
       location: "Highlands, Denver, CO",
+      ownerStaffId: "staff_luis",
     },
     {
       id: "job_school",
@@ -393,6 +449,7 @@ export const seedState: CrmState = {
       superintendent: "Tom Brennan",
       projectManager: "Luis Ortega",
       location: "West Colfax, Denver, CO",
+      ownerStaffId: "staff_luis",
     },
   ],
   activities: [

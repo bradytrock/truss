@@ -25,8 +25,8 @@ export default function ClientDetailPage() {
         title="Client not found"
         description="It may have been removed when demo data was reset."
         action={
-          <Button nativeButton={false} render={<Link href="/clients" />}>
-            Back to clients
+          <Button nativeButton={false} render={<Link href="/contacts" />}>
+            Back to contacts
           </Button>
         }
       />
@@ -49,7 +49,7 @@ export default function ClientDetailPage() {
     <div className="space-y-5">
       <div>
         <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          Client
+          Company
         </p>
         <h1 className="font-heading text-2xl font-semibold tracking-tight">{client.name}</h1>
         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -179,7 +179,9 @@ export default function ClientDetailPage() {
                 <ul className="space-y-3">
                   {contacts.map((contact) => (
                     <li key={contact.id}>
-                      <p className="text-sm font-medium">{contact.name}</p>
+                      <Link href={`/contacts/${contact.id}`} className="text-sm font-medium hover:underline">
+                        {contact.name}
+                      </Link>
                       <p className="text-xs text-muted-foreground">{contact.title}</p>
                       {contact.email ? (
                         <a

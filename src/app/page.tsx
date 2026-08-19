@@ -118,7 +118,15 @@ export default function HomePage() {
       ) : null}
       <PageHeader
         title={`${greeting()}, ${crm.user.name.split(" ")[0] || "there"}`}
-        description="Open pipeline, proposals out, AR, and today's field calendar — the loop from bid to job photo."
+        description={
+          crm.viewer?.role === "business_development"
+            ? "All jobs in the company, plus the restricted BD report: open jobs, closed YTD, referral partners by PM, and YTD revenue."
+            : crm.viewer?.role === "project_manager" || crm.viewer?.role === "superintendent"
+              ? "Your jobs, your contact book, and the work assigned to you."
+              : crm.viewer?.role === "team_lead" || crm.viewer?.role === "team_admin"
+                ? "Jobs and contacts for your team. Login As a teammate to inspect their book, or open Reports for team activity."
+                : "Open pipeline, proposals out, AR, and today's field calendar — the loop from bid to job photo."
+        }
       />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

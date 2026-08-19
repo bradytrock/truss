@@ -4,8 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import {
-  Building2,
+  BookUser,
   Briefcase,
+  BarChart3,
   CalendarDays,
   FileText,
   Kanban,
@@ -51,17 +52,22 @@ import {
   CreateEventDialog,
   CreateInvoiceDialog,
 } from "@/components/create-ops-dialogs";
+import { canViewReports } from "@/lib/visibility";
+import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const nav = [
-  { href: "/", label: "Home", icon: LayoutDashboard },
-  { href: "/pipeline", label: "Pipeline", icon: Kanban },
-  { href: "/estimates", label: "Estimates", icon: FileText },
-  { href: "/jobs", label: "Jobs", icon: Briefcase },
-  { href: "/invoices", label: "Invoices", icon: Receipt },
-  { href: "/schedule", label: "Schedule", icon: CalendarDays },
-  { href: "/clients", label: "Clients", icon: Building2 },
-];
+function navItems(showReports: boolean) {
+  return [
+    { href: "/", label: "Home", icon: LayoutDashboard },
+    { href: "/pipeline", label: "Pipeline", icon: Kanban },
+    { href: "/estimates", label: "Estimates", icon: FileText },
+    { href: "/jobs", label: "Jobs", icon: Briefcase },
+    { href: "/invoices", label: "Invoices", icon: Receipt },
+    { href: "/schedule", label: "Schedule", icon: CalendarDays },
+    { href: "/contacts", label: "Contacts", icon: BookUser },
+    ...(showReports ? [{ href: "/reports", label: "Reports", icon: BarChart3 }] : []),
+  ];
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -124,7 +130,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   Schedule event
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setCreate("client")}>
-                  New client
+                  New contact
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setCreate("job")}>
                   Log a job
@@ -134,6 +140,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <UserMenu />
           </div>
         </header>
+        <ScopeBanners />
         <main className="flex-1 p-4 sm:p-6">{children}</main>
       </div>
 
@@ -189,9 +196,11 @@ function Brand() {
 }
 
 function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+  const { viewer } = useCrm();
+  const items = navItems(Boolean(viewer && canViewReports(viewer.role)));
   return (
     <nav className="flex flex-col gap-0.5 px-2">
-      {nav.map((item) => {
+      {items.map((item) => {
         const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
         const Icon = item.icon;
         return (
@@ -218,7 +227,7 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
 function SearchTrigger() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const { opportunities, jobs, clients, estimates, invoices } = useCrm();
+  const { opportunities, jobs, contacts, estimates, invoices } = useCrm();
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -239,7 +248,7 @@ function SearchTrigger() {
         onClick={() => setOpen(true)}
       >
         <Search data-icon="inline-start" />
-        Search pursuits, jobs, estimates
+        Search pursuits, jobs, contacts
         <kbd className="ml-auto hidden rounded border bg-muted px-1.5 py-0.5 font-sans text-[10px] sm:inline">
           ⌘K
         </kbd>
@@ -248,7 +257,7 @@ function SearchTrigger() {
         open={open}
         onOpenChange={setOpen}
         title="Search Truss"
-        description="Jump to a pursuit, job, or client"
+        description="Jump to a pursuit, job, or contact"
         className="sm:max-w-lg"
       >
         <Command>
@@ -283,17 +292,17 @@ function SearchTrigger() {
                 </CommandItem>
               ))}
             </CommandGroup>
-            <CommandGroup heading="Clients">
-              {clients.map((client) => (
+            <CommandGroup heading="Contacts">
+              {contacts.map((contact) => (
                 <CommandItem
-                  key={client.id}
-                  value={`${client.name} ${client.city}`}
+                  key={contact.id}
+                  value={`${contact.name} ${contact.title} ${contact.email}`}
                   onSelect={() => {
                     setOpen(false);
-                    router.push(`/clients/${client.id}`);
+                    router.push(`/contacts/${contact.id}`);
                   }}
                 >
-                  {client.name}
+                  {contact.name}
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -332,8 +341,32 @@ function SearchTrigger() {
   );
 }
 
+function ScopeBanners() {
+  const { impersonatedStaff, stopLoginAs, scopeLabel, viewer } = useCrm();
+  if (!viewer) return null;
+  return (
+    <div className="space-y-0">
+      {impersonatedStaff ? (
+        <div className="flex flex-col gap-2 border-b bg-amber-50 px-4 py-2 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+          <p>
+            Logged in as <span className="font-medium">{impersonatedStaff.name}</span>
+            <span className="text-amber-900/80"> · {SEAT_ROLE_LABELS[impersonatedStaff.role]}</span>
+            . You are viewing their jobs and contact book.
+          </p>
+          <Button size="sm" variant="outline" onClick={stopLoginAs}>
+            Exit Login As
+          </Button>
+        </div>
+      ) : (
+        <p className="border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground">{scopeLabel}</p>
+      )}
+    </div>
+  );
+}
+
 function UserMenu() {
-  const { resetDemo, signOut, user } = useCrm();
+  const { resetDemo, signOut, user, staff, switchSeat, loginAs, loginAsOptions, viewer, impersonatedStaff, stopLoginAs } =
+    useCrm();
 
   return (
     <DropdownMenu>
@@ -351,10 +384,50 @@ function UserMenu() {
       <DropdownMenuContent align="end" className="min-w-56">
         <DropdownMenuLabel>
           <div className="flex flex-col">
-            <span className="text-sm text-foreground">{user.name}</span>
-            <span className="text-xs font-normal">{user.title}</span>
+            <span className="text-sm text-foreground">{viewer?.name ?? user.name}</span>
+            <span className="text-xs font-normal">
+              {viewer ? SEAT_ROLE_LABELS[viewer.role] : user.title}
+            </span>
           </div>
         </DropdownMenuLabel>
+        {loginAsOptions.length > 0 ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+              Login As…
+            </DropdownMenuLabel>
+            {loginAsOptions.map((member) => (
+              <DropdownMenuItem
+                key={member.id}
+                onClick={() => loginAs(member.id)}
+              >
+                {member.name}
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {SEAT_ROLE_LABELS[member.role]}
+                </span>
+              </DropdownMenuItem>
+            ))}
+            {impersonatedStaff ? (
+              <DropdownMenuItem onClick={() => stopLoginAs()}>Exit Login As</DropdownMenuItem>
+            ) : null}
+          </>
+        ) : null}
+        {staff.length > 1 ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+              Switch seat
+            </DropdownMenuLabel>
+            {staff.map((member) => (
+              <DropdownMenuItem key={member.id} onClick={() => switchSeat(member.id)}>
+                {member.name}
+                <span className="ml-auto text-xs text-muted-foreground">
+                  {SEAT_ROLE_LABELS[member.role]}
+                </span>
+              </DropdownMenuItem>
+            ))}
+          </>
+        ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => {
