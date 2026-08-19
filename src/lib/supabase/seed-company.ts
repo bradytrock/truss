@@ -133,9 +133,51 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
       lost_reason: opportunity.lostReason ?? null,
       created_at: opportunity.createdAt,
       code: opportunity.code,
+      lead_source: opportunity.leadSource ?? "",
+      referral_contact_id: opportunity.referralContactId
+        ? remap(opportunity.referralContactId, ids)
+        : null,
+      street: opportunity.street ?? "",
+      city: opportunity.city ?? "",
+      state: opportunity.state ?? "",
+      postal_code: opportunity.postalCode ?? "",
+      notes: opportunity.notes ?? "",
     }))
   );
-  if (oppError) throw oppError;
+  if (oppError) {
+    const missing =
+      oppError.message.includes("schema cache") ||
+      oppError.code === "PGRST204" ||
+      oppError.message.includes("lead_source") ||
+      oppError.message.includes("Could not find the");
+    if (!missing) throw oppError;
+    const { error: retryError } = await supabase.from("opportunities").insert(
+      seed.opportunities.map((opportunity) => ({
+        id: remap(opportunity.id, ids),
+        company_id: companyId,
+        name: opportunity.name,
+        client_id: opportunity.clientId ? remap(opportunity.clientId, ids) : null,
+        primary_contact_id: opportunity.primaryContactId
+          ? remap(opportunity.primaryContactId, ids)
+          : null,
+        stage: opportunity.stage,
+        value: opportunity.value,
+        bid_due_at: opportunity.bidDueAt,
+        pre_bid_walk_at: opportunity.preBidWalkAt,
+        location: opportunity.location,
+        project_type: opportunity.projectType,
+        delivery_method: opportunity.deliveryMethod,
+        estimator: opportunity.estimator,
+        owner_staff_id: opportunity.ownerStaffId ? remap(opportunity.ownerStaffId, ids) : null,
+        win_probability: opportunity.winProbability,
+        next_step: opportunity.nextStep,
+        lost_reason: opportunity.lostReason ?? null,
+        created_at: opportunity.createdAt,
+        code: opportunity.code,
+      })),
+    );
+    if (retryError) throw retryError;
+  }
 
   const { error: jobError } = await supabase.from("jobs").insert(
     seed.jobs.map((job) => ({

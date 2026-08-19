@@ -40,6 +40,16 @@ export function canPostTrainingBulletin(role: SeatRole) {
   return role === "company_admin" || role === "team_lead" || role === "team_admin";
 }
 
+export function assignableStaff(viewer: StaffMember | undefined, staff: StaffMember[]) {
+  if (!viewer) return staff;
+  const scope = accessScope(viewer.role);
+  if (scope === "company" || scope === "all_jobs") return staff;
+  if (scope === "team") {
+    return staff.filter((member) => member.teamId === viewer.teamId || member.id === viewer.id);
+  }
+  return staff.filter((member) => member.id === viewer.id);
+}
+
 export function canLoginAs(viewer: StaffMember) {
   return (
     viewer.role === "company_admin" ||

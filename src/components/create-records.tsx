@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { MapPin, Search, User, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
@@ -21,22 +23,34 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { useCrm } from "@/lib/crm-store";
+import { localYmd } from "@/lib/format";
+import {
+  defaultDeliveryForSource,
+  formatJobSite,
+  leadName,
+} from "@/lib/leads";
 import {
   CLIENT_TYPE_LABELS,
   CLIENT_TYPES,
-  DELIVERY_LABELS,
-  DELIVERY_METHODS,
   JOB_STATUS_LABELS,
   JOB_STATUSES,
-  PROJECT_TYPE_LABELS,
-  PROJECT_TYPES,
+  LEAD_SOURCE_LABELS,
+  LEAD_SOURCES,
   type ClientType,
-  type DeliveryMethod,
   type JobStatus,
-  type ProjectType,
+  type LeadSource,
 } from "@/lib/types";
+import { assignableStaff } from "@/lib/visibility";
 
 export function CreateOpportunityDialog({
   open,
@@ -45,199 +59,411 @@ export function CreateOpportunityDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { clients, contacts, addOpportunity, user, teamMembers } = useCrm();
-  const people = teamMembers.length > 0 ? teamMembers : [user.name].filter(Boolean);
-  const [name, setName] = useState("");
-  const [contactId, setContactId] = useState(contacts[0]?.id ?? "");
-  const [value, setValue] = useState("28000");
-  const [location, setLocation] = useState("Denver, CO");
-  const [projectType, setProjectType] = useState<ProjectType>("restoration");
-  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("fixed_price");
-  const [bidDueAt, setBidDueAt] = useState("");
-  const [estimator, setEstimator] = useState<string>(user.name || people[0] || "");
-  const [nextStep, setNextStep] = useState("Schedule a site visit and write the proposal.");
+  const crm = useCrm();
+  const people = assignableStaff(crm.viewer, crm.book.staff);
+  const defaultAssignee = people.find((member) => member.id === crm.user.staffId)?.id ?? people[0]?.id ?? "";
+  const [assigneeId, setAssigneeId] = useState(defaultAssignee);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
+  const [street, setStreet] = useState("");
+  const [city, setCity] = useState("");
+  const [region, setRegion] = useState("");
+  const [postalCode, setPostalCode] = useState("");
+  const [source, setSource] = useState<LeadSource | "">("");
+  const [referralId, setReferralId] = useState("");
+  const [referralQuery, setReferralQuery] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  const contact = contacts.find((item) => item.id === contactId);
-  const company = contact?.clientId ? clients.find((item) => item.id === contact.clientId) : undefined;
+  const assignee = people.find((member) => member.id === assigneeId);
+  const isMe = Boolean(assignee && assignee.id === crm.user.staffId);
+
+  const referralMatches = useMemo(() => {
+    const needle = referralQuery.trim().toLowerCase();
+    const visible = [...crm.contacts].sort((a, b) => {
+      if (a.isReferralPartner !== b.isReferralPartner) return a.isReferralPartner ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    if (!needle) return visible.slice(0, 8);
+    return visible
+      .filter((contact) => {
+        const haystack = `${contact.name} ${contact.title} ${contact.email} ${contact.phone}`.toLowerCase();
+        return haystack.includes(needle);
+      })
+      .slice(0, 8);
+  }, [crm.contacts, referralQuery]);
+
+  const selectedReferral = crm.contacts.find((contact) => contact.id === referralId);
+
+  function reset() {
+    setAssigneeId(defaultAssignee);
+    setFirstName("");
+    setLastName("");
+    setPhone("");
+    setEmail("");
+    setStreet("");
+    setCity("");
+    setRegion("");
+    setPostalCode("");
+    setSource("");
+    setReferralId("");
+    setReferralQuery("");
+    setNotes("");
+  }
+
+  function handleOpenChange(next: boolean) {
+    if (!next) reset();
+    else setAssigneeId(defaultAssignee);
+    onOpenChange(next);
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!name.trim() || !contactId) {
-      toast.error("A project name and homeowner (or contact) are required.");
+    const first = firstName.trim();
+    const last = lastName.trim();
+    if (!first || !last) {
+      toast.error("First and last name are required.");
       return;
     }
+    if (!phone.trim() && !email.trim()) {
+      toast.error("Add a phone or email so the assigned person can respond in five minutes.");
+      return;
+    }
+    if (!source) {
+      toast.error("How did they hear about us?");
+      return;
+    }
+    if (source === "referral" && !referralId) {
+      toast.error("Search your contacts and connect the person who sent this lead.");
+      return;
+    }
+    const site = formatJobSite({ street, city, state: region, postalCode });
+    const fullName = `${first} ${last}`;
+    const owner = assignee ?? crm.viewer;
+    setSaving(true);
     try {
-      const opportunity = await addOpportunity({
-        name: name.trim(),
-        clientId: contact?.clientId ?? null,
-        primaryContactId: contactId,
+      const contact = await crm.addContact({
+        clientId: null,
+        name: fullName,
+        title: "Homeowner",
+        email: email.trim(),
+        phone: phone.trim(),
+        ownerStaffId: owner?.id || crm.user.staffId,
+        isReferralPartner: false,
+      });
+      const opportunity = await crm.addOpportunity({
+        name: leadName(first, last, site || city.trim()),
+        clientId: null,
+        primaryContactId: contact.id,
         stage: "pursuing",
-        value: Number(value) || 0,
-        bidDueAt: bidDueAt || null,
+        value: 0,
+        bidDueAt: null,
         preBidWalkAt: null,
-        location,
-        projectType,
-        deliveryMethod,
-        estimator,
-        nextStep,
+        location: site || city.trim() || "Address TBD",
+        projectType: "restoration",
+        deliveryMethod: defaultDeliveryForSource(source),
+        estimator: owner?.name || crm.user.name,
+        ownerStaffId: owner?.id,
+        nextStep: "Call back within 5 minutes.",
+        leadSource: source,
+        referralContactId: source === "referral" ? referralId : null,
+        street: street.trim(),
+        city: city.trim(),
+        state: region.trim(),
+        postalCode: postalCode.trim(),
+        notes: notes.trim(),
+      });
+      const referrer = source === "referral" ? selectedReferral : undefined;
+      await crm.addActivity({
+        entityType: "opportunity",
+        entityId: opportunity.id,
+        type: "note",
+        body: [
+          `Lead opened for ${fullName}. Source: ${LEAD_SOURCE_LABELS[source]}.`,
+          referrer ? `Referred by ${referrer.name}.` : "",
+          notes.trim() ? notes.trim() : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
+      });
+      await crm.addTask({
+        title: `Call ${fullName} back`,
+        dueAt: localYmd(new Date()),
+        relatedType: "opportunity",
+        relatedId: opportunity.id,
+        assignee: owner?.name || crm.user.name,
       });
       toast.success(`Lead opened: ${opportunity.code}`);
-      onOpenChange(false);
-      setName("");
+      handleOpenChange(false);
     } catch {
       // Store already toasted the error.
+    } finally {
+      setSaving(false);
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>New lead</DialogTitle>
-          <DialogDescription>
-            Log a homeowner, insurance claim, or conversation before it hits estimating. A company is optional.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-3">
-          <Field label="Project" htmlFor="opp-name">
-            <Input
-              id="opp-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="e.g. Alvarez hail roof — Park Hill"
-            />
-          </Field>
-          <Field label="Homeowner / contact">
-            <Select
-              value={contactId}
-              onValueChange={(value) => setContactId(String(value ?? ""))}
-              items={contacts.map((item) => ({ value: item.id, label: item.name }))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {contacts.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {company ? (
-              <p className="text-xs text-muted-foreground">Company on file: {company.name}</p>
-            ) : (
-              <p className="text-xs text-muted-foreground">Direct to consumer — no company required.</p>
-            )}
-          </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Est. contract value" htmlFor="opp-value">
-              <Input
-                id="opp-value"
-                type="number"
-                min={0}
-                value={value}
-                onChange={(event) => setValue(event.target.value)}
-              />
+    <Sheet open={open} onOpenChange={handleOpenChange}>
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="w-full gap-0 overflow-y-auto sm:max-w-[28rem]"
+      >
+        <SheetHeader className="relative border-b pr-14">
+          <SheetTitle className="font-heading text-xl">New Lead</SheetTitle>
+          <SheetDescription>
+            This slides in so you can finish a quick task without leaving your page.
+          </SheetDescription>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            className="absolute top-3 right-3 size-8 rounded-full bg-muted hover:bg-muted/80"
+            onClick={() => handleOpenChange(false)}
+            aria-label="Close"
+          >
+            <XIcon />
+          </Button>
+        </SheetHeader>
+        <form onSubmit={handleSubmit} className="flex flex-1 flex-col">
+          <div className="grid gap-3.5 px-4 py-4">
+            <div className="grid gap-1.5">
+              <div className="flex items-end justify-between gap-2">
+                <Label htmlFor="lead-assignee">Assigned to</Label>
+                {isMe ? <span className="text-[11px] text-muted-foreground">Me</span> : null}
+              </div>
+              <div className="relative">
+                <User className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Select
+                  value={assigneeId}
+                  onValueChange={(value) => setAssigneeId(String(value ?? ""))}
+                  items={people.map((member) => ({ value: member.id, label: member.name }))}
+                >
+                  <SelectTrigger id="lead-assignee" className="w-full pl-8">
+                    <SelectValue placeholder="Select a person" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {people.map((member) => (
+                      <SelectItem key={member.id} value={member.id}>
+                        {member.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="First name" htmlFor="lead-first">
+                <Input
+                  id="lead-first"
+                  value={firstName}
+                  onChange={(event) => setFirstName(event.target.value)}
+                  placeholder="John"
+                  autoComplete="given-name"
+                />
+              </Field>
+              <Field label="Last name" htmlFor="lead-last">
+                <Input
+                  id="lead-last"
+                  value={lastName}
+                  onChange={(event) => setLastName(event.target.value)}
+                  placeholder="Smith"
+                  autoComplete="family-name"
+                />
+              </Field>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Phone" htmlFor="lead-phone">
+                <Input
+                  id="lead-phone"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  placeholder="(555) 123-4567"
+                  autoComplete="tel"
+                />
+              </Field>
+              <Field label="Email" htmlFor="lead-email">
+                <Input
+                  id="lead-email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="john@example.com"
+                  autoComplete="email"
+                />
+              </Field>
+            </div>
+
+            <Field label="Address" htmlFor="lead-street">
+              <InputGroup>
+                <InputGroupAddon>
+                  <MapPin />
+                </InputGroupAddon>
+                <InputGroupInput
+                  id="lead-street"
+                  value={street}
+                  onChange={(event) => setStreet(event.target.value)}
+                  placeholder="Start typing an address..."
+                  autoComplete="street-address"
+                />
+              </InputGroup>
             </Field>
-            <Field label="Location" htmlFor="opp-location">
-              <Input
-                id="opp-location"
-                value={location}
-                onChange={(event) => setLocation(event.target.value)}
-                placeholder="Street, city"
-              />
-            </Field>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Project type">
+
+            <div className="grid grid-cols-[1fr_4.5rem_6rem] gap-3">
+              <Field label="City" htmlFor="lead-city">
+                <Input
+                  id="lead-city"
+                  value={city}
+                  onChange={(event) => setCity(event.target.value)}
+                  placeholder="City"
+                  autoComplete="address-level2"
+                />
+              </Field>
+              <Field label="State" htmlFor="lead-state">
+                <Input
+                  id="lead-state"
+                  value={region}
+                  onChange={(event) => setRegion(event.target.value.toUpperCase().slice(0, 2))}
+                  placeholder="ST"
+                  autoComplete="address-level1"
+                />
+              </Field>
+              <Field label="ZIP" htmlFor="lead-zip">
+                <Input
+                  id="lead-zip"
+                  value={postalCode}
+                  onChange={(event) => setPostalCode(event.target.value)}
+                  placeholder="12345"
+                  autoComplete="postal-code"
+                />
+              </Field>
+            </div>
+
+            <Field label="How did they hear about us?">
               <Select
-                value={projectType}
-                onValueChange={(value) => setProjectType(value as ProjectType)}
-                items={PROJECT_TYPES.map((type) => ({
-                  value: type,
-                  label: PROJECT_TYPE_LABELS[type],
+                value={source || null}
+                onValueChange={(value) => {
+                  const next = String(value ?? "") as LeadSource | "";
+                  setSource(next);
+                  if (next !== "referral") {
+                    setReferralId("");
+                    setReferralQuery("");
+                  }
+                }}
+                items={LEAD_SOURCES.map((item) => ({
+                  value: item,
+                  label: LEAD_SOURCE_LABELS[item],
                 }))}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue placeholder="Select source" />
                 </SelectTrigger>
                 <SelectContent>
-                  {PROJECT_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {PROJECT_TYPE_LABELS[type]}
+                  {LEAD_SOURCES.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {LEAD_SOURCE_LABELS[item]}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="How they buy">
-              <Select
-                value={deliveryMethod}
-                onValueChange={(value) => setDeliveryMethod(value as DeliveryMethod)}
-                items={DELIVERY_METHODS.map((method) => ({
-                  value: method,
-                  label: DELIVERY_LABELS[method],
-                }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DELIVERY_METHODS.map((method) => (
-                    <SelectItem key={method} value={method}>
-                      {DELIVERY_LABELS[method]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Proposal due" htmlFor="opp-due">
-              <Input
-                id="opp-due"
-                type="date"
-                value={bidDueAt}
-                onChange={(event) => setBidDueAt(event.target.value)}
+
+            {source === "referral" ? (
+              <div className="grid gap-1.5">
+                <Label htmlFor="lead-referral">Referred by</Label>
+                {selectedReferral ? (
+                  <div className="flex items-center justify-between gap-2 border bg-muted/40 px-2.5 py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{selectedReferral.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {selectedReferral.title || "Contact"}
+                        {selectedReferral.isReferralPartner ? " · Referral partner" : ""}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="xs"
+                      variant="ghost"
+                      onClick={() => {
+                        setReferralId("");
+                        setReferralQuery("");
+                      }}
+                    >
+                      Change
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <InputGroup>
+                      <InputGroupAddon>
+                        <Search />
+                      </InputGroupAddon>
+                      <InputGroupInput
+                        id="lead-referral"
+                        value={referralQuery}
+                        onChange={(event) => setReferralQuery(event.target.value)}
+                        placeholder="Search contacts you can see..."
+                      />
+                    </InputGroup>
+                    {crm.contacts.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        No contacts in this seat’s book. Team leads can Login As a project manager, or add the
+                        referrer as a contact first.
+                      </p>
+                    ) : referralMatches.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">No matching contacts in your book.</p>
+                    ) : (
+                      <ul className="max-h-40 divide-y overflow-y-auto border">
+                        {referralMatches.map((contact) => (
+                          <li key={contact.id}>
+                            <button
+                              type="button"
+                              className="flex w-full flex-col items-start px-2.5 py-2 text-left hover:bg-muted/60"
+                              onClick={() => setReferralId(contact.id)}
+                            >
+                              <span className="text-sm font-medium">{contact.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                {contact.title || "Contact"}
+                                {contact.isReferralPartner ? " · Referral partner" : ""}
+                                {contact.phone ? ` · ${contact.phone}` : ""}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )}
+              </div>
+            ) : null}
+
+            <Field label="Notes" htmlFor="lead-notes">
+              <Textarea
+                id="lead-notes"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="Anything helpful..."
+                rows={4}
               />
             </Field>
-            <Field label="Estimator">
-              <Select
-                value={estimator}
-                onValueChange={(value) => setEstimator(String(value ?? ""))}
-                items={people.map((person) => ({ value: person, label: person }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {people.map((person) => (
-                    <SelectItem key={person} value={person}>
-                      {person}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
+
+            <div className="border border-destructive/25 bg-destructive/5 px-3 py-2.5">
+              <p className="text-sm font-medium text-destructive">Lead response required</p>
+              <p className="mt-0.5 text-sm text-destructive">Your org requires a response within 5 minutes.</p>
+            </div>
           </div>
-          <Field label="Next step" htmlFor="opp-next">
-            <Textarea
-              id="opp-next"
-              value={nextStep}
-              onChange={(event) => setNextStep(event.target.value)}
-              rows={2}
-            />
-          </Field>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+          <SheetFooter className="border-t">
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving…" : "Save lead"}
             </Button>
-            <Button type="submit">Open lead</Button>
-          </DialogFooter>
+          </SheetFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 }
 

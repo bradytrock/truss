@@ -20,6 +20,7 @@ To attach a project that is already running:
    - [`supabase/migrations/20260819220000_job_codes.sql`](supabase/migrations/20260819220000_job_codes.sql) — job / pipeline codes (`BJ081926-A`)
    - [`supabase/migrations/20260819230000_google_calendars.sql`](supabase/migrations/20260819230000_google_calendars.sql) — per-user Google Calendar links, team sharing, admin visibility
    - [`supabase/migrations/20260819240000_training.sql`](supabase/migrations/20260819240000_training.sql) — per-seat training progress, badges, attempts, and company training bulletins
+   - [`supabase/migrations/20260819250000_lead_intake.sql`](supabase/migrations/20260819250000_lead_intake.sql) — lead source, referred-by contact, job-site address, and notes on pursuits
 3. In Authentication → URL configuration, add `http://localhost:3847/auth/callback`. For local work you can turn off “Confirm email”.
 4. Create an account. Signup opens a company, a profile, and the Northline sample book in Postgres.
 
@@ -37,7 +38,7 @@ To connect real Google Calendars, create an OAuth web client in Google Cloud (Ca
 
 - **Settings** — company name, main phone, office email, website, license, and office address. Only a company admin sees this, under the initials menu in the top right. The same block prints on estimates and invoices.
 - **Contacts** — homeowners first (no company required), plus adjusters, realtors, and one architect as referral partners
-- **Pipeline** — leads through sold and lost: hail, water, fire, kitchens, windows, an addition. Each card shows a job code (`BJ081926-A`) assigned when the lead is opened.
+- **Pipeline** — leads through sold and lost: hail, water, fire, kitchens, windows, an addition. Each card shows a job code (`BJ081926-A`) assigned when the lead is opened. **New lead** slides in from the right: assignee, homeowner name, phone, email, job-site address, and how they heard about you. If the source is Referral, search contacts this seat can see and connect the referrer.
 - **Jobs** — a status board of sold work. Codes carry over from the awarded lead; a job logged from scratch gets the next letter for that person’s day.
 - **Estimates / invoices** — EST-1001–1010 and INV-2001–2010 against homeowners, with insurance draws and retainage
 - **Calendar & photos** — Google Calendar per seat, team sharing, site walks, shingle days, punch, and job photos

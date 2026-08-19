@@ -49,6 +49,24 @@ export const DELIVERY_METHODS = [
 
 export type DeliveryMethod = (typeof DELIVERY_METHODS)[number];
 
+export const LEAD_SOURCES = [
+  "referral",
+  "google",
+  "website",
+  "facebook",
+  "instagram",
+  "yard_sign",
+  "truck",
+  "storm",
+  "insurance",
+  "realtor",
+  "repeat",
+  "neighbor",
+  "other",
+] as const;
+
+export type LeadSource = (typeof LEAD_SOURCES)[number];
+
 export const CLIENT_TYPES = [
   "owner",
   "developer",
@@ -185,6 +203,13 @@ export interface Opportunity {
   createdAt: string;
   lostReason?: string;
   ownerStaffId: string;
+  leadSource?: LeadSource | "";
+  referralContactId?: string | null;
+  street?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  notes?: string;
 }
 
 export interface Job {
@@ -471,6 +496,22 @@ export const DELIVERY_LABELS: Record<DeliveryMethod, string> = {
   cm_at_risk: "CM at risk",
   design_build: "Design-build",
   gc_mp: "GC / MP",
+};
+
+export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
+  referral: "Referral",
+  google: "Google search",
+  website: "Website",
+  facebook: "Facebook",
+  instagram: "Instagram",
+  yard_sign: "Yard sign",
+  truck: "Truck / wrap",
+  storm: "Storm canvass",
+  insurance: "Insurance adjuster",
+  realtor: "Realtor",
+  repeat: "Repeat customer",
+  neighbor: "Neighbor",
+  other: "Other",
 };
 
 export const CLIENT_TYPE_LABELS: Record<ClientType, string> = {

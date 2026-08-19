@@ -195,6 +195,18 @@ function requireClient() {
   return createClient();
 }
 
+function isMissingLeadIntake(error: { message?: string; code?: string }) {
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("schema cache") ||
+    message.includes("lead_source") ||
+    message.includes("referral_contact_id") ||
+    message.includes("Could not find the")
+  );
+}
+
 type CrmContextValue = CrmState & {
   user: CurrentUser;
   viewer: StaffMember | undefined;
@@ -895,32 +907,75 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           createdAt: new Date().toISOString(),
           winProbability: STAGE_PROBABILITY[input.stage],
           ownerStaffId,
+          leadSource: input.leadSource ?? "",
+          referralContactId: input.referralContactId ?? null,
+          street: input.street ?? "",
+          city: input.city ?? "",
+          state: input.state ?? "",
+          postalCode: input.postalCode ?? "",
+          notes: input.notes ?? "",
         };
         setState((prev) => ({ ...prev, opportunities: [opportunity, ...prev.opportunities] }));
         return opportunity;
       }
-      const { data, error } = await supabase
-        .from("opportunities")
-        .insert({
-          company_id: user.companyId,
-          name: input.name,
-          client_id: input.clientId || null,
-          primary_contact_id: input.primaryContactId || null,
-          stage: input.stage,
-          value: input.value,
-          bid_due_at: input.bidDueAt,
-          pre_bid_walk_at: input.preBidWalkAt,
-          location: input.location,
-          project_type: input.projectType,
-          delivery_method: input.deliveryMethod,
-          estimator: input.estimator,
-          owner_staff_id: ownerStaffId || null,
-          win_probability: STAGE_PROBABILITY[input.stage],
-          next_step: input.nextStep,
-          code,
-        })
-        .select("*")
-        .single();
+      const base = {
+        company_id: user.companyId,
+        name: input.name,
+        client_id: input.clientId || null,
+        primary_contact_id: input.primaryContactId || null,
+        stage: input.stage,
+        value: input.value,
+        bid_due_at: input.bidDueAt,
+        pre_bid_walk_at: input.preBidWalkAt,
+        location: input.location,
+        project_type: input.projectType,
+        delivery_method: input.deliveryMethod,
+        estimator: input.estimator,
+        owner_staff_id: ownerStaffId || null,
+        win_probability: STAGE_PROBABILITY[input.stage],
+        next_step: input.nextStep,
+        code,
+        lead_source: input.leadSource ?? "",
+        referral_contact_id: input.referralContactId || null,
+        street: input.street ?? "",
+        city: input.city ?? "",
+        state: input.state ?? "",
+        postal_code: input.postalCode ?? "",
+        notes: input.notes ?? "",
+      };
+      let { data, error } = await supabase.from("opportunities").insert(base).select("*").single();
+      if (error && isMissingLeadIntake(error)) {
+        const retry = await supabase
+          .from("opportunities")
+          .insert({
+            company_id: base.company_id,
+            name: base.name,
+            client_id: base.client_id,
+            primary_contact_id: base.primary_contact_id,
+            stage: base.stage,
+            value: base.value,
+            bid_due_at: base.bid_due_at,
+            pre_bid_walk_at: base.pre_bid_walk_at,
+            location: base.location,
+            project_type: base.project_type,
+            delivery_method: base.delivery_method,
+            estimator: base.estimator,
+            owner_staff_id: base.owner_staff_id,
+            win_probability: base.win_probability,
+            next_step: base.next_step,
+            code: base.code,
+          })
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+        if (error) {
+          toast.error(
+            "Run supabase/migrations/20260819250000_lead_intake.sql in the SQL editor, then try again.",
+          );
+          throw error;
+        }
+      }
       if (error || !data) {
         toast.error(codeInsertError(error, "Could not open the pursuit."));
         throw error ?? new Error("Could not open the pursuit.");

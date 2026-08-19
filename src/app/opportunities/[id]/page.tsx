@@ -28,6 +28,7 @@ import {
   STAGE_LABELS,
   type PipelineStage,
 } from "@/lib/types";
+import { formatJobSite, leadSourceLabel } from "@/lib/leads";
 
 export default function OpportunityDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -285,6 +286,40 @@ export default function OpportunityDetailPage() {
                   "—"
                 )}
               </RecordProperty>
+              {opportunity.leadSource ? (
+                <RecordProperty label="Source">
+                  {leadSourceLabel(opportunity.leadSource)}
+                </RecordProperty>
+              ) : null}
+              {opportunity.referralContactId ? (
+                <RecordProperty label="Referred by">
+                  {crm.getContact(opportunity.referralContactId) ? (
+                    <Link
+                      href={`/contacts/${opportunity.referralContactId}`}
+                      className="hover:underline"
+                    >
+                      {crm.getContact(opportunity.referralContactId)?.name}
+                    </Link>
+                  ) : (
+                    "Contact not in this seat’s book"
+                  )}
+                </RecordProperty>
+              ) : null}
+              {(opportunity.street || opportunity.city) ? (
+                <RecordProperty label="Job site">
+                  {formatJobSite({
+                    street: opportunity.street,
+                    city: opportunity.city,
+                    state: opportunity.state,
+                    postalCode: opportunity.postalCode,
+                  }) || opportunity.location}
+                </RecordProperty>
+              ) : (
+                <RecordProperty label="Location">{opportunity.location}</RecordProperty>
+              )}
+              {opportunity.notes ? (
+                <RecordProperty label="Notes">{opportunity.notes}</RecordProperty>
+              ) : null}
               <RecordProperty label="Delivery">{DELIVERY_LABELS[opportunity.deliveryMethod]}</RecordProperty>
               <RecordProperty label="Estimator">
                 <Select

@@ -156,6 +156,13 @@ export function mapOpportunity(row: OpportunityRow): Opportunity {
     createdAt: row.created_at,
     lostReason: row.lost_reason ?? undefined,
     ownerStaffId: row.owner_staff_id ?? "",
+    leadSource: (row.lead_source ?? "") as Opportunity["leadSource"],
+    referralContactId: row.referral_contact_id,
+    street: row.street ?? "",
+    city: row.city ?? "",
+    state: row.state ?? "",
+    postalCode: row.postal_code ?? "",
+    notes: row.notes ?? "",
   };
 }
 
@@ -222,6 +229,13 @@ export function opportunityPatch(patch: Partial<Opportunity>) {
   if (patch.lostReason !== undefined) row.lost_reason = patch.lostReason ?? null;
   if (patch.ownerStaffId !== undefined) row.owner_staff_id = patch.ownerStaffId || null;
   if (patch.code !== undefined) row.code = patch.code;
+  if (patch.leadSource !== undefined) row.lead_source = patch.leadSource ?? "";
+  if (patch.referralContactId !== undefined) row.referral_contact_id = patch.referralContactId || null;
+  if (patch.street !== undefined) row.street = patch.street;
+  if (patch.city !== undefined) row.city = patch.city;
+  if (patch.state !== undefined) row.state = patch.state;
+  if (patch.postalCode !== undefined) row.postal_code = patch.postalCode;
+  if (patch.notes !== undefined) row.notes = patch.notes;
   return row;
 }
 

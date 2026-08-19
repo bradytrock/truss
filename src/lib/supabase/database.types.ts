@@ -190,6 +190,13 @@ export type Database = {
           owner_staff_id: string | null;
           created_at: string;
           code: string;
+          lead_source: string;
+          referral_contact_id: string | null;
+          street: string;
+          city: string;
+          state: string;
+          postal_code: string;
+          notes: string;
         };
         Insert: {
           id?: string;
@@ -211,6 +218,13 @@ export type Database = {
           owner_staff_id?: string | null;
           created_at?: string;
           code?: string;
+          lead_source?: string;
+          referral_contact_id?: string | null;
+          street?: string;
+          city?: string;
+          state?: string;
+          postal_code?: string;
+          notes?: string;
         };
         Update: Partial<Database["public"]["Tables"]["opportunities"]["Insert"]>;
         Relationships: [];

@@ -22,6 +22,7 @@ import { TypeBadge } from "@/components/status-badge";
 import { EmptyState, RecordCode } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
 import { daysUntil, formatCurrency, formatDateShort } from "@/lib/format";
+import { leadSourceLabel } from "@/lib/leads";
 import {
   PIPELINE_STAGES,
   STAGE_LABELS,
@@ -238,6 +239,11 @@ function OpportunityCard({
               {opportunity.name}
             </Link>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{customerName}</p>
+            {opportunity.leadSource ? (
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                {leadSourceLabel(opportunity.leadSource)}
+              </p>
+            ) : null}
           </div>
         </div>
         <div className="flex items-center justify-between gap-2">
