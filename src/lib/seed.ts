@@ -1,5 +1,13 @@
 import { NORTHLINE_STAFF, NORTHLINE_TEAMS, type CrmState } from "@/lib/types";
 import { demoOps } from "@/lib/demo-ops";
+import {
+  extraActivities,
+  extraClients,
+  extraContacts,
+  extraJobs,
+  extraOpportunities,
+  extraTasks,
+} from "@/lib/northline-extra";
 
 export const seedState: CrmState = {
   staff: structuredClone(NORTHLINE_STAFF),
@@ -74,6 +82,7 @@ export const seedState: CrmState = {
       notes:
         "Key specifier. They put Northline on the bid list for most of their commercial and civic work.",
     },
+    ...extraClients,
   ],
   contacts: [
     {
@@ -196,6 +205,7 @@ export const seedState: CrmState = {
       ownerStaffId: "staff_luis",
       isReferralPartner: true,
     },
+    ...extraContacts,
   ],
   opportunities: [
     {
@@ -379,6 +389,7 @@ export const seedState: CrmState = {
       lostReason: "Second low. $410K over apparent low bidder.",
       createdAt: "2026-05-14T14:00:00.000Z",
     },
+    ...extraOpportunities,
   ],
   jobs: [
     {
@@ -451,6 +462,7 @@ export const seedState: CrmState = {
       location: "West Colfax, Denver, CO",
       ownerStaffId: "staff_luis",
     },
+    ...extraJobs,
   ],
   activities: [
     {
@@ -543,6 +555,7 @@ export const seedState: CrmState = {
       createdAt: "2026-08-13T16:00:00.000Z",
       author: "Luis Ortega",
     },
+    ...extraActivities,
   ],
   tasks: [
     {
@@ -617,6 +630,7 @@ export const seedState: CrmState = {
       relatedId: "job_parking",
       assignee: "Luis Ortega",
     },
+    ...extraTasks,
   ],
   catalog: demoOps.catalog,
   estimates: demoOps.estimates,

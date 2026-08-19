@@ -28,15 +28,18 @@ npm run dev
 
 ## What you can do
 
-- **Contacts** — people-first contact book. Companies still sit behind each person for jobs and invoices
-- **Seats** — company admin sees everything; business development sees all jobs with a restricted report; team leads/admins see their team and can Login As; project managers and supers see only their own book
-- **Reports** — open jobs, closed jobs YTD, referral partners in each PM’s book, YTD revenue, and team activity
-- **Pipeline** — pursuits from pursuing through award; awarding opens a precon job
+- **Contacts** — 28 people across owners, agencies, and architects, including referral partners in each PM’s book
+- **Pipeline** — 22 pursuits from pursuing through award and lost
+- **Jobs** — 12 field records (precon through complete, plus one on hold)
+- **Estimates / invoices** — EST-1001–1010 and INV-2001–2010 with payments and AR
+- **Schedule & photos** — walks, OACs, night work, and job photos
 - **Price book** — CSI-style labor, material, equipment, allowance, and subcontract items
 - **Estimates** — build a proposal from the catalog, send it, mark it accepted, convert it to an invoice
 - **Jobs** — field snapshot, activity, related billing, and job photos (upload or URL)
 - **Invoices** — draws and retainage with payment history and outstanding AR
 - **Schedule** — week view for walks, inspections, production, and owner meetings
+
+The Northline sample book loads locally with no sign-in. Avatar menu → **Reset demo data** restores it in memory, or (after migrations and a signed-in company) wipes that company’s CRM tables and reloads this book. It does not delete the Auth user.
 
 ## What lives in Supabase
 

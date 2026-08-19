@@ -1,6 +1,16 @@
 import type { CrmState } from "@/lib/types";
+import {
+  extraCatalog,
+  extraEstimateLines,
+  extraEstimates,
+  extraEvents,
+  extraInvoiceLines,
+  extraInvoices,
+  extraPayments,
+  extraPhotos,
+} from "@/lib/demo-ops-extra";
 
-export const demoOps: Pick<
+export const demoOpsCore: Pick<
   CrmState,
   | "catalog"
   | "estimates"
@@ -32,8 +42,10 @@ export const demoOps: Pick<
     { id: "cat_env", name: "Envelope & waterproofing", kind: "subcontract", unit: "LS", unitCost: 1960000, costCode: "07 10 00" },
     { id: "cat_int", name: "Interiors package", kind: "subcontract", unit: "LS", unitCost: 3410000, costCode: "09 00 00" },
     { id: "cat_conc_pkg", name: "Concrete package", kind: "subcontract", unit: "LS", unitCost: 1240000, costCode: "03 00 00" },
+    ...extraCatalog,
   ],
   estimates: [
+    // existing estimates stay below
     {
       id: "est_imaging",
       number: "EST-1001",
@@ -398,4 +410,15 @@ export const demoOps: Pick<
       storagePath: null,
     },
   ],
+};
+
+export const demoOps: typeof demoOpsCore = {
+  catalog: [...demoOpsCore.catalog, ...extraCatalog],
+  estimates: [...demoOpsCore.estimates, ...extraEstimates],
+  estimateLines: [...demoOpsCore.estimateLines, ...extraEstimateLines],
+  invoices: [...demoOpsCore.invoices, ...extraInvoices],
+  invoiceLines: [...demoOpsCore.invoiceLines, ...extraInvoiceLines],
+  payments: [...demoOpsCore.payments, ...extraPayments],
+  events: [...demoOpsCore.events, ...extraEvents],
+  photos: [...demoOpsCore.photos, ...extraPhotos],
 };
