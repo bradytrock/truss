@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthFrame } from "@/components/auth-frame";
 import { ConnectSupabaseForm } from "@/components/connect-supabase";
+import { authErrorMessage } from "@/lib/auth-errors";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
@@ -21,40 +22,55 @@ export default function SignupPage() {
   const [title, setTitle] = useState("VP, Preconstruction");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
+    setFormError(null);
     if (!isSupabaseConfigured()) {
-      toast.error("Connect the Supabase project first.");
+      const message = "Connect the Supabase project first.";
+      setFormError(message);
+      toast.error(message);
       return;
     }
     setPending(true);
-    const supabase = createClient();
-    const origin = window.location.origin;
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${origin}/auth/callback`,
-        data: {
-          full_name: fullName,
-          company,
-          title,
+    try {
+      const supabase = createClient();
+      const origin = window.location.origin;
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${origin}/auth/callback`,
+          data: {
+            full_name: fullName,
+            company,
+            title,
+          },
         },
-      },
-    });
-    setPending(false);
-    if (error) {
-      toast.error(error.message);
-      return;
+      });
+      if (error) {
+        const message = authErrorMessage(error);
+        setFormError(message);
+        toast.error(message);
+        return;
+      }
+      if (data.session) {
+        router.replace("/");
+        router.refresh();
+        return;
+      }
+      const message =
+        "Account created, but this project requires email confirmation, so you cannot sign in yet. In Supabase: Authentication → Providers → Email → turn off Confirm email. Then sign in. Until then, open the sample book.";
+      setFormError(message);
+      toast.message(message);
+    } catch (error) {
+      const message = authErrorMessage(error instanceof Error ? error.message : "Could not create the account.");
+      setFormError(message);
+      toast.error(message);
+    } finally {
+      setPending(false);
     }
-    if (data.session) {
-      router.replace("/");
-      router.refresh();
-      return;
-    }
-    toast.success("Check your email to confirm the account, then sign in.");
-    router.replace("/login");
   }
 
   return (
@@ -64,6 +80,11 @@ export default function SignupPage() {
     >
       {configured ? (
         <form onSubmit={onSubmit} className="grid gap-3">
+        {formError ? (
+          <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {formError}
+          </p>
+        ) : null}
         <div className="grid gap-1.5">
           <Label htmlFor="name">Your name</Label>
           <Input
@@ -117,7 +138,7 @@ export default function SignupPage() {
             required
           />
         </div>
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" nativeButton disabled={pending}>
           {pending ? "Creating workspace…" : "Create account"}
         </Button>
       </form>
@@ -129,6 +150,13 @@ export default function SignupPage() {
         <Link href="/login" className="font-medium text-primary hover:underline">
           Sign in
         </Link>
+        <span className="block mt-2">
+          Or{" "}
+          <Link href="/" className="font-medium text-primary hover:underline">
+            open the Northline sample book
+          </Link>{" "}
+          without signing in.
+        </span>
       </p>
     </AuthFrame>
   );

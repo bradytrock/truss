@@ -249,7 +249,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       error: authError,
     } = await supabase.auth.getUser();
     if (authError || !authUser) {
-      setHydrateError(authError?.message ?? "Sign in to load the book of work.");
+      setState(structuredClone(seedState));
+      setUser(northlineUser);
+      setHydrateError(null);
       setHydrated(true);
       return;
     }
@@ -260,7 +262,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       .eq("id", authUser.id)
       .maybeSingle();
     if (profileError || !profile) {
-      setHydrateError(profileError?.message ?? "No profile yet. Sign out and create an account.");
+      setState(structuredClone(seedState));
+      setUser(northlineUser);
+      const missingSchema =
+        profileError?.message?.includes("schema cache") ||
+        profileError?.code === "PGRST205" ||
+        profileError?.message?.includes("Could not find the table");
+      setHydrateError(
+        missingSchema
+          ? "Signed in, but this project is missing the Truss tables. Run the three files in supabase/migrations in the SQL editor (in order), then reset demo data."
+          : profileError?.message ??
+            "No profile yet. Create an account after the migrations have been applied."
+      );
       setHydrated(true);
       return;
     }
