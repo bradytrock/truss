@@ -168,6 +168,7 @@ export interface Contact {
 
 export interface Opportunity {
   id: string;
+  code: string;
   name: string;
   clientId: string | null;
   primaryContactId: string;
@@ -188,6 +189,7 @@ export interface Opportunity {
 
 export interface Job {
   id: string;
+  code: string;
   opportunityId: string | null;
   name: string;
   clientId: string | null;

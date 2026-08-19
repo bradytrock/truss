@@ -128,6 +128,7 @@ export default function ClientDetailPage() {
                           {job.name}
                         </Link>
                         <p className="text-xs text-muted-foreground">
+                          {job.code ? `${job.code} · ` : ""}
                           {formatCurrencyFull(job.contractValue)} · {job.projectManager}
                         </p>
                       </div>

@@ -1,3 +1,4 @@
+import { backfillRecordCodes } from "@/lib/job-code";
 import { NORTHLINE_STAFF, NORTHLINE_TEAMS, type CrmState } from "@/lib/types";
 import { demoOps } from "@/lib/demo-ops";
 import {
@@ -9,13 +10,19 @@ import {
   extraTasks,
 } from "@/lib/northline-extra";
 
+const stamped = backfillRecordCodes(
+  extraOpportunities.map((opportunity) => ({ ...opportunity, code: "" })),
+  extraJobs.map((job) => ({ ...job, code: "" })),
+  NORTHLINE_STAFF,
+);
+
 export const seedState: CrmState = {
   staff: structuredClone(NORTHLINE_STAFF),
   teams: structuredClone(NORTHLINE_TEAMS),
   clients: extraClients,
   contacts: extraContacts,
-  opportunities: extraOpportunities,
-  jobs: extraJobs,
+  opportunities: stamped.opportunities,
+  jobs: stamped.jobs,
   activities: extraActivities,
   tasks: extraTasks,
   catalog: demoOps.catalog,

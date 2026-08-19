@@ -16,7 +16,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ActivityComposer, ActivityList } from "@/components/activity";
 import { RecordProperty } from "@/components/app-shell";
-import { EmptyState, LoadingScreen } from "@/components/page-chrome";
+import { EmptyState, LoadingScreen, RecordCode } from "@/components/page-chrome";
 import { EstimateStatusBadge, StageBadge, TypeBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { daysUntil, formatCurrencyFull, formatDate } from "@/lib/format";
@@ -79,9 +79,15 @@ export default function OpportunityDetailPage() {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
-          <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Pursuit
-          </p>
+          {opportunity.code ? (
+            <p className="mb-1">
+              <RecordCode code={opportunity.code} className="text-xs" />
+            </p>
+          ) : (
+            <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Pursuit
+            </p>
+          )}
           <h1 className="font-heading text-[1.85rem] leading-[1.1] font-medium text-balance">
             {opportunity.name}
           </h1>
@@ -179,7 +185,7 @@ export default function OpportunityDetailPage() {
                 <p className="text-sm">
                   Awarded work lives on{" "}
                   <Link href={`/jobs/${job.id}`} className="font-medium text-primary hover:underline">
-                    {job.name}
+                    {job.code ? `${job.code} · ${job.name}` : job.name}
                   </Link>
                   . {job.projectManager} is PM.
                 </p>

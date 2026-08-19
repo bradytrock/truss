@@ -17,6 +17,7 @@ To attach a project that is already running:
    - [`supabase/migrations/20260819190000_seats_contacts.sql`](supabase/migrations/20260819190000_seats_contacts.sql) — seats, teams, contact-book ownership, referral partners
    - [`supabase/migrations/20260819200000_residential_homeowners.sql`](supabase/migrations/20260819200000_residential_homeowners.sql) — optional company on contacts/jobs, residential types, insurance / T&M delivery
    - [`supabase/migrations/20260819210000_company_settings.sql`](supabase/migrations/20260819210000_company_settings.sql) — business name, phone, email, address, and license on `companies`
+   - [`supabase/migrations/20260819220000_job_codes.sql`](supabase/migrations/20260819220000_job_codes.sql) — job / pipeline codes (`BJ081926-A`)
 3. In Authentication → URL configuration, add `http://localhost:3847/auth/callback`. For local work you can turn off “Confirm email”.
 4. Create an account. Signup opens a company, a profile, and the Northline sample book in Postgres.
 
@@ -32,8 +33,8 @@ npm run dev
 
 - **Settings** — company name, main phone, office email, website, license, and office address. Only a company admin sees this, under the initials menu in the top right. The same block prints on estimates and invoices.
 - **Contacts** — homeowners first (no company required), plus adjusters, realtors, and one architect as referral partners
-- **Pipeline** — leads through sold and lost: hail, water, fire, kitchens, windows, an addition
-- **Jobs** — 11 residential field records and one small commercial TI
+- **Pipeline** — leads through sold and lost: hail, water, fire, kitchens, windows, an addition. Each card shows a job code (`BJ081926-A`) assigned when the lead is opened.
+- **Jobs** — a status board of sold work. Codes carry over from the awarded lead; a job logged from scratch gets the next letter for that person’s day.
 - **Estimates / invoices** — EST-1001–1010 and INV-2001–2010 against homeowners, with insurance draws and retainage
 - **Schedule & photos** — site walks, shingle days, punch, and job photos
 - **Price book** — roofing squares, extraction, cabinets, and the usual trades

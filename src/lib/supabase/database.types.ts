@@ -189,6 +189,7 @@ export type Database = {
           lost_reason: string | null;
           owner_staff_id: string | null;
           created_at: string;
+          code: string;
         };
         Insert: {
           id?: string;
@@ -209,6 +210,7 @@ export type Database = {
           lost_reason?: string | null;
           owner_staff_id?: string | null;
           created_at?: string;
+          code?: string;
         };
         Update: Partial<Database["public"]["Tables"]["opportunities"]["Insert"]>;
         Relationships: [];
@@ -230,6 +232,7 @@ export type Database = {
           location: string;
           owner_staff_id: string | null;
           created_at: string;
+          code: string;
         };
         Insert: {
           id?: string;
@@ -246,6 +249,7 @@ export type Database = {
           project_manager?: string;
           location?: string;
           owner_staff_id?: string | null;
+          code?: string;
         };
         Update: Partial<Database["public"]["Tables"]["jobs"]["Insert"]>;
         Relationships: [];

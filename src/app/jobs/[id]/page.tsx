@@ -15,7 +15,7 @@ import {
 import { ActivityComposer, ActivityList } from "@/components/activity";
 import { RecordProperty } from "@/components/app-shell";
 import { AddPhotoDialog, CreateEstimateDialog, CreateInvoiceDialog } from "@/components/create-ops-dialogs";
-import { EmptyState, LoadingScreen } from "@/components/page-chrome";
+import { EmptyState, LoadingScreen, RecordCode } from "@/components/page-chrome";
 import {
   EstimateStatusBadge,
   InvoiceStatusBadge,
@@ -71,9 +71,15 @@ export default function JobDetailPage() {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Job
-          </p>
+          {job.code ? (
+            <p className="mb-1">
+              <RecordCode code={job.code} className="text-xs" />
+            </p>
+          ) : (
+            <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Job
+            </p>
+          )}
           <h1 className="font-heading text-[1.85rem] leading-[1.1] font-medium text-balance">
             {job.name}
           </h1>
@@ -107,7 +113,11 @@ export default function JobDetailPage() {
             <CardHeader className="border-b">
               <CardTitle>Field snapshot</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-3">
+            <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <p className="text-xs text-muted-foreground">Job code</p>
+                <p className="font-mono text-sm font-medium">{job.code || "—"}</p>
+              </div>
               <div>
                 <p className="text-xs text-muted-foreground">Project manager</p>
                 <p className="text-sm font-medium">{job.projectManager}</p>

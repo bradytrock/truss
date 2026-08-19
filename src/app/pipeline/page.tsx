@@ -31,7 +31,7 @@ export default function PipelinePage() {
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filter by project, homeowner, or city"
+            placeholder="Filter by code, project, homeowner, or city"
             className="w-full sm:w-72"
           />
         }

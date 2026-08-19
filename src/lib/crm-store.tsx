@@ -60,6 +60,12 @@ import {
   type SeatRole,
   type StaffMember,
 } from "@/lib/types";
+import {
+  backfillRecordCodes,
+  codeInsertError,
+  existingRecordCodes,
+  nextJobCode,
+} from "@/lib/job-code";
 import { resolveCustomerName, type CustomerRecord } from "@/lib/parties";
 import { canLoginAs, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 
@@ -119,6 +125,16 @@ const northlineUser = userFromStaff(NORTHLINE_STAFF[0], {
 
 const DEMO_STAFF_KEY = "truss.demoStaffId";
 const COMPANY_SETTINGS_KEY = "truss.companySettings";
+
+function allocateCode(
+  creatorName: string,
+  jobs: Job[],
+  opportunities: Opportunity[],
+  inherit?: string,
+) {
+  if (inherit) return inherit;
+  return nextJobCode(creatorName, new Date(), existingRecordCodes([...jobs, ...opportunities]));
+}
 
 function readLocalCompany(): CompanySettings {
   try {
@@ -185,7 +201,7 @@ type CrmContextValue = CrmState & {
   updateOpportunity: (id: string, patch: Partial<Opportunity>) => Promise<void>;
   updateJob: (id: string, patch: Partial<Job>) => Promise<void>;
   addOpportunity: (
-    input: Omit<Opportunity, "id" | "createdAt" | "winProbability" | "ownerStaffId"> & {
+    input: Omit<Opportunity, "id" | "code" | "createdAt" | "winProbability" | "ownerStaffId"> & {
       ownerStaffId?: string;
     }
   ) => Promise<Opportunity>;
@@ -197,7 +213,7 @@ type CrmContextValue = CrmState & {
     }
   ) => Promise<Client>;
   addContact: (input: Omit<Contact, "id">) => Promise<Contact>;
-  addJob: (input: Omit<Job, "id" | "ownerStaffId"> & { ownerStaffId?: string }) => Promise<Job>;
+  addJob: (input: Omit<Job, "id" | "code" | "ownerStaffId"> & { ownerStaffId?: string }) => Promise<Job>;
   addActivity: (input: {
     entityType: "opportunity" | "job" | "client";
     entityId: string;
@@ -307,7 +323,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         profileError?.message?.includes("Could not find the table");
       setHydrateError(
         missingSchema
-          ? "Signed in, but this project is missing the Truss tables. Run the five files in supabase/migrations in the SQL editor (in order), then reset demo data."
+          ? "Signed in, but this project is missing the Truss tables. Run the files in supabase/migrations in the SQL editor (in order), then reset demo data."
           : profileError?.message ??
             "No profile yet. Create an account after the migrations have been applied."
       );
@@ -366,7 +382,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         role,
         teamId: matched?.teamId ?? null,
       });
-      setState(book.state);
+      const stamped = backfillRecordCodes(
+        book.state.opportunities,
+        book.state.jobs,
+        book.state.staff.length > 0 ? book.state.staff : NORTHLINE_STAFF,
+      );
+      setState({ ...book.state, opportunities: stamped.opportunities, jobs: stamped.jobs });
       setHydrateError(null);
       setHydrated(true);
     } catch (error) {
@@ -642,6 +663,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             nextJobs = [
               {
                 id: crypto.randomUUID(),
+                code: allocateCode(user.name, jobs, prev.opportunities, current.code),
                 opportunityId: id,
                 name: current.name,
                 clientId: current.clientId,
@@ -730,11 +752,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               project_manager: user.name || "Luis Ortega",
               location: current.location,
               owner_staff_id: user.staffId || null,
+              code: allocateCode(user.name, state.jobs, state.opportunities, current.code),
             })
             .select("*")
             .single();
           if (jobError) {
-            toast.error(jobError.message);
+            toast.error(codeInsertError(jobError, "Could not open the job."));
           } else if (data) {
             createdJob = mapJob(data);
             await addActivity({
@@ -802,7 +825,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const addOpportunity = useCallback(
     async (
-      input: Omit<Opportunity, "id" | "createdAt" | "winProbability" | "ownerStaffId"> & {
+      input: Omit<Opportunity, "id" | "code" | "createdAt" | "winProbability" | "ownerStaffId"> & {
         ownerStaffId?: string;
       }
     ) => {
@@ -810,11 +833,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         input.ownerStaffId ||
         staffByName(input.estimator, state.staff)?.id ||
         user.staffId;
+      const code = allocateCode(user.name, state.jobs, state.opportunities);
       const supabase = requireClient();
       if (!supabase) {
         const opportunity: Opportunity = {
           ...input,
           id: crypto.randomUUID(),
+          code,
           createdAt: new Date().toISOString(),
           winProbability: STAGE_PROBABILITY[input.stage],
           ownerStaffId,
@@ -840,11 +865,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           owner_staff_id: ownerStaffId || null,
           win_probability: STAGE_PROBABILITY[input.stage],
           next_step: input.nextStep,
+          code,
         })
         .select("*")
         .single();
       if (error || !data) {
-        toast.error(error?.message ?? "Could not open the pursuit.");
+        toast.error(codeInsertError(error, "Could not open the pursuit."));
         throw error ?? new Error("Could not open the pursuit.");
       }
       const opportunity = mapOpportunity(data);
@@ -857,7 +883,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       return opportunity;
     },
-    [addActivity, state.staff, user.companyId, user.staffId]
+    [addActivity, state.jobs, state.opportunities, state.staff, user.companyId, user.name, user.staffId]
   );
 
   const addClient = useCallback(
@@ -967,14 +993,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const addJob = useCallback(
-    async (input: Omit<Job, "id" | "ownerStaffId"> & { ownerStaffId?: string }) => {
+    async (input: Omit<Job, "id" | "code" | "ownerStaffId"> & { ownerStaffId?: string }) => {
       const ownerStaffId =
         input.ownerStaffId ||
         staffByName(input.projectManager, state.staff)?.id ||
         user.staffId;
+      const linked = input.opportunityId
+        ? state.opportunities.find((opportunity) => opportunity.id === input.opportunityId)
+        : undefined;
+      const code = allocateCode(user.name, state.jobs, state.opportunities, linked?.code);
       const supabase = requireClient();
       if (!supabase) {
-        const job: Job = { ...input, id: crypto.randomUUID(), ownerStaffId };
+        const job: Job = { ...input, id: crypto.randomUUID(), ownerStaffId, code };
         setState((prev) => ({ ...prev, jobs: [job, ...prev.jobs] }));
         return job;
       }
@@ -994,11 +1024,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           project_manager: input.projectManager,
           location: input.location,
           owner_staff_id: ownerStaffId || null,
+          code,
         })
         .select("*")
         .single();
       if (error || !data) {
-        toast.error(error?.message ?? "Could not log the job.");
+        toast.error(codeInsertError(error, "Could not log the job."));
         throw error ?? new Error("Could not log the job.");
       }
       const job = mapJob(data);
@@ -1011,7 +1042,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       return job;
     },
-    [addActivity, state.staff, user.companyId, user.staffId]
+    [addActivity, state.jobs, state.opportunities, state.staff, user.companyId, user.name, user.staffId]
   );
 
   const toggleTask = useCallback(async (id: string) => {

@@ -126,7 +126,7 @@ export const extraContacts: Contact[] = [
   },
 ];
 
-export const extraOpportunities: Opportunity[] = [
+export const extraOpportunities: Omit<Opportunity, "code">[] = [
   {
     id: "opp_alvarez_roof",
     name: "Alvarez hail roof — Park Hill",
@@ -563,7 +563,7 @@ export const extraOpportunities: Opportunity[] = [
   },
 ];
 
-export const extraJobs: Job[] = [
+export const extraJobs: Omit<Job, "code">[] = [
   {
     id: "job_alvarez_roof",
     opportunityId: "opp_alvarez_roof",

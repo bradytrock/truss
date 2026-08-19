@@ -153,6 +153,9 @@ export default function ReportsPage() {
                     <Link href={`/jobs/${job.id}`} className="font-medium hover:underline">
                       {job.name}
                     </Link>
+                    {job.code ? (
+                      <p className="font-mono text-xs text-muted-foreground">{job.code}</p>
+                    ) : null}
                   </TableCell>
                   <TableCell>{job.projectManager}</TableCell>
                   <TableCell>

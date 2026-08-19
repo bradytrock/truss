@@ -246,13 +246,18 @@ function SearchTrigger() {
               {opportunities.map((opportunity) => (
                 <CommandItem
                   key={opportunity.id}
-                  value={`${opportunity.name} ${opportunity.location}`}
+                  value={`${opportunity.code} ${opportunity.name} ${opportunity.location}`}
                   onSelect={() => {
                     setOpen(false);
                     router.push(`/opportunities/${opportunity.id}`);
                   }}
                 >
-                  {opportunity.name}
+                  <span className="min-w-0 truncate">{opportunity.name}</span>
+                  {opportunity.code ? (
+                    <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+                      {opportunity.code}
+                    </span>
+                  ) : null}
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -260,13 +265,16 @@ function SearchTrigger() {
               {jobs.map((job) => (
                 <CommandItem
                   key={job.id}
-                  value={`${job.name} ${job.location}`}
+                  value={`${job.code} ${job.name} ${job.location}`}
                   onSelect={() => {
                     setOpen(false);
                     router.push(`/jobs/${job.id}`);
                   }}
                 >
-                  {job.name}
+                  <span className="min-w-0 truncate">{job.name}</span>
+                  {job.code ? (
+                    <span className="ml-auto font-mono text-[10px] text-muted-foreground">{job.code}</span>
+                  ) : null}
                 </CommandItem>
               ))}
             </CommandGroup>

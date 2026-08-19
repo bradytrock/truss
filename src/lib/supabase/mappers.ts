@@ -97,6 +97,7 @@ export function mapContact(row: ContactRow): Contact {
 export function mapOpportunity(row: OpportunityRow): Opportunity {
   return {
     id: row.id,
+    code: row.code || "",
     name: row.name,
     clientId: row.client_id,
     primaryContactId: row.primary_contact_id ?? "",
@@ -119,6 +120,7 @@ export function mapOpportunity(row: OpportunityRow): Opportunity {
 export function mapJob(row: JobRow): Job {
   return {
     id: row.id,
+    code: row.code || "",
     opportunityId: row.opportunity_id,
     name: row.name,
     clientId: row.client_id,
@@ -177,6 +179,7 @@ export function opportunityPatch(patch: Partial<Opportunity>) {
   if (patch.nextStep !== undefined) row.next_step = patch.nextStep;
   if (patch.lostReason !== undefined) row.lost_reason = patch.lostReason ?? null;
   if (patch.ownerStaffId !== undefined) row.owner_staff_id = patch.ownerStaffId || null;
+  if (patch.code !== undefined) row.code = patch.code;
   return row;
 }
 
@@ -196,6 +199,7 @@ export function jobPatch(patch: Partial<Job>) {
   if (patch.projectManager !== undefined) row.project_manager = patch.projectManager;
   if (patch.location !== undefined) row.location = patch.location;
   if (patch.ownerStaffId !== undefined) row.owner_staff_id = patch.ownerStaffId || null;
+  if (patch.code !== undefined) row.code = patch.code;
   return row;
 }
 

@@ -81,7 +81,7 @@ export function CreateOpportunityDialog({
         estimator,
         nextStep,
       });
-      toast.success(`Lead opened: ${opportunity.name}`);
+      toast.success(`Lead opened: ${opportunity.code}`);
       onOpenChange(false);
       setName("");
     } catch {
@@ -504,7 +504,7 @@ export function CreateJobDialog({
         projectManager,
         location,
       });
-      toast.success(`Job logged: ${job.name}`);
+      toast.success(`Job logged: ${job.code}`);
       onOpenChange(false);
       setName("");
     } catch {

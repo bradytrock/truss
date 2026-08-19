@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ErrorBanner, LoadingScreen, Metric, MetricStrip, PageHeader } from "@/components/page-chrome";
+import { ErrorBanner, LoadingScreen, Metric, MetricStrip, PageHeader, RecordCode } from "@/components/page-chrome";
 import { JobStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import {
@@ -335,7 +335,10 @@ export default function HomePage() {
               <Card className="h-full transition-colors hover:bg-muted/40">
                 <CardHeader>
                   <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="text-sm">{job.name}</CardTitle>
+                    <div className="min-w-0">
+                      <RecordCode code={job.code} />
+                      <CardTitle className="mt-0.5 text-sm">{job.name}</CardTitle>
+                    </div>
                     <JobStatusBadge status={job.status} />
                   </div>
                   <CardDescription>

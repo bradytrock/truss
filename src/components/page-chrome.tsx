@@ -119,3 +119,18 @@ export function ErrorBanner({
     </div>
   );
 }
+
+export function RecordCode({
+  code,
+  className,
+}: {
+  code?: string;
+  className?: string;
+}) {
+  if (!code) return null;
+  return (
+    <span className={cn("font-mono text-[11px] font-medium tracking-wide text-muted-foreground", className)}>
+      {code}
+    </span>
+  );
+}

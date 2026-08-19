@@ -116,6 +116,7 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
       next_step: opportunity.nextStep,
       lost_reason: opportunity.lostReason ?? null,
       created_at: opportunity.createdAt,
+      code: opportunity.code,
     }))
   );
   if (oppError) throw oppError;
@@ -136,6 +137,7 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
       project_manager: job.projectManager,
       location: job.location,
       owner_staff_id: job.ownerStaffId ? remap(job.ownerStaffId, ids) : null,
+      code: job.code,
     }))
   );
   if (jobError) throw jobError;

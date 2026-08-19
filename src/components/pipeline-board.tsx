@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { TypeBadge } from "@/components/status-badge";
-import { EmptyState } from "@/components/page-chrome";
+import { EmptyState, RecordCode } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
 import { daysUntil, formatCurrency, formatDateShort } from "@/lib/format";
 import {
@@ -54,6 +54,7 @@ export function PipelineBoard({ query }: { query: string }) {
       const customer = customerName(opportunity);
       const contact = getContact(opportunity.primaryContactId);
       return (
+        opportunity.code.toLowerCase().includes(needle) ||
         opportunity.name.toLowerCase().includes(needle) ||
         opportunity.location.toLowerCase().includes(needle) ||
         customer.toLowerCase().includes(needle) ||
@@ -229,9 +230,10 @@ function OpportunityCard({
             <GripVertical className="size-3.5" />
           </button>
           <div className="min-w-0 flex-1">
+            <RecordCode code={opportunity.code} />
             <Link
               href={`/opportunities/${opportunity.id}`}
-              className="block text-sm font-medium leading-snug hover:underline"
+              className="mt-0.5 block text-sm font-medium leading-snug hover:underline"
             >
               {opportunity.name}
             </Link>

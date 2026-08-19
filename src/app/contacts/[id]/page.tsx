@@ -96,7 +96,10 @@ export default function ContactDetailPage() {
                         <Link href={`/jobs/${job.id}`} className="text-sm font-medium hover:underline">
                           {job.name}
                         </Link>
-                        <p className="text-xs text-muted-foreground">{job.projectManager}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {job.code ? `${job.code} · ` : ""}
+                          {job.projectManager}
+                        </p>
                       </div>
                       <JobStatusBadge status={job.status} />
                     </li>
