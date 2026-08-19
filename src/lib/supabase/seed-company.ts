@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { seedState } from "@/lib/seed";
+import { insertOperations, wipeOperations } from "@/lib/supabase/ops-seed";
 import { TEAM } from "@/lib/types";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -17,6 +18,7 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
   const ids = new Map<string, string>();
   const seed = structuredClone(seedState);
 
+  await wipeOperations(supabase, companyId);
   const { error: wipeActivities } = await supabase.from("activities").delete().eq("company_id", companyId);
   if (wipeActivities) throw wipeActivities;
   const { error: wipeTasks } = await supabase.from("tasks").delete().eq("company_id", companyId);
@@ -144,4 +146,6 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
     }))
   );
   if (taskError) throw taskError;
+
+  await insertOperations(supabase, companyId, ids);
 }

@@ -1,10 +1,18 @@
 import type { Database } from "@/lib/supabase/database.types";
 import type {
   Activity,
+  CatalogItem,
   Client,
   Contact,
+  Estimate,
+  EstimateLine,
+  Invoice,
+  InvoiceLine,
   Job,
+  JobPhoto,
   Opportunity,
+  Payment,
+  ScheduleEvent,
   Task,
 } from "@/lib/types";
 
@@ -14,6 +22,14 @@ type OpportunityRow = Database["public"]["Tables"]["opportunities"]["Row"];
 type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ActivityRow = Database["public"]["Tables"]["activities"]["Row"];
 type TaskRow = Database["public"]["Tables"]["tasks"]["Row"];
+type CatalogRow = Database["public"]["Tables"]["catalog_items"]["Row"];
+type EstimateRow = Database["public"]["Tables"]["estimates"]["Row"];
+type EstimateLineRow = Database["public"]["Tables"]["estimate_lines"]["Row"];
+type InvoiceRow = Database["public"]["Tables"]["invoices"]["Row"];
+type InvoiceLineRow = Database["public"]["Tables"]["invoice_lines"]["Row"];
+type PaymentRow = Database["public"]["Tables"]["payments"]["Row"];
+type EventRow = Database["public"]["Tables"]["schedule_events"]["Row"];
+type PhotoRow = Database["public"]["Tables"]["job_photos"]["Row"];
 
 export function mapClient(row: ClientRow): Client {
   return {
@@ -134,4 +150,111 @@ export function jobPatch(patch: Partial<Job>) {
   if (patch.projectManager !== undefined) row.project_manager = patch.projectManager;
   if (patch.location !== undefined) row.location = patch.location;
   return row;
+}
+
+export function mapCatalogItem(row: CatalogRow): CatalogItem {
+  return {
+    id: row.id,
+    name: row.name,
+    kind: row.kind,
+    unit: row.unit,
+    unitCost: Number(row.unit_cost),
+    costCode: row.cost_code,
+  };
+}
+
+export function mapEstimate(row: EstimateRow): Estimate {
+  return {
+    id: row.id,
+    number: row.number,
+    name: row.name,
+    clientId: row.client_id,
+    opportunityId: row.opportunity_id,
+    jobId: row.job_id,
+    status: row.status,
+    notes: row.notes,
+    validUntil: row.valid_until,
+    sentAt: row.sent_at,
+    acceptedAt: row.accepted_at,
+    createdAt: row.created_at,
+  };
+}
+
+export function mapEstimateLine(row: EstimateLineRow): EstimateLine {
+  return {
+    id: row.id,
+    estimateId: row.estimate_id,
+    catalogItemId: row.catalog_item_id,
+    description: row.description,
+    quantity: Number(row.quantity),
+    unit: row.unit,
+    unitCost: Number(row.unit_cost),
+    sortOrder: row.sort_order,
+  };
+}
+
+export function mapInvoice(row: InvoiceRow): Invoice {
+  return {
+    id: row.id,
+    number: row.number,
+    name: row.name,
+    clientId: row.client_id,
+    jobId: row.job_id,
+    estimateId: row.estimate_id,
+    status: row.status,
+    issuedAt: row.issued_at,
+    dueAt: row.due_at,
+    notes: row.notes,
+  };
+}
+
+export function mapInvoiceLine(row: InvoiceLineRow): InvoiceLine {
+  return {
+    id: row.id,
+    invoiceId: row.invoice_id,
+    description: row.description,
+    quantity: Number(row.quantity),
+    unit: row.unit,
+    unitCost: Number(row.unit_cost),
+    sortOrder: row.sort_order,
+  };
+}
+
+export function mapPayment(row: PaymentRow): Payment {
+  return {
+    id: row.id,
+    invoiceId: row.invoice_id,
+    amount: Number(row.amount),
+    method: row.method,
+    paidAt: row.paid_at,
+    reference: row.reference,
+  };
+}
+
+export function mapScheduleEvent(row: EventRow): ScheduleEvent {
+  return {
+    id: row.id,
+    title: row.title,
+    kind: row.kind,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    location: row.location,
+    assignee: row.assignee,
+    opportunityId: row.opportunity_id,
+    jobId: row.job_id,
+    clientId: row.client_id,
+    notes: row.notes,
+  };
+}
+
+export function mapJobPhoto(row: PhotoRow): JobPhoto {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    caption: row.caption,
+    category: row.category,
+    takenAt: row.taken_at,
+    imageUrl: row.image_url,
+    storagePath: row.storage_path,
+  };
 }

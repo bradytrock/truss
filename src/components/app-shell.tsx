@@ -6,10 +6,13 @@ import { useEffect, useState, type ReactNode } from "react";
 import {
   Building2,
   Briefcase,
+  CalendarDays,
+  FileText,
   Kanban,
   LayoutDashboard,
   Menu,
   Plus,
+  Receipt,
   Search,
 } from "lucide-react";
 import { useCrm } from "@/lib/crm-store";
@@ -43,19 +46,29 @@ import {
   CreateJobDialog,
   CreateOpportunityDialog,
 } from "@/components/create-records";
+import {
+  CreateEstimateDialog,
+  CreateEventDialog,
+  CreateInvoiceDialog,
+} from "@/components/create-ops-dialogs";
 import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/pipeline", label: "Pipeline", icon: Kanban },
+  { href: "/estimates", label: "Estimates", icon: FileText },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
+  { href: "/invoices", label: "Invoices", icon: Receipt },
+  { href: "/schedule", label: "Schedule", icon: CalendarDays },
   { href: "/clients", label: "Clients", icon: Building2 },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [create, setCreate] = useState<"opportunity" | "client" | "job" | null>(null);
+  const [create, setCreate] = useState<
+    "opportunity" | "client" | "job" | "estimate" | "invoice" | "event" | null
+  >(null);
 
   return (
     <div className="flex min-h-full">
@@ -64,7 +77,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Nav pathname={pathname} />
         <div className="mt-auto p-3">
           <p className="px-2 text-[11px] leading-relaxed text-[#f4efe6]/50">
-            High-level CRM for general contractors. Pipeline in, jobs out.
+            Bid it, send it, bill it, shoot it. Pipeline through job photos.
           </p>
         </div>
       </aside>
@@ -101,6 +114,15 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <DropdownMenuItem onClick={() => setCreate("opportunity")}>
                   New pursuit
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCreate("estimate")}>
+                  New estimate
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCreate("invoice")}>
+                  New invoice
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCreate("event")}>
+                  Schedule event
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setCreate("client")}>
                   New client
                 </DropdownMenuItem>
@@ -126,6 +148,18 @@ export function AppShell({ children }: { children: ReactNode }) {
       <CreateJobDialog
         open={create === "job"}
         onOpenChange={(open) => setCreate(open ? "job" : null)}
+      />
+      <CreateEstimateDialog
+        open={create === "estimate"}
+        onOpenChange={(open) => setCreate(open ? "estimate" : null)}
+      />
+      <CreateInvoiceDialog
+        open={create === "invoice"}
+        onOpenChange={(open) => setCreate(open ? "invoice" : null)}
+      />
+      <CreateEventDialog
+        open={create === "event"}
+        onOpenChange={(open) => setCreate(open ? "event" : null)}
       />
     </div>
   );
@@ -184,7 +218,7 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
 function SearchTrigger() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const { opportunities, jobs, clients } = useCrm();
+  const { opportunities, jobs, clients, estimates, invoices } = useCrm();
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -205,7 +239,7 @@ function SearchTrigger() {
         onClick={() => setOpen(true)}
       >
         <Search data-icon="inline-start" />
-        Search pursuits, jobs, clients
+        Search pursuits, jobs, estimates
         <kbd className="ml-auto hidden rounded border bg-muted px-1.5 py-0.5 font-sans text-[10px] sm:inline">
           ⌘K
         </kbd>
@@ -260,6 +294,34 @@ function SearchTrigger() {
                   }}
                 >
                   {client.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <CommandGroup heading="Estimates">
+              {estimates.map((estimate) => (
+                <CommandItem
+                  key={estimate.id}
+                  value={`${estimate.number} ${estimate.name}`}
+                  onSelect={() => {
+                    setOpen(false);
+                    router.push(`/estimates/${estimate.id}`);
+                  }}
+                >
+                  {estimate.number} · {estimate.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <CommandGroup heading="Invoices">
+              {invoices.map((invoice) => (
+                <CommandItem
+                  key={invoice.id}
+                  value={`${invoice.number} ${invoice.name}`}
+                  onSelect={() => {
+                    setOpen(false);
+                    router.push(`/invoices/${invoice.id}`);
+                  }}
+                >
+                  {invoice.number} · {invoice.name}
                 </CommandItem>
               ))}
             </CommandGroup>

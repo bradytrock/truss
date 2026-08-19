@@ -24,6 +24,38 @@ export function formatCurrencyFull(value: number) {
   }).format(value);
 }
 
+export function formatMoney(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+export function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+export function localYmd(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function startOfWeek(date: Date) {
+  const next = new Date(date);
+  next.setHours(12, 0, 0, 0);
+  const day = next.getDay();
+  const offset = day === 0 ? -6 : 1 - day;
+  next.setDate(next.getDate() + offset);
+  return next;
+}
+
 function parseDate(iso: string) {
   if (iso.includes("T")) return new Date(iso);
   return new Date(`${iso}T12:00:00`);

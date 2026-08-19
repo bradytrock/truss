@@ -17,9 +17,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { ActivityComposer, ActivityList } from "@/components/activity";
 import { RecordProperty } from "@/components/app-shell";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
-import { StageBadge, TypeBadge } from "@/components/status-badge";
+import { EstimateStatusBadge, StageBadge, TypeBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { daysUntil, formatCurrencyFull, formatDate } from "@/lib/format";
+import { sumLines } from "@/lib/money";
+import { CreateEstimateDialog } from "@/components/create-ops-dialogs";
 import {
   DELIVERY_LABELS,
   PIPELINE_STAGES,
@@ -32,6 +34,7 @@ export default function OpportunityDetailPage() {
   const crm = useCrm();
   const opportunity = crm.getOpportunity(id);
   const [nextStep, setNextStep] = useState<string | null>(null);
+  const [estimateOpen, setEstimateOpen] = useState(false);
 
   if (!crm.hydrated) return <LoadingScreen />;
   if (!opportunity) {
@@ -58,6 +61,7 @@ export default function OpportunityDetailPage() {
   const tasks = crm.tasks.filter(
     (task) => task.relatedType === "opportunity" && task.relatedId === opportunity.id
   );
+  const estimates = crm.estimates.filter((estimate) => estimate.opportunityId === opportunity.id);
   const due = daysUntil(opportunity.bidDueAt);
   const step = nextStep ?? opportunity.nextStep;
 
@@ -180,9 +184,46 @@ export default function OpportunityDetailPage() {
                   </Link>
                   . {job.projectManager} is PM.
                 </p>
-              </CardContent>
-            </Card>
+            </CardContent>
+          </Card>
           ) : null}
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between border-b">
+              <CardTitle>Estimates</CardTitle>
+              <Button size="sm" variant="outline" onClick={() => setEstimateOpen(true)}>
+                New estimate
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {estimates.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No proposals on this pursuit yet. Draft one from the price book before bid day.
+                </p>
+              ) : (
+                <ul className="space-y-3">
+                  {estimates.map((estimate) => (
+                    <li key={estimate.id} className="flex items-start justify-between gap-3">
+                      <div>
+                        <Link
+                          href={`/estimates/${estimate.id}`}
+                          className="text-sm font-medium hover:underline"
+                        >
+                          {estimate.number} · {estimate.name}
+                        </Link>
+                        <p className="text-xs tabular-nums text-muted-foreground">
+                          {formatCurrencyFull(
+                            sumLines(crm.estimateLines.filter((line) => line.estimateId === estimate.id))
+                          )}
+                        </p>
+                      </div>
+                      <EstimateStatusBadge status={estimate.status} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader className="border-b">
@@ -287,6 +328,14 @@ export default function OpportunityDetailPage() {
           </Card>
         </div>
       </div>
+
+      <CreateEstimateDialog
+        open={estimateOpen}
+        onOpenChange={setEstimateOpen}
+        defaultClientId={opportunity.clientId}
+        defaultOpportunityId={opportunity.id}
+        defaultJobId={job?.id}
+      />
     </div>
   );
 }

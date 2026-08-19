@@ -1,4 +1,5 @@
 import type { CrmState } from "@/lib/types";
+import { demoOps } from "@/lib/demo-ops";
 
 export const seedState: CrmState = {
   clients: [
@@ -560,4 +561,12 @@ export const seedState: CrmState = {
       assignee: "Luis Ortega",
     },
   ],
+  catalog: demoOps.catalog,
+  estimates: demoOps.estimates,
+  estimateLines: demoOps.estimateLines,
+  invoices: demoOps.invoices,
+  invoiceLines: demoOps.invoiceLines,
+  payments: demoOps.payments,
+  events: demoOps.events,
+  photos: demoOps.photos,
 };

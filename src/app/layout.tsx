@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Truss — CRM for general contractors",
   description:
-    "A high-level CRM for general contractors: bid pipeline, jobs in the field, and the owners who award the work.",
+    "Pipeline, estimates, jobs, invoices, schedule, and job photos for general contractors.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -142,6 +142,138 @@ export interface Task {
   assignee: string;
 }
 
+export const CATALOG_KINDS = [
+  "labor",
+  "material",
+  "equipment",
+  "allowance",
+  "subcontract",
+] as const;
+export type CatalogKind = (typeof CATALOG_KINDS)[number];
+
+export const ESTIMATE_STATUSES = [
+  "draft",
+  "sent",
+  "viewed",
+  "accepted",
+  "declined",
+] as const;
+export type EstimateStatus = (typeof ESTIMATE_STATUSES)[number];
+
+export const INVOICE_STATUSES = [
+  "draft",
+  "sent",
+  "partial",
+  "paid",
+  "overdue",
+  "void",
+] as const;
+export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
+
+export const EVENT_KINDS = [
+  "site_walk",
+  "pre_bid",
+  "inspection",
+  "production",
+  "meeting",
+  "punch",
+] as const;
+export type EventKind = (typeof EVENT_KINDS)[number];
+
+export const PHOTO_CATEGORIES = ["before", "progress", "after", "issue"] as const;
+export type PhotoCategory = (typeof PHOTO_CATEGORIES)[number];
+
+export interface CatalogItem {
+  id: string;
+  name: string;
+  kind: CatalogKind;
+  unit: string;
+  unitCost: number;
+  costCode: string;
+}
+
+export interface Estimate {
+  id: string;
+  number: string;
+  name: string;
+  clientId: string;
+  opportunityId: string | null;
+  jobId: string | null;
+  status: EstimateStatus;
+  notes: string;
+  validUntil: string | null;
+  sentAt: string | null;
+  acceptedAt: string | null;
+  createdAt: string;
+}
+
+export interface EstimateLine {
+  id: string;
+  estimateId: string;
+  catalogItemId: string | null;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitCost: number;
+  sortOrder: number;
+}
+
+export interface Invoice {
+  id: string;
+  number: string;
+  name: string;
+  clientId: string;
+  jobId: string | null;
+  estimateId: string | null;
+  status: InvoiceStatus;
+  issuedAt: string;
+  dueAt: string | null;
+  notes: string;
+}
+
+export interface InvoiceLine {
+  id: string;
+  invoiceId: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitCost: number;
+  sortOrder: number;
+}
+
+export interface Payment {
+  id: string;
+  invoiceId: string;
+  amount: number;
+  method: string;
+  paidAt: string;
+  reference: string;
+}
+
+export interface ScheduleEvent {
+  id: string;
+  title: string;
+  kind: EventKind;
+  startsAt: string;
+  endsAt: string;
+  location: string;
+  assignee: string;
+  opportunityId: string | null;
+  jobId: string | null;
+  clientId: string | null;
+  notes: string;
+}
+
+export interface JobPhoto {
+  id: string;
+  jobId: string;
+  caption: string;
+  category: PhotoCategory;
+  takenAt: string;
+  imageUrl: string;
+  storagePath: string | null;
+}
+
 export interface CrmState {
   clients: Client[];
   contacts: Contact[];
@@ -149,6 +281,14 @@ export interface CrmState {
   jobs: Job[];
   activities: Activity[];
   tasks: Task[];
+  catalog: CatalogItem[];
+  estimates: Estimate[];
+  estimateLines: EstimateLine[];
+  invoices: Invoice[];
+  invoiceLines: InvoiceLine[];
+  payments: Payment[];
+  events: ScheduleEvent[];
+  photos: JobPhoto[];
 }
 
 export const STAGE_LABELS: Record<PipelineStage, string> = {
@@ -210,6 +350,47 @@ export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   meeting: "Meeting",
   site_walk: "Site walk",
   stage_change: "Stage change",
+};
+
+export const CATALOG_KIND_LABELS: Record<CatalogKind, string> = {
+  labor: "Labor",
+  material: "Material",
+  equipment: "Equipment",
+  allowance: "Allowance",
+  subcontract: "Subcontract",
+};
+
+export const ESTIMATE_STATUS_LABELS: Record<EstimateStatus, string> = {
+  draft: "Draft",
+  sent: "Sent",
+  viewed: "Viewed",
+  accepted: "Accepted",
+  declined: "Declined",
+};
+
+export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
+  draft: "Draft",
+  sent: "Sent",
+  partial: "Partial",
+  paid: "Paid",
+  overdue: "Overdue",
+  void: "Void",
+};
+
+export const EVENT_KIND_LABELS: Record<EventKind, string> = {
+  site_walk: "Site walk",
+  pre_bid: "Pre-bid",
+  inspection: "Inspection",
+  production: "Production",
+  meeting: "Meeting",
+  punch: "Punch",
+};
+
+export const PHOTO_CATEGORY_LABELS: Record<PhotoCategory, string> = {
+  before: "Before",
+  progress: "Progress",
+  after: "After",
+  issue: "Issue",
 };
 
 export const TEAM = [

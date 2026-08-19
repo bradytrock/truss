@@ -211,6 +211,225 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["tasks"]["Insert"]>;
         Relationships: [];
       };
+      catalog_items: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          kind: Database["public"]["Enums"]["catalog_kind"];
+          unit: string;
+          unit_cost: number;
+          cost_code: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          kind: Database["public"]["Enums"]["catalog_kind"];
+          unit?: string;
+          unit_cost?: number;
+          cost_code?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["catalog_items"]["Insert"]>;
+        Relationships: [];
+      };
+      estimates: {
+        Row: {
+          id: string;
+          company_id: string;
+          number: string;
+          name: string;
+          client_id: string;
+          opportunity_id: string | null;
+          job_id: string | null;
+          status: Database["public"]["Enums"]["estimate_status"];
+          notes: string;
+          valid_until: string | null;
+          sent_at: string | null;
+          accepted_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          number: string;
+          name: string;
+          client_id: string;
+          opportunity_id?: string | null;
+          job_id?: string | null;
+          status?: Database["public"]["Enums"]["estimate_status"];
+          notes?: string;
+          valid_until?: string | null;
+          sent_at?: string | null;
+          accepted_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["estimates"]["Insert"]>;
+        Relationships: [];
+      };
+      estimate_lines: {
+        Row: {
+          id: string;
+          company_id: string;
+          estimate_id: string;
+          catalog_item_id: string | null;
+          description: string;
+          quantity: number;
+          unit: string;
+          unit_cost: number;
+          sort_order: number;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          estimate_id: string;
+          catalog_item_id?: string | null;
+          description: string;
+          quantity?: number;
+          unit?: string;
+          unit_cost?: number;
+          sort_order?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["estimate_lines"]["Insert"]>;
+        Relationships: [];
+      };
+      invoices: {
+        Row: {
+          id: string;
+          company_id: string;
+          number: string;
+          name: string;
+          client_id: string;
+          job_id: string | null;
+          estimate_id: string | null;
+          status: Database["public"]["Enums"]["invoice_status"];
+          issued_at: string;
+          due_at: string | null;
+          notes: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          number: string;
+          name: string;
+          client_id: string;
+          job_id?: string | null;
+          estimate_id?: string | null;
+          status?: Database["public"]["Enums"]["invoice_status"];
+          issued_at?: string;
+          due_at?: string | null;
+          notes?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["invoices"]["Insert"]>;
+        Relationships: [];
+      };
+      invoice_lines: {
+        Row: {
+          id: string;
+          company_id: string;
+          invoice_id: string;
+          description: string;
+          quantity: number;
+          unit: string;
+          unit_cost: number;
+          sort_order: number;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          invoice_id: string;
+          description: string;
+          quantity?: number;
+          unit?: string;
+          unit_cost?: number;
+          sort_order?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["invoice_lines"]["Insert"]>;
+        Relationships: [];
+      };
+      payments: {
+        Row: {
+          id: string;
+          company_id: string;
+          invoice_id: string;
+          amount: number;
+          method: string;
+          paid_at: string;
+          reference: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          invoice_id: string;
+          amount: number;
+          method?: string;
+          paid_at?: string;
+          reference?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["payments"]["Insert"]>;
+        Relationships: [];
+      };
+      schedule_events: {
+        Row: {
+          id: string;
+          company_id: string;
+          title: string;
+          kind: Database["public"]["Enums"]["event_kind"];
+          starts_at: string;
+          ends_at: string;
+          location: string;
+          assignee: string;
+          opportunity_id: string | null;
+          job_id: string | null;
+          client_id: string | null;
+          notes: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          title: string;
+          kind?: Database["public"]["Enums"]["event_kind"];
+          starts_at: string;
+          ends_at: string;
+          location?: string;
+          assignee?: string;
+          opportunity_id?: string | null;
+          job_id?: string | null;
+          client_id?: string | null;
+          notes?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["schedule_events"]["Insert"]>;
+        Relationships: [];
+      };
+      job_photos: {
+        Row: {
+          id: string;
+          company_id: string;
+          job_id: string;
+          caption: string;
+          category: Database["public"]["Enums"]["photo_category"];
+          taken_at: string;
+          image_url: string;
+          storage_path: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          job_id: string;
+          caption?: string;
+          category?: Database["public"]["Enums"]["photo_category"];
+          taken_at?: string;
+          image_url: string;
+          storage_path?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["job_photos"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -236,6 +455,11 @@ export type Database = {
       client_type: "owner" | "developer" | "public" | "healthcare_system" | "architect";
       activity_type: "note" | "call" | "email" | "meeting" | "site_walk" | "stage_change";
       entity_kind: "opportunity" | "job" | "client";
+      catalog_kind: "labor" | "material" | "equipment" | "allowance" | "subcontract";
+      estimate_status: "draft" | "sent" | "viewed" | "accepted" | "declined";
+      invoice_status: "draft" | "sent" | "partial" | "paid" | "overdue" | "void";
+      event_kind: "site_walk" | "pre_bid" | "inspection" | "production" | "meeting" | "punch";
+      photo_category: "before" | "progress" | "after" | "issue";
     };
     CompositeTypes: Record<string, never>;
   };

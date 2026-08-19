@@ -91,7 +91,7 @@ function SetupHint() {
       <ol className="mt-2 list-decimal space-y-1 pl-4">
         <li>Create a project at supabase.com.</li>
         <li>
-          Run <code className="text-foreground">supabase/migrations/20260819170000_truss_crm.sql</code> in the SQL editor.
+          Run both SQL files in <code className="text-foreground">supabase/migrations</code> (CRM, then estimates / invoices / schedule).
         </li>
         <li>
           Put the project URL and publishable (or anon) key in <code className="text-foreground">.env.local</code>.

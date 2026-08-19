@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -13,10 +14,17 @@ import {
 } from "@/components/ui/select";
 import { ActivityComposer, ActivityList } from "@/components/activity";
 import { RecordProperty } from "@/components/app-shell";
+import { AddPhotoDialog, CreateEstimateDialog, CreateInvoiceDialog } from "@/components/create-ops-dialogs";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
-import { JobStatusBadge } from "@/components/status-badge";
+import {
+  EstimateStatusBadge,
+  InvoiceStatusBadge,
+  JobStatusBadge,
+  PhotoCategoryBadge,
+} from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate } from "@/lib/format";
+import { derivedInvoiceStatus, invoiceBalance, sumLines } from "@/lib/money";
 import { JOB_STATUS_LABELS, JOB_STATUSES, type JobStatus } from "@/lib/types";
 import { toast } from "sonner";
 
@@ -24,6 +32,9 @@ export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const crm = useCrm();
   const job = crm.getJob(id);
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [estimateOpen, setEstimateOpen] = useState(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
 
   if (!crm.hydrated) return <LoadingScreen />;
   if (!job) {
@@ -53,6 +64,9 @@ export default function JobDetailPage() {
   const tasks = crm.tasks.filter(
     (task) => task.relatedType === "job" && task.relatedId === job.id
   );
+  const estimates = crm.estimates.filter((estimate) => estimate.jobId === job.id);
+  const invoices = crm.invoices.filter((invoice) => invoice.jobId === job.id);
+  const photos = crm.photos.filter((photo) => photo.jobId === job.id);
 
   return (
     <div className="space-y-5">
@@ -103,6 +117,40 @@ export default function JobDetailPage() {
                 <p className="text-xs text-muted-foreground">Substantial completion</p>
                 <p className="text-sm font-medium">{formatDate(job.substantialCompletion)}</p>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between border-b">
+              <CardTitle>Job photos</CardTitle>
+              <Button size="sm" variant="outline" onClick={() => setPhotoOpen(true)}>
+                Add photo
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {photos.length === 0 ? (
+                <p className="py-6 text-sm text-muted-foreground">
+                  No photos yet. Upload from the field or paste a URL so the office sees the same job.
+                </p>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {photos.map((photo) => (
+                    <figure key={photo.id} className="overflow-hidden rounded-lg border">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo.imageUrl}
+                        alt={photo.caption || "Job photo"}
+                        className="aspect-[4/3] w-full object-cover"
+                      />
+                      <figcaption className="space-y-1 p-2.5">
+                        <PhotoCategoryBadge category={photo.category} />
+                        <p className="text-sm leading-snug">{photo.caption || "Untitled"}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(photo.takenAt)}</p>
+                      </figcaption>
+                    </figure>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -210,8 +258,90 @@ export default function JobDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between border-b">
+              <CardTitle>Estimates</CardTitle>
+              <Button size="sm" variant="ghost" onClick={() => setEstimateOpen(true)}>
+                New
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {estimates.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No estimates tied to this job.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {estimates.map((estimate) => (
+                    <li key={estimate.id}>
+                      <Link href={`/estimates/${estimate.id}`} className="text-sm font-medium hover:underline">
+                        {estimate.number}
+                      </Link>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <EstimateStatusBadge status={estimate.status} />
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {formatCurrencyFull(
+                            sumLines(crm.estimateLines.filter((line) => line.estimateId === estimate.id))
+                          )}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between border-b">
+              <CardTitle>Invoices</CardTitle>
+              <Button size="sm" variant="ghost" onClick={() => setInvoiceOpen(true)}>
+                New
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {invoices.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No invoices on this job.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {invoices.map((invoice) => (
+                    <li key={invoice.id}>
+                      <Link href={`/invoices/${invoice.id}`} className="text-sm font-medium hover:underline">
+                        {invoice.number}
+                      </Link>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <InvoiceStatusBadge
+                          status={derivedInvoiceStatus(invoice, crm.invoiceLines, crm.payments)}
+                        />
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {formatCurrencyFull(
+                            invoiceBalance(invoice.id, crm.invoiceLines, crm.payments)
+                          )}{" "}
+                          due
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
+
+      <AddPhotoDialog open={photoOpen} onOpenChange={setPhotoOpen} jobId={job.id} />
+      <CreateEstimateDialog
+        open={estimateOpen}
+        onOpenChange={setEstimateOpen}
+        defaultClientId={job.clientId}
+        defaultJobId={job.id}
+        defaultOpportunityId={job.opportunityId ?? undefined}
+      />
+      <CreateInvoiceDialog
+        open={invoiceOpen}
+        onOpenChange={setInvoiceOpen}
+        defaultClientId={job.clientId}
+        defaultJobId={job.id}
+      />
     </div>
   );
 }

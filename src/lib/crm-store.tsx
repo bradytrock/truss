@@ -12,6 +12,10 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
+import { seedState } from "@/lib/seed";
+import { fetchCompanyBook } from "@/lib/supabase/load-book";
+import { seedOperationsIfMissing } from "@/lib/supabase/ops-seed";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -20,8 +24,14 @@ import {
   mapActivity,
   mapClient,
   mapContact,
+  mapEstimate,
+  mapEstimateLine,
+  mapInvoice,
   mapJob,
+  mapJobPhoto,
   mapOpportunity,
+  mapPayment,
+  mapScheduleEvent,
   mapTask,
   opportunityPatch,
 } from "@/lib/supabase/mappers";
@@ -32,9 +42,15 @@ import {
   type Client,
   type CrmState,
   type CurrentUser,
+  type Estimate,
+  type EstimateLine,
+  type Invoice,
   type Job,
   type Opportunity,
+  type PhotoCategory,
   type PipelineStage,
+  type ScheduleEvent,
+  TEAM,
 } from "@/lib/types";
 
 const emptyState: CrmState = {
@@ -44,6 +60,14 @@ const emptyState: CrmState = {
   jobs: [],
   activities: [],
   tasks: [],
+  catalog: [],
+  estimates: [],
+  estimateLines: [],
+  invoices: [],
+  invoiceLines: [],
+  payments: [],
+  events: [],
+  photos: [],
 };
 
 const guestUser: CurrentUser = {
@@ -55,6 +79,23 @@ const guestUser: CurrentUser = {
   initials: "TR",
 };
 
+const northlineUser: CurrentUser = {
+  id: "local",
+  companyId: "local",
+  name: "Jordan Hale",
+  title: "VP, Preconstruction",
+  company: "Northline Construction",
+  initials: "JH",
+};
+
+function requireClient() {
+  if (!isSupabaseConfigured()) {
+    toast.message("Connect a Supabase project to save. You are browsing the Northline sample book locally.");
+    return null;
+  }
+  return createClient();
+}
+
 type CrmContextValue = CrmState & {
   user: CurrentUser;
   teamMembers: string[];
@@ -65,6 +106,8 @@ type CrmContextValue = CrmState & {
   getContact: (id: string) => CrmState["contacts"][number] | undefined;
   getOpportunity: (id: string) => Opportunity | undefined;
   getJob: (id: string) => Job | undefined;
+  getEstimate: (id: string) => Estimate | undefined;
+  getInvoice: (id: string) => Invoice | undefined;
   jobForOpportunity: (opportunityId: string) => Job | undefined;
   moveOpportunity: (
     id: string,
@@ -94,6 +137,51 @@ type CrmContextValue = CrmState & {
     relatedId: string | null;
     assignee: string;
   }) => Promise<void>;
+  addEstimate: (input: {
+    name: string;
+    clientId: string;
+    opportunityId: string | null;
+    jobId: string | null;
+    notes?: string;
+    validUntil?: string | null;
+  }) => Promise<Estimate>;
+  updateEstimate: (id: string, patch: Partial<Pick<Estimate, "name" | "notes" | "validUntil">>) => Promise<void>;
+  sendEstimate: (id: string) => Promise<void>;
+  acceptEstimate: (id: string) => Promise<void>;
+  declineEstimate: (id: string) => Promise<void>;
+  addEstimateLineFromCatalog: (estimateId: string, catalogItemId: string) => Promise<void>;
+  addCustomEstimateLine: (estimateId: string) => Promise<void>;
+  updateEstimateLine: (
+    id: string,
+    patch: Partial<Pick<EstimateLine, "description" | "quantity" | "unit" | "unitCost">>
+  ) => Promise<void>;
+  removeEstimateLine: (id: string) => Promise<void>;
+  convertEstimateToInvoice: (estimateId: string) => Promise<Invoice>;
+  addInvoice: (input: {
+    name: string;
+    clientId: string;
+    jobId: string | null;
+    dueAt: string | null;
+    notes?: string;
+  }) => Promise<Invoice>;
+  sendInvoice: (id: string) => Promise<void>;
+  voidInvoice: (id: string) => Promise<void>;
+  recordPayment: (input: {
+    invoiceId: string;
+    amount: number;
+    method: string;
+    paidAt: string;
+    reference: string;
+  }) => Promise<void>;
+  addScheduleEvent: (input: Omit<ScheduleEvent, "id">) => Promise<ScheduleEvent>;
+  addJobPhoto: (input: {
+    jobId: string;
+    caption: string;
+    category: PhotoCategory;
+    takenAt: string;
+    imageUrl?: string;
+    file?: File;
+  }) => Promise<void>;
   resetDemo: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -103,15 +191,11 @@ const CrmContext = createContext<CrmContextValue | null>(null);
 export function CrmProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const configured = isSupabaseConfigured();
-  const [state, setState] = useState<CrmState>(emptyState);
-  const [user, setUser] = useState<CurrentUser>(guestUser);
-  const [teamMembers, setTeamMembers] = useState<string[]>([]);
+  const [state, setState] = useState<CrmState>(configured ? emptyState : structuredClone(seedState));
+  const [user, setUser] = useState<CurrentUser>(configured ? guestUser : northlineUser);
+  const [teamMembers, setTeamMembers] = useState<string[]>(configured ? [] : [...TEAM]);
   const [hydrated, setHydrated] = useState(!configured);
-  const [hydrateError, setHydrateError] = useState<string | null>(
-    configured
-      ? null
-      : "Connect a Supabase project to store the book of work. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY (or ANON_KEY), then run the migration in /supabase/migrations."
-  );
+  const [hydrateError, setHydrateError] = useState<string | null>(null);
   const seeding = useRef(false);
 
   const load = useCallback(async () => {
@@ -145,108 +229,42 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       .maybeSingle();
 
     const companyId = profile.company_id;
-    const [clientsRes, contactsRes, oppsRes, jobsRes, activitiesRes, tasksRes, teamRes] =
-      await Promise.all([
-        supabase.from("clients").select("*").eq("company_id", companyId).order("name"),
-        supabase.from("contacts").select("*").eq("company_id", companyId).order("name"),
-        supabase.from("opportunities").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
-        supabase.from("jobs").select("*").eq("company_id", companyId).order("start_date", { ascending: false }),
-        supabase.from("activities").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
-        supabase.from("tasks").select("*").eq("company_id", companyId).order("due_at"),
-        supabase.from("team_members").select("name").eq("company_id", companyId).order("name"),
-      ]);
-
-    const firstError =
-      clientsRes.error ||
-      contactsRes.error ||
-      oppsRes.error ||
-      jobsRes.error ||
-      activitiesRes.error ||
-      tasksRes.error ||
-      teamRes.error;
-    if (firstError) {
-      setHydrateError(firstError.message);
-      setHydrated(true);
-      return;
-    }
-
-    const clients = (clientsRes.data ?? []).map(mapClient);
-    const team = (teamRes.data ?? []).map((row) => row.name);
-
-    let nextClients = clients;
-    let nextTeam = team;
-    let nextContacts = (contactsRes.data ?? []).map(mapContact);
-    let nextOpportunities = (oppsRes.data ?? []).map(mapOpportunity);
-    let nextJobs = (jobsRes.data ?? []).map(mapJob);
-    let nextActivities = (activitiesRes.data ?? []).map(mapActivity);
-    let nextTasks = (tasksRes.data ?? []).map(mapTask);
-
-    if (clients.length === 0 && team.length === 0 && !seeding.current) {
-      seeding.current = true;
-      try {
-        await seedCompanyBook(supabase, companyId);
-        const second = await Promise.all([
-          supabase.from("clients").select("*").eq("company_id", companyId).order("name"),
-          supabase.from("contacts").select("*").eq("company_id", companyId).order("name"),
-          supabase
-            .from("opportunities")
-            .select("*")
-            .eq("company_id", companyId)
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("jobs")
-            .select("*")
-            .eq("company_id", companyId)
-            .order("start_date", { ascending: false }),
-          supabase
-            .from("activities")
-            .select("*")
-            .eq("company_id", companyId)
-            .order("created_at", { ascending: false }),
-          supabase.from("tasks").select("*").eq("company_id", companyId).order("due_at"),
-          supabase.from("team_members").select("name").eq("company_id", companyId).order("name"),
-        ]);
-        const seedError = second.find((result) => result.error)?.error;
-        if (seedError) {
-          setHydrateError(seedError.message);
-          setHydrated(true);
-          return;
+    try {
+      let book = await fetchCompanyBook(supabase, companyId);
+      if (book.state.clients.length === 0 && book.team.length === 0 && !seeding.current) {
+        seeding.current = true;
+        try {
+          await seedCompanyBook(supabase, companyId);
+          book = await fetchCompanyBook(supabase, companyId);
+        } finally {
+          seeding.current = false;
         }
-        nextClients = (second[0].data ?? []).map(mapClient);
-        nextContacts = (second[1].data ?? []).map(mapContact);
-        nextOpportunities = (second[2].data ?? []).map(mapOpportunity);
-        nextJobs = (second[3].data ?? []).map(mapJob);
-        nextActivities = (second[4].data ?? []).map(mapActivity);
-        nextTasks = (second[5].data ?? []).map(mapTask);
-        nextTeam = (second[6].data ?? []).map((row) => row.name);
-      } catch (error) {
-        setHydrateError(error instanceof Error ? error.message : "Could not load the sample book.");
-        setHydrated(true);
-        return;
-      } finally {
-        seeding.current = false;
+      } else if (book.state.catalog.length === 0 && !seeding.current) {
+        seeding.current = true;
+        try {
+          await seedOperationsIfMissing(supabase, companyId);
+          book = await fetchCompanyBook(supabase, companyId);
+        } finally {
+          seeding.current = false;
+        }
       }
-    }
 
-    setUser({
-      id: profile.id,
-      companyId,
-      name: profile.full_name,
-      title: profile.title,
-      company: company?.name ?? "Truss",
-      initials: profile.initials,
-    });
-    setTeamMembers(nextTeam);
-    setState({
-      clients: nextClients,
-      contacts: nextContacts,
-      opportunities: nextOpportunities,
-      jobs: nextJobs,
-      activities: nextActivities,
-      tasks: nextTasks,
-    });
-    setHydrateError(null);
-    setHydrated(true);
+      setUser({
+        id: profile.id,
+        companyId,
+        name: profile.full_name,
+        title: profile.title,
+        company: company?.name ?? "Truss",
+        initials: profile.initials,
+      });
+      setTeamMembers(book.team);
+      setState(book.state);
+      setHydrateError(null);
+      setHydrated(true);
+    } catch (error) {
+      setHydrateError(error instanceof Error ? error.message : "Could not load the book of work.");
+      setHydrated(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -268,6 +286,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       "activities",
       "tasks",
       "team_members",
+      "catalog_items",
+      "estimates",
+      "estimate_lines",
+      "invoices",
+      "invoice_lines",
+      "payments",
+      "schedule_events",
+      "job_photos",
     ] as const;
     let timer: number | undefined;
     const channel = supabase.channel(`truss-company-${user.companyId}`);
@@ -313,6 +339,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     (id: string) => state.jobs.find((job) => job.id === id),
     [state.jobs]
   );
+  const getEstimate = useCallback(
+    (id: string) => state.estimates.find((estimate) => estimate.id === id),
+    [state.estimates]
+  );
+  const getInvoice = useCallback(
+    (id: string) => state.invoices.find((invoice) => invoice.id === id),
+    [state.invoices]
+  );
   const jobForOpportunity = useCallback(
     (opportunityId: string) =>
       state.jobs.find((job) => job.opportunityId === opportunityId),
@@ -326,7 +360,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       type: ActivityType;
       body: string;
     }) => {
-      const supabase = createClient();
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
       const author = user.name;
       const { data, error } = await supabase
         .from("activities")
@@ -358,7 +393,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const current = state.opportunities.find((opportunity) => opportunity.id === id);
       if (!current || current.stage === stage) return null;
 
-      const supabase = createClient();
+      const supabase = requireClient();
+      if (!supabase) return null;
       const { error } = await supabase
         .from("opportunities")
         .update({
@@ -422,7 +458,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const updateOpportunity = useCallback(
     async (id: string, patch: Partial<Opportunity>) => {
-      const supabase = createClient();
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
       const { error } = await supabase.from("opportunities").update(opportunityPatch(patch)).eq("id", id);
       if (error) {
         toast.error(error.message);
@@ -439,7 +476,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const updateJob = useCallback(async (id: string, patch: Partial<Job>) => {
-    const supabase = createClient();
+    const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
     const { error } = await supabase.from("jobs").update(jobPatch(patch)).eq("id", id);
     if (error) {
       toast.error(error.message);
@@ -453,7 +491,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const addOpportunity = useCallback(
     async (input: Omit<Opportunity, "id" | "createdAt" | "winProbability">) => {
-      const supabase = createClient();
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
       const { data, error } = await supabase
         .from("opportunities")
         .insert({
@@ -494,7 +533,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const addClient = useCallback(
     async (input: Omit<Client, "id"> & { contactName?: string; contactTitle?: string }) => {
       const { contactName, contactTitle, ...clientInput } = input;
-      const supabase = createClient();
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
       const { data, error } = await supabase
         .from("clients")
         .insert({
@@ -532,7 +572,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const addJob = useCallback(
     async (input: Omit<Job, "id">) => {
-      const supabase = createClient();
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
       const { data, error } = await supabase
         .from("jobs")
         .insert({
@@ -570,7 +611,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const toggleTask = useCallback(async (id: string) => {
     const current = state.tasks.find((task) => task.id === id);
     if (!current) return;
-    const supabase = createClient();
+    const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
     const { error } = await supabase.from("tasks").update({ completed: !current.completed }).eq("id", id);
     if (error) {
       toast.error(error.message);
@@ -592,7 +634,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       relatedId: string | null;
       assignee: string;
     }) => {
-      const supabase = createClient();
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
       const { data, error } = await supabase
         .from("tasks")
         .insert({
@@ -614,7 +657,557 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [user.companyId]
   );
 
+  const addEstimate = useCallback(
+    async (input: {
+      name: string;
+      clientId: string;
+      opportunityId: string | null;
+      jobId: string | null;
+      notes?: string;
+      validUntil?: string | null;
+    }) => {
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      const number = nextNumber("EST", state.estimates.map((estimate) => estimate.number));
+      const { data, error } = await supabase
+        .from("estimates")
+        .insert({
+          company_id: user.companyId,
+          number,
+          name: input.name,
+          client_id: input.clientId,
+          opportunity_id: input.opportunityId,
+          job_id: input.jobId,
+          notes: input.notes ?? "",
+          valid_until: input.validUntil ?? null,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        toast.error(error?.message ?? "Could not create the estimate.");
+        throw error ?? new Error("Could not create the estimate.");
+      }
+      const estimate = mapEstimate(data);
+      setState((prev) => ({ ...prev, estimates: [estimate, ...prev.estimates] }));
+      return estimate;
+    },
+    [state.estimates, user.companyId]
+  );
+
+  const updateEstimate = useCallback(
+    async (id: string, patch: Partial<Pick<Estimate, "name" | "notes" | "validUntil">>) => {
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      const { error } = await supabase
+        .from("estimates")
+        .update({
+          name: patch.name,
+          notes: patch.notes,
+          valid_until: patch.validUntil,
+        })
+        .eq("id", id);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        estimates: prev.estimates.map((estimate) =>
+          estimate.id === id ? { ...estimate, ...patch } : estimate
+        ),
+      }));
+    },
+    []
+  );
+
+  const sendEstimate = useCallback(
+    async (id: string) => {
+      const current = state.estimates.find((estimate) => estimate.id === id);
+      if (!current) return;
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      const sentAt = new Date().toISOString();
+      const { error } = await supabase
+        .from("estimates")
+        .update({ status: "sent", sent_at: sentAt })
+        .eq("id", id);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        estimates: prev.estimates.map((estimate) =>
+          estimate.id === id ? { ...estimate, status: "sent", sentAt } : estimate
+        ),
+      }));
+      if (current.opportunityId) {
+        await addActivity({
+          entityType: "opportunity",
+          entityId: current.opportunityId,
+          type: "email",
+          body: `Sent proposal ${current.number} — ${current.name}.`,
+        });
+      }
+    },
+    [addActivity, state.estimates]
+  );
+
+  const acceptEstimate = useCallback(
+    async (id: string) => {
+      const current = state.estimates.find((estimate) => estimate.id === id);
+      if (!current) return;
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      const acceptedAt = new Date().toISOString();
+      const { error } = await supabase
+        .from("estimates")
+        .update({ status: "accepted", accepted_at: acceptedAt })
+        .eq("id", id);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        estimates: prev.estimates.map((estimate) =>
+          estimate.id === id ? { ...estimate, status: "accepted", acceptedAt } : estimate
+        ),
+      }));
+      if (current.opportunityId) {
+        await addActivity({
+          entityType: "opportunity",
+          entityId: current.opportunityId,
+          type: "note",
+          body: `Owner accepted proposal ${current.number}. Convert to an invoice when you are ready to bill.`,
+        });
+      }
+    },
+    [addActivity, state.estimates]
+  );
+
+  const declineEstimate = useCallback(
+    async (id: string) => {
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      const { error } = await supabase.from("estimates").update({ status: "declined" }).eq("id", id);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        estimates: prev.estimates.map((estimate) =>
+          estimate.id === id ? { ...estimate, status: "declined" } : estimate
+        ),
+      }));
+    },
+    []
+  );
+
+  const addEstimateLineFromCatalog = useCallback(
+    async (estimateId: string, catalogItemId: string) => {
+      const item = state.catalog.find((entry) => entry.id === catalogItemId);
+      if (!item) return;
+      const sortOrder =
+        Math.max(
+          0,
+          ...state.estimateLines
+            .filter((line) => line.estimateId === estimateId)
+            .map((line) => line.sortOrder)
+        ) + 1;
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      const { data, error } = await supabase
+        .from("estimate_lines")
+        .insert({
+          company_id: user.companyId,
+          estimate_id: estimateId,
+          catalog_item_id: item.id,
+          description: item.name,
+          quantity: 1,
+          unit: item.unit,
+          unit_cost: item.unitCost,
+          sort_order: sortOrder,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        toast.error(error?.message ?? "Could not add the line.");
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        estimateLines: [...prev.estimateLines, mapEstimateLine(data)],
+      }));
+    },
+    [state.catalog, state.estimateLines, user.companyId]
+  );
+
+  const addCustomEstimateLine = useCallback(
+    async (estimateId: string) => {
+      const sortOrder =
+        Math.max(
+          0,
+          ...state.estimateLines
+            .filter((line) => line.estimateId === estimateId)
+            .map((line) => line.sortOrder)
+        ) + 1;
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      const { data, error } = await supabase
+        .from("estimate_lines")
+        .insert({
+          company_id: user.companyId,
+          estimate_id: estimateId,
+          description: "New line",
+          quantity: 1,
+          unit: "LS",
+          unit_cost: 0,
+          sort_order: sortOrder,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        toast.error(error?.message ?? "Could not add the line.");
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        estimateLines: [...prev.estimateLines, mapEstimateLine(data)],
+      }));
+    },
+    [state.estimateLines, user.companyId]
+  );
+
+  const updateEstimateLine = useCallback(
+    async (
+      id: string,
+      patch: Partial<Pick<EstimateLine, "description" | "quantity" | "unit" | "unitCost">>
+    ) => {
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      const { error } = await supabase
+        .from("estimate_lines")
+        .update({
+          description: patch.description,
+          quantity: patch.quantity,
+          unit: patch.unit,
+          unit_cost: patch.unitCost,
+        })
+        .eq("id", id);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        estimateLines: prev.estimateLines.map((line) =>
+          line.id === id ? { ...line, ...patch } : line
+        ),
+      }));
+    },
+    []
+  );
+
+  const removeEstimateLine = useCallback(async (id: string) => {
+    const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
+    const { error } = await supabase.from("estimate_lines").delete().eq("id", id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      estimateLines: prev.estimateLines.filter((line) => line.id !== id),
+    }));
+  }, []);
+
+  const convertEstimateToInvoice = useCallback(
+    async (estimateId: string) => {
+      const estimate = state.estimates.find((item) => item.id === estimateId);
+      if (!estimate) throw new Error("Estimate not found.");
+      const lines = state.estimateLines.filter((line) => line.estimateId === estimateId);
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      const number = nextNumber("INV", state.invoices.map((invoice) => invoice.number));
+      const issuedAt = new Date().toISOString().slice(0, 10);
+      const due = new Date();
+      due.setDate(due.getDate() + 30);
+      const { data, error } = await supabase
+        .from("invoices")
+        .insert({
+          company_id: user.companyId,
+          number,
+          name: estimate.name,
+          client_id: estimate.clientId,
+          job_id: estimate.jobId,
+          estimate_id: estimate.id,
+          status: "draft",
+          issued_at: issuedAt,
+          due_at: due.toISOString().slice(0, 10),
+          notes: `Converted from ${estimate.number}.`,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        toast.error(error?.message ?? "Could not convert the estimate.");
+        throw error ?? new Error("Could not convert the estimate.");
+      }
+      if (lines.length) {
+        const { error: lineError } = await supabase.from("invoice_lines").insert(
+          lines.map((line, index) => ({
+            company_id: user.companyId,
+            invoice_id: data.id,
+            description: line.description,
+            quantity: line.quantity,
+            unit: line.unit,
+            unit_cost: line.unitCost,
+            sort_order: index,
+          }))
+        );
+        if (lineError) {
+          toast.error(lineError.message);
+          throw lineError;
+        }
+      }
+      const invoice = mapInvoice(data);
+      const mappedLines = lines.map((line, index) => ({
+        id: crypto.randomUUID(),
+        invoiceId: invoice.id,
+        description: line.description,
+        quantity: line.quantity,
+        unit: line.unit,
+        unitCost: line.unitCost,
+        sortOrder: index,
+      }));
+      setState((prev) => ({
+        ...prev,
+        invoices: [invoice, ...prev.invoices],
+        invoiceLines: [...prev.invoiceLines, ...mappedLines],
+      }));
+      await load();
+      return invoice;
+    },
+    [load, state.estimateLines, state.estimates, state.invoices, user.companyId]
+  );
+
+  const addInvoice = useCallback(
+    async (input: {
+      name: string;
+      clientId: string;
+      jobId: string | null;
+      dueAt: string | null;
+      notes?: string;
+    }) => {
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      const number = nextNumber("INV", state.invoices.map((invoice) => invoice.number));
+      const { data, error } = await supabase
+        .from("invoices")
+        .insert({
+          company_id: user.companyId,
+          number,
+          name: input.name,
+          client_id: input.clientId,
+          job_id: input.jobId,
+          notes: input.notes ?? "",
+          due_at: input.dueAt,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        toast.error(error?.message ?? "Could not create the invoice.");
+        throw error ?? new Error("Could not create the invoice.");
+      }
+      const invoice = mapInvoice(data);
+      setState((prev) => ({ ...prev, invoices: [invoice, ...prev.invoices] }));
+      return invoice;
+    },
+    [state.invoices, user.companyId]
+  );
+
+  const sendInvoice = useCallback(async (id: string) => {
+    const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
+    const { error } = await supabase.from("invoices").update({ status: "sent" }).eq("id", id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      invoices: prev.invoices.map((invoice) =>
+        invoice.id === id ? { ...invoice, status: "sent" } : invoice
+      ),
+    }));
+  }, []);
+
+  const voidInvoice = useCallback(async (id: string) => {
+    const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
+    const { error } = await supabase.from("invoices").update({ status: "void" }).eq("id", id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      invoices: prev.invoices.map((invoice) =>
+        invoice.id === id ? { ...invoice, status: "void" } : invoice
+      ),
+    }));
+  }, []);
+
+  const recordPayment = useCallback(
+    async (input: {
+      invoiceId: string;
+      amount: number;
+      method: string;
+      paidAt: string;
+      reference: string;
+    }) => {
+      const invoice = state.invoices.find((item) => item.id === input.invoiceId);
+      if (!invoice) return;
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      const { data, error } = await supabase
+        .from("payments")
+        .insert({
+          company_id: user.companyId,
+          invoice_id: input.invoiceId,
+          amount: input.amount,
+          method: input.method,
+          paid_at: input.paidAt,
+          reference: input.reference,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        toast.error(error?.message ?? "Could not record the payment.");
+        return;
+      }
+      const payment = mapPayment(data);
+      const nextPayments = [payment, ...state.payments];
+      const nextStatus = derivedInvoiceStatus(
+        { ...invoice, status: invoice.status === "void" ? "void" : invoice.status === "draft" ? "sent" : invoice.status },
+        state.invoiceLines,
+        nextPayments
+      );
+      const { error: statusError } = await supabase
+        .from("invoices")
+        .update({ status: nextStatus })
+        .eq("id", invoice.id);
+      if (statusError) toast.error(statusError.message);
+      setState((prev) => ({
+        ...prev,
+        payments: [payment, ...prev.payments],
+        invoices: prev.invoices.map((item) =>
+          item.id === invoice.id ? { ...item, status: nextStatus } : item
+        ),
+      }));
+      if (invoice.jobId) {
+        await addActivity({
+          entityType: "job",
+          entityId: invoice.jobId,
+          type: "note",
+          body: `Payment of ${input.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })} recorded on ${invoice.number}.`,
+        });
+      }
+    },
+    [addActivity, state.invoiceLines, state.invoices, state.payments, user.companyId]
+  );
+
+  const addScheduleEvent = useCallback(
+    async (input: Omit<ScheduleEvent, "id">) => {
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      const { data, error } = await supabase
+        .from("schedule_events")
+        .insert({
+          company_id: user.companyId,
+          title: input.title,
+          kind: input.kind,
+          starts_at: input.startsAt,
+          ends_at: input.endsAt,
+          location: input.location,
+          assignee: input.assignee,
+          opportunity_id: input.opportunityId,
+          job_id: input.jobId,
+          client_id: input.clientId,
+          notes: input.notes,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        toast.error(error?.message ?? "Could not add the event.");
+        throw error ?? new Error("Could not add the event.");
+      }
+      const event = mapScheduleEvent(data);
+      setState((prev) => ({ ...prev, events: [...prev.events, event] }));
+      return event;
+    },
+    [user.companyId]
+  );
+
+  const addJobPhoto = useCallback(
+    async (input: {
+      jobId: string;
+      caption: string;
+      category: PhotoCategory;
+      takenAt: string;
+      imageUrl?: string;
+      file?: File;
+    }) => {
+      const supabase = requireClient();
+    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      let imageUrl = input.imageUrl?.trim() ?? "";
+      let storagePath: string | null = null;
+      if (input.file) {
+        const ext = input.file.name.split(".").pop()?.toLowerCase() || "jpg";
+        storagePath = `${user.companyId}/${input.jobId}/${crypto.randomUUID()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("job-photos")
+          .upload(storagePath, input.file, { contentType: input.file.type, upsert: false });
+        if (uploadError) {
+          toast.error(uploadError.message);
+          return;
+        }
+        imageUrl = supabase.storage.from("job-photos").getPublicUrl(storagePath).data.publicUrl;
+      }
+      if (!imageUrl) {
+        toast.error("Add a photo file or an image URL.");
+        return;
+      }
+      const { data, error } = await supabase
+        .from("job_photos")
+        .insert({
+          company_id: user.companyId,
+          job_id: input.jobId,
+          caption: input.caption,
+          category: input.category,
+          taken_at: input.takenAt,
+          image_url: imageUrl,
+          storage_path: storagePath,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        toast.error(error?.message ?? "Could not save the photo.");
+        return;
+      }
+      setState((prev) => ({ ...prev, photos: [mapJobPhoto(data), ...prev.photos] }));
+    },
+    [user.companyId]
+  );
+
   const resetDemo = useCallback(async () => {
+    if (!isSupabaseConfigured()) {
+      setState(structuredClone(seedState));
+      toast.success("Northline sample book restored.");
+      return;
+    }
     if (!user.companyId) return;
     const supabase = createClient();
     try {
@@ -627,8 +1220,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   }, [load, user.companyId]);
 
   const signOut = useCallback(async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    if (isSupabaseConfigured()) {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+    }
     router.replace("/login");
     router.refresh();
   }, [router]);
@@ -645,6 +1240,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       getContact,
       getOpportunity,
       getJob,
+      getEstimate,
+      getInvoice,
       jobForOpportunity,
       moveOpportunity,
       updateOpportunity,
@@ -655,6 +1252,22 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addActivity,
       toggleTask,
       addTask,
+      addEstimate,
+      updateEstimate,
+      sendEstimate,
+      acceptEstimate,
+      declineEstimate,
+      addEstimateLineFromCatalog,
+      addCustomEstimateLine,
+      updateEstimateLine,
+      removeEstimateLine,
+      convertEstimateToInvoice,
+      addInvoice,
+      sendInvoice,
+      voidInvoice,
+      recordPayment,
+      addScheduleEvent,
+      addJobPhoto,
       resetDemo,
       signOut,
     }),
@@ -669,6 +1282,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       getContact,
       getOpportunity,
       getJob,
+      getEstimate,
+      getInvoice,
       jobForOpportunity,
       moveOpportunity,
       updateOpportunity,
@@ -679,6 +1294,22 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addActivity,
       toggleTask,
       addTask,
+      addEstimate,
+      updateEstimate,
+      sendEstimate,
+      acceptEstimate,
+      declineEstimate,
+      addEstimateLineFromCatalog,
+      addCustomEstimateLine,
+      updateEstimateLine,
+      removeEstimateLine,
+      convertEstimateToInvoice,
+      addInvoice,
+      sendInvoice,
+      voidInvoice,
+      recordPayment,
+      addScheduleEvent,
+      addJobPhoto,
       resetDemo,
       signOut,
     ]

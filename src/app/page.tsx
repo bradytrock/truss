@@ -7,6 +7,8 @@ import {
   Briefcase,
   CalendarClock,
   CircleDollarSign,
+  FileText,
+  Receipt,
   Trophy,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,8 +22,11 @@ import {
   formatCurrencyFull,
   formatDateShort,
   formatRelative,
+  formatTime,
   greeting,
+  localYmd,
 } from "@/lib/format";
+import { derivedInvoiceStatus, invoiceBalance, sumLines } from "@/lib/money";
 import { PIPELINE_STAGES, STAGE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -50,6 +55,23 @@ export default function HomePage() {
     );
     const activeValue = activeJobs.reduce((sum, job) => sum + job.contractValue, 0);
     const winRate = closed.length === 0 ? 0 : Math.round((awarded.length / closed.length) * 100);
+    const proposals = crm.estimates.filter(
+      (estimate) => estimate.status === "sent" || estimate.status === "viewed"
+    );
+    const proposalValue = proposals.reduce(
+      (sum, estimate) =>
+        sum + sumLines(crm.estimateLines.filter((line) => line.estimateId === estimate.id)),
+      0
+    );
+    const ar = crm.invoices.reduce((sum, invoice) => {
+      const status = derivedInvoiceStatus(invoice, crm.invoiceLines, crm.payments);
+      if (status === "void" || status === "draft" || status === "paid") return sum;
+      return sum + invoiceBalance(invoice.id, crm.invoiceLines, crm.payments);
+    }, 0);
+    const todayKey = localYmd(new Date());
+    const todayEvents = crm.events
+      .filter((event) => localYmd(new Date(event.startsAt)) === todayKey)
+      .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
     const byStage = PIPELINE_STAGES.filter(
       (stage) => stage !== "awarded" && stage !== "lost"
     ).map((stage) => ({
@@ -71,8 +93,12 @@ export default function HomePage() {
       closedCount: closed.length,
       byStage,
       maxStage,
+      proposals,
+      proposalValue,
+      ar,
+      todayEvents,
     };
-  }, [crm.jobs, crm.opportunities]);
+  }, [crm.estimateLines, crm.estimates, crm.events, crm.invoiceLines, crm.invoices, crm.jobs, crm.opportunities, crm.payments]);
 
   const upcomingTasks = crm.tasks
     .filter((task) => !task.completed)
@@ -92,7 +118,7 @@ export default function HomePage() {
       ) : null}
       <PageHeader
         title={`${greeting()}, ${crm.user.name.split(" ")[0] || "there"}`}
-        description="Open pipeline, bids due this week, and jobs in the field — the high-level view a GC principal actually uses."
+        description="Open pipeline, proposals out, AR, and today's field calendar — the loop from bid to job photo."
       />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -123,6 +149,35 @@ export default function HomePage() {
           label="Win rate"
           value={`${stats.winRate}%`}
           hint={`${stats.awardedCount} awarded / ${stats.closedCount} closed pursuits`}
+        />
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-3">
+        <Kpi
+          icon={<FileText className="size-4" />}
+          label="Proposals out"
+          value={String(stats.proposals.length)}
+          hint={
+            stats.proposals.length
+              ? `${formatCurrency(stats.proposalValue)} sitting with owners`
+              : "No sent proposals waiting on a decision"
+          }
+        />
+        <Kpi
+          icon={<Receipt className="size-4" />}
+          label="AR outstanding"
+          value={formatCurrency(stats.ar)}
+          hint="Sent, partial, and overdue invoices"
+        />
+        <Kpi
+          icon={<CalendarClock className="size-4" />}
+          label="On today's calendar"
+          value={String(stats.todayEvents.length)}
+          hint={
+            stats.todayEvents[0]
+              ? `Next: ${formatTime(stats.todayEvents[0].startsAt)} ${stats.todayEvents[0].title}`
+              : "Nothing scheduled today"
+          }
         />
       </section>
 
