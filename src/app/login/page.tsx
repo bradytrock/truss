@@ -7,9 +7,10 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ConnectSupabaseForm } from "@/components/connect-supabase";
+import { AuthFrame } from "@/components/auth-frame";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { AuthFrame } from "@/components/auth-frame";
 
 function LoginForm() {
   const router = useRouter();
@@ -18,12 +19,12 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
-  const configured = isSupabaseConfigured();
+  const [configured, setConfigured] = useState(isSupabaseConfigured());
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!configured) {
-      toast.error("Add your Supabase URL and publishable key first.");
+    if (!isSupabaseConfigured()) {
+      toast.error("Connect the Supabase project first.");
       return;
     }
     setPending(true);
@@ -41,11 +42,9 @@ function LoginForm() {
   return (
     <AuthFrame
       title="Sign in to Truss"
-      description="Your pipeline, jobs, and owners live in Supabase — Auth, Postgres, and Realtime."
+      description="Auth, Postgres, Realtime, and Storage run on your Supabase project."
     >
-      {!configured ? (
-        <SetupHint />
-      ) : (
+      {configured ? (
         <form onSubmit={onSubmit} className="grid gap-3">
           <div className="grid gap-1.5">
             <Label htmlFor="email">Email</Label>
@@ -73,31 +72,28 @@ function LoginForm() {
             {pending ? "Signing in…" : "Sign in"}
           </Button>
         </form>
+      ) : (
+        <ConnectSupabaseForm onConnected={() => setConfigured(true)} />
       )}
       <p className="mt-4 text-center text-sm text-muted-foreground">
-        New company?{" "}
-        <Link href="/signup" className="font-medium text-primary hover:underline">
-          Create an account
-        </Link>
+        {configured ? (
+          <>
+            New company?{" "}
+            <Link href="/signup" className="font-medium text-primary hover:underline">
+              Create an account
+            </Link>
+          </>
+        ) : (
+          <>
+            Or{" "}
+            <Link href="/" className="font-medium text-primary hover:underline">
+              browse the Northline sample book
+            </Link>{" "}
+            without a project.
+          </>
+        )}
       </p>
     </AuthFrame>
-  );
-}
-
-function SetupHint() {
-  return (
-    <div className="rounded-lg border bg-muted/40 p-3 text-sm leading-relaxed text-muted-foreground">
-      <p className="font-medium text-foreground">Connect Supabase to continue.</p>
-      <ol className="mt-2 list-decimal space-y-1 pl-4">
-        <li>Create a project at supabase.com.</li>
-        <li>
-          Run both SQL files in <code className="text-foreground">supabase/migrations</code> (CRM, then estimates / invoices / schedule).
-        </li>
-        <li>
-          Put the project URL and publishable (or anon) key in <code className="text-foreground">.env.local</code>.
-        </li>
-      </ol>
-    </div>
   );
 }
 

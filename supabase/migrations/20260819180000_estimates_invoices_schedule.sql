@@ -184,14 +184,28 @@ create policy "company isolation" on public.job_photos
   using (company_id = public.current_company_id())
   with check (company_id = public.current_company_id());
 
-alter publication supabase_realtime add table public.catalog_items;
-alter publication supabase_realtime add table public.estimates;
-alter publication supabase_realtime add table public.estimate_lines;
-alter publication supabase_realtime add table public.invoices;
-alter publication supabase_realtime add table public.invoice_lines;
-alter publication supabase_realtime add table public.payments;
-alter publication supabase_realtime add table public.schedule_events;
-alter publication supabase_realtime add table public.job_photos;
+do $$
+declare
+  tbl text;
+begin
+  foreach tbl in array array[
+    'catalog_items',
+    'estimates',
+    'estimate_lines',
+    'invoices',
+    'invoice_lines',
+    'payments',
+    'schedule_events',
+    'job_photos'
+  ]
+  loop
+    begin
+      execute format('alter publication supabase_realtime add table public.%I', tbl);
+    exception
+      when duplicate_object then null;
+    end;
+  end loop;
+end $$;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values (
@@ -202,6 +216,11 @@ values (
   array['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 )
 on conflict (id) do nothing;
+
+create policy "public read job photos"
+on storage.objects for select
+to public
+using (bucket_id = 'job-photos');
 
 create policy "company photo files"
 on storage.objects for all to authenticated

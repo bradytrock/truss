@@ -1,15 +1,22 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { getSupabaseKey, getSupabaseUrl, isSupabaseConfigured } from "@/lib/supabase/env";
+import {
+  getSupabaseKey,
+  getSupabaseUrl,
+  SB_KEY_COOKIE,
+  SB_URL_COOKIE,
+} from "@/lib/supabase/env";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
+  const url = getSupabaseUrl() || request.cookies.get(SB_URL_COOKIE)?.value || "";
+  const key = getSupabaseKey() || request.cookies.get(SB_KEY_COOKIE)?.value || "";
 
-  if (!isSupabaseConfigured()) {
+  if (!url || !key) {
     return NextResponse.next({ request });
   }
 
-  const supabase = createServerClient(getSupabaseUrl(), getSupabaseKey(), {
+  const supabase = createServerClient(url, key, {
     cookies: {
       getAll() {
         return request.cookies.getAll();

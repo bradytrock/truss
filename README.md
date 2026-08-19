@@ -6,20 +6,24 @@ The Northline Construction sample book is Denver work — the same loop Roofr an
 
 ## Connect Supabase
 
-1. Create a project at [supabase.com](https://supabase.com).
+The hosted MCP at `https://mcp.supabase.com/mcp` is online. This cloud agent cannot complete the OAuth click-through — authenticate Supabase under **Cursor Settings → MCP** in the desktop app if you want the agent to create projects for you.
+
+To attach a project that is already running:
+
+1. Open [http://localhost:3847/login](http://localhost:3847/login) and paste the project URL plus the **publishable** (or anon) key from Settings → API. Truss checks that the project is reachable, then stores the keys for this browser and writes `.env.local`.
 2. In the SQL editor, run both migrations, in order:
    - [`supabase/migrations/20260819170000_truss_crm.sql`](supabase/migrations/20260819170000_truss_crm.sql) — companies, profiles, pipeline, jobs, RLS, signup trigger, Realtime
    - [`supabase/migrations/20260819180000_estimates_invoices_schedule.sql`](supabase/migrations/20260819180000_estimates_invoices_schedule.sql) — price book, estimates, invoices, payments, schedule, job photos, Storage bucket
-3. Copy `.env.example` to `.env.local` and fill in the project URL plus the **publishable** key (or the legacy anon key).
-4. In Authentication → URL configuration, add `http://localhost:3847/auth/callback` to the redirect allow list. For local work you can turn off “Confirm email”.
+3. In Authentication → URL configuration, add `http://localhost:3847/auth/callback`. For local work you can turn off “Confirm email”.
+4. Create an account. Signup opens a company, a profile, and the Northline sample book in Postgres.
+
+You can still put the same values in `.env.local` by hand:
 
 ```bash
 cp .env.example .env.local
 npm install
 npm run dev
 ```
-
-Open [http://localhost:3847](http://localhost:3847). Without env keys the Northline sample book loads locally so you can click through estimates, invoices, schedule, and job photos. Create an account after connecting a project — Truss then opens a company, a profile, and the same book in your database.
 
 ## What you can do
 

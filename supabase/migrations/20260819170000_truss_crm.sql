@@ -234,7 +234,7 @@ $$;
 
 create trigger on_auth_user_created
   after insert on auth.users
-  for each row execute procedure public.handle_new_user();
+  for each row execute function public.handle_new_user();
 
 alter table public.companies enable row level security;
 alter table public.profiles enable row level security;
@@ -299,12 +299,26 @@ create policy "company isolation" on public.tasks
   using (company_id = public.current_company_id())
   with check (company_id = public.current_company_id());
 
-alter publication supabase_realtime add table public.companies;
-alter publication supabase_realtime add table public.profiles;
-alter publication supabase_realtime add table public.team_members;
-alter publication supabase_realtime add table public.clients;
-alter publication supabase_realtime add table public.contacts;
-alter publication supabase_realtime add table public.opportunities;
-alter publication supabase_realtime add table public.jobs;
-alter publication supabase_realtime add table public.activities;
-alter publication supabase_realtime add table public.tasks;
+do $$
+declare
+  tbl text;
+begin
+  foreach tbl in array array[
+    'companies',
+    'profiles',
+    'team_members',
+    'clients',
+    'contacts',
+    'opportunities',
+    'jobs',
+    'activities',
+    'tasks'
+  ]
+  loop
+    begin
+      execute format('alter publication supabase_realtime add table public.%I', tbl);
+    exception
+      when duplicate_object then null;
+    end;
+  end loop;
+end $$;

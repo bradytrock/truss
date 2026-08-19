@@ -8,12 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthFrame } from "@/components/auth-frame";
+import { ConnectSupabaseForm } from "@/components/connect-supabase";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 export default function SignupPage() {
   const router = useRouter();
-  const configured = isSupabaseConfigured();
+  const [configured, setConfigured] = useState(isSupabaseConfigured());
   const [pending, setPending] = useState(false);
   const [fullName, setFullName] = useState("");
   const [company, setCompany] = useState("Northline Construction");
@@ -23,8 +24,8 @@ export default function SignupPage() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!configured) {
-      toast.error("Add your Supabase URL and publishable key first.");
+    if (!isSupabaseConfigured()) {
+      toast.error("Connect the Supabase project first.");
       return;
     }
     setPending(true);
@@ -61,7 +62,8 @@ export default function SignupPage() {
       title="Create your GC workspace"
       description="A company, your profile, and the Northline sample book are created in Postgres on first sign-in."
     >
-      <form onSubmit={onSubmit} className="grid gap-3">
+      {configured ? (
+        <form onSubmit={onSubmit} className="grid gap-3">
         <div className="grid gap-1.5">
           <Label htmlFor="name">Your name</Label>
           <Input
@@ -115,10 +117,13 @@ export default function SignupPage() {
             required
           />
         </div>
-        <Button type="submit" disabled={pending || !configured}>
+        <Button type="submit" disabled={pending}>
           {pending ? "Creating workspace…" : "Create account"}
         </Button>
       </form>
+      ) : (
+        <ConnectSupabaseForm onConnected={() => setConfigured(true)} />
+      )}
       <p className="mt-4 text-center text-sm text-muted-foreground">
         Already on Truss?{" "}
         <Link href="/login" className="font-medium text-primary hover:underline">
