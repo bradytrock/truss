@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/command";
 import {
   DropdownMenu,
+  DropdownMenuGroup,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -360,20 +361,23 @@ function UserMenu() {
         </Avatar>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56">
-        <DropdownMenuLabel>
-          <div className="flex flex-col">
-            <span className="text-sm text-foreground">{viewer?.name ?? user.name}</span>
-            <span className="text-xs font-normal">
-              {viewer ? SEAT_ROLE_LABELS[viewer.role] : user.title}
-            </span>
-          </div>
-        </DropdownMenuLabel>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>
+            <div className="flex flex-col">
+              <span className="text-sm text-foreground">{viewer?.name ?? user.name}</span>
+              <span className="text-xs font-normal">
+                {viewer ? SEAT_ROLE_LABELS[viewer.role] : user.title}
+              </span>
+            </div>
+          </DropdownMenuLabel>
+        </DropdownMenuGroup>
         {loginAsOptions.length > 0 ? (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-              Login As…
-            </DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                Login As…
+              </DropdownMenuLabel>
             {loginAsOptions.map((member) => (
               <DropdownMenuItem
                 key={member.id}
@@ -388,14 +392,16 @@ function UserMenu() {
             {impersonatedStaff ? (
               <DropdownMenuItem onClick={() => stopLoginAs()}>Exit Login As</DropdownMenuItem>
             ) : null}
+            </DropdownMenuGroup>
           </>
         ) : null}
         {staff.length > 1 ? (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-              Switch seat
-            </DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                Switch seat
+              </DropdownMenuLabel>
             {staff.map((member) => (
               <DropdownMenuItem key={member.id} onClick={() => switchSeat(member.id)}>
                 {member.name}
@@ -404,6 +410,7 @@ function UserMenu() {
                 </span>
               </DropdownMenuItem>
             ))}
+            </DropdownMenuGroup>
           </>
         ) : null}
         <DropdownMenuSeparator />

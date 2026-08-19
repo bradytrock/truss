@@ -157,22 +157,22 @@ export default function SettingsPage() {
         </Card>
 
         <div className="flex items-center gap-3">
-            <Button type="submit" nativeButton disabled={pending || !dirty}>
-              {pending ? "Saving…" : "Save settings"}
+          <Button type="submit" nativeButton disabled={pending || !dirty}>
+            {pending ? "Saving…" : "Save settings"}
+          </Button>
+          {dirty ? (
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={pending}
+              onClick={() => setDraft(null)}
+            >
+              Discard
             </Button>
-            {dirty ? (
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={pending}
-                onClick={() => setDraft(null)}
-              >
-                Discard
-              </Button>
-            ) : (
-              <p className="text-xs text-muted-foreground">No unsaved changes.</p>
-            )}
-          </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">No unsaved changes.</p>
+          )}
+        </div>
       </form>
     </div>
   );
