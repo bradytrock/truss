@@ -3,6 +3,7 @@ import type {
   Activity,
   CatalogItem,
   Client,
+  CompanySettings,
   Contact,
   Estimate,
   EstimateLine,
@@ -34,6 +35,21 @@ type EventRow = Database["public"]["Tables"]["schedule_events"]["Row"];
 type PhotoRow = Database["public"]["Tables"]["job_photos"]["Row"];
 type StaffRow = Database["public"]["Tables"]["team_members"]["Row"];
 type TeamRow = Database["public"]["Tables"]["teams"]["Row"];
+type CompanyRow = Database["public"]["Tables"]["companies"]["Row"];
+
+export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>): CompanySettings {
+  return {
+    name: row.name,
+    phone: row.phone ?? "",
+    email: row.email ?? "",
+    website: row.website ?? "",
+    street: row.street ?? "",
+    city: row.city ?? "",
+    state: row.state ?? "",
+    postalCode: row.postal_code ?? "",
+    licenseNumber: row.license_number ?? "",
+  };
+}
 
 export function mapStaff(row: StaffRow): StaffMember {
   return {

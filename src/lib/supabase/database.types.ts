@@ -4,9 +4,48 @@ export type Database = {
   public: {
     Tables: {
       companies: {
-        Row: { id: string; name: string; created_at: string };
-        Insert: { id?: string; name: string; created_at?: string };
-        Update: { id?: string; name?: string; created_at?: string };
+        Row: {
+          id: string;
+          name: string;
+          phone: string;
+          email: string;
+          website: string;
+          street: string;
+          city: string;
+          state: string;
+          postal_code: string;
+          license_number: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          phone?: string;
+          email?: string;
+          website?: string;
+          street?: string;
+          city?: string;
+          state?: string;
+          postal_code?: string;
+          license_number?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          phone?: string;
+          email?: string;
+          website?: string;
+          street?: string;
+          city?: string;
+          state?: string;
+          postal_code?: string;
+          license_number?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       profiles: {

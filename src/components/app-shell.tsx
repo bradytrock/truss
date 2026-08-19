@@ -55,6 +55,7 @@ function navItems(showReports: boolean) {
     { href: "/schedule", label: "Schedule" },
     { href: "/contacts", label: "Contacts" },
     ...(showReports ? [{ href: "/reports", label: "Reports" }] : []),
+    { href: "/settings", label: "Settings" },
   ];
 }
 
@@ -342,6 +343,7 @@ function ScopeBanners() {
 }
 
 function UserMenu() {
+  const router = useRouter();
   const { resetDemo, signOut, user, staff, switchSeat, loginAs, loginAsOptions, viewer, impersonatedStaff, stopLoginAs } =
     useCrm();
 
@@ -406,6 +408,7 @@ function UserMenu() {
           </>
         ) : null}
         <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => router.push("/settings")}>Settings</DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => {
             void resetDemo();

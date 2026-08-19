@@ -23,6 +23,7 @@ import {
   jobPatch,
   mapActivity,
   mapClient,
+  mapCompany,
   mapContact,
   mapEstimate,
   mapEstimateLine,
@@ -36,6 +37,7 @@ import {
   opportunityPatch,
 } from "@/lib/supabase/mappers";
 import {
+  NORTHLINE_COMPANY,
   NORTHLINE_STAFF,
   STAGE_LABELS,
   STAGE_PROBABILITY,
@@ -43,6 +45,7 @@ import {
   staffByName,
   type ActivityType,
   type Client,
+  type CompanySettings,
   type Contact,
   type CrmState,
   type CurrentUser,
@@ -115,6 +118,30 @@ const northlineUser = userFromStaff(NORTHLINE_STAFF[0], {
 });
 
 const DEMO_STAFF_KEY = "truss.demoStaffId";
+const COMPANY_SETTINGS_KEY = "truss.companySettings";
+
+function readLocalCompany(): CompanySettings {
+  try {
+    const raw = window.localStorage.getItem(COMPANY_SETTINGS_KEY);
+    if (!raw) return structuredClone(NORTHLINE_COMPANY);
+    const parsed = JSON.parse(raw) as Partial<CompanySettings>;
+    return {
+      ...NORTHLINE_COMPANY,
+      ...parsed,
+      name: parsed.name?.trim() || NORTHLINE_COMPANY.name,
+    };
+  } catch {
+    return structuredClone(NORTHLINE_COMPANY);
+  }
+}
+
+function writeLocalCompany(settings: CompanySettings) {
+  try {
+    window.localStorage.setItem(COMPANY_SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    // ignore quota / private mode
+  }
+}
 
 function requireClient() {
   if (!isSupabaseConfigured()) {
@@ -147,6 +174,9 @@ type CrmContextValue = CrmState & {
   getEstimate: (id: string) => Estimate | undefined;
   getInvoice: (id: string) => Invoice | undefined;
   jobForOpportunity: (opportunityId: string) => Job | undefined;
+  company: CompanySettings;
+  canEditCompany: boolean;
+  updateCompany: (settings: CompanySettings) => Promise<boolean>;
   moveOpportunity: (
     id: string,
     stage: PipelineStage,
@@ -238,6 +268,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const configured = isSupabaseConfigured();
   const [state, setState] = useState<CrmState>(configured ? emptyState : structuredClone(seedState));
   const [user, setUser] = useState<CurrentUser>(configured ? guestUser : northlineUser);
+  const [companySettings, setCompanySettings] = useState<CompanySettings>(NORTHLINE_COMPANY);
   const [impersonatedStaffId, setImpersonatedStaffId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(!configured);
   const [hydrateError, setHydrateError] = useState<string | null>(null);
@@ -251,8 +282,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       error: authError,
     } = await supabase.auth.getUser();
     if (authError || !authUser) {
+      const local = readLocalCompany();
+      setCompanySettings(local);
       setState(structuredClone(seedState));
-      setUser(northlineUser);
+      setUser({ ...northlineUser, company: local.name });
       setHydrateError(null);
       setHydrated(true);
       return;
@@ -264,15 +297,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       .eq("id", authUser.id)
       .maybeSingle();
     if (profileError || !profile) {
+      const local = readLocalCompany();
+      setCompanySettings(local);
       setState(structuredClone(seedState));
-      setUser(northlineUser);
+      setUser({ ...northlineUser, company: local.name });
       const missingSchema =
         profileError?.message?.includes("schema cache") ||
         profileError?.code === "PGRST205" ||
         profileError?.message?.includes("Could not find the table");
       setHydrateError(
         missingSchema
-          ? "Signed in, but this project is missing the Truss tables. Run the four files in supabase/migrations in the SQL editor (in order), then reset demo data."
+          ? "Signed in, but this project is missing the Truss tables. Run the five files in supabase/migrations in the SQL editor (in order), then reset demo data."
           : profileError?.message ??
             "No profile yet. Create an account after the migrations have been applied."
       );
@@ -280,11 +315,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const { data: company } = await supabase
+    const { data: companyRow, error: companyError } = await supabase
       .from("companies")
-      .select("name")
+      .select("*")
       .eq("id", profile.company_id)
       .maybeSingle();
+    const settings = companyRow
+      ? mapCompany(companyRow)
+      : companyError
+        ? NORTHLINE_COMPANY
+        : { ...NORTHLINE_COMPANY, name: "Truss" };
 
     const companyId = profile.company_id;
     try {
@@ -314,13 +354,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         roster.find((member) => member.role === "company_admin") ||
         roster[0];
       const role = (profile.role as SeatRole | undefined) ?? matched?.role ?? "company_admin";
+      setCompanySettings(settings);
       setUser({
         id: profile.id,
         companyId,
         staffId: matched?.id ?? "",
         name: profile.full_name,
         title: profile.title,
-        company: company?.name ?? "Truss",
+        company: settings.name,
         initials: profile.initials,
         role,
         teamId: matched?.teamId ?? null,
@@ -379,6 +420,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     channel.on(
       "postgres_changes",
+      { event: "*", schema: "public", table: "companies", filter: `id=eq.${user.companyId}` },
+      () => {
+        void load();
+      }
+    );
+    channel.on(
+      "postgres_changes",
       { event: "*", schema: "public", table: "profiles", filter: `id=eq.${user.id}` },
       () => {
         void load();
@@ -397,15 +445,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       try {
         const saved = window.localStorage.getItem(DEMO_STAFF_KEY);
         const member = state.staff.find((item) => item.id === saved) ?? state.staff[0];
-        if (!member) return;
+        const local = readLocalCompany();
+        setCompanySettings(local);
+        if (!member) {
+          setUser((current) => ({ ...current, company: local.name }));
+          return;
+        }
         setUser((current) =>
-          current.staffId === member.id
-            ? current
-            : userFromStaff(member, {
-                id: current.id || "local",
-                companyId: current.companyId || "local",
-                company: current.company || "Northline Construction",
-              })
+          userFromStaff(member, {
+            id: current.id || "local",
+            companyId: current.companyId || "local",
+            company: local.name,
+          })
         );
       } catch {
         // ignore storage
@@ -1565,6 +1616,76 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [user.companyId]
   );
 
+  const canEditCompany = viewer?.role === "company_admin";
+
+  const updateCompany = useCallback(
+    async (next: CompanySettings) => {
+      const name = next.name.trim();
+      if (!name) {
+        toast.error("Company name is required.");
+        return false;
+      }
+      if (!canEditCompany) {
+        toast.error("Only a company admin can change business settings.");
+        return false;
+      }
+      const settings: CompanySettings = {
+        name,
+        phone: next.phone.trim(),
+        email: next.email.trim(),
+        website: next.website.trim(),
+        street: next.street.trim(),
+        city: next.city.trim(),
+        state: next.state.trim(),
+        postalCode: next.postalCode.trim(),
+        licenseNumber: next.licenseNumber.trim(),
+      };
+      if (!isSupabaseConfigured() || !user.companyId || user.companyId === "local") {
+        setCompanySettings(settings);
+        setUser((current) => ({ ...current, company: settings.name }));
+        writeLocalCompany(settings);
+        toast.success("Business settings saved.");
+        return true;
+      }
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("companies")
+        .update({
+          name: settings.name,
+          phone: settings.phone,
+          email: settings.email,
+          website: settings.website,
+          street: settings.street,
+          city: settings.city,
+          state: settings.state,
+          postal_code: settings.postalCode,
+          license_number: settings.licenseNumber,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.companyId)
+        .select("*")
+        .single();
+      if (error || !data) {
+        const missingColumn =
+          error?.message?.includes("schema cache") ||
+          error?.code === "PGRST204" ||
+          error?.message?.includes("Could not find the");
+        toast.error(
+          missingColumn
+            ? "Run supabase/migrations/20260819210000_company_settings.sql in the SQL editor, then try again."
+            : error?.message ?? "Could not save business settings."
+        );
+        return false;
+      }
+      const saved = mapCompany(data);
+      setCompanySettings(saved);
+      setUser((current) => ({ ...current, company: saved.name }));
+      toast.success("Business settings saved.");
+      return true;
+    },
+    [canEditCompany, user.companyId]
+  );
+
   const resetDemo = useCallback(async () => {
     if (!isSupabaseConfigured()) {
       setState(structuredClone(seedState));
@@ -1618,6 +1739,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       getEstimate,
       getInvoice,
       jobForOpportunity,
+      company: companySettings,
+      canEditCompany,
+      updateCompany,
       moveOpportunity,
       updateOpportunity,
       updateJob,
@@ -1670,6 +1794,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       getEstimate,
       getInvoice,
       jobForOpportunity,
+      companySettings,
+      canEditCompany,
+      updateCompany,
       moveOpportunity,
       updateOpportunity,
       updateJob,

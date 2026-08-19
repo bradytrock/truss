@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { RecordPaymentDialog } from "@/components/create-ops-dialogs";
 import { RecordProperty } from "@/components/app-shell";
+import { CompanyLetterhead } from "@/components/company-letterhead";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { InvoiceStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
@@ -63,6 +64,7 @@ export default function InvoiceDetailPage() {
 
   return (
     <div className="space-y-5">
+      <CompanyLetterhead className="border-b pb-4" />
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">

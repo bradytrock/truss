@@ -122,3 +122,18 @@ export function initials(name: string) {
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
 }
+
+export function formatCompanyAddress(company: {
+  street: string;
+  city: string;
+  state: string;
+  postalCode: string;
+}) {
+  const cityLine = [company.city, company.state].filter(Boolean).join(", ");
+  const locality = [cityLine, company.postalCode].filter(Boolean).join(" ");
+  return [company.street, locality].filter(Boolean).join(" · ");
+}
+
+export function formatCompanyContact(company: { phone: string; email: string; website: string }) {
+  return [company.phone, company.email, company.website].filter(Boolean).join(" · ");
+}

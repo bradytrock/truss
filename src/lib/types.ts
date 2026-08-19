@@ -107,6 +107,30 @@ export interface CurrentUser {
   teamId: string | null;
 }
 
+export interface CompanySettings {
+  name: string;
+  phone: string;
+  email: string;
+  website: string;
+  street: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  licenseNumber: string;
+}
+
+export const NORTHLINE_COMPANY: CompanySettings = {
+  name: "Northline Construction",
+  phone: "(303) 555-0140",
+  email: "office@northlineco.com",
+  website: "northlineco.com",
+  street: "2840 Larimer Street",
+  city: "Denver",
+  state: "CO",
+  postalCode: "80205",
+  licenseNumber: "CO-GC-44821",
+};
+
 export interface StaffMember {
   id: string;
   name: string;

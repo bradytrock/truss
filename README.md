@@ -16,6 +16,7 @@ To attach a project that is already running:
    - [`supabase/migrations/20260819180000_estimates_invoices_schedule.sql`](supabase/migrations/20260819180000_estimates_invoices_schedule.sql) — price book, estimates, invoices, payments, schedule, job photos, Storage bucket
    - [`supabase/migrations/20260819190000_seats_contacts.sql`](supabase/migrations/20260819190000_seats_contacts.sql) — seats, teams, contact-book ownership, referral partners
    - [`supabase/migrations/20260819200000_residential_homeowners.sql`](supabase/migrations/20260819200000_residential_homeowners.sql) — optional company on contacts/jobs, residential types, insurance / T&M delivery
+   - [`supabase/migrations/20260819210000_company_settings.sql`](supabase/migrations/20260819210000_company_settings.sql) — business name, phone, email, address, and license on `companies`
 3. In Authentication → URL configuration, add `http://localhost:3847/auth/callback`. For local work you can turn off “Confirm email”.
 4. Create an account. Signup opens a company, a profile, and the Northline sample book in Postgres.
 
@@ -29,6 +30,7 @@ npm run dev
 
 ## What you can do
 
+- **Settings** — company name, main phone, office email, website, license, and office address. Company admins can edit; other seats can view. The same block prints on estimates and invoices.
 - **Contacts** — homeowners first (no company required), plus adjusters, realtors, and one architect as referral partners
 - **Pipeline** — leads through sold and lost: hail, water, fire, kitchens, windows, an addition
 - **Jobs** — 11 residential field records and one small commercial TI
