@@ -139,3 +139,41 @@
     font-feature-settings: "tnum";
   }
 }
+
+.lesson-body {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+.lesson-body p {
+  margin-bottom: 0.8rem;
+}
+.lesson-body .tip {
+  border-left: 2px solid var(--primary);
+  background: var(--muted);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+.lesson-body ul,
+.lesson-body ol {
+  margin: 0.75rem 0 0.75rem 1.2rem;
+}
+.lesson-body li {
+  margin-bottom: 0.35rem;
+}
+.lesson-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  margin: 1rem 0;
+}
+.lesson-body th,
+.lesson-body td {
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.55rem;
+  text-align: left;
+}
+.lesson-body strong {
+  font-weight: 600;
+}

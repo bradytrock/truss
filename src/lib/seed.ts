@@ -1,4 +1,5 @@
 import { seedCalendarAccounts, seedCalendarShares } from "@/lib/calendar-seed";
+import { seedTrainingBulletins, seedTrainingProgress } from "@/lib/training/seed";
 import { backfillRecordCodes } from "@/lib/job-code";
 import { NORTHLINE_STAFF, NORTHLINE_TEAMS, type CrmState } from "@/lib/types";
 import { demoOps } from "@/lib/demo-ops";
@@ -36,4 +37,6 @@ export const seedState: CrmState = {
   photos: demoOps.photos,
   calendarAccounts: structuredClone(seedCalendarAccounts),
   calendarShares: structuredClone(seedCalendarShares),
+  trainingProgress: structuredClone(seedTrainingProgress),
+  trainingBulletins: structuredClone(seedTrainingBulletins),
 };

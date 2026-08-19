@@ -371,6 +371,33 @@ export interface JobPhoto {
   storagePath: string | null;
 }
 
+export interface TrainingAttempt {
+  id: string;
+  staffId: string;
+  kind: "chapter" | "practice" | "exam";
+  chapterId: string | null;
+  score: number;
+  correct: number;
+  total: number;
+  passed: boolean;
+  createdAt: string;
+}
+
+export interface TrainingProgress {
+  staffId: string;
+  read: Record<string, string>;
+  badges: Record<string, string>;
+  attempts: TrainingAttempt[];
+}
+
+export interface TrainingBulletin {
+  id: string;
+  title: string;
+  body: string;
+  author: string;
+  createdAt: string;
+}
+
 export interface CrmState {
   staff: StaffMember[];
   teams: Team[];
@@ -390,6 +417,8 @@ export interface CrmState {
   photos: JobPhoto[];
   calendarAccounts: CalendarAccount[];
   calendarShares: CalendarShare[];
+  trainingProgress: TrainingProgress[];
+  trainingBulletins: TrainingBulletin[];
 }
 
 export const STAGE_LABELS: Record<PipelineStage, string> = {

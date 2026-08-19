@@ -1,4 +1,4 @@
-import type { Database } from "@/lib/supabase/database.types";
+import type { Database, Json } from "@/lib/supabase/database.types";
 import type {
   Activity,
   CalendarAccount,
@@ -19,6 +19,9 @@ import type {
   StaffMember,
   Task,
   Team,
+  TrainingAttempt,
+  TrainingBulletin,
+  TrainingProgress,
 } from "@/lib/types";
 
 type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
@@ -40,6 +43,41 @@ type TeamRow = Database["public"]["Tables"]["teams"]["Row"];
 type CompanyRow = Database["public"]["Tables"]["companies"]["Row"];
 type CalendarAccountRow = Database["public"]["Tables"]["calendar_accounts"]["Row"];
 type CalendarShareRow = Database["public"]["Tables"]["calendar_shares"]["Row"];
+type TrainingProgressRow = Database["public"]["Tables"]["training_progress"]["Row"];
+type TrainingBulletinRow = Database["public"]["Tables"]["training_bulletins"]["Row"];
+
+function stringRecord(value: Json | undefined): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (typeof item === "string") out[key] = item;
+  }
+  return out;
+}
+
+function mapAttempts(value: Json | undefined, staffId: string): TrainingAttempt[] {
+  if (!Array.isArray(value)) return [];
+  const attempts: TrainingAttempt[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const row = item as Record<string, unknown>;
+    const kind = row.kind;
+    if (kind !== "chapter" && kind !== "practice" && kind !== "exam") continue;
+    if (typeof row.id !== "string") continue;
+    attempts.push({
+      id: row.id,
+      staffId: typeof row.staffId === "string" ? row.staffId : staffId,
+      kind,
+      chapterId: typeof row.chapterId === "string" ? row.chapterId : null,
+      score: Number(row.score) || 0,
+      correct: Number(row.correct) || 0,
+      total: Number(row.total) || 0,
+      passed: Boolean(row.passed),
+      createdAt: typeof row.createdAt === "string" ? row.createdAt : new Date().toISOString(),
+    });
+  }
+  return attempts;
+}
 
 export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>): CompanySettings {
   return {
@@ -330,5 +368,24 @@ export function mapCalendarShare(row: CalendarShareRow): CalendarShare {
   return {
     ownerStaffId: row.owner_staff_id,
     viewerStaffId: row.viewer_staff_id,
+  };
+}
+
+export function mapTrainingProgress(row: TrainingProgressRow): TrainingProgress {
+  return {
+    staffId: row.staff_id,
+    read: stringRecord(row.read),
+    badges: stringRecord(row.badges),
+    attempts: mapAttempts(row.attempts, row.staff_id),
+  };
+}
+
+export function mapTrainingBulletin(row: TrainingBulletinRow): TrainingBulletin {
+  return {
+    id: row.id,
+    title: row.title,
+    body: row.body,
+    author: row.author,
+    createdAt: row.created_at,
   };
 }

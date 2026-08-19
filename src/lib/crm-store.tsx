@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { seedState } from "@/lib/seed";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
+import type { Json } from "@/lib/supabase/database.types";
 import { seedOperationsIfMissing } from "@/lib/supabase/ops-seed";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
 import { createClient } from "@/lib/supabase/client";
@@ -34,6 +35,7 @@ import {
   mapPayment,
   mapScheduleEvent,
   mapTask,
+  mapTrainingBulletin,
   opportunityPatch,
 } from "@/lib/supabase/mappers";
 import {
@@ -61,6 +63,8 @@ import {
   type ScheduleEvent,
   type SeatRole,
   type StaffMember,
+  type TrainingBulletin,
+  type TrainingProgress,
 } from "@/lib/types";
 import {
   accountForStaff,
@@ -69,6 +73,17 @@ import {
   readLocalCalendar,
   writeLocalCalendar,
 } from "@/lib/calendar";
+import {
+  clearLocalTraining,
+  readLocalTraining,
+  writeLocalTraining,
+} from "@/lib/training/persist";
+import {
+  lessonKey,
+  recordAttempt,
+  staffProgress,
+  type QuizKind,
+} from "@/lib/training/engine";
 import {
   backfillRecordCodes,
   codeInsertError,
@@ -97,6 +112,8 @@ const emptyState: CrmState = {
   photos: [],
   calendarAccounts: [],
   calendarShares: [],
+  trainingProgress: [],
+  trainingBulletins: [],
 };
 
 function userFromStaff(
@@ -281,6 +298,16 @@ type CrmContextValue = CrmState & {
   disconnectCalendar: () => Promise<void>;
   setShareWithTeam: (shareWithTeam: boolean) => Promise<void>;
   setCalendarShare: (viewerStaffId: string, shared: boolean) => Promise<void>;
+  progressFor: (staffId: string) => TrainingProgress;
+  markLessonRead: (chapterId: string, index: number) => Promise<void>;
+  submitQuiz: (input: {
+    kind: QuizKind;
+    chapterId: string | null;
+    score: number;
+    correct: number;
+    total: number;
+  }) => Promise<TrainingProgress>;
+  addTrainingBulletin: (title: string, body: string) => Promise<void>;
   addJobPhoto: (input: {
     jobId: string;
     caption: string;
@@ -442,6 +469,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       "job_photos",
       "calendar_accounts",
       "calendar_shares",
+      "training_progress",
+      "training_bulletins",
     ] as const;
     let timer: number | undefined;
     const channel = supabase.channel(`truss-company-${user.companyId}`);
@@ -486,7 +515,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         const member = state.staff.find((item) => item.id === saved) ?? state.staff[0];
         const local = readLocalCompany();
         setCompanySettings(local);
-        setState((prev) => ({ ...prev, ...readLocalCalendar(prev) }));
+        setState((prev) => ({
+          ...prev,
+          ...readLocalCalendar(prev),
+          ...readLocalTraining(prev),
+        }));
         if (!member) {
           setUser((current) => ({ ...current, company: local.name }));
           return;
@@ -1592,6 +1625,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const persistTraining = useCallback(
+    (progress: TrainingProgress[], bulletins: TrainingBulletin[]) => {
+      if (!isSupabaseConfigured()) {
+        writeLocalTraining({ trainingProgress: progress, trainingBulletins: bulletins });
+      }
+    },
+    []
+  );
+
   const addScheduleEvent = useCallback(
     async (input: Omit<ScheduleEvent, "id">) => {
       const supabase = requireClient();
@@ -1758,6 +1800,150 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [persistCalendar, user.companyId, user.staffId]
   );
 
+  const progressFor = useCallback(
+    (staffId: string) => staffProgress(state.trainingProgress, staffId),
+    [state.trainingProgress],
+  );
+
+  const upsertProgress = useCallback(
+    async (next: TrainingProgress) => {
+      setState((prev) => {
+        const exists = prev.trainingProgress.some((item) => item.staffId === next.staffId);
+        const trainingProgress = exists
+          ? prev.trainingProgress.map((item) => (item.staffId === next.staffId ? next : item))
+          : [...prev.trainingProgress, next];
+        persistTraining(trainingProgress, prev.trainingBulletins);
+        return { ...prev, trainingProgress };
+      });
+      const supabase = requireClient();
+      if (!supabase || !user.companyId || user.companyId === "local") return;
+      const { error } = await supabase.from("training_progress").upsert(
+        {
+          company_id: user.companyId,
+          staff_id: next.staffId,
+          read: next.read as Json,
+          badges: next.badges as Json,
+          attempts: next.attempts as unknown as Json,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "company_id,staff_id" },
+      );
+      if (error) {
+        const missing =
+          error.message.includes("schema cache") ||
+          error.code === "PGRST205" ||
+          error.message.includes("Could not find the table");
+        toast.error(
+          missing
+            ? "Run supabase/migrations/20260819240000_training.sql in the SQL editor, then try again."
+            : error.message,
+        );
+      }
+    },
+    [persistTraining, user.companyId],
+  );
+
+  const markLessonRead = useCallback(
+    async (chapterId: string, index: number) => {
+      const staffId = user.staffId;
+      if (!staffId) return;
+      const key = lessonKey(chapterId, index);
+      const current = staffProgress(state.trainingProgress, staffId);
+      if (current.read[key]) return;
+      await upsertProgress({
+        ...current,
+        read: { ...current.read, [key]: new Date().toISOString() },
+      });
+    },
+    [state.trainingProgress, upsertProgress, user.staffId],
+  );
+
+  const submitQuiz = useCallback(
+    async (input: {
+      kind: QuizKind;
+      chapterId: string | null;
+      score: number;
+      correct: number;
+      total: number;
+    }) => {
+      const staffId = user.staffId;
+      if (!staffId) {
+        throw new Error("No seat is selected.");
+      }
+      const next = recordAttempt(staffProgress(state.trainingProgress, staffId), {
+        kind: input.kind,
+        chapterId: input.chapterId,
+        score: input.score,
+        correct: input.correct,
+        total: input.total,
+        createdAt: new Date().toISOString(),
+      });
+      await upsertProgress(next);
+      return next;
+    },
+    [state.trainingProgress, upsertProgress, user.staffId],
+  );
+
+  const addTrainingBulletin = useCallback(
+    async (title: string, body: string) => {
+      const trimmedTitle = title.trim();
+      const trimmedBody = body.trim();
+      if (!trimmedTitle || !trimmedBody) {
+        toast.error("A title and note are required.");
+        return;
+      }
+      const bulletin: TrainingBulletin = {
+        id: crypto.randomUUID(),
+        title: trimmedTitle,
+        body: trimmedBody,
+        author: user.name,
+        createdAt: new Date().toISOString(),
+      };
+      setState((prev) => {
+        const trainingBulletins = [bulletin, ...prev.trainingBulletins];
+        persistTraining(prev.trainingProgress, trainingBulletins);
+        return { ...prev, trainingBulletins };
+      });
+      const supabase = requireClient();
+      if (!supabase || !user.companyId || user.companyId === "local") {
+        toast.success("Training bulletin posted.");
+        return;
+      }
+      const { data, error } = await supabase
+        .from("training_bulletins")
+        .insert({
+          id: bulletin.id,
+          company_id: user.companyId,
+          title: bulletin.title,
+          body: bulletin.body,
+          author: bulletin.author,
+          created_at: bulletin.createdAt,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        const missing =
+          error?.message.includes("schema cache") ||
+          error?.code === "PGRST205" ||
+          error?.message.includes("Could not find the table");
+        toast.error(
+          missing
+            ? "Run supabase/migrations/20260819240000_training.sql in the SQL editor, then try again."
+            : error?.message ?? "Could not post the bulletin.",
+        );
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        trainingBulletins: prev.trainingBulletins.map((item) =>
+          item.id === bulletin.id ? mapTrainingBulletin(data) : item,
+        ),
+      }));
+      toast.success("Training bulletin posted.");
+    },
+    [persistTraining, user.companyId, user.name],
+  );
+
   const addJobPhoto = useCallback(
     async (input: {
       jobId: string;
@@ -1882,6 +2068,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const resetDemo = useCallback(async () => {
     if (!isSupabaseConfigured()) {
       clearLocalCalendar();
+      clearLocalTraining();
       setState(structuredClone(seedState));
       toast.success("Northline sample book restored.");
       return;
@@ -1966,6 +2153,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       disconnectCalendar,
       setShareWithTeam,
       setCalendarShare,
+      progressFor,
+      markLessonRead,
+      submitQuiz,
+      addTrainingBulletin,
       addJobPhoto,
       resetDemo,
       signOut,
@@ -2026,6 +2217,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       disconnectCalendar,
       setShareWithTeam,
       setCalendarShare,
+      progressFor,
+      markLessonRead,
+      submitQuiz,
+      addTrainingBulletin,
       addJobPhoto,
       resetDemo,
       signOut,

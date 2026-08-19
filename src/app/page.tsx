@@ -20,6 +20,7 @@ import {
 import { derivedInvoiceStatus, invoiceBalance, sumLines } from "@/lib/money";
 import { PIPELINE_STAGES, STAGE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { COURSE, overallProgress, staffProgress } from "@/lib/training/engine";
 
 export default function HomePage() {
   const crm = useCrm();
@@ -255,7 +256,7 @@ export default function HomePage() {
         </Card>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      <section className="grid gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader className="border-b">
             <CardTitle>This week on the desk</CardTitle>
@@ -293,6 +294,39 @@ export default function HomePage() {
                 })}
               </ul>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Training</CardTitle>
+            <CardDescription>
+              Roofing certification pack. Chapter tests at {COURSE.passScore}%, exam at {COURSE.finalPassScore}%.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-3">
+            {(() => {
+              const training = overallProgress(staffProgress(crm.trainingProgress, crm.user.staffId));
+              return (
+                <>
+                  <p className="text-sm">
+                    {training.read} of {training.totalLessons} lessons · {training.passedChapters} of{" "}
+                    {training.chapterCount} chapter tests
+                    {training.certified ? " · certified" : ""}
+                  </p>
+                  {crm.trainingBulletins[0] ? (
+                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                      Bulletin: {crm.trainingBulletins[0].title}
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-xs text-muted-foreground">No company training notes this week.</p>
+                  )}
+                  <Link href="/training" className="mt-3 inline-block text-sm font-medium text-primary hover:underline">
+                    Open training
+                  </Link>
+                </>
+              );
+            })()}
           </CardContent>
         </Card>
 

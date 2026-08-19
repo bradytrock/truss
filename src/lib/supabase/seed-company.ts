@@ -27,6 +27,14 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
   if (wipeCal && !wipeCal.message.includes("schema cache") && wipeCal.code !== "PGRST205") {
     throw wipeCal;
   }
+  const { error: wipeTraining } = await supabase.from("training_progress").delete().eq("company_id", companyId);
+  if (wipeTraining && !wipeTraining.message.includes("schema cache") && wipeTraining.code !== "PGRST205") {
+    throw wipeTraining;
+  }
+  const { error: wipeBulletins } = await supabase.from("training_bulletins").delete().eq("company_id", companyId);
+  if (wipeBulletins && !wipeBulletins.message.includes("schema cache") && wipeBulletins.code !== "PGRST205") {
+    throw wipeBulletins;
+  }
   const { error: wipeActivities } = await supabase.from("activities").delete().eq("company_id", companyId);
   if (wipeActivities) throw wipeActivities;
   const { error: wipeTasks } = await supabase.from("tasks").delete().eq("company_id", companyId);
@@ -203,6 +211,36 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
   );
   if (shareError && !shareError.message.includes("schema cache") && shareError.code !== "PGRST205") {
     throw shareError;
+  }
+
+  const { error: trainingError } = await supabase.from("training_progress").insert(
+    seed.trainingProgress.map((progress) => ({
+      company_id: companyId,
+      staff_id: remap(progress.staffId, ids),
+      read: progress.read,
+      badges: progress.badges,
+      attempts: progress.attempts.map((attempt) => ({
+        ...attempt,
+        staffId: remap(attempt.staffId, ids),
+      })),
+    })),
+  );
+  if (trainingError && !trainingError.message.includes("schema cache") && trainingError.code !== "PGRST205") {
+    throw trainingError;
+  }
+
+  const { error: bulletinError } = await supabase.from("training_bulletins").insert(
+    seed.trainingBulletins.map((bulletin) => ({
+      id: remap(bulletin.id, ids),
+      company_id: companyId,
+      title: bulletin.title,
+      body: bulletin.body,
+      author: bulletin.author,
+      created_at: bulletin.createdAt,
+    })),
+  );
+  if (bulletinError && !bulletinError.message.includes("schema cache") && bulletinError.code !== "PGRST205") {
+    throw bulletinError;
   }
 
   await insertOperations(supabase, companyId, ids);

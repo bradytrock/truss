@@ -42,6 +42,7 @@ import {
   CreateInvoiceDialog,
 } from "@/components/create-ops-dialogs";
 import { canViewReports, canManageSettings } from "@/lib/visibility";
+import { COURSE } from "@/lib/training/engine";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand";
@@ -54,6 +55,7 @@ function navItems(showReports: boolean) {
     { href: "/jobs", label: "Jobs" },
     { href: "/invoices", label: "Invoices" },
     { href: "/calendar", label: "Calendar" },
+    { href: "/training", label: "Training" },
     { href: "/contacts", label: "Contacts" },
     ...(showReports ? [{ href: "/reports", label: "Reports" }] : []),
   ];
@@ -317,6 +319,20 @@ function SearchTrigger() {
                   }}
                 >
                   {invoice.number} · {invoice.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <CommandGroup heading="Training">
+              {COURSE.chapters.map((chapter) => (
+                <CommandItem
+                  key={chapter.id}
+                  value={`${chapter.title} ${chapter.tagline} training ${chapter.id}`}
+                  onSelect={() => {
+                    setOpen(false);
+                    router.push(`/training/${chapter.id}`);
+                  }}
+                >
+                  {chapter.title}
                 </CommandItem>
               ))}
             </CommandGroup>

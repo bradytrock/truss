@@ -18,6 +18,8 @@ import {
   mapStaff,
   mapTask,
   mapTeam,
+  mapTrainingBulletin,
+  mapTrainingProgress,
 } from "@/lib/supabase/mappers";
 import type { Database } from "@/lib/supabase/database.types";
 import { NORTHLINE_STAFF, NORTHLINE_TEAMS, initialsFromName, type CrmState, type SeatRole } from "@/lib/types";
@@ -57,6 +59,8 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     photosRes,
     calendarAccountsRes,
     calendarSharesRes,
+    trainingProgressRes,
+    trainingBulletinsRes,
   ] = await Promise.all([
     supabase.from("clients").select("*").eq("company_id", companyId).order("name"),
     supabase.from("contacts").select("*").eq("company_id", companyId).order("name"),
@@ -84,6 +88,10 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     supabase.from("job_photos").select("*").eq("company_id", companyId).order("taken_at", { ascending: false }),
     supabase.from("calendar_accounts").select("*").eq("company_id", companyId),
     supabase.from("calendar_shares").select("*").eq("company_id", companyId),
+    supabase.from("training_progress").select("*").eq("company_id", companyId),
+    supabase.from("training_bulletins").select("*").eq("company_id", companyId).order("created_at", {
+      ascending: false,
+    }),
   ]);
 
   const missingTeams = Boolean(teamsRes.error);
@@ -163,6 +171,12 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     calendarShares: calendarSharesRes.error
       ? []
       : (calendarSharesRes.data ?? []).map(mapCalendarShare),
+    trainingProgress: trainingProgressRes.error
+      ? []
+      : (trainingProgressRes.data ?? []).map(mapTrainingProgress),
+    trainingBulletins: trainingBulletinsRes.error
+      ? []
+      : (trainingBulletinsRes.data ?? []).map(mapTrainingBulletin),
   };
 
   return {

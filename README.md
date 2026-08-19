@@ -1,6 +1,6 @@
 # Truss
 
-A contractor operating system for restoration and home improvement: pipeline, estimates, jobs, invoices, calendar, and job photos. Auth, Postgres, Row Level Security, Realtime, and Storage all run on Supabase.
+A contractor operating system for restoration and home improvement: pipeline, estimates, jobs, invoices, calendar, training, and job photos. Auth, Postgres, Row Level Security, Realtime, and Storage all run on Supabase.
 
 Northline Construction’s sample book is Denver residential work — hail roofs, water and fire restoration, kitchens, windows — plus a thin commercial leftover. Homeowners do not need a company on file.
 
@@ -19,6 +19,7 @@ To attach a project that is already running:
    - [`supabase/migrations/20260819210000_company_settings.sql`](supabase/migrations/20260819210000_company_settings.sql) — business name, phone, email, address, and license on `companies`
    - [`supabase/migrations/20260819220000_job_codes.sql`](supabase/migrations/20260819220000_job_codes.sql) — job / pipeline codes (`BJ081926-A`)
    - [`supabase/migrations/20260819230000_google_calendars.sql`](supabase/migrations/20260819230000_google_calendars.sql) — per-user Google Calendar links, team sharing, admin visibility
+   - [`supabase/migrations/20260819240000_training.sql`](supabase/migrations/20260819240000_training.sql) — per-seat training progress, badges, attempts, and company training bulletins
 3. In Authentication → URL configuration, add `http://localhost:3847/auth/callback`. For local work you can turn off “Confirm email”.
 4. Create an account. Signup opens a company, a profile, and the Northline sample book in Postgres.
 
@@ -45,13 +46,14 @@ To connect real Google Calendars, create an OAuth web client in Google Cloud (Ca
 - **Jobs** — field snapshot, activity, related billing, and job photos (upload or URL)
 - **Invoices** — draws and retainage with payment history and outstanding AR
 - **Calendar** — week view of Truss field events plus each person’s Google Calendar. Link is per seat. Share with your team; company admins see every calendar and whether it is linked.
+- **Training** — roofing certification course (companion to *Roofing Construction & Estimating, Revised* by Daniel Atcheson). Original lesson summaries, generated takeoff questions, 70% chapter/practice, 80% exam. Progress is per seat. Team leads and company admin see crew progress and can post training bulletins. Open jobs recommend chapters by project type.
 
 The Northline sample book loads locally with no sign-in. Avatar menu → **Reset demo data** restores it in memory, or (after migrations and a signed-in company) wipes that company’s CRM tables and reloads this book. It does not delete the Auth user.
 
 ## What lives in Supabase
 
 - **Auth** — email/password; each signup creates a `companies` row and a `profiles` row
-- **Postgres** — contacts, homeowners, pursuits, jobs, catalog, estimates, invoices, payments, schedule, calendar accounts, photos, teams, seats
+- **Postgres** — contacts, homeowners, pursuits, jobs, catalog, estimates, invoices, payments, schedule, calendar accounts, photos, teams, seats, training progress, training bulletins
 - **RLS** — every query is limited to `current_company_id()`
 - **Realtime** — the board and records refresh when anyone in the company writes
 - **Storage** — `job-photos` bucket, files stored as `{companyId}/{jobId}/{uuid}`

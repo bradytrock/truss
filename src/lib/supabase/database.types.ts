@@ -582,6 +582,46 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["calendar_tokens"]["Insert"]>;
         Relationships: [];
       };
+      training_progress: {
+        Row: {
+          company_id: string;
+          staff_id: string;
+          read: Json;
+          badges: Json;
+          attempts: Json;
+          updated_at: string;
+        };
+        Insert: {
+          company_id: string;
+          staff_id: string;
+          read?: Json;
+          badges?: Json;
+          attempts?: Json;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["training_progress"]["Insert"]>;
+        Relationships: [];
+      };
+      training_bulletins: {
+        Row: {
+          id: string;
+          company_id: string;
+          title: string;
+          body: string;
+          author: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          title: string;
+          body?: string;
+          author?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["training_bulletins"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

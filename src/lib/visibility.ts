@@ -27,6 +27,19 @@ export function canManageSettings(role: SeatRole) {
   return role === "company_admin";
 }
 
+export function canViewTeamTraining(role: SeatRole) {
+  return (
+    role === "company_admin" ||
+    role === "business_development" ||
+    role === "team_lead" ||
+    role === "team_admin"
+  );
+}
+
+export function canPostTrainingBulletin(role: SeatRole) {
+  return role === "company_admin" || role === "team_lead" || role === "team_admin";
+}
+
 export function canLoginAs(viewer: StaffMember) {
   return (
     viewer.role === "company_admin" ||
@@ -166,6 +179,7 @@ export function scopeBook(
     photos,
     estimateLines: state.estimateLines.filter((line) => estimateIds.has(line.estimateId)),
     invoiceLines: state.invoiceLines.filter((line) => invoiceIds.has(line.invoiceId)),
+    trainingProgress: state.trainingProgress.filter((item) => staffIds.has(item.staffId)),
   };
 }
 

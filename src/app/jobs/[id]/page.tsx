@@ -25,7 +25,9 @@ import {
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate } from "@/lib/format";
 import { derivedInvoiceStatus, invoiceBalance, sumLines } from "@/lib/money";
-import { JOB_STATUS_LABELS, JOB_STATUSES, type JobStatus } from "@/lib/types";
+import { JOB_STATUS_LABELS, JOB_STATUSES, PROJECT_TYPE_LABELS, type JobStatus } from "@/lib/types";
+import { recommendedChapterIds } from "@/lib/training/recommend";
+import { COURSE } from "@/lib/training/engine";
 import { toast } from "sonner";
 
 export default function JobDetailPage() {
@@ -245,6 +247,35 @@ export default function JobDetailPage() {
                   "Logged directly — not from this pipeline"
                 )}
               </RecordProperty>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle>Training for this job</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
+                Chapters that match{" "}
+                {opportunity
+                  ? `${PROJECT_TYPE_LABELS[opportunity.projectType].toLowerCase()} work on the related lead`
+                  : "the kind of work this crew typically walks"}
+                . Read them before the first homeowner meeting.
+              </p>
+              <ul className="space-y-2">
+                {recommendedChapterIds(opportunity?.projectType).map((chapterId) => {
+                  const chapter = COURSE.chapters.find((item) => item.id === chapterId);
+                  if (!chapter) return null;
+                  return (
+                    <li key={chapterId}>
+                      <Link href={`/training/${chapter.id}`} className="text-sm font-medium hover:underline">
+                        {chapter.title}
+                      </Link>
+                      <p className="text-xs text-muted-foreground">{chapter.tagline}</p>
+                    </li>
+                  );
+                })}
+              </ul>
             </CardContent>
           </Card>
 
