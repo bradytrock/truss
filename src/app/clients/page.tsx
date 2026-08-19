@@ -31,7 +31,7 @@ export default function ClientsPage() {
   return (
     <div className="space-y-5">
       {crm.hydrateError ? (
-        <ErrorBanner message={crm.hydrateError} onRetry={crm.resetDemo} />
+        <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.resetDemo()} />
       ) : null}
       <PageHeader
         eyebrow="Relationships"

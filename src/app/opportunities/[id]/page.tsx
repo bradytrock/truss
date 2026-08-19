@@ -24,7 +24,6 @@ import {
   DELIVERY_LABELS,
   PIPELINE_STAGES,
   STAGE_LABELS,
-  TEAM,
   type PipelineStage,
 } from "@/lib/types";
 
@@ -63,12 +62,14 @@ export default function OpportunityDetailPage() {
   const step = nextStep ?? opportunity.nextStep;
 
   function handleStage(stage: PipelineStage) {
-    const created = crm.moveOpportunity(id, stage);
-    if (stage === "awarded") {
-      toast.success(created ? "Awarded. A precon job is now on the jobs list." : "Already on a job.");
-    } else if (stage === "lost") {
-      toast.message("Marked lost.");
-    }
+    void (async () => {
+      const created = await crm.moveOpportunity(id, stage);
+      if (stage === "awarded") {
+        toast.success(created ? "Awarded. A precon job is now on the jobs list." : "Already on a job.");
+      } else if (stage === "lost") {
+        toast.message("Marked lost.");
+      }
+    })();
   }
 
   return (
@@ -234,13 +235,13 @@ export default function OpportunityDetailPage() {
                   onValueChange={(value) => {
                     if (value) crm.updateOpportunity(opportunity.id, { estimator: String(value) });
                   }}
-                  items={TEAM.map((person) => ({ value: person, label: person }))}
+                  items={crm.teamMembers.map((person) => ({ value: person, label: person }))}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {TEAM.map((person) => (
+                    {crm.teamMembers.map((person) => (
                       <SelectItem key={person} value={person}>
                         {person}
                       </SelectItem>

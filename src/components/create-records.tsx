@@ -25,14 +25,12 @@ import { useCrm } from "@/lib/crm-store";
 import {
   CLIENT_TYPE_LABELS,
   CLIENT_TYPES,
-  CURRENT_USER,
   DELIVERY_LABELS,
   DELIVERY_METHODS,
   JOB_STATUS_LABELS,
   JOB_STATUSES,
   PROJECT_TYPE_LABELS,
   PROJECT_TYPES,
-  TEAM,
   type ClientType,
   type DeliveryMethod,
   type JobStatus,
@@ -46,7 +44,8 @@ export function CreateOpportunityDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { clients, contacts, addOpportunity } = useCrm();
+  const { clients, contacts, addOpportunity, user, teamMembers } = useCrm();
+  const people = teamMembers.length > 0 ? teamMembers : [user.name].filter(Boolean);
   const [name, setName] = useState("");
   const [clientId, setClientId] = useState(clients[0]?.id ?? "");
   const [value, setValue] = useState("5000000");
@@ -54,34 +53,38 @@ export function CreateOpportunityDialog({
   const [projectType, setProjectType] = useState<ProjectType>("commercial");
   const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("cm_at_risk");
   const [bidDueAt, setBidDueAt] = useState("");
-  const [estimator, setEstimator] = useState<string>(CURRENT_USER.name);
+  const [estimator, setEstimator] = useState<string>(user.name || people[0] || "");
   const [nextStep, setNextStep] = useState("Qualify the RFP and assign an estimator.");
 
   const clientContacts = contacts.filter((contact) => contact.clientId === clientId);
 
-  function handleSubmit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!name.trim() || !clientId) {
       toast.error("A project name and client are required.");
       return;
     }
-    const opportunity = addOpportunity({
-      name: name.trim(),
-      clientId,
-      primaryContactId: clientContacts[0]?.id ?? "",
-      stage: "pursuing",
-      value: Number(value) || 0,
-      bidDueAt: bidDueAt || null,
-      preBidWalkAt: null,
-      location,
-      projectType,
-      deliveryMethod,
-      estimator,
-      nextStep,
-    });
-    toast.success(`Pursuit opened: ${opportunity.name}`);
-    onOpenChange(false);
-    setName("");
+    try {
+      const opportunity = await addOpportunity({
+        name: name.trim(),
+        clientId,
+        primaryContactId: clientContacts[0]?.id ?? "",
+        stage: "pursuing",
+        value: Number(value) || 0,
+        bidDueAt: bidDueAt || null,
+        preBidWalkAt: null,
+        location,
+        projectType,
+        deliveryMethod,
+        estimator,
+        nextStep,
+      });
+      toast.success(`Pursuit opened: ${opportunity.name}`);
+      onOpenChange(false);
+      setName("");
+    } catch {
+      // Store already toasted the error.
+    }
   }
 
   return (
@@ -196,13 +199,13 @@ export function CreateOpportunityDialog({
             <Select
               value={estimator}
               onValueChange={(value) => setEstimator(String(value ?? ""))}
-              items={TEAM.map((person) => ({ value: person, label: person }))}
+              items={people.map((person) => ({ value: person, label: person }))}
             >
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {TEAM.map((person) => (
+                {people.map((person) => (
                   <SelectItem key={person} value={person}>
                     {person}
                   </SelectItem>
@@ -246,26 +249,30 @@ export function CreateClientDialog({
   const [contactTitle, setContactTitle] = useState("");
   const [notes, setNotes] = useState("");
 
-  function handleSubmit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!name.trim()) {
       toast.error("Company name is required.");
       return;
     }
-    addClient({
-      name: name.trim(),
-      type,
-      city,
-      state,
-      notes,
-      contactName: contactName.trim() || undefined,
-      contactTitle: contactTitle.trim() || undefined,
-    });
-    toast.success(`Client added: ${name.trim()}`);
-    onOpenChange(false);
-    setName("");
-    setContactName("");
-    setNotes("");
+    try {
+      await addClient({
+        name: name.trim(),
+        type,
+        city,
+        state,
+        notes,
+        contactName: contactName.trim() || undefined,
+        contactTitle: contactTitle.trim() || undefined,
+      });
+      toast.success(`Client added: ${name.trim()}`);
+      onOpenChange(false);
+      setName("");
+      setContactName("");
+      setNotes("");
+    } catch {
+      // Store already toasted the error.
+    }
   }
 
   return (
@@ -364,7 +371,8 @@ export function CreateJobDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { clients, addJob } = useCrm();
+  const { clients, addJob, teamMembers, user } = useCrm();
+  const people = teamMembers.length > 0 ? teamMembers : [user.name].filter(Boolean);
   const [name, setName] = useState("");
   const [clientId, setClientId] = useState(clients[0]?.id ?? "");
   const [value, setValue] = useState("10000000");
@@ -374,27 +382,31 @@ export function CreateJobDialog({
   const [projectManager, setProjectManager] = useState("Luis Ortega");
   const [superintendent, setSuperintendent] = useState("Tom Brennan");
 
-  function handleSubmit(event: FormEvent) {
+  async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!name.trim() || !clientId) {
       toast.error("A job name and client are required.");
       return;
     }
-    const job = addJob({
-      opportunityId: null,
-      name: name.trim(),
-      clientId,
-      status,
-      contractValue: Number(value) || 0,
-      startDate,
-      substantialCompletion: null,
-      superintendent,
-      projectManager,
-      location,
-    });
-    toast.success(`Job logged: ${job.name}`);
-    onOpenChange(false);
-    setName("");
+    try {
+      const job = await addJob({
+        opportunityId: null,
+        name: name.trim(),
+        clientId,
+        status,
+        contractValue: Number(value) || 0,
+        startDate,
+        substantialCompletion: null,
+        superintendent,
+        projectManager,
+        location,
+      });
+      toast.success(`Job logged: ${job.name}`);
+      onOpenChange(false);
+      setName("");
+    } catch {
+      // Store already toasted the error.
+    }
   }
 
   return (
@@ -487,13 +499,13 @@ export function CreateJobDialog({
               <Select
                 value={projectManager}
                 onValueChange={(value) => setProjectManager(String(value ?? ""))}
-                items={TEAM.map((person) => ({ value: person, label: person }))}
+                items={people.map((person) => ({ value: person, label: person }))}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {TEAM.map((person) => (
+                  {people.map((person) => (
                     <SelectItem key={person} value={person}>
                       {person}
                     </SelectItem>
@@ -505,13 +517,13 @@ export function CreateJobDialog({
               <Select
                 value={superintendent}
                 onValueChange={(value) => setSuperintendent(String(value ?? ""))}
-                items={TEAM.map((person) => ({ value: person, label: person }))}
+                items={people.map((person) => ({ value: person, label: person }))}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {TEAM.map((person) => (
+                  {people.map((person) => (
                     <SelectItem key={person} value={person}>
                       {person}
                     </SelectItem>

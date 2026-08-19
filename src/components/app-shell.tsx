@@ -12,7 +12,7 @@ import {
   Plus,
   Search,
 } from "lucide-react";
-import { toast } from "sonner";
+import { useCrm } from "@/lib/crm-store";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,8 +43,6 @@ import {
   CreateJobDialog,
   CreateOpportunityDialog,
 } from "@/components/create-records";
-import { useCrm } from "@/lib/crm-store";
-import { CURRENT_USER } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const nav = [
@@ -134,6 +132,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 }
 
 function Brand() {
+  const { user } = useCrm();
   return (
     <div className="flex items-center gap-2.5 px-4 py-4">
       <span className="flex size-8 items-center justify-center rounded-md bg-[#c45c26] text-white">
@@ -149,7 +148,7 @@ function Brand() {
       </span>
       <div className="min-w-0">
         <p className="font-heading text-sm font-semibold tracking-tight">Truss</p>
-        <p className="truncate text-[11px] text-[#f4efe6]/55">{CURRENT_USER.company}</p>
+        <p className="truncate text-[11px] text-[#f4efe6]/55">{user.company}</p>
       </div>
     </div>
   );
@@ -272,7 +271,7 @@ function SearchTrigger() {
 }
 
 function UserMenu() {
-  const { resetDemo } = useCrm();
+  const { resetDemo, signOut, user } = useCrm();
 
   return (
     <DropdownMenu>
@@ -283,26 +282,26 @@ function UserMenu() {
       >
         <Avatar size="sm">
           <AvatarFallback className="bg-primary text-primary-foreground">
-            {CURRENT_USER.initials}
+            {user.initials}
           </AvatarFallback>
         </Avatar>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56">
         <DropdownMenuLabel>
           <div className="flex flex-col">
-            <span className="text-sm text-foreground">{CURRENT_USER.name}</span>
-            <span className="text-xs font-normal">{CURRENT_USER.title}</span>
+            <span className="text-sm text-foreground">{user.name}</span>
+            <span className="text-xs font-normal">{user.title}</span>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={() => {
-            resetDemo();
-            toast.success("Demo data restored.");
+            void resetDemo();
           }}
         >
           Reset demo data
         </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => void signOut()}>Sign out</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

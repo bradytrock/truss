@@ -17,7 +17,7 @@ import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { JobStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate } from "@/lib/format";
-import { JOB_STATUS_LABELS, JOB_STATUSES, TEAM, type JobStatus } from "@/lib/types";
+import { JOB_STATUS_LABELS, JOB_STATUSES, type JobStatus } from "@/lib/types";
 import { toast } from "sonner";
 
 export default function JobDetailPage() {
@@ -157,13 +157,13 @@ export default function JobDetailPage() {
                   onValueChange={(value) => {
                     if (value) crm.updateJob(job.id, { projectManager: String(value) });
                   }}
-                  items={TEAM.map((person) => ({ value: person, label: person }))}
+                  items={crm.teamMembers.map((person) => ({ value: person, label: person }))}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {TEAM.map((person) => (
+                    {crm.teamMembers.map((person) => (
                       <SelectItem key={person} value={person}>
                         {person}
                       </SelectItem>

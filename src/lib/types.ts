@@ -1,10 +1,3 @@
-export const CURRENT_USER = {
-  name: "Jordan Hale",
-  title: "VP, Preconstruction",
-  company: "Northline Construction",
-  initials: "JH",
-} as const;
-
 export const PIPELINE_STAGES = [
   "pursuing",
   "estimating",
@@ -68,6 +61,15 @@ export const ACTIVITY_TYPES = [
 ] as const;
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
+
+export interface CurrentUser {
+  id: string;
+  companyId: string;
+  name: string;
+  title: string;
+  company: string;
+  initials: string;
+}
 
 export interface Client {
   id: string;

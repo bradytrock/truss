@@ -1,6 +1,7 @@
 "use client";
 
 import { ThemeProvider } from "next-themes";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
@@ -11,11 +12,25 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
       <TooltipProvider delay={200}>
-        <CrmProvider>
-          <AppShell>{children}</AppShell>
-          <Toaster />
-        </CrmProvider>
+        <Shell>{children}</Shell>
+        <Toaster />
       </TooltipProvider>
     </ThemeProvider>
+  );
+}
+
+function Shell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  const isAuth =
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/signup") ||
+    pathname.startsWith("/auth");
+
+  if (isAuth) return children;
+
+  return (
+    <CrmProvider>
+      <AppShell>{children}</AppShell>
+    </CrmProvider>
   );
 }

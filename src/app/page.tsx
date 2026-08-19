@@ -22,7 +22,7 @@ import {
   formatRelative,
   greeting,
 } from "@/lib/format";
-import { CURRENT_USER, PIPELINE_STAGES, STAGE_LABELS } from "@/lib/types";
+import { PIPELINE_STAGES, STAGE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export default function HomePage() {
@@ -88,10 +88,10 @@ export default function HomePage() {
   return (
     <div className="space-y-6">
       {crm.hydrateError ? (
-        <ErrorBanner message={crm.hydrateError} onRetry={crm.resetDemo} />
+        <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.resetDemo()} />
       ) : null}
       <PageHeader
-        title={`${greeting()}, ${CURRENT_USER.name.split(" ")[0]}`}
+        title={`${greeting()}, ${crm.user.name.split(" ")[0] || "there"}`}
         description="Open pipeline, bids due this week, and jobs in the field — the high-level view a GC principal actually uses."
       />
 

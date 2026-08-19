@@ -79,18 +79,20 @@ export function PipelineBoard({ query }: { query: string }) {
       : opportunities.find((item) => item.id === overId)?.stage;
 
     if (!overStage || overStage === opportunity.stage) return;
-    const created = moveOpportunity(opportunity.id, overStage);
-    if (overStage === "awarded") {
-      toast.success(
-        created
-          ? `Awarded. Opened ${opportunity.name} as a precon job.`
-          : `Marked ${opportunity.name} awarded.`
-      );
-    } else if (overStage === "lost") {
-      toast.message(`${opportunity.name} marked lost.`);
-    } else {
-      toast.success(`Moved to ${STAGE_LABELS[overStage]}.`);
-    }
+    void (async () => {
+      const created = await moveOpportunity(opportunity.id, overStage);
+      if (overStage === "awarded") {
+        toast.success(
+          created
+            ? `Awarded. Opened ${opportunity.name} as a precon job.`
+            : `Marked ${opportunity.name} awarded.`
+        );
+      } else if (overStage === "lost") {
+        toast.message(`${opportunity.name} marked lost.`);
+      } else {
+        toast.success(`Moved to ${STAGE_LABELS[overStage]}.`);
+      }
+    })();
   }
 
   if (filtered.length === 0) {

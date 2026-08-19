@@ -1,24 +1,27 @@
 # Truss
 
-A high-level CRM for general contractors — HubSpot-shaped, built around how a GC actually sells and runs work.
+A high-level CRM for general contractors. Auth, Postgres, Row Level Security, and Realtime all run on Supabase.
 
-Northline Construction is the demo company: bid pipeline, jobs in the field, and the owners who award them. Data lives in the browser (`localStorage`) so you can click around without setting up a database.
+## Connect Supabase
 
-## What it covers
-
-- **Home** — open pipeline, weighted value, bids due this week, win rate, and work in the field
-- **Pipeline** — drag pursuits through Pursuing → Estimating → Bid submitted → Interview/VE → Awarded / Lost. Awarding a bid opens a job.
-- **Jobs** — precon through punch. Status, PM, contract value — not daily reports or RFIs
-- **Clients** — owners, developers, public agencies, and the architects who put you on the list
-- **Records** — next step, activity log, contacts, and the link from pursuit to job
-
-## Run locally
+1. Create a project at [supabase.com](https://supabase.com).
+2. In the SQL editor, run [`supabase/migrations/20260819170000_truss_crm.sql`](supabase/migrations/20260819170000_truss_crm.sql). That creates the schema, company-scoped RLS, the signup trigger, and Realtime publication.
+3. Copy `.env.example` to `.env.local` and fill in the project URL plus the **publishable** key (or the legacy anon key).
+4. In Authentication → URL configuration, add `http://localhost:3847/auth/callback` to the redirect allow list. For local work you can turn off “Confirm email”.
 
 ```bash
+cp .env.example .env.local
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3847](http://localhost:3847). Use **Create** for a new pursuit, client, or job. **Reset demo data** in the avatar menu restores the Northline book of work.
+Open [http://localhost:3847](http://localhost:3847). Create an account — Truss opens a company, a profile, and the Northline sample book in your project.
 
-Search with `⌘K` / `Ctrl+K`.
+## What lives in Supabase
+
+- **Auth** — email/password; each signup creates a `companies` row and a `profiles` row
+- **Postgres** — clients, contacts, pursuits, jobs, activity, tasks, team members
+- **RLS** — every query is limited to `current_company_id()`
+- **Realtime** — the board and records refresh when anyone in the company writes
+
+Reset demo data (avatar menu) wipes that company’s CRM tables and reloads the sample book. It does not delete the Auth user.
