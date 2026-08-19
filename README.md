@@ -30,7 +30,7 @@ npm run dev
 
 ## What you can do
 
-- **Settings** — company name, main phone, office email, website, license, and office address. Company admins can edit; other seats can view. The same block prints on estimates and invoices.
+- **Settings** — company name, main phone, office email, website, license, and office address. Only a company admin sees this, under the initials menu in the top right. The same block prints on estimates and invoices.
 - **Contacts** — homeowners first (no company required), plus adjusters, realtors, and one architect as referral partners
 - **Pipeline** — leads through sold and lost: hail, water, fire, kitchens, windows, an addition
 - **Jobs** — 11 residential field records and one small commercial TI

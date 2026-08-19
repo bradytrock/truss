@@ -23,6 +23,10 @@ export function canViewReports(role: SeatRole) {
   );
 }
 
+export function canManageSettings(role: SeatRole) {
+  return role === "company_admin";
+}
+
 export function canLoginAs(viewer: StaffMember) {
   return (
     viewer.role === "company_admin" ||

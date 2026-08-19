@@ -40,7 +40,7 @@ import {
   CreateEventDialog,
   CreateInvoiceDialog,
 } from "@/components/create-ops-dialogs";
-import { canViewReports } from "@/lib/visibility";
+import { canViewReports, canManageSettings } from "@/lib/visibility";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand";
@@ -55,7 +55,6 @@ function navItems(showReports: boolean) {
     { href: "/schedule", label: "Schedule" },
     { href: "/contacts", label: "Contacts" },
     ...(showReports ? [{ href: "/reports", label: "Reports" }] : []),
-    { href: "/settings", label: "Settings" },
   ];
 }
 
@@ -408,7 +407,9 @@ function UserMenu() {
           </>
         ) : null}
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => router.push("/settings")}>Settings</DropdownMenuItem>
+        {viewer && canManageSettings(viewer.role) ? (
+          <DropdownMenuItem onClick={() => router.push("/settings")}>Settings</DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem
           onClick={() => {
             void resetDemo();
