@@ -81,12 +81,16 @@ export default function JobDetailPage() {
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <JobStatusBadge status={job.status} />
             <span className="text-sm text-muted-foreground">
-              {client ? (
+              {job.primaryContactId ? (
+                <Link href={`/contacts/${job.primaryContactId}`} className="hover:underline">
+                  {crm.customerName(job)}
+                </Link>
+              ) : client ? (
                 <Link href={`/clients/${client.id}`} className="hover:underline">
                   {client.name}
                 </Link>
               ) : (
-                "Unknown client"
+                crm.customerName(job)
               )}
               {" · "}
               {job.location}
@@ -335,6 +339,7 @@ export default function JobDetailPage() {
         defaultClientId={job.clientId}
         defaultJobId={job.id}
         defaultOpportunityId={job.opportunityId ?? undefined}
+        defaultContactId={job.primaryContactId}
       />
       <CreateInvoiceDialog
         open={invoiceOpen}

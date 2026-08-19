@@ -35,11 +35,11 @@ export default function JobsPage() {
     return crm.jobs.filter((job) => {
       if (status !== "all" && job.status !== status) return false;
       if (!needle) return true;
-      const client = crm.getClient(job.clientId);
+      const customer = crm.customerName(job);
       return (
         job.name.toLowerCase().includes(needle) ||
         job.location.toLowerCase().includes(needle) ||
-        client?.name.toLowerCase().includes(needle) ||
+        customer.toLowerCase().includes(needle) ||
         job.projectManager.toLowerCase().includes(needle)
       );
     });
@@ -55,7 +55,7 @@ export default function JobsPage() {
       <PageHeader
         eyebrow="Operations"
         title="Jobs"
-        description="Awarded and active work. This is the book after the bid — not daily reports, just who owns it and where it stands."
+        description="Sold work in the field. Restoration, remodel, roofing — and the occasional commercial leftover."
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Input
@@ -107,7 +107,7 @@ export default function JobsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Job</TableHead>
-                <TableHead>Client</TableHead>
+                <TableHead>Customer</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>PM</TableHead>
                 <TableHead>Start</TableHead>
@@ -123,7 +123,7 @@ export default function JobsPage() {
                     </Link>
                     <p className="text-xs text-muted-foreground">{job.location}</p>
                   </TableCell>
-                  <TableCell>{crm.getClient(job.clientId)?.name ?? "—"}</TableCell>
+                  <TableCell>{crm.customerName(job)}</TableCell>
                   <TableCell>
                     <JobStatusBadge status={job.status} />
                   </TableCell>

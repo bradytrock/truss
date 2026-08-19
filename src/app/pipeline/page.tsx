@@ -26,18 +26,18 @@ export default function PipelinePage() {
       <PageHeader
         eyebrow="Preconstruction"
         title="Pipeline"
-        description="The bid board. Drag a card when a pursuit moves — awarded work becomes a job automatically."
+        description="Leads to sold jobs. Drag a card when a homeowner moves — sold work becomes a job automatically."
         actions={
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filter by project, client, or city"
+            placeholder="Filter by project, homeowner, or city"
             className="w-full sm:w-72"
           />
         }
       />
       <p className="text-sm text-muted-foreground">
-        {open.length} open pursuits · {formatCurrency(pipelineValue)} unweighted
+        {open.length} open leads · {formatCurrency(pipelineValue)} unweighted
       </p>
       <PipelineBoard query={query} />
     </div>

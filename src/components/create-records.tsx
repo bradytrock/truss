@@ -48,28 +48,29 @@ export function CreateOpportunityDialog({
   const { clients, contacts, addOpportunity, user, teamMembers } = useCrm();
   const people = teamMembers.length > 0 ? teamMembers : [user.name].filter(Boolean);
   const [name, setName] = useState("");
-  const [clientId, setClientId] = useState(clients[0]?.id ?? "");
-  const [value, setValue] = useState("5000000");
+  const [contactId, setContactId] = useState(contacts[0]?.id ?? "");
+  const [value, setValue] = useState("28000");
   const [location, setLocation] = useState("Denver, CO");
-  const [projectType, setProjectType] = useState<ProjectType>("commercial");
-  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("cm_at_risk");
+  const [projectType, setProjectType] = useState<ProjectType>("restoration");
+  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("fixed_price");
   const [bidDueAt, setBidDueAt] = useState("");
   const [estimator, setEstimator] = useState<string>(user.name || people[0] || "");
-  const [nextStep, setNextStep] = useState("Qualify the RFP and assign an estimator.");
+  const [nextStep, setNextStep] = useState("Schedule a site visit and write the proposal.");
 
-  const clientContacts = contacts.filter((contact) => contact.clientId === clientId);
+  const contact = contacts.find((item) => item.id === contactId);
+  const company = contact?.clientId ? clients.find((item) => item.id === contact.clientId) : undefined;
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!name.trim() || !clientId) {
-      toast.error("A project name and client are required.");
+    if (!name.trim() || !contactId) {
+      toast.error("A project name and homeowner (or contact) are required.");
       return;
     }
     try {
       const opportunity = await addOpportunity({
         name: name.trim(),
-        clientId,
-        primaryContactId: clientContacts[0]?.id ?? "",
+        clientId: contact?.clientId ?? null,
+        primaryContactId: contactId,
         stage: "pursuing",
         value: Number(value) || 0,
         bidDueAt: bidDueAt || null,
@@ -80,7 +81,7 @@ export function CreateOpportunityDialog({
         estimator,
         nextStep,
       });
-      toast.success(`Pursuit opened: ${opportunity.name}`);
+      toast.success(`Lead opened: ${opportunity.name}`);
       onOpenChange(false);
       setName("");
     } catch {
@@ -92,9 +93,9 @@ export function CreateOpportunityDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>New pursuit</DialogTitle>
+          <DialogTitle>New lead</DialogTitle>
           <DialogDescription>
-            Log a bid, RFP, or conversation before it hits estimating.
+            Log a homeowner, insurance claim, or conversation before it hits estimating. A company is optional.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-3">
@@ -103,28 +104,33 @@ export function CreateOpportunityDialog({
               id="opp-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="e.g. RiNo Life Science Lab"
+              placeholder="e.g. Alvarez hail roof — Park Hill"
             />
           </Field>
+          <Field label="Homeowner / contact">
+            <Select
+              value={contactId}
+              onValueChange={(value) => setContactId(String(value ?? ""))}
+              items={contacts.map((item) => ({ value: item.id, label: item.name }))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {contacts.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {company ? (
+              <p className="text-xs text-muted-foreground">Company on file: {company.name}</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">Direct to consumer — no company required.</p>
+            )}
+          </Field>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Client">
-              <Select
-                value={clientId}
-                onValueChange={(value) => setClientId(String(value ?? ""))}
-                items={clients.map((client) => ({ value: client.id, label: client.name }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
             <Field label="Est. contract value" htmlFor="opp-value">
               <Input
                 id="opp-value"
@@ -132,6 +138,14 @@ export function CreateOpportunityDialog({
                 min={0}
                 value={value}
                 onChange={(event) => setValue(event.target.value)}
+              />
+            </Field>
+            <Field label="Location" htmlFor="opp-location">
+              <Input
+                id="opp-location"
+                value={location}
+                onChange={(event) => setLocation(event.target.value)}
+                placeholder="Street, city"
               />
             </Field>
           </div>
@@ -157,7 +171,7 @@ export function CreateOpportunityDialog({
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Delivery">
+            <Field label="How they buy">
               <Select
                 value={deliveryMethod}
                 onValueChange={(value) => setDeliveryMethod(value as DeliveryMethod)}
@@ -180,14 +194,7 @@ export function CreateOpportunityDialog({
             </Field>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Location" htmlFor="opp-location">
-              <Input
-                id="opp-location"
-                value={location}
-                onChange={(event) => setLocation(event.target.value)}
-              />
-            </Field>
-            <Field label="Bid due" htmlFor="opp-due">
+            <Field label="Proposal due" htmlFor="opp-due">
               <Input
                 id="opp-due"
                 type="date"
@@ -195,25 +202,25 @@ export function CreateOpportunityDialog({
                 onChange={(event) => setBidDueAt(event.target.value)}
               />
             </Field>
+            <Field label="Estimator">
+              <Select
+                value={estimator}
+                onValueChange={(value) => setEstimator(String(value ?? ""))}
+                items={people.map((person) => ({ value: person, label: person }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {people.map((person) => (
+                    <SelectItem key={person} value={person}>
+                      {person}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
           </div>
-          <Field label="Estimator">
-            <Select
-              value={estimator}
-              onValueChange={(value) => setEstimator(String(value ?? ""))}
-              items={people.map((person) => ({ value: person, label: person }))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {people.map((person) => (
-                  <SelectItem key={person} value={person}>
-                    {person}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
           <Field label="Next step" htmlFor="opp-next">
             <Textarea
               id="opp-next"
@@ -226,7 +233,7 @@ export function CreateOpportunityDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit">Open pursuit</Button>
+            <Button type="submit">Open lead</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -241,39 +248,58 @@ export function CreateClientDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { addClient } = useCrm();
-  const [name, setName] = useState("");
+  const { addClient, addContact, clients, user } = useCrm();
+  const [contactName, setContactName] = useState("");
+  const [contactTitle, setContactTitle] = useState("Homeowner");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [companyMode, setCompanyMode] = useState<"none" | "existing" | "new">("none");
+  const [existingClientId, setExistingClientId] = useState(clients[0]?.id ?? "");
+  const [companyName, setCompanyName] = useState("");
   const [type, setType] = useState<ClientType>("owner");
   const [city, setCity] = useState("Denver");
   const [state, setState] = useState("CO");
-  const [contactName, setContactName] = useState("");
-  const [contactTitle, setContactTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [referral, setReferral] = useState(false);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!contactName.trim() || !name.trim()) {
-      toast.error("A person and company are required.");
+    if (!contactName.trim()) {
+      toast.error("A name is required. A company is not.");
       return;
     }
     try {
-      await addClient({
-        name: name.trim(),
-        type,
-        city,
-        state,
-        notes,
-        contactName: contactName.trim(),
-        contactTitle: contactTitle.trim() || undefined,
-        isReferralPartner: referral,
-      });
+      if (companyMode === "new" && companyName.trim()) {
+        await addClient({
+          name: companyName.trim(),
+          type,
+          city,
+          state,
+          notes,
+          contactName: contactName.trim(),
+          contactTitle: contactTitle.trim() || "Homeowner",
+          isReferralPartner: referral,
+        });
+      } else {
+        await addContact({
+          clientId: companyMode === "existing" && existingClientId ? existingClientId : null,
+          name: contactName.trim(),
+          title: contactTitle.trim() || "Homeowner",
+          email: email.trim(),
+          phone: phone.trim(),
+          ownerStaffId: user.staffId,
+          isReferralPartner: referral,
+        });
+      }
       toast.success(`Contact added: ${contactName.trim()}`);
       onOpenChange(false);
-      setName("");
       setContactName("");
+      setEmail("");
+      setPhone("");
+      setCompanyName("");
       setNotes("");
       setReferral(false);
+      setCompanyMode("none");
     } catch {
       // Store already toasted the error.
     }
@@ -285,84 +311,147 @@ export function CreateClientDialog({
         <DialogHeader>
           <DialogTitle>New contact</DialogTitle>
           <DialogDescription>
-            Add a person to the contact book. We keep the company on file so jobs and invoices still have an owner.
+            Most Northline work is the homeowner. Add a company only if they actually have one — realtor, adjuster, or the occasional commercial owner.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-3">
-          <Field label="Company" htmlFor="cli-name">
+          <Field label="Name" htmlFor="cli-contact">
             <Input
-              id="cli-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="e.g. Redstone Development"
+              id="cli-contact"
+              value={contactName}
+              onChange={(event) => setContactName(event.target.value)}
+              placeholder="e.g. Dana Alvarez"
             />
           </Field>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Type">
-              <Select
-                value={type}
-                onValueChange={(value) => setType(value as ClientType)}
-                items={CLIENT_TYPES.map((clientType) => ({
-                  value: clientType,
-                  label: CLIENT_TYPE_LABELS[clientType],
-                }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CLIENT_TYPES.map((clientType) => (
-                    <SelectItem key={clientType} value={clientType}>
-                      {CLIENT_TYPE_LABELS[clientType]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="City" htmlFor="cli-city">
-              <Input id="cli-city" value={city} onChange={(event) => setCity(event.target.value)} />
-            </Field>
-            <Field label="State" htmlFor="cli-state">
-              <Input
-                id="cli-state"
-                value={state}
-                onChange={(event) => setState(event.target.value)}
-              />
-            </Field>
-          </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Name" htmlFor="cli-contact">
-              <Input
-                id="cli-contact"
-                value={contactName}
-                onChange={(event) => setContactName(event.target.value)}
-                placeholder="e.g. Ava Lindstrom"
-              />
-            </Field>
             <Field label="Title" htmlFor="cli-title">
               <Input
                 id="cli-title"
                 value={contactTitle}
                 onChange={(event) => setContactTitle(event.target.value)}
-                placeholder="VP of Development"
+                placeholder="Homeowner"
+              />
+            </Field>
+            <Field label="Phone" htmlFor="cli-phone">
+              <Input
+                id="cli-phone"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="(303) 555-0100"
               />
             </Field>
           </div>
+          <Field label="Email" htmlFor="cli-email">
+            <Input
+              id="cli-email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="dana@example.com"
+            />
+          </Field>
+          <Field label="Company">
+            <Select
+              value={companyMode}
+              onValueChange={(value) => setCompanyMode((value as typeof companyMode) ?? "none")}
+              items={[
+                { value: "none", label: "None — homeowner / DTC" },
+                { value: "existing", label: "Existing company" },
+                { value: "new", label: "Add a company" },
+              ]}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None — homeowner / DTC</SelectItem>
+                <SelectItem value="existing">Existing company</SelectItem>
+                <SelectItem value="new">Add a company</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          {companyMode === "existing" ? (
+            <Field label="Which company">
+              <Select
+                value={existingClientId}
+                onValueChange={(value) => setExistingClientId(String(value ?? ""))}
+                items={clients.map((client) => ({ value: client.id, label: client.name }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          ) : null}
+          {companyMode === "new" ? (
+            <>
+              <Field label="Company name" htmlFor="cli-name">
+                <Input
+                  id="cli-name"
+                  value={companyName}
+                  onChange={(event) => setCompanyName(event.target.value)}
+                  placeholder="e.g. Summit Claims Group"
+                />
+              </Field>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Field label="Type">
+                  <Select
+                    value={type}
+                    onValueChange={(value) => setType(value as ClientType)}
+                    items={CLIENT_TYPES.map((clientType) => ({
+                      value: clientType,
+                      label: CLIENT_TYPE_LABELS[clientType],
+                    }))}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CLIENT_TYPES.map((clientType) => (
+                        <SelectItem key={clientType} value={clientType}>
+                          {CLIENT_TYPE_LABELS[clientType]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="City" htmlFor="cli-city">
+                  <Input id="cli-city" value={city} onChange={(event) => setCity(event.target.value)} />
+                </Field>
+                <Field label="State" htmlFor="cli-state">
+                  <Input
+                    id="cli-state"
+                    value={state}
+                    onChange={(event) => setState(event.target.value)}
+                  />
+                </Field>
+              </div>
+            </>
+          ) : null}
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
               checked={referral}
               onCheckedChange={(value) => setReferral(Boolean(value))}
             />
-            Referral partner — counts in the PM’s book for BD reports
+            Referral partner — realtor, adjuster, or specifier in this seat’s book
           </label>
-          <Field label="Notes" htmlFor="cli-notes">
-            <Textarea
-              id="cli-notes"
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              placeholder="How they buy work, who actually awards..."
-            />
-          </Field>
+          {companyMode === "new" ? (
+            <Field label="Notes" htmlFor="cli-notes">
+              <Textarea
+                id="cli-notes"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="How they send work..."
+              />
+            </Field>
+          ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
@@ -382,28 +471,31 @@ export function CreateJobDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { clients, addJob, teamMembers, user } = useCrm();
+  const { contacts, addJob, teamMembers, user } = useCrm();
   const people = teamMembers.length > 0 ? teamMembers : [user.name].filter(Boolean);
   const [name, setName] = useState("");
-  const [clientId, setClientId] = useState(clients[0]?.id ?? "");
-  const [value, setValue] = useState("10000000");
+  const [contactId, setContactId] = useState(contacts[0]?.id ?? "");
+  const [value, setValue] = useState("28000");
   const [location, setLocation] = useState("Denver, CO");
   const [status, setStatus] = useState<JobStatus>("precon");
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
-  const [projectManager, setProjectManager] = useState("Luis Ortega");
+  const [projectManager, setProjectManager] = useState(user.name || "Elena Voss");
   const [superintendent, setSuperintendent] = useState("Tom Brennan");
+
+  const contact = contacts.find((item) => item.id === contactId);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!name.trim() || !clientId) {
-      toast.error("A job name and client are required.");
+    if (!name.trim() || !contactId) {
+      toast.error("A job name and homeowner are required.");
       return;
     }
     try {
       const job = await addJob({
         opportunityId: null,
         name: name.trim(),
-        clientId,
+        clientId: contact?.clientId ?? null,
+        primaryContactId: contactId,
         status,
         contractValue: Number(value) || 0,
         startDate,
@@ -426,7 +518,7 @@ export function CreateJobDialog({
         <DialogHeader>
           <DialogTitle>Log a job</DialogTitle>
           <DialogDescription>
-            For work already under contract that did not come through this pipeline.
+            For work already under contract — a sold restoration, remodel, or roof that did not come through this pipeline.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-3">
@@ -435,28 +527,28 @@ export function CreateJobDialog({
               id="job-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="e.g. 16th Street Office Core & Shell"
+              placeholder="e.g. Hart water restoration"
             />
           </Field>
+          <Field label="Homeowner / contact">
+            <Select
+              value={contactId}
+              onValueChange={(value) => setContactId(String(value ?? ""))}
+              items={contacts.map((item) => ({ value: item.id, label: item.name }))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {contacts.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Client">
-              <Select
-                value={clientId}
-                onValueChange={(value) => setClientId(String(value ?? ""))}
-                items={clients.map((client) => ({ value: client.id, label: client.name }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
             <Field label="Status">
               <Select
                 value={status}
@@ -478,8 +570,6 @@ export function CreateJobDialog({
                 </SelectContent>
               </Select>
             </Field>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Contract value" htmlFor="job-value">
               <Input
                 id="job-value"
@@ -489,6 +579,8 @@ export function CreateJobDialog({
                 onChange={(event) => setValue(event.target.value)}
               />
             </Field>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Start date" htmlFor="job-start">
               <Input
                 id="job-start"
@@ -497,14 +589,14 @@ export function CreateJobDialog({
                 onChange={(event) => setStartDate(event.target.value)}
               />
             </Field>
+            <Field label="Location" htmlFor="job-location">
+              <Input
+                id="job-location"
+                value={location}
+                onChange={(event) => setLocation(event.target.value)}
+              />
+            </Field>
           </div>
-          <Field label="Location" htmlFor="job-location">
-            <Input
-              id="job-location"
-              value={location}
-              onChange={(event) => setLocation(event.target.value)}
-            />
-          </Field>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Project manager">
               <Select

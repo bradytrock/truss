@@ -83,7 +83,7 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
     seed.contacts.map((contact) => ({
       id: remap(contact.id, ids),
       company_id: companyId,
-      client_id: remap(contact.clientId, ids),
+      client_id: contact.clientId ? remap(contact.clientId, ids) : null,
       name: contact.name,
       title: contact.title,
       email: contact.email,
@@ -99,7 +99,7 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
       id: remap(opportunity.id, ids),
       company_id: companyId,
       name: opportunity.name,
-      client_id: remap(opportunity.clientId, ids),
+      client_id: opportunity.clientId ? remap(opportunity.clientId, ids) : null,
       primary_contact_id: opportunity.primaryContactId
         ? remap(opportunity.primaryContactId, ids)
         : null,
@@ -126,7 +126,8 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
       company_id: companyId,
       opportunity_id: job.opportunityId ? remap(job.opportunityId, ids) : null,
       name: job.name,
-      client_id: remap(job.clientId, ids),
+      client_id: job.clientId ? remap(job.clientId, ids) : null,
+      primary_contact_id: job.primaryContactId ? remap(job.primaryContactId, ids) : null,
       status: job.status,
       contract_value: job.contractValue,
       start_date: job.startDate,

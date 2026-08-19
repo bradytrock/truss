@@ -40,35 +40,48 @@ export function CreateEstimateDialog({
   defaultClientId,
   defaultOpportunityId,
   defaultJobId,
+  defaultContactId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultClientId?: string;
+  defaultClientId?: string | null;
   defaultOpportunityId?: string;
   defaultJobId?: string;
+  defaultContactId?: string | null;
 }) {
   const router = useRouter();
-  const { clients, opportunities, jobs, addEstimate } = useCrm();
+  const { contacts, opportunities, jobs, addEstimate } = useCrm();
+  const jobDefault = defaultJobId ? jobs.find((job) => job.id === defaultJobId) : undefined;
   const [name, setName] = useState("");
-  const [clientId, setClientId] = useState(defaultClientId ?? clients[0]?.id ?? "");
+  const [contactId, setContactId] = useState(
+    defaultContactId || jobDefault?.primaryContactId || contacts[0]?.id || ""
+  );
   const [opportunityId, setOpportunityId] = useState(defaultOpportunityId ?? "");
   const [jobId, setJobId] = useState(defaultJobId ?? "");
   const [validUntil, setValidUntil] = useState("");
   const [notes, setNotes] = useState("");
 
-  const clientOpps = opportunities.filter((opportunity) => opportunity.clientId === clientId);
-  const clientJobs = jobs.filter((job) => job.clientId === clientId);
+  const contact = contacts.find((item) => item.id === contactId);
+  const relatedOpps = opportunities.filter(
+    (opportunity) =>
+      opportunity.primaryContactId === contactId ||
+      (contact?.clientId && opportunity.clientId === contact.clientId)
+  );
+  const relatedJobs = jobs.filter(
+    (job) =>
+      job.primaryContactId === contactId || (contact?.clientId && job.clientId === contact.clientId)
+  );
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!name.trim() || !clientId) {
-      toast.error("A name and client are required.");
+    if (!name.trim() || !contactId) {
+      toast.error("A name and homeowner are required.");
       return;
     }
     try {
       const estimate = await addEstimate({
         name: name.trim(),
-        clientId,
+        clientId: contact?.clientId ?? defaultClientId ?? null,
         opportunityId: opportunityId || null,
         jobId: jobId || null,
         validUntil: validUntil || null,
@@ -89,7 +102,7 @@ export function CreateEstimateDialog({
         <DialogHeader>
           <DialogTitle>New estimate</DialogTitle>
           <DialogDescription>
-            Price from the catalog, send the proposal, then convert it to an invoice when the owner signs.
+            Price from the catalog, send the proposal, then convert it to an invoice when the homeowner signs.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-3">
@@ -98,39 +111,39 @@ export function CreateEstimateDialog({
               id="est-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="e.g. Suite 400 TI — GMP"
+              placeholder="e.g. Ellison kitchen — Wash Park"
             />
           </Field>
-          <Field label="Client">
+          <Field label="Homeowner / contact">
             <Select
-              value={clientId}
+              value={contactId}
               onValueChange={(value) => {
-                setClientId(String(value ?? ""));
+                setContactId(String(value ?? ""));
                 setOpportunityId("");
                 setJobId("");
               }}
-              items={clients.map((client) => ({ value: client.id, label: client.name }))}
+              items={contacts.map((item) => ({ value: item.id, label: item.name }))}
             >
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {clients.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {client.name}
+                {contacts.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Pursuit (optional)">
+            <Field label="Lead (optional)">
               <Select
                 value={opportunityId || "none"}
                 onValueChange={(value) => setOpportunityId(value === "none" ? "" : String(value ?? ""))}
                 items={[
                   { value: "none", label: "None" },
-                  ...clientOpps.map((opportunity) => ({
+                  ...relatedOpps.map((opportunity) => ({
                     value: opportunity.id,
                     label: opportunity.name,
                   })),
@@ -141,7 +154,7 @@ export function CreateEstimateDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">None</SelectItem>
-                  {clientOpps.map((opportunity) => (
+                  {relatedOpps.map((opportunity) => (
                     <SelectItem key={opportunity.id} value={opportunity.id}>
                       {opportunity.name}
                     </SelectItem>
@@ -155,7 +168,7 @@ export function CreateEstimateDialog({
                 onValueChange={(value) => setJobId(value === "none" ? "" : String(value ?? ""))}
                 items={[
                   { value: "none", label: "None" },
-                  ...clientJobs.map((job) => ({ value: job.id, label: job.name })),
+                  ...relatedJobs.map((job) => ({ value: job.id, label: job.name })),
                 ]}
               >
                 <SelectTrigger className="w-full">
@@ -163,7 +176,7 @@ export function CreateEstimateDialog({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">None</SelectItem>
-                  {clientJobs.map((job) => (
+                  {relatedJobs.map((job) => (
                     <SelectItem key={job.id} value={job.id}>
                       {job.name}
                     </SelectItem>
@@ -186,7 +199,7 @@ export function CreateEstimateDialog({
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               rows={2}
-              placeholder="Alternates, exclusions, bid form notes..."
+              placeholder="Allowances, exclusions, insurance notes..."
             />
           </Field>
           <DialogFooter>
@@ -209,14 +222,13 @@ export function CreateInvoiceDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultClientId?: string;
+  defaultClientId?: string | null;
   defaultJobId?: string;
 }) {
   const router = useRouter();
-  const { clients, jobs, addInvoice } = useCrm();
+  const { jobs, addInvoice, customerName } = useCrm();
   const [name, setName] = useState("");
-  const [clientId, setClientId] = useState(defaultClientId ?? clients[0]?.id ?? "");
-  const [jobId, setJobId] = useState(defaultJobId ?? "");
+  const [jobId, setJobId] = useState(defaultJobId ?? jobs[0]?.id ?? "");
   const dueDefault = (() => {
     const date = new Date();
     date.setDate(date.getDate() + 30);
@@ -225,18 +237,18 @@ export function CreateInvoiceDialog({
   const [dueAt, setDueAt] = useState(dueDefault);
   const [notes, setNotes] = useState("");
 
-  const clientJobs = jobs.filter((job) => job.clientId === clientId);
+  const job = jobs.find((item) => item.id === jobId);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!name.trim() || !clientId) {
-      toast.error("A name and client are required.");
+    if (!name.trim() || !jobId) {
+      toast.error("A name and job are required.");
       return;
     }
     try {
       const invoice = await addInvoice({
         name: name.trim(),
-        clientId,
+        clientId: job?.clientId ?? defaultClientId ?? null,
         jobId: jobId || null,
         dueAt: dueAt || null,
         notes,
@@ -256,7 +268,7 @@ export function CreateInvoiceDialog({
         <DialogHeader>
           <DialogTitle>New invoice</DialogTitle>
           <DialogDescription>
-            Bill a draw, deposit, or retainage. Record payments as checks and ACH come in.
+            Bill a draw, deposit, or retainage against a job. Homeowners do not need a company on file.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-3">
@@ -265,54 +277,30 @@ export function CreateInvoiceDialog({
               id="inv-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="e.g. Application 5 — August"
+              placeholder="e.g. Alvarez roof — progress"
             />
           </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Client">
-              <Select
-                value={clientId}
-                onValueChange={(value) => {
-                  setClientId(String(value ?? ""));
-                  setJobId("");
-                }}
-                items={clients.map((client) => ({ value: client.id, label: client.name }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Job (optional)">
-              <Select
-                value={jobId || "none"}
-                onValueChange={(value) => setJobId(value === "none" ? "" : String(value ?? ""))}
-                items={[
-                  { value: "none", label: "None" },
-                  ...clientJobs.map((job) => ({ value: job.id, label: job.name })),
-                ]}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {clientJobs.map((job) => (
-                    <SelectItem key={job.id} value={job.id}>
-                      {job.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
+          <Field label="Job">
+            <Select
+              value={jobId}
+              onValueChange={(value) => setJobId(String(value ?? ""))}
+              items={jobs.map((item) => ({
+                value: item.id,
+                label: `${item.name} — ${customerName(item)}`,
+              }))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {jobs.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.name} — {customerName(item)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
           <Field label="Due" htmlFor="inv-due">
             <Input
               id="inv-due"

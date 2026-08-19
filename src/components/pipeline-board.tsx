@@ -40,7 +40,7 @@ const columnAccent: Record<PipelineStage, string> = {
 };
 
 export function PipelineBoard({ query }: { query: string }) {
-  const { opportunities, getClient, moveOpportunity } = useCrm();
+  const { opportunities, getContact, customerName, moveOpportunity } = useCrm();
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -51,14 +51,16 @@ export function PipelineBoard({ query }: { query: string }) {
     const needle = query.trim().toLowerCase();
     return opportunities.filter((opportunity) => {
       if (!needle) return true;
-      const client = getClient(opportunity.clientId);
+      const customer = customerName(opportunity);
+      const contact = getContact(opportunity.primaryContactId);
       return (
         opportunity.name.toLowerCase().includes(needle) ||
         opportunity.location.toLowerCase().includes(needle) ||
-        client?.name.toLowerCase().includes(needle)
+        customer.toLowerCase().includes(needle) ||
+        (contact?.name.toLowerCase().includes(needle) ?? false)
       );
     });
-  }, [getClient, opportunities, query]);
+  }, [customerName, getContact, opportunities, query]);
 
   const active = opportunities.find((opportunity) => opportunity.id === activeId) ?? null;
 
@@ -133,7 +135,7 @@ export function PipelineBoard({ query }: { query: string }) {
                   <OpportunityCard
                     key={opportunity.id}
                     opportunity={opportunity}
-                    clientName={getClient(opportunity.clientId)?.name ?? "Unknown client"}
+                    customerName={customerName(opportunity)}
                   />
                 ))}
               </PipelineColumn>
@@ -146,7 +148,7 @@ export function PipelineBoard({ query }: { query: string }) {
         {active ? (
           <OpportunityCard
             opportunity={active}
-            clientName={getClient(active.clientId)?.name ?? "Unknown client"}
+            customerName={customerName(active)}
             overlay
           />
         ) : null}
@@ -193,11 +195,11 @@ function PipelineColumn({
 
 function OpportunityCard({
   opportunity,
-  clientName,
+  customerName,
   overlay,
 }: {
   opportunity: Opportunity;
-  clientName: string;
+  customerName: string;
   overlay?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -234,7 +236,7 @@ function OpportunityCard({
             >
               {opportunity.name}
             </Link>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{clientName}</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{customerName}</p>
           </div>
         </div>
         <div className="flex items-center justify-between gap-2">

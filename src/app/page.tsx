@@ -125,7 +125,7 @@ export default function HomePage() {
               ? "Your jobs, your contact book, and the work assigned to you."
               : crm.viewer?.role === "team_lead" || crm.viewer?.role === "team_admin"
                 ? "Jobs and contacts for your team. Login As a teammate to inspect their book, or open Reports for team activity."
-                : "Open pipeline, proposals out, AR, and today's field calendar — the loop from bid to job photo."
+                : "Open pipeline, proposals out, AR, and today's field calendar — restoration and remodel from lead to job photo."
         }
       />
 
@@ -138,12 +138,12 @@ export default function HomePage() {
         />
         <Kpi
           icon={<CalendarClock className="size-4" />}
-          label="Bids due this week"
+          label="Proposals due this week"
           value={String(stats.bidsThisWeek.length)}
           hint={
             stats.bidsThisWeek[0]
               ? `Next: ${[...stats.bidsThisWeek].sort((a, b) => (a.bidDueAt ?? "").localeCompare(b.bidDueAt ?? ""))[0]?.name}`
-              : "No bid dates in the next seven days"
+              : "No proposal dates in the next seven days"
           }
         />
         <Kpi
@@ -167,7 +167,7 @@ export default function HomePage() {
           value={String(stats.proposals.length)}
           hint={
             stats.proposals.length
-              ? `${formatCurrency(stats.proposalValue)} sitting with owners`
+              ? `${formatCurrency(stats.proposalValue)} sitting with homeowners`
               : "No sent proposals waiting on a decision"
           }
         />
@@ -227,8 +227,8 @@ export default function HomePage() {
 
         <Card>
           <CardHeader className="border-b">
-            <CardTitle>Bids due</CardTitle>
-            <CardDescription>Hard dates the estimating desk cannot miss.</CardDescription>
+            <CardTitle>Proposals due</CardTitle>
+            <CardDescription>Dates the estimating desk cannot miss.</CardDescription>
           </CardHeader>
           <CardContent className="pt-1">
             {stats.bidsThisWeek.length === 0 ? (
@@ -250,7 +250,7 @@ export default function HomePage() {
                         >
                           <p className="text-sm font-medium">{opportunity.name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {crm.getClient(opportunity.clientId)?.name} ·{" "}
+                            {crm.customerName(opportunity)} ·{" "}
                             {formatCurrency(opportunity.value)}
                           </p>
                         </Link>
@@ -359,7 +359,7 @@ export default function HomePage() {
                     <JobStatusBadge status={job.status} />
                   </div>
                   <CardDescription>
-                    {crm.getClient(job.clientId)?.name} · {job.location}
+                    {crm.customerName(job)} · {job.location}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex items-center justify-between text-sm">

@@ -104,22 +104,22 @@ export function scopeBook(
         });
 
   const clientIds = new Set<string>();
-  for (const job of jobs) clientIds.add(job.clientId);
-  for (const opportunity of opportunities) clientIds.add(opportunity.clientId);
-  for (const contact of contacts) clientIds.add(contact.clientId);
+  for (const job of jobs) if (job.clientId) clientIds.add(job.clientId);
+  for (const opportunity of opportunities) if (opportunity.clientId) clientIds.add(opportunity.clientId);
+  for (const contact of contacts) if (contact.clientId) clientIds.add(contact.clientId);
   const clients = state.clients.filter((client) => clientIds.has(client.id));
 
   const estimates = state.estimates.filter((estimate) => {
     if (estimate.jobId && jobIds.has(estimate.jobId)) return true;
     if (estimate.opportunityId && opportunityIds.has(estimate.opportunityId)) return true;
-    return clientIds.has(estimate.clientId) && scope === "all_jobs";
+    return Boolean(estimate.clientId && clientIds.has(estimate.clientId) && scope === "all_jobs");
   });
   const estimateIds = new Set(estimates.map((estimate) => estimate.id));
 
   const invoices = state.invoices.filter((invoice) => {
     if (invoice.jobId && jobIds.has(invoice.jobId)) return true;
     if (invoice.estimateId && estimateIds.has(invoice.estimateId)) return true;
-    return clientIds.has(invoice.clientId) && (scope === "all_jobs" || jobIds.size > 0);
+    return Boolean(invoice.clientId && clientIds.has(invoice.clientId) && (scope === "all_jobs" || jobIds.size > 0));
   });
   const invoiceIds = new Set(invoices.map((invoice) => invoice.id));
 

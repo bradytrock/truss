@@ -59,13 +59,13 @@ export default function ContactsPage() {
       <PageHeader
         eyebrow="Relationships"
         title="Contacts"
-        description="People first. Each name lives in a seat’s book — PMs keep their own, team leads see the team, and company admin sees everyone."
+        description="People first. Homeowners do not need a company. Realtors, adjusters, and the occasional commercial owner can still sit on a company record."
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search people or companies"
+              placeholder="Search people, homeowners, or companies"
               className="sm:w-64"
             />
             <Select
@@ -97,7 +97,7 @@ export default function ContactsPage() {
           description={
             query || filter !== "all"
               ? "Clear the search or filter to see the people you can access."
-              : "Add owners, reps, and architects to the book for this seat."
+              : "Add homeowners, adjusters, and realtors to the book for this seat."
           }
         />
       ) : (
@@ -130,7 +130,7 @@ export default function ContactsPage() {
                           {company.name}
                         </Link>
                       ) : (
-                        "—"
+                        <span className="text-muted-foreground">Homeowner</span>
                       )}
                     </TableCell>
                     <TableCell className="hidden text-muted-foreground md:table-cell">

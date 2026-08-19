@@ -90,12 +90,12 @@ export default function OpportunityDetailPage() {
             <StageBadge stage={opportunity.stage} />
             <TypeBadge type={opportunity.projectType} />
             <span className="text-sm text-muted-foreground">
-              {client ? (
-                <Link href={`/clients/${client.id}`} className="hover:underline">
-                  {client.name}
+              {contact ? (
+                <Link href={`/contacts/${contact.id}`} className="hover:underline">
+                  {contact.name}
                 </Link>
               ) : (
-                "Unknown client"
+                crm.customerName(opportunity)
               )}
               {" · "}
               {opportunity.location}
@@ -245,15 +245,26 @@ export default function OpportunityDetailPage() {
               <CardTitle>About this pursuit</CardTitle>
             </CardHeader>
             <CardContent>
-              <RecordProperty label="Client">
-                {client ? (
+              <RecordProperty label="Customer">
+                {contact ? (
+                  <Link href={`/contacts/${contact.id}`} className="hover:underline">
+                    {contact.name}
+                  </Link>
+                ) : client ? (
                   <Link href={`/clients/${client.id}`} className="hover:underline">
                     {client.name}
                   </Link>
                 ) : (
-                  "—"
+                  "Homeowner"
                 )}
               </RecordProperty>
+              {client ? (
+              <RecordProperty label="Company">
+                <Link href={`/clients/${client.id}`} className="hover:underline">
+                  {client.name}
+                </Link>
+              </RecordProperty>
+              ) : null}
               <RecordProperty label="Primary contact">
                 {contact ? (
                   <div>
@@ -335,6 +346,7 @@ export default function OpportunityDetailPage() {
         defaultClientId={opportunity.clientId}
         defaultOpportunityId={opportunity.id}
         defaultJobId={job?.id}
+        defaultContactId={opportunity.primaryContactId}
       />
     </div>
   );

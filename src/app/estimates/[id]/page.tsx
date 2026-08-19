@@ -81,13 +81,7 @@ export default function EstimateDetailPage() {
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <EstimateStatusBadge status={estimate.status} />
             <span className="text-sm text-muted-foreground">
-              {client ? (
-                <Link href={`/clients/${client.id}`} className="hover:underline">
-                  {client.name}
-                </Link>
-              ) : (
-                "Unknown client"
-              )}
+              {crm.customerName(estimate)}
             </span>
           </div>
         </div>
@@ -315,13 +309,13 @@ export default function EstimateDetailPage() {
               <CardTitle>Proposal</CardTitle>
             </CardHeader>
             <CardContent>
-              <RecordProperty label="Client">
+              <RecordProperty label="Customer">
                 {client ? (
                   <Link href={`/clients/${client.id}`} className="hover:underline">
                     {client.name}
                   </Link>
                 ) : (
-                  "—"
+                  crm.customerName(estimate)
                 )}
               </RecordProperty>
               <RecordProperty label="Pursuit">

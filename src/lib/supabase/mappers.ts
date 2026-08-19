@@ -106,6 +106,7 @@ export function mapJob(row: JobRow): Job {
     opportunityId: row.opportunity_id,
     name: row.name,
     clientId: row.client_id,
+    primaryContactId: row.primary_contact_id,
     status: row.status,
     contractValue: Number(row.contract_value),
     startDate: row.start_date,
@@ -168,6 +169,7 @@ export function jobPatch(patch: Partial<Job>) {
   if (patch.name !== undefined) row.name = patch.name;
   if (patch.clientId !== undefined) row.client_id = patch.clientId;
   if (patch.opportunityId !== undefined) row.opportunity_id = patch.opportunityId;
+  if (patch.primaryContactId !== undefined) row.primary_contact_id = patch.primaryContactId;
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.contractValue !== undefined) row.contract_value = patch.contractValue;
   if (patch.startDate !== undefined) row.start_date = patch.startDate;

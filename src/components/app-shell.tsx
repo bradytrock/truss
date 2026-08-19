@@ -83,7 +83,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Nav pathname={pathname} />
         <div className="mt-auto p-3">
           <p className="px-2 text-[11px] leading-relaxed text-[#f4efe6]/50">
-            Bid it, send it, bill it, shoot it. Pipeline through job photos.
+            Bid it, send it, bill it, shoot it. Home restoration through job photos.
           </p>
         </div>
       </aside>
@@ -118,7 +118,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-44">
                 <DropdownMenuItem onClick={() => setCreate("opportunity")}>
-                  New pursuit
+                  New lead
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setCreate("estimate")}>
                   New estimate

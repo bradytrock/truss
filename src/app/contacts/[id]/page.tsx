@@ -10,6 +10,7 @@ import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { JobStatusBadge, StageBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency } from "@/lib/format";
+import { jobsForContact, opportunitiesForContact } from "@/lib/parties";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 
 export default function ContactDetailPage() {
@@ -35,11 +36,8 @@ export default function ContactDetailPage() {
 
   const company = crm.getClient(contact.clientId);
   const owner = crm.staff.find((member) => member.id === contact.ownerStaffId);
-  const opportunities = crm.opportunities.filter(
-    (opportunity) =>
-      opportunity.primaryContactId === contact.id || opportunity.clientId === contact.clientId
-  );
-  const jobs = crm.jobs.filter((job) => job.clientId === contact.clientId);
+  const opportunities = opportunitiesForContact(contact, crm.opportunities);
+  const jobs = jobsForContact(contact, crm.jobs);
 
   return (
     <div className="space-y-5">
@@ -90,7 +88,7 @@ export default function ContactDetailPage() {
             </CardHeader>
             <CardContent>
               {jobs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No jobs in view for this company.</p>
+                <p className="text-sm text-muted-foreground">No jobs in view for this person.</p>
               ) : (
                 <ul className="divide-y">
                   {jobs.map((job) => (
@@ -122,7 +120,7 @@ export default function ContactDetailPage() {
                     {company.name}
                   </Link>
                 ) : (
-                  "—"
+                  "Homeowner"
                 )}
               </RecordProperty>
               <RecordProperty label="Email">

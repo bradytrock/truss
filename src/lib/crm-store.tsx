@@ -57,6 +57,7 @@ import {
   type SeatRole,
   type StaffMember,
 } from "@/lib/types";
+import { resolveCustomerName, type CustomerRecord } from "@/lib/parties";
 import { canLoginAs, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 
 const emptyState: CrmState = {
@@ -138,8 +139,9 @@ type CrmContextValue = CrmState & {
   switchSeat: (staffId: string) => void;
   loginAs: (staffId: string) => void;
   stopLoginAs: () => void;
-  getClient: (id: string) => Client | undefined;
-  getContact: (id: string) => Contact | undefined;
+  getClient: (id: string | null | undefined) => Client | undefined;
+  getContact: (id: string | null | undefined) => Contact | undefined;
+  customerName: (record: CustomerRecord) => string;
   getOpportunity: (id: string) => Opportunity | undefined;
   getJob: (id: string) => Job | undefined;
   getEstimate: (id: string) => Estimate | undefined;
@@ -182,7 +184,7 @@ type CrmContextValue = CrmState & {
   }) => Promise<void>;
   addEstimate: (input: {
     name: string;
-    clientId: string;
+    clientId: string | null;
     opportunityId: string | null;
     jobId: string | null;
     notes?: string;
@@ -202,7 +204,7 @@ type CrmContextValue = CrmState & {
   convertEstimateToInvoice: (estimateId: string) => Promise<Invoice>;
   addInvoice: (input: {
     name: string;
-    clientId: string;
+    clientId: string | null;
     jobId: string | null;
     dueAt: string | null;
     notes?: string;
@@ -270,7 +272,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         profileError?.message?.includes("Could not find the table");
       setHydrateError(
         missingSchema
-          ? "Signed in, but this project is missing the Truss tables. Run the three files in supabase/migrations in the SQL editor (in order), then reset demo data."
+          ? "Signed in, but this project is missing the Truss tables. Run the four files in supabase/migrations in the SQL editor (in order), then reset demo data."
           : profileError?.message ??
             "No profile yet. Create an account after the migrations have been applied."
       );
@@ -492,12 +494,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getClient = useCallback(
-    (id: string) => scoped.clients.find((client) => client.id === id),
+    (id: string | null | undefined) =>
+      id ? scoped.clients.find((client) => client.id === id) : undefined,
     [scoped.clients]
   );
   const getContact = useCallback(
-    (id: string) => scoped.contacts.find((contact) => contact.id === id),
+    (id: string | null | undefined) =>
+      id ? scoped.contacts.find((contact) => contact.id === id) : undefined,
     [scoped.contacts]
+  );
+  const customerName = useCallback(
+    (record: CustomerRecord) => resolveCustomerName(record, scoped),
+    [scoped]
   );
   const getOpportunity = useCallback(
     (id: string) => scoped.opportunities.find((opportunity) => opportunity.id === id),
@@ -594,6 +602,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
                 projectManager: user.name || "Luis Ortega",
                 location: current.location,
                 ownerStaffId: user.staffId,
+                primaryContactId: current.primaryContactId || null,
               },
               ...jobs,
             ];
@@ -662,6 +671,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               opportunity_id: id,
               name: current.name,
               client_id: current.clientId,
+              primary_contact_id: current.primaryContactId || null,
               status: "precon",
               contract_value: current.value,
               start_date: new Date().toISOString().slice(0, 10),
@@ -766,7 +776,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         .insert({
           company_id: user.companyId,
           name: input.name,
-          client_id: input.clientId,
+          client_id: input.clientId || null,
           primary_contact_id: input.primaryContactId || null,
           stage: input.stage,
           value: input.value,
@@ -884,7 +894,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         .from("contacts")
         .insert({
           company_id: user.companyId,
-          client_id: contact.clientId,
+          client_id: contact.clientId || null,
           name: contact.name,
           title: contact.title,
           email: contact.email,
@@ -923,7 +933,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           company_id: user.companyId,
           opportunity_id: input.opportunityId,
           name: input.name,
-          client_id: input.clientId,
+          client_id: input.clientId || null,
+          primary_contact_id: input.primaryContactId || null,
           status: input.status,
           contract_value: input.contractValue,
           start_date: input.startDate,
@@ -1012,7 +1023,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const addEstimate = useCallback(
     async (input: {
       name: string;
-      clientId: string;
+      clientId: string | null;
       opportunityId: string | null;
       jobId: string | null;
       notes?: string;
@@ -1027,7 +1038,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           company_id: user.companyId,
           number,
           name: input.name,
-          client_id: input.clientId,
+          client_id: input.clientId || null,
           opportunity_id: input.opportunityId,
           job_id: input.jobId,
           notes: input.notes ?? "",
@@ -1348,7 +1359,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const addInvoice = useCallback(
     async (input: {
       name: string;
-      clientId: string;
+      clientId: string | null;
       jobId: string | null;
       dueAt: string | null;
       notes?: string;
@@ -1362,7 +1373,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           company_id: user.companyId,
           number,
           name: input.name,
-          client_id: input.clientId,
+          client_id: input.clientId || null,
           job_id: input.jobId,
           notes: input.notes ?? "",
           due_at: input.dueAt,
@@ -1601,6 +1612,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       stopLoginAs,
       getClient,
       getContact,
+      customerName,
       getOpportunity,
       getJob,
       getEstimate,
@@ -1652,6 +1664,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       stopLoginAs,
       getClient,
       getContact,
+      customerName,
       getOpportunity,
       getJob,
       getEstimate,

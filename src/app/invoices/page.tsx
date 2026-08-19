@@ -47,11 +47,11 @@ export default function InvoicesPage() {
       .filter((row) => {
         if (status !== "all" && row.status !== status) return false;
         if (!needle) return true;
-        const client = crm.getClient(row.invoice.clientId);
+        const customer = crm.customerName(row.invoice);
         return (
           row.invoice.name.toLowerCase().includes(needle) ||
           row.invoice.number.toLowerCase().includes(needle) ||
-          (client?.name.toLowerCase().includes(needle) ?? false)
+          customer.toLowerCase().includes(needle)
         );
       });
   }, [crm, query, status]);
@@ -120,7 +120,7 @@ export default function InvoicesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Invoice</TableHead>
-                <TableHead>Client</TableHead>
+                <TableHead>Customer</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Due</TableHead>
                 <TableHead className="text-right">Total</TableHead>
@@ -136,7 +136,7 @@ export default function InvoicesPage() {
                     </Link>
                     <p className="text-xs text-muted-foreground">{invoice.name}</p>
                   </TableCell>
-                  <TableCell>{crm.getClient(invoice.clientId)?.name ?? "—"}</TableCell>
+                  <TableCell>{crm.customerName(invoice)}</TableCell>
                   <TableCell>
                     <InvoiceStatusBadge status={rowStatus} />
                   </TableCell>

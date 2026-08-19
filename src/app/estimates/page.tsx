@@ -43,11 +43,11 @@ export default function EstimatesPage() {
     return crm.estimates.filter((estimate) => {
       if (status !== "all" && estimate.status !== status) return false;
       if (!needle) return true;
-      const client = crm.getClient(estimate.clientId);
+      const customer = crm.customerName(estimate);
       return (
         estimate.name.toLowerCase().includes(needle) ||
         estimate.number.toLowerCase().includes(needle) ||
-        (client?.name.toLowerCase().includes(needle) ?? false)
+        customer.toLowerCase().includes(needle)
       );
     });
   }, [crm, query, status]);
@@ -116,7 +116,7 @@ export default function EstimatesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Estimate</TableHead>
-                <TableHead>Client</TableHead>
+                <TableHead>Customer</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Valid until</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
@@ -135,7 +135,7 @@ export default function EstimatesPage() {
                       </Link>
                       <p className="text-xs text-muted-foreground">{estimate.name}</p>
                     </TableCell>
-                    <TableCell>{crm.getClient(estimate.clientId)?.name ?? "—"}</TableCell>
+                    <TableCell>{crm.customerName(estimate)}</TableCell>
                     <TableCell>
                       <EstimateStatusBadge status={estimate.status} />
                     </TableCell>

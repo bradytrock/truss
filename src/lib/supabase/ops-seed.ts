@@ -77,8 +77,8 @@ export async function insertOperations(
 
   const { error: estimateError } = await supabase.from("estimates").insert(
     seed.estimates.flatMap((estimate) => {
-      const clientId = ids.get(estimate.clientId);
-      if (!clientId) return [];
+      const clientId = estimate.clientId ? ids.get(estimate.clientId) ?? null : null;
+      if (estimate.clientId && !clientId) return [];
       return [
         {
           id: remap(estimate.id, ids),
@@ -123,8 +123,8 @@ export async function insertOperations(
 
   const { error: invoiceError } = await supabase.from("invoices").insert(
     seed.invoices.flatMap((invoice) => {
-      const clientId = ids.get(invoice.clientId);
-      if (!clientId) return [];
+      const clientId = invoice.clientId ? ids.get(invoice.clientId) ?? null : null;
+      if (invoice.clientId && !clientId) return [];
       return [
         {
           id: remap(invoice.id, ids),

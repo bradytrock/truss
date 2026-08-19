@@ -51,7 +51,6 @@ export default function InvoiceDetailPage() {
     );
   }
 
-  const client = crm.getClient(invoice.clientId);
   const job = invoice.jobId ? crm.getJob(invoice.jobId) : undefined;
   const estimate = invoice.estimateId ? crm.getEstimate(invoice.estimateId) : undefined;
   const lines = crm.invoiceLines
@@ -76,13 +75,7 @@ export default function InvoiceDetailPage() {
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <InvoiceStatusBadge status={status} />
             <span className="text-sm text-muted-foreground">
-              {client ? (
-                <Link href={`/clients/${client.id}`} className="hover:underline">
-                  {client.name}
-                </Link>
-              ) : (
-                "Unknown client"
-              )}
+              {crm.customerName(invoice)}
             </span>
           </div>
         </div>

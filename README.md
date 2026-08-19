@@ -1,8 +1,8 @@
 # Truss
 
-A contractor operating system for general contractors: pipeline, estimates, jobs, invoices, schedule, and job photos. Auth, Postgres, Row Level Security, Realtime, and Storage all run on Supabase.
+A contractor operating system for restoration and home improvement: pipeline, estimates, jobs, invoices, schedule, and job photos. Auth, Postgres, Row Level Security, Realtime, and Storage all run on Supabase.
 
-The Northline Construction sample book is Denver work — the same loop Roofr and JobNimbus cover, without satellite takeoffs or payment processing.
+Northline Construction’s sample book is Denver residential work — hail roofs, water and fire restoration, kitchens, windows — plus a thin commercial leftover. Homeowners do not need a company on file.
 
 ## Connect Supabase
 
@@ -15,6 +15,7 @@ To attach a project that is already running:
    - [`supabase/migrations/20260819170000_truss_crm.sql`](supabase/migrations/20260819170000_truss_crm.sql) — companies, profiles, pipeline, jobs, RLS, signup trigger, Realtime
    - [`supabase/migrations/20260819180000_estimates_invoices_schedule.sql`](supabase/migrations/20260819180000_estimates_invoices_schedule.sql) — price book, estimates, invoices, payments, schedule, job photos, Storage bucket
    - [`supabase/migrations/20260819190000_seats_contacts.sql`](supabase/migrations/20260819190000_seats_contacts.sql) — seats, teams, contact-book ownership, referral partners
+   - [`supabase/migrations/20260819200000_residential_homeowners.sql`](supabase/migrations/20260819200000_residential_homeowners.sql) — optional company on contacts/jobs, residential types, insurance / T&M delivery
 3. In Authentication → URL configuration, add `http://localhost:3847/auth/callback`. For local work you can turn off “Confirm email”.
 4. Create an account. Signup opens a company, a profile, and the Northline sample book in Postgres.
 
@@ -28,12 +29,12 @@ npm run dev
 
 ## What you can do
 
-- **Contacts** — 28 people across owners, agencies, and architects, including referral partners in each PM’s book
-- **Pipeline** — 22 pursuits from pursuing through award and lost
-- **Jobs** — 12 field records (precon through complete, plus one on hold)
-- **Estimates / invoices** — EST-1001–1010 and INV-2001–2010 with payments and AR
-- **Schedule & photos** — walks, OACs, night work, and job photos
-- **Price book** — CSI-style labor, material, equipment, allowance, and subcontract items
+- **Contacts** — homeowners first (no company required), plus adjusters, realtors, and one architect as referral partners
+- **Pipeline** — leads through sold and lost: hail, water, fire, kitchens, windows, an addition
+- **Jobs** — 11 residential field records and one small commercial TI
+- **Estimates / invoices** — EST-1001–1010 and INV-2001–2010 against homeowners, with insurance draws and retainage
+- **Schedule & photos** — site walks, shingle days, punch, and job photos
+- **Price book** — roofing squares, extraction, cabinets, and the usual trades
 - **Estimates** — build a proposal from the catalog, send it, mark it accepted, convert it to an invoice
 - **Jobs** — field snapshot, activity, related billing, and job photos (upload or URL)
 - **Invoices** — draws and retainage with payment history and outstanding AR
@@ -44,7 +45,7 @@ The Northline sample book loads locally with no sign-in. Avatar menu → **Reset
 ## What lives in Supabase
 
 - **Auth** — email/password; each signup creates a `companies` row and a `profiles` row
-- **Postgres** — contacts, companies, pursuits, jobs, catalog, estimates, invoices, payments, schedule, photos, teams, seats
+- **Postgres** — contacts (company optional), homeowners, pursuits, jobs, catalog, estimates, invoices, payments, schedule, photos, teams, seats
 - **RLS** — every query is limited to `current_company_id()`
 - **Realtime** — the board and records refresh when anyone in the company writes
 - **Storage** — `job-photos` bucket, files stored as `{companyId}/{jobId}/{uuid}`

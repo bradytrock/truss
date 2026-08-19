@@ -20,6 +20,11 @@ export const JOB_STATUSES = [
 export type JobStatus = (typeof JOB_STATUSES)[number];
 
 export const PROJECT_TYPES = [
+  "restoration",
+  "remodel",
+  "roofing",
+  "exterior",
+  "addition",
   "commercial",
   "multifamily",
   "healthcare",
@@ -33,6 +38,9 @@ export const PROJECT_TYPES = [
 export type ProjectType = (typeof PROJECT_TYPES)[number];
 
 export const DELIVERY_METHODS = [
+  "insurance_claim",
+  "fixed_price",
+  "time_and_materials",
   "design_bid_build",
   "cm_at_risk",
   "design_build",
@@ -47,6 +55,9 @@ export const CLIENT_TYPES = [
   "public",
   "healthcare_system",
   "architect",
+  "insurance",
+  "realtor",
+  "trade_partner",
 ] as const;
 
 export type ClientType = (typeof CLIENT_TYPES)[number];
@@ -122,7 +133,7 @@ export interface Client {
 
 export interface Contact {
   id: string;
-  clientId: string;
+  clientId: string | null;
   name: string;
   title: string;
   email: string;
@@ -134,7 +145,7 @@ export interface Contact {
 export interface Opportunity {
   id: string;
   name: string;
-  clientId: string;
+  clientId: string | null;
   primaryContactId: string;
   stage: PipelineStage;
   value: number;
@@ -155,7 +166,8 @@ export interface Job {
   id: string;
   opportunityId: string | null;
   name: string;
-  clientId: string;
+  clientId: string | null;
+  primaryContactId: string | null;
   status: JobStatus;
   contractValue: number;
   startDate: string;
@@ -240,7 +252,7 @@ export interface Estimate {
   id: string;
   number: string;
   name: string;
-  clientId: string;
+  clientId: string | null;
   opportunityId: string | null;
   jobId: string | null;
   status: EstimateStatus;
@@ -266,7 +278,7 @@ export interface Invoice {
   id: string;
   number: string;
   name: string;
-  clientId: string;
+  clientId: string | null;
   jobId: string | null;
   estimateId: string | null;
   status: InvoiceStatus;
@@ -338,11 +350,11 @@ export interface CrmState {
 }
 
 export const STAGE_LABELS: Record<PipelineStage, string> = {
-  pursuing: "Pursuing",
+  pursuing: "Lead",
   estimating: "Estimating",
-  bid_submitted: "Bid submitted",
-  interview: "Interview / VE",
-  awarded: "Awarded",
+  bid_submitted: "Proposal sent",
+  interview: "Follow-up",
+  awarded: "Sold",
   lost: "Lost",
 };
 
@@ -364,6 +376,11 @@ export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
 };
 
 export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
+  restoration: "Restoration",
+  remodel: "Remodel",
+  roofing: "Roofing",
+  exterior: "Exterior / windows",
+  addition: "Addition",
   commercial: "Commercial",
   multifamily: "Multifamily",
   healthcare: "Healthcare",
@@ -375,6 +392,9 @@ export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
 };
 
 export const DELIVERY_LABELS: Record<DeliveryMethod, string> = {
+  insurance_claim: "Insurance claim",
+  fixed_price: "Fixed price",
+  time_and_materials: "Time & materials",
   design_bid_build: "Design-bid-build",
   cm_at_risk: "CM at risk",
   design_build: "Design-build",
@@ -382,11 +402,14 @@ export const DELIVERY_LABELS: Record<DeliveryMethod, string> = {
 };
 
 export const CLIENT_TYPE_LABELS: Record<ClientType, string> = {
-  owner: "Owner",
+  owner: "Owner / company",
   developer: "Developer",
   public: "Public agency",
   healthcare_system: "Health system",
   architect: "Architect",
+  insurance: "Insurance / adjuster",
+  realtor: "Realtor",
+  trade_partner: "Trade partner",
 };
 
 export const ACTIVITY_LABELS: Record<ActivityType, string> = {

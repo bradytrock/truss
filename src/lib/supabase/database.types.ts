@@ -108,7 +108,7 @@ export type Database = {
         Row: {
           id: string;
           company_id: string;
-          client_id: string;
+          client_id: string | null;
           name: string;
           title: string;
           email: string;
@@ -119,7 +119,7 @@ export type Database = {
         Insert: {
           id?: string;
           company_id: string;
-          client_id: string;
+          client_id?: string | null;
           name: string;
           title?: string;
           email?: string;
@@ -135,7 +135,7 @@ export type Database = {
           id: string;
           company_id: string;
           name: string;
-          client_id: string;
+          client_id: string | null;
           primary_contact_id: string | null;
           stage: Database["public"]["Enums"]["pipeline_stage"];
           value: number;
@@ -155,7 +155,7 @@ export type Database = {
           id?: string;
           company_id: string;
           name: string;
-          client_id: string;
+          client_id?: string | null;
           primary_contact_id?: string | null;
           stage?: Database["public"]["Enums"]["pipeline_stage"];
           value?: number;
@@ -180,7 +180,8 @@ export type Database = {
           company_id: string;
           opportunity_id: string | null;
           name: string;
-          client_id: string;
+          client_id: string | null;
+          primary_contact_id: string | null;
           status: Database["public"]["Enums"]["job_status"];
           contract_value: number;
           start_date: string;
@@ -196,7 +197,8 @@ export type Database = {
           company_id: string;
           opportunity_id?: string | null;
           name: string;
-          client_id: string;
+          client_id?: string | null;
+          primary_contact_id?: string | null;
           status?: Database["public"]["Enums"]["job_status"];
           contract_value?: number;
           start_date?: string;
@@ -287,7 +289,7 @@ export type Database = {
           company_id: string;
           number: string;
           name: string;
-          client_id: string;
+          client_id: string | null;
           opportunity_id: string | null;
           job_id: string | null;
           status: Database["public"]["Enums"]["estimate_status"];
@@ -302,7 +304,7 @@ export type Database = {
           company_id: string;
           number: string;
           name: string;
-          client_id: string;
+          client_id?: string | null;
           opportunity_id?: string | null;
           job_id?: string | null;
           status?: Database["public"]["Enums"]["estimate_status"];
@@ -347,7 +349,7 @@ export type Database = {
           company_id: string;
           number: string;
           name: string;
-          client_id: string;
+          client_id: string | null;
           job_id: string | null;
           estimate_id: string | null;
           status: Database["public"]["Enums"]["invoice_status"];
@@ -361,7 +363,7 @@ export type Database = {
           company_id: string;
           number: string;
           name: string;
-          client_id: string;
+          client_id?: string | null;
           job_id?: string | null;
           estimate_id?: string | null;
           status?: Database["public"]["Enums"]["invoice_status"];
@@ -490,6 +492,11 @@ export type Database = {
         | "lost";
       job_status: "precon" | "in_progress" | "punch" | "complete" | "on_hold";
       project_type:
+        | "restoration"
+        | "remodel"
+        | "roofing"
+        | "exterior"
+        | "addition"
         | "commercial"
         | "multifamily"
         | "healthcare"
@@ -498,8 +505,23 @@ export type Database = {
         | "hospitality"
         | "civic"
         | "tenant_improvement";
-      delivery_method: "design_bid_build" | "cm_at_risk" | "design_build" | "gc_mp";
-      client_type: "owner" | "developer" | "public" | "healthcare_system" | "architect";
+      delivery_method:
+        | "insurance_claim"
+        | "fixed_price"
+        | "time_and_materials"
+        | "design_bid_build"
+        | "cm_at_risk"
+        | "design_build"
+        | "gc_mp";
+      client_type:
+        | "owner"
+        | "developer"
+        | "public"
+        | "healthcare_system"
+        | "architect"
+        | "insurance"
+        | "realtor"
+        | "trade_partner";
       activity_type: "note" | "call" | "email" | "meeting" | "site_walk" | "stage_change";
       entity_kind: "opportunity" | "job" | "client";
       seat_role:
