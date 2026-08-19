@@ -19,6 +19,14 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
   const seed = structuredClone(seedState);
 
   await wipeOperations(supabase, companyId);
+  const { error: wipeShares } = await supabase.from("calendar_shares").delete().eq("company_id", companyId);
+  if (wipeShares && !wipeShares.message.includes("schema cache") && wipeShares.code !== "PGRST205") {
+    throw wipeShares;
+  }
+  const { error: wipeCal } = await supabase.from("calendar_accounts").delete().eq("company_id", companyId);
+  if (wipeCal && !wipeCal.message.includes("schema cache") && wipeCal.code !== "PGRST205") {
+    throw wipeCal;
+  }
   const { error: wipeActivities } = await supabase.from("activities").delete().eq("company_id", companyId);
   if (wipeActivities) throw wipeActivities;
   const { error: wipeTasks } = await supabase.from("tasks").delete().eq("company_id", companyId);
@@ -169,6 +177,33 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
     }))
   );
   if (taskError) throw taskError;
+
+  const { error: calendarError } = await supabase.from("calendar_accounts").insert(
+    seed.calendarAccounts.map((account) => ({
+      company_id: companyId,
+      staff_id: remap(account.staffId, ids),
+      google_email: account.googleEmail,
+      google_calendar_id: account.calendarId,
+      linked: account.linked,
+      linked_at: account.linkedAt,
+      share_with_team: account.shareWithTeam,
+      source: account.source,
+    }))
+  );
+  if (calendarError && !calendarError.message.includes("schema cache") && calendarError.code !== "PGRST205") {
+    throw calendarError;
+  }
+
+  const { error: shareError } = await supabase.from("calendar_shares").insert(
+    seed.calendarShares.map((share) => ({
+      company_id: companyId,
+      owner_staff_id: remap(share.ownerStaffId, ids),
+      viewer_staff_id: remap(share.viewerStaffId, ids),
+    }))
+  );
+  if (shareError && !shareError.message.includes("schema cache") && shareError.code !== "PGRST205") {
+    throw shareError;
+  }
 
   await insertOperations(supabase, companyId, ids);
 }

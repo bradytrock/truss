@@ -44,6 +44,8 @@ import {
   initialsFromName,
   staffByName,
   type ActivityType,
+  type CalendarAccount,
+  type CalendarShare,
   type Client,
   type CompanySettings,
   type Contact,
@@ -60,6 +62,13 @@ import {
   type SeatRole,
   type StaffMember,
 } from "@/lib/types";
+import {
+  accountForStaff,
+  clearLocalCalendar,
+  demoGoogleEmail,
+  readLocalCalendar,
+  writeLocalCalendar,
+} from "@/lib/calendar";
 import {
   backfillRecordCodes,
   codeInsertError,
@@ -86,6 +95,8 @@ const emptyState: CrmState = {
   payments: [],
   events: [],
   photos: [],
+  calendarAccounts: [],
+  calendarShares: [],
 };
 
 function userFromStaff(
@@ -265,6 +276,11 @@ type CrmContextValue = CrmState & {
     reference: string;
   }) => Promise<void>;
   addScheduleEvent: (input: Omit<ScheduleEvent, "id">) => Promise<ScheduleEvent>;
+  linkDemoCalendar: () => Promise<void>;
+  markCalendarLinked: (staffId: string, googleEmail: string, source: "google" | "demo") => Promise<void>;
+  disconnectCalendar: () => Promise<void>;
+  setShareWithTeam: (shareWithTeam: boolean) => Promise<void>;
+  setCalendarShare: (viewerStaffId: string, shared: boolean) => Promise<void>;
   addJobPhoto: (input: {
     jobId: string;
     caption: string;
@@ -424,6 +440,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       "payments",
       "schedule_events",
       "job_photos",
+      "calendar_accounts",
+      "calendar_shares",
     ] as const;
     let timer: number | undefined;
     const channel = supabase.channel(`truss-company-${user.companyId}`);
@@ -468,6 +486,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         const member = state.staff.find((item) => item.id === saved) ?? state.staff[0];
         const local = readLocalCompany();
         setCompanySettings(local);
+        setState((prev) => ({ ...prev, ...readLocalCalendar(prev) }));
         if (!member) {
           setUser((current) => ({ ...current, company: local.name }));
           return;
@@ -1564,10 +1583,23 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [addActivity, state.invoiceLines, state.invoices, state.payments, user.companyId]
   );
 
+  const persistCalendar = useCallback(
+    (accounts: CalendarAccount[], shares: CalendarShare[]) => {
+      if (!isSupabaseConfigured()) {
+        writeLocalCalendar({ calendarAccounts: accounts, calendarShares: shares });
+      }
+    },
+    []
+  );
+
   const addScheduleEvent = useCallback(
     async (input: Omit<ScheduleEvent, "id">) => {
       const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      if (!supabase) {
+        const event: ScheduleEvent = { ...input, id: crypto.randomUUID() };
+        setState((prev) => ({ ...prev, events: [...prev.events, event] }));
+        return event;
+      }
       const { data, error } = await supabase
         .from("schedule_events")
         .insert({
@@ -1594,6 +1626,136 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return event;
     },
     [user.companyId]
+  );
+
+  const upsertAccount = useCallback(
+    async (account: CalendarAccount) => {
+      setState((prev) => {
+        const exists = prev.calendarAccounts.some((item) => item.staffId === account.staffId);
+        const calendarAccounts = exists
+          ? prev.calendarAccounts.map((item) => (item.staffId === account.staffId ? account : item))
+          : [...prev.calendarAccounts, account];
+        persistCalendar(calendarAccounts, prev.calendarShares);
+        return { ...prev, calendarAccounts };
+      });
+      const supabase = requireClient();
+      if (!supabase || !user.companyId || user.companyId === "local") return;
+      const { error } = await supabase.from("calendar_accounts").upsert(
+        {
+          company_id: user.companyId,
+          staff_id: account.staffId,
+          google_email: account.googleEmail,
+          google_calendar_id: account.calendarId,
+          linked: account.linked,
+          linked_at: account.linkedAt,
+          share_with_team: account.shareWithTeam,
+          source: account.source,
+        },
+        { onConflict: "company_id,staff_id" }
+      );
+      if (error) toast.error(error.message);
+    },
+    [persistCalendar, user.companyId]
+  );
+
+  const linkDemoCalendar = useCallback(async () => {
+    const staffId = user.staffId;
+    if (!staffId) return;
+    const current = accountForStaff(state.calendarAccounts, staffId);
+    await upsertAccount({
+      ...current,
+      staffId,
+      googleEmail: demoGoogleEmail(user.name),
+      calendarId: "primary",
+      linked: true,
+      linkedAt: new Date().toISOString(),
+      source: "demo",
+    });
+    toast.success("Demo Google Calendar linked.");
+  }, [state.calendarAccounts, upsertAccount, user.name, user.staffId]);
+
+  const markCalendarLinked = useCallback(
+    async (staffId: string, googleEmail: string, source: "google" | "demo") => {
+      const current = accountForStaff(state.calendarAccounts, staffId);
+      await upsertAccount({
+        ...current,
+        staffId,
+        googleEmail,
+        linked: true,
+        linkedAt: new Date().toISOString(),
+        source,
+      });
+    },
+    [state.calendarAccounts, upsertAccount]
+  );
+
+  const disconnectCalendar = useCallback(async () => {
+    const staffId = user.staffId;
+    if (!staffId) return;
+    try {
+      await fetch("/api/google/calendar/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staffId }),
+      });
+    } catch {
+      // Local demo still unlinks below.
+    }
+    const current = accountForStaff(state.calendarAccounts, staffId);
+    await upsertAccount({
+      ...current,
+      googleEmail: "",
+      linked: false,
+      linkedAt: null,
+      source: "demo",
+    });
+    toast.message("Google Calendar disconnected.");
+  }, [state.calendarAccounts, upsertAccount, user.staffId]);
+
+  const setShareWithTeam = useCallback(
+    async (shareWithTeam: boolean) => {
+      const staffId = user.staffId;
+      if (!staffId) return;
+      const current = accountForStaff(state.calendarAccounts, staffId);
+      await upsertAccount({ ...current, staffId, shareWithTeam });
+    },
+    [state.calendarAccounts, upsertAccount, user.staffId]
+  );
+
+  const setCalendarShare = useCallback(
+    async (viewerStaffId: string, shared: boolean) => {
+      const ownerStaffId = user.staffId;
+      if (!ownerStaffId || viewerStaffId === ownerStaffId) return;
+      let nextShares: CalendarShare[] = [];
+      setState((prev) => {
+        const filtered = prev.calendarShares.filter(
+          (share) => !(share.ownerStaffId === ownerStaffId && share.viewerStaffId === viewerStaffId)
+        );
+        nextShares = shared
+          ? [...filtered, { ownerStaffId, viewerStaffId }]
+          : filtered;
+        persistCalendar(prev.calendarAccounts, nextShares);
+        return { ...prev, calendarShares: nextShares };
+      });
+      const supabase = requireClient();
+      if (!supabase || !user.companyId || user.companyId === "local") return;
+      if (shared) {
+        const { error } = await supabase.from("calendar_shares").insert({
+          company_id: user.companyId,
+          owner_staff_id: ownerStaffId,
+          viewer_staff_id: viewerStaffId,
+        });
+        if (error && !error.message.toLowerCase().includes("duplicate")) toast.error(error.message);
+      } else {
+        const { error } = await supabase
+          .from("calendar_shares")
+          .delete()
+          .eq("owner_staff_id", ownerStaffId)
+          .eq("viewer_staff_id", viewerStaffId);
+        if (error) toast.error(error.message);
+      }
+    },
+    [persistCalendar, user.companyId, user.staffId]
   );
 
   const addJobPhoto = useCallback(
@@ -1719,6 +1881,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const resetDemo = useCallback(async () => {
     if (!isSupabaseConfigured()) {
+      clearLocalCalendar();
       setState(structuredClone(seedState));
       toast.success("Northline sample book restored.");
       return;
@@ -1798,6 +1961,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       voidInvoice,
       recordPayment,
       addScheduleEvent,
+      linkDemoCalendar,
+      markCalendarLinked,
+      disconnectCalendar,
+      setShareWithTeam,
+      setCalendarShare,
       addJobPhoto,
       resetDemo,
       signOut,
@@ -1853,6 +2021,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       voidInvoice,
       recordPayment,
       addScheduleEvent,
+      linkDemoCalendar,
+      markCalendarLinked,
+      disconnectCalendar,
+      setShareWithTeam,
+      setCalendarShare,
       addJobPhoto,
       resetDemo,
       signOut,

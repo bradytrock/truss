@@ -522,9 +522,99 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["job_photos"]["Insert"]>;
         Relationships: [];
       };
+      calendar_accounts: {
+        Row: {
+          id: string;
+          company_id: string;
+          staff_id: string;
+          google_email: string;
+          google_calendar_id: string;
+          linked: boolean;
+          linked_at: string | null;
+          share_with_team: boolean;
+          source: "demo" | "google";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          staff_id: string;
+          google_email?: string;
+          google_calendar_id?: string;
+          linked?: boolean;
+          linked_at?: string | null;
+          share_with_team?: boolean;
+          source?: "demo" | "google";
+        };
+        Update: Partial<Database["public"]["Tables"]["calendar_accounts"]["Insert"]>;
+        Relationships: [];
+      };
+      calendar_shares: {
+        Row: {
+          id: string;
+          company_id: string;
+          owner_staff_id: string;
+          viewer_staff_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          owner_staff_id: string;
+          viewer_staff_id: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["calendar_shares"]["Insert"]>;
+        Relationships: [];
+      };
+      calendar_tokens: {
+        Row: {
+          account_id: string;
+          refresh_token: string | null;
+          access_token: string | null;
+          token_expires_at: string | null;
+        };
+        Insert: {
+          account_id: string;
+          refresh_token?: string | null;
+          access_token?: string | null;
+          token_expires_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["calendar_tokens"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      save_google_calendar_tokens: {
+        Args: {
+          p_staff_id: string;
+          p_google_email: string;
+          p_calendar_id: string;
+          p_refresh_token: string;
+          p_access_token: string;
+          p_token_expires_at: string;
+        };
+        Returns: undefined;
+      };
+      google_calendar_credentials: {
+        Args: { target_staff_id: string };
+        Returns: {
+          refresh_token: string | null;
+          access_token: string | null;
+          token_expires_at: string | null;
+          google_email: string;
+          google_calendar_id: string;
+        }[];
+      };
+      disconnect_google_calendar: {
+        Args: { p_staff_id: string };
+        Returns: undefined;
+      };
+      can_view_staff_calendar: {
+        Args: { target_staff_id: string };
+        Returns: boolean;
+      };
+    };
     Enums: {
       pipeline_stage:
         | "pursuing"

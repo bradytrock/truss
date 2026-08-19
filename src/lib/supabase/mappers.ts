@@ -1,6 +1,8 @@
 import type { Database } from "@/lib/supabase/database.types";
 import type {
   Activity,
+  CalendarAccount,
+  CalendarShare,
   CatalogItem,
   Client,
   CompanySettings,
@@ -36,6 +38,8 @@ type PhotoRow = Database["public"]["Tables"]["job_photos"]["Row"];
 type StaffRow = Database["public"]["Tables"]["team_members"]["Row"];
 type TeamRow = Database["public"]["Tables"]["teams"]["Row"];
 type CompanyRow = Database["public"]["Tables"]["companies"]["Row"];
+type CalendarAccountRow = Database["public"]["Tables"]["calendar_accounts"]["Row"];
+type CalendarShareRow = Database["public"]["Tables"]["calendar_shares"]["Row"];
 
 export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>): CompanySettings {
   return {
@@ -307,5 +311,24 @@ export function mapJobPhoto(row: PhotoRow): JobPhoto {
     takenAt: row.taken_at,
     imageUrl: row.image_url,
     storagePath: row.storage_path,
+  };
+}
+
+export function mapCalendarAccount(row: CalendarAccountRow): CalendarAccount {
+  return {
+    staffId: row.staff_id,
+    googleEmail: row.google_email,
+    calendarId: row.google_calendar_id,
+    linked: row.linked,
+    linkedAt: row.linked_at,
+    shareWithTeam: row.share_with_team,
+    source: row.source,
+  };
+}
+
+export function mapCalendarShare(row: CalendarShareRow): CalendarShare {
+  return {
+    ownerStaffId: row.owner_staff_id,
+    viewerStaffId: row.viewer_staff_id,
   };
 }

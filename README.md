@@ -1,6 +1,6 @@
 # Truss
 
-A contractor operating system for restoration and home improvement: pipeline, estimates, jobs, invoices, schedule, and job photos. Auth, Postgres, Row Level Security, Realtime, and Storage all run on Supabase.
+A contractor operating system for restoration and home improvement: pipeline, estimates, jobs, invoices, calendar, and job photos. Auth, Postgres, Row Level Security, Realtime, and Storage all run on Supabase.
 
 Northline Construction’s sample book is Denver residential work — hail roofs, water and fire restoration, kitchens, windows — plus a thin commercial leftover. Homeowners do not need a company on file.
 
@@ -18,6 +18,7 @@ To attach a project that is already running:
    - [`supabase/migrations/20260819200000_residential_homeowners.sql`](supabase/migrations/20260819200000_residential_homeowners.sql) — optional company on contacts/jobs, residential types, insurance / T&M delivery
    - [`supabase/migrations/20260819210000_company_settings.sql`](supabase/migrations/20260819210000_company_settings.sql) — business name, phone, email, address, and license on `companies`
    - [`supabase/migrations/20260819220000_job_codes.sql`](supabase/migrations/20260819220000_job_codes.sql) — job / pipeline codes (`BJ081926-A`)
+   - [`supabase/migrations/20260819230000_google_calendars.sql`](supabase/migrations/20260819230000_google_calendars.sql) — per-user Google Calendar links, team sharing, admin visibility
 3. In Authentication → URL configuration, add `http://localhost:3847/auth/callback`. For local work you can turn off “Confirm email”.
 4. Create an account. Signup opens a company, a profile, and the Northline sample book in Postgres.
 
@@ -29,6 +30,8 @@ npm install
 npm run dev
 ```
 
+To connect real Google Calendars, create an OAuth web client in Google Cloud (Calendar API + `.../auth/calendar.events.readonly`). Put `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env.local`, and add `http://localhost:3847/api/google/calendar/callback` as an authorized redirect URI. Without those keys, each seat can still **Link demo Google Calendar** so sharing and admin visibility can be tried locally.
+
 ## What you can do
 
 - **Settings** — company name, main phone, office email, website, license, and office address. Only a company admin sees this, under the initials menu in the top right. The same block prints on estimates and invoices.
@@ -36,22 +39,23 @@ npm run dev
 - **Pipeline** — leads through sold and lost: hail, water, fire, kitchens, windows, an addition. Each card shows a job code (`BJ081926-A`) assigned when the lead is opened.
 - **Jobs** — a status board of sold work. Codes carry over from the awarded lead; a job logged from scratch gets the next letter for that person’s day.
 - **Estimates / invoices** — EST-1001–1010 and INV-2001–2010 against homeowners, with insurance draws and retainage
-- **Schedule & photos** — site walks, shingle days, punch, and job photos
+- **Calendar & photos** — Google Calendar per seat, team sharing, site walks, shingle days, punch, and job photos
 - **Price book** — roofing squares, extraction, cabinets, and the usual trades
 - **Estimates** — build a proposal from the catalog, send it, mark it accepted, convert it to an invoice
 - **Jobs** — field snapshot, activity, related billing, and job photos (upload or URL)
 - **Invoices** — draws and retainage with payment history and outstanding AR
-- **Schedule** — week view for walks, inspections, production, and owner meetings
+- **Calendar** — week view of Truss field events plus each person’s Google Calendar. Link is per seat. Share with your team; company admins see every calendar and whether it is linked.
 
 The Northline sample book loads locally with no sign-in. Avatar menu → **Reset demo data** restores it in memory, or (after migrations and a signed-in company) wipes that company’s CRM tables and reloads this book. It does not delete the Auth user.
 
 ## What lives in Supabase
 
 - **Auth** — email/password; each signup creates a `companies` row and a `profiles` row
-- **Postgres** — contacts (company optional), homeowners, pursuits, jobs, catalog, estimates, invoices, payments, schedule, photos, teams, seats
+- **Postgres** — contacts, homeowners, pursuits, jobs, catalog, estimates, invoices, payments, schedule, calendar accounts, photos, teams, seats
 - **RLS** — every query is limited to `current_company_id()`
 - **Realtime** — the board and records refresh when anyone in the company writes
 - **Storage** — `job-photos` bucket, files stored as `{companyId}/{jobId}/{uuid}`
+- **Google Calendar** — refresh tokens stay in `calendar_tokens` (RPC only). Metadata and shares are company-visible; company admins can read every linked calendar.
 
 Reset demo data (avatar menu) wipes that company’s CRM tables and reloads the sample book. It does not delete the Auth user.
 

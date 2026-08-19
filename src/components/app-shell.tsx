@@ -53,7 +53,7 @@ function navItems(showReports: boolean) {
     { href: "/estimates", label: "Estimates" },
     { href: "/jobs", label: "Jobs" },
     { href: "/invoices", label: "Invoices" },
-    { href: "/schedule", label: "Schedule" },
+    { href: "/calendar", label: "Calendar" },
     { href: "/contacts", label: "Contacts" },
     ...(showReports ? [{ href: "/reports", label: "Reports" }] : []),
   ];
@@ -117,7 +117,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   New invoice
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setCreate("event")}>
-                  Schedule event
+                  Calendar event
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setCreate("client")}>
                   New contact

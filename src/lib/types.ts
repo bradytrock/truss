@@ -346,6 +346,21 @@ export interface ScheduleEvent {
   notes: string;
 }
 
+export interface CalendarAccount {
+  staffId: string;
+  googleEmail: string;
+  calendarId: string;
+  linked: boolean;
+  linkedAt: string | null;
+  shareWithTeam: boolean;
+  source: "google" | "demo";
+}
+
+export interface CalendarShare {
+  ownerStaffId: string;
+  viewerStaffId: string;
+}
+
 export interface JobPhoto {
   id: string;
   jobId: string;
@@ -373,6 +388,8 @@ export interface CrmState {
   payments: Payment[];
   events: ScheduleEvent[];
   photos: JobPhoto[];
+  calendarAccounts: CalendarAccount[];
+  calendarShares: CalendarShare[];
 }
 
 export const STAGE_LABELS: Record<PipelineStage, string> = {

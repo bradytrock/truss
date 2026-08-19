@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   mapActivity,
+  mapCalendarAccount,
+  mapCalendarShare,
   mapCatalogItem,
   mapClient,
   mapContact,
@@ -53,6 +55,8 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     paymentsRes,
     eventsRes,
     photosRes,
+    calendarAccountsRes,
+    calendarSharesRes,
   ] = await Promise.all([
     supabase.from("clients").select("*").eq("company_id", companyId).order("name"),
     supabase.from("contacts").select("*").eq("company_id", companyId).order("name"),
@@ -78,6 +82,8 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     supabase.from("payments").select("*").eq("company_id", companyId).order("paid_at", { ascending: false }),
     supabase.from("schedule_events").select("*").eq("company_id", companyId).order("starts_at"),
     supabase.from("job_photos").select("*").eq("company_id", companyId).order("taken_at", { ascending: false }),
+    supabase.from("calendar_accounts").select("*").eq("company_id", companyId),
+    supabase.from("calendar_shares").select("*").eq("company_id", companyId),
   ]);
 
   const missingTeams = Boolean(teamsRes.error);
@@ -151,6 +157,12 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     payments: (paymentsRes.data ?? []).map(mapPayment),
     events: (eventsRes.data ?? []).map(mapScheduleEvent),
     photos: (photosRes.data ?? []).map(mapJobPhoto),
+    calendarAccounts: calendarAccountsRes.error
+      ? []
+      : (calendarAccountsRes.data ?? []).map(mapCalendarAccount),
+    calendarShares: calendarSharesRes.error
+      ? []
+      : (calendarSharesRes.data ?? []).map(mapCalendarShare),
   };
 
   return {

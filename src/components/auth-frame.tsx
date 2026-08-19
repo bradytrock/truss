@@ -25,7 +25,7 @@ export function AuthFrame({
           <ol className="mt-10 space-y-5 text-sm">
             <AuthPoint index="01" label="Leads" copy="Homeowner walks to sold jobs." />
             <AuthPoint index="02" label="Paper" copy="Estimates, invoices, insurance draws." />
-            <AuthPoint index="03" label="Field" copy="Schedule, photos, punch." />
+            <AuthPoint index="03" label="Field" copy="Calendar, photos, punch." />
           </ol>
         </div>
         <p className="text-[11px] tracking-[0.14em] text-sidebar-foreground/40 uppercase">

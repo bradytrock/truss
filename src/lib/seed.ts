@@ -1,3 +1,4 @@
+import { seedCalendarAccounts, seedCalendarShares } from "@/lib/calendar-seed";
 import { backfillRecordCodes } from "@/lib/job-code";
 import { NORTHLINE_STAFF, NORTHLINE_TEAMS, type CrmState } from "@/lib/types";
 import { demoOps } from "@/lib/demo-ops";
@@ -33,4 +34,6 @@ export const seedState: CrmState = {
   payments: demoOps.payments,
   events: demoOps.events,
   photos: demoOps.photos,
+  calendarAccounts: structuredClone(seedCalendarAccounts),
+  calendarShares: structuredClone(seedCalendarShares),
 };
