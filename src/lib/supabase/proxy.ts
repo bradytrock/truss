@@ -41,7 +41,10 @@ export async function updateSession(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isAuthRoute =
-    path.startsWith("/login") || path.startsWith("/signup") || path.startsWith("/auth");
+    path.startsWith("/login") ||
+    path.startsWith("/signup") ||
+    path.startsWith("/auth") ||
+    path.startsWith("/api/supabase");
 
   if (!signedIn && !isAuthRoute) {
     const url = request.nextUrl.clone();
