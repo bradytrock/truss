@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CreateEventDialog } from "@/components/create-ops-dialogs";
@@ -87,7 +87,6 @@ export default function SchedulePage() {
 
       {crm.events.length === 0 ? (
         <EmptyState
-          icon={<CalendarDays className="size-5" />}
           title="Nothing on the calendar"
           description="Add a site walk, inspection, or OAC so the office and the field share one week."
           action={<Button onClick={() => setCreateDay(today)}>New event</Button>}
@@ -106,7 +105,7 @@ export default function SchedulePage() {
                   type="button"
                   onClick={() => setCreateDay(key)}
                   className={cn(
-                    "mb-2 flex w-full items-baseline justify-between rounded-lg px-2 py-1.5 text-left text-sm hover:bg-muted",
+                    "mb-2 flex w-full items-baseline justify-between px-1.5 py-1 text-left text-sm hover:bg-muted",
                     isToday && "bg-primary/10 hover:bg-primary/15"
                   )}
                 >
@@ -120,7 +119,7 @@ export default function SchedulePage() {
                     <button
                       type="button"
                       onClick={() => setCreateDay(key)}
-                      className="w-full rounded-lg border border-dashed px-2 py-6 text-xs text-muted-foreground hover:bg-muted/50"
+                      className="w-full border border-dashed px-2 py-6 text-xs text-muted-foreground hover:bg-muted/50"
                     >
                       Add
                     </button>

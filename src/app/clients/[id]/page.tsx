@@ -21,7 +21,6 @@ export default function ClientDetailPage() {
   if (!client) {
     return (
       <EmptyState
-        icon={<span className="text-sm font-medium">?</span>}
         title="Client not found"
         description="It may have been removed when demo data was reset."
         action={
@@ -51,7 +50,7 @@ export default function ClientDetailPage() {
         <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
           Company
         </p>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">{client.name}</h1>
+        <h1 className="font-heading text-[1.85rem] leading-[1.1] font-medium">{client.name}</h1>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <TypeBadge type={client.type} />
           <span className="text-sm text-muted-foreground">

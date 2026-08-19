@@ -14,7 +14,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { CalendarClock, GripVertical, MapPin } from "lucide-react";
+import { GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -31,12 +31,12 @@ import {
 import { cn } from "@/lib/utils";
 
 const columnAccent: Record<PipelineStage, string> = {
-  pursuing: "bg-sky-500",
-  estimating: "bg-amber-500",
-  bid_submitted: "bg-violet-500",
-  interview: "bg-orange-500",
-  awarded: "bg-emerald-500",
-  lost: "bg-zinc-400",
+  pursuing: "bg-foreground/25",
+  estimating: "bg-foreground/40",
+  bid_submitted: "bg-primary",
+  interview: "bg-primary",
+  awarded: "bg-foreground",
+  lost: "bg-foreground/15",
 };
 
 export function PipelineBoard({ query }: { query: string }) {
@@ -100,7 +100,6 @@ export function PipelineBoard({ query }: { query: string }) {
   if (filtered.length === 0) {
     return (
       <EmptyState
-        icon={<CalendarClock className="size-5" />}
         title={query ? "No pursuits match that search" : "Pipeline is empty"}
         description={
           query
@@ -174,8 +173,8 @@ function PipelineColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex w-[280px] shrink-0 flex-col rounded-xl border bg-muted/40",
-        isOver && "ring-2 ring-primary/40"
+        "flex w-[272px] shrink-0 flex-col rounded-md border bg-card",
+        isOver && "border-primary"
       )}
     >
       <div className="border-b px-3 py-2.5">
@@ -213,9 +212,9 @@ function OpportunityCard({
       ref={setNodeRef}
       size="sm"
       className={cn(
-        "bg-card shadow-none ring-foreground/8",
-        isDragging && !overlay && "opacity-40",
-        overlay && "w-[264px] rotate-1 shadow-lg"
+          "bg-card shadow-none",
+          isDragging && !overlay && "opacity-40",
+          overlay && "w-[248px] shadow-md"
       )}
     >
       <CardContent className="space-y-2">
@@ -240,26 +239,22 @@ function OpportunityCard({
           </div>
         </div>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-sm font-semibold tabular-nums">
+          <span className="font-heading text-sm font-medium tabular-nums">
             {formatCurrency(opportunity.value)}
           </span>
           <TypeBadge type={opportunity.projectType} />
         </div>
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span className="inline-flex min-w-0 items-center gap-1 truncate">
-            <MapPin className="size-3 shrink-0" />
-            <span className="truncate">{opportunity.location}</span>
-          </span>
+          <span className="min-w-0 truncate">{opportunity.location}</span>
           {opportunity.bidDueAt ? (
             <span
               className={cn(
-                "inline-flex shrink-0 items-center gap-1 tabular-nums",
+                "shrink-0 tabular-nums",
                 dueIn !== null && dueIn <= 3 && dueIn >= 0 && "font-medium text-destructive",
                 dueIn !== null && dueIn < 0 && opportunity.stage !== "awarded" && opportunity.stage !== "lost"
                   && "text-destructive"
               )}
             >
-              <CalendarClock className="size-3" />
               {dueIn === 0
                 ? "Due today"
                 : dueIn === 1

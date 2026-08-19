@@ -45,7 +45,6 @@ export default function EstimateDetailPage() {
   if (!estimate) {
     return (
       <EmptyState
-        icon={<span className="text-sm font-medium">?</span>}
         title="Estimate not found"
         description="It may have been removed when demo data was reset."
         action={
@@ -75,7 +74,7 @@ export default function EstimateDetailPage() {
           <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
             {estimate.number}
           </p>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight text-balance">
+          <h1 className="font-heading text-[1.85rem] leading-[1.1] font-medium text-balance">
             {estimate.name}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">

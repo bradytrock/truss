@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -101,7 +100,6 @@ export default function EstimatesPage() {
 
       {rows.length === 0 ? (
         <EmptyState
-          icon={<FileText className="size-5" />}
           title={query || status !== "all" ? "No estimates match these filters" : "No estimates yet"}
           description={
             query || status !== "all"
@@ -111,7 +109,7 @@ export default function EstimatesPage() {
           action={<Button onClick={() => setCreate(true)}>New estimate</Button>}
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="overflow-hidden rounded-md border bg-card">
           <Table>
             <TableHeader>
               <TableRow>

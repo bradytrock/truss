@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { BarChart3 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -12,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
+import { EmptyState, ErrorBanner, LoadingScreen, Metric, MetricStrip, PageHeader } from "@/components/page-chrome";
 import { JobStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency, formatCurrencyFull, formatRelative } from "@/lib/format";
@@ -34,7 +33,6 @@ export default function ReportsPage() {
   if (!viewer || !canViewReports(viewer.role)) {
     return (
       <EmptyState
-        icon={<BarChart3 className="size-5" />}
         title="Reports are restricted"
         description="Project managers and field seats work from their own jobs. Company admin, business development, and team leads run reports."
         action={
@@ -69,20 +67,20 @@ export default function ReportsPage() {
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi label="Open jobs" value={String(report.openJobs.length)} hint="Precon, in progress, punch" />
-        <Kpi
+      <MetricStrip className="sm:grid-cols-2 xl:grid-cols-4">
+        <Metric label="Open jobs" value={String(report.openJobs.length)} hint="Precon, in progress, punch" />
+        <Metric
           label={`Closed jobs ${report.year}`}
           value={String(report.closedYtd.length)}
           hint="Substantial completion this year"
         />
-        <Kpi
+        <Metric
           label="Referral partners"
           value={String(report.referralByPm.reduce((sum, row) => sum + row.referralPartners, 0))}
           hint="In project managers’ books"
         />
-        <Kpi label={`YTD revenue`} value={formatCurrency(report.ytdRevenue)} hint="Payments received this year" />
-      </div>
+        <Metric label={`YTD revenue`} value={formatCurrency(report.ytdRevenue)} hint="Payments received this year" />
+      </MetricStrip>
 
       <Card>
         <CardHeader className="border-b">
@@ -198,14 +196,3 @@ export default function ReportsPage() {
   );
 }
 
-function Kpi({ label, value, hint }: { label: string; value: string; hint: string }) {
-  return (
-    <Card size="sm">
-      <CardHeader>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <CardTitle className="text-xl tabular-nums">{value}</CardTitle>
-        <CardDescription>{hint}</CardDescription>
-      </CardHeader>
-    </Card>
-  );
-}

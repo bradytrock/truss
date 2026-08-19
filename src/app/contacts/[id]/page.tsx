@@ -22,7 +22,6 @@ export default function ContactDetailPage() {
   if (!contact) {
     return (
       <EmptyState
-        icon={<span className="text-sm font-medium">?</span>}
         title="Contact not in this book"
         description="This person is outside your seat’s access. A team lead can Login As the owner, or a company admin can open the full book."
         action={
@@ -45,7 +44,7 @@ export default function ContactDetailPage() {
         <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
           Contact
         </p>
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">{contact.name}</h1>
+        <h1 className="font-heading text-[1.85rem] leading-[1.1] font-medium">{contact.name}</h1>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="text-sm text-muted-foreground">{contact.title}</span>
           {contact.isReferralPartner ? <Badge variant="secondary">Referral partner</Badge> : null}

@@ -39,7 +39,6 @@ export default function InvoiceDetailPage() {
   if (!invoice) {
     return (
       <EmptyState
-        icon={<span className="text-sm font-medium">?</span>}
         title="Invoice not found"
         description="It may have been removed when demo data was reset."
         action={
@@ -69,7 +68,7 @@ export default function InvoiceDetailPage() {
           <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
             {invoice.number}
           </p>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight text-balance">
+          <h1 className="font-heading text-[1.85rem] leading-[1.1] font-medium text-balance">
             {invoice.name}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">

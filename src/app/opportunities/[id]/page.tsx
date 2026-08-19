@@ -40,7 +40,6 @@ export default function OpportunityDetailPage() {
   if (!opportunity) {
     return (
       <EmptyState
-        icon={<span className="text-sm font-medium">?</span>}
         title="Pursuit not found"
         description="It may have been removed when demo data was reset."
         action={
@@ -83,7 +82,7 @@ export default function OpportunityDetailPage() {
           <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
             Pursuit
           </p>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight text-balance">
+          <h1 className="font-heading text-[1.85rem] leading-[1.1] font-medium text-balance">
             {opportunity.name}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -103,7 +102,7 @@ export default function OpportunityDetailPage() {
           </div>
         </div>
         <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-          <p className="text-2xl font-semibold tabular-nums">
+          <p className="font-heading text-[1.85rem] leading-none font-medium tabular-nums">
             {formatCurrencyFull(opportunity.value)}
           </p>
           <Select
@@ -134,8 +133,8 @@ export default function OpportunityDetailPage() {
         <p
           className={
             due !== null && due <= 3
-              ? "rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-              : "rounded-lg border bg-muted/50 px-3 py-2 text-sm text-muted-foreground"
+              ? "border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+              : "border bg-muted/50 px-3 py-2 text-sm text-muted-foreground"
           }
         >
           Bid due {formatDate(opportunity.bidDueAt)}

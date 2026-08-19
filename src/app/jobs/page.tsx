@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Briefcase } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -93,7 +92,6 @@ export default function JobsPage() {
 
       {rows.length === 0 ? (
         <EmptyState
-          icon={<Briefcase className="size-5" />}
           title={query || status !== "all" ? "No jobs match these filters" : "No jobs yet"}
           description={
             query || status !== "all"
@@ -102,7 +100,7 @@ export default function JobsPage() {
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="overflow-hidden rounded-md border bg-card">
           <Table>
             <TableHeader>
               <TableRow>

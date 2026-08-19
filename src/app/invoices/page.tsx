@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -105,7 +104,6 @@ export default function InvoicesPage() {
 
       {rows.length === 0 ? (
         <EmptyState
-          icon={<Receipt className="size-5" />}
           title={query || status !== "all" ? "No invoices match these filters" : "No invoices yet"}
           description={
             query || status !== "all"
@@ -115,7 +113,7 @@ export default function InvoicesPage() {
           action={<Button onClick={() => setCreate(true)}>New invoice</Button>}
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="overflow-hidden rounded-md border bg-card">
           <Table>
             <TableHeader>
               <TableRow>

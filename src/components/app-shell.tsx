@@ -3,19 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import {
-  BookUser,
-  Briefcase,
-  BarChart3,
-  CalendarDays,
-  FileText,
-  Kanban,
-  LayoutDashboard,
-  Menu,
-  Plus,
-  Receipt,
-  Search,
-} from "lucide-react";
+import { Menu, Plus, Search } from "lucide-react";
 import { useCrm } from "@/lib/crm-store";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -55,17 +43,18 @@ import {
 import { canViewReports } from "@/lib/visibility";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { BrandMark } from "@/components/brand";
 
 function navItems(showReports: boolean) {
   return [
-    { href: "/", label: "Home", icon: LayoutDashboard },
-    { href: "/pipeline", label: "Pipeline", icon: Kanban },
-    { href: "/estimates", label: "Estimates", icon: FileText },
-    { href: "/jobs", label: "Jobs", icon: Briefcase },
-    { href: "/invoices", label: "Invoices", icon: Receipt },
-    { href: "/schedule", label: "Schedule", icon: CalendarDays },
-    { href: "/contacts", label: "Contacts", icon: BookUser },
-    ...(showReports ? [{ href: "/reports", label: "Reports", icon: BarChart3 }] : []),
+    { href: "/", label: "Home" },
+    { href: "/pipeline", label: "Pipeline" },
+    { href: "/estimates", label: "Estimates" },
+    { href: "/jobs", label: "Jobs" },
+    { href: "/invoices", label: "Invoices" },
+    { href: "/schedule", label: "Schedule" },
+    { href: "/contacts", label: "Contacts" },
+    ...(showReports ? [{ href: "/reports", label: "Reports" }] : []),
   ];
 }
 
@@ -78,18 +67,18 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-full">
-      <aside className="hidden w-60 shrink-0 flex-col bg-[#1c1914] text-[#f4efe6] md:flex">
+      <aside className="hidden w-52 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
         <Brand />
         <Nav pathname={pathname} />
-        <div className="mt-auto p-3">
-          <p className="px-2 text-[11px] leading-relaxed text-[#f4efe6]/50">
-            Bid it, send it, bill it, shoot it. Home restoration through job photos.
+        <div className="mt-auto border-t border-sidebar-border px-4 py-3">
+          <p className="text-[10px] tracking-[0.14em] text-sidebar-foreground/35 uppercase">
+            Restoration · remodel
           </p>
         </div>
       </aside>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-72 bg-[#1c1914] p-0 text-[#f4efe6] sm:max-w-72">
+        <SheetContent side="left" className="w-72 bg-sidebar p-0 text-sidebar-foreground sm:max-w-72">
           <SheetHeader className="sr-only">
             <SheetTitle>Navigation</SheetTitle>
           </SheetHeader>
@@ -99,7 +88,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col bg-background">
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-background/90 px-3 backdrop-blur-md sm:px-5">
+        <header className="sticky top-0 z-30 flex h-12 items-center gap-2 border-b bg-background px-3 sm:px-5">
           <Button
             variant="ghost"
             size="icon"
@@ -141,7 +130,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
         <ScopeBanners />
-        <main className="flex-1 p-4 sm:p-6">{children}</main>
+        <main className="flex-1 p-5 sm:p-7">{children}</main>
       </div>
 
       <CreateOpportunityDialog
@@ -175,22 +164,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 function Brand() {
   const { user } = useCrm();
   return (
-    <div className="flex items-center gap-2.5 px-4 py-4">
-      <span className="flex size-8 items-center justify-center rounded-md bg-[#c45c26] text-white">
-        <svg viewBox="0 0 24 24" className="size-4" fill="none" aria-hidden>
-          <path
-            d="M3 19h18M5 19V9l7-5 7 5v10M9 19v-6h6v6"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
-        </svg>
-      </span>
-      <div className="min-w-0">
-        <p className="font-heading text-sm font-semibold tracking-tight">Truss</p>
-        <p className="truncate text-[11px] text-[#f4efe6]/55">{user.company}</p>
-      </div>
+    <div className="border-b border-sidebar-border px-4 py-4">
+      <BrandMark
+        className="inline-flex items-center gap-2 text-sidebar-foreground"
+        markClassName="size-4 text-primary"
+      />
+      <p className="mt-2 truncate pl-6 text-[11px] text-sidebar-foreground/45">{user.company}</p>
     </div>
   );
 }
@@ -199,23 +178,21 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
   const { viewer } = useCrm();
   const items = navItems(Boolean(viewer && canViewReports(viewer.role)));
   return (
-    <nav className="flex flex-col gap-0.5 px-2">
+    <nav className="flex flex-col px-2 py-3">
       {items.map((item) => {
         const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
-        const Icon = item.icon;
         return (
           <Link
             key={item.href}
             href={item.href}
             onClick={onNavigate}
             className={cn(
-              "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+              "border-l-2 px-3 py-[7px] text-[13px] tracking-tight transition-colors",
               active
-                ? "bg-white/10 text-white"
-                : "text-[#f4efe6]/70 hover:bg-white/5 hover:text-white"
+                ? "border-primary bg-white/6 font-medium text-white"
+                : "border-transparent text-sidebar-foreground/58 hover:bg-white/4 hover:text-white"
             )}
           >
-            <Icon className="size-4" />
             {item.label}
           </Link>
         );
@@ -244,11 +221,11 @@ function SearchTrigger() {
     <>
       <Button
         variant="outline"
-        className="h-8 w-full max-w-md justify-start text-muted-foreground"
+        className="h-8 w-full max-w-sm justify-start rounded-md font-normal text-muted-foreground"
         onClick={() => setOpen(true)}
       >
         <Search data-icon="inline-start" />
-        Search pursuits, jobs, contacts
+        Search jobs, people, estimates
         <kbd className="ml-auto hidden rounded border bg-muted px-1.5 py-0.5 font-sans text-[10px] sm:inline">
           ⌘K
         </kbd>
@@ -347,10 +324,10 @@ function ScopeBanners() {
   return (
     <div className="space-y-0">
       {impersonatedStaff ? (
-        <div className="flex flex-col gap-2 border-b bg-amber-50 px-4 py-2 text-sm text-amber-950 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 border-b border-primary/20 bg-primary/8 px-4 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
           <p>
             Logged in as <span className="font-medium">{impersonatedStaff.name}</span>
-            <span className="text-amber-900/80"> · {SEAT_ROLE_LABELS[impersonatedStaff.role]}</span>
+            <span className="text-muted-foreground"> · {SEAT_ROLE_LABELS[impersonatedStaff.role]}</span>
             . You are viewing their jobs and contact book.
           </p>
           <Button size="sm" variant="outline" onClick={stopLoginAs}>
@@ -358,7 +335,7 @@ function ScopeBanners() {
           </Button>
         </div>
       ) : (
-        <p className="border-b bg-muted/40 px-4 py-2 text-xs text-muted-foreground">{scopeLabel}</p>
+        <p className="border-b px-4 py-1.5 text-[11px] text-muted-foreground">{scopeLabel}</p>
       )}
     </div>
   );
@@ -451,7 +428,7 @@ export function RecordProperty({
 }) {
   return (
     <div className="grid gap-1 border-b py-3 last:border-b-0">
-      <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</p>
+      <p className="text-[11px] tracking-wide text-muted-foreground uppercase">{label}</p>
       <div className="text-sm">{children}</div>
     </div>
   );

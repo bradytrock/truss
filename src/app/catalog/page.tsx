@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -34,12 +33,11 @@ export default function CatalogPage() {
 
       {crm.catalog.length === 0 ? (
         <EmptyState
-          icon={<BookOpen className="size-5" />}
           title="Price book is empty"
           description="Reset the Northline demo to load CSI-style items, or connect Supabase and run the second migration."
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="overflow-hidden rounded-md border bg-card">
           <Table>
             <TableHeader>
               <TableRow>

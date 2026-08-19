@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { BookUser } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -92,7 +91,6 @@ export default function ContactsPage() {
 
       {rows.length === 0 ? (
         <EmptyState
-          icon={<BookUser className="size-5" />}
           title={query || filter !== "all" ? "No contacts match these filters" : "No contacts in this book"}
           description={
             query || filter !== "all"
@@ -101,7 +99,7 @@ export default function ContactsPage() {
           }
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="overflow-hidden rounded-md border bg-card">
           <Table>
             <TableHeader>
               <TableRow>

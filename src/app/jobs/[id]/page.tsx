@@ -40,7 +40,6 @@ export default function JobDetailPage() {
   if (!job) {
     return (
       <EmptyState
-        icon={<span className="text-sm font-medium">?</span>}
         title="Job not in this book"
         description="This job belongs to another seat. Team leads can Login As the project manager; company admin sees every job."
         action={
@@ -75,7 +74,7 @@ export default function JobDetailPage() {
           <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
             Job
           </p>
-          <h1 className="font-heading text-2xl font-semibold tracking-tight text-balance">
+          <h1 className="font-heading text-[1.85rem] leading-[1.1] font-medium text-balance">
             {job.name}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -97,7 +96,7 @@ export default function JobDetailPage() {
             </span>
           </div>
         </div>
-        <p className="text-2xl font-semibold tabular-nums">
+        <p className="font-heading text-[1.85rem] leading-none font-medium tabular-nums">
           {formatCurrencyFull(job.contractValue)}
         </p>
       </div>
@@ -139,7 +138,7 @@ export default function JobDetailPage() {
               ) : (
                 <div className="grid gap-3 sm:grid-cols-2">
                   {photos.map((photo) => (
-                    <figure key={photo.id} className="overflow-hidden rounded-lg border">
+                    <figure key={photo.id} className="overflow-hidden border">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={photo.imageUrl}

@@ -1,19 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, type ReactNode } from "react";
-import {
-  ArrowUpRight,
-  Briefcase,
-  CalendarClock,
-  CircleDollarSign,
-  FileText,
-  Receipt,
-  Trophy,
-} from "lucide-react";
+import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
+import { ErrorBanner, LoadingScreen, Metric, MetricStrip, PageHeader } from "@/components/page-chrome";
 import { JobStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import {
@@ -129,56 +120,49 @@ export default function HomePage() {
         }
       />
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi
-          icon={<CircleDollarSign className="size-4" />}
+      <MetricStrip className="sm:grid-cols-2 xl:grid-cols-4">
+        <Metric
           label="Open pipeline"
           value={formatCurrency(stats.pipelineValue)}
-          hint={`${stats.openCount} active pursuits · ${formatCurrency(stats.weighted)} weighted`}
+          hint={`${stats.openCount} open leads · ${formatCurrency(stats.weighted)} weighted`}
         />
-        <Kpi
-          icon={<CalendarClock className="size-4" />}
+        <Metric
           label="Proposals due this week"
           value={String(stats.bidsThisWeek.length)}
           hint={
             stats.bidsThisWeek[0]
               ? `Next: ${[...stats.bidsThisWeek].sort((a, b) => (a.bidDueAt ?? "").localeCompare(b.bidDueAt ?? ""))[0]?.name}`
-              : "No proposal dates in the next seven days"
+              : "None in the next seven days"
           }
         />
-        <Kpi
-          icon={<Briefcase className="size-4" />}
+        <Metric
           label="Work in the field"
           value={formatCurrency(stats.activeValue)}
-          hint={`${stats.activeJobs.length} jobs in precon, construction, or punch`}
+          hint={`${stats.activeJobs.length} jobs in precon, production, or punch`}
         />
-        <Kpi
-          icon={<Trophy className="size-4" />}
+        <Metric
           label="Win rate"
           value={`${stats.winRate}%`}
-          hint={`${stats.awardedCount} awarded / ${stats.closedCount} closed pursuits`}
+          hint={`${stats.awardedCount} sold / ${stats.closedCount} closed`}
         />
-      </section>
+      </MetricStrip>
 
-      <section className="grid gap-3 sm:grid-cols-3">
-        <Kpi
-          icon={<FileText className="size-4" />}
+      <MetricStrip className="sm:grid-cols-3">
+        <Metric
           label="Proposals out"
           value={String(stats.proposals.length)}
           hint={
             stats.proposals.length
-              ? `${formatCurrency(stats.proposalValue)} sitting with homeowners`
-              : "No sent proposals waiting on a decision"
+              ? `${formatCurrency(stats.proposalValue)} with homeowners`
+              : "Nothing waiting on a signature"
           }
         />
-        <Kpi
-          icon={<Receipt className="size-4" />}
+        <Metric
           label="AR outstanding"
           value={formatCurrency(stats.ar)}
-          hint="Sent, partial, and overdue invoices"
+          hint="Sent, partial, and overdue"
         />
-        <Kpi
-          icon={<CalendarClock className="size-4" />}
+        <Metric
           label="On today's calendar"
           value={String(stats.todayEvents.length)}
           hint={
@@ -187,7 +171,7 @@ export default function HomePage() {
               : "Nothing scheduled today"
           }
         />
-      </section>
+      </MetricStrip>
 
       <section className="grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
@@ -207,20 +191,16 @@ export default function HomePage() {
                     {formatCurrency(item.value)}
                   </span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                <div className="h-1.5 overflow-hidden bg-muted">
                   <div
-                    className="h-full rounded-full bg-primary"
+                    className="h-full bg-foreground"
                     style={{ width: `${Math.max(4, (item.value / stats.maxStage) * 100)}%` }}
                   />
                 </div>
               </div>
             ))}
-            <Link
-              href="/pipeline"
-              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-            >
-              Open pipeline board
-              <ArrowUpRight className="size-3.5" />
+            <Link href="/pipeline" className="text-sm font-medium text-primary hover:underline">
+              Open pipeline board →
             </Link>
           </CardContent>
         </Card>
@@ -344,7 +324,7 @@ export default function HomePage() {
 
       <section>
         <div className="mb-3 flex items-end justify-between">
-          <h2 className="text-base font-medium">Active jobs</h2>
+          <h2 className="font-heading text-lg font-medium tracking-tight">Active jobs</h2>
           <Link href="/jobs" className="text-sm text-primary hover:underline">
             All jobs
           </Link>
@@ -363,7 +343,7 @@ export default function HomePage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex items-center justify-between text-sm">
-                  <span className="font-semibold tabular-nums">
+                  <span className="font-heading text-base font-medium tabular-nums">
                     {formatCurrencyFull(job.contractValue)}
                   </span>
                   <span className="text-xs text-muted-foreground">{job.projectManager}</span>
@@ -377,27 +357,3 @@ export default function HomePage() {
   );
 }
 
-function Kpi({
-  icon,
-  label,
-  value,
-  hint,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  hint: string;
-}) {
-  return (
-    <Card size="sm">
-      <CardHeader>
-        <CardDescription className="flex items-center gap-2">
-          {icon}
-          {label}
-        </CardDescription>
-        <CardTitle className="text-2xl tabular-nums">{value}</CardTitle>
-      </CardHeader>
-      <CardContent className="text-xs text-muted-foreground">{hint}</CardContent>
-    </Card>
-  );
-}
