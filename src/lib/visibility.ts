@@ -9,7 +9,8 @@ import { bdOpportunityIds, jobInBdBook, referralPartnerIds } from "@/lib/bd";
 
 export type AccessScope = "company" | "bd" | "team" | "own";
 
-export function accessScope(role: SeatRole): AccessScope {
+export function accessScope(role: SeatRole, restricted = false): AccessScope {
+  if (restricted) return "own";
   if (role === "company_admin" || role === "accountant") return "company";
   if (role === "business_development") return "bd";
   if (role === "team_lead" || role === "team_admin") return "team";
@@ -30,7 +31,8 @@ export function canViewAccounting(role: SeatRole) {
   return role === "company_admin" || role === "accountant";
 }
 
-export function canManageSettings(role: SeatRole) {
+export function canManageSettings(role: SeatRole, member?: StaffMember) {
+  if (member?.restricted || member?.locked) return false;
   return role === "company_admin";
 }
 
@@ -44,7 +46,7 @@ export function canPostTrainingBulletin(role: SeatRole) {
 
 export function assignableStaff(viewer: StaffMember | undefined, staff: StaffMember[]) {
   if (!viewer) return staff;
-  const scope = accessScope(viewer.role);
+  const scope = accessScope(viewer.role, viewer.restricted);
   if (scope === "company" || scope === "bd") return staff;
   if (scope === "team") {
     return staff.filter((member) => member.teamId === viewer.teamId || member.id === viewer.id);
@@ -53,6 +55,7 @@ export function assignableStaff(viewer: StaffMember | undefined, staff: StaffMem
 }
 
 export function canLoginAs(viewer: StaffMember) {
+  if (viewer.restricted || viewer.locked) return false;
   return (
     viewer.role === "company_admin" ||
     viewer.role === "team_lead" ||
@@ -61,7 +64,9 @@ export function canLoginAs(viewer: StaffMember) {
 }
 
 export function loginAsTargets(viewer: StaffMember, staff: StaffMember[]) {
-  const real = staff.filter((member) => !isNorthlineDemoName(member.name));
+  const real = staff.filter(
+    (member) => !isNorthlineDemoName(member.name) && !member.locked,
+  );
   if (viewer.role === "company_admin") {
     return real.filter((member) => member.id !== viewer.id);
   }
@@ -82,7 +87,7 @@ export function teamMemberNames(teamId: string | null, staff: StaffMember[]) {
 }
 
 function visibleStaffIdsForScope(effective: StaffMember, staff: StaffMember[]) {
-  const scope = accessScope(effective.role);
+  const scope = accessScope(effective.role, effective.restricted);
   if (scope === "company") {
     return new Set(staff.map((member) => member.id));
   }
@@ -95,7 +100,7 @@ export function scopeBook(
   effective: StaffMember | undefined
 ): CrmState {
   if (!effective) return state;
-  const scope = accessScope(effective.role);
+  const scope = accessScope(effective.role, effective.restricted);
   if (scope === "company") return state;
 
   const staffIds = visibleStaffIdsForScope(effective, state.staff);
@@ -225,7 +230,7 @@ export function scopeDescription(
   if (impersonating) {
     return `Logged in as ${effective.name} (${SEAT_SHORT[effective.role]}). Showing that seat’s book.`;
   }
-  const scope = accessScope(viewer.role);
+  const scope = accessScope(viewer.role, viewer.restricted);
   if (scope === "company") {
     if (effective.role === "accountant") {
       return "Accounting — every job’s books, receipts, and the QuickBooks entry queue.";

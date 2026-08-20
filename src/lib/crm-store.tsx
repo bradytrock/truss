@@ -29,6 +29,17 @@ import {
   fillEstimateLine,
   invoiceLinesFromEstimate,
 } from "@/lib/estimate-totals";
+import {
+  defaultTitleForRole,
+  inviteExpiry,
+  inviteSignupUrl,
+  isDuplicateStaffEmail,
+  isMissingAccountManagement,
+  missingAccountManagementMessage,
+  newInviteToken,
+  normalizeSeatEmail,
+  wouldLeaveNoAdmin,
+} from "@/lib/accounts";
 import { isPublicAppPath } from "@/lib/auth-paths";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -118,7 +129,7 @@ import {
 import { formatJobSite } from "@/lib/leads";
 import { fillPayment, fileToDataUrl } from "@/lib/job-financials";
 import { resolveCustomerName, type CustomerRecord } from "@/lib/parties";
-import { canLoginAs, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
+import { canLoginAs, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 
 const emptyState: CrmState = {
   staff: [],
@@ -418,6 +429,18 @@ type CrmContextValue = CrmState & {
   company: CompanySettings;
   canEditCompany: boolean;
   updateCompany: (settings: CompanySettings) => Promise<boolean>;
+  inviteStaff: (input: {
+    name: string;
+    email: string;
+    role: SeatRole;
+    title?: string;
+  }) => Promise<{ member: StaffMember; inviteUrl: string | null } | null>;
+  updateStaffAccount: (
+    id: string,
+    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "locked" | "restricted">>,
+  ) => Promise<boolean>;
+  refreshStaffInvite: (id: string) => Promise<string | null>;
+  removeStaff: (id: string) => Promise<boolean>;
   moveOpportunity: (
     id: string,
     stage: PipelineStage,
@@ -678,6 +701,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       const matched = ensured.matched;
       const roster = ensured.roster;
+      if (matched?.locked) {
+        await supabase.auth.signOut();
+        setHydrateError(null);
+        setHydrated(true);
+        toast.error("This account is locked. Ask a company admin to unlock it.");
+        router.replace("/login?error=" + encodeURIComponent("This account is locked. Ask a company admin to unlock it."));
+        return;
+      }
       const role = (profile.role as SeatRole | undefined) ?? matched?.role ?? "company_admin";
       setCompanySettings(settings);
       setUser({
@@ -781,6 +812,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       "calendar_shares",
       "training_progress",
       "training_bulletins",
+      "account_invites",
     ] as const;
     let timer: number | undefined;
     const channel = supabase.channel(`truss-company-${user.companyId}`);
@@ -3392,7 +3424,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [user.companyId]
   );
 
-  const canEditCompany = viewer?.role === "company_admin";
+  const canEditCompany = Boolean(viewer && canManageSettings(viewer.role, viewer));
 
   const updateCompany = useCallback(
     async (next: CompanySettings) => {
@@ -3462,6 +3494,296 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [canEditCompany, user.companyId]
   );
 
+  const persistStaffFields = useCallback(
+    async (
+      member: StaffMember,
+      extras?: { inviteToken?: string | null; inviteExpiresAt?: string | null },
+    ) => {
+      if (!isSupabaseConfigured() || !user.companyId || user.companyId === "local") return true;
+      const supabase = createClient();
+      const inviteToken = extras?.inviteToken ?? member.inviteToken;
+      const inviteExpiresAt = extras?.inviteExpiresAt ?? member.inviteExpiresAt;
+      const { error } = await supabase.from("team_members").upsert({
+        id: member.id,
+        company_id: user.companyId,
+        name: member.name,
+        title: member.title,
+        role: member.role,
+        team_id: member.teamId,
+        initials: member.initials || initialsFromName(member.name),
+        email: member.email,
+        locked: member.locked,
+        restricted: member.restricted,
+        invite_expires_at: inviteExpiresAt,
+      });
+      if (error) {
+        toast.error("Could not save teammate", {
+          description: isDuplicateStaffEmail(error)
+            ? "That email already belongs to someone on this company."
+            : isMissingAccountManagement(error)
+              ? missingAccountManagementMessage()
+              : error.message,
+        });
+        return false;
+      }
+      if (inviteToken && member.email) {
+        const { error: inviteError } = await supabase.from("account_invites").upsert(
+          {
+            token: inviteToken,
+            company_id: user.companyId,
+            staff_id: member.id,
+            email: member.email,
+            expires_at: inviteExpiresAt ?? inviteExpiry(),
+            created_by: user.id || null,
+          },
+          { onConflict: "staff_id" },
+        );
+        if (inviteError) {
+          toast.error("Teammate saved, invite link did not", {
+            description: isMissingAccountManagement(inviteError)
+              ? missingAccountManagementMessage()
+              : inviteError.message,
+          });
+          return false;
+        }
+      } else {
+        const { error: clearInvite } = await supabase.from("account_invites").delete().eq("staff_id", member.id);
+        if (clearInvite && !isMissingAccountManagement(clearInvite)) {
+          toast.error("Could not clear the old invite", { description: clearInvite.message });
+        }
+      }
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ role: member.role, full_name: member.name, title: member.title })
+        .eq("staff_id", member.id);
+      if (profileError && !isMissingAccountManagement(profileError) && profileError.code !== "PGRST116") {
+        toast.error("Seat saved, login role did not update", { description: profileError.message });
+      }
+      return true;
+    },
+    [user.companyId, user.id],
+  );
+
+  const inviteStaff = useCallback(
+    async (input: { name: string; email: string; role: SeatRole; title?: string }) => {
+      if (!canEditCompany) {
+        toast.error("Only a company admin can add people.");
+        return null;
+      }
+      const name = input.name.trim();
+      const email = normalizeSeatEmail(input.email);
+      if (!name) {
+        toast.error("Name is required.");
+        return null;
+      }
+      if (email && state.staff.some((member) => normalizeSeatEmail(member.email) === email)) {
+        toast.error("That email already belongs to someone on this company.");
+        return null;
+      }
+      const token = email ? newInviteToken() : null;
+      const expires = email ? inviteExpiry() : null;
+      const member: StaffMember = {
+        id: crypto.randomUUID(),
+        name,
+        title: input.title?.trim() || defaultTitleForRole(input.role),
+        role: input.role,
+        teamId: null,
+        initials: initialsFromName(name),
+        email,
+        locked: false,
+        restricted: false,
+        inviteToken: token,
+        inviteExpiresAt: expires,
+      };
+      const ok = await persistStaffFields(member, { inviteToken: token, inviteExpiresAt: expires });
+      if (!ok) return null;
+      setState((current) => ({ ...current, staff: [...current.staff, member] }));
+      const inviteUrl = token ? inviteSignupUrl(window.location.origin, token) : null;
+      toast.success(email ? `Invite ready for ${name}` : `${name} added to the roster`);
+      return { member, inviteUrl };
+    },
+    [canEditCompany, persistStaffFields, state.staff],
+  );
+
+  const updateStaffAccount = useCallback(
+    async (
+      id: string,
+      patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "locked" | "restricted">>,
+    ) => {
+      if (!canEditCompany) {
+        toast.error("Only a company admin can change accounts.");
+        return false;
+      }
+      const current = state.staff.find((member) => member.id === id);
+      if (!current) return false;
+      const next: StaffMember = {
+        ...current,
+        ...patch,
+        name: patch.name !== undefined ? patch.name.trim() : current.name,
+        title: patch.title !== undefined ? patch.title.trim() : current.title,
+        email: patch.email !== undefined ? normalizeSeatEmail(patch.email) : current.email,
+      };
+      if (!next.name) {
+        toast.error("Name is required.");
+        return false;
+      }
+      if (wouldLeaveNoAdmin(state.staff, id, next)) {
+        toast.error("Keep at least one unlocked company admin.");
+        return false;
+      }
+      if (id === viewer?.id && (next.locked || Boolean(patch.restricted && next.restricted))) {
+        toast.error("You cannot lock or restrict your own seat.");
+        return false;
+      }
+      if (
+        next.email &&
+        state.staff.some((member) => member.id !== id && normalizeSeatEmail(member.email) === next.email)
+      ) {
+        toast.error("That email already belongs to someone on this company.");
+        return false;
+      }
+      if (!next.email) {
+        next.inviteToken = null;
+        next.inviteExpiresAt = null;
+      }
+      const ok = await persistStaffFields(next);
+      if (!ok) return false;
+      setState((currentBook) => ({
+        ...currentBook,
+        staff: currentBook.staff.map((member) => (member.id === id ? next : member)),
+      }));
+      if (id === user.staffId) {
+        setUser((currentUser) => ({
+          ...currentUser,
+          name: next.name,
+          title: next.title,
+          role: next.role,
+        }));
+      }
+      toast.success(`${next.name} updated`);
+      return true;
+    },
+    [canEditCompany, persistStaffFields, state.staff, user.staffId, viewer?.id],
+  );
+
+  const refreshStaffInvite = useCallback(
+    async (id: string) => {
+      if (!canEditCompany) {
+        toast.error("Only a company admin can send invites.");
+        return null;
+      }
+      const current = state.staff.find((member) => member.id === id);
+      if (!current) return null;
+      if (!current.email) {
+        toast.error("Add an email before sending an invite.");
+        return null;
+      }
+      if (current.locked) {
+        toast.error("Unlock this account before sending an invite.");
+        return null;
+      }
+      const token = newInviteToken();
+      const expires = inviteExpiry();
+      const next: StaffMember = { ...current, inviteToken: token, inviteExpiresAt: expires };
+      const ok = await persistStaffFields(next, { inviteToken: token, inviteExpiresAt: expires });
+      if (!ok) return null;
+      setState((currentBook) => ({
+        ...currentBook,
+        staff: currentBook.staff.map((member) => (member.id === id ? next : member)),
+      }));
+      toast.success(`Invite refreshed for ${current.name}`);
+      return inviteSignupUrl(window.location.origin, token);
+    },
+    [canEditCompany, persistStaffFields, state.staff],
+  );
+
+  const removeStaff = useCallback(
+    async (id: string) => {
+      if (!canEditCompany) {
+        toast.error("Only a company admin can remove people.");
+        return false;
+      }
+      const current = state.staff.find((member) => member.id === id);
+      if (!current) return false;
+      if (id === viewer?.id || id === user.staffId) {
+        toast.error("You cannot remove your own seat.");
+        return false;
+      }
+      if (wouldLeaveNoAdmin(state.staff, id, { role: "project_manager", locked: true, restricted: true })) {
+        toast.error("Keep at least one unlocked company admin.");
+        return false;
+      }
+      const fallbackId = viewer?.id || user.staffId;
+      const applyLocalRemove = () => {
+        setState((currentBook) => ({
+          ...currentBook,
+          staff: currentBook.staff.filter((member) => member.id !== id),
+          contacts: currentBook.contacts.map((contact) =>
+            contact.ownerStaffId === id ? { ...contact, ownerStaffId: fallbackId } : contact,
+          ),
+          opportunities: currentBook.opportunities.map((opportunity) => ({
+            ...opportunity,
+            ownerStaffId: opportunity.ownerStaffId === id ? fallbackId : opportunity.ownerStaffId,
+            originatorStaffId:
+              opportunity.originatorStaffId === id ? fallbackId : opportunity.originatorStaffId,
+          })),
+          jobs: currentBook.jobs.map((job) =>
+            job.ownerStaffId === id ? { ...job, ownerStaffId: fallbackId } : job,
+          ),
+          teams: currentBook.teams.map((team) =>
+            team.leadStaffId === id ? { ...team, leadStaffId: fallbackId } : team,
+          ),
+        }));
+      };
+      if (!isSupabaseConfigured() || !user.companyId || user.companyId === "local") {
+        applyLocalRemove();
+        toast.success(`${current.name} removed`);
+        return true;
+      }
+      const supabase = createClient();
+      const reassign = async (table: "contacts" | "opportunities" | "jobs" | "teams", column: string) => {
+        const { error } = await supabase
+          .from(table)
+          .update({ [column]: fallbackId } as never)
+          .eq("company_id", user.companyId)
+          .eq(column, id);
+        if (error && !isMissingAccountManagement(error) && error.code !== "PGRST204") {
+          toast.error(`Could not reassign ${table}`, { description: error.message });
+        }
+      };
+      await reassign("contacts", "owner_staff_id");
+      await reassign("opportunities", "owner_staff_id");
+      await reassign("opportunities", "originator_staff_id");
+      await reassign("jobs", "owner_staff_id");
+      await reassign("teams", "lead_staff_id");
+      await supabase.from("account_invites").delete().eq("staff_id", id);
+      const { error: profileError } = await supabase.from("profiles").delete().eq("staff_id", id);
+      if (profileError && !isMissingAccountManagement(profileError)) {
+        const locked: StaffMember = { ...current, locked: true };
+        const ok = await persistStaffFields(locked);
+        if (ok) {
+          setState((currentBook) => ({
+            ...currentBook,
+            staff: currentBook.staff.map((member) => (member.id === id ? locked : member)),
+          }));
+        }
+        toast.error("Could not remove their login, so the seat was locked instead", {
+          description: profileError.message,
+        });
+        return false;
+      }
+      const { error } = await supabase.from("team_members").delete().eq("id", id);
+      if (error) {
+        toast.error("Could not remove teammate", { description: error.message });
+        return false;
+      }
+      applyLocalRemove();
+      toast.success(`${current.name} removed`);
+      return true;
+    },
+    [canEditCompany, persistStaffFields, state.staff, user.companyId, user.staffId, viewer?.id],
+  );
+
   const resetDemo = useCallback(async () => {
     if (!isSupabaseConfigured() || !user.companyId || isUnsignedDemo(user)) {
       toast.error("Sign in to clear company data.");
@@ -3516,6 +3838,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       company: companySettings,
       canEditCompany,
       updateCompany,
+      inviteStaff,
+      updateStaffAccount,
+      refreshStaffInvite,
+      removeStaff,
       moveOpportunity,
       updateOpportunity,
       updateJob,
@@ -3587,6 +3913,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       companySettings,
       canEditCompany,
       updateCompany,
+      inviteStaff,
+      updateStaffAccount,
+      refreshStaffInvite,
+      removeStaff,
       moveOpportunity,
       updateOpportunity,
       updateJob,

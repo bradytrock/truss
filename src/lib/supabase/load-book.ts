@@ -128,14 +128,31 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
         role: inferRole(row.title),
         teamId: row.team_id ?? null,
         initials: initialsFromName(row.name),
+        email: "",
+        locked: false,
+        restricted: false,
+        inviteExpiresAt: null,
+        inviteToken: null,
       };
     }
+  });
+
+  const invitesRes = await supabase.from("account_invites").select("staff_id, token, expires_at").eq("company_id", companyId);
+  const invites = invitesRes.error ? [] : (invitesRes.data ?? []);
+  const staffWithInvites = staff.map((member) => {
+    const invite = invites.find((row) => row.staff_id === member.id);
+    if (!invite) return member;
+    return {
+      ...member,
+      inviteToken: invite.token,
+      inviteExpiresAt: invite.expires_at,
+    };
   });
 
   const teams = missingTeams ? [] : (teamsRes.data ?? []).map(mapTeam);
 
   const state: CrmState = {
-    staff,
+    staff: staffWithInvites,
     teams: teams.length > 0 ? teams : [],
     clients: (clientsRes.data ?? []).map(mapClient),
     contacts: (contactsRes.data ?? []).map((row) => {

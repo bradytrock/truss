@@ -31,6 +31,11 @@ export function staffMemberFromProfile(input: {
     role: input.role,
     teamId: null,
     initials: input.initials || initialsFromName(input.name),
+    email: "",
+    locked: false,
+    restricted: false,
+    inviteExpiresAt: null,
+    inviteToken: null,
   };
 }
 

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorBanner, LoadingScreen, PageHeader, EmptyState } from "@/components/page-chrome";
+import { PeopleSettings } from "@/components/people-settings";
 import { useCrm } from "@/lib/crm-store";
 import type { CompanySettings } from "@/lib/types";
 import { canManageSettings } from "@/lib/visibility";
@@ -23,11 +24,11 @@ export default function SettingsPage() {
 
   if (!crm.hydrated) return <LoadingScreen />;
 
-  if (!crm.viewer || !canManageSettings(crm.viewer.role)) {
+  if (!crm.viewer || !canManageSettings(crm.viewer.role, crm.viewer)) {
     return (
       <EmptyState
         title="Settings are restricted"
-        description="Only a company admin can change the business name, phone, and office address."
+        description="Only a company admin can change the business name, invite people, or lock accounts."
         action={
           <Link href="/" className="text-sm font-medium text-primary hover:underline">
             Back to home
@@ -60,7 +61,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Company"
         title="Settings"
-        description="The name, phone, and address that appear on proposals and invoices. This is the contractor, not a homeowner."
+        description="Business letterhead, then the people who can sign in. Invite links join this company — they do not open a second one."
       />
 
       <form onSubmit={onSubmit} className="max-w-2xl space-y-4">
@@ -174,6 +175,17 @@ export default function SettingsPage() {
           )}
         </div>
       </form>
+
+      <div className="max-w-4xl">
+        <PeopleSettings
+          staff={crm.book.staff}
+          viewerId={crm.viewer.id}
+          onInvite={crm.inviteStaff}
+          onUpdate={crm.updateStaffAccount}
+          onRefreshInvite={crm.refreshStaffInvite}
+          onRemove={crm.removeStaff}
+        />
+      </div>
     </div>
   );
 }

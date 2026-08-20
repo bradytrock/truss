@@ -11,7 +11,7 @@ export function yearOf(value: string | null | undefined) {
 
 export function buildReports(state: CrmState, viewer: StaffMember, now = new Date()) {
   const year = now.getFullYear();
-  const scope = accessScope(viewer.role);
+  const scope = accessScope(viewer.role, viewer.restricted);
   const staffIds =
     scope === "team" ? teamMemberIds(viewer.teamId, state.staff) : new Set(state.staff.map((s) => s.id));
   const names = new Set(

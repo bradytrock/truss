@@ -107,6 +107,10 @@ export type Database = {
           role: Database["public"]["Enums"]["seat_role"];
           team_id: string | null;
           initials: string;
+          email: string;
+          locked: boolean;
+          restricted: boolean;
+          invite_expires_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -117,9 +121,37 @@ export type Database = {
           role?: Database["public"]["Enums"]["seat_role"];
           team_id?: string | null;
           initials?: string;
+          email?: string;
+          locked?: boolean;
+          restricted?: boolean;
+          invite_expires_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["team_members"]["Insert"]>;
+        Relationships: [];
+      };
+      account_invites: {
+        Row: {
+          id: string;
+          company_id: string;
+          staff_id: string;
+          email: string;
+          token: string;
+          expires_at: string;
+          created_at: string;
+          created_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          staff_id: string;
+          email: string;
+          token: string;
+          expires_at: string;
+          created_at?: string;
+          created_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["account_invites"]["Insert"]>;
         Relationships: [];
       };
       clients: {
@@ -800,6 +832,21 @@ export type Database = {
       sign_shared_estimate: {
         Args: { p_token: string };
         Returns: Json;
+      };
+      invite_preview: {
+        Args: { p_token: string };
+        Returns: {
+          company_name: string;
+          seat_name: string;
+          seat_title: string;
+          seat_role: Database["public"]["Enums"]["seat_role"];
+          email: string;
+          expires_at: string;
+        }[];
+      };
+      claim_invite: {
+        Args: { p_token: string };
+        Returns: string;
       };
     };
     Enums: {

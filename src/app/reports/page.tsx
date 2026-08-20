@@ -48,7 +48,7 @@ export default function ReportsPage() {
 
   if (!report) return <LoadingScreen />;
 
-  const scope = accessScope(viewer.role);
+  const scope = accessScope(viewer.role, viewer.restricted);
   const isBd = isBusinessDevelopment(viewer.role);
   const showTeamActivity = scope === "team" || scope === "company";
 

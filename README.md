@@ -43,6 +43,7 @@ To attach a project that is already running:
    - [`supabase/migrations/20260819320000_sign_shared_estimate.sql`](supabase/migrations/20260819320000_sign_shared_estimate.sql) — homeowner can sign a shared estimate, which awards the lead and opens a job
    - [`supabase/migrations/20260819340000_project_financials.sql`](supabase/migrations/20260819340000_project_financials.sql) — Accounting seat, expenses with required receipts, payment images, QuickBooks entry queue
    - [`supabase/migrations/20260820120000_opportunity_originator.sql`](supabase/migrations/20260820120000_opportunity_originator.sql) — who sourced the lead (`originator_staff_id`) stays when it is assigned
+   - [`supabase/migrations/20260820200000_account_management.sql`](supabase/migrations/20260820200000_account_management.sql) — People settings: invite tokens, lock, restrict, and join-an-existing-company on signup
 3. In Authentication → URL configuration, add `http://localhost:3847/auth/callback`. For local work you can turn off “Confirm email”.
 4. Create an account. Signup opens a company, a profile, and a seat for you. It does not add sample people (Jordan Hale, Priya Shah, and the rest). Add real teammates as you hire them.
 
@@ -58,7 +59,7 @@ To connect real Google Calendars, create an OAuth web client in Google Cloud (Ca
 
 ## What you can do
 
-- **Settings** — company name, main phone, office email, website, license, and office address. Only a company admin sees this, under the initials menu in the top right. The same block prints on estimates and invoices.
+- **Settings** — company name, main phone, office email, website, license, and office address, plus **People**: add a roster seat, copy a 14-day signup invite into this company, restrict someone to their own book, lock a login, or remove them. Only a company admin sees this, under the initials menu in the top right. The business block prints on estimates and invoices. Invites are not emailed from Truss — copy the link. A locked account is signed out on the next load. Restrict keeps the role but forces access to that person’s jobs only. You cannot lock, restrict, or remove the last unlocked company admin.
 - **Contacts** — homeowners first (no company required), plus adjusters, realtors, and one architect as referral partners
 - **Pipeline** — leads through Job Sold and lost. Every new lead (and every new estimate) opens a job for costing so expenses and P&L treat it like production work. When the homeowner signs, the card moves to Job Sold. Each card shows a job code (`BJ081926-A`) assigned when the lead is opened. **New lead** slides in from the right: assignee, homeowner name, phone, email, job-site address, and how they heard about you. If the source is Referral, search contacts this seat can see and connect the referrer. Business development keeps credit (`Sourced by`) when they assign the lead to a PM or estimator.
 - **Business development** — nav is pipeline, jobs from the agents they brought in, contacts, and ROI. They see company BD return (cash on sourced jobs ÷ office spend they logged) as well as their own numbers.
@@ -75,12 +76,12 @@ To connect real Google Calendars, create an OAuth web client in Google Cloud (Ca
 - **Calendar** — week view of Truss field events plus each person’s Google Calendar. Link is per seat. Share with your team; company admins see every calendar and whether it is linked.
 - **Training** — roofing certification course (companion to *Roofing Construction & Estimating, Revised* by Daniel Atcheson). Original lesson summaries, generated takeoff questions, 70% chapter/practice, 80% exam. Progress is per seat. Team leads and company admin see crew progress and can post training bulletins. Open jobs recommend chapters by project type.
 
-Signup creates your seat only — no sample roster. Existing companies drop Northline demo seats (Jordan Hale, Priya Shah, and the rest) on load and reassign their jobs and contacts to you. Avatar menu → **Reset company data** wipes CRM tables and leaves your login as the only seat. **Login As** is only for real teammates you add.
+Signup creates your seat only — no sample roster. Existing companies drop Northline demo seats (Jordan Hale, Priya Shah, and the rest) on load and reassign their jobs and contacts to you. Avatar menu → **Reset company data** wipes CRM tables and leaves your login as the only seat. **Login As** is only for real teammates you add. Add more people from Settings → People (`/signup?invite=…` joins the company that sent the link).
 
 ## What lives in Supabase
 
 - **Auth** — email/password; each signup creates a `companies` row, a `profiles` row, and a `team_members` seat linked by `profiles.staff_id`
-- **Postgres** — contacts, homeowners, pursuits, jobs, catalog, estimates, invoices, payments, expenses, schedule, calendar accounts, photos, teams, seats, training progress, training bulletins
+- **Postgres** — contacts, homeowners, pursuits, jobs, catalog, estimates, invoices, payments, expenses, schedule, calendar accounts, photos, teams, seats, account invites, training progress, training bulletins
 - **RLS** — every query is limited to `current_company_id()`
 - **Realtime** — the board and records refresh when anyone in the company writes
 - **Storage** — `job-photos` bucket (`{companyId}/{jobId}/{uuid}`) and `receipts` bucket (`{companyId}/expenses|payments/{uuid}`)

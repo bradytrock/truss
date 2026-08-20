@@ -104,6 +104,11 @@ export function mapStaff(row: StaffRow): StaffMember {
     role: row.role ?? "project_manager",
     teamId: row.team_id,
     initials: row.initials || row.name.slice(0, 2).toUpperCase(),
+    email: row.email ?? "",
+    locked: Boolean(row.locked),
+    restricted: Boolean(row.restricted),
+    inviteExpiresAt: row.invite_expires_at ?? null,
+    inviteToken: null,
   };
 }
 

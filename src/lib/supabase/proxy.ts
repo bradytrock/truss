@@ -51,7 +51,21 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getUser();
   const signedIn = Boolean(data.user);
 
-  if (signedIn && (path.startsWith("/login") || path.startsWith("/signup"))) {
+  if (signedIn && path.startsWith("/login")) {
+    const next = request.nextUrl.searchParams.get("next");
+    const dest = request.nextUrl.clone();
+    if (next && next.startsWith("/") && !next.startsWith("//")) {
+      const parsed = new URL(next, request.nextUrl.origin);
+      dest.pathname = parsed.pathname;
+      dest.search = parsed.search;
+    } else {
+      dest.pathname = "/";
+      dest.search = "";
+    }
+    return NextResponse.redirect(dest);
+  }
+
+  if (signedIn && path.startsWith("/signup") && !request.nextUrl.searchParams.get("invite")) {
     const home = request.nextUrl.clone();
     home.pathname = "/";
     home.search = "";

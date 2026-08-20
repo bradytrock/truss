@@ -1,22 +1,48 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthFrame } from "@/components/auth-frame";
 import { ConnectSupabaseForm } from "@/components/connect-supabase";
+import {
+  isMissingAccountManagement,
+  missingAccountManagementMessage,
+  normalizeSeatEmail,
+} from "@/lib/accounts";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import type { SeatRole } from "@/lib/types";
+import { SEAT_ROLE_LABELS } from "@/lib/types";
 
-export default function SignupPage() {
+type InvitePreview = {
+  company_name: string;
+  seat_name: string;
+  seat_title: string;
+  seat_role: SeatRole;
+  email: string;
+  expires_at: string;
+};
+
+function firstInviteRow(data: InvitePreview[] | InvitePreview | null) {
+  if (!data) return null;
+  return Array.isArray(data) ? data[0] ?? null : data;
+}
+
+function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const inviteToken = searchParams.get("invite")?.trim() ?? "";
   const [configured, setConfigured] = useState(isSupabaseConfigured());
   const [pending, setPending] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(Boolean(inviteToken));
+  const [invite, setInvite] = useState<InvitePreview | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [fullName, setFullName] = useState("");
   const [company, setCompany] = useState("Northline Construction");
   const [title, setTitle] = useState("Company admin");
@@ -24,11 +50,65 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!inviteToken || !isSupabaseConfigured()) {
+      setInviteLoading(false);
+      return;
+    }
+    let cancelled = false;
+    const supabase = createClient();
+    void (async () => {
+      const { data, error } = await supabase.rpc("invite_preview", { p_token: inviteToken });
+      if (cancelled) return;
+      if (error) {
+        setInviteError(
+          isMissingAccountManagement(error)
+            ? missingAccountManagementMessage()
+            : error.message || "Could not load that invite.",
+        );
+        setInviteLoading(false);
+        return;
+      }
+      const row = firstInviteRow(data as InvitePreview[] | InvitePreview | null);
+      if (!row) {
+        setInviteError("That invite is missing or expired. Ask a company admin to send a new one.");
+        setInviteLoading(false);
+        return;
+      }
+      setInvite(row);
+      setFullName(row.seat_name);
+      setTitle(row.seat_title);
+      setEmail(row.email);
+      setInviteLoading(false);
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session) {
+        const { error: claimError } = await supabase.rpc("claim_invite", { p_token: inviteToken });
+        if (claimError) {
+          setInviteError(claimError.message);
+          return;
+        }
+        toast.success(`Joined ${row.company_name}`);
+        router.replace("/");
+        router.refresh();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [inviteToken, router]);
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setFormError(null);
     if (!isSupabaseConfigured()) {
       const message = "Connect the Supabase project first.";
+      setFormError(message);
+      toast.error(message);
+      return;
+    }
+    if (invite && normalizeSeatEmail(email) !== normalizeSeatEmail(invite.email)) {
+      const message = "Sign up with the email this invite was sent to.";
       setFormError(message);
       toast.error(message);
       return;
@@ -44,12 +124,39 @@ export default function SignupPage() {
           emailRedirectTo: `${origin}/auth/callback`,
           data: {
             full_name: fullName,
-            company,
+            company: invite ? invite.company_name : company,
             title,
+            ...(inviteToken ? { invite_token: inviteToken } : {}),
           },
         },
       });
       if (error) {
+        const already =
+          /already registered|already exists|user already/i.test(error.message) && Boolean(inviteToken);
+        if (already) {
+          const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+          if (signInError) {
+            const message = authErrorMessage(signInError);
+            setFormError(
+              `${message} This email already has a login. Sign in, then open the invite link again.`,
+            );
+            toast.error(message);
+            return;
+          }
+          const { error: claimError } = await supabase.rpc("claim_invite", { p_token: inviteToken });
+          if (claimError) {
+            const message = isMissingAccountManagement(claimError)
+              ? missingAccountManagementMessage()
+              : claimError.message;
+            setFormError(message);
+            toast.error(message);
+            return;
+          }
+          toast.success(invite ? `Joined ${invite.company_name}` : "Signed in");
+          router.replace("/");
+          router.refresh();
+          return;
+        }
         const message = authErrorMessage(error);
         setFormError(message);
         toast.error(message);
@@ -60,8 +167,9 @@ export default function SignupPage() {
         router.refresh();
         return;
       }
-      const message =
-        "Account created, but this project requires email confirmation, so you cannot sign in yet. In Supabase: Authentication → Providers → Email → turn off Confirm email. Then sign in.";
+      const message = invite
+        ? "Account created, but this project requires email confirmation. Confirm the email, then sign in to join the company."
+        : "Account created, but this project requires email confirmation, so you cannot sign in yet. In Supabase: Authentication → Providers → Email → turn off Confirm email. Then sign in.";
       setFormError(message);
       toast.message(message);
     } catch (error) {
@@ -73,85 +181,120 @@ export default function SignupPage() {
     }
   }
 
+  const joining = Boolean(invite);
+  const titleText = joining ? `Join ${invite?.company_name}` : "Create your GC workspace";
+  const description = joining
+    ? `This invite is for ${invite?.email} as ${invite?.seat_title || SEAT_ROLE_LABELS[invite?.seat_role ?? "project_manager"]}. You will land on the existing company, not a new one.`
+    : "A company, your profile, and your seat are created in Postgres on first sign-in.";
+
   return (
-    <AuthFrame
-      title="Create your GC workspace"
-      description="A company, your profile, and your seat are created in Postgres on first sign-in."
-    >
+    <AuthFrame title={titleText} description={description}>
       {configured ? (
         <form onSubmit={onSubmit} className="grid gap-3">
-        {formError ? (
-          <p className="border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {formError}
-          </p>
-        ) : null}
-        <div className="grid gap-1.5">
-          <Label htmlFor="name">Your name</Label>
-          <Input
-            id="name"
-            value={fullName}
-            onChange={(event) => setFullName(event.target.value)}
-            required
-            placeholder="Your name"
-          />
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+          {inviteLoading ? (
+            <p className="text-sm text-muted-foreground">Looking up the invite…</p>
+          ) : null}
+          {inviteError ? (
+            <p className="border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {inviteError}
+            </p>
+          ) : null}
+          {formError ? (
+            <p className="border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+              {formError}
+            </p>
+          ) : null}
           <div className="grid gap-1.5">
-            <Label htmlFor="company">Company</Label>
+            <Label htmlFor="name">Your name</Label>
             <Input
-              id="company"
-              value={company}
-              onChange={(event) => setCompany(event.target.value)}
+              id="name"
+              value={fullName}
+              onChange={(event) => setFullName(event.target.value)}
               required
+              placeholder="Your name"
+            />
+          </div>
+          {joining ? (
+            <div className="grid gap-1.5">
+              <Label htmlFor="title">Title</Label>
+              <Input
+                id="title"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                required
+              />
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label htmlFor="company">Company</Label>
+                <Input
+                  id="company"
+                  value={company}
+                  onChange={(event) => setCompany(event.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="title">Title</Label>
+                <Input
+                  id="title"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  required
+                  placeholder="Company admin"
+                />
+              </div>
+            </div>
+          )}
+          <div className="grid gap-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+              readOnly={joining}
             />
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="title">Title</Label>
+            <Label htmlFor="password">Password</Label>
             <Input
-              id="title"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
+              id="password"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
               required
-              placeholder="Company admin"
             />
           </div>
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            autoComplete="new-password"
-            minLength={8}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-        </div>
-        <Button type="submit" nativeButton disabled={pending}>
-          {pending ? "Creating workspace…" : "Create account"}
-        </Button>
-      </form>
+          <Button type="submit" nativeButton disabled={pending || inviteLoading || Boolean(inviteError && inviteToken)}>
+            {pending ? "Working…" : joining ? "Join company" : "Create account"}
+          </Button>
+        </form>
       ) : (
         <ConnectSupabaseForm onConnected={() => setConfigured(true)} />
       )}
       <p className="mt-4 text-center text-sm text-muted-foreground">
         Already on Truss?{" "}
-        <Link href="/login" className="font-medium text-primary hover:underline">
+        <Link
+          href={inviteToken ? `/login?next=${encodeURIComponent(`/signup?invite=${inviteToken}`)}` : "/login"}
+          className="font-medium text-primary hover:underline"
+        >
           Sign in
         </Link>
       </p>
     </AuthFrame>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense>
+      <SignupForm />
+    </Suspense>
   );
 }

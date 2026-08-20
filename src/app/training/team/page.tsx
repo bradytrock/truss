@@ -26,7 +26,7 @@ export default function TeamTrainingPage() {
 
   const rows = useMemo(() => {
     if (!viewer) return [];
-    const scope = accessScope(viewer.role);
+    const scope = accessScope(viewer.role, viewer.restricted);
     const visible =
       scope === "company"
         ? crm.book.staff

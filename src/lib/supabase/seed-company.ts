@@ -33,6 +33,7 @@ export async function seedCompanyBook(
 ) {
   await wipeOperations(supabase, companyId);
   const optionalDeletes = [
+    "account_invites",
     "calendar_shares",
     "calendar_accounts",
     "training_progress",

@@ -158,6 +158,11 @@ export interface StaffMember {
   role: SeatRole;
   teamId: string | null;
   initials: string;
+  email: string;
+  locked: boolean;
+  restricted: boolean;
+  inviteExpiresAt: string | null;
+  inviteToken: string | null;
 }
 
 export interface Team {
@@ -700,6 +705,11 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     role: "company_admin",
     teamId: null,
     initials: "JH",
+    email: "",
+    locked: false,
+    restricted: false,
+    inviteExpiresAt: null,
+    inviteToken: null,
   },
   {
     id: "staff_priya",
@@ -708,6 +718,11 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     role: "business_development",
     teamId: null,
     initials: "PS",
+    email: "",
+    locked: false,
+    restricted: false,
+    inviteExpiresAt: null,
+    inviteToken: null,
   },
   {
     id: "staff_claire",
@@ -716,6 +731,11 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     role: "business_development",
     teamId: null,
     initials: "CD",
+    email: "",
+    locked: false,
+    restricted: false,
+    inviteExpiresAt: null,
+    inviteToken: null,
   },
   {
     id: "staff_luis",
@@ -724,6 +744,11 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     role: "team_lead",
     teamId: "team_field",
     initials: "LO",
+    email: "",
+    locked: false,
+    restricted: false,
+    inviteExpiresAt: null,
+    inviteToken: null,
   },
   {
     id: "staff_maya",
@@ -732,6 +757,11 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     role: "team_admin",
     teamId: "team_pursuits",
     initials: "MC",
+    email: "",
+    locked: false,
+    restricted: false,
+    inviteExpiresAt: null,
+    inviteToken: null,
   },
   {
     id: "staff_elena",
@@ -740,6 +770,11 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     role: "project_manager",
     teamId: "team_field",
     initials: "EV",
+    email: "",
+    locked: false,
+    restricted: false,
+    inviteExpiresAt: null,
+    inviteToken: null,
   },
   {
     id: "staff_tom",
@@ -748,6 +783,11 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     role: "superintendent",
     teamId: "team_field",
     initials: "TB",
+    email: "",
+    locked: false,
+    restricted: false,
+    inviteExpiresAt: null,
+    inviteToken: null,
   },
   {
     id: "staff_nora",
@@ -756,6 +796,11 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     role: "accountant",
     teamId: null,
     initials: "NK",
+    email: "",
+    locked: false,
+    restricted: false,
+    inviteExpiresAt: null,
+    inviteToken: null,
   },
 ];
 
