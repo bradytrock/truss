@@ -743,6 +743,10 @@ export type Database = {
         Args: { p_token: string };
         Returns: Json;
       };
+      sign_shared_estimate: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
     };
     Enums: {
       pipeline_stage:

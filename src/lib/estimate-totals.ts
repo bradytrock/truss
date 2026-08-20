@@ -81,6 +81,23 @@ export function amountForEstimate(estimate: Estimate, lines: EstimateLine[]) {
   return estimateTotals(estimate, linesForEstimate(lines, estimate.id)).total;
 }
 
+export function contractValueForOpportunity(
+  opportunityId: string,
+  estimates: Estimate[],
+  lines: EstimateLine[],
+  fallback = 0,
+) {
+  const related = estimates.filter(
+    (estimate) => estimate.opportunityId === opportunityId && estimate.status !== "declined",
+  );
+  const preferred =
+    related.find((estimate) => estimate.status === "accepted") ??
+    related.find((estimate) => estimate.status === "sent" || estimate.status === "viewed") ??
+    related[0];
+  if (!preferred) return fallback;
+  return amountForEstimate(preferred, lines);
+}
+
 export function lineLabel(line: Pick<EstimateLine, "title" | "description">) {
   const title = line.title.trim();
   const description = line.description.trim();

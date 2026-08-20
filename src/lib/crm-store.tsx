@@ -23,6 +23,8 @@ import { newShareToken } from "@/lib/share";
 import { fillJobRecord, parseLocation, type JobDraft, customFieldsJson } from "@/lib/job-record";
 import {
   DEFAULT_ESTIMATE_TERMS,
+  amountForEstimate,
+  contractValueForOpportunity,
   fillEstimate,
   fillEstimateLine,
   invoiceLinesFromEstimate,
@@ -104,6 +106,7 @@ import {
   existingRecordCodes,
   nextJobCode,
 } from "@/lib/job-code";
+import { formatJobSite } from "@/lib/leads";
 import { resolveCustomerName, type CustomerRecord } from "@/lib/parties";
 import { canLoginAs, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 
@@ -381,7 +384,8 @@ type CrmContextValue = CrmState & {
   moveOpportunity: (
     id: string,
     stage: PipelineStage,
-    lostReason?: string
+    lostReason?: string,
+    extras?: { contractValue?: number; street?: string; city?: string; state?: string; postalCode?: string }
   ) => Promise<Job | null>;
   updateOpportunity: (id: string, patch: Partial<Opportunity>) => Promise<void>;
   updateJob: (id: string, patch: Partial<Job>) => Promise<void>;
@@ -947,12 +951,28 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const moveOpportunity = useCallback(
-    async (id: string, stage: PipelineStage, lostReason?: string) => {
+    async (
+      id: string,
+      stage: PipelineStage,
+      lostReason?: string,
+      extras?: { contractValue?: number; street?: string; city?: string; state?: string; postalCode?: string }
+    ) => {
       let createdJob: Job | null = null;
       const current = state.opportunities.find((opportunity) => opportunity.id === id);
-      if (!current || current.stage === stage) return null;
+      if (!current || current.stage === stage) {
+        return state.jobs.find((job) => job.opportunityId === id) ?? null;
+      }
+      const contractValue =
+        extras?.contractValue ??
+        contractValueForOpportunity(id, state.estimates, state.estimateLines, current.value);
+      const street = extras?.street ?? current.street ?? "";
+      const city = extras?.city ?? current.city ?? "";
+      const stateCode = extras?.state ?? current.state ?? "";
+      const postalCode = extras?.postalCode ?? current.postalCode ?? "";
+      const location =
+        formatJobSite({ street, city, state: stateCode, postalCode }) || current.location;
 
-      const supabase = requireClient();
+      const supabase = maybeClient();
       if (!supabase) {
         setState((prev) => {
           const jobs = [...prev.jobs];
@@ -967,22 +987,28 @@ export function CrmProvider({ children }: { children: ReactNode }) {
                   name: current.name,
                   clientId: current.clientId,
                   status: "precon",
-                  contractValue: current.value,
+                  contractValue,
                   startDate: new Date().toISOString().slice(0, 10),
                   substantialCompletion: null,
                   superintendent: "Tom Brennan",
                   projectManager: user.name || "Luis Ortega",
-                  location: current.location,
+                  location,
                   ownerStaffId: user.staffId,
                   primaryContactId: current.primaryContactId || null,
                   description: current.notes ?? "",
                   relatedContactIds: current.referralContactId ? [current.referralContactId] : [],
+                  street,
+                  city,
+                  state: stateCode,
+                  postalCode,
                 },
                 current
               ),
               ...jobs,
             ];
             createdJob = nextJobs[0];
+          } else if (stage === "awarded") {
+            createdJob = jobs.find((job) => job.opportunityId === id) ?? null;
           }
           return {
             ...prev,
@@ -991,8 +1017,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
                 ? {
                     ...opportunity,
                     stage,
+                    value: stage === "awarded" ? contractValue : opportunity.value,
                     winProbability: STAGE_PROBABILITY[stage],
                     lostReason: stage === "lost" ? lostReason ?? opportunity.lostReason : opportunity.lostReason,
+                    street: street || opportunity.street,
+                    city: city || opportunity.city,
+                    state: stateCode || opportunity.state,
+                    postalCode: postalCode || opportunity.postalCode,
+                    location,
                   }
                 : opportunity
             ),
@@ -1020,6 +1052,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         .update({
           stage,
           win_probability: STAGE_PROBABILITY[stage],
+          value: stage === "awarded" ? contractValue : current.value,
           lost_reason: stage === "lost" ? lostReason ?? current.lostReason ?? null : null,
         })
         .eq("id", id);
@@ -1038,8 +1071,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
 
       if (stage === "awarded") {
-        const already = state.jobs.some((job) => job.opportunityId === id);
-        if (!already) {
+        const already = state.jobs.find((job) => job.opportunityId === id);
+        if (already) {
+          createdJob = already;
+        } else {
           const awarded = fillJobRecord(
             {
               id: crypto.randomUUID(),
@@ -1048,15 +1083,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               clientId: current.clientId,
               primaryContactId: current.primaryContactId || null,
               status: "precon",
-              contractValue: current.value,
+              contractValue,
               startDate: new Date().toISOString().slice(0, 10),
               substantialCompletion: null,
               superintendent: "Tom Brennan",
               projectManager: user.name || "Luis Ortega",
-              location: current.location,
+              location,
               ownerStaffId: user.staffId,
               description: current.notes ?? "",
               relatedContactIds: current.referralContactId ? [current.referralContactId] : [],
+              street,
+              city,
+              state: stateCode,
+              postalCode,
             },
             current
           );
@@ -1129,7 +1168,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       await load();
       return createdJob;
     },
-    [addActivity, load, state.jobs, state.opportunities, user.companyId, user.name, user.staffId]
+    [addActivity, load, state.estimateLines, state.estimates, state.jobs, state.opportunities, user.companyId, user.name, user.staffId]
   );
 
   const updateOpportunity = useCallback(
@@ -1196,7 +1235,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         staffByName(input.estimator, state.staff)?.id ||
         user.staffId;
       const code = allocateCode(user.name, state.jobs, state.opportunities);
-      const supabase = requireClient();
+      const supabase = maybeClient();
       if (!supabase) {
         const opportunity: Opportunity = {
           ...input,
@@ -1342,6 +1381,56 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return opportunity;
     },
     [addActivity, state.jobs, state.opportunities, state.staff, user.companyId, user.name, user.staffId]
+  );
+
+  const ensureLeadForEstimate = useCallback(
+    async (input: {
+      name: string;
+      clientId: string | null;
+      opportunityId: string | null;
+      jobId: string | null;
+      contactId?: string | null;
+      street?: string;
+      city?: string;
+      state?: string;
+      postalCode?: string;
+    }) => {
+      if (input.opportunityId) return input.opportunityId;
+      const job = input.jobId ? state.jobs.find((item) => item.id === input.jobId) : undefined;
+      if (job?.opportunityId) return job.opportunityId;
+      const site =
+        formatJobSite({
+          street: input.street,
+          city: input.city,
+          state: input.state,
+          postalCode: input.postalCode,
+        }) ||
+        job?.location ||
+        "Address TBD";
+      const opportunity = await addOpportunity({
+        name: input.name,
+        clientId: input.clientId ?? job?.clientId ?? null,
+        primaryContactId: input.contactId || job?.primaryContactId || "",
+        stage: "pursuing",
+        value: 0,
+        bidDueAt: null,
+        preBidWalkAt: null,
+        location: site,
+        projectType: job?.projectType || "restoration",
+        deliveryMethod: "fixed_price",
+        estimator: user.name,
+        nextStep: "Write and send the proposal.",
+        leadSource: job?.leadSource || "",
+        referralContactId: null,
+        street: input.street ?? job?.street ?? "",
+        city: input.city ?? job?.city ?? "",
+        state: input.state ?? job?.state ?? "",
+        postalCode: input.postalCode ?? job?.postalCode ?? "",
+        notes: "",
+      });
+      return opportunity.id;
+    },
+    [addOpportunity, state.jobs, user.name]
   );
 
   const addClient = useCallback(
@@ -1624,14 +1713,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       intro?: string;
       terms?: string;
     }) => {
+      const opportunityId = await ensureLeadForEstimate(input);
       const number = nextNumber("EST", state.estimates.map((estimate) => estimate.number));
-      const linked = siteFromLinked(input.jobId, input.opportunityId, state.jobs, state.opportunities);
+      const linked = siteFromLinked(input.jobId, opportunityId, state.jobs, state.opportunities);
       const estimate = fillEstimate({
         id: crypto.randomUUID(),
         number,
         name: input.name,
         clientId: input.clientId,
-        opportunityId: input.opportunityId,
+        opportunityId,
         jobId: input.jobId,
         contactId: input.contactId ?? null,
         status: "draft",
@@ -1704,7 +1794,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       setState((prev) => ({ ...prev, estimates: [mapped, ...prev.estimates] }));
       return mapped;
     },
-    [state.estimates, state.jobs, state.opportunities, user.companyId]
+    [ensureLeadForEstimate, state.estimates, state.jobs, state.opportunities, user.companyId]
   );
 
   const updateEstimate = useCallback(async (id: string, patch: Partial<Estimate>) => {
@@ -1749,46 +1839,54 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           ),
         }));
       const supabase = maybeClient();
-      if (!supabase) {
-        apply();
-        if (current.opportunityId) {
-          await addActivity({
-            entityType: "opportunity",
-            entityId: current.opportunityId,
-            type: "email",
-            body: `Sent proposal ${current.number} — ${current.name}.`,
-          });
+      if (supabase) {
+        const payload: { status: "sent"; sent_at: string; share_token?: string } = {
+          status: "sent",
+          sent_at: sentAt,
+          share_token: shareToken,
+        };
+        let { error } = await supabase.from("estimates").update(payload).eq("id", id);
+        if (error && isMissingShareToken(error)) {
+          const retry = await supabase
+            .from("estimates")
+            .update({ status: "sent", sent_at: sentAt })
+            .eq("id", id);
+          error = retry.error;
         }
-        return;
-      }
-      const payload: { status: "sent"; sent_at: string; share_token?: string } = {
-        status: "sent",
-        sent_at: sentAt,
-        share_token: shareToken,
-      };
-      let { error } = await supabase.from("estimates").update(payload).eq("id", id);
-      if (error && isMissingShareToken(error)) {
-        const retry = await supabase
-          .from("estimates")
-          .update({ status: "sent", sent_at: sentAt })
-          .eq("id", id);
-        error = retry.error;
-      }
-      if (error) {
-        toast.error(error.message);
-        return;
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
       }
       apply();
-      if (current.opportunityId) {
+      const opportunityId = current.opportunityId || (await ensureLeadForEstimate(current));
+      if (opportunityId && opportunityId !== current.opportunityId) {
+        await updateEstimate(id, { opportunityId });
+      }
+      if (opportunityId) {
+        const opportunity = state.opportunities.find((item) => item.id === opportunityId);
+        if (
+          opportunity &&
+          (opportunity.stage === "pursuing" || opportunity.stage === "estimating")
+        ) {
+          await moveOpportunity(opportunityId, "bid_submitted");
+        }
         await addActivity({
           entityType: "opportunity",
-          entityId: current.opportunityId,
+          entityId: opportunityId,
           type: "email",
           body: `Sent proposal ${current.number} — ${current.name}.`,
         });
       }
     },
-    [addActivity, state.estimates]
+    [
+      addActivity,
+      ensureLeadForEstimate,
+      moveOpportunity,
+      state.estimates,
+      state.opportunities,
+      updateEstimate,
+    ]
   );
 
   const acceptEstimate = useCallback(
@@ -1804,37 +1902,51 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           ),
         }));
       const supabase = maybeClient();
-      if (!supabase) {
-        apply();
-        if (current.opportunityId) {
-          await addActivity({
-            entityType: "opportunity",
-            entityId: current.opportunityId,
-            type: "note",
-            body: `Owner accepted proposal ${current.number}. Convert to an invoice when you are ready to bill.`,
-          });
+      if (supabase) {
+        const { error } = await supabase
+          .from("estimates")
+          .update({ status: "accepted", accepted_at: acceptedAt })
+          .eq("id", id);
+        if (error) {
+          toast.error(error.message);
+          return;
         }
-        return;
-      }
-      const { error } = await supabase
-        .from("estimates")
-        .update({ status: "accepted", accepted_at: acceptedAt })
-        .eq("id", id);
-      if (error) {
-        toast.error(error.message);
-        return;
       }
       apply();
-      if (current.opportunityId) {
+      const opportunityId = current.opportunityId || (await ensureLeadForEstimate(current));
+      if (opportunityId && opportunityId !== current.opportunityId) {
+        await updateEstimate(id, { opportunityId });
+      }
+      const total = amountForEstimate(current, state.estimateLines);
+      const job = opportunityId
+        ? await moveOpportunity(opportunityId, "awarded", undefined, {
+            contractValue: total,
+            street: current.street,
+            city: current.city,
+            state: current.state,
+            postalCode: current.postalCode,
+          })
+        : null;
+      if (job && job.id !== current.jobId) {
+        await updateEstimate(id, { jobId: job.id, opportunityId });
+      }
+      if (opportunityId) {
         await addActivity({
           entityType: "opportunity",
-          entityId: current.opportunityId,
+          entityId: opportunityId,
           type: "note",
-          body: `Owner accepted proposal ${current.number}. Convert to an invoice when you are ready to bill.`,
+          body: `Owner signed proposal ${current.number}. Job opened and the lead moved to Job Sold.`,
         });
       }
     },
-    [addActivity, state.estimates]
+    [
+      addActivity,
+      ensureLeadForEstimate,
+      moveOpportunity,
+      state.estimateLines,
+      state.estimates,
+      updateEstimate,
+    ]
   );
 
   const declineEstimate = useCallback(async (id: string) => {

@@ -423,11 +423,12 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         <>
           <Button
             onClick={() => {
-              void crm.acceptEstimate(estimate.id);
-              toast.success("Marked accepted.");
+              void crm.acceptEstimate(estimate.id).then(() => {
+                toast.success("Signed. The lead moved to Job Sold and a job is on the board.");
+              });
             }}
           >
-            Mark accepted
+            Mark signed
           </Button>
           <Button
             variant="outline"

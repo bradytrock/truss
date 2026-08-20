@@ -88,8 +88,8 @@ export function PipelineBoard({ query }: { query: string }) {
       if (overStage === "awarded") {
         toast.success(
           created
-            ? `Awarded. Opened ${opportunity.name} as a precon job.`
-            : `Marked ${opportunity.name} awarded.`
+            ? `Job Sold. Opened ${opportunity.name} as a precon job.`
+            : `Moved ${opportunity.name} to Job Sold.`
         );
       } else if (overStage === "lost") {
         toast.message(`${opportunity.name} marked lost.`);
@@ -106,7 +106,7 @@ export function PipelineBoard({ query }: { query: string }) {
         description={
           query
             ? "Try a project name, client, or city."
-            : "Open a pursuit from an RFP, a walk, or a conversation with an owner."
+            : "Open a new lead or write an estimate — every estimate lands in Lead. When it is signed it moves to Job Sold and becomes a job."
         }
       />
     );

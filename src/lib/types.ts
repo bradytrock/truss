@@ -489,7 +489,7 @@ export const STAGE_LABELS: Record<PipelineStage, string> = {
   estimating: "Estimating",
   bid_submitted: "Proposal sent",
   interview: "Follow-up",
-  awarded: "Sold",
+  awarded: "Job Sold",
   lost: "Lost",
 };
 

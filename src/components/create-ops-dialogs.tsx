@@ -103,7 +103,7 @@ export function CreateEstimateDialog({
         <DialogHeader>
           <DialogTitle>New estimate</DialogTitle>
           <DialogDescription>
-            Price from the catalog, send the proposal, then convert it to an invoice when the homeowner signs.
+            Price from the catalog, send the proposal, then mark it signed. The homeowner lands on Lead; signing opens the job and moves the card to Job Sold.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-3">
@@ -143,7 +143,7 @@ export function CreateEstimateDialog({
                 value={opportunityId || "none"}
                 onValueChange={(value) => setOpportunityId(value === "none" ? "" : String(value ?? ""))}
                 items={[
-                  { value: "none", label: "None" },
+                  { value: "none", label: "Open a new Lead" },
                   ...relatedOpps.map((opportunity) => ({
                     value: opportunity.id,
                     label: opportunity.name,
@@ -154,7 +154,7 @@ export function CreateEstimateDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="none">Open a new Lead</SelectItem>
                   {relatedOpps.map((opportunity) => (
                     <SelectItem key={opportunity.id} value={opportunity.id}>
                       {opportunity.name}
@@ -162,6 +162,9 @@ export function CreateEstimateDialog({
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                Every estimate shows on the pipeline. Leave this blank to put it in Lead.
+              </p>
             </Field>
             <Field label="Job (optional)">
               <Select

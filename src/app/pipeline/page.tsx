@@ -29,7 +29,7 @@ export default function PipelinePage() {
       <PageHeader
         eyebrow="Preconstruction"
         title="Pipeline"
-        description="Leads to sold jobs. Drag a card when a homeowner moves — sold work becomes a job automatically."
+        description="Leads to sold jobs. Every new estimate opens a Lead. When the homeowner signs, it moves to Job Sold and a job is created."
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <Input

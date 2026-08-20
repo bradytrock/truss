@@ -69,7 +69,7 @@ export default function OpportunityDetailPage() {
     void (async () => {
       const created = await crm.moveOpportunity(id, stage);
       if (stage === "awarded") {
-        toast.success(created ? "Awarded. A precon job is now on the jobs list." : "Already on a job.");
+        toast.success(created ? "Job Sold. A precon job is now on the jobs list." : "Already on a job.");
       } else if (stage === "lost") {
         toast.message("Marked lost.");
       }
