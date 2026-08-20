@@ -761,6 +761,12 @@ export const NORTHLINE_STAFF: StaffMember[] = [
 
 export const TEAM = NORTHLINE_STAFF.map((member) => member.name);
 
+export function isNorthlineDemoName(name: string) {
+  const needle = name.trim().toLowerCase();
+  if (!needle) return false;
+  return NORTHLINE_STAFF.some((member) => member.name.toLowerCase() === needle);
+}
+
 export function staffByName(name: string, roster: StaffMember[] = NORTHLINE_STAFF) {
   return roster.find((member) => member.name === name);
 }

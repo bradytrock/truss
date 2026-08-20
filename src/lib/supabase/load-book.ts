@@ -23,13 +23,11 @@ import {
   mapTrainingProgress,
 } from "@/lib/supabase/mappers";
 import type { Database } from "@/lib/supabase/database.types";
-import { NORTHLINE_STAFF, NORTHLINE_TEAMS, initialsFromName, type CrmState, type SeatRole } from "@/lib/types";
+import { initialsFromName, type CrmState, type SeatRole } from "@/lib/types";
 
 type Client = SupabaseClient<Database>;
 
-function inferRole(name: string, title: string): SeatRole {
-  const fromSeed = NORTHLINE_STAFF.find((member) => member.name === name);
-  if (fromSeed) return fromSeed.role;
+function inferRole(title: string): SeatRole {
   const lower = title.toLowerCase();
   if (lower.includes("admin") && lower.includes("team")) return "team_admin";
   if (lower.includes("lead")) return "team_lead";
@@ -127,26 +125,23 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
         id: row.id,
         name: row.name,
         title: row.title,
-        role: inferRole(row.name, row.title),
-        teamId: NORTHLINE_STAFF.find((member) => member.name === row.name)?.teamId ?? null,
+        role: inferRole(row.title),
+        teamId: row.team_id ?? null,
         initials: initialsFromName(row.name),
       };
     }
   });
 
-  const teams = missingTeams
-    ? structuredClone(NORTHLINE_TEAMS)
-    : (teamsRes.data ?? []).map(mapTeam);
+  const teams = missingTeams ? [] : (teamsRes.data ?? []).map(mapTeam);
 
   const state: CrmState = {
-    staff: staff.length > 0 ? staff : structuredClone(NORTHLINE_STAFF),
-    teams: teams.length > 0 ? teams : structuredClone(NORTHLINE_TEAMS),
+    staff,
+    teams: teams.length > 0 ? teams : [],
     clients: (clientsRes.data ?? []).map(mapClient),
     contacts: (contactsRes.data ?? []).map((row) => {
       try {
         return mapContact(row);
       } catch {
-        const seed = NORTHLINE_STAFF.find((member) => member.name === "Jordan Hale");
         return {
           id: row.id,
           clientId: row.client_id,
@@ -154,7 +149,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
           title: row.title,
           email: row.email,
           phone: row.phone,
-          ownerStaffId: seed?.id ?? "",
+          ownerStaffId: "",
           isReferralPartner: false,
         };
       }

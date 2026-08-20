@@ -13,11 +13,10 @@ import {
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
-import { seedState } from "@/lib/seed";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
-import { seedOperationsIfMissing } from "@/lib/supabase/ops-seed";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
+import { retireDemoStaff } from "@/lib/supabase/retire-demo-staff";
 import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
@@ -59,7 +58,6 @@ import {
 } from "@/lib/supabase/mappers";
 import {
   NORTHLINE_COMPANY,
-  NORTHLINE_STAFF,
   STAGE_LABELS,
   STAGE_PROBABILITY,
   initialsFromName,
@@ -601,7 +599,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         authUser.email ||
         "Signed in";
       setCompanySettings(local);
-      setState(structuredClone(seedState));
+      setState(emptyState);
       setUser({
         id: authUser.id,
         companyId: "",
@@ -621,7 +619,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         profileError?.message?.includes("Could not find the table");
       setHydrateError(
         missingSchema
-          ? "Signed in, but this project is missing the Truss tables. Run the files in supabase/migrations in the SQL editor (in order), then reset demo data."
+          ? "Signed in, but this project is missing the Truss tables. Run the files in supabase/migrations in the SQL editor (in order), then sign out and back in."
           : profileError?.message ??
             "No profile yet. Create an account after the migrations have been applied."
       );
@@ -641,42 +639,45 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         : { ...NORTHLINE_COMPANY, name: "Truss" };
 
     const companyId = profile.company_id;
-    const preserve = {
-      userId: profile.id,
-      name: profile.full_name,
-      title: profile.title,
-      role: (profile.role as SeatRole | undefined) ?? "company_admin",
-      initials: profile.initials,
-    };
     try {
       let book = await fetchCompanyBook(supabase, companyId);
-      if (book.state.clients.length === 0 && book.team.length === 0 && !seeding.current) {
-        seeding.current = true;
-        try {
-          await seedCompanyBook(supabase, companyId, { preserve });
+      let ensured = await ensureSignedInStaff(
+        supabase,
+        companyId,
+        {
+          id: profile.id,
+          full_name: profile.full_name,
+          title: profile.title,
+          initials: profile.initials,
+          role: (profile.role as SeatRole | undefined) ?? "company_admin",
+          staff_id: profile.staff_id,
+        },
+        book.state.staff,
+      );
+      if (ensured.matched) {
+        const removed = await retireDemoStaff(supabase, companyId, {
+          staffId: ensured.matched.id,
+          name: profile.full_name,
+        });
+        if (removed) {
           book = await fetchCompanyBook(supabase, companyId);
-        } finally {
-          seeding.current = false;
-        }
-      } else if (book.state.catalog.length === 0 && !seeding.current) {
-        seeding.current = true;
-        try {
-          await seedOperationsIfMissing(supabase, companyId);
-          book = await fetchCompanyBook(supabase, companyId);
-        } finally {
-          seeding.current = false;
+          ensured = await ensureSignedInStaff(
+            supabase,
+            companyId,
+            {
+              id: profile.id,
+              full_name: profile.full_name,
+              title: profile.title,
+              initials: profile.initials,
+              role: (profile.role as SeatRole | undefined) ?? "company_admin",
+              staff_id: profile.staff_id,
+            },
+            book.state.staff,
+          );
         }
       }
-
-      const ensured = await ensureSignedInStaff(supabase, companyId, {
-        id: profile.id,
-        full_name: profile.full_name,
-        title: profile.title,
-        initials: profile.initials,
-        role: (profile.role as SeatRole | undefined) ?? "company_admin",
-        staff_id: profile.staff_id,
-      }, book.state.staff);
       const matched = ensured.matched;
+      const roster = ensured.roster;
       const role = (profile.role as SeatRole | undefined) ?? matched?.role ?? "company_admin";
       setCompanySettings(settings);
       setUser({
@@ -693,7 +694,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const stamped = backfillRecordCodes(
         book.state.opportunities,
         book.state.jobs,
-        ensured.roster.length > 0 ? ensured.roster : NORTHLINE_STAFF,
+        roster,
       );
       let opportunities = stamped.opportunities;
       let jobs = stamped.jobs;
@@ -706,7 +707,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             const restamped = backfillRecordCodes(
               book.state.opportunities,
               book.state.jobs,
-              ensured.roster.length > 0 ? ensured.roster : NORTHLINE_STAFF,
+              roster,
             );
             opportunities = restamped.opportunities;
             jobs = restamped.jobs;
@@ -717,7 +718,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       setState({
         ...book.state,
-        staff: ensured.roster,
+        staff: roster,
         opportunities,
         jobs,
       });
@@ -3463,16 +3464,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const resetDemo = useCallback(async () => {
     if (!isSupabaseConfigured() || !user.companyId || isUnsignedDemo(user)) {
-      toast.error("Sign in to restore the sample book for your company.");
+      toast.error("Sign in to clear company data.");
       return;
     }
     const supabase = createClient();
     try {
       await seedCompanyBook(supabase, user.companyId, { preserve: preserveFromUser(user) });
       await load();
-      toast.success("Northline sample book restored in Supabase.");
+      toast.success("Company data cleared. Your seat is the only account left.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not reset demo data.");
+      toast.error(error instanceof Error ? error.message : "Could not clear company data.");
     }
   }, [load, user]);
 

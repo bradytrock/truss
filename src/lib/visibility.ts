@@ -4,6 +4,7 @@ import type {
   StaffMember,
   Team,
 } from "@/lib/types";
+import { isNorthlineDemoName } from "@/lib/types";
 import { bdOpportunityIds, jobInBdBook, referralPartnerIds } from "@/lib/bd";
 
 export type AccessScope = "company" | "bd" | "team" | "own";
@@ -60,11 +61,12 @@ export function canLoginAs(viewer: StaffMember) {
 }
 
 export function loginAsTargets(viewer: StaffMember, staff: StaffMember[]) {
+  const real = staff.filter((member) => !isNorthlineDemoName(member.name));
   if (viewer.role === "company_admin") {
-    return staff.filter((member) => member.id !== viewer.id);
+    return real.filter((member) => member.id !== viewer.id);
   }
   if (!canLoginAs(viewer) || !viewer.teamId) return [];
-  return staff.filter(
+  return real.filter(
     (member) => member.teamId === viewer.teamId && member.id !== viewer.id
   );
 }

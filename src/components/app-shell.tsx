@@ -45,7 +45,6 @@ import { LogExpenseDialog, LogPaymentDialog } from "@/components/log-financial-d
 import { canViewReports, canManageSettings, canViewAccounting } from "@/lib/visibility";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { COURSE } from "@/lib/training/engine";
-import { isUnsignedDemo } from "@/lib/seats";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand";
@@ -418,7 +417,7 @@ function ScopeBanners() {
 
 function UserMenu() {
   const router = useRouter();
-  const { resetDemo, signOut, user, staff, switchSeat, loginAs, loginAsOptions, viewer, impersonatedStaff, stopLoginAs } =
+  const { resetDemo, signOut, user, loginAs, loginAsOptions, viewer, impersonatedStaff, stopLoginAs } =
     useCrm();
 
   return (
@@ -469,24 +468,6 @@ function UserMenu() {
             </DropdownMenuGroup>
           </>
         ) : null}
-        {isUnsignedDemo(user) && staff.length > 1 ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-                Switch seat
-              </DropdownMenuLabel>
-            {staff.map((member) => (
-              <DropdownMenuItem key={member.id} onClick={() => switchSeat(member.id)}>
-                {member.name}
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {SEAT_ROLE_LABELS[member.role]}
-                </span>
-              </DropdownMenuItem>
-            ))}
-            </DropdownMenuGroup>
-          </>
-        ) : null}
         <DropdownMenuSeparator />
         {viewer && canManageSettings(viewer.role) ? (
           <DropdownMenuItem onClick={() => router.push("/settings")}>Settings</DropdownMenuItem>
@@ -496,7 +477,7 @@ function UserMenu() {
             void resetDemo();
           }}
         >
-          Reset demo data
+          Reset company data
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => void signOut()}>Sign out</DropdownMenuItem>
       </DropdownMenuContent>

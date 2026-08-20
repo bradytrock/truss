@@ -76,7 +76,7 @@ export default function SignupPage() {
   return (
     <AuthFrame
       title="Create your GC workspace"
-      description="A company, your profile, and the Northline sample book are created in Postgres on first sign-in."
+      description="A company, your profile, and your seat are created in Postgres on first sign-in."
     >
       {configured ? (
         <form onSubmit={onSubmit} className="grid gap-3">
