@@ -21,6 +21,20 @@ export function missingEstimateWriterMessage() {
   return `Saved in this browser. Run ${ESTIMATE_WRITER_SQL} in the SQL editor to keep tax, optional lines, and terms in Postgres.`;
 }
 
+export const SHARE_TOKEN_SQL = "supabase/migrations/20260819300000_share_tokens.sql";
+
+export function isMissingShareToken(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("schema cache") ||
+    message.includes("Could not find the") ||
+    message.includes("share_token")
+  );
+}
+
 export function isRequiredClientId(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
   const message = error.message ?? "";

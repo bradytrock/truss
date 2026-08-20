@@ -1,3 +1,4 @@
+import { seedShareToken } from "@/lib/share";
 import type { Estimate, EstimateLine } from "@/lib/types";
 
 export type AdjustmentKind = "percent" | "amount";
@@ -140,6 +141,7 @@ export type EstimateDraft = Omit<
   | "city"
   | "state"
   | "postalCode"
+  | "shareToken"
 > &
   Partial<
     Pick<
@@ -156,6 +158,7 @@ export type EstimateDraft = Omit<
       | "city"
       | "state"
       | "postalCode"
+      | "shareToken"
     >
   >;
 
@@ -180,6 +183,7 @@ export function fillEstimate(estimate: EstimateDraft): Estimate {
     city: estimate.city ?? "",
     state: estimate.state ?? "",
     postalCode: estimate.postalCode ?? "",
+    shareToken: estimate.shareToken?.trim() || seedShareToken("e", estimate.number),
   };
 }
 

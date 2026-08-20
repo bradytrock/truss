@@ -9,12 +9,13 @@ import {
   ArrowUp,
   ChevronDown,
   Copy,
+  Download,
   Plus,
   Trash2,
 } from "lucide-react";
-import { CompanyLetterhead } from "@/components/company-letterhead";
+import { ProposalDocument } from "@/components/proposal-document";
+import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { EstimateStatusBadge } from "@/components/status-badge";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -56,11 +57,12 @@ import {
   estimateTotals,
   groupEstimateLines,
   lineAmount,
-  lineIncluded,
   linesForEstimate,
   type AdjustmentKind,
 } from "@/lib/estimate-totals";
-import { formatDate, formatMoney } from "@/lib/format";
+import { downloadEstimatePdf } from "@/lib/document-pdf";
+import { shareUrl } from "@/lib/share";
+import { formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -116,170 +118,6 @@ function CommitTextarea({
         if (draft !== value) onCommit(draft);
       }}
     />
-  );
-}
-
-function TotalsStack({
-  estimate,
-  lines,
-  className,
-}: {
-  estimate: Estimate;
-  lines: EstimateLine[];
-  className?: string;
-}) {
-  const totals = estimateTotals(estimate, lines);
-  return (
-    <dl className={cn("space-y-1.5 text-sm", className)}>
-      <div className="flex justify-between gap-4">
-        <dt className="text-muted-foreground">Subtotal</dt>
-        <dd className="tabular-nums">{formatMoney(totals.subtotal)}</dd>
-      </div>
-      {totals.discount > 0 ? (
-        <div className="flex justify-between gap-4">
-          <dt className="text-muted-foreground">
-            Discount
-            {estimate.discountKind === "percent" ? ` (${estimate.discountValue}%)` : ""}
-          </dt>
-          <dd className="tabular-nums">−{formatMoney(totals.discount)}</dd>
-        </div>
-      ) : null}
-      {totals.tax > 0 ? (
-        <div className="flex justify-between gap-4">
-          <dt className="text-muted-foreground">Tax ({estimate.taxRate}%)</dt>
-          <dd className="tabular-nums">{formatMoney(totals.tax)}</dd>
-        </div>
-      ) : null}
-      <div className="flex justify-between gap-4 border-t pt-2 font-medium">
-        <dt>Total</dt>
-        <dd className="tabular-nums">{formatMoney(totals.total)}</dd>
-      </div>
-      {totals.deposit > 0 ? (
-        <div className="flex justify-between gap-4 text-muted-foreground">
-          <dt>
-            Deposit due
-            {estimate.depositKind === "percent" ? ` (${estimate.depositValue}%)` : ""}
-          </dt>
-          <dd className="tabular-nums">{formatMoney(totals.deposit)}</dd>
-        </div>
-      ) : null}
-      {totals.optionalCount > 0 ? (
-        <p className="pt-1 text-xs text-muted-foreground">
-          {formatMoney(totals.optionalTotal)} in optional work is not in this total.
-        </p>
-      ) : null}
-    </dl>
-  );
-}
-
-function EstimatePreview({
-  estimate,
-  lines,
-  customer,
-  site,
-  onToggleOptional,
-  selectable,
-}: {
-  estimate: Estimate;
-  lines: EstimateLine[];
-  customer: string;
-  site: string;
-  onToggleOptional?: (line: EstimateLine, selected: boolean) => void;
-  selectable?: boolean;
-}) {
-  const groups = groupEstimateLines(lines);
-  return (
-    <div className="space-y-6 rounded-md border bg-card p-5 sm:p-7">
-      <CompanyLetterhead />
-      <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            {estimate.number}
-          </p>
-          <h2 className="font-heading mt-1 text-2xl font-medium text-balance">{estimate.name}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">Prepared for {customer}</p>
-          {site ? <p className="text-sm text-muted-foreground">{site}</p> : null}
-        </div>
-        <div className="text-sm sm:text-right">
-          <EstimateStatusBadge status={estimate.status} />
-          <p className="mt-2 text-muted-foreground">Valid until {formatDate(estimate.validUntil)}</p>
-        </div>
-      </div>
-      {estimate.intro ? (
-        <p className="text-sm leading-relaxed whitespace-pre-wrap">{estimate.intro}</p>
-      ) : null}
-      {groups.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No line items on this proposal yet.</p>
-      ) : (
-        <div className="space-y-5">
-          {groups.map((group) => (
-            <section key={group.name}>
-              <h3 className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">
-                {group.name}
-              </h3>
-              <ul className="divide-y border-y">
-                {group.lines.map((line) => {
-                  const included = lineIncluded(line);
-                  return (
-                    <li
-                      key={line.id}
-                      className={cn(
-                        "flex items-start justify-between gap-3 py-3",
-                        !included && "opacity-70"
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {line.optional && selectable && onToggleOptional ? (
-                            <Checkbox
-                              checked={line.selected}
-                              onCheckedChange={(value) => onToggleOptional(line, Boolean(value))}
-                              aria-label={`Include ${line.title || line.description}`}
-                            />
-                          ) : null}
-                          <p className="font-medium">{line.title || line.description}</p>
-                          {line.optional ? (
-                            <Badge variant="secondary">{included ? "Selected" : "Optional"}</Badge>
-                          ) : null}
-                        </div>
-                        {line.description && line.description !== line.title ? (
-                          <p className="mt-0.5 text-sm text-muted-foreground">{line.description}</p>
-                        ) : null}
-                        <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                          {line.quantity} {line.unit} × {formatMoney(line.unitCost)}
-                        </p>
-                      </div>
-                      <p className={cn("shrink-0 tabular-nums", !included && "line-through")}>
-                        {formatMoney(lineAmount(line))}
-                      </p>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ))}
-        </div>
-      )}
-      <TotalsStack estimate={estimate} lines={lines} className="ml-auto max-w-xs" />
-      {estimate.terms ? (
-        <div>
-          <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">
-            {estimate.terms}
-          </p>
-        </div>
-      ) : null}
-      {estimate.notes ? (
-        <div>
-          <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">
-            Internal notes
-          </h3>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">
-            {estimate.notes}
-          </p>
-        </div>
-      ) : null}
-    </div>
   );
 }
 
@@ -497,6 +335,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   const [bookOpen, setBookOpen] = useState(false);
   const [bookGroup, setBookGroup] = useState<string | undefined>();
   const [pending, setPending] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [sectionName, setSectionName] = useState("");
 
   const lines = linesForEstimate(crm.estimateLines, estimate.id);
@@ -536,23 +375,50 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     }
   }
 
+  function downloadPdf() {
+    if (lines.length === 0) {
+      toast.error("Add at least one line before generating a PDF.");
+      return;
+    }
+    return downloadEstimatePdf({
+      estimate,
+      lines,
+      company: crm.company,
+      customer,
+    });
+  }
+
+  async function openShare(markSent: boolean) {
+    if (markSent && totals.includedCount === 0) {
+      toast.error("Add at least one included line before sending.");
+      return;
+    }
+    setPending(true);
+    try {
+      if (markSent) await crm.sendEstimate(estimate.id);
+      else await crm.ensureEstimateShareToken(estimate.id);
+      setShareOpen(true);
+      if (markSent) setTab("preview");
+    } finally {
+      setPending(false);
+    }
+  }
+
   const actions = (
     <div className="flex flex-wrap gap-2">
+      <Button variant="outline" disabled={pending || lines.length === 0} onClick={() => void downloadPdf()}>
+        <Download />
+        PDF
+      </Button>
       {estimate.status === "draft" ? (
-        <Button
-          disabled={pending || totals.includedCount === 0}
-          onClick={() => {
-            setPending(true);
-            void crm.sendEstimate(estimate.id).then(() => {
-              toast.success("Proposal marked sent.");
-              setPending(false);
-              setTab("preview");
-            });
-          }}
-        >
+        <Button disabled={pending || totals.includedCount === 0} onClick={() => void openShare(true)}>
           Send proposal
         </Button>
-      ) : null}
+      ) : (
+        <Button variant="outline" disabled={pending} onClick={() => void openShare(false)}>
+          Share
+        </Button>
+      )}
       {estimate.status === "sent" || estimate.status === "viewed" ? (
         <>
           <Button
@@ -590,6 +456,9 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           <ChevronDown />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem disabled={pending} onClick={() => void openShare(false)}>
+            Share link
+          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => {
               void crm.duplicateEstimate(estimate.id).then((copy) => {
@@ -927,12 +796,13 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   );
 
   const preview = (
-    <EstimatePreview
+    <ProposalDocument
+      company={crm.company}
       estimate={estimate}
       lines={lines}
       customer={customer}
-      site={site}
       selectable={optionalOpen}
+      showInternalNotes
       onToggleOptional={(line, selected) => void crm.updateEstimateLine(line.id, { selected })}
     />
   );
@@ -1000,6 +870,14 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         open={bookOpen}
         onOpenChange={setBookOpen}
         onPick={(catalogItemId) => void crm.addEstimateLineFromCatalog(estimate.id, catalogItemId, bookGroup)}
+      />
+      <ShareLinkDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        title={`Share ${estimate.number}`}
+        description="Copy this link for the homeowner. They can review the proposal, pick optional items, and download a PDF — no login required."
+        url={estimate.shareToken ? shareUrl("e", estimate.shareToken) : ""}
+        onDownloadPdf={downloadPdf}
       />
     </div>
   );

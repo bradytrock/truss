@@ -15,6 +15,7 @@ import {
   extraPayments,
   extraPhotos,
 } from "@/lib/demo-ops-extra";
+import { seedShareToken } from "@/lib/share";
 
 const catalogCore: CrmState["catalog"] = [
   { id: "cat_sog", name: "Place & finish slab on grade", kind: "labor", unit: "sf", unitCost: 4.85, costCode: "03 30 00" },
@@ -57,7 +58,10 @@ export const demoOps: Pick<
   estimateLines: extraEstimateLines.map((line) =>
     fillEstimateLine({ ...line, ...ESTIMATE_LINE_EXTRAS[line.id] }),
   ),
-  invoices: extraInvoices,
+  invoices: extraInvoices.map((invoice) => ({
+    ...invoice,
+    shareToken: seedShareToken("i", invoice.number),
+  })),
   invoiceLines: extraInvoiceLines,
   payments: extraPayments,
   events: extraEvents,

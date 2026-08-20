@@ -188,7 +188,7 @@ export const extraEstimateLines: EstimateLineDraft[] = [
   { id: "el_r3", estimateId: "est_redmond", catalogItemId: "cat_dw", description: "Drywall", quantity: 2400, unit: "sf", unitCost: 3.65, sortOrder: 2 },
 ];
 
-export const extraInvoices: Invoice[] = [
+export const extraInvoices: Omit<Invoice, "shareToken">[] = [
   {
     id: "inv_alvarez_1",
     number: "INV-2001",

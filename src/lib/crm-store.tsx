@@ -18,7 +18,8 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedOperationsIfMissing } from "@/lib/supabase/ops-seed";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken } from "@/lib/supabase/schema-errors";
+import { newShareToken } from "@/lib/share";
 import { fillJobRecord, parseLocation, type JobDraft, customFieldsJson } from "@/lib/job-record";
 import {
   DEFAULT_ESTIMATE_TERMS,
@@ -33,6 +34,7 @@ import {
   jobPatch,
   estimatePatch,
   estimateLinePatch,
+  invoicePatch,
   mapActivity,
   mapClient,
   mapCompany,
@@ -430,6 +432,9 @@ type CrmContextValue = CrmState & {
   sendEstimate: (id: string) => Promise<void>;
   acceptEstimate: (id: string) => Promise<void>;
   declineEstimate: (id: string) => Promise<void>;
+  markEstimateViewed: (id: string) => Promise<void>;
+  ensureEstimateShareToken: (id: string) => Promise<string>;
+  ensureInvoiceShareToken: (id: string) => Promise<string>;
   duplicateEstimate: (id: string) => Promise<Estimate>;
   addEstimateLineFromCatalog: (
     estimateId: string,
@@ -1576,6 +1581,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         city: input.city ?? linked.city,
         state: input.state ?? linked.state,
         postalCode: input.postalCode ?? linked.postalCode,
+        shareToken: newShareToken(),
       });
       const supabase = maybeClient();
       if (!supabase) {
@@ -1603,6 +1609,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         city: estimate.city,
         state: estimate.state,
         postal_code: estimate.postalCode,
+        share_token: estimate.shareToken,
       };
       let { data, error } = await supabase.from("estimates").insert(payload).select("*").single();
       if (error && isMissingEstimateWriter(error)) {
@@ -1666,11 +1673,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const current = state.estimates.find((estimate) => estimate.id === id);
       if (!current) return;
       const sentAt = new Date().toISOString();
+      const shareToken = current.shareToken || newShareToken();
       const apply = () =>
         setState((prev) => ({
           ...prev,
           estimates: prev.estimates.map((estimate) =>
-            estimate.id === id ? { ...estimate, status: "sent" as const, sentAt } : estimate
+            estimate.id === id
+              ? { ...estimate, status: "sent" as const, sentAt, shareToken }
+              : estimate
           ),
         }));
       const supabase = maybeClient();
@@ -1686,10 +1696,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
         return;
       }
-      const { error } = await supabase
-        .from("estimates")
-        .update({ status: "sent", sent_at: sentAt })
-        .eq("id", id);
+      const payload: { status: "sent"; sent_at: string; share_token?: string } = {
+        status: "sent",
+        sent_at: sentAt,
+        share_token: shareToken,
+      };
+      let { error } = await supabase.from("estimates").update(payload).eq("id", id);
+      if (error && isMissingShareToken(error)) {
+        const retry = await supabase
+          .from("estimates")
+          .update({ status: "sent", sent_at: sentAt })
+          .eq("id", id);
+        error = retry.error;
+      }
       if (error) {
         toast.error(error.message);
         return;
@@ -1773,6 +1792,38 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     apply();
   }, []);
+
+  const markEstimateViewed = useCallback(async (id: string) => {
+    const current = state.estimates.find((estimate) => estimate.id === id);
+    if (!current || current.status !== "sent") return;
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        estimates: prev.estimates.map((estimate) =>
+          estimate.id === id ? { ...estimate, status: "viewed" as const } : estimate
+        ),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("estimates").update({ status: "viewed" }).eq("id", id);
+    if (error) return;
+    apply();
+  }, [state.estimates]);
+
+  const ensureEstimateShareToken = useCallback(
+    async (id: string) => {
+      const current = state.estimates.find((estimate) => estimate.id === id);
+      if (!current) throw new Error("Estimate not found.");
+      if (current.shareToken) return current.shareToken;
+      const shareToken = newShareToken();
+      await updateEstimate(id, { shareToken });
+      return shareToken;
+    },
+    [state.estimates, updateEstimate]
+  );
 
   const duplicateEstimate = useCallback(
     async (id: string) => {
@@ -2105,6 +2156,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           issuedAt,
           dueAt,
           notes,
+          shareToken: newShareToken(),
         };
         const mappedLines = billed.map((line) => ({
           id: crypto.randomUUID(),
@@ -2122,22 +2174,40 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }));
         return invoice;
       }
-      const { data, error } = await supabase
-        .from("invoices")
-        .insert({
-          company_id: user.companyId,
-          number,
-          name: estimate.name,
-          client_id: estimate.clientId,
-          job_id: estimate.jobId,
-          estimate_id: estimate.id,
-          status: "draft",
-          issued_at: issuedAt,
-          due_at: dueAt,
-          notes,
-        })
-        .select("*")
-        .single();
+      const payload = {
+        company_id: user.companyId,
+        number,
+        name: estimate.name,
+        client_id: estimate.clientId,
+        job_id: estimate.jobId,
+        estimate_id: estimate.id,
+        status: "draft" as const,
+        issued_at: issuedAt,
+        due_at: dueAt,
+        notes,
+        share_token: newShareToken(),
+      };
+      let { data, error } = await supabase.from("invoices").insert(payload).select("*").single();
+      if (error && isMissingShareToken(error)) {
+        const retry = await supabase
+          .from("invoices")
+          .insert({
+            company_id: payload.company_id,
+            number: payload.number,
+            name: payload.name,
+            client_id: payload.client_id,
+            job_id: payload.job_id,
+            estimate_id: payload.estimate_id,
+            status: payload.status,
+            issued_at: payload.issued_at,
+            due_at: payload.due_at,
+            notes: payload.notes,
+          })
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+      }
       if (error || !data) {
         toast.error(error?.message ?? "Could not convert the estimate.");
         throw error ?? new Error("Could not convert the estimate.");
@@ -2186,48 +2256,124 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       dueAt: string | null;
       notes?: string;
     }) => {
-      const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
       const number = nextNumber("INV", state.invoices.map((invoice) => invoice.number));
-      const { data, error } = await supabase
-        .from("invoices")
-        .insert({
-          company_id: user.companyId,
-          number,
-          name: input.name,
-          client_id: input.clientId || null,
-          job_id: input.jobId,
-          notes: input.notes ?? "",
-          due_at: input.dueAt,
-        })
-        .select("*")
-        .single();
+      const invoice = {
+        id: crypto.randomUUID(),
+        number,
+        name: input.name,
+        clientId: input.clientId,
+        jobId: input.jobId,
+        estimateId: null,
+        status: "draft" as const,
+        issuedAt: new Date().toISOString().slice(0, 10),
+        dueAt: input.dueAt,
+        notes: input.notes ?? "",
+        shareToken: newShareToken(),
+      };
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({ ...prev, invoices: [invoice, ...prev.invoices] }));
+        return invoice;
+      }
+      const payload = {
+        company_id: user.companyId,
+        number,
+        name: invoice.name,
+        client_id: invoice.clientId || null,
+        job_id: invoice.jobId,
+        notes: invoice.notes,
+        due_at: invoice.dueAt,
+        share_token: invoice.shareToken,
+      };
+      let { data, error } = await supabase.from("invoices").insert(payload).select("*").single();
+      if (error && isMissingShareToken(error)) {
+        const retry = await supabase
+          .from("invoices")
+          .insert({
+            company_id: payload.company_id,
+            number: payload.number,
+            name: payload.name,
+            client_id: payload.client_id,
+            job_id: payload.job_id,
+            notes: payload.notes,
+            due_at: payload.due_at,
+          })
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+      }
       if (error || !data) {
         toast.error(error?.message ?? "Could not create the invoice.");
         throw error ?? new Error("Could not create the invoice.");
       }
-      const invoice = mapInvoice(data);
-      setState((prev) => ({ ...prev, invoices: [invoice, ...prev.invoices] }));
-      return invoice;
+      const mapped = { ...invoice, ...mapInvoice(data), id: data.id, number: data.number || number };
+      setState((prev) => ({ ...prev, invoices: [mapped, ...prev.invoices] }));
+      return mapped;
     },
     [state.invoices, user.companyId]
   );
 
   const sendInvoice = useCallback(async (id: string) => {
-    const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
-    const { error } = await supabase.from("invoices").update({ status: "sent" }).eq("id", id);
+    const current = state.invoices.find((invoice) => invoice.id === id);
+    if (!current) return;
+    const shareToken = current.shareToken || newShareToken();
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        invoices: prev.invoices.map((invoice) =>
+          invoice.id === id ? { ...invoice, status: "sent" as const, shareToken } : invoice
+        ),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    let { error } = await supabase
+      .from("invoices")
+      .update({ status: "sent", share_token: shareToken })
+      .eq("id", id);
+    if (error && isMissingShareToken(error)) {
+      const retry = await supabase.from("invoices").update({ status: "sent" }).eq("id", id);
+      error = retry.error;
+    }
     if (error) {
       toast.error(error.message);
       return;
     }
-    setState((prev) => ({
-      ...prev,
-      invoices: prev.invoices.map((invoice) =>
-        invoice.id === id ? { ...invoice, status: "sent" } : invoice
-      ),
-    }));
-  }, []);
+    apply();
+  }, [state.invoices]);
+
+  const ensureInvoiceShareToken = useCallback(async (id: string) => {
+    const current = state.invoices.find((invoice) => invoice.id === id);
+    if (!current) throw new Error("Invoice not found.");
+    if (current.shareToken) return current.shareToken;
+    const shareToken = newShareToken();
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        invoices: prev.invoices.map((invoice) =>
+          invoice.id === id ? { ...invoice, shareToken } : invoice
+        ),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return shareToken;
+    }
+    const { error } = await supabase.from("invoices").update(invoicePatch({ shareToken })).eq("id", id);
+    if (error) {
+      if (isMissingShareToken(error)) {
+        apply();
+        return shareToken;
+      }
+      toast.error(error.message);
+      throw error;
+    }
+    apply();
+    return shareToken;
+  }, [state.invoices]);
 
   const voidInvoice = useCallback(async (id: string) => {
     const supabase = requireClient();
@@ -2826,6 +2972,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       sendEstimate,
       acceptEstimate,
       declineEstimate,
+      markEstimateViewed,
+      ensureEstimateShareToken,
       addEstimateLineFromCatalog,
       addCustomEstimateLine,
       updateEstimateLine,
@@ -2835,6 +2983,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       convertEstimateToInvoice,
       addInvoice,
       sendInvoice,
+      ensureInvoiceShareToken,
       voidInvoice,
       recordPayment,
       addScheduleEvent,
@@ -2892,6 +3041,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       sendEstimate,
       acceptEstimate,
       declineEstimate,
+      markEstimateViewed,
+      ensureEstimateShareToken,
       addEstimateLineFromCatalog,
       addCustomEstimateLine,
       updateEstimateLine,
@@ -2901,6 +3052,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       convertEstimateToInvoice,
       addInvoice,
       sendInvoice,
+      ensureInvoiceShareToken,
       voidInvoice,
       recordPayment,
       addScheduleEvent,
@@ -2928,4 +3080,8 @@ export function useCrm() {
     throw new Error("useCrm must be used within CrmProvider");
   }
   return context;
+}
+
+export function useCrmOptional() {
+  return useContext(CrmContext);
 }

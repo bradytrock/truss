@@ -396,6 +396,7 @@ export type Database = {
           city: string;
           state: string;
           postal_code: string;
+          share_token: string;
         };
         Insert: {
           id?: string;
@@ -423,6 +424,7 @@ export type Database = {
           city?: string;
           state?: string;
           postal_code?: string;
+          share_token?: string;
         };
         Update: Partial<Database["public"]["Tables"]["estimates"]["Insert"]>;
         Relationships: [];
@@ -477,6 +479,7 @@ export type Database = {
           due_at: string | null;
           notes: string;
           created_at: string;
+          share_token: string;
         };
         Insert: {
           id?: string;
@@ -490,6 +493,7 @@ export type Database = {
           issued_at?: string;
           due_at?: string | null;
           notes?: string;
+          share_token?: string;
         };
         Update: Partial<Database["public"]["Tables"]["invoices"]["Insert"]>;
         Relationships: [];
@@ -730,6 +734,14 @@ export type Database = {
       can_view_staff_calendar: {
         Args: { target_staff_id: string };
         Returns: boolean;
+      };
+      shared_estimate: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      shared_invoice: {
+        Args: { p_token: string };
+        Returns: Json;
       };
     };
     Enums: {

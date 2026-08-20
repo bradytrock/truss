@@ -25,8 +25,13 @@ function Shell({ children }: { children: ReactNode }) {
     pathname.startsWith("/login") ||
     pathname.startsWith("/signup") ||
     pathname.startsWith("/auth");
+  const isShare = pathname.startsWith("/share");
 
   if (isAuth) return children;
+
+  if (isShare) {
+    return <CrmProvider>{children}</CrmProvider>;
+  }
 
   return (
     <CrmProvider>

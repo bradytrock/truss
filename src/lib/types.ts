@@ -343,6 +343,7 @@ export interface Estimate {
   city: string;
   state: string;
   postalCode: string;
+  shareToken: string;
 }
 
 export interface EstimateLine {
@@ -372,6 +373,7 @@ export interface Invoice {
   issuedAt: string;
   dueAt: string | null;
   notes: string;
+  shareToken: string;
 }
 
 export interface InvoiceLine {

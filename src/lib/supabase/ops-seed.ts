@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { seedState } from "@/lib/seed";
-import { isMissingEstimateWriter } from "@/lib/supabase/schema-errors";
+import { isMissingEstimateWriter, isMissingShareToken } from "@/lib/supabase/schema-errors";
 import type { Database } from "@/lib/supabase/database.types";
 
 type Client = SupabaseClient<Database>;
@@ -118,10 +118,17 @@ export async function insertOperations(
         city: estimate.city,
         state: estimate.state,
         postal_code: estimate.postalCode,
+        share_token: estimate.shareToken,
       },
     ];
   });
   let { error: estimateError } = await supabase.from("estimates").insert(estimateRows);
+  if (estimateError && isMissingShareToken(estimateError)) {
+    const retry = await supabase.from("estimates").insert(
+      estimateRows.map(({ share_token: _shareToken, ...row }) => row),
+    );
+    estimateError = retry.error;
+  }
   if (estimateError && isMissingEstimateWriter(estimateError)) {
     const retry = await supabase.from("estimates").insert(
       estimateRows.map((row) => ({
@@ -185,29 +192,53 @@ export async function insertOperations(
   }
   if (estimateLineError) throw estimateLineError;
 
-  const { error: invoiceError } = await supabase.from("invoices").insert(
-    seed.invoices.flatMap((invoice) => {
-      const clientId = invoice.clientId
-        ? ids.get(invoice.clientId) ?? null
-        : householdId;
-      if (invoice.clientId && !clientId) return [];
-      return [
-        {
-          id: remap(invoice.id, ids),
-          company_id: companyId,
-          number: invoice.number,
-          name: invoice.name,
-          client_id: clientId,
-          job_id: invoice.jobId ? ids.get(invoice.jobId) ?? null : null,
-          estimate_id: invoice.estimateId ? ids.get(invoice.estimateId) ?? null : null,
-          status: invoice.status,
-          issued_at: invoice.issuedAt,
-          due_at: invoice.dueAt,
-          notes: invoice.notes,
-        },
-      ];
-    })
-  );
+  const invoiceRows = seed.invoices.flatMap((invoice) => {
+    const clientId = invoice.clientId
+      ? ids.get(invoice.clientId) ?? null
+      : householdId;
+    if (invoice.clientId && !clientId) return [];
+    return [
+      {
+        id: remap(invoice.id, ids),
+        company_id: companyId,
+        number: invoice.number,
+        name: invoice.name,
+        client_id: clientId,
+        job_id: invoice.jobId ? ids.get(invoice.jobId) ?? null : null,
+        estimate_id: invoice.estimateId ? ids.get(invoice.estimateId) ?? null : null,
+        status: invoice.status,
+        issued_at: invoice.issuedAt,
+        due_at: invoice.dueAt,
+        notes: invoice.notes,
+        share_token: invoice.shareToken,
+      },
+    ];
+  });
+  let { error: invoiceError } = await supabase.from("invoices").insert(invoiceRows);
+  if (invoiceError && isMissingShareToken(invoiceError)) {
+    const retry = await supabase.from("invoices").insert(
+      invoiceRows.map(({ share_token: _shareToken, ...row }) => row),
+    );
+    invoiceError = retry.error;
+  }
+  if (invoiceError && isMissingEstimateWriter(invoiceError)) {
+    const retry = await supabase.from("invoices").insert(
+      invoiceRows.map((row) => ({
+        id: row.id,
+        company_id: row.company_id,
+        number: row.number,
+        name: row.name,
+        client_id: row.client_id,
+        job_id: row.job_id,
+        estimate_id: row.estimate_id,
+        status: row.status,
+        issued_at: row.issued_at,
+        due_at: row.due_at,
+        notes: row.notes,
+      })),
+    );
+    invoiceError = retry.error;
+  }
   if (invoiceError) throw invoiceError;
 
   const { error: invoiceLineError } = await supabase.from("invoice_lines").insert(

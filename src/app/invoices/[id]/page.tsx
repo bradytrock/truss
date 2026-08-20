@@ -4,29 +4,24 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableFooter,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { RecordPaymentDialog } from "@/components/create-ops-dialogs";
 import { RecordProperty } from "@/components/app-shell";
-import { CompanyLetterhead } from "@/components/company-letterhead";
+import { InvoiceDocument } from "@/components/invoice-document";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
+import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { InvoiceStatusBadge } from "@/components/status-badge";
+import { downloadInvoicePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate, formatMoney } from "@/lib/format";
+import { shareUrl } from "@/lib/share";
+import type { Invoice } from "@/lib/types";
 import {
   derivedInvoiceStatus,
   invoiceBalance,
   invoiceTotal,
-  lineAmount,
   paidOnInvoice,
 } from "@/lib/money";
 
@@ -35,6 +30,8 @@ export default function InvoiceDetailPage() {
   const crm = useCrm();
   const invoice = crm.getInvoice(id);
   const [payOpen, setPayOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [pending, setPending] = useState(false);
 
   if (!crm.hydrated) return <LoadingScreen />;
   if (!invoice) {
@@ -51,48 +48,75 @@ export default function InvoiceDetailPage() {
     );
   }
 
-  const job = invoice.jobId ? crm.getJob(invoice.jobId) : undefined;
-  const estimate = invoice.estimateId ? crm.getEstimate(invoice.estimateId) : undefined;
+  const record: Invoice = invoice;
+  const job = record.jobId ? crm.getJob(record.jobId) : undefined;
+  const estimate = record.estimateId ? crm.getEstimate(record.estimateId) : undefined;
   const lines = crm.invoiceLines
-    .filter((line) => line.invoiceId === invoice.id)
+    .filter((line) => line.invoiceId === record.id)
     .sort((a, b) => a.sortOrder - b.sortOrder);
-  const payments = crm.payments.filter((payment) => payment.invoiceId === invoice.id);
-  const status = derivedInvoiceStatus(invoice, crm.invoiceLines, crm.payments);
-  const total = invoiceTotal(invoice.id, crm.invoiceLines);
-  const paid = paidOnInvoice(invoice.id, crm.payments);
-  const balance = invoiceBalance(invoice.id, crm.invoiceLines, crm.payments);
+  const payments = crm.payments.filter((payment) => payment.invoiceId === record.id);
+  const status = derivedInvoiceStatus(record, crm.invoiceLines, crm.payments);
+  const total = invoiceTotal(record.id, crm.invoiceLines);
+  const paid = paidOnInvoice(record.id, crm.payments);
+  const balance = invoiceBalance(record.id, crm.invoiceLines, crm.payments);
+  const customer = crm.customerName(record);
+
+  function downloadPdf() {
+    if (lines.length === 0) {
+      toast.error("Add at least one line before generating a PDF.");
+      return;
+    }
+    return downloadInvoicePdf({
+      invoice: record,
+      lines,
+      payments,
+      company: crm.company,
+      customer,
+    });
+  }
+
+  async function openShare(markSent: boolean) {
+    setPending(true);
+    try {
+      if (markSent) await crm.sendInvoice(record.id);
+      else await crm.ensureInvoiceShareToken(record.id);
+      setShareOpen(true);
+    } finally {
+      setPending(false);
+    }
+  }
 
   return (
     <div className="space-y-5">
-      <CompanyLetterhead className="border-b pb-4" />
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            {invoice.number}
+            {record.number}
           </p>
           <h1 className="font-heading text-[1.85rem] leading-[1.1] font-medium text-balance">
-            {invoice.name}
+            {record.name}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <InvoiceStatusBadge status={status} />
-            <span className="text-sm text-muted-foreground">
-              {crm.customerName(invoice)}
-            </span>
+            <span className="text-sm text-muted-foreground">{customer}</span>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {invoice.status === "draft" ? (
-            <Button
-              onClick={() => {
-                void crm.sendInvoice(invoice.id);
-                toast.success("Invoice marked sent.");
-              }}
-            >
-              Mark sent
+          <Button variant="outline" disabled={pending || lines.length === 0} onClick={() => void downloadPdf()}>
+            <Download />
+            PDF
+          </Button>
+          {record.status === "draft" ? (
+            <Button disabled={pending} onClick={() => void openShare(true)}>
+              Send
             </Button>
-          ) : null}
+          ) : (
+            <Button variant="outline" disabled={pending} onClick={() => void openShare(false)}>
+              Share
+            </Button>
+          )}
           {status !== "void" && status !== "paid" ? (
-            <Button variant={invoice.status === "draft" ? "outline" : "default"} onClick={() => setPayOpen(true)}>
+            <Button variant={record.status === "draft" ? "outline" : "default"} onClick={() => setPayOpen(true)}>
               Record payment
             </Button>
           ) : null}
@@ -100,7 +124,7 @@ export default function InvoiceDetailPage() {
             <Button
               variant="outline"
               onClick={() => {
-                void crm.voidInvoice(invoice.id);
+                void crm.voidInvoice(record.id);
                 toast.message("Invoice voided.");
               }}
             >
@@ -133,55 +157,14 @@ export default function InvoiceDetailPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="space-y-4">
-          <Card>
-            <CardHeader className="border-b">
-              <CardTitle>Line items</CardTitle>
-            </CardHeader>
-            <CardContent className="px-0">
-              {lines.length === 0 ? (
-                <p className="px-4 py-8 text-sm text-muted-foreground">
-                  No lines on this invoice. Convert an estimate to copy the schedule of values.
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Qty</TableHead>
-                      <TableHead>Unit</TableHead>
-                      <TableHead className="text-right">Unit cost</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {lines.map((line) => (
-                      <TableRow key={line.id}>
-                        <TableCell>{line.description}</TableCell>
-                        <TableCell className="tabular-nums">{line.quantity}</TableCell>
-                        <TableCell>{line.unit}</TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatMoney(line.unitCost)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatMoney(lineAmount(line))}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                  <TableFooter>
-                    <TableRow>
-                      <TableCell colSpan={4} className="font-medium">
-                        Total
-                      </TableCell>
-                      <TableCell className="text-right font-semibold tabular-nums">
-                        {formatCurrencyFull(total)}
-                      </TableCell>
-                    </TableRow>
-                  </TableFooter>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+          <InvoiceDocument
+            invoice={record}
+            lines={lines}
+            payments={payments}
+            customer={customer}
+            company={crm.company}
+            status={status}
+          />
 
           <Card>
             <CardHeader className="border-b">
@@ -214,8 +197,8 @@ export default function InvoiceDetailPage() {
             <CardTitle>Billing</CardTitle>
           </CardHeader>
           <CardContent>
-            <RecordProperty label="Issued">{formatDate(invoice.issuedAt)}</RecordProperty>
-            <RecordProperty label="Due">{formatDate(invoice.dueAt)}</RecordProperty>
+            <RecordProperty label="Issued">{formatDate(record.issuedAt)}</RecordProperty>
+            <RecordProperty label="Due">{formatDate(record.dueAt)}</RecordProperty>
             <RecordProperty label="Job">
               {job ? (
                 <Link href={`/jobs/${job.id}`} className="hover:underline">
@@ -234,12 +217,20 @@ export default function InvoiceDetailPage() {
                 "—"
               )}
             </RecordProperty>
-            {invoice.notes ? <RecordProperty label="Notes">{invoice.notes}</RecordProperty> : null}
+            {record.notes ? <RecordProperty label="Notes">{record.notes}</RecordProperty> : null}
           </CardContent>
         </Card>
       </div>
 
-      <RecordPaymentDialog open={payOpen} onOpenChange={setPayOpen} invoiceId={invoice.id} />
+      <RecordPaymentDialog open={payOpen} onOpenChange={setPayOpen} invoiceId={record.id} />
+      <ShareLinkDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        title={`Share ${record.number}`}
+        description="Copy this link for the homeowner. They can open the invoice and download a PDF — no login required."
+        url={record.shareToken ? shareUrl("i", record.shareToken) : ""}
+        onDownloadPdf={downloadPdf}
+      />
     </div>
   );
 }

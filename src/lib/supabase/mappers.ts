@@ -328,6 +328,7 @@ export function mapEstimate(row: EstimateRow): Estimate {
     city: row.city ?? "",
     state: row.state ?? "",
     postalCode: row.postal_code ?? "",
+    shareToken: row.share_token ?? "",
   });
 }
 
@@ -372,6 +373,7 @@ export function estimatePatch(patch: Partial<Estimate>) {
   if (patch.city !== undefined) row.city = patch.city;
   if (patch.state !== undefined) row.state = patch.state;
   if (patch.postalCode !== undefined) row.postal_code = patch.postalCode;
+  if (patch.shareToken !== undefined) row.share_token = patch.shareToken;
   return row;
 }
 
@@ -403,7 +405,22 @@ export function mapInvoice(row: InvoiceRow): Invoice {
     issuedAt: row.issued_at,
     dueAt: row.due_at,
     notes: row.notes,
+    shareToken: row.share_token?.trim() || "",
   };
+}
+
+export function invoicePatch(patch: Partial<Invoice>) {
+  const row: Database["public"]["Tables"]["invoices"]["Update"] = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.clientId !== undefined) row.client_id = patch.clientId;
+  if (patch.jobId !== undefined) row.job_id = patch.jobId;
+  if (patch.estimateId !== undefined) row.estimate_id = patch.estimateId;
+  if (patch.status !== undefined) row.status = patch.status;
+  if (patch.issuedAt !== undefined) row.issued_at = patch.issuedAt;
+  if (patch.dueAt !== undefined) row.due_at = patch.dueAt;
+  if (patch.notes !== undefined) row.notes = patch.notes;
+  if (patch.shareToken !== undefined) row.share_token = patch.shareToken;
+  return row;
 }
 
 export function mapInvoiceLine(row: InvoiceLineRow): InvoiceLine {
