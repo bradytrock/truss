@@ -20,7 +20,7 @@ import { EmptyState, LoadingScreen, RecordCode } from "@/components/page-chrome"
 import { EstimateStatusBadge, StageBadge, TypeBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { daysUntil, formatCurrencyFull, formatDate } from "@/lib/format";
-import { sumLines } from "@/lib/money";
+import { amountForEstimate } from "@/lib/estimate-totals";
 import { CreateEstimateDialog } from "@/components/create-ops-dialogs";
 import {
   DELIVERY_LABELS,
@@ -219,7 +219,7 @@ export default function OpportunityDetailPage() {
                         </Link>
                         <p className="text-xs tabular-nums text-muted-foreground">
                           {formatCurrencyFull(
-                            sumLines(crm.estimateLines.filter((line) => line.estimateId === estimate.id))
+                            amountForEstimate(estimate, crm.estimateLines)
                           )}
                         </p>
                       </div>

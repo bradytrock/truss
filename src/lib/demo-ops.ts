@@ -1,5 +1,11 @@
 import type { CrmState } from "@/lib/types";
 import {
+  ESTIMATE_LINE_EXTRAS,
+  ESTIMATE_RECORD_EXTRAS,
+  fillEstimate,
+  fillEstimateLine,
+} from "@/lib/estimate-totals";
+import {
   extraCatalog,
   extraEstimateLines,
   extraEstimates,
@@ -45,8 +51,12 @@ export const demoOps: Pick<
   | "photos"
 > = {
   catalog: [...catalogCore, ...extraCatalog],
-  estimates: extraEstimates,
-  estimateLines: extraEstimateLines,
+  estimates: extraEstimates.map((estimate) =>
+    fillEstimate({ ...estimate, ...ESTIMATE_RECORD_EXTRAS[estimate.id] }),
+  ),
+  estimateLines: extraEstimateLines.map((line) =>
+    fillEstimateLine({ ...line, ...ESTIMATE_LINE_EXTRAS[line.id] }),
+  ),
   invoices: extraInvoices,
   invoiceLines: extraInvoiceLines,
   payments: extraPayments,

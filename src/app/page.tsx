@@ -17,7 +17,8 @@ import {
   greeting,
   localYmd,
 } from "@/lib/format";
-import { derivedInvoiceStatus, invoiceBalance, sumLines } from "@/lib/money";
+import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
+import { amountForEstimate } from "@/lib/estimate-totals";
 import { PIPELINE_STAGES, STAGE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { COURSE, overallProgress, staffProgress } from "@/lib/training/engine";
@@ -52,7 +53,7 @@ export default function HomePage() {
     );
     const proposalValue = proposals.reduce(
       (sum, estimate) =>
-        sum + sumLines(crm.estimateLines.filter((line) => line.estimateId === estimate.id)),
+        sum + amountForEstimate(estimate, crm.estimateLines),
       0
     );
     const ar = crm.invoices.reduce((sum, invoice) => {

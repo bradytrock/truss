@@ -2,6 +2,7 @@ import type { Client, Contact, CrmState, Job, Opportunity } from "@/lib/types";
 
 export type CustomerRecord = {
   clientId?: string | null;
+  contactId?: string | null;
   primaryContactId?: string | null;
   jobId?: string | null;
   opportunityId?: string | null;
@@ -15,7 +16,7 @@ export function resolveCustomerName(record: CustomerRecord, book: PartyBook): st
     : undefined;
   if (client) return client.name;
 
-  let contactId = record.primaryContactId ?? null;
+  let contactId = record.contactId ?? record.primaryContactId ?? null;
   if (!contactId && record.jobId) {
     contactId = book.jobs.find((job) => job.id === record.jobId)?.primaryContactId ?? null;
   }

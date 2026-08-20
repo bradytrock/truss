@@ -1,0 +1,1053 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import { toast } from "sonner";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  Copy,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import { CompanyLetterhead } from "@/components/company-letterhead";
+import { EstimateStatusBadge } from "@/components/status-badge";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { useCrm } from "@/lib/crm-store";
+import {
+  COMMON_UNITS,
+  estimateTotals,
+  groupEstimateLines,
+  lineAmount,
+  lineIncluded,
+  linesForEstimate,
+  type AdjustmentKind,
+} from "@/lib/estimate-totals";
+import { formatDate, formatMoney } from "@/lib/format";
+import { formatJobSite } from "@/lib/leads";
+import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine } from "@/lib/types";
+import { cn } from "@/lib/utils";
+
+function CommitInput({
+  value,
+  onCommit,
+  className,
+  parse,
+  ...props
+}: Omit<ComponentProps<typeof Input>, "value" | "onChange" | "onBlur"> & {
+  value: string | number;
+  onCommit: (value: string) => void;
+  parse?: (value: string) => string;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => {
+    setDraft(String(value));
+  }, [value]);
+  return (
+    <Input
+      {...props}
+      className={className}
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        const next = parse ? parse(draft) : draft;
+        if (next !== String(value)) onCommit(next);
+        else setDraft(String(value));
+      }}
+    />
+  );
+}
+
+function CommitTextarea({
+  value,
+  onCommit,
+  ...props
+}: Omit<ComponentProps<typeof Textarea>, "value" | "onChange" | "onBlur"> & {
+  value: string;
+  onCommit: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+  return (
+    <Textarea
+      {...props}
+      value={draft}
+      onChange={(event) => setDraft(event.target.value)}
+      onBlur={() => {
+        if (draft !== value) onCommit(draft);
+      }}
+    />
+  );
+}
+
+function TotalsStack({
+  estimate,
+  lines,
+  className,
+}: {
+  estimate: Estimate;
+  lines: EstimateLine[];
+  className?: string;
+}) {
+  const totals = estimateTotals(estimate, lines);
+  return (
+    <dl className={cn("space-y-1.5 text-sm", className)}>
+      <div className="flex justify-between gap-4">
+        <dt className="text-muted-foreground">Subtotal</dt>
+        <dd className="tabular-nums">{formatMoney(totals.subtotal)}</dd>
+      </div>
+      {totals.discount > 0 ? (
+        <div className="flex justify-between gap-4">
+          <dt className="text-muted-foreground">
+            Discount
+            {estimate.discountKind === "percent" ? ` (${estimate.discountValue}%)` : ""}
+          </dt>
+          <dd className="tabular-nums">−{formatMoney(totals.discount)}</dd>
+        </div>
+      ) : null}
+      {totals.tax > 0 ? (
+        <div className="flex justify-between gap-4">
+          <dt className="text-muted-foreground">Tax ({estimate.taxRate}%)</dt>
+          <dd className="tabular-nums">{formatMoney(totals.tax)}</dd>
+        </div>
+      ) : null}
+      <div className="flex justify-between gap-4 border-t pt-2 font-medium">
+        <dt>Total</dt>
+        <dd className="tabular-nums">{formatMoney(totals.total)}</dd>
+      </div>
+      {totals.deposit > 0 ? (
+        <div className="flex justify-between gap-4 text-muted-foreground">
+          <dt>
+            Deposit due
+            {estimate.depositKind === "percent" ? ` (${estimate.depositValue}%)` : ""}
+          </dt>
+          <dd className="tabular-nums">{formatMoney(totals.deposit)}</dd>
+        </div>
+      ) : null}
+      {totals.optionalCount > 0 ? (
+        <p className="pt-1 text-xs text-muted-foreground">
+          {formatMoney(totals.optionalTotal)} in optional work is not in this total.
+        </p>
+      ) : null}
+    </dl>
+  );
+}
+
+function EstimatePreview({
+  estimate,
+  lines,
+  customer,
+  site,
+  onToggleOptional,
+  selectable,
+}: {
+  estimate: Estimate;
+  lines: EstimateLine[];
+  customer: string;
+  site: string;
+  onToggleOptional?: (line: EstimateLine, selected: boolean) => void;
+  selectable?: boolean;
+}) {
+  const groups = groupEstimateLines(lines);
+  return (
+    <div className="space-y-6 rounded-md border bg-card p-5 sm:p-7">
+      <CompanyLetterhead />
+      <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            {estimate.number}
+          </p>
+          <h2 className="font-heading mt-1 text-2xl font-medium text-balance">{estimate.name}</h2>
+          <p className="mt-2 text-sm text-muted-foreground">Prepared for {customer}</p>
+          {site ? <p className="text-sm text-muted-foreground">{site}</p> : null}
+        </div>
+        <div className="text-sm sm:text-right">
+          <EstimateStatusBadge status={estimate.status} />
+          <p className="mt-2 text-muted-foreground">Valid until {formatDate(estimate.validUntil)}</p>
+        </div>
+      </div>
+      {estimate.intro ? (
+        <p className="text-sm leading-relaxed whitespace-pre-wrap">{estimate.intro}</p>
+      ) : null}
+      {groups.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No line items on this proposal yet.</p>
+      ) : (
+        <div className="space-y-5">
+          {groups.map((group) => (
+            <section key={group.name}>
+              <h3 className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">
+                {group.name}
+              </h3>
+              <ul className="divide-y border-y">
+                {group.lines.map((line) => {
+                  const included = lineIncluded(line);
+                  return (
+                    <li
+                      key={line.id}
+                      className={cn(
+                        "flex items-start justify-between gap-3 py-3",
+                        !included && "opacity-70"
+                      )}
+                    >
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {line.optional && selectable && onToggleOptional ? (
+                            <Checkbox
+                              checked={line.selected}
+                              onCheckedChange={(value) => onToggleOptional(line, Boolean(value))}
+                              aria-label={`Include ${line.title || line.description}`}
+                            />
+                          ) : null}
+                          <p className="font-medium">{line.title || line.description}</p>
+                          {line.optional ? (
+                            <Badge variant="secondary">{included ? "Selected" : "Optional"}</Badge>
+                          ) : null}
+                        </div>
+                        {line.description && line.description !== line.title ? (
+                          <p className="mt-0.5 text-sm text-muted-foreground">{line.description}</p>
+                        ) : null}
+                        <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+                          {line.quantity} {line.unit} × {formatMoney(line.unitCost)}
+                        </p>
+                      </div>
+                      <p className={cn("shrink-0 tabular-nums", !included && "line-through")}>
+                        {formatMoney(lineAmount(line))}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
+      <TotalsStack estimate={estimate} lines={lines} className="ml-auto max-w-xs" />
+      {estimate.terms ? (
+        <div>
+          <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">
+            {estimate.terms}
+          </p>
+        </div>
+      ) : null}
+      {estimate.notes ? (
+        <div>
+          <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">
+            Internal notes
+          </h3>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">
+            {estimate.notes}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PriceBookSheet({
+  open,
+  onOpenChange,
+  onPick,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onPick: (catalogItemId: string) => void;
+}) {
+  const { catalog } = useCrm();
+  const groups = useMemo(() => {
+    const kinds = Array.from(new Set(catalog.map((item) => item.kind))) as CatalogKind[];
+    return kinds.map((kind) => ({
+      kind,
+      items: catalog.filter((item) => item.kind === kind),
+    }));
+  }, [catalog]);
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-full sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>Price book</SheetTitle>
+          <SheetDescription>
+            Drop a catalog item onto this proposal. Quantity and price stay editable after you add it.
+          </SheetDescription>
+        </SheetHeader>
+        <Command className="min-h-0 flex-1 border-0 bg-transparent p-0">
+          <div className="px-4">
+            <CommandInput placeholder="Search the book" />
+          </div>
+          <CommandList className="max-h-none flex-1 px-2">
+            <CommandEmpty>No items match that search.</CommandEmpty>
+            {groups.map((group) => (
+              <CommandGroup key={group.kind} heading={CATALOG_KIND_LABELS[group.kind]}>
+                {group.items.map((item) => (
+                  <CommandItem
+                    key={item.id}
+                    value={`${item.costCode} ${item.name}`}
+                    onSelect={() => {
+                      onPick(item.id);
+                      onOpenChange(false);
+                    }}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p>{item.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.costCode} · {item.unit}
+                      </p>
+                    </div>
+                    <span className="tabular-nums text-muted-foreground">
+                      {formatMoney(item.unitCost)}
+                    </span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+function LineCard({
+  line,
+  editable,
+  onPatch,
+  onMove,
+  onRemove,
+}: {
+  line: EstimateLine;
+  editable: boolean;
+  onPatch: (patch: Partial<EstimateLine>) => void;
+  onMove: (direction: "up" | "down") => void;
+  onRemove: () => void;
+}) {
+  const units = COMMON_UNITS.includes(line.unit) ? COMMON_UNITS : [line.unit, ...COMMON_UNITS];
+  return (
+    <div
+      className={cn(
+        "rounded-md border bg-card p-3",
+        line.optional && !line.selected && "border-dashed"
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <div className="grid min-w-0 flex-1 gap-2">
+          <CommitInput
+            value={line.title}
+            disabled={!editable}
+            placeholder="Title"
+            onCommit={(value) => onPatch({ title: value })}
+          />
+          <CommitTextarea
+            value={line.description}
+            disabled={!editable}
+            rows={2}
+            placeholder="What the homeowner sees under the title"
+            onCommit={(value) => onPatch({ description: value })}
+          />
+        </div>
+        {editable ? (
+          <div className="flex flex-col gap-1">
+            <Button size="icon-xs" variant="ghost" aria-label="Move up" onClick={() => onMove("up")}>
+              <ArrowUp />
+            </Button>
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              aria-label="Move down"
+              onClick={() => onMove("down")}
+            >
+              <ArrowDown />
+            </Button>
+            <Button size="icon-xs" variant="ghost" aria-label="Remove line" onClick={onRemove}>
+              <Trash2 />
+            </Button>
+          </div>
+        ) : null}
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div>
+          <Label className="text-xs text-muted-foreground">Qty</Label>
+          <CommitInput
+            type="number"
+            min={0}
+            step="0.01"
+            disabled={!editable}
+            value={line.quantity}
+            onCommit={(value) => onPatch({ quantity: Number(value) || 0 })}
+          />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Unit</Label>
+          {editable ? (
+            <Select
+              value={line.unit}
+              onValueChange={(value) => onPatch({ unit: String(value ?? line.unit) })}
+              items={units.map((unit) => ({ value: unit, label: unit }))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {units.map((unit) => (
+                  <SelectItem key={unit} value={unit}>
+                    {unit}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="mt-1 text-sm">{line.unit}</p>
+          )}
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Unit price</Label>
+          <CommitInput
+            type="number"
+            min={0}
+            step="0.01"
+            disabled={!editable}
+            className="text-right"
+            value={line.unitCost}
+            onCommit={(value) => onPatch({ unitCost: Number(value) || 0 })}
+          />
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Amount</Label>
+          <p className="mt-1.5 text-right text-sm font-medium tabular-nums">
+            {formatMoney(lineAmount(line))}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-4 text-sm">
+        <label className="flex items-center gap-2">
+          <Checkbox
+            checked={line.optional}
+            disabled={!editable}
+            onCheckedChange={(value) =>
+              onPatch({ optional: Boolean(value), selected: Boolean(value) ? line.selected : true })
+            }
+          />
+          Optional
+        </label>
+        {line.optional ? (
+          <label className="flex items-center gap-2">
+            <Checkbox
+              checked={line.selected}
+              onCheckedChange={(value) => onPatch({ selected: Boolean(value) })}
+            />
+            Include in total
+          </label>
+        ) : null}
+        <label className="flex items-center gap-2">
+          <Checkbox
+            checked={line.taxable}
+            disabled={!editable}
+            onCheckedChange={(value) => onPatch({ taxable: Boolean(value) })}
+          />
+          Taxable
+        </label>
+      </div>
+    </div>
+  );
+}
+
+export function EstimateWriter({ estimate }: { estimate: Estimate }) {
+  const router = useRouter();
+  const crm = useCrm();
+  const [tab, setTab] = useState("write");
+  const [bookOpen, setBookOpen] = useState(false);
+  const [bookGroup, setBookGroup] = useState<string | undefined>();
+  const [pending, setPending] = useState(false);
+  const [sectionName, setSectionName] = useState("");
+
+  const lines = linesForEstimate(crm.estimateLines, estimate.id);
+  const groups = groupEstimateLines(lines);
+  const totals = estimateTotals(estimate, lines);
+  const relatedInvoice = crm.invoices.find((invoice) => invoice.estimateId === estimate.id);
+  const editable = estimate.status === "draft";
+  const optionalOpen = estimate.status === "draft" || estimate.status === "sent" || estimate.status === "viewed";
+  const canConvert =
+    (estimate.status === "sent" || estimate.status === "viewed" || estimate.status === "accepted") &&
+    !relatedInvoice;
+  const contact = estimate.contactId ? crm.getContact(estimate.contactId) : undefined;
+  const client = crm.getClient(estimate.clientId);
+  const opportunity = estimate.opportunityId ? crm.getOpportunity(estimate.opportunityId) : undefined;
+  const job = estimate.jobId ? crm.getJob(estimate.jobId) : undefined;
+  const customer = crm.customerName(estimate);
+  const site =
+    formatJobSite({
+      street: estimate.street,
+      city: estimate.city,
+      state: estimate.state,
+      postalCode: estimate.postalCode,
+    }) || "";
+
+  function lastGroup() {
+    return groups[groups.length - 1]?.name;
+  }
+
+  async function handleConvert() {
+    setPending(true);
+    try {
+      const invoice = await crm.convertEstimateToInvoice(estimate.id);
+      toast.success(`${invoice.number} created from this proposal.`);
+      router.push(`/invoices/${invoice.id}`);
+    } catch {
+      setPending(false);
+    }
+  }
+
+  const actions = (
+    <div className="flex flex-wrap gap-2">
+      {estimate.status === "draft" ? (
+        <Button
+          disabled={pending || totals.includedCount === 0}
+          onClick={() => {
+            setPending(true);
+            void crm.sendEstimate(estimate.id).then(() => {
+              toast.success("Proposal marked sent.");
+              setPending(false);
+              setTab("preview");
+            });
+          }}
+        >
+          Send proposal
+        </Button>
+      ) : null}
+      {estimate.status === "sent" || estimate.status === "viewed" ? (
+        <>
+          <Button
+            onClick={() => {
+              void crm.acceptEstimate(estimate.id);
+              toast.success("Marked accepted.");
+            }}
+          >
+            Mark accepted
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              void crm.declineEstimate(estimate.id);
+              toast.message("Marked declined.");
+            }}
+          >
+            Decline
+          </Button>
+        </>
+      ) : null}
+      {canConvert ? (
+        <Button disabled={pending} variant={estimate.status === "accepted" ? "default" : "outline"} onClick={() => void handleConvert()}>
+          Convert to invoice
+        </Button>
+      ) : null}
+      {relatedInvoice ? (
+        <Button nativeButton={false} variant="outline" render={<Link href={`/invoices/${relatedInvoice.id}`} />}>
+          Open {relatedInvoice.number}
+        </Button>
+      ) : null}
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button variant="outline" />}>
+          More
+          <ChevronDown />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onClick={() => {
+              void crm.duplicateEstimate(estimate.id).then((copy) => {
+                toast.success(`${copy.number} drafted as a copy.`);
+                router.push(`/estimates/${copy.id}`);
+              });
+            }}
+          >
+            <Copy />
+            Duplicate
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+
+  const writer = (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Customer & job site</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Label>Homeowner</Label>
+            {editable ? (
+              <Select
+                value={estimate.contactId || "none"}
+                onValueChange={(value) => {
+                  const contactId = value === "none" ? null : String(value ?? "");
+                  const next = crm.contacts.find((item) => item.id === contactId);
+                  void crm.updateEstimate(estimate.id, {
+                    contactId,
+                    clientId: next?.clientId ?? estimate.clientId,
+                  });
+                }}
+                items={[
+                  { value: "none", label: "Choose a contact" },
+                  ...crm.contacts.map((item) => ({ value: item.id, label: item.name })),
+                ]}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Choose a contact</SelectItem>
+                  {crm.contacts.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="mt-1 text-sm">
+                {contact ? (
+                  <Link href={`/contacts/${contact.id}`} className="hover:underline">
+                    {contact.name}
+                  </Link>
+                ) : (
+                  customer
+                )}
+              </p>
+            )}
+            {client ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Company{" "}
+                <Link href={`/clients/${client.id}`} className="hover:underline">
+                  {client.name}
+                </Link>
+              </p>
+            ) : null}
+          </div>
+          <div>
+            <Label>Street</Label>
+            <CommitInput
+              disabled={!editable}
+              value={estimate.street}
+              placeholder="860 S Washington St"
+              onCommit={(value) => void crm.updateEstimate(estimate.id, { street: value })}
+            />
+          </div>
+          <div>
+            <Label>City</Label>
+            <CommitInput
+              disabled={!editable}
+              value={estimate.city}
+              onCommit={(value) => void crm.updateEstimate(estimate.id, { city: value })}
+            />
+          </div>
+          <div>
+            <Label>State</Label>
+            <CommitInput
+              disabled={!editable}
+              value={estimate.state}
+              onCommit={(value) => void crm.updateEstimate(estimate.id, { state: value })}
+            />
+          </div>
+          <div>
+            <Label>ZIP</Label>
+            <CommitInput
+              disabled={!editable}
+              value={estimate.postalCode}
+              onCommit={(value) => void crm.updateEstimate(estimate.id, { postalCode: value })}
+            />
+          </div>
+          <div>
+            <Label>Lead</Label>
+            <p className="mt-1 text-sm">
+              {opportunity ? (
+                <Link href={`/opportunities/${opportunity.id}`} className="hover:underline">
+                  {opportunity.name}
+                </Link>
+              ) : (
+                "—"
+              )}
+            </p>
+          </div>
+          <div>
+            <Label>Job</Label>
+            <p className="mt-1 text-sm">
+              {job ? (
+                <Link href={`/jobs/${job.id}`} className="hover:underline">
+                  {job.name}
+                </Link>
+              ) : (
+                "—"
+              )}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Cover note</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CommitTextarea
+            rows={3}
+            disabled={!editable}
+            value={estimate.intro}
+            placeholder="What this proposal covers, in the homeowner’s language."
+            onCommit={(value) => void crm.updateEstimate(estimate.id, { intro: value })}
+          />
+        </CardContent>
+      </Card>
+
+      <div className="space-y-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="font-heading text-lg font-medium">Line items</h2>
+          {editable ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setBookGroup(lastGroup());
+                  setBookOpen(true);
+                }}
+              >
+                <Plus />
+                Price book
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void crm.addCustomEstimateLine(estimate.id, lastGroup())}
+              >
+                Custom item
+              </Button>
+            </div>
+          ) : null}
+        </div>
+
+        {lines.length === 0 ? (
+          <div className="border border-dashed px-4 py-8">
+            <p className="font-medium">No lines yet</p>
+            <p className="mt-1 max-w-md text-sm text-muted-foreground">
+              Pull items from the price book or add a lump-sum line. Optional work stays out of the
+              total until you check it.
+            </p>
+            {editable ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button size="sm" onClick={() => setBookOpen(true)}>
+                  Add from price book
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => void crm.addCustomEstimateLine(estimate.id)}>
+                  Custom item
+                </Button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          groups.map((group) => (
+            <section key={group.name} className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <CommitInput
+                  className="h-8 max-w-xs font-medium"
+                  disabled={!editable}
+                  value={group.name}
+                  onCommit={(value) => {
+                    const next = value.trim() || "Items";
+                    if (next === group.name) return;
+                    for (const line of group.lines) {
+                      void crm.updateEstimateLine(line.id, { groupName: next });
+                    }
+                  }}
+                />
+                {editable ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setBookGroup(group.name);
+                      setBookOpen(true);
+                    }}
+                  >
+                    Add to section
+                  </Button>
+                ) : null}
+              </div>
+              {group.lines.map((line) => (
+                <LineCard
+                  key={line.id}
+                  line={line}
+                  editable={editable}
+                  onPatch={(patch) => void crm.updateEstimateLine(line.id, patch)}
+                  onMove={(direction) => void crm.reorderEstimateLine(line.id, direction)}
+                  onRemove={() => void crm.removeEstimateLine(line.id)}
+                />
+              ))}
+            </section>
+          ))
+        )}
+
+        {editable ? (
+          <form
+            className="flex flex-col gap-2 sm:flex-row"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const name = sectionName.trim() || "New section";
+              void crm.addCustomEstimateLine(estimate.id, name);
+              setSectionName("");
+            }}
+          >
+            <Input
+              value={sectionName}
+              onChange={(event) => setSectionName(event.target.value)}
+              placeholder="New section name — Demo, Roof, Allowances"
+            />
+            <Button type="submit" variant="outline">
+              Add section
+            </Button>
+          </form>
+        ) : null}
+      </div>
+
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Tax, discount & deposit</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <Label>Tax rate (%)</Label>
+            <CommitInput
+              type="number"
+              min={0}
+              step="0.01"
+              disabled={!editable}
+              value={estimate.taxRate}
+              onCommit={(value) => void crm.updateEstimate(estimate.id, { taxRate: Number(value) || 0 })}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">Applied only to taxable included lines, after discount.</p>
+          </div>
+          <div>
+            <Label>Valid until</Label>
+            <CommitInput
+              type="date"
+              disabled={!editable}
+              value={estimate.validUntil ?? ""}
+              onCommit={(value) => void crm.updateEstimate(estimate.id, { validUntil: value || null })}
+            />
+          </div>
+          <AdjustmentFields
+            label="Discount"
+            kind={estimate.discountKind}
+            value={estimate.discountValue}
+            disabled={!editable}
+            onChange={(discountKind, discountValue) =>
+              void crm.updateEstimate(estimate.id, { discountKind, discountValue })
+            }
+          />
+          <AdjustmentFields
+            label="Deposit"
+            kind={estimate.depositKind}
+            value={estimate.depositValue}
+            disabled={!editable}
+            onChange={(depositKind, depositValue) =>
+              void crm.updateEstimate(estimate.id, { depositKind, depositValue })
+            }
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Terms</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CommitTextarea
+            rows={4}
+            disabled={!editable}
+            value={estimate.terms}
+            onCommit={(value) => void crm.updateEstimate(estimate.id, { terms: value })}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Internal notes</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CommitTextarea
+            rows={3}
+            value={estimate.notes}
+            disabled={estimate.status === "declined"}
+            placeholder="Hold points, insurance notes, things the homeowner should not see."
+            onCommit={(value) => void crm.updateEstimate(estimate.id, { notes: value })}
+          />
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  const preview = (
+    <EstimatePreview
+      estimate={estimate}
+      lines={lines}
+      customer={customer}
+      site={site}
+      selectable={optionalOpen}
+      onToggleOptional={(line, selected) => void crm.updateEstimateLine(line.id, { selected })}
+    />
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="sticky top-0 z-20 -mx-5 flex flex-col gap-3 border-b bg-background/95 px-5 py-3 backdrop-blur sm:-mx-7 sm:px-7 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:backdrop-blur-none">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              {estimate.number}
+            </p>
+            {editable ? (
+              <CommitInput
+                className="font-heading h-auto border-0 bg-transparent px-0 text-[1.85rem] leading-[1.1] font-medium shadow-none focus-visible:ring-0"
+                value={estimate.name}
+                onCommit={(value) => {
+                  if (value.trim()) void crm.updateEstimate(estimate.id, { name: value.trim() });
+                }}
+              />
+            ) : (
+              <h1 className="font-heading text-[1.85rem] leading-[1.1] font-medium text-balance">
+                {estimate.name}
+              </h1>
+            )}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <EstimateStatusBadge status={estimate.status} />
+              <span className="text-sm text-muted-foreground">{customer}</span>
+              {site ? <span className="text-sm text-muted-foreground">· {site}</span> : null}
+            </div>
+          </div>
+          {actions}
+        </div>
+      </div>
+
+      <div className="rounded-md border bg-muted/40 px-4 py-3 sm:flex sm:items-center sm:justify-between">
+        <p className="text-sm text-muted-foreground">
+          {totals.includedCount} included
+          {totals.optionalCount ? ` · ${totals.optionalCount} optional off` : ""}
+        </p>
+        <p className="font-heading text-xl font-medium tabular-nums">{formatMoney(totals.total)}</p>
+      </div>
+
+      <div className="xl:hidden">
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList>
+            <TabsTrigger value="write">Write</TabsTrigger>
+            <TabsTrigger value="preview">Preview</TabsTrigger>
+          </TabsList>
+          <TabsContent value="write" className="mt-4">
+            {writer}
+          </TabsContent>
+          <TabsContent value="preview" className="mt-4">
+            {preview}
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      <div className="hidden gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)] xl:items-start">
+        {writer}
+        <div className="xl:sticky xl:top-4">{preview}</div>
+      </div>
+
+      <PriceBookSheet
+        open={bookOpen}
+        onOpenChange={setBookOpen}
+        onPick={(catalogItemId) => void crm.addEstimateLineFromCatalog(estimate.id, catalogItemId, bookGroup)}
+      />
+    </div>
+  );
+}
+
+function AdjustmentFields({
+  label,
+  kind,
+  value,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  kind: AdjustmentKind;
+  value: number;
+  disabled?: boolean;
+  onChange: (kind: AdjustmentKind, value: number) => void;
+}) {
+  return (
+    <div>
+      <Label>{label}</Label>
+      <div className="flex gap-2">
+        <Select
+          value={kind}
+          disabled={disabled}
+          onValueChange={(next) => onChange((next === "amount" ? "amount" : "percent") as AdjustmentKind, value)}
+          items={[
+            { value: "percent", label: "%" },
+            { value: "amount", label: "$" },
+          ]}
+        >
+          <SelectTrigger className="w-20">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="percent">%</SelectItem>
+            <SelectItem value="amount">$</SelectItem>
+          </SelectContent>
+        </Select>
+        <CommitInput
+          type="number"
+          min={0}
+          step="0.01"
+          disabled={disabled}
+          value={value}
+          onCommit={(next) => onChange(kind, Number(next) || 0)}
+        />
+      </div>
+    </div>
+  );
+}

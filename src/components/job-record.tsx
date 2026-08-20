@@ -61,7 +61,8 @@ import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate } from "@/lib/format";
 import { assignedCrewPatch, jobAddress, mapsUrl, uniqueIds, uniqueNames } from "@/lib/job-record";
 import { leadSourceLabel } from "@/lib/leads";
-import { derivedInvoiceStatus, invoiceBalance, sumLines } from "@/lib/money";
+import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
+import { amountForEstimate } from "@/lib/estimate-totals";
 import { COURSE } from "@/lib/training/engine";
 import { recommendedChapterIds } from "@/lib/training/recommend";
 import {
@@ -816,7 +817,7 @@ export function JobRecord({ job }: { job: Job }) {
                       <EstimateStatusBadge status={estimate.status} />
                       <span className="text-xs tabular-nums text-muted-foreground">
                         {formatCurrencyFull(
-                          sumLines(crm.estimateLines.filter((line) => line.estimateId === estimate.id))
+                          amountForEstimate(estimate, crm.estimateLines)
                         )}
                       </span>
                     </div>

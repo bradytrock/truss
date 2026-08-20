@@ -1,4 +1,5 @@
-import { fillJobRecord, parseCustomFields, customFieldsJson } from "@/lib/job-record";
+import { fillEstimate, fillEstimateLine } from "@/lib/estimate-totals";
+import { customFieldsJson, fillJobRecord, parseCustomFields } from "@/lib/job-record";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import type {
   Activity,
@@ -297,34 +298,97 @@ export function mapCatalogItem(row: CatalogRow): CatalogItem {
   };
 }
 
+function adjustmentKind(value: string | null | undefined): "percent" | "amount" {
+  return value === "amount" ? "amount" : "percent";
+}
+
 export function mapEstimate(row: EstimateRow): Estimate {
-  return {
+  return fillEstimate({
     id: row.id,
     number: row.number,
     name: row.name,
     clientId: row.client_id,
     opportunityId: row.opportunity_id,
     jobId: row.job_id,
+    contactId: row.contact_id ?? null,
     status: row.status,
     notes: row.notes,
     validUntil: row.valid_until,
     sentAt: row.sent_at,
     acceptedAt: row.accepted_at,
     createdAt: row.created_at,
-  };
+    taxRate: Number(row.tax_rate ?? 0),
+    discountKind: adjustmentKind(row.discount_kind),
+    discountValue: Number(row.discount_value ?? 0),
+    depositKind: adjustmentKind(row.deposit_kind),
+    depositValue: Number(row.deposit_value ?? 0),
+    intro: row.intro ?? "",
+    terms: row.terms ?? "",
+    street: row.street ?? "",
+    city: row.city ?? "",
+    state: row.state ?? "",
+    postalCode: row.postal_code ?? "",
+  });
 }
 
 export function mapEstimateLine(row: EstimateLineRow): EstimateLine {
-  return {
+  return fillEstimateLine({
     id: row.id,
     estimateId: row.estimate_id,
     catalogItemId: row.catalog_item_id,
+    title: row.title ?? "",
     description: row.description,
     quantity: Number(row.quantity),
     unit: row.unit,
     unitCost: Number(row.unit_cost),
     sortOrder: row.sort_order,
-  };
+    groupName: row.group_name ?? "",
+    optional: Boolean(row.optional),
+    selected: row.selected ?? true,
+    taxable: row.taxable ?? true,
+  });
+}
+
+export function estimatePatch(patch: Partial<Estimate>) {
+  const row: Database["public"]["Tables"]["estimates"]["Update"] = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.clientId !== undefined) row.client_id = patch.clientId;
+  if (patch.opportunityId !== undefined) row.opportunity_id = patch.opportunityId;
+  if (patch.jobId !== undefined) row.job_id = patch.jobId;
+  if (patch.contactId !== undefined) row.contact_id = patch.contactId;
+  if (patch.status !== undefined) row.status = patch.status;
+  if (patch.notes !== undefined) row.notes = patch.notes;
+  if (patch.validUntil !== undefined) row.valid_until = patch.validUntil;
+  if (patch.sentAt !== undefined) row.sent_at = patch.sentAt;
+  if (patch.acceptedAt !== undefined) row.accepted_at = patch.acceptedAt;
+  if (patch.taxRate !== undefined) row.tax_rate = patch.taxRate;
+  if (patch.discountKind !== undefined) row.discount_kind = patch.discountKind;
+  if (patch.discountValue !== undefined) row.discount_value = patch.discountValue;
+  if (patch.depositKind !== undefined) row.deposit_kind = patch.depositKind;
+  if (patch.depositValue !== undefined) row.deposit_value = patch.depositValue;
+  if (patch.intro !== undefined) row.intro = patch.intro;
+  if (patch.terms !== undefined) row.terms = patch.terms;
+  if (patch.street !== undefined) row.street = patch.street;
+  if (patch.city !== undefined) row.city = patch.city;
+  if (patch.state !== undefined) row.state = patch.state;
+  if (patch.postalCode !== undefined) row.postal_code = patch.postalCode;
+  return row;
+}
+
+export function estimateLinePatch(patch: Partial<EstimateLine>) {
+  const row: Database["public"]["Tables"]["estimate_lines"]["Update"] = {};
+  if (patch.catalogItemId !== undefined) row.catalog_item_id = patch.catalogItemId;
+  if (patch.title !== undefined) row.title = patch.title;
+  if (patch.description !== undefined) row.description = patch.description;
+  if (patch.quantity !== undefined) row.quantity = patch.quantity;
+  if (patch.unit !== undefined) row.unit = patch.unit;
+  if (patch.unitCost !== undefined) row.unit_cost = patch.unitCost;
+  if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder;
+  if (patch.groupName !== undefined) row.group_name = patch.groupName;
+  if (patch.optional !== undefined) row.optional = patch.optional;
+  if (patch.selected !== undefined) row.selected = patch.selected;
+  if (patch.taxable !== undefined) row.taxable = patch.taxable;
+  return row;
 }
 
 export function mapInvoice(row: InvoiceRow): Invoice {

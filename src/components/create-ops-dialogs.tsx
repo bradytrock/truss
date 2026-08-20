@@ -84,6 +84,7 @@ export function CreateEstimateDialog({
         clientId: contact?.clientId ?? defaultClientId ?? null,
         opportunityId: opportunityId || null,
         jobId: jobId || null,
+        contactId,
         validUntil: validUntil || null,
         notes,
       });

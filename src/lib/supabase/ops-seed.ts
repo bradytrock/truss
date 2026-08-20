@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { seedState } from "@/lib/seed";
+import { isMissingEstimateWriter } from "@/lib/supabase/schema-errors";
 import type { Database } from "@/lib/supabase/database.types";
 
 type Client = SupabaseClient<Database>;
@@ -31,14 +32,16 @@ export async function wipeOperations(supabase: Client, companyId: string) {
 
 export async function mapExistingSeedIds(supabase: Client, companyId: string) {
   const ids = new Map<string, string>();
-  const [clients, opportunities, jobs] = await Promise.all([
+  const [clients, opportunities, jobs, contacts] = await Promise.all([
     supabase.from("clients").select("id, name").eq("company_id", companyId),
     supabase.from("opportunities").select("id, name").eq("company_id", companyId),
     supabase.from("jobs").select("id, name").eq("company_id", companyId),
+    supabase.from("contacts").select("id, name").eq("company_id", companyId),
   ]);
   if (clients.error) throw clients.error;
   if (opportunities.error) throw opportunities.error;
   if (jobs.error) throw jobs.error;
+  if (contacts.error) throw contacts.error;
 
   for (const client of seedState.clients) {
     const match = (clients.data ?? []).find((row) => row.name === client.name);
@@ -52,7 +55,16 @@ export async function mapExistingSeedIds(supabase: Client, companyId: string) {
     const match = (jobs.data ?? []).find((row) => row.name === job.name);
     if (match) ids.set(job.id, match.id);
   }
+  for (const contact of seedState.contacts) {
+    const match = (contacts.data ?? []).find((row) => row.name === contact.name);
+    if (match) ids.set(contact.id, match.id);
+  }
   return ids;
+}
+
+function mappedId(source: string | null | undefined, ids: Map<string, string>) {
+  if (!source) return null;
+  return ids.get(source) ?? null;
 }
 
 export async function insertOperations(
@@ -76,52 +88,101 @@ export async function insertOperations(
   );
   if (catalogError) throw catalogError;
 
-  const { error: estimateError } = await supabase.from("estimates").insert(
-    seed.estimates.flatMap((estimate) => {
-      const clientId = estimate.clientId
-        ? ids.get(estimate.clientId) ?? null
-        : householdId;
-      if (estimate.clientId && !clientId) return [];
-      return [
-        {
-          id: remap(estimate.id, ids),
-          company_id: companyId,
-          number: estimate.number,
-          name: estimate.name,
-          client_id: clientId,
-          opportunity_id: estimate.opportunityId ? ids.get(estimate.opportunityId) ?? null : null,
-          job_id: estimate.jobId ? ids.get(estimate.jobId) ?? null : null,
-          status: estimate.status,
-          notes: estimate.notes,
-          valid_until: estimate.validUntil,
-          sent_at: estimate.sentAt,
-          accepted_at: estimate.acceptedAt,
-          created_at: estimate.createdAt,
-        },
-      ];
-    })
-  );
+  const estimateRows = seed.estimates.flatMap((estimate) => {
+    const clientId = estimate.clientId ? ids.get(estimate.clientId) ?? null : householdId;
+    if (estimate.clientId && !clientId) return [];
+    return [
+      {
+        id: remap(estimate.id, ids),
+        company_id: companyId,
+        number: estimate.number,
+        name: estimate.name,
+        client_id: clientId,
+        opportunity_id: mappedId(estimate.opportunityId, ids),
+        job_id: mappedId(estimate.jobId, ids),
+        contact_id: mappedId(estimate.contactId, ids),
+        status: estimate.status,
+        notes: estimate.notes,
+        valid_until: estimate.validUntil,
+        sent_at: estimate.sentAt,
+        accepted_at: estimate.acceptedAt,
+        created_at: estimate.createdAt,
+        tax_rate: estimate.taxRate,
+        discount_kind: estimate.discountKind,
+        discount_value: estimate.discountValue,
+        deposit_kind: estimate.depositKind,
+        deposit_value: estimate.depositValue,
+        intro: estimate.intro,
+        terms: estimate.terms,
+        street: estimate.street,
+        city: estimate.city,
+        state: estimate.state,
+        postal_code: estimate.postalCode,
+      },
+    ];
+  });
+  let { error: estimateError } = await supabase.from("estimates").insert(estimateRows);
+  if (estimateError && isMissingEstimateWriter(estimateError)) {
+    const retry = await supabase.from("estimates").insert(
+      estimateRows.map((row) => ({
+        id: row.id,
+        company_id: row.company_id,
+        number: row.number,
+        name: row.name,
+        client_id: row.client_id,
+        opportunity_id: row.opportunity_id,
+        job_id: row.job_id,
+        status: row.status,
+        notes: row.notes,
+        valid_until: row.valid_until,
+        sent_at: row.sent_at,
+        accepted_at: row.accepted_at,
+        created_at: row.created_at,
+      })),
+    );
+    estimateError = retry.error;
+  }
   if (estimateError) throw estimateError;
 
-  const { error: estimateLineError } = await supabase.from("estimate_lines").insert(
-    seed.estimateLines.flatMap((line) => {
-      const estimateId = ids.get(line.estimateId);
-      if (!estimateId) return [];
-      return [
-        {
-          id: remap(line.id, ids),
-          company_id: companyId,
-          estimate_id: estimateId,
-          catalog_item_id: line.catalogItemId ? ids.get(line.catalogItemId) ?? null : null,
-          description: line.description,
-          quantity: line.quantity,
-          unit: line.unit,
-          unit_cost: line.unitCost,
-          sort_order: line.sortOrder,
-        },
-      ];
-    })
-  );
+  const estimateLineRows = seed.estimateLines.flatMap((line) => {
+    const estimateId = ids.get(line.estimateId);
+    if (!estimateId) return [];
+    return [
+      {
+        id: remap(line.id, ids),
+        company_id: companyId,
+        estimate_id: estimateId,
+        catalog_item_id: mappedId(line.catalogItemId, ids),
+        title: line.title,
+        description: line.description,
+        quantity: line.quantity,
+        unit: line.unit,
+        unit_cost: line.unitCost,
+        sort_order: line.sortOrder,
+        group_name: line.groupName,
+        optional: line.optional,
+        selected: line.selected,
+        taxable: line.taxable,
+      },
+    ];
+  });
+  let { error: estimateLineError } = await supabase.from("estimate_lines").insert(estimateLineRows);
+  if (estimateLineError && isMissingEstimateWriter(estimateLineError)) {
+    const retry = await supabase.from("estimate_lines").insert(
+      estimateLineRows.map((row) => ({
+        id: row.id,
+        company_id: row.company_id,
+        estimate_id: row.estimate_id,
+        catalog_item_id: row.catalog_item_id,
+        description: row.description,
+        quantity: row.quantity,
+        unit: row.unit,
+        unit_cost: row.unit_cost,
+        sort_order: row.sort_order,
+      })),
+    );
+    estimateLineError = retry.error;
+  }
   if (estimateLineError) throw estimateLineError;
 
   const { error: invoiceError } = await supabase.from("invoices").insert(

@@ -18,13 +18,21 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedOperationsIfMissing } from "@/lib/supabase/ops-seed";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
-import { isRequiredClientId, requiredClientIdMessage } from "@/lib/supabase/schema-errors";
-import { fillJobRecord, type JobDraft, customFieldsJson } from "@/lib/job-record";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage } from "@/lib/supabase/schema-errors";
+import { fillJobRecord, parseLocation, type JobDraft, customFieldsJson } from "@/lib/job-record";
+import {
+  DEFAULT_ESTIMATE_TERMS,
+  fillEstimate,
+  fillEstimateLine,
+  invoiceLinesFromEstimate,
+} from "@/lib/estimate-totals";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { findStaffForProfile, isUnsignedDemo, namesMatch, staffMemberFromProfile } from "@/lib/seats";
 import {
   jobPatch,
+  estimatePatch,
+  estimateLinePatch,
   mapActivity,
   mapClient,
   mapCompany,
@@ -199,6 +207,46 @@ function requireClient() {
   return createClient();
 }
 
+function maybeClient() {
+  if (!isSupabaseConfigured()) return null;
+  return createClient();
+}
+
+function siteFromLinked(
+  jobId: string | null | undefined,
+  opportunityId: string | null | undefined,
+  jobs: Job[],
+  opportunities: Opportunity[],
+) {
+  const job = jobId ? jobs.find((item) => item.id === jobId) : undefined;
+  if (job && (job.street.trim() || job.city.trim() || job.location.trim())) {
+    if (job.street.trim() || job.city.trim()) {
+      return {
+        street: job.street,
+        city: job.city,
+        state: job.state,
+        postalCode: job.postalCode,
+      };
+    }
+    return parseLocation(job.location);
+  }
+  const opportunity = opportunityId
+    ? opportunities.find((item) => item.id === opportunityId)
+    : undefined;
+  if (opportunity) {
+    if (opportunity.street?.trim() || opportunity.city?.trim()) {
+      return {
+        street: opportunity.street ?? "",
+        city: opportunity.city ?? "",
+        state: opportunity.state ?? "",
+        postalCode: opportunity.postalCode ?? "",
+      };
+    }
+    return parseLocation(opportunity.location);
+  }
+  return { street: "", city: "", state: "", postalCode: "" };
+}
+
 function isMissingJobOverview(error: { message?: string; code?: string }) {
   const message = error.message ?? "";
   return (
@@ -368,20 +416,30 @@ type CrmContextValue = CrmState & {
     clientId: string | null;
     opportunityId: string | null;
     jobId: string | null;
+    contactId?: string | null;
     notes?: string;
     validUntil?: string | null;
+    street?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    intro?: string;
+    terms?: string;
   }) => Promise<Estimate>;
-  updateEstimate: (id: string, patch: Partial<Pick<Estimate, "name" | "notes" | "validUntil">>) => Promise<void>;
+  updateEstimate: (id: string, patch: Partial<Estimate>) => Promise<void>;
   sendEstimate: (id: string) => Promise<void>;
   acceptEstimate: (id: string) => Promise<void>;
   declineEstimate: (id: string) => Promise<void>;
-  addEstimateLineFromCatalog: (estimateId: string, catalogItemId: string) => Promise<void>;
-  addCustomEstimateLine: (estimateId: string) => Promise<void>;
-  updateEstimateLine: (
-    id: string,
-    patch: Partial<Pick<EstimateLine, "description" | "quantity" | "unit" | "unitCost">>
+  duplicateEstimate: (id: string) => Promise<Estimate>;
+  addEstimateLineFromCatalog: (
+    estimateId: string,
+    catalogItemId: string,
+    groupName?: string
   ) => Promise<void>;
+  addCustomEstimateLine: (estimateId: string, groupName?: string) => Promise<void>;
+  updateEstimateLine: (id: string, patch: Partial<EstimateLine>) => Promise<void>;
   removeEstimateLine: (id: string) => Promise<void>;
+  reorderEstimateLine: (id: string, direction: "up" | "down") => Promise<void>;
   convertEstimateToInvoice: (estimateId: string) => Promise<Invoice>;
   addInvoice: (input: {
     name: string;
@@ -843,7 +901,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       type: ActivityType;
       body: string;
     }) => {
-      const supabase = requireClient();
+      const supabase = maybeClient();
       if (!supabase) {
         setState((prev) => ({
           ...prev,
@@ -1486,70 +1544,148 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       clientId: string | null;
       opportunityId: string | null;
       jobId: string | null;
+      contactId?: string | null;
       notes?: string;
       validUntil?: string | null;
+      street?: string;
+      city?: string;
+      state?: string;
+      postalCode?: string;
+      intro?: string;
+      terms?: string;
     }) => {
-      const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
       const number = nextNumber("EST", state.estimates.map((estimate) => estimate.number));
-      const { data, error } = await supabase
-        .from("estimates")
-        .insert({
-          company_id: user.companyId,
-          number,
-          name: input.name,
-          client_id: input.clientId || null,
-          opportunity_id: input.opportunityId,
-          job_id: input.jobId,
-          notes: input.notes ?? "",
-          valid_until: input.validUntil ?? null,
-        })
-        .select("*")
-        .single();
+      const linked = siteFromLinked(input.jobId, input.opportunityId, state.jobs, state.opportunities);
+      const estimate = fillEstimate({
+        id: crypto.randomUUID(),
+        number,
+        name: input.name,
+        clientId: input.clientId,
+        opportunityId: input.opportunityId,
+        jobId: input.jobId,
+        contactId: input.contactId ?? null,
+        status: "draft",
+        notes: input.notes ?? "",
+        validUntil: input.validUntil ?? null,
+        sentAt: null,
+        acceptedAt: null,
+        createdAt: new Date().toISOString(),
+        intro: input.intro ?? "",
+        terms: input.terms ?? DEFAULT_ESTIMATE_TERMS,
+        street: input.street ?? linked.street,
+        city: input.city ?? linked.city,
+        state: input.state ?? linked.state,
+        postalCode: input.postalCode ?? linked.postalCode,
+      });
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({ ...prev, estimates: [estimate, ...prev.estimates] }));
+        return estimate;
+      }
+      const payload = {
+        company_id: user.companyId,
+        number,
+        name: estimate.name,
+        client_id: estimate.clientId || null,
+        opportunity_id: estimate.opportunityId,
+        job_id: estimate.jobId,
+        contact_id: estimate.contactId,
+        notes: estimate.notes,
+        valid_until: estimate.validUntil,
+        tax_rate: estimate.taxRate,
+        discount_kind: estimate.discountKind,
+        discount_value: estimate.discountValue,
+        deposit_kind: estimate.depositKind,
+        deposit_value: estimate.depositValue,
+        intro: estimate.intro,
+        terms: estimate.terms,
+        street: estimate.street,
+        city: estimate.city,
+        state: estimate.state,
+        postal_code: estimate.postalCode,
+      };
+      let { data, error } = await supabase.from("estimates").insert(payload).select("*").single();
+      if (error && isMissingEstimateWriter(error)) {
+        const retry = await supabase
+          .from("estimates")
+          .insert({
+            company_id: payload.company_id,
+            number: payload.number,
+            name: payload.name,
+            client_id: payload.client_id,
+            opportunity_id: payload.opportunity_id,
+            job_id: payload.job_id,
+            notes: payload.notes,
+            valid_until: payload.valid_until,
+          })
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+        if (!error && data) toast.message(missingEstimateWriterMessage());
+      }
       if (error || !data) {
         toast.error(error?.message ?? "Could not create the estimate.");
         throw error ?? new Error("Could not create the estimate.");
       }
-      const estimate = mapEstimate(data);
-      setState((prev) => ({ ...prev, estimates: [estimate, ...prev.estimates] }));
-      return estimate;
+      const mapped = fillEstimate({ ...estimate, ...mapEstimate(data), id: data.id, number: data.number || number });
+      setState((prev) => ({ ...prev, estimates: [mapped, ...prev.estimates] }));
+      return mapped;
     },
-    [state.estimates, user.companyId]
+    [state.estimates, state.jobs, state.opportunities, user.companyId]
   );
 
-  const updateEstimate = useCallback(
-    async (id: string, patch: Partial<Pick<Estimate, "name" | "notes" | "validUntil">>) => {
-      const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
-      const { error } = await supabase
-        .from("estimates")
-        .update({
-          name: patch.name,
-          notes: patch.notes,
-          valid_until: patch.validUntil,
-        })
-        .eq("id", id);
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
+  const updateEstimate = useCallback(async (id: string, patch: Partial<Estimate>) => {
+    const apply = () =>
       setState((prev) => ({
         ...prev,
         estimates: prev.estimates.map((estimate) =>
-          estimate.id === id ? { ...estimate, ...patch } : estimate
+          estimate.id === id ? fillEstimate({ ...estimate, ...patch }) : estimate
         ),
       }));
-    },
-    []
-  );
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("estimates").update(estimatePatch(patch)).eq("id", id);
+    if (error) {
+      if (isMissingEstimateWriter(error)) {
+        apply();
+        toast.message(missingEstimateWriterMessage());
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
 
   const sendEstimate = useCallback(
     async (id: string) => {
       const current = state.estimates.find((estimate) => estimate.id === id);
       if (!current) return;
-      const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
       const sentAt = new Date().toISOString();
+      const apply = () =>
+        setState((prev) => ({
+          ...prev,
+          estimates: prev.estimates.map((estimate) =>
+            estimate.id === id ? { ...estimate, status: "sent" as const, sentAt } : estimate
+          ),
+        }));
+      const supabase = maybeClient();
+      if (!supabase) {
+        apply();
+        if (current.opportunityId) {
+          await addActivity({
+            entityType: "opportunity",
+            entityId: current.opportunityId,
+            type: "email",
+            body: `Sent proposal ${current.number} — ${current.name}.`,
+          });
+        }
+        return;
+      }
       const { error } = await supabase
         .from("estimates")
         .update({ status: "sent", sent_at: sentAt })
@@ -1558,12 +1694,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error(error.message);
         return;
       }
-      setState((prev) => ({
-        ...prev,
-        estimates: prev.estimates.map((estimate) =>
-          estimate.id === id ? { ...estimate, status: "sent", sentAt } : estimate
-        ),
-      }));
+      apply();
       if (current.opportunityId) {
         await addActivity({
           entityType: "opportunity",
@@ -1580,9 +1711,27 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     async (id: string) => {
       const current = state.estimates.find((estimate) => estimate.id === id);
       if (!current) return;
-      const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
       const acceptedAt = new Date().toISOString();
+      const apply = () =>
+        setState((prev) => ({
+          ...prev,
+          estimates: prev.estimates.map((estimate) =>
+            estimate.id === id ? { ...estimate, status: "accepted" as const, acceptedAt } : estimate
+          ),
+        }));
+      const supabase = maybeClient();
+      if (!supabase) {
+        apply();
+        if (current.opportunityId) {
+          await addActivity({
+            entityType: "opportunity",
+            entityId: current.opportunityId,
+            type: "note",
+            body: `Owner accepted proposal ${current.number}. Convert to an invoice when you are ready to bill.`,
+          });
+        }
+        return;
+      }
       const { error } = await supabase
         .from("estimates")
         .update({ status: "accepted", accepted_at: acceptedAt })
@@ -1591,12 +1740,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error(error.message);
         return;
       }
-      setState((prev) => ({
-        ...prev,
-        estimates: prev.estimates.map((estimate) =>
-          estimate.id === id ? { ...estimate, status: "accepted", acceptedAt } : estimate
-        ),
-      }));
+      apply();
       if (current.opportunityId) {
         await addActivity({
           entityType: "opportunity",
@@ -1609,27 +1753,123 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [addActivity, state.estimates]
   );
 
-  const declineEstimate = useCallback(
-    async (id: string) => {
-      const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
-      const { error } = await supabase.from("estimates").update({ status: "declined" }).eq("id", id);
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
+  const declineEstimate = useCallback(async (id: string) => {
+    const apply = () =>
       setState((prev) => ({
         ...prev,
         estimates: prev.estimates.map((estimate) =>
-          estimate.id === id ? { ...estimate, status: "declined" } : estimate
+          estimate.id === id ? { ...estimate, status: "declined" as const } : estimate
         ),
       }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("estimates").update({ status: "declined" }).eq("id", id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
+
+  const duplicateEstimate = useCallback(
+    async (id: string) => {
+      const source = state.estimates.find((estimate) => estimate.id === id);
+      if (!source) throw new Error("Estimate not found.");
+      const lines = state.estimateLines.filter((line) => line.estimateId === source.id);
+      const copy = await addEstimate({
+        name: source.name.endsWith("(copy)") ? source.name : `${source.name} (copy)`,
+        clientId: source.clientId,
+        opportunityId: source.opportunityId,
+        jobId: source.jobId,
+        contactId: source.contactId,
+        notes: source.notes,
+        validUntil: source.validUntil,
+        street: source.street,
+        city: source.city,
+        state: source.state,
+        postalCode: source.postalCode,
+        intro: source.intro,
+        terms: source.terms,
+      });
+      await updateEstimate(copy.id, {
+        taxRate: source.taxRate,
+        discountKind: source.discountKind,
+        discountValue: source.discountValue,
+        depositKind: source.depositKind,
+        depositValue: source.depositValue,
+      });
+      const copied = lines
+        .slice()
+        .sort((a, b) => a.sortOrder - b.sortOrder)
+        .map((line) =>
+          fillEstimateLine({
+            ...line,
+            id: crypto.randomUUID(),
+            estimateId: copy.id,
+          }),
+        );
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({ ...prev, estimateLines: [...prev.estimateLines, ...copied] }));
+        return fillEstimate({ ...copy, taxRate: source.taxRate, discountKind: source.discountKind, discountValue: source.discountValue, depositKind: source.depositKind, depositValue: source.depositValue });
+      }
+      if (copied.length) {
+        const payload = copied.map((line) => ({
+          id: line.id,
+          company_id: user.companyId,
+          estimate_id: copy.id,
+          catalog_item_id: line.catalogItemId,
+          title: line.title,
+          description: line.description,
+          quantity: line.quantity,
+          unit: line.unit,
+          unit_cost: line.unitCost,
+          sort_order: line.sortOrder,
+          group_name: line.groupName,
+          optional: line.optional,
+          selected: line.selected,
+          taxable: line.taxable,
+        }));
+        let { error } = await supabase.from("estimate_lines").insert(payload);
+        if (error && isMissingEstimateWriter(error)) {
+          const retry = await supabase.from("estimate_lines").insert(
+            payload.map((row) => ({
+              id: row.id,
+              company_id: row.company_id,
+              estimate_id: row.estimate_id,
+              catalog_item_id: row.catalog_item_id,
+              description: row.description,
+              quantity: row.quantity,
+              unit: row.unit,
+              unit_cost: row.unit_cost,
+              sort_order: row.sort_order,
+            })),
+          );
+          error = retry.error;
+        }
+        if (error) {
+          toast.error(error.message);
+          throw error;
+        }
+      }
+      setState((prev) => ({ ...prev, estimateLines: [...prev.estimateLines, ...copied] }));
+      return fillEstimate({
+        ...copy,
+        taxRate: source.taxRate,
+        discountKind: source.discountKind,
+        discountValue: source.discountValue,
+        depositKind: source.depositKind,
+        depositValue: source.depositValue,
+      });
     },
-    []
+    [addEstimate, state.estimateLines, state.estimates, updateEstimate, user.companyId]
   );
 
   const addEstimateLineFromCatalog = useCallback(
-    async (estimateId: string, catalogItemId: string) => {
+    async (estimateId: string, catalogItemId: string, groupName?: string) => {
       const item = state.catalog.find((entry) => entry.id === catalogItemId);
       if (!item) return;
       const sortOrder =
@@ -1639,36 +1879,72 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             .filter((line) => line.estimateId === estimateId)
             .map((line) => line.sortOrder)
         ) + 1;
-      const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
-      const { data, error } = await supabase
-        .from("estimate_lines")
-        .insert({
-          company_id: user.companyId,
-          estimate_id: estimateId,
-          catalog_item_id: item.id,
-          description: item.name,
-          quantity: 1,
-          unit: item.unit,
-          unit_cost: item.unitCost,
-          sort_order: sortOrder,
-        })
-        .select("*")
-        .single();
+      const line = fillEstimateLine({
+        id: crypto.randomUUID(),
+        estimateId,
+        catalogItemId: item.id,
+        title: item.name,
+        description: item.name,
+        quantity: 1,
+        unit: item.unit,
+        unitCost: item.unitCost,
+        sortOrder,
+        groupName: groupName ?? "",
+      });
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({ ...prev, estimateLines: [...prev.estimateLines, line] }));
+        return;
+      }
+      const payload = {
+        company_id: user.companyId,
+        estimate_id: estimateId,
+        catalog_item_id: item.id,
+        title: line.title,
+        description: line.description,
+        quantity: line.quantity,
+        unit: line.unit,
+        unit_cost: line.unitCost,
+        sort_order: sortOrder,
+        group_name: line.groupName,
+        optional: line.optional,
+        selected: line.selected,
+        taxable: line.taxable,
+      };
+      let { data, error } = await supabase.from("estimate_lines").insert(payload).select("*").single();
+      if (error && isMissingEstimateWriter(error)) {
+        const retry = await supabase
+          .from("estimate_lines")
+          .insert({
+            company_id: payload.company_id,
+            estimate_id: payload.estimate_id,
+            catalog_item_id: payload.catalog_item_id,
+            description: payload.description,
+            quantity: payload.quantity,
+            unit: payload.unit,
+            unit_cost: payload.unit_cost,
+            sort_order: payload.sort_order,
+          })
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingEstimateWriterMessage());
+      }
       if (error || !data) {
         toast.error(error?.message ?? "Could not add the line.");
         return;
       }
       setState((prev) => ({
         ...prev,
-        estimateLines: [...prev.estimateLines, mapEstimateLine(data)],
+        estimateLines: [...prev.estimateLines, fillEstimateLine({ ...line, ...mapEstimateLine(data), id: data.id })],
       }));
     },
     [state.catalog, state.estimateLines, user.companyId]
   );
 
   const addCustomEstimateLine = useCallback(
-    async (estimateId: string) => {
+    async (estimateId: string, groupName?: string) => {
       const sortOrder =
         Math.max(
           0,
@@ -1676,88 +1952,176 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             .filter((line) => line.estimateId === estimateId)
             .map((line) => line.sortOrder)
         ) + 1;
-      const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
-      const { data, error } = await supabase
-        .from("estimate_lines")
-        .insert({
-          company_id: user.companyId,
-          estimate_id: estimateId,
-          description: "New line",
-          quantity: 1,
-          unit: "LS",
-          unit_cost: 0,
-          sort_order: sortOrder,
-        })
-        .select("*")
-        .single();
+      const line = fillEstimateLine({
+        id: crypto.randomUUID(),
+        estimateId,
+        catalogItemId: null,
+        title: "New item",
+        description: "",
+        quantity: 1,
+        unit: "LS",
+        unitCost: 0,
+        sortOrder,
+        groupName: groupName ?? "",
+      });
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({ ...prev, estimateLines: [...prev.estimateLines, line] }));
+        return;
+      }
+      const payload = {
+        company_id: user.companyId,
+        estimate_id: estimateId,
+        title: line.title,
+        description: line.description || line.title,
+        quantity: line.quantity,
+        unit: line.unit,
+        unit_cost: line.unitCost,
+        sort_order: sortOrder,
+        group_name: line.groupName,
+        optional: line.optional,
+        selected: line.selected,
+        taxable: line.taxable,
+      };
+      let { data, error } = await supabase.from("estimate_lines").insert(payload).select("*").single();
+      if (error && isMissingEstimateWriter(error)) {
+        const retry = await supabase
+          .from("estimate_lines")
+          .insert({
+            company_id: payload.company_id,
+            estimate_id: payload.estimate_id,
+            description: payload.description,
+            quantity: payload.quantity,
+            unit: payload.unit,
+            unit_cost: payload.unit_cost,
+            sort_order: payload.sort_order,
+          })
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingEstimateWriterMessage());
+      }
       if (error || !data) {
         toast.error(error?.message ?? "Could not add the line.");
         return;
       }
       setState((prev) => ({
         ...prev,
-        estimateLines: [...prev.estimateLines, mapEstimateLine(data)],
+        estimateLines: [...prev.estimateLines, fillEstimateLine({ ...line, ...mapEstimateLine(data), id: data.id })],
       }));
     },
     [state.estimateLines, user.companyId]
   );
 
-  const updateEstimateLine = useCallback(
-    async (
-      id: string,
-      patch: Partial<Pick<EstimateLine, "description" | "quantity" | "unit" | "unitCost">>
-    ) => {
-      const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
-      const { error } = await supabase
-        .from("estimate_lines")
-        .update({
-          description: patch.description,
-          quantity: patch.quantity,
-          unit: patch.unit,
-          unit_cost: patch.unitCost,
-        })
-        .eq("id", id);
-      if (error) {
-        toast.error(error.message);
-        return;
-      }
+  const updateEstimateLine = useCallback(async (id: string, patch: Partial<EstimateLine>) => {
+    const apply = () =>
       setState((prev) => ({
         ...prev,
         estimateLines: prev.estimateLines.map((line) =>
-          line.id === id ? { ...line, ...patch } : line
+          line.id === id ? fillEstimateLine({ ...line, ...patch }) : line
         ),
       }));
-    },
-    []
-  );
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("estimate_lines").update(estimateLinePatch(patch)).eq("id", id);
+    if (error) {
+      if (isMissingEstimateWriter(error)) {
+        apply();
+        toast.message(missingEstimateWriterMessage());
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
 
   const removeEstimateLine = useCallback(async (id: string) => {
-    const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        estimateLines: prev.estimateLines.filter((line) => line.id !== id),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
     const { error } = await supabase.from("estimate_lines").delete().eq("id", id);
     if (error) {
       toast.error(error.message);
       return;
     }
-    setState((prev) => ({
-      ...prev,
-      estimateLines: prev.estimateLines.filter((line) => line.id !== id),
-    }));
+    apply();
   }, []);
+
+  const reorderEstimateLine = useCallback(
+    async (id: string, direction: "up" | "down") => {
+      const current = state.estimateLines.find((line) => line.id === id);
+      if (!current) return;
+      const siblings = state.estimateLines
+        .filter((line) => line.estimateId === current.estimateId)
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+      const index = siblings.findIndex((line) => line.id === id);
+      const swap = direction === "up" ? siblings[index - 1] : siblings[index + 1];
+      if (!swap) return;
+      const firstOrder = current.sortOrder;
+      const secondOrder = swap.sortOrder;
+      await updateEstimateLine(current.id, { sortOrder: secondOrder });
+      await updateEstimateLine(swap.id, { sortOrder: firstOrder });
+    },
+    [state.estimateLines, updateEstimateLine]
+  );
 
   const convertEstimateToInvoice = useCallback(
     async (estimateId: string) => {
       const estimate = state.estimates.find((item) => item.id === estimateId);
       if (!estimate) throw new Error("Estimate not found.");
-      const lines = state.estimateLines.filter((line) => line.estimateId === estimateId);
-      const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
+      const billed = invoiceLinesFromEstimate(estimate, state.estimateLines);
+      if (billed.length === 0) {
+        toast.error("Add at least one included line before converting.");
+        throw new Error("No included lines.");
+      }
       const number = nextNumber("INV", state.invoices.map((invoice) => invoice.number));
       const issuedAt = new Date().toISOString().slice(0, 10);
       const due = new Date();
       due.setDate(due.getDate() + 30);
+      const dueAt = due.toISOString().slice(0, 10);
+      const notes = `Converted from ${estimate.number}. Optional lines that were not selected were left off.`;
+      const supabase = maybeClient();
+      if (!supabase) {
+        const invoice = {
+          id: crypto.randomUUID(),
+          number,
+          name: estimate.name,
+          clientId: estimate.clientId,
+          jobId: estimate.jobId,
+          estimateId: estimate.id,
+          status: "draft" as const,
+          issuedAt,
+          dueAt,
+          notes,
+        };
+        const mappedLines = billed.map((line) => ({
+          id: crypto.randomUUID(),
+          invoiceId: invoice.id,
+          description: line.description,
+          quantity: line.quantity,
+          unit: line.unit,
+          unitCost: line.unitCost,
+          sortOrder: line.sortOrder,
+        }));
+        setState((prev) => ({
+          ...prev,
+          invoices: [invoice, ...prev.invoices],
+          invoiceLines: [...prev.invoiceLines, ...mappedLines],
+        }));
+        return invoice;
+      }
       const { data, error } = await supabase
         .from("invoices")
         .insert({
@@ -1769,8 +2133,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           estimate_id: estimate.id,
           status: "draft",
           issued_at: issuedAt,
-          due_at: due.toISOString().slice(0, 10),
-          notes: `Converted from ${estimate.number}.`,
+          due_at: dueAt,
+          notes,
         })
         .select("*")
         .single();
@@ -1778,32 +2142,30 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error(error?.message ?? "Could not convert the estimate.");
         throw error ?? new Error("Could not convert the estimate.");
       }
-      if (lines.length) {
-        const { error: lineError } = await supabase.from("invoice_lines").insert(
-          lines.map((line, index) => ({
-            company_id: user.companyId,
-            invoice_id: data.id,
-            description: line.description,
-            quantity: line.quantity,
-            unit: line.unit,
-            unit_cost: line.unitCost,
-            sort_order: index,
-          }))
-        );
-        if (lineError) {
-          toast.error(lineError.message);
-          throw lineError;
-        }
+      const { error: lineError } = await supabase.from("invoice_lines").insert(
+        billed.map((line) => ({
+          company_id: user.companyId,
+          invoice_id: data.id,
+          description: line.description,
+          quantity: line.quantity,
+          unit: line.unit,
+          unit_cost: line.unitCost,
+          sort_order: line.sortOrder,
+        }))
+      );
+      if (lineError) {
+        toast.error(lineError.message);
+        throw lineError;
       }
       const invoice = mapInvoice(data);
-      const mappedLines = lines.map((line, index) => ({
+      const mappedLines = billed.map((line) => ({
         id: crypto.randomUUID(),
         invoiceId: invoice.id,
         description: line.description,
         quantity: line.quantity,
         unit: line.unit,
         unitCost: line.unitCost,
-        sortOrder: index,
+        sortOrder: line.sortOrder,
       }));
       setState((prev) => ({
         ...prev,
@@ -2468,6 +2830,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addCustomEstimateLine,
       updateEstimateLine,
       removeEstimateLine,
+      reorderEstimateLine,
+      duplicateEstimate,
       convertEstimateToInvoice,
       addInvoice,
       sendInvoice,
@@ -2532,6 +2896,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addCustomEstimateLine,
       updateEstimateLine,
       removeEstimateLine,
+      reorderEstimateLine,
+      duplicateEstimate,
       convertEstimateToInvoice,
       addInvoice,
       sendInvoice,

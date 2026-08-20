@@ -23,8 +23,8 @@ import { CreateEstimateDialog } from "@/components/create-ops-dialogs";
 import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { EstimateStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
-import { formatCurrencyFull, formatDate } from "@/lib/format";
-import { sumLines } from "@/lib/money";
+import { formatDate, formatMoney } from "@/lib/format";
+import { amountForEstimate } from "@/lib/estimate-totals";
 import {
   ESTIMATE_STATUS_LABELS,
   ESTIMATE_STATUSES,
@@ -61,7 +61,7 @@ export default function EstimatesPage() {
       <PageHeader
         eyebrow="Preconstruction"
         title="Estimates"
-        description="Price book to proposal. Send it, get it accepted, convert it to an invoice — the same loop as a production GC platform."
+        description="Write a proposal the way a production crew actually prices work: sections, optional lines, tax, and a client preview. Send it, get it accepted, convert it to an invoice."
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Input
@@ -122,8 +122,9 @@ export default function EstimatesPage() {
             </TableHeader>
             <TableBody>
               {rows.map((estimate) => {
-                const total = sumLines(
-                  crm.estimateLines.filter((line) => line.estimateId === estimate.id)
+                const total = amountForEstimate(
+                  estimate,
+                  crm.estimateLines
                 );
                 return (
                   <TableRow key={estimate.id}>
@@ -139,7 +140,7 @@ export default function EstimatesPage() {
                     </TableCell>
                     <TableCell>{formatDate(estimate.validUntil)}</TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatCurrencyFull(total)}
+                      {formatMoney(total)}
                     </TableCell>
                   </TableRow>
                 );
@@ -154,7 +155,7 @@ export default function EstimatesPage() {
         <Link href="/catalog" className="text-primary hover:underline">
           price book
         </Link>
-        .
+        . Totals include tax and skip optional lines that are not selected.
       </p>
 
       <CreateEstimateDialog open={create} onOpenChange={setCreate} />

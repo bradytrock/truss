@@ -24,6 +24,7 @@ To attach a project that is already running:
    - [`supabase/migrations/20260819260000_profile_staff.sql`](supabase/migrations/20260819260000_profile_staff.sql) — each signed-in profile gets its own seat so login does not land on the sample company admin
    - [`supabase/migrations/20260819270000_job_overview.sql`](supabase/migrations/20260819270000_job_overview.sql) — job-site address, crew, tags, related contacts, and custom fields on the job record
    - [`supabase/migrations/20260819280000_nullable_company.sql`](supabase/migrations/20260819280000_nullable_company.sql) — homeowners and trades do not need a company (`contacts.client_id` can be null)
+   - [`supabase/migrations/20260819290000_estimate_writer.sql`](supabase/migrations/20260819290000_estimate_writer.sql) — tax, discount, deposit, terms, job-site address, sections, and optional lines on estimates
 3. In Authentication → URL configuration, add `http://localhost:3847/auth/callback`. For local work you can turn off “Confirm email”.
 4. Create an account. Signup opens a company, a profile, a seat for you, and the Northline sample book in Postgres. The sample roster stays available under **Login As**; the app does not treat you as Jordan Hale.
 
@@ -43,10 +44,10 @@ To connect real Google Calendars, create an OAuth web client in Google Cloud (Ca
 - **Contacts** — homeowners first (no company required), plus adjusters, realtors, and one architect as referral partners
 - **Pipeline** — leads through sold and lost: hail, water, fire, kitchens, windows, an addition. Each card shows a job code (`BJ081926-A`) assigned when the lead is opened. **New lead** slides in from the right: assignee, homeowner name, phone, email, job-site address, and how they heard about you. If the source is Referral, search contacts this seat can see and connect the referrer.
 - **Jobs** — a status board of sold work. Open a job for the field record: site photo, address, crew, tags, related contacts, and custom fields (claim number, deductible). Codes carry over from the awarded lead.
-- **Estimates / invoices** — EST-1001–1010 and INV-2001–2010 against homeowners, with insurance draws and retainage
+- **Estimates** — Joist-style writer: sections, optional lines, tax, discount, deposit, terms, and a client preview. Send it, mark it accepted, convert included lines to an invoice. EST-1001–1010 against homeowners.
 - **Calendar & photos** — Google Calendar per seat, team sharing, site walks, shingle days, punch, and job photos
 - **Price book** — roofing squares, extraction, cabinets, and the usual trades
-- **Estimates** — build a proposal from the catalog, send it, mark it accepted, convert it to an invoice
+- **Estimates** — write a proposal from the price book (sections, optional work, tax), send it, mark it accepted, convert it to an invoice
 - **Jobs** — field record (overview, photos, estimates/invoices, custom fields), activity, and job photos (upload or URL)
 - **Invoices** — draws and retainage with payment history and outstanding AR
 - **Calendar** — week view of Truss field events plus each person’s Google Calendar. Link is per seat. Share with your team; company admins see every calendar and whether it is linked.
@@ -66,3 +67,5 @@ The Northline sample book loads locally with no sign-in. Avatar menu → **Reset
 Reset demo data (avatar menu) wipes that company’s CRM tables and reloads the sample book. Your login stays on the roster. It does not delete the Auth user.
 
 Truss does not measure roofs from satellite imagery, collect card payments, or send SMS. Those are the pieces left to the tools you already use for takeoff and banking.
+
+The estimate writer is specified for the iOS app in [`docs/ios-estimate-writer-prompt.md`](docs/ios-estimate-writer-prompt.md) — data model, totals formula, status machine, and screens.

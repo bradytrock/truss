@@ -325,23 +325,40 @@ export interface Estimate {
   clientId: string | null;
   opportunityId: string | null;
   jobId: string | null;
+  contactId: string | null;
   status: EstimateStatus;
   notes: string;
   validUntil: string | null;
   sentAt: string | null;
   acceptedAt: string | null;
   createdAt: string;
+  taxRate: number;
+  discountKind: "percent" | "amount";
+  discountValue: number;
+  depositKind: "percent" | "amount";
+  depositValue: number;
+  intro: string;
+  terms: string;
+  street: string;
+  city: string;
+  state: string;
+  postalCode: string;
 }
 
 export interface EstimateLine {
   id: string;
   estimateId: string;
   catalogItemId: string | null;
+  title: string;
   description: string;
   quantity: number;
   unit: string;
   unitCost: number;
   sortOrder: number;
+  groupName: string;
+  optional: boolean;
+  selected: boolean;
+  taxable: boolean;
 }
 
 export interface Invoice {

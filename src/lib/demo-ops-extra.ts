@@ -1,4 +1,5 @@
-import type { CatalogItem, Estimate, EstimateLine, Invoice, InvoiceLine, JobPhoto, Payment, ScheduleEvent } from "@/lib/types";
+import type { CatalogItem, Invoice, InvoiceLine, JobPhoto, Payment, ScheduleEvent } from "@/lib/types";
+import type { EstimateDraft, EstimateLineDraft } from "@/lib/estimate-totals";
 
 export const extraCatalog: CatalogItem[] = [
   { id: "cat_tear", name: "Roof tear-off", kind: "labor", unit: "sq", unitCost: 185, costCode: "07 31 00" },
@@ -15,7 +16,7 @@ export const extraCatalog: CatalogItem[] = [
   { id: "cat_packout", name: "Contents pack-out", kind: "allowance", unit: "ls", unitCost: 4800, costCode: "02 41 19" },
 ];
 
-export const extraEstimates: Estimate[] = [
+export const extraEstimates: EstimateDraft[] = [
   {
     id: "est_ellison",
     number: "EST-1001",
@@ -158,7 +159,7 @@ export const extraEstimates: Estimate[] = [
   },
 ];
 
-export const extraEstimateLines: EstimateLine[] = [
+export const extraEstimateLines: EstimateLineDraft[] = [
   { id: "el_e1", estimateId: "est_ellison", catalogItemId: "cat_demo", description: "Kitchen demo", quantity: 280, unit: "sf", unitCost: 6.4, sortOrder: 0 },
   { id: "el_e2", estimateId: "est_ellison", catalogItemId: "cat_cab", description: "Cabinets", quantity: 28, unit: "lf", unitCost: 480, sortOrder: 1 },
   { id: "el_e3", estimateId: "est_ellison", catalogItemId: "cat_quartz", description: "Quartz — island and walls", quantity: 62, unit: "sf", unitCost: 72, sortOrder: 2 },
@@ -173,10 +174,12 @@ export const extraEstimateLines: EstimateLine[] = [
   { id: "el_p1", estimateId: "est_pell", catalogItemId: "cat_tear", description: "Tear-off", quantity: 28, unit: "sq", unitCost: 185, sortOrder: 0 },
   { id: "el_p2", estimateId: "est_pell", catalogItemId: "cat_shingle", description: "Architectural shingles", quantity: 28, unit: "sq", unitCost: 420, sortOrder: 1 },
   { id: "el_p3", estimateId: "est_pell", catalogItemId: "cat_gutter", description: "Gutters", quantity: 140, unit: "lf", unitCost: 12.5, sortOrder: 2 },
+  { id: "el_p4", estimateId: "est_pell", catalogItemId: "cat_gutter", description: "Leaf guards", quantity: 140, unit: "lf", unitCost: 8, sortOrder: 3 },
   { id: "el_pk1", estimateId: "est_park", catalogItemId: "cat_cab", description: "Cabinets", quantity: 32, unit: "lf", unitCost: 480, sortOrder: 0 },
   { id: "el_pk2", estimateId: "est_park", catalogItemId: "cat_quartz", description: "Quartz", quantity: 70, unit: "sf", unitCost: 72, sortOrder: 1 },
   { id: "el_a1", estimateId: "est_alvarez", catalogItemId: "cat_tear", description: "Tear-off", quantity: 32, unit: "sq", unitCost: 185, sortOrder: 0 },
   { id: "el_a2", estimateId: "est_alvarez", catalogItemId: "cat_shingle", description: "Shingles", quantity: 32, unit: "sq", unitCost: 420, sortOrder: 1 },
+  { id: "el_a3", estimateId: "est_alvarez", catalogItemId: "cat_dump", description: "Dumpster", quantity: 1, unit: "ea", unitCost: 650, sortOrder: 2 },
   { id: "el_b1", estimateId: "est_blake", catalogItemId: "cat_cab", description: "Cabinets install", quantity: 22, unit: "lf", unitCost: 480, sortOrder: 0 },
   { id: "el_b2", estimateId: "est_blake", catalogItemId: "cat_quartz", description: "Quartz", quantity: 44, unit: "sf", unitCost: 72, sortOrder: 1 },
   { id: "el_c1", estimateId: "est_calder_win", catalogItemId: "cat_window", description: "West elevation windows", quantity: 4, unit: "ea", unitCost: 780, sortOrder: 0 },
