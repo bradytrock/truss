@@ -4,15 +4,15 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { QbStatusBadge } from "@/components/status-badge";
-import { Metric, MetricStrip } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
-import { formatCurrencyFull, formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 import {
   expensesForJob,
-  jobProfitAndLoss,
   paymentsForJob,
   type JobBooksBasis,
 } from "@/lib/job-financials";
+import { buildProfitAndLoss, jobPeriodBounds } from "@/lib/profit-and-loss";
+import { ProfitAndLossReport } from "@/components/profit-and-loss";
 import { EXPENSE_ACCOUNT_LABELS, type Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { LogExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
@@ -22,18 +22,34 @@ export function JobFinancials({ job }: { job: Job }) {
   const [basis, setBasis] = useState<JobBooksBasis>("accrual");
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const period = useMemo(() => jobPeriodBounds(job), [job]);
 
-  const books = useMemo(
+  const statement = useMemo(
     () =>
-      jobProfitAndLoss({
-        job,
+      buildProfitAndLoss({
+        companyName: crm.company.name,
+        jobs: crm.jobs,
         invoices: crm.invoices,
         invoiceLines: crm.invoiceLines,
         payments: crm.payments,
         expenses: crm.expenses,
         basis,
+        job,
+        from: null,
+        to: null,
+        periodLabel: period.periodLabel,
       }),
-    [basis, crm.expenses, crm.invoiceLines, crm.invoices, crm.payments, job],
+    [
+      basis,
+      crm.company.name,
+      crm.expenses,
+      crm.invoiceLines,
+      crm.invoices,
+      crm.jobs,
+      crm.payments,
+      job,
+      period.periodLabel,
+    ],
   );
   const expenses = expensesForJob(job.id, crm.expenses).sort((a, b) =>
     b.incurredAt.localeCompare(a.incurredAt),
@@ -45,11 +61,9 @@ export function JobFinancials({ job }: { job: Job }) {
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">
-            Job costing in QuickBooks language. Accrual uses invoices; cash uses money in the door.
-          </p>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          Same statement as QuickBooks: income, cost of sales, gross profit, then overhead.
+        </p>
         <div className="flex flex-wrap gap-2">
           <div className="flex border">
             <button
@@ -82,50 +96,7 @@ export function JobFinancials({ job }: { job: Job }) {
         </div>
       </div>
 
-      <MetricStrip className="sm:grid-cols-2 xl:grid-cols-4">
-        <Metric
-          label={basis === "cash" ? "Collected" : "Invoiced"}
-          value={formatCurrencyFull(books.income)}
-          hint={
-            basis === "cash"
-              ? `${books.paymentCount} receipts`
-              : `${books.invoiceCount} invoices · ${formatCurrencyFull(books.ar)} AR`
-          }
-        />
-        <Metric
-          label="Job expenses"
-          value={formatCurrencyFull(books.expenses)}
-          hint={`${books.expenseCount} with receipts`}
-        />
-        <Metric
-          label="Gross profit"
-          value={formatCurrencyFull(books.profit)}
-          hint={`${Math.round(books.margin * 100)}% margin`}
-        />
-        <Metric
-          label="Contract"
-          value={formatCurrencyFull(books.contractValue)}
-          hint="Sold value on the job"
-        />
-      </MetricStrip>
-
-      {Object.keys(books.byAccount).length > 0 ? (
-        <div>
-          <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">Expenses by account</p>
-          <ul className="divide-y border">
-            {Object.entries(books.byAccount)
-              .sort((a, b) => b[1] - a[1])
-              .map(([account, amount]) => (
-                <li key={account} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                  <span>
-                    {EXPENSE_ACCOUNT_LABELS[account as keyof typeof EXPENSE_ACCOUNT_LABELS] ?? account}
-                  </span>
-                  <span className="tabular-nums">{formatMoney(amount)}</span>
-                </li>
-              ))}
-          </ul>
-        </div>
-      ) : null}
+      <ProfitAndLossReport statement={statement} />
 
       <div>
         <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">Expenses</p>

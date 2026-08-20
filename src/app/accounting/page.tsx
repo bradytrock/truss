@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -13,17 +13,23 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState, ErrorBanner, LoadingScreen, Metric, MetricStrip, PageHeader } from "@/components/page-chrome";
+import { ProfitAndLossReport } from "@/components/profit-and-loss";
 import { QbStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate, formatMoney } from "@/lib/format";
 import { invoiceTotal } from "@/lib/money";
-import { qbQueue } from "@/lib/job-financials";
+import { qbQueue, type JobBooksBasis } from "@/lib/job-financials";
+import { buildProfitAndLoss, formatPnlPeriod, yearToDateBounds } from "@/lib/profit-and-loss";
 import { EXPENSE_ACCOUNT_LABELS } from "@/lib/types";
 import { canViewAccounting } from "@/lib/visibility";
+import { cn } from "@/lib/utils";
 
 export default function AccountingPage() {
   const crm = useCrm();
   const viewer = crm.viewer;
+  const [basis, setBasis] = useState<JobBooksBasis>("accrual");
+  const [span, setSpan] = useState<"ytd" | "all">("ytd");
+  const ytd = useMemo(() => yearToDateBounds(), []);
   const queue = useMemo(
     () =>
       qbQueue({
@@ -34,6 +40,41 @@ export default function AccountingPage() {
       }),
     [crm.expenses, crm.invoiceLines, crm.invoices, crm.payments],
   );
+  const statement = useMemo(() => {
+    const dated = [
+      ...crm.invoices.map((invoice) => invoice.issuedAt),
+      ...crm.payments.map((payment) => payment.paidAt),
+      ...crm.expenses.map((expense) => expense.incurredAt),
+    ]
+      .map((value) => value.slice(0, 10))
+      .filter(Boolean)
+      .sort();
+    const from = span === "ytd" ? ytd.from : dated[0] ?? ytd.from;
+    const to = ytd.to;
+    return buildProfitAndLoss({
+      companyName: crm.company.name,
+      jobs: crm.jobs,
+      invoices: crm.invoices,
+      invoiceLines: crm.invoiceLines,
+      payments: crm.payments,
+      expenses: crm.expenses,
+      basis,
+      from,
+      to,
+      periodLabel: formatPnlPeriod(from, to),
+    });
+  }, [
+    basis,
+    crm.company.name,
+    crm.expenses,
+    crm.invoiceLines,
+    crm.invoices,
+    crm.jobs,
+    crm.payments,
+    span,
+    ytd.from,
+    ytd.to,
+  ]);
 
   if (!crm.hydrated) return <LoadingScreen />;
 
@@ -59,8 +100,58 @@ export default function AccountingPage() {
       <PageHeader
         eyebrow="Books"
         title="Accounting"
-        description="What still needs to be typed into QuickBooks Desktop. Mark a row after you enter it. The web connector comes later — receipts stay on the job either way."
+        description="Profit and loss in QuickBooks form, plus the queue of invoices, expenses, and payments still waiting to be typed into Desktop."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <div className="flex border">
+              <button
+                type="button"
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium",
+                  basis === "accrual" ? "bg-foreground text-background" : "text-muted-foreground",
+                )}
+                onClick={() => setBasis("accrual")}
+              >
+                Accrual
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium",
+                  basis === "cash" ? "bg-foreground text-background" : "text-muted-foreground",
+                )}
+                onClick={() => setBasis("cash")}
+              >
+                Cash
+              </button>
+            </div>
+            <div className="flex border">
+              <button
+                type="button"
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium",
+                  span === "ytd" ? "bg-foreground text-background" : "text-muted-foreground",
+                )}
+                onClick={() => setSpan("ytd")}
+              >
+                Year to date
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium",
+                  span === "all" ? "bg-foreground text-background" : "text-muted-foreground",
+                )}
+                onClick={() => setSpan("all")}
+              >
+                All dates
+              </button>
+            </div>
+          </div>
+        }
       />
+
+      <ProfitAndLossReport statement={statement} />
 
       <MetricStrip className="sm:grid-cols-3">
         <Metric
