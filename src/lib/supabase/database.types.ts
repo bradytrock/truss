@@ -56,6 +56,7 @@ export type Database = {
           title: string;
           initials: string;
           role: Database["public"]["Enums"]["seat_role"];
+          staff_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -65,6 +66,7 @@ export type Database = {
           title?: string;
           initials: string;
           role?: Database["public"]["Enums"]["seat_role"];
+          staff_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -74,6 +76,7 @@ export type Database = {
           title?: string;
           initials?: string;
           role?: Database["public"]["Enums"]["seat_role"];
+          staff_id?: string | null;
         };
         Relationships: [];
       };

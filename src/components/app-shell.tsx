@@ -43,6 +43,7 @@ import {
 } from "@/components/create-ops-dialogs";
 import { canViewReports, canManageSettings } from "@/lib/visibility";
 import { COURSE } from "@/lib/training/engine";
+import { isUnsignedDemo } from "@/lib/seats";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand";
@@ -419,7 +420,7 @@ function UserMenu() {
             </DropdownMenuGroup>
           </>
         ) : null}
-        {staff.length > 1 ? (
+        {isUnsignedDemo(user) && staff.length > 1 ? (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>

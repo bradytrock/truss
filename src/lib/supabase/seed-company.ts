@@ -1,10 +1,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { seedState } from "@/lib/seed";
+import { namesMatch } from "@/lib/seats";
 import { insertOperations, wipeOperations } from "@/lib/supabase/ops-seed";
-import { NORTHLINE_STAFF, NORTHLINE_TEAMS } from "@/lib/types";
+import { initialsFromName, NORTHLINE_STAFF, NORTHLINE_TEAMS, type SeatRole } from "@/lib/types";
 import type { Database } from "@/lib/supabase/database.types";
 
 type Client = SupabaseClient<Database>;
+
+export type PreserveSignedInStaff = {
+  userId: string;
+  name: string;
+  title: string;
+  role: SeatRole;
+  initials?: string;
+};
 
 function remap(source: string, map: Map<string, string>) {
   const existing = map.get(source);
@@ -14,7 +23,11 @@ function remap(source: string, map: Map<string, string>) {
   return next;
 }
 
-export async function seedCompanyBook(supabase: Client, companyId: string) {
+export async function seedCompanyBook(
+  supabase: Client,
+  companyId: string,
+  options?: { preserve?: PreserveSignedInStaff | null },
+) {
   const ids = new Map<string, string>();
   const seed = structuredClone(seedState);
 
@@ -73,6 +86,38 @@ export async function seedCompanyBook(supabase: Client, companyId: string) {
     }))
   );
   if (teamError) throw teamError;
+
+  const preserve = options?.preserve;
+  if (preserve?.name.trim() && !NORTHLINE_STAFF.some((member) => namesMatch(member.name, preserve.name))) {
+    const { data: preserved, error: preserveError } = await supabase
+      .from("team_members")
+      .insert({
+        company_id: companyId,
+        name: preserve.name.trim(),
+        title: preserve.title.trim() || "Company admin",
+        role: preserve.role || "company_admin",
+        team_id: null,
+        initials: preserve.initials || initialsFromName(preserve.name),
+      })
+      .select("id")
+      .single();
+    if (preserveError) throw preserveError;
+    if (preserved && preserve.userId) {
+      const { error: linkError } = await supabase
+        .from("profiles")
+        .update({ staff_id: preserved.id })
+        .eq("id", preserve.userId);
+      if (
+        linkError &&
+        linkError.code !== "PGRST204" &&
+        !linkError.message.includes("staff_id") &&
+        !linkError.message.includes("schema cache") &&
+        !linkError.message.includes("Could not find the")
+      ) {
+        throw linkError;
+      }
+    }
+  }
 
   for (const team of NORTHLINE_TEAMS) {
     const { error: leadError } = await supabase

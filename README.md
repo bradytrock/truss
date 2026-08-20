@@ -21,8 +21,9 @@ To attach a project that is already running:
    - [`supabase/migrations/20260819230000_google_calendars.sql`](supabase/migrations/20260819230000_google_calendars.sql) — per-user Google Calendar links, team sharing, admin visibility
    - [`supabase/migrations/20260819240000_training.sql`](supabase/migrations/20260819240000_training.sql) — per-seat training progress, badges, attempts, and company training bulletins
    - [`supabase/migrations/20260819250000_lead_intake.sql`](supabase/migrations/20260819250000_lead_intake.sql) — lead source, referred-by contact, job-site address, and notes on pursuits
+   - [`supabase/migrations/20260819260000_profile_staff.sql`](supabase/migrations/20260819260000_profile_staff.sql) — each signed-in profile gets its own seat so login does not land on the sample company admin
 3. In Authentication → URL configuration, add `http://localhost:3847/auth/callback`. For local work you can turn off “Confirm email”.
-4. Create an account. Signup opens a company, a profile, and the Northline sample book in Postgres.
+4. Create an account. Signup opens a company, a profile, a seat for you, and the Northline sample book in Postgres. The sample roster stays available under **Login As**; the app does not treat you as Jordan Hale.
 
 You can still put the same values in `.env.local` by hand:
 
@@ -49,17 +50,17 @@ To connect real Google Calendars, create an OAuth web client in Google Cloud (Ca
 - **Calendar** — week view of Truss field events plus each person’s Google Calendar. Link is per seat. Share with your team; company admins see every calendar and whether it is linked.
 - **Training** — roofing certification course (companion to *Roofing Construction & Estimating, Revised* by Daniel Atcheson). Original lesson summaries, generated takeoff questions, 70% chapter/practice, 80% exam. Progress is per seat. Team leads and company admin see crew progress and can post training bulletins. Open jobs recommend chapters by project type.
 
-The Northline sample book loads locally with no sign-in. Avatar menu → **Reset demo data** restores it in memory, or (after migrations and a signed-in company) wipes that company’s CRM tables and reloads this book. It does not delete the Auth user.
+The Northline sample book loads locally with no sign-in. Avatar menu → **Reset demo data** restores it in memory, or (after migrations and a signed-in company) wipes that company’s CRM tables and reloads this book. Your signed-in seat is put back on the roster. It does not delete the Auth user. **Switch seat** is only for the unsigned sample; when you are signed in, use **Login As** to look at someone else’s book.
 
 ## What lives in Supabase
 
-- **Auth** — email/password; each signup creates a `companies` row and a `profiles` row
+- **Auth** — email/password; each signup creates a `companies` row, a `profiles` row, and a `team_members` seat linked by `profiles.staff_id`
 - **Postgres** — contacts, homeowners, pursuits, jobs, catalog, estimates, invoices, payments, schedule, calendar accounts, photos, teams, seats, training progress, training bulletins
 - **RLS** — every query is limited to `current_company_id()`
 - **Realtime** — the board and records refresh when anyone in the company writes
 - **Storage** — `job-photos` bucket, files stored as `{companyId}/{jobId}/{uuid}`
 - **Google Calendar** — refresh tokens stay in `calendar_tokens` (RPC only). Metadata and shares are company-visible; company admins can read every linked calendar.
 
-Reset demo data (avatar menu) wipes that company’s CRM tables and reloads the sample book. It does not delete the Auth user.
+Reset demo data (avatar menu) wipes that company’s CRM tables and reloads the sample book. Your login stays on the roster. It does not delete the Auth user.
 
 Truss does not measure roofs from satellite imagery, collect card payments, or send SMS. Those are the pieces left to the tools you already use for takeoff and banking.

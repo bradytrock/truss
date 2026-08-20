@@ -20,6 +20,7 @@ import { seedOperationsIfMissing } from "@/lib/supabase/ops-seed";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { findStaffForProfile, isUnsignedDemo, namesMatch, staffMemberFromProfile } from "@/lib/seats";
 import {
   jobPatch,
   mapActivity,
@@ -34,6 +35,7 @@ import {
   mapOpportunity,
   mapPayment,
   mapScheduleEvent,
+  mapStaff,
   mapTask,
   mapTrainingBulletin,
   opportunityPatch,
@@ -207,6 +209,85 @@ function isMissingLeadIntake(error: { message?: string; code?: string }) {
   );
 }
 
+function isMissingStaffLink(error: { message?: string; code?: string } | null) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("staff_id") ||
+    message.includes("schema cache") ||
+    message.includes("Could not find the")
+  );
+}
+
+function preserveFromUser(user: CurrentUser) {
+  if (!user.id || isUnsignedDemo(user) || !user.name.trim()) return null;
+  return {
+    userId: user.id,
+    name: user.name,
+    title: user.title,
+    role: user.role,
+    initials: user.initials,
+  };
+}
+
+async function linkProfileStaff(
+  supabase: ReturnType<typeof createClient>,
+  profileId: string,
+  staffId: string,
+) {
+  const { error } = await supabase.from("profiles").update({ staff_id: staffId }).eq("id", profileId);
+  if (error && !isMissingStaffLink(error)) {
+    toast.error(error.message);
+  }
+}
+
+async function ensureSignedInStaff(
+  supabase: ReturnType<typeof createClient>,
+  companyId: string,
+  profile: {
+    id: string;
+    full_name: string;
+    title: string;
+    initials: string;
+    role: SeatRole;
+    staff_id?: string | null;
+  },
+  roster: StaffMember[],
+) {
+  const matched = findStaffForProfile(roster, profile);
+  if (matched) {
+    if (profile.staff_id !== matched.id) {
+      await linkProfileStaff(supabase, profile.id, matched.id);
+    }
+    return { roster, matched };
+  }
+
+  const { data, error } = await supabase
+    .from("team_members")
+    .insert({
+      company_id: companyId,
+      name: profile.full_name,
+      title: profile.title || "Company admin",
+      role: profile.role || "company_admin",
+      team_id: null,
+      initials: profile.initials || initialsFromName(profile.full_name),
+    })
+    .select("*")
+    .single();
+  if (error || !data) {
+    if (error && !isMissingStaffLink(error)) {
+      toast.error(error.message);
+    }
+    return { roster, matched: undefined };
+  }
+
+  const inserted = mapStaff(data);
+  await linkProfileStaff(supabase, profile.id, inserted.id);
+  return { roster: [...roster, inserted], matched: inserted };
+}
+
 type CrmContextValue = CrmState & {
   user: CurrentUser;
   viewer: StaffMember | undefined;
@@ -354,9 +435,25 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     } = await supabase.auth.getUser();
     if (authError || !authUser) {
       const local = readLocalCompany();
+      const seed = structuredClone(seedState);
       setCompanySettings(local);
-      setState(structuredClone(seedState));
-      setUser({ ...northlineUser, company: local.name });
+      setState({
+        ...seed,
+        ...readLocalCalendar(seed),
+        ...readLocalTraining(seed),
+      });
+      let restored: StaffMember | undefined;
+      try {
+        const saved = window.localStorage.getItem(DEMO_STAFF_KEY);
+        restored = seed.staff.find((item) => item.id === saved);
+      } catch {
+        restored = undefined;
+      }
+      setUser(
+        restored
+          ? userFromStaff(restored, { id: "local", companyId: "local", company: local.name })
+          : { ...northlineUser, company: local.name }
+      );
       setHydrateError(null);
       setHydrated(true);
       return;
@@ -369,9 +466,25 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       .maybeSingle();
     if (profileError || !profile) {
       const local = readLocalCompany();
+      const metaName =
+        (typeof authUser.user_metadata?.full_name === "string" && authUser.user_metadata.full_name.trim()) ||
+        authUser.email ||
+        "Signed in";
       setCompanySettings(local);
       setState(structuredClone(seedState));
-      setUser({ ...northlineUser, company: local.name });
+      setUser({
+        id: authUser.id,
+        companyId: "",
+        staffId: "",
+        name: metaName,
+        title:
+          (typeof authUser.user_metadata?.title === "string" && authUser.user_metadata.title.trim()) ||
+          "Company admin",
+        company: local.name,
+        initials: initialsFromName(metaName),
+        role: "company_admin",
+        teamId: null,
+      });
       const missingSchema =
         profileError?.message?.includes("schema cache") ||
         profileError?.code === "PGRST205" ||
@@ -398,12 +511,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         : { ...NORTHLINE_COMPANY, name: "Truss" };
 
     const companyId = profile.company_id;
+    const preserve = {
+      userId: profile.id,
+      name: profile.full_name,
+      title: profile.title,
+      role: (profile.role as SeatRole | undefined) ?? "company_admin",
+      initials: profile.initials,
+    };
     try {
       let book = await fetchCompanyBook(supabase, companyId);
       if (book.state.clients.length === 0 && book.team.length === 0 && !seeding.current) {
         seeding.current = true;
         try {
-          await seedCompanyBook(supabase, companyId);
+          await seedCompanyBook(supabase, companyId, { preserve });
           book = await fetchCompanyBook(supabase, companyId);
         } finally {
           seeding.current = false;
@@ -418,12 +538,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      const roster = book.state.staff;
-      const matched =
-        roster.find((member) => member.name === profile.full_name) ||
-        roster.find((member) => member.role === ((profile.role as SeatRole | undefined) ?? "company_admin")) ||
-        roster.find((member) => member.role === "company_admin") ||
-        roster[0];
+      const ensured = await ensureSignedInStaff(supabase, companyId, {
+        id: profile.id,
+        full_name: profile.full_name,
+        title: profile.title,
+        initials: profile.initials,
+        role: (profile.role as SeatRole | undefined) ?? "company_admin",
+        staff_id: profile.staff_id,
+      }, book.state.staff);
+      const matched = ensured.matched;
       const role = (profile.role as SeatRole | undefined) ?? matched?.role ?? "company_admin";
       setCompanySettings(settings);
       setUser({
@@ -433,16 +556,21 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         name: profile.full_name,
         title: profile.title,
         company: settings.name,
-        initials: profile.initials,
+        initials: profile.initials || initialsFromName(profile.full_name),
         role,
         teamId: matched?.teamId ?? null,
       });
       const stamped = backfillRecordCodes(
         book.state.opportunities,
         book.state.jobs,
-        book.state.staff.length > 0 ? book.state.staff : NORTHLINE_STAFF,
+        ensured.roster.length > 0 ? ensured.roster : NORTHLINE_STAFF,
       );
-      setState({ ...book.state, opportunities: stamped.opportunities, jobs: stamped.jobs });
+      setState({
+        ...book.state,
+        staff: ensured.roster,
+        opportunities: stamped.opportunities,
+        jobs: stamped.jobs,
+      });
       setHydrateError(null);
       setHydrated(true);
     } catch (error) {
@@ -457,6 +585,21 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       void load();
     }, 0);
     return () => window.clearTimeout(timer);
+  }, [configured, load]);
+
+  useEffect(() => {
+    if (!configured) return;
+    const supabase = createClient();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
+        void load();
+      }
+    });
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [configured, load]);
 
   useEffect(() => {
@@ -551,13 +694,26 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once from seed
   }, [configured]);
 
-  const viewer = useMemo(
-    () =>
-      state.staff.find((member) => member.id === user.staffId) ??
-      state.staff.find((member) => member.name === user.name) ??
-      state.staff[0],
-    [state.staff, user.name, user.staffId]
-  );
+  const viewer = useMemo(() => {
+    const byId = user.staffId ? state.staff.find((member) => member.id === user.staffId) : undefined;
+    if (byId && (isUnsignedDemo(user) || namesMatch(byId.name, user.name) || !user.name.trim())) {
+      return byId;
+    }
+    const byName = user.name.trim()
+      ? state.staff.find((member) => namesMatch(member.name, user.name))
+      : undefined;
+    if (byName) return byName;
+    if (!isUnsignedDemo(user) && user.name.trim()) {
+      return staffMemberFromProfile({
+        id: user.staffId || user.id,
+        name: user.name,
+        title: user.title || "Company admin",
+        role: user.role,
+        initials: user.initials,
+      });
+    }
+    return byId ?? state.staff[0];
+  }, [state.staff, user]);
   const impersonatedStaff = useMemo(
     () => state.staff.find((member) => member.id === impersonatedStaffId),
     [impersonatedStaffId, state.staff]
@@ -586,6 +742,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const switchSeat = useCallback(
     (staffId: string) => {
+      if (!isUnsignedDemo(user)) return;
       const member = state.staff.find((item) => item.id === staffId);
       if (!member) return;
       setImpersonatedStaffId(null);
@@ -603,7 +760,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       toast.success(`Viewing as ${member.name}`);
     },
-    [state.staff, user.company, user.companyId, user.id]
+    [state.staff, user]
   );
 
   const loginAs = useCallback(
@@ -2131,13 +2288,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     if (!user.companyId) return;
     const supabase = createClient();
     try {
-      await seedCompanyBook(supabase, user.companyId);
+      await seedCompanyBook(supabase, user.companyId, { preserve: preserveFromUser(user) });
       await load();
       toast.success("Northline sample book restored in Supabase.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not reset demo data.");
     }
-  }, [load, user.companyId]);
+  }, [load, user]);
 
   const signOut = useCallback(async () => {
     if (isSupabaseConfigured()) {

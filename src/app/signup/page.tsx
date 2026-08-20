@@ -19,7 +19,7 @@ export default function SignupPage() {
   const [pending, setPending] = useState(false);
   const [fullName, setFullName] = useState("");
   const [company, setCompany] = useState("Northline Construction");
-  const [title, setTitle] = useState("VP, Preconstruction");
+  const [title, setTitle] = useState("Company admin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
@@ -92,7 +92,7 @@ export default function SignupPage() {
             value={fullName}
             onChange={(event) => setFullName(event.target.value)}
             required
-            placeholder="Jordan Hale"
+            placeholder="Your name"
           />
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -112,6 +112,7 @@ export default function SignupPage() {
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               required
+              placeholder="Company admin"
             />
           </div>
         </div>
