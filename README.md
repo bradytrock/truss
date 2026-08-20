@@ -15,6 +15,8 @@ npm run dev
 
 The app listens on port 3847. The unsigned demo loads Northline’s sample book in the browser. Sign in after you attach a Supabase project.
 
+Production (`npm run build`) uses webpack instead of Turbopack. Restricted hosts that block extra localhost ports otherwise panic while compiling `globals.css`. Honors `PORT` on `npm start`.
+
 ## Connect Supabase
 
 The hosted MCP at `https://mcp.supabase.com/mcp` is online. This cloud agent cannot complete the OAuth click-through — authenticate Supabase under **Cursor Settings → MCP** in the desktop app if you want the agent to create projects for you.
