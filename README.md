@@ -54,9 +54,9 @@ To connect real Google Calendars, create an OAuth web client in Google Cloud (Ca
 - **Estimates** — write a proposal from the price book (sections, optional work, tax), download a PDF, send a client link. Signing moves the Lead to Job Sold and opens a job. Convert included lines to an invoice.
 - **Jobs** — field record (overview, photos, estimates/invoices, custom fields), activity, and job photos (upload or URL)
 - **Invoices** — draws and retainage with payment history, outstanding AR, PDF, and a client share link
-- **Accounting** — company admin and the Accounting seat (sample: Nora Keene, Controller) see invoices, expenses, and payments that still need to be typed into QuickBooks Desktop. Mark a row after you enter it. The Desktop web connector comes later.
+- **Accounting** — company admin and the Accounting seat (sample: Nora Keene, Controller) get a company Profit and Loss in QuickBooks form, plus invoices, expenses, and payments that still need to be typed into QuickBooks Desktop. Mark a row after you enter it. The Desktop web connector comes later.
 - **Log expense / Log payment** — Create (+) in the top right. A photo is required every time, whether or not AI reads the receipt. Images stay on the record. Optional `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` fills vendor, amount, date, and account from the photo.
-- **Job financials** — on the job record, Accrual (invoiced − expenses) or Cash (collected − expenses) P&L, expenses by account, and receipt thumbnails
+- **Job financials** — QuickBooks-style Profit and Loss on the job (Income, Cost of Sales, Gross Profit, Expenses, Net Income). Accrual or cash. Receipt thumbnails stay under the statement.
 - **Calendar** — week view of Truss field events plus each person’s Google Calendar. Link is per seat. Share with your team; company admins see every calendar and whether it is linked.
 - **Training** — roofing certification course (companion to *Roofing Construction & Estimating, Revised* by Daniel Atcheson). Original lesson summaries, generated takeoff questions, 70% chapter/practice, 80% exam. Progress is per seat. Team leads and company admin see crew progress and can post training bulletins. Open jobs recommend chapters by project type.
 
