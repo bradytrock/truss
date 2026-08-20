@@ -4,6 +4,17 @@ A contractor operating system for restoration and home improvement: pipeline, es
 
 Northline Construction’s sample book is Denver residential work — hail roofs, water and fire restoration, kitchens, windows — plus a thin commercial leftover. Homeowners do not need a company on file.
 
+The source of truth is [github.com/bradytrock/truss](https://github.com/bradytrock/truss).
+
+```bash
+git clone https://github.com/bradytrock/truss.git
+cd truss
+npm install
+npm run dev
+```
+
+The app listens on port 3847. The unsigned demo loads Northline’s sample book in the browser. Sign in after you attach a Supabase project.
+
 ## Connect Supabase
 
 The hosted MCP at `https://mcp.supabase.com/mcp` is online. This cloud agent cannot complete the OAuth click-through — authenticate Supabase under **Cursor Settings → MCP** in the desktop app if you want the agent to create projects for you.
