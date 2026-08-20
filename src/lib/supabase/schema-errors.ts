@@ -3,6 +3,7 @@ import type { ClientType, DeliveryMethod, ProjectType } from "@/lib/types";
 export const NULLABLE_COMPANY_SQL = "supabase/migrations/20260819280000_nullable_company.sql";
 export const ESTIMATE_WRITER_SQL = "supabase/migrations/20260819290000_estimate_writer.sql";
 export const RESIDENTIAL_ENUMS_SQL = "supabase/migrations/20260819200000_residential_homeowners.sql";
+export const JOB_OVERVIEW_SQL = "supabase/migrations/20260819270000_job_overview.sql";
 
 export function isMissingEstimateWriter(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -96,6 +97,23 @@ export function isInvalidEnumValue(error: { message?: string; code?: string } | 
 
 export function missingResidentialEnumsMessage() {
   return `Run ${RESIDENTIAL_ENUMS_SQL} in the SQL editor so fixed-price, insurance claims, and residential work types store correctly.`;
+}
+
+export function isMissingPrimaryContactColumn(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  return /primary_contact_id/i.test(error.message ?? "");
+}
+
+export function missingPrimaryContactMessage() {
+  return `Saved. Run ${RESIDENTIAL_ENUMS_SQL} in the SQL editor so the homeowner stays on the job in Postgres.`;
+}
+
+export function missingJobOverviewMessage() {
+  return `Saved in this browser. Run ${JOB_OVERVIEW_SQL} in the SQL editor to keep it in Postgres.`;
+}
+
+export function missingPrimaryContactHint() {
+  return `Run ${RESIDENTIAL_ENUMS_SQL} in the SQL editor so jobs can store a homeowner, then try again.`;
 }
 
 export function legacyDeliveryMethod(value: string): DeliveryMethod {

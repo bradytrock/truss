@@ -11,6 +11,7 @@ import {
   legacyProjectType,
   requiredClientIdMessage,
 } from "@/lib/supabase/schema-errors";
+import { insertJobRowsWithFallbacks } from "@/lib/supabase/job-insert";
 import { initialsFromName, NORTHLINE_STAFF, NORTHLINE_TEAMS, type SeatRole } from "@/lib/types";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -322,45 +323,11 @@ export async function seedCompanyBook(
     project_type: job.projectType || null,
     lead_source: job.leadSource ?? "",
   }));
-  let { error: jobError } = await supabase.from("jobs").insert(jobRows);
-  if (jobError && isInvalidEnumValue(jobError)) {
-    const retry = await supabase.from("jobs").insert(
-      jobRows.map((row) => ({
-        ...row,
-        project_type: row.project_type ? legacyProjectType(row.project_type) : null,
-      })),
-    );
-    jobError = retry.error;
-  }
-  if (jobError) {
-    const missing =
-      jobError.message.includes("schema cache") ||
-      jobError.code === "PGRST204" ||
-      jobError.message.includes("description") ||
-      jobError.message.includes("custom_fields") ||
-      jobError.message.includes("Could not find the");
-    if (!missing) throw jobError;
-    const { error: retryError } = await supabase.from("jobs").insert(
-      seed.jobs.map((job) => ({
-        id: remap(job.id, ids),
-        company_id: companyId,
-        opportunity_id: job.opportunityId ? remap(job.opportunityId, ids) : null,
-        name: job.name,
-        client_id: clientRef(job.clientId, ids, householdId),
-        primary_contact_id: job.primaryContactId ? remap(job.primaryContactId, ids) : null,
-        status: job.status,
-        contract_value: job.contractValue,
-        start_date: job.startDate,
-        substantial_completion: job.substantialCompletion,
-        superintendent: job.superintendent,
-        project_manager: job.projectManager,
-        location: job.location,
-        owner_staff_id: job.ownerStaffId ? remap(job.ownerStaffId, ids) : null,
-        code: job.code,
-      })),
-    );
-    if (retryError) throw retryError;
-  }
+  const { error: jobError } = await insertJobRowsWithFallbacks(jobRows, async (rows) => {
+    const result = await supabase.from("jobs").insert(rows as never);
+    return { error: result.error };
+  });
+  if (jobError) throw jobError;
 
   const { error: activityError } = await supabase.from("activities").insert(
     seed.activities.map((activity) => ({
