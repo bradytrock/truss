@@ -19,12 +19,11 @@ Production (`npm run build`) uses webpack instead of Turbopack. Restricted hosts
 
 ## Connect Supabase
 
+Truss ships pointed at one shared project (`cxrgdjvkmvnuztubxldh`). Signup still creates a **company per account**; people on the same company share that book. You do not paste keys to sign in. `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` override the baked-in project if you need a private instance.
+
 The hosted MCP at `https://mcp.supabase.com/mcp` is online. This cloud agent cannot complete the OAuth click-through — authenticate Supabase under **Cursor Settings → MCP** in the desktop app if you want the agent to create projects for you.
 
-To attach a project that is already running:
-
-1. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in `.env.local` (or on the host, then redeploy). Without those names the hosted app shows a paste-keys form instead of email sign-in. You can also open [http://localhost:3847/login](http://localhost:3847/login) and paste the project URL plus the **publishable** (or anon) key from Settings → API; that only connects this browser. Truss checks that the project is reachable, then stores the keys for this browser and writes `.env.local` in development.
-2. In the SQL editor, run the migrations, in order:
+On that shared project, run the migrations in the SQL editor (in order) if they are not applied yet:
    - [`supabase/migrations/20260819170000_truss_crm.sql`](supabase/migrations/20260819170000_truss_crm.sql) — companies, profiles, pipeline, jobs, RLS, signup trigger, Realtime
    - [`supabase/migrations/20260819180000_estimates_invoices_schedule.sql`](supabase/migrations/20260819180000_estimates_invoices_schedule.sql) — price book, estimates, invoices, payments, schedule, job photos, Storage bucket
    - [`supabase/migrations/20260819190000_seats_contacts.sql`](supabase/migrations/20260819190000_seats_contacts.sql) — seats, teams, contact-book ownership, referral partners
@@ -44,16 +43,10 @@ To attach a project that is already running:
    - [`supabase/migrations/20260819340000_project_financials.sql`](supabase/migrations/20260819340000_project_financials.sql) — Accounting seat, expenses with required receipts, payment images, QuickBooks entry queue
    - [`supabase/migrations/20260820120000_opportunity_originator.sql`](supabase/migrations/20260820120000_opportunity_originator.sql) — who sourced the lead (`originator_staff_id`) stays when it is assigned
    - [`supabase/migrations/20260820200000_account_management.sql`](supabase/migrations/20260820200000_account_management.sql) — People settings: invite tokens, lock, restrict, and join-an-existing-company on signup
-3. In Authentication → URL configuration, add `http://localhost:3847/auth/callback`. For local work you can turn off “Confirm email”.
-4. Create an account. Signup opens a company, a profile, and a seat for you. It does not add sample people (Jordan Hale, Priya Shah, and the rest). Add real teammates as you hire them.
 
-You can still put the same values in `.env.local` by hand:
+In Authentication → URL configuration, add `http://localhost:3847/auth/callback` (and the hosted app origin). For local work you can turn off “Confirm email”. Signup opens a company, a profile, and a seat for you. It does not add sample people. Add real teammates from Settings → People.
 
-```bash
-cp .env.example .env.local
-npm install
-npm run dev
-```
+`.env.local` is optional. Copy `.env.example` only if you want to override the shared project.
 
 To connect real Google Calendars, create an OAuth web client in Google Cloud (Calendar API + `.../auth/calendar.events.readonly`). Put `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env.local`, and add `http://localhost:3847/api/google/calendar/callback` as an authorized redirect URI. Without those keys, each seat can still **Link demo Google Calendar** so sharing and admin visibility can be tried locally.
 

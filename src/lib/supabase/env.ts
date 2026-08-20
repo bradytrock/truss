@@ -3,36 +3,19 @@ export const SB_KEY_COOKIE = "truss-sb-key";
 export const SB_URL_LS = "truss.supabase.url";
 export const SB_KEY_LS = "truss.supabase.key";
 
-function readCookie(name: string) {
-  if (typeof document === "undefined") return "";
-  const prefix = `${name}=`;
-  const match = document.cookie.split("; ").find((part) => part.startsWith(prefix));
-  return match ? decodeURIComponent(match.slice(prefix.length)) : "";
-}
-
-function readStorage(name: string) {
-  if (typeof window === "undefined") return "";
-  try {
-    return window.localStorage.getItem(name) ?? "";
-  } catch {
-    return "";
-  }
-}
+/** Shared Truss project. Publishable key is a client key; RLS isolates companies. Env vars still override. */
+export const TRUSS_SUPABASE_URL = "https://cxrgdjvkmvnuztubxldh.supabase.co";
+export const TRUSS_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Fs_dTxYT2nBFYVjLLG6vpg_n5b_NSa1";
 
 export function getSupabaseUrl() {
-  return (
-    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
-    readStorage(SB_URL_LS) ||
-    readCookie(SB_URL_COOKIE)
-  );
+  return process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || TRUSS_SUPABASE_URL;
 }
 
 export function getSupabaseKey() {
   return (
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
-    readStorage(SB_KEY_LS) ||
-    readCookie(SB_KEY_COOKIE)
+    TRUSS_SUPABASE_PUBLISHABLE_KEY
   );
 }
 
