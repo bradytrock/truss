@@ -110,7 +110,10 @@ import {
   backfillRecordCodes,
   codeInsertError,
   existingRecordCodes,
+  isMissingCodeColumn,
+  missingCodeColumnMessage,
   nextJobCode,
+  payloadWithoutCode,
 } from "@/lib/job-code";
 import { formatJobSite } from "@/lib/leads";
 import { fillPayment, fileToDataUrl } from "@/lib/job-financials";
@@ -268,6 +271,7 @@ function isMissingJobOverview(error: { message?: string; code?: string }) {
     message.includes("schema cache") ||
     message.includes("custom_fields") ||
     message.includes("related_contact_ids") ||
+    message.includes("postal_code") ||
     message.includes("Could not find the")
   );
 }
@@ -1157,33 +1161,42 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             lead_source: awarded.leadSource ?? "",
           };
           let { data, error: jobError } = await supabase.from("jobs").insert(payload).select("*").single();
-          if (jobError && isMissingJobOverview(jobError)) {
-            const retry = await supabase
-              .from("jobs")
-              .insert({
-                company_id: payload.company_id,
-                opportunity_id: payload.opportunity_id,
-                name: payload.name,
-                client_id: payload.client_id,
-                primary_contact_id: payload.primary_contact_id,
-                status: payload.status,
-                contract_value: payload.contract_value,
-                start_date: payload.start_date,
-                superintendent: payload.superintendent,
-                project_manager: payload.project_manager,
-                location: payload.location,
-                owner_staff_id: payload.owner_staff_id,
-                code: payload.code,
-              })
-              .select("*")
-              .single();
+          if (jobError && isMissingCodeColumn(jobError)) {
+            const retry = await supabase.from("jobs").insert(payloadWithoutCode(payload)).select("*").single();
             data = retry.data;
             jobError = retry.error;
+            if (!jobError) toast.message(missingCodeColumnMessage());
+          }
+          if (jobError && isMissingJobOverview(jobError)) {
+            const slim = {
+              company_id: payload.company_id,
+              opportunity_id: payload.opportunity_id,
+              name: payload.name,
+              client_id: payload.client_id,
+              primary_contact_id: payload.primary_contact_id,
+              status: payload.status,
+              contract_value: payload.contract_value,
+              start_date: payload.start_date,
+              superintendent: payload.superintendent,
+              project_manager: payload.project_manager,
+              location: payload.location,
+              owner_staff_id: payload.owner_staff_id,
+              code: payload.code,
+            };
+            const retry = await supabase.from("jobs").insert(slim).select("*").single();
+            data = retry.data;
+            jobError = retry.error;
+            if (jobError && isMissingCodeColumn(jobError)) {
+              const withoutCode = await supabase.from("jobs").insert(payloadWithoutCode(slim)).select("*").single();
+              data = withoutCode.data;
+              jobError = withoutCode.error;
+              if (!jobError) toast.message(missingCodeColumnMessage());
+            }
           }
           if (jobError) {
             toast.error(codeInsertError(jobError, "Could not open the job."));
           } else if (data) {
-            createdJob = mapJob(data);
+            createdJob = { ...mapJob(data), code: data.code || payload.code };
             await addActivity({
               entityType: "job",
               entityId: data.id,
@@ -1326,61 +1339,61 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           toast.message(missingResidentialEnumsMessage());
         }
       }
+      if (error && isMissingCodeColumn(error)) {
+        const retry = await supabase.from("opportunities").insert(payloadWithoutCode(base)).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingCodeColumnMessage());
+      }
       if (error && isMissingLeadIntake(error)) {
-        const retry = await supabase
-          .from("opportunities")
-          .insert({
-            company_id: base.company_id,
-            name: base.name,
-            client_id: base.client_id,
-            primary_contact_id: base.primary_contact_id,
-            stage: base.stage,
-            value: base.value,
-            bid_due_at: base.bid_due_at,
-            pre_bid_walk_at: base.pre_bid_walk_at,
-            location: base.location,
-            project_type: isInvalidEnumValue(error)
-              ? legacyProjectType(base.project_type)
-              : base.project_type,
-            delivery_method: isInvalidEnumValue(error)
-              ? legacyDeliveryMethod(base.delivery_method)
-              : base.delivery_method,
-            estimator: base.estimator,
-            owner_staff_id: base.owner_staff_id,
-            win_probability: base.win_probability,
-            next_step: base.next_step,
-            code: base.code,
-          })
-          .select("*")
-          .single();
+        const slim = {
+          company_id: base.company_id,
+          name: base.name,
+          client_id: base.client_id,
+          primary_contact_id: base.primary_contact_id,
+          stage: base.stage,
+          value: base.value,
+          bid_due_at: base.bid_due_at,
+          pre_bid_walk_at: base.pre_bid_walk_at,
+          location: base.location,
+          project_type: isInvalidEnumValue(error)
+            ? legacyProjectType(base.project_type)
+            : base.project_type,
+          delivery_method: isInvalidEnumValue(error)
+            ? legacyDeliveryMethod(base.delivery_method)
+            : base.delivery_method,
+          estimator: base.estimator,
+          owner_staff_id: base.owner_staff_id,
+          win_probability: base.win_probability,
+          next_step: base.next_step,
+          code: base.code,
+        };
+        const retry = await supabase.from("opportunities").insert(slim).select("*").single();
         data = retry.data;
         error = retry.error;
         if (error && isInvalidEnumValue(error)) {
           const enumRetry = await supabase
             .from("opportunities")
             .insert({
-              company_id: base.company_id,
-              name: base.name,
-              client_id: base.client_id,
-              primary_contact_id: base.primary_contact_id,
-              stage: base.stage,
-              value: base.value,
-              bid_due_at: base.bid_due_at,
-              pre_bid_walk_at: base.pre_bid_walk_at,
-              location: base.location,
+              ...slim,
               project_type: legacyProjectType(base.project_type),
               delivery_method: legacyDeliveryMethod(base.delivery_method),
-              estimator: base.estimator,
-              owner_staff_id: base.owner_staff_id,
-              win_probability: base.win_probability,
-              next_step: base.next_step,
-              code: base.code,
             })
             .select("*")
             .single();
           data = enumRetry.data;
           error = enumRetry.error;
           if (!error && data) toast.message(missingResidentialEnumsMessage());
+        }
+        if (error && isMissingCodeColumn(error)) {
+          const withoutCode = await supabase
+            .from("opportunities")
+            .insert(payloadWithoutCode(slim))
+            .select("*")
+            .single();
+          data = withoutCode.data;
+          error = withoutCode.error;
+          if (!error) toast.message(missingCodeColumnMessage());
         }
         if (error) {
           toast.error(
@@ -1399,7 +1412,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         );
         throw error ?? new Error("Could not open the pursuit.");
       }
-      const opportunity = mapOpportunity(data);
+      const opportunity = { ...mapOpportunity(data), code: data.code || code };
       setState((prev) => ({ ...prev, opportunities: [opportunity, ...prev.opportunities] }));
       await addActivity({
         entityType: "opportunity",
@@ -1628,29 +1641,38 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         data = retry.data;
         error = retry.error;
       }
-      if (error && isMissingJobOverview(error)) {
-        const retry = await supabase
-          .from("jobs")
-          .insert({
-            company_id: payload.company_id,
-            opportunity_id: payload.opportunity_id,
-            name: payload.name,
-            client_id: payload.client_id,
-            primary_contact_id: payload.primary_contact_id,
-            status: payload.status,
-            contract_value: payload.contract_value,
-            start_date: payload.start_date,
-            substantial_completion: payload.substantial_completion,
-            superintendent: payload.superintendent,
-            project_manager: payload.project_manager,
-            location: payload.location,
-            owner_staff_id: payload.owner_staff_id,
-            code: payload.code,
-          })
-          .select("*")
-          .single();
+      if (error && isMissingCodeColumn(error)) {
+        const retry = await supabase.from("jobs").insert(payloadWithoutCode(payload)).select("*").single();
         data = retry.data;
         error = retry.error;
+        if (!error) toast.message(missingCodeColumnMessage());
+      }
+      if (error && isMissingJobOverview(error)) {
+        const slim = {
+          company_id: payload.company_id,
+          opportunity_id: payload.opportunity_id,
+          name: payload.name,
+          client_id: payload.client_id,
+          primary_contact_id: payload.primary_contact_id,
+          status: payload.status,
+          contract_value: payload.contract_value,
+          start_date: payload.start_date,
+          substantial_completion: payload.substantial_completion,
+          superintendent: payload.superintendent,
+          project_manager: payload.project_manager,
+          location: payload.location,
+          owner_staff_id: payload.owner_staff_id,
+          code: payload.code,
+        };
+        const retry = await supabase.from("jobs").insert(slim).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (error && isMissingCodeColumn(error)) {
+          const withoutCode = await supabase.from("jobs").insert(payloadWithoutCode(slim)).select("*").single();
+          data = withoutCode.data;
+          error = withoutCode.error;
+          if (!error) toast.message(missingCodeColumnMessage());
+        }
       }
       if (error || !data) {
         toast.error(codeInsertError(error, "Could not log the job."));

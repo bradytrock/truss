@@ -136,17 +136,28 @@ export function backfillRecordCodes<
   };
 }
 
+export const CODE_MIGRATION_SQL = "supabase/migrations/20260819220000_job_codes.sql";
+
 export const CODE_MIGRATION_HINT =
   "Run supabase/migrations/20260819220000_job_codes.sql in the SQL editor, then try again.";
 
+export function missingCodeColumnMessage() {
+  return `Saved. Run ${CODE_MIGRATION_SQL} in the SQL editor so the job code stays in Postgres.`;
+}
+
+export function payloadWithoutCode<T extends { code?: string }>(row: T): Omit<T, "code"> {
+  const { code: _code, ...rest } = row;
+  return rest;
+}
+
 export function isMissingCodeColumn(error: { message?: string; code?: string } | null | undefined) {
   const message = error?.message ?? "";
+  // postal_code / cost_code must not count as the jobs.code column.
+  const text = message.replace(/postal_code/gi, "").replace(/cost_code/gi, "");
   return (
-    message.includes("schema cache") ||
-    error?.code === "PGRST204" ||
-    error?.code === "PGRST205" ||
-    message.includes("Could not find the") ||
-    (message.toLowerCase().includes("column") && message.toLowerCase().includes("code"))
+    /'code'|"code"/.test(text) ||
+    /column\s+["']?code["']?/i.test(text) ||
+    (text.toLowerCase().includes("column") && /(^|[^a-z_])code([^a-z_]|$)/i.test(text))
   );
 }
 
