@@ -28,6 +28,7 @@ To attach a project that is already running:
    - [`supabase/migrations/20260819300000_share_tokens.sql`](supabase/migrations/20260819300000_share_tokens.sql) — client share tokens on estimates and invoices, plus public lookup RPCs
    - [`supabase/migrations/20260819310000_ensure_residential_enums.sql`](supabase/migrations/20260819310000_ensure_residential_enums.sql) — `fixed_price`, insurance, and residential project types on the Postgres enums (safe to re-run)
    - [`supabase/migrations/20260819320000_sign_shared_estimate.sql`](supabase/migrations/20260819320000_sign_shared_estimate.sql) — homeowner can sign a shared estimate, which awards the lead and opens a job
+   - [`supabase/migrations/20260819340000_project_financials.sql`](supabase/migrations/20260819340000_project_financials.sql) — Accounting seat, expenses with required receipts, payment images, QuickBooks entry queue
 3. In Authentication → URL configuration, add `http://localhost:3847/auth/callback`. For local work you can turn off “Confirm email”.
 4. Create an account. Signup opens a company, a profile, a seat for you, and the Northline sample book in Postgres. The sample roster stays available under **Login As**; the app does not treat you as Jordan Hale.
 
@@ -53,6 +54,9 @@ To connect real Google Calendars, create an OAuth web client in Google Cloud (Ca
 - **Estimates** — write a proposal from the price book (sections, optional work, tax), download a PDF, send a client link. Signing moves the Lead to Job Sold and opens a job. Convert included lines to an invoice.
 - **Jobs** — field record (overview, photos, estimates/invoices, custom fields), activity, and job photos (upload or URL)
 - **Invoices** — draws and retainage with payment history, outstanding AR, PDF, and a client share link
+- **Accounting** — company admin and the Accounting seat (sample: Nora Keene, Controller) see invoices, expenses, and payments that still need to be typed into QuickBooks Desktop. Mark a row after you enter it. The Desktop web connector comes later.
+- **Log expense / Log payment** — Create (+) in the top right. A photo is required every time, whether or not AI reads the receipt. Images stay on the record. Optional `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` fills vendor, amount, date, and account from the photo.
+- **Job financials** — on the job record, Accrual (invoiced − expenses) or Cash (collected − expenses) P&L, expenses by account, and receipt thumbnails
 - **Calendar** — week view of Truss field events plus each person’s Google Calendar. Link is per seat. Share with your team; company admins see every calendar and whether it is linked.
 - **Training** — roofing certification course (companion to *Roofing Construction & Estimating, Revised* by Daniel Atcheson). Original lesson summaries, generated takeoff questions, 70% chapter/practice, 80% exam. Progress is per seat. Team leads and company admin see crew progress and can post training bulletins. Open jobs recommend chapters by project type.
 
@@ -61,10 +65,10 @@ The Northline sample book loads locally with no sign-in. Avatar menu → **Reset
 ## What lives in Supabase
 
 - **Auth** — email/password; each signup creates a `companies` row, a `profiles` row, and a `team_members` seat linked by `profiles.staff_id`
-- **Postgres** — contacts, homeowners, pursuits, jobs, catalog, estimates, invoices, payments, schedule, calendar accounts, photos, teams, seats, training progress, training bulletins
+- **Postgres** — contacts, homeowners, pursuits, jobs, catalog, estimates, invoices, payments, expenses, schedule, calendar accounts, photos, teams, seats, training progress, training bulletins
 - **RLS** — every query is limited to `current_company_id()`
 - **Realtime** — the board and records refresh when anyone in the company writes
-- **Storage** — `job-photos` bucket, files stored as `{companyId}/{jobId}/{uuid}`
+- **Storage** — `job-photos` bucket (`{companyId}/{jobId}/{uuid}`) and `receipts` bucket (`{companyId}/expenses|payments/{uuid}`)
 - **Google Calendar** — refresh tokens stay in `calendar_tokens` (RPC only). Metadata and shares are company-visible; company admins can read every linked calendar.
 
 Reset demo data (avatar menu) wipes that company’s CRM tables and reloads the sample book. Your login stays on the roster. It does not delete the Auth user.

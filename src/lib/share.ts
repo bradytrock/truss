@@ -149,6 +149,7 @@ export type SharedInvoicePayload = {
     dueAt: string | null;
     notes: string;
     shareToken: string;
+    qbStatus: "not_in_qb" | "entered";
   };
   lines: Array<{
     id: string;
@@ -161,11 +162,16 @@ export type SharedInvoicePayload = {
   }>;
   payments: Array<{
     id: string;
-    invoiceId: string;
+    invoiceId: string | null;
+    jobId: string | null;
     amount: number;
     method: string;
     paidAt: string;
     reference: string;
+    receiptUrl: string;
+    receiptStoragePath: string | null;
+    qbStatus: "not_in_qb" | "entered";
+    createdBy: string;
   }>;
 };
 
@@ -261,6 +267,7 @@ export function parseSharedInvoice(raw: unknown): SharedInvoicePayload | null {
       dueAt: asNullable(invoice.dueAt),
       notes: "",
       shareToken: asString(invoice.shareToken),
+      qbStatus: "not_in_qb",
     },
     lines: raw.lines.filter(isRecord).map((line, index) => ({
       id: asString(line.id, `line-${index}`),
@@ -273,11 +280,16 @@ export function parseSharedInvoice(raw: unknown): SharedInvoicePayload | null {
     })),
     payments: payments.map((payment, index) => ({
       id: asString(payment.id, `pay-${index}`),
-      invoiceId: asString(payment.invoiceId, asString(invoice.id)),
+      invoiceId: asNullable(payment.invoiceId) ?? asString(invoice.id),
+      jobId: asNullable(payment.jobId),
       amount: asNumber(payment.amount),
       method: asString(payment.method, "check"),
       paidAt: asString(payment.paidAt),
       reference: asString(payment.reference),
+      receiptUrl: asString(payment.receiptUrl),
+      receiptStoragePath: asNullable(payment.receiptStoragePath),
+      qbStatus: "not_in_qb",
+      createdBy: "",
     })),
   };
 }

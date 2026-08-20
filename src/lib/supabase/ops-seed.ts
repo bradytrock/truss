@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { seedState } from "@/lib/seed";
-import { isMissingEstimateWriter, isMissingShareToken } from "@/lib/supabase/schema-errors";
+import { isMissingEstimateWriter, isMissingShareToken, isMissingFinancials } from "@/lib/supabase/schema-errors";
 import type { Database } from "@/lib/supabase/database.types";
 
 type Client = SupabaseClient<Database>;
@@ -15,6 +15,7 @@ function remap(source: string, map: Map<string, string>) {
 
 export async function wipeOperations(supabase: Client, companyId: string) {
   const tables = [
+    "expenses",
     "payments",
     "invoice_lines",
     "invoices",
@@ -26,6 +27,9 @@ export async function wipeOperations(supabase: Client, companyId: string) {
   ] as const;
   for (const table of tables) {
     const { error } = await supabase.from(table).delete().eq("company_id", companyId);
+    if (error && (error.code === "PGRST205" || error.message.includes("schema cache") || error.message.includes("expenses"))) {
+      continue;
+    }
     if (error) throw error;
   }
 }
@@ -211,10 +215,17 @@ export async function insertOperations(
         due_at: invoice.dueAt,
         notes: invoice.notes,
         share_token: invoice.shareToken,
+        qb_status: invoice.qbStatus,
       },
     ];
   });
   let { error: invoiceError } = await supabase.from("invoices").insert(invoiceRows);
+  if (invoiceError && isMissingFinancials(invoiceError)) {
+    const retry = await supabase.from("invoices").insert(
+      invoiceRows.map(({ qb_status: _qb, ...row }) => row),
+    );
+    invoiceError = retry.error;
+  }
   if (invoiceError && isMissingShareToken(invoiceError)) {
     const retry = await supabase.from("invoices").insert(
       invoiceRows.map(({ share_token: _shareToken, ...row }) => row),
@@ -261,23 +272,48 @@ export async function insertOperations(
   );
   if (invoiceLineError) throw invoiceLineError;
 
-  const { error: paymentError } = await supabase.from("payments").insert(
+  let { error: paymentError } = await supabase.from("payments").insert(
     seed.payments.flatMap((payment) => {
-      const invoiceId = ids.get(payment.invoiceId);
-      if (!invoiceId) return [];
+      const invoiceId = payment.invoiceId ? ids.get(payment.invoiceId) ?? null : null;
+      if (payment.invoiceId && !invoiceId) return [];
       return [
         {
           id: remap(payment.id, ids),
           company_id: companyId,
           invoice_id: invoiceId,
+          job_id: payment.jobId ? ids.get(payment.jobId) ?? null : null,
           amount: payment.amount,
           method: payment.method,
           paid_at: payment.paidAt,
           reference: payment.reference,
+          receipt_url: payment.receiptUrl,
+          receipt_storage_path: payment.receiptStoragePath,
+          qb_status: payment.qbStatus,
+          created_by: payment.createdBy,
         },
       ];
     })
   );
+  if (paymentError && isMissingFinancials(paymentError)) {
+    const retry = await supabase.from("payments").insert(
+      seed.payments.flatMap((payment) => {
+        const invoiceId = payment.invoiceId ? ids.get(payment.invoiceId) ?? null : null;
+        if (!invoiceId) return [];
+        return [
+          {
+            id: remap(payment.id, ids),
+            company_id: companyId,
+            invoice_id: invoiceId,
+            amount: payment.amount,
+            method: payment.method,
+            paid_at: payment.paidAt,
+            reference: payment.reference,
+          },
+        ];
+      }),
+    );
+    paymentError = retry.error;
+  }
   if (paymentError) throw paymentError;
 
   const { error: eventError } = await supabase.from("schedule_events").insert(
@@ -317,6 +353,35 @@ export async function insertOperations(
   if (photoRows.length) {
     const { error: photoError } = await supabase.from("job_photos").insert(photoRows);
     if (photoError) throw photoError;
+  }
+
+  const expenseRows = seed.expenses.flatMap((expense) => {
+    const jobId = expense.jobId ? ids.get(expense.jobId) ?? null : null;
+    if (expense.jobId && !jobId) return [];
+    return [
+      {
+        id: remap(expense.id, ids),
+        company_id: companyId,
+        number: expense.number,
+        job_id: jobId,
+        vendor: expense.vendor,
+        account: expense.account,
+        amount: expense.amount,
+        incurred_at: expense.incurredAt,
+        method: expense.method,
+        memo: expense.memo,
+        receipt_url: expense.receiptUrl,
+        receipt_storage_path: expense.receiptStoragePath,
+        qb_status: expense.qbStatus,
+        extracted_by_ai: expense.extractedByAi,
+        created_at: expense.createdAt,
+        created_by: expense.createdBy,
+      },
+    ];
+  });
+  if (expenseRows.length) {
+    const { error: expenseError } = await supabase.from("expenses").insert(expenseRows);
+    if (expenseError && !isMissingFinancials(expenseError)) throw expenseError;
   }
 }
 

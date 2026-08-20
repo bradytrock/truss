@@ -39,6 +39,7 @@ export function buildReports(state: CrmState, viewer: StaffMember, now = new Dat
     .filter((payment) => yearOf(payment.paidAt) === year)
     .filter((payment) => {
       if (scope !== "team") return true;
+      if (!payment.invoiceId) return false;
       const invoice = state.invoices.find((item) => item.id === payment.invoiceId);
       if (!invoice?.jobId) return false;
       return jobs.some((job) => job.id === invoice.jobId);

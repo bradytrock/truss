@@ -480,6 +480,7 @@ export type Database = {
           notes: string;
           created_at: string;
           share_token: string;
+          qb_status: string;
         };
         Insert: {
           id?: string;
@@ -494,6 +495,7 @@ export type Database = {
           due_at?: string | null;
           notes?: string;
           share_token?: string;
+          qb_status?: string;
         };
         Update: Partial<Database["public"]["Tables"]["invoices"]["Insert"]>;
         Relationships: [];
@@ -526,23 +528,73 @@ export type Database = {
         Row: {
           id: string;
           company_id: string;
-          invoice_id: string;
+          invoice_id: string | null;
+          job_id: string | null;
           amount: number;
           method: string;
           paid_at: string;
           reference: string;
+          receipt_url: string;
+          receipt_storage_path: string | null;
+          qb_status: string;
+          created_by: string;
           created_at: string;
         };
         Insert: {
           id?: string;
           company_id: string;
-          invoice_id: string;
+          invoice_id?: string | null;
+          job_id?: string | null;
           amount: number;
           method?: string;
           paid_at?: string;
           reference?: string;
+          receipt_url?: string;
+          receipt_storage_path?: string | null;
+          qb_status?: string;
+          created_by?: string;
         };
         Update: Partial<Database["public"]["Tables"]["payments"]["Insert"]>;
+        Relationships: [];
+      };
+      expenses: {
+        Row: {
+          id: string;
+          company_id: string;
+          number: string;
+          job_id: string | null;
+          vendor: string;
+          account: string;
+          amount: number;
+          incurred_at: string;
+          method: string;
+          memo: string;
+          receipt_url: string;
+          receipt_storage_path: string | null;
+          qb_status: string;
+          extracted_by_ai: boolean;
+          created_at: string;
+          created_by: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          number: string;
+          job_id?: string | null;
+          vendor?: string;
+          account?: string;
+          amount?: number;
+          incurred_at?: string;
+          method?: string;
+          memo?: string;
+          receipt_url: string;
+          receipt_storage_path?: string | null;
+          qb_status?: string;
+          extracted_by_ai?: boolean;
+          created_at?: string;
+          created_by?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["expenses"]["Insert"]>;
         Relationships: [];
       };
       schedule_events: {
@@ -797,7 +849,8 @@ export type Database = {
         | "team_admin"
         | "project_manager"
         | "estimator"
-        | "superintendent";
+        | "superintendent"
+        | "accountant";
       catalog_kind: "labor" | "material" | "equipment" | "allowance" | "subcontract";
       estimate_status: "draft" | "sent" | "viewed" | "accepted" | "declined";
       invoice_status: "draft" | "sent" | "partial" | "paid" | "overdue" | "void";

@@ -24,7 +24,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useCrm } from "@/lib/crm-store";
 import { localYmd } from "@/lib/format";
-import { invoiceBalance } from "@/lib/money";
+import { LogPaymentDialog } from "@/components/log-financial-dialogs";
 import {
   EVENT_KIND_LABELS,
   EVENT_KINDS,
@@ -559,103 +559,15 @@ export function RecordPaymentDialog({
   onOpenChange: (open: boolean) => void;
   invoiceId: string;
 }) {
-  const { invoices, invoiceLines, payments, recordPayment } = useCrm();
+  const { invoices } = useCrm();
   const invoice = invoices.find((item) => item.id === invoiceId);
-  const balance = invoice ? invoiceBalance(invoice.id, invoiceLines, payments) : 0;
-  const [amount, setAmount] = useState(String(balance || ""));
-  const [method, setMethod] = useState("check");
-  const [paidAt, setPaidAt] = useState(localYmd(new Date()));
-  const [reference, setReference] = useState("");
-
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
-    const value = Number(amount);
-    if (!invoice || !value || value <= 0) {
-      toast.error("Enter a payment amount.");
-      return;
-    }
-    await recordPayment({
-      invoiceId: invoice.id,
-      amount: value,
-      method,
-      paidAt,
-      reference,
-    });
-    toast.success("Payment recorded.");
-    onOpenChange(false);
-  }
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Record payment</DialogTitle>
-          <DialogDescription>
-            {invoice
-              ? `${invoice.number} · ${balance.toLocaleString("en-US", { style: "currency", currency: "USD" })} remaining`
-              : "Invoice"}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-3">
-          <Field label="Amount" htmlFor="pay-amt">
-            <Input
-              id="pay-amt"
-              type="number"
-              min={0}
-              step="0.01"
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-            />
-          </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Method">
-              <Select
-                value={method}
-                onValueChange={(value) => setMethod(String(value ?? "check"))}
-                items={[
-                  { value: "check", label: "Check" },
-                  { value: "ACH", label: "ACH" },
-                  { value: "wire", label: "Wire" },
-                  { value: "card", label: "Card" },
-                ]}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="check">Check</SelectItem>
-                  <SelectItem value="ACH">ACH</SelectItem>
-                  <SelectItem value="wire">Wire</SelectItem>
-                  <SelectItem value="card">Card</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Date" htmlFor="pay-date">
-              <Input
-                id="pay-date"
-                type="date"
-                value={paidAt}
-                onChange={(event) => setPaidAt(event.target.value)}
-              />
-            </Field>
-          </div>
-          <Field label="Reference" htmlFor="pay-ref">
-            <Input
-              id="pay-ref"
-              value={reference}
-              onChange={(event) => setReference(event.target.value)}
-              placeholder="Check number or draw note"
-            />
-          </Field>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit">Record</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+    <LogPaymentDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      defaultInvoiceId={invoiceId}
+      defaultJobId={invoice?.jobId}
+    />
   );
 }
 

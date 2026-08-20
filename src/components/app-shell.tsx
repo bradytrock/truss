@@ -41,20 +41,22 @@ import {
   CreateEventDialog,
   CreateInvoiceDialog,
 } from "@/components/create-ops-dialogs";
-import { canViewReports, canManageSettings } from "@/lib/visibility";
+import { LogExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
+import { canViewReports, canManageSettings, canViewAccounting } from "@/lib/visibility";
 import { COURSE } from "@/lib/training/engine";
 import { isUnsignedDemo } from "@/lib/seats";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand";
 
-function navItems(showReports: boolean) {
+function navItems(showReports: boolean, showAccounting: boolean) {
   return [
     { href: "/", label: "Home" },
     { href: "/pipeline", label: "Pipeline" },
     { href: "/estimates", label: "Estimates" },
     { href: "/jobs", label: "Jobs" },
     { href: "/invoices", label: "Invoices" },
+    ...(showAccounting ? [{ href: "/accounting", label: "Accounting" }] : []),
     { href: "/calendar", label: "Calendar" },
     { href: "/training", label: "Training" },
     { href: "/contacts", label: "Contacts" },
@@ -66,7 +68,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [create, setCreate] = useState<
-    "opportunity" | "client" | "job" | "estimate" | "invoice" | "event" | null
+    "opportunity" | "client" | "job" | "estimate" | "invoice" | "event" | "expense" | "payment" | null
   >(null);
 
   return (
@@ -110,6 +112,13 @@ export function AppShell({ children }: { children: ReactNode }) {
                 Create
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-44">
+                <DropdownMenuItem onClick={() => setCreate("expense")}>
+                  Log expense
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCreate("payment")}>
+                  Log payment
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => setCreate("opportunity")}>
                   New lead
                 </DropdownMenuItem>
@@ -161,6 +170,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         open={create === "event"}
         onOpenChange={(open) => setCreate(open ? "event" : null)}
       />
+      <LogExpenseDialog
+        open={create === "expense"}
+        onOpenChange={(open) => setCreate(open ? "expense" : null)}
+      />
+      <LogPaymentDialog
+        open={create === "payment"}
+        onOpenChange={(open) => setCreate(open ? "payment" : null)}
+      />
     </div>
   );
 }
@@ -180,7 +197,10 @@ function Brand() {
 
 function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   const { viewer } = useCrm();
-  const items = navItems(Boolean(viewer && canViewReports(viewer.role)));
+  const items = navItems(
+    Boolean(viewer && canViewReports(viewer.role)),
+    Boolean(viewer && canViewAccounting(viewer.role)),
+  );
   return (
     <nav className="flex flex-col px-2 py-3">
       {items.map((item) => {

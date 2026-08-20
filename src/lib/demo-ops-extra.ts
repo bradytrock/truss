@@ -1,4 +1,4 @@
-import type { CatalogItem, Invoice, InvoiceLine, JobPhoto, Payment, ScheduleEvent } from "@/lib/types";
+import type { CatalogItem, Invoice, InvoiceLine, JobPhoto, ScheduleEvent } from "@/lib/types";
 import type { EstimateDraft, EstimateLineDraft } from "@/lib/estimate-totals";
 
 export const extraCatalog: CatalogItem[] = [
@@ -188,7 +188,7 @@ export const extraEstimateLines: EstimateLineDraft[] = [
   { id: "el_r3", estimateId: "est_redmond", catalogItemId: "cat_dw", description: "Drywall", quantity: 2400, unit: "sf", unitCost: 3.65, sortOrder: 2 },
 ];
 
-export const extraInvoices: Omit<Invoice, "shareToken">[] = [
+export const extraInvoices: Omit<Invoice, "shareToken" | "qbStatus">[] = [
   {
     id: "inv_alvarez_1",
     number: "INV-2001",
@@ -325,7 +325,14 @@ export const extraInvoiceLines: InvoiceLine[] = [
   { id: "il_r11", invoiceId: "inv_redmond_dep", description: "Deposit 10%", quantity: 1, unit: "LS", unitCost: 14800, sortOrder: 0 },
 ];
 
-export const extraPayments: Payment[] = [
+export const extraPayments: Array<{
+  id: string;
+  invoiceId: string;
+  amount: number;
+  method: string;
+  paidAt: string;
+  reference: string;
+}> = [
   {
     id: "pay_r1",
     invoiceId: "inv_hart_dry",

@@ -14,6 +14,7 @@ import {
   mapJobPhoto,
   mapOpportunity,
   mapPayment,
+  mapExpense,
   mapScheduleEvent,
   mapStaff,
   mapTask,
@@ -35,6 +36,9 @@ function inferRole(name: string, title: string): SeatRole {
   if (lower.includes("business")) return "business_development";
   if (lower.includes("super")) return "superintendent";
   if (lower.includes("estimat")) return "estimator";
+  if (lower.includes("account") || lower.includes("controller") || lower.includes("bookkeep") || lower.includes("cpa")) {
+    return "accountant";
+  }
   if (lower.includes("admin")) return "company_admin";
   return "project_manager";
 }
@@ -57,6 +61,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     paymentsRes,
     eventsRes,
     photosRes,
+    expensesRes,
     calendarAccountsRes,
     calendarSharesRes,
     trainingProgressRes,
@@ -86,6 +91,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     supabase.from("payments").select("*").eq("company_id", companyId).order("paid_at", { ascending: false }),
     supabase.from("schedule_events").select("*").eq("company_id", companyId).order("starts_at"),
     supabase.from("job_photos").select("*").eq("company_id", companyId).order("taken_at", { ascending: false }),
+    supabase.from("expenses").select("*").eq("company_id", companyId).order("incurred_at", { ascending: false }),
     supabase.from("calendar_accounts").select("*").eq("company_id", companyId),
     supabase.from("calendar_shares").select("*").eq("company_id", companyId),
     supabase.from("training_progress").select("*").eq("company_id", companyId),
@@ -163,6 +169,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     invoices: (invoicesRes.data ?? []).map(mapInvoice),
     invoiceLines: (invoiceLinesRes.data ?? []).map(mapInvoiceLine),
     payments: (paymentsRes.data ?? []).map(mapPayment),
+    expenses: expensesRes.error ? [] : (expensesRes.data ?? []).map(mapExpense),
     events: (eventsRes.data ?? []).map(mapScheduleEvent),
     photos: (photosRes.data ?? []).map(mapJobPhoto),
     calendarAccounts: calendarAccountsRes.error

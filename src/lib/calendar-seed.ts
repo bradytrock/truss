@@ -38,6 +38,7 @@ export const seedCalendarAccounts: CalendarAccount[] = [
   linked("staff_maya", true, "2026-05-18T14:00:00.000Z"),
   linked("staff_elena", true, "2026-04-22T16:40:00.000Z"),
   linked("staff_tom", false, "2026-07-09T13:20:00.000Z"),
+  unlinked("staff_nora"),
 ];
 
 export const seedCalendarShares: CalendarShare[] = [

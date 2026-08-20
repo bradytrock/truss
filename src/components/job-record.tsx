@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 import {
   Briefcase,
@@ -25,6 +26,7 @@ import {
 import { toast } from "sonner";
 import { ActivityComposer, ActivityList } from "@/components/activity";
 import { AddPhotoDialog, CreateEstimateDialog, CreateInvoiceDialog } from "@/components/create-ops-dialogs";
+import { JobFinancials } from "@/components/job-financials";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -202,6 +204,8 @@ function contactKind(contact: Contact, job: Job) {
 
 export function JobRecord({ job }: { job: Job }) {
   const crm = useCrm();
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab") ?? "overview";
   const [heroOpen, setHeroOpen] = useState(true);
   const [addressOpen, setAddressOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
@@ -408,10 +412,11 @@ export function JobRecord({ job }: { job: Job }) {
         </div>
       </div>
 
-      <Tabs defaultValue="overview">
-        <TabsList variant="line" className="w-full justify-start rounded-none border-x px-2">
+      <Tabs defaultValue={["overview", "photos", "financials", "paper", "fields"].includes(initialTab) ? initialTab : "overview"}>
+        <TabsList variant="line" className="w-full justify-start overflow-x-auto rounded-none border-x px-2">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="photos">Photos</TabsTrigger>
+          <TabsTrigger value="financials">Financials</TabsTrigger>
           <TabsTrigger value="paper">Paper</TabsTrigger>
           <TabsTrigger value="fields">Custom fields</TabsTrigger>
         </TabsList>
@@ -779,6 +784,10 @@ export function JobRecord({ job }: { job: Job }) {
               ))}
             </div>
           ) : null}
+        </TabsContent>
+
+        <TabsContent value="financials" className="border-x border-b p-4">
+          <JobFinancials job={job} />
         </TabsContent>
 
         <TabsContent value="paper" className="space-y-4 border-x border-b p-4">

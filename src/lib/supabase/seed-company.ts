@@ -108,7 +108,7 @@ export async function seedCompanyBook(
   );
   if (teamTableError) throw teamTableError;
 
-  const { error: teamError } = await supabase.from("team_members").insert(
+  let { error: teamError } = await supabase.from("team_members").insert(
     NORTHLINE_STAFF.map((member) => ({
       id: remap(member.id, ids),
       company_id: companyId,
@@ -119,6 +119,20 @@ export async function seedCompanyBook(
       initials: member.initials,
     }))
   );
+  if (teamError && isInvalidEnumValue(teamError)) {
+    const retry = await supabase.from("team_members").insert(
+      NORTHLINE_STAFF.map((member) => ({
+        id: remap(member.id, ids),
+        company_id: companyId,
+        name: member.name,
+        title: member.title,
+        role: member.role === "accountant" ? "company_admin" : member.role,
+        team_id: member.teamId ? remap(member.teamId, ids) : null,
+        initials: member.initials,
+      })),
+    );
+    teamError = retry.error;
+  }
   if (teamError) throw teamError;
 
   const preserve = options?.preserve;

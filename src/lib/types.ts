@@ -99,6 +99,7 @@ export const SEAT_ROLES = [
   "project_manager",
   "estimator",
   "superintendent",
+  "accountant",
 ] as const;
 
 export type SeatRole = (typeof SEAT_ROLES)[number];
@@ -111,6 +112,7 @@ export const SEAT_ROLE_LABELS: Record<SeatRole, string> = {
   project_manager: "Project manager",
   estimator: "Estimator",
   superintendent: "Superintendent",
+  accountant: "Accounting",
 };
 
 export interface CurrentUser {
@@ -309,6 +311,9 @@ export type EventKind = (typeof EVENT_KINDS)[number];
 export const PHOTO_CATEGORIES = ["before", "progress", "after", "issue"] as const;
 export type PhotoCategory = (typeof PHOTO_CATEGORIES)[number];
 
+export const QB_SYNC_STATUSES = ["not_in_qb", "entered"] as const;
+export type QbSyncStatus = (typeof QB_SYNC_STATUSES)[number];
+
 export interface CatalogItem {
   id: string;
   name: string;
@@ -374,6 +379,7 @@ export interface Invoice {
   dueAt: string | null;
   notes: string;
   shareToken: string;
+  qbStatus: QbSyncStatus;
 }
 
 export interface InvoiceLine {
@@ -386,13 +392,53 @@ export interface InvoiceLine {
   sortOrder: number;
 }
 
+export const EXPENSE_ACCOUNTS = [
+  "materials",
+  "subcontractors",
+  "equipment_rental",
+  "dumpsters",
+  "permits",
+  "labor",
+  "fuel",
+  "office",
+  "insurance",
+  "other",
+] as const;
+export type ExpenseAccount = (typeof EXPENSE_ACCOUNTS)[number];
+
+export const EXPENSE_METHODS = ["credit_card", "debit", "check", "ach", "cash"] as const;
+export type ExpenseMethod = (typeof EXPENSE_METHODS)[number];
+
 export interface Payment {
   id: string;
-  invoiceId: string;
+  invoiceId: string | null;
+  jobId: string | null;
   amount: number;
   method: string;
   paidAt: string;
   reference: string;
+  receiptUrl: string;
+  receiptStoragePath: string | null;
+  qbStatus: QbSyncStatus;
+  createdBy: string;
+}
+
+export interface Expense {
+  id: string;
+  number: string;
+  jobId: string | null;
+  vendor: string;
+  account: ExpenseAccount;
+  amount: number;
+  incurredAt: string;
+  method: ExpenseMethod;
+  memo: string;
+  receiptUrl: string;
+  receiptStoragePath: string | null;
+  qbStatus: QbSyncStatus;
+  extractedByAi: boolean;
+  createdAt: string;
+  createdBy: string;
 }
 
 export interface ScheduleEvent {
@@ -476,6 +522,7 @@ export interface CrmState {
   invoices: Invoice[];
   invoiceLines: InvoiceLine[];
   payments: Payment[];
+  expenses: Expense[];
   events: ScheduleEvent[];
   photos: JobPhoto[];
   calendarAccounts: CalendarAccount[];
@@ -613,6 +660,32 @@ export const PHOTO_CATEGORY_LABELS: Record<PhotoCategory, string> = {
   issue: "Issue",
 };
 
+export const QB_SYNC_STATUS_LABELS: Record<QbSyncStatus, string> = {
+  not_in_qb: "Not in QuickBooks",
+  entered: "Entered in QuickBooks",
+};
+
+export const EXPENSE_ACCOUNT_LABELS: Record<ExpenseAccount, string> = {
+  materials: "Job materials",
+  subcontractors: "Subcontractors",
+  equipment_rental: "Equipment rental",
+  dumpsters: "Dumpsters / disposal",
+  permits: "Permits & fees",
+  labor: "Direct labor",
+  fuel: "Fuel",
+  office: "Office / overhead",
+  insurance: "Insurance",
+  other: "Other",
+};
+
+export const EXPENSE_METHOD_LABELS: Record<ExpenseMethod, string> = {
+  credit_card: "Credit card",
+  debit: "Debit card",
+  check: "Check",
+  ach: "ACH",
+  cash: "Cash",
+};
+
 export const NORTHLINE_TEAMS: Team[] = [
   { id: "team_field", name: "Field operations", leadStaffId: "staff_luis" },
   { id: "team_pursuits", name: "Healthcare & interiors", leadStaffId: "staff_maya" },
@@ -666,6 +739,14 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     role: "superintendent",
     teamId: "team_field",
     initials: "TB",
+  },
+  {
+    id: "staff_nora",
+    name: "Nora Keene",
+    title: "Controller",
+    role: "accountant",
+    teamId: null,
+    initials: "NK",
   },
 ];
 

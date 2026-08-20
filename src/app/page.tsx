@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ErrorBanner, LoadingScreen, Metric, MetricStrip, PageHeader, RecordCode } from "@/components/page-chrome";
@@ -22,6 +23,8 @@ import { amountForEstimate } from "@/lib/estimate-totals";
 import { PIPELINE_STAGES, STAGE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { COURSE, overallProgress, staffProgress } from "@/lib/training/engine";
+import { qbQueue } from "@/lib/job-financials";
+import { canViewAccounting } from "@/lib/visibility";
 
 export default function HomePage() {
   const crm = useCrm();
@@ -90,8 +93,14 @@ export default function HomePage() {
       proposalValue,
       ar,
       todayEvents,
+      qb: qbQueue({
+        invoices: crm.invoices,
+        invoiceLines: crm.invoiceLines,
+        payments: crm.payments,
+        expenses: crm.expenses,
+      }),
     };
-  }, [crm.estimateLines, crm.estimates, crm.events, crm.invoiceLines, crm.invoices, crm.jobs, crm.opportunities, crm.payments]);
+  }, [crm.estimateLines, crm.estimates, crm.events, crm.expenses, crm.invoiceLines, crm.invoices, crm.jobs, crm.opportunities, crm.payments]);
 
   const upcomingTasks = crm.tasks
     .filter((task) => !task.completed)
@@ -112,7 +121,9 @@ export default function HomePage() {
       <PageHeader
         title={`${greeting()}, ${crm.user.name.split(" ")[0] || "there"}`}
         description={
-          crm.viewer?.role === "business_development"
+          crm.viewer?.role === "accountant"
+            ? "Books for every job: expenses, receipts, and what still needs to be typed into QuickBooks."
+            : crm.viewer?.role === "business_development"
             ? "All jobs in the company, plus the restricted BD report: open jobs, closed YTD, referral partners by PM, and YTD revenue."
             : crm.viewer?.role === "project_manager" || crm.viewer?.role === "superintendent"
               ? "Your jobs, your contact book, and the work assigned to you."
@@ -174,6 +185,27 @@ export default function HomePage() {
           }
         />
       </MetricStrip>
+
+      {crm.viewer && canViewAccounting(crm.viewer.role) ? (
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>QuickBooks entry queue</CardTitle>
+            <CardDescription>
+              Until the Desktop web connector is live, mark rows on Accounting after you type them into QB.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm">
+              {stats.qb.invoiceCount + stats.qb.expenseCount + stats.qb.paymentCount} items waiting ·{" "}
+              {stats.qb.invoiceCount} invoices, {stats.qb.expenseCount} expenses, {stats.qb.paymentCount}{" "}
+              payments
+            </p>
+            <Button nativeButton={false} render={<Link href="/accounting" />}>
+              Open accounting
+            </Button>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <section className="grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">

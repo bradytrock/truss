@@ -1,0 +1,592 @@
+"use client";
+
+import { useEffect, useState, type FormEvent } from "react";
+import { Camera, LoaderCircle, Sparkles } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useCrm } from "@/lib/crm-store";
+import { localYmd } from "@/lib/format";
+import { compressReceipt } from "@/lib/job-financials";
+import { invoiceBalance } from "@/lib/money";
+import {
+  EXPENSE_ACCOUNT_LABELS,
+  EXPENSE_ACCOUNTS,
+  EXPENSE_METHOD_LABELS,
+  EXPENSE_METHODS,
+  type ExpenseAccount,
+  type ExpenseMethod,
+} from "@/lib/types";
+
+async function extractReceipt(imageDataUrl: string, kind: "expense" | "payment") {
+  const response = await fetch("/api/receipts/extract", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image: imageDataUrl, kind }),
+  });
+  return (await response.json()) as Record<string, unknown>;
+}
+
+function ReceiptFields({
+  previewUrl,
+  onFile,
+}: {
+  previewUrl: string;
+  onFile: (file: File, dataUrl: string) => void;
+}) {
+  async function handle(file: File | undefined) {
+    if (!file) return;
+    if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
+      toast.error("Use a photo of the receipt.");
+      return;
+    }
+    const next = await compressReceipt(file);
+    onFile(next.file, next.dataUrl);
+  }
+
+  return (
+    <div className="grid gap-2">
+      <Label>Receipt photo</Label>
+      <p className="text-xs text-muted-foreground">
+        Required. Camera or library. The image stays on the record.
+      </p>
+      {previewUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={previewUrl} alt="Receipt" className="max-h-48 w-full border object-contain bg-muted" />
+      ) : (
+        <div className="flex h-32 items-center justify-center border border-dashed text-sm text-muted-foreground">
+          No photo yet
+        </div>
+      )}
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={(event) => void handle(event.target.files?.[0])}
+        />
+        <Input
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+          onChange={(event) => void handle(event.target.files?.[0])}
+        />
+      </div>
+      <p className="text-[11px] text-muted-foreground">First field opens the camera on a phone. Second is the library.</p>
+    </div>
+  );
+}
+
+export function LogExpenseDialog({
+  open,
+  onOpenChange,
+  defaultJobId,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  defaultJobId?: string | null;
+}) {
+  const crm = useCrm();
+  const [file, setFile] = useState<File | undefined>();
+  const [preview, setPreview] = useState("");
+  const [vendor, setVendor] = useState("");
+  const [amount, setAmount] = useState("");
+  const [incurredAt, setIncurredAt] = useState(localYmd(new Date()));
+  const [account, setAccount] = useState<ExpenseAccount>("materials");
+  const [method, setMethod] = useState<ExpenseMethod>("credit_card");
+  const [jobId, setJobId] = useState(defaultJobId ?? "");
+  const [memo, setMemo] = useState("");
+  const [extractedByAi, setExtractedByAi] = useState(false);
+  const [pending, setPending] = useState(false);
+  const [reading, setReading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setFile(undefined);
+    setPreview("");
+    setVendor("");
+    setAmount("");
+    setIncurredAt(localYmd(new Date()));
+    setAccount("materials");
+    setMethod("credit_card");
+    setJobId(defaultJobId ?? "");
+    setMemo("");
+    setExtractedByAi(false);
+  }, [open, defaultJobId]);
+
+  async function readReceipt() {
+    if (!preview) {
+      toast.error("Take the photo first.");
+      return;
+    }
+    setReading(true);
+    try {
+      const result = await extractReceipt(preview, "expense");
+      if (result.ok) {
+        if (typeof result.vendor === "string") setVendor(result.vendor);
+        if (typeof result.amount === "number" && result.amount) setAmount(String(result.amount));
+        if (typeof result.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(result.date)) {
+          setIncurredAt(result.date);
+        }
+        if (typeof result.memo === "string") setMemo(result.memo);
+        if (typeof result.account === "string") setAccount(result.account as ExpenseAccount);
+        if (typeof result.method === "string") setMethod(result.method as ExpenseMethod);
+        setExtractedByAi(true);
+        toast.success("Read the receipt. Check the fields before you save.");
+      } else {
+        toast.message(typeof result.message === "string" ? result.message : "Fill the fields from the photo.");
+      }
+    } catch {
+      toast.error("Could not read the receipt.");
+    } finally {
+      setReading(false);
+    }
+  }
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    const value = Number(amount);
+    if (!file && !preview) {
+      toast.error("Photograph the receipt.");
+      return;
+    }
+    setPending(true);
+    try {
+      const saved = await crm.addExpense({
+        jobId: jobId || null,
+        vendor,
+        account,
+        amount: value,
+        incurredAt,
+        method,
+        memo,
+        file,
+        receiptUrl: file ? undefined : preview,
+        extractedByAi,
+      });
+      if (saved) onOpenChange(false);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Log expense</DialogTitle>
+          <DialogDescription>
+            Same idea as a QuickBooks check or credit-card expense: vendor, account, job, and the
+            receipt. The photo is required even if you type the numbers.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="grid gap-3">
+          <ReceiptFields
+            previewUrl={preview}
+            onFile={(nextFile, dataUrl) => {
+              setFile(nextFile);
+              setPreview(dataUrl);
+              setExtractedByAi(false);
+            }}
+          />
+          <Button type="button" variant="outline" disabled={!preview || reading} onClick={() => void readReceipt()}>
+            {reading ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
+            {reading ? "Reading…" : "Read receipt with AI"}
+          </Button>
+          <div className="grid gap-1.5">
+            <Label htmlFor="exp-vendor">Vendor</Label>
+            <Input
+              id="exp-vendor"
+              value={vendor}
+              onChange={(event) => setVendor(event.target.value)}
+              placeholder="ABC Supply"
+              required
+            />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="exp-amt">Amount</Label>
+              <Input
+                id="exp-amt"
+                type="number"
+                min={0}
+                step="0.01"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                required
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="exp-date">Date</Label>
+              <Input
+                id="exp-date"
+                type="date"
+                value={incurredAt}
+                onChange={(event) => setIncurredAt(event.target.value)}
+                required
+              />
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label>Account</Label>
+              <Select
+                value={account}
+                onValueChange={(value) => setAccount(value as ExpenseAccount)}
+                items={EXPENSE_ACCOUNTS.map((item) => ({
+                  value: item,
+                  label: EXPENSE_ACCOUNT_LABELS[item],
+                }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EXPENSE_ACCOUNTS.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {EXPENSE_ACCOUNT_LABELS[item]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label>Paid with</Label>
+              <Select
+                value={method}
+                onValueChange={(value) => setMethod(value as ExpenseMethod)}
+                items={EXPENSE_METHODS.map((item) => ({
+                  value: item,
+                  label: EXPENSE_METHOD_LABELS[item],
+                }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EXPENSE_METHODS.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {EXPENSE_METHOD_LABELS[item]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Job</Label>
+            <Select
+              value={jobId || "none"}
+              onValueChange={(value) => setJobId(value === "none" ? "" : String(value))}
+              items={[
+                { value: "none", label: "Overhead — not a job" },
+                ...crm.jobs.map((job) => ({
+                  value: job.id,
+                  label: `${job.code ? `${job.code} · ` : ""}${job.name}`,
+                })),
+              ]}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a job" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Overhead — not a job</SelectItem>
+                {crm.jobs.map((job) => (
+                  <SelectItem key={job.id} value={job.id}>
+                    {job.code ? `${job.code} · ` : ""}
+                    {job.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="exp-memo">Memo</Label>
+            <Textarea
+              id="exp-memo"
+              rows={3}
+              value={memo}
+              onChange={(event) => setMemo(event.target.value)}
+              placeholder="What this is for, in QuickBooks language."
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Saving…" : "Save expense"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function LogPaymentDialog({
+  open,
+  onOpenChange,
+  defaultJobId,
+  defaultInvoiceId,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  defaultJobId?: string | null;
+  defaultInvoiceId?: string | null;
+}) {
+  const crm = useCrm();
+  const [file, setFile] = useState<File | undefined>();
+  const [preview, setPreview] = useState("");
+  const [jobId, setJobId] = useState(defaultJobId ?? "");
+  const [invoiceId, setInvoiceId] = useState(defaultInvoiceId ?? "");
+  const [amount, setAmount] = useState("");
+  const [method, setMethod] = useState("check");
+  const [paidAt, setPaidAt] = useState(localYmd(new Date()));
+  const [reference, setReference] = useState("");
+  const [pending, setPending] = useState(false);
+  const [reading, setReading] = useState(false);
+
+  const invoices = crm.invoices.filter((invoice) => {
+    if (invoice.status === "void" || invoice.status === "draft") return false;
+    if (jobId && invoice.jobId !== jobId) return false;
+    return true;
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    setFile(undefined);
+    setPreview("");
+    setJobId(defaultJobId ?? "");
+    setInvoiceId(defaultInvoiceId ?? "");
+    setAmount("");
+    setMethod("check");
+    setPaidAt(localYmd(new Date()));
+    setReference("");
+  }, [open, defaultJobId, defaultInvoiceId]);
+
+  useEffect(() => {
+    const invoice = crm.invoices.find((item) => item.id === invoiceId);
+    if (!invoice) return;
+    const balance = invoiceBalance(invoice.id, crm.invoiceLines, crm.payments);
+    setAmount(String(balance || ""));
+    if (invoice.jobId) setJobId(invoice.jobId);
+  }, [invoiceId, crm.invoices, crm.invoiceLines, crm.payments]);
+
+  async function readReceipt() {
+    if (!preview) {
+      toast.error("Take the photo first.");
+      return;
+    }
+    setReading(true);
+    try {
+      const result = await extractReceipt(preview, "payment");
+      if (result.ok) {
+        if (typeof result.amount === "number" && result.amount) setAmount(String(result.amount));
+        if (typeof result.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(result.date)) {
+          setPaidAt(result.date);
+        }
+        if (typeof result.method === "string" && result.method) setMethod(result.method);
+        if (typeof result.reference === "string") setReference(result.reference);
+        toast.success("Read the slip. Check the fields before you save.");
+      } else {
+        toast.message(typeof result.message === "string" ? result.message : "Fill the fields from the photo.");
+      }
+    } catch {
+      toast.error("Could not read the photo.");
+    } finally {
+      setReading(false);
+    }
+  }
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    const value = Number(amount);
+    if (!value || value <= 0) {
+      toast.error("Enter a payment amount.");
+      return;
+    }
+    if (!file && !preview) {
+      toast.error("Photograph the check, remit, or deposit slip.");
+      return;
+    }
+    setPending(true);
+    try {
+      await crm.recordPayment({
+        invoiceId: invoiceId || null,
+        jobId: jobId || null,
+        amount: value,
+        method,
+        paidAt,
+        reference,
+        file,
+        receiptUrl: file ? undefined : preview,
+      });
+      onOpenChange(false);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Log payment</DialogTitle>
+          <DialogDescription>
+            Receive payment like QuickBooks: apply it to an invoice when you can, keep the check
+            image either way.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="grid gap-3">
+          <ReceiptFields
+            previewUrl={preview}
+            onFile={(nextFile, dataUrl) => {
+              setFile(nextFile);
+              setPreview(dataUrl);
+            }}
+          />
+          <Button type="button" variant="outline" disabled={!preview || reading} onClick={() => void readReceipt()}>
+            {reading ? <LoaderCircle className="animate-spin" /> : <Camera />}
+            {reading ? "Reading…" : "Read check / remit with AI"}
+          </Button>
+          <div className="grid gap-1.5">
+            <Label>Job</Label>
+            <Select
+              value={jobId || "none"}
+              onValueChange={(value) => setJobId(value === "none" ? "" : String(value))}
+              items={[
+                { value: "none", label: "Select a job" },
+                ...crm.jobs.map((job) => ({
+                  value: job.id,
+                  label: `${job.code ? `${job.code} · ` : ""}${job.name}`,
+                })),
+              ]}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a job" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Select a job</SelectItem>
+                {crm.jobs.map((job) => (
+                  <SelectItem key={job.id} value={job.id}>
+                    {job.code ? `${job.code} · ` : ""}
+                    {job.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Invoice</Label>
+            <Select
+              value={invoiceId || "none"}
+              onValueChange={(value) => setInvoiceId(value === "none" ? "" : String(value))}
+              items={[
+                { value: "none", label: "Unapplied — deposit only" },
+                ...invoices.map((invoice) => ({
+                  value: invoice.id,
+                  label: `${invoice.number} · ${invoice.name}`,
+                })),
+              ]}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Apply to invoice" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Unapplied — deposit only</SelectItem>
+                {invoices.map((invoice) => (
+                  <SelectItem key={invoice.id} value={invoice.id}>
+                    {invoice.number} · {invoice.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="pay2-amt">Amount</Label>
+              <Input
+                id="pay2-amt"
+                type="number"
+                min={0}
+                step="0.01"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                required
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="pay2-date">Date</Label>
+              <Input
+                id="pay2-date"
+                type="date"
+                value={paidAt}
+                onChange={(event) => setPaidAt(event.target.value)}
+                required
+              />
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label>Method</Label>
+              <Select
+                value={method}
+                onValueChange={(value) => setMethod(String(value ?? "check"))}
+                items={[
+                  { value: "check", label: "Check" },
+                  { value: "ACH", label: "ACH" },
+                  { value: "wire", label: "Wire" },
+                  { value: "card", label: "Card" },
+                ]}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="check">Check</SelectItem>
+                  <SelectItem value="ACH">ACH</SelectItem>
+                  <SelectItem value="wire">Wire</SelectItem>
+                  <SelectItem value="card">Card</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="pay2-ref">Reference</Label>
+              <Input
+                id="pay2-ref"
+                value={reference}
+                onChange={(event) => setReference(event.target.value)}
+                placeholder="Check number"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Saving…" : "Save payment"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

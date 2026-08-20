@@ -18,7 +18,7 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedOperationsIfMissing } from "@/lib/supabase/ops-seed";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage } from "@/lib/supabase/schema-errors";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, parseLocation, type JobDraft, customFieldsJson } from "@/lib/job-record";
 import {
@@ -48,6 +48,7 @@ import {
   mapJobPhoto,
   mapOpportunity,
   mapPayment,
+  mapExpense,
   mapScheduleEvent,
   mapStaff,
   mapTask,
@@ -81,6 +82,11 @@ import {
   type StaffMember,
   type TrainingBulletin,
   type TrainingProgress,
+  type Expense,
+  type ExpenseAccount,
+  type ExpenseMethod,
+  type QbSyncStatus,
+  type Payment,
 } from "@/lib/types";
 import {
   accountForStaff,
@@ -107,6 +113,7 @@ import {
   nextJobCode,
 } from "@/lib/job-code";
 import { formatJobSite } from "@/lib/leads";
+import { fillPayment, fileToDataUrl } from "@/lib/job-financials";
 import { resolveCustomerName, type CustomerRecord } from "@/lib/parties";
 import { canLoginAs, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 
@@ -127,6 +134,7 @@ const emptyState: CrmState = {
   payments: [],
   events: [],
   photos: [],
+  expenses: [],
   calendarAccounts: [],
   calendarShares: [],
   trainingProgress: [],
@@ -460,12 +468,32 @@ type CrmContextValue = CrmState & {
   sendInvoice: (id: string) => Promise<void>;
   voidInvoice: (id: string) => Promise<void>;
   recordPayment: (input: {
-    invoiceId: string;
+    invoiceId?: string | null;
+    jobId?: string | null;
     amount: number;
     method: string;
     paidAt: string;
     reference: string;
+    receiptUrl?: string;
+    file?: File;
   }) => Promise<void>;
+  addExpense: (input: {
+    jobId: string | null;
+    vendor: string;
+    account: ExpenseAccount;
+    amount: number;
+    incurredAt: string;
+    method: ExpenseMethod;
+    memo: string;
+    receiptUrl?: string;
+    file?: File;
+    extractedByAi?: boolean;
+  }) => Promise<Expense | null>;
+  setQbStatus: (
+    kind: "invoice" | "payment" | "expense",
+    id: string,
+    status: QbSyncStatus,
+  ) => Promise<void>;
   addScheduleEvent: (input: Omit<ScheduleEvent, "id">) => Promise<ScheduleEvent>;
   linkDemoCalendar: () => Promise<void>;
   markCalendarLinked: (staffId: string, googleEmail: string, source: "google" | "demo") => Promise<void>;
@@ -703,6 +731,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       "payments",
       "schedule_events",
       "job_photos",
+      "expenses",
       "calendar_accounts",
       "calendar_shares",
       "training_progress",
@@ -2334,6 +2363,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           dueAt,
           notes,
           shareToken: newShareToken(),
+          qbStatus: "not_in_qb" as const,
         };
         const mappedLines = billed.map((line) => ({
           id: crypto.randomUUID(),
@@ -2363,6 +2393,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         due_at: dueAt,
         notes,
         share_token: newShareToken(),
+        qb_status: "not_in_qb",
       };
       let { data, error } = await supabase.from("invoices").insert(payload).select("*").single();
       if (error && isMissingShareToken(error)) {
@@ -2446,6 +2477,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         dueAt: input.dueAt,
         notes: input.notes ?? "",
         shareToken: newShareToken(),
+        qbStatus: "not_in_qb" as const,
       };
       const supabase = maybeClient();
       if (!supabase) {
@@ -2461,6 +2493,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         notes: invoice.notes,
         due_at: invoice.dueAt,
         share_token: invoice.shareToken,
+        qb_status: invoice.qbStatus,
       };
       let { data, error } = await supabase.from("invoices").insert(payload).select("*").single();
       if (error && isMissingShareToken(error)) {
@@ -2570,61 +2603,369 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const recordPayment = useCallback(
     async (input: {
-      invoiceId: string;
+      invoiceId?: string | null;
+      jobId?: string | null;
       amount: number;
       method: string;
       paidAt: string;
       reference: string;
+      receiptUrl?: string;
+      file?: File;
     }) => {
-      const invoice = state.invoices.find((item) => item.id === input.invoiceId);
-      if (!invoice) return;
-      const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
-      const { data, error } = await supabase
-        .from("payments")
-        .insert({
-          company_id: user.companyId,
-          invoice_id: input.invoiceId,
-          amount: input.amount,
-          method: input.method,
-          paid_at: input.paidAt,
-          reference: input.reference,
-        })
-        .select("*")
-        .single();
+      const invoice = input.invoiceId
+        ? state.invoices.find((item) => item.id === input.invoiceId)
+        : undefined;
+      const jobId = input.jobId ?? invoice?.jobId ?? null;
+      if (!input.invoiceId && !jobId) {
+        toast.error("Tie the payment to a job or an invoice.");
+        return;
+      }
+      let receiptUrl = input.receiptUrl?.trim() ?? "";
+      let receiptStoragePath: string | null = null;
+      const supabase = maybeClient();
+      if (input.file) {
+        if (supabase) {
+          const ext = input.file.name.split(".").pop()?.toLowerCase() || "jpg";
+          receiptStoragePath = `${user.companyId}/payments/${crypto.randomUUID()}.${ext}`;
+          const { error: uploadError } = await supabase.storage
+            .from("receipts")
+            .upload(receiptStoragePath, input.file, { contentType: input.file.type, upsert: false });
+          if (uploadError) {
+            toast.error(uploadError.message);
+            return;
+          }
+          receiptUrl = supabase.storage.from("receipts").getPublicUrl(receiptStoragePath).data.publicUrl;
+        } else {
+          receiptUrl = await fileToDataUrl(input.file);
+        }
+      }
+      if (!receiptUrl) {
+        toast.error("Photograph the check, remit, or deposit slip. Every payment keeps the image.");
+        return;
+      }
+      const payment = fillPayment({
+        id: crypto.randomUUID(),
+        invoiceId: invoice?.id ?? null,
+        jobId,
+        amount: input.amount,
+        method: input.method,
+        paidAt: input.paidAt,
+        reference: input.reference,
+        receiptUrl,
+        receiptStoragePath,
+        qbStatus: "not_in_qb",
+        createdBy: user.name,
+      });
+      if (!supabase) {
+        setState((prev) => {
+          let invoices = prev.invoices;
+          if (invoice) {
+            const nextPayments = [payment, ...prev.payments];
+            const nextStatus = derivedInvoiceStatus(
+              {
+                ...invoice,
+                status:
+                  invoice.status === "void"
+                    ? "void"
+                    : invoice.status === "draft"
+                      ? "sent"
+                      : invoice.status,
+              },
+              prev.invoiceLines,
+              nextPayments,
+            );
+            invoices = prev.invoices.map((item) =>
+              item.id === invoice.id ? { ...item, status: nextStatus } : item,
+            );
+          }
+          return { ...prev, payments: [payment, ...prev.payments], invoices };
+        });
+        toast.success("Payment recorded with the receipt.");
+        return;
+      }
+      const payload = {
+        id: payment.id,
+        company_id: user.companyId,
+        invoice_id: payment.invoiceId,
+        job_id: payment.jobId,
+        amount: payment.amount,
+        method: payment.method,
+        paid_at: payment.paidAt,
+        reference: payment.reference,
+        receipt_url: payment.receiptUrl,
+        receipt_storage_path: payment.receiptStoragePath,
+        qb_status: payment.qbStatus,
+        created_by: payment.createdBy,
+      };
+      let { data, error } = await supabase.from("payments").insert(payload).select("*").single();
+      if (error && isMissingFinancials(error)) {
+        if (!payment.invoiceId) {
+          toast.error(missingFinancialsMessage());
+          setState((prev) => ({ ...prev, payments: [payment, ...prev.payments] }));
+          return;
+        }
+        const retry = await supabase
+          .from("payments")
+          .insert({
+            company_id: user.companyId,
+            invoice_id: payment.invoiceId,
+            amount: payment.amount,
+            method: payment.method,
+            paid_at: payment.paidAt,
+            reference: payment.reference,
+          })
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingFinancialsMessage());
+      }
       if (error || !data) {
         toast.error(error?.message ?? "Could not record the payment.");
         return;
       }
-      const payment = mapPayment(data);
-      const nextPayments = [payment, ...state.payments];
-      const nextStatus = derivedInvoiceStatus(
-        { ...invoice, status: invoice.status === "void" ? "void" : invoice.status === "draft" ? "sent" : invoice.status },
-        state.invoiceLines,
-        nextPayments
-      );
-      const { error: statusError } = await supabase
-        .from("invoices")
-        .update({ status: nextStatus })
-        .eq("id", invoice.id);
-      if (statusError) toast.error(statusError.message);
+      const saved = mapPayment(data);
+      const nextPayments = [saved, ...state.payments];
+      let nextStatus = invoice?.status;
+      if (invoice) {
+        nextStatus = derivedInvoiceStatus(
+          {
+            ...invoice,
+            status: invoice.status === "void" ? "void" : invoice.status === "draft" ? "sent" : invoice.status,
+          },
+          state.invoiceLines,
+          nextPayments,
+        );
+        const { error: statusError } = await supabase
+          .from("invoices")
+          .update({ status: nextStatus })
+          .eq("id", invoice.id);
+        if (statusError) toast.error(statusError.message);
+      }
       setState((prev) => ({
         ...prev,
-        payments: [payment, ...prev.payments],
-        invoices: prev.invoices.map((item) =>
-          item.id === invoice.id ? { ...item, status: nextStatus } : item
-        ),
+        payments: [saved, ...prev.payments],
+        invoices: invoice
+          ? prev.invoices.map((item) =>
+              item.id === invoice.id ? { ...item, status: nextStatus ?? item.status } : item,
+            )
+          : prev.invoices,
       }));
-      if (invoice.jobId) {
+      if (jobId) {
         await addActivity({
           entityType: "job",
-          entityId: invoice.jobId,
+          entityId: jobId,
           type: "note",
-          body: `Payment of ${input.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })} recorded on ${invoice.number}.`,
+          body: `Payment of ${input.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })} recorded${invoice ? ` on ${invoice.number}` : ""}.`,
         });
       }
     },
-    [addActivity, state.invoiceLines, state.invoices, state.payments, user.companyId]
+    [addActivity, state.invoiceLines, state.invoices, state.payments, user.companyId, user.name]
+  );
+
+  const addExpense = useCallback(
+    async (input: {
+      jobId: string | null;
+      vendor: string;
+      account: ExpenseAccount;
+      amount: number;
+      incurredAt: string;
+      method: ExpenseMethod;
+      memo: string;
+      receiptUrl?: string;
+      file?: File;
+      extractedByAi?: boolean;
+    }) => {
+      if (!input.amount || input.amount <= 0) {
+        toast.error("Enter an amount.");
+        return null;
+      }
+      if (!input.vendor.trim()) {
+        toast.error("Enter the vendor.");
+        return null;
+      }
+      let receiptUrl = input.receiptUrl?.trim() ?? "";
+      let receiptStoragePath: string | null = null;
+      const supabase = maybeClient();
+      if (input.file) {
+        if (supabase) {
+          const ext = input.file.name.split(".").pop()?.toLowerCase() || "jpg";
+          receiptStoragePath = `${user.companyId}/expenses/${crypto.randomUUID()}.${ext}`;
+          const { error: uploadError } = await supabase.storage
+            .from("receipts")
+            .upload(receiptStoragePath, input.file, { contentType: input.file.type, upsert: false });
+          if (uploadError) {
+            toast.error(uploadError.message);
+            return null;
+          }
+          receiptUrl = supabase.storage.from("receipts").getPublicUrl(receiptStoragePath).data.publicUrl;
+        } else {
+          receiptUrl = await fileToDataUrl(input.file);
+        }
+      }
+      if (!receiptUrl) {
+        toast.error("Photograph the receipt. Every expense keeps the image.");
+        return null;
+      }
+      const expense: Expense = {
+        id: crypto.randomUUID(),
+        number: nextNumber("EXP", state.expenses.map((item) => item.number)),
+        jobId: input.jobId,
+        vendor: input.vendor.trim(),
+        account: input.account,
+        amount: input.amount,
+        incurredAt: input.incurredAt,
+        method: input.method,
+        memo: input.memo.trim(),
+        receiptUrl,
+        receiptStoragePath,
+        qbStatus: "not_in_qb",
+        extractedByAi: Boolean(input.extractedByAi),
+        createdAt: new Date().toISOString(),
+        createdBy: user.name,
+      };
+      if (!supabase) {
+        setState((prev) => ({ ...prev, expenses: [expense, ...prev.expenses] }));
+        if (expense.jobId) {
+          await addActivity({
+            entityType: "job",
+            entityId: expense.jobId,
+            type: "note",
+            body: `${expense.number} · ${expense.vendor} · ${expense.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })}.`,
+          });
+        }
+        toast.success(`${expense.number} saved with the receipt.`);
+        return expense;
+      }
+      const { data, error } = await supabase
+        .from("expenses")
+        .insert({
+          id: expense.id,
+          company_id: user.companyId,
+          number: expense.number,
+          job_id: expense.jobId,
+          vendor: expense.vendor,
+          account: expense.account,
+          amount: expense.amount,
+          incurred_at: expense.incurredAt,
+          method: expense.method,
+          memo: expense.memo,
+          receipt_url: expense.receiptUrl,
+          receipt_storage_path: expense.receiptStoragePath,
+          qb_status: expense.qbStatus,
+          extracted_by_ai: expense.extractedByAi,
+          created_by: expense.createdBy,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        if (error && isMissingFinancials(error)) {
+          toast.message(missingFinancialsMessage());
+          setState((prev) => ({ ...prev, expenses: [expense, ...prev.expenses] }));
+          return expense;
+        }
+        toast.error(error?.message ?? "Could not save the expense.");
+        return null;
+      }
+      const saved = mapExpense(data);
+      setState((prev) => ({ ...prev, expenses: [saved, ...prev.expenses] }));
+      if (saved.jobId) {
+        await addActivity({
+          entityType: "job",
+          entityId: saved.jobId,
+          type: "note",
+          body: `${saved.number} · ${saved.vendor} · ${saved.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })}.`,
+        });
+      }
+      toast.success(`${saved.number} saved with the receipt.`);
+      return saved;
+    },
+    [addActivity, state.expenses, user.companyId, user.name],
+  );
+
+  const setQbStatus = useCallback(
+    async (kind: "invoice" | "payment" | "expense", id: string, status: QbSyncStatus) => {
+      const supabase = maybeClient();
+      if (kind === "invoice") {
+        if (!supabase) {
+          setState((prev) => ({
+            ...prev,
+            invoices: prev.invoices.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
+          }));
+          return;
+        }
+        const { error } = await supabase.from("invoices").update({ qb_status: status }).eq("id", id);
+        if (error && isMissingFinancials(error)) {
+          toast.message(missingFinancialsMessage());
+          setState((prev) => ({
+            ...prev,
+            invoices: prev.invoices.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
+          }));
+          return;
+        }
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+        setState((prev) => ({
+          ...prev,
+          invoices: prev.invoices.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
+        }));
+        return;
+      }
+      if (kind === "payment") {
+        if (!supabase) {
+          setState((prev) => ({
+            ...prev,
+            payments: prev.payments.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
+          }));
+          return;
+        }
+        const { error } = await supabase.from("payments").update({ qb_status: status }).eq("id", id);
+        if (error && isMissingFinancials(error)) {
+          toast.message(missingFinancialsMessage());
+          setState((prev) => ({
+            ...prev,
+            payments: prev.payments.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
+          }));
+          return;
+        }
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+        setState((prev) => ({
+          ...prev,
+          payments: prev.payments.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
+        }));
+        return;
+      }
+      if (!supabase) {
+        setState((prev) => ({
+          ...prev,
+          expenses: prev.expenses.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
+        }));
+        return;
+      }
+      const { error } = await supabase.from("expenses").update({ qb_status: status }).eq("id", id);
+      if (error && isMissingFinancials(error)) {
+        toast.message(missingFinancialsMessage());
+        setState((prev) => ({
+          ...prev,
+          expenses: prev.expenses.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
+        }));
+        return;
+      }
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        expenses: prev.expenses.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
+      }));
+    },
+    [],
   );
 
   const persistCalendar = useCallback(
@@ -3163,6 +3504,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       ensureInvoiceShareToken,
       voidInvoice,
       recordPayment,
+      addExpense,
+      setQbStatus,
       addScheduleEvent,
       linkDemoCalendar,
       markCalendarLinked,
@@ -3232,6 +3575,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       ensureInvoiceShareToken,
       voidInvoice,
       recordPayment,
+      addExpense,
+      setQbStatus,
       addScheduleEvent,
       linkDemoCalendar,
       markCalendarLinked,

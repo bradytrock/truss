@@ -15,6 +15,8 @@ import {
   extraPayments,
   extraPhotos,
 } from "@/lib/demo-ops-extra";
+import { extraExpenses, seedPaymentsFromExtra } from "@/lib/demo-financials";
+import { fillInvoiceQb } from "@/lib/job-financials";
 import { seedShareToken } from "@/lib/share";
 
 const catalogCore: CrmState["catalog"] = [
@@ -48,6 +50,7 @@ export const demoOps: Pick<
   | "invoices"
   | "invoiceLines"
   | "payments"
+  | "expenses"
   | "events"
   | "photos"
 > = {
@@ -58,12 +61,15 @@ export const demoOps: Pick<
   estimateLines: extraEstimateLines.map((line) =>
     fillEstimateLine({ ...line, ...ESTIMATE_LINE_EXTRAS[line.id] }),
   ),
-  invoices: extraInvoices.map((invoice) => ({
-    ...invoice,
-    shareToken: seedShareToken("i", invoice.number),
-  })),
+  invoices: extraInvoices.map((invoice) =>
+    fillInvoiceQb({
+      ...invoice,
+      shareToken: seedShareToken("i", invoice.number),
+    }),
+  ),
   invoiceLines: extraInvoiceLines,
-  payments: extraPayments,
+  payments: seedPaymentsFromExtra(extraPayments),
+  expenses: extraExpenses,
   events: extraEvents,
   photos: extraPhotos,
 };

@@ -8,7 +8,7 @@ import type {
 export type AccessScope = "company" | "all_jobs" | "team" | "own";
 
 export function accessScope(role: SeatRole): AccessScope {
-  if (role === "company_admin") return "company";
+  if (role === "company_admin" || role === "accountant") return "company";
   if (role === "business_development") return "all_jobs";
   if (role === "team_lead" || role === "team_admin") return "team";
   return "own";
@@ -19,8 +19,13 @@ export function canViewReports(role: SeatRole) {
     role === "company_admin" ||
     role === "business_development" ||
     role === "team_lead" ||
-    role === "team_admin"
+    role === "team_admin" ||
+    role === "accountant"
   );
+}
+
+export function canViewAccounting(role: SeatRole) {
+  return role === "company_admin" || role === "accountant";
 }
 
 export function canManageSettings(role: SeatRole) {
@@ -150,7 +155,14 @@ export function scopeBook(
   });
   const invoiceIds = new Set(invoices.map((invoice) => invoice.id));
 
-  const payments = state.payments.filter((payment) => invoiceIds.has(payment.invoiceId));
+  const payments = state.payments.filter((payment) => {
+    if (payment.jobId && jobIds.has(payment.jobId)) return true;
+    return Boolean(payment.invoiceId && invoiceIds.has(payment.invoiceId));
+  });
+  const expenses = state.expenses.filter((expense) => {
+    if (!expense.jobId) return false;
+    return jobIds.has(expense.jobId);
+  });
   const photos = state.photos.filter((photo) => jobIds.has(photo.jobId));
   const events = state.events.filter((event) => {
     if (event.jobId && jobIds.has(event.jobId)) return true;
@@ -185,6 +197,7 @@ export function scopeBook(
     estimates,
     invoices,
     payments,
+    expenses,
     events,
     photos,
     estimateLines: state.estimateLines.filter((line) => estimateIds.has(line.estimateId)),
@@ -204,7 +217,12 @@ export function scopeDescription(
     return `Logged in as ${effective.name} (${SEAT_SHORT[effective.role]}). Showing that seat’s book.`;
   }
   const scope = accessScope(viewer.role);
-  if (scope === "company") return "Company admin — every job, contact, and report in the company.";
+  if (scope === "company") {
+    if (effective.role === "accountant") {
+      return "Accounting — every job’s books, receipts, and the QuickBooks entry queue.";
+    }
+    return "Company admin — every job, contact, and report in the company.";
+  }
   if (scope === "all_jobs") {
     return "Business development — all jobs, plus restricted reports (open / closed YTD, referral partners by PM, YTD revenue).";
   }
@@ -222,4 +240,5 @@ const SEAT_SHORT: Record<SeatRole, string> = {
   project_manager: "project manager",
   estimator: "estimator",
   superintendent: "superintendent",
+  accountant: "accounting",
 };

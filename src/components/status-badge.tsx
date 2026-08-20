@@ -112,6 +112,14 @@ export function EventKindBadge({ kind }: { kind: EventKind }) {
   );
 }
 
+export function QbStatusBadge({ status }: { status: "not_in_qb" | "entered" }) {
+  return (
+    <Badge variant="outline" className={status === "entered" ? done : hot}>
+      {status === "entered" ? "In QuickBooks" : "Needs QuickBooks"}
+    </Badge>
+  );
+}
+
 export function PhotoCategoryBadge({ category }: { category: PhotoCategory }) {
   return (
     <Badge variant="outline" className="font-normal text-muted-foreground">

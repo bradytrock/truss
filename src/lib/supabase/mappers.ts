@@ -17,6 +17,7 @@ import type {
   JobPhoto,
   Opportunity,
   Payment,
+  Expense,
   ScheduleEvent,
   StaffMember,
   Task,
@@ -406,6 +407,7 @@ export function mapInvoice(row: InvoiceRow): Invoice {
     dueAt: row.due_at,
     notes: row.notes,
     shareToken: row.share_token?.trim() || "",
+    qbStatus: row.qb_status === "entered" ? "entered" : "not_in_qb",
   };
 }
 
@@ -420,6 +422,7 @@ export function invoicePatch(patch: Partial<Invoice>) {
   if (patch.dueAt !== undefined) row.due_at = patch.dueAt;
   if (patch.notes !== undefined) row.notes = patch.notes;
   if (patch.shareToken !== undefined) row.share_token = patch.shareToken;
+  if (patch.qbStatus !== undefined) row.qb_status = patch.qbStatus;
   return row;
 }
 
@@ -439,10 +442,56 @@ export function mapPayment(row: PaymentRow): Payment {
   return {
     id: row.id,
     invoiceId: row.invoice_id,
+    jobId: row.job_id ?? null,
     amount: Number(row.amount),
     method: row.method,
     paidAt: row.paid_at,
     reference: row.reference,
+    receiptUrl: row.receipt_url ?? "",
+    receiptStoragePath: row.receipt_storage_path ?? null,
+    qbStatus: row.qb_status === "entered" ? "entered" : "not_in_qb",
+    createdBy: row.created_by ?? "",
+  };
+}
+
+export function mapExpense(row: Database["public"]["Tables"]["expenses"]["Row"]): Expense {
+  const account = row.account;
+  const method = row.method;
+  return {
+    id: row.id,
+    number: row.number,
+    jobId: row.job_id,
+    vendor: row.vendor,
+    account:
+      account === "materials" ||
+      account === "subcontractors" ||
+      account === "equipment_rental" ||
+      account === "dumpsters" ||
+      account === "permits" ||
+      account === "labor" ||
+      account === "fuel" ||
+      account === "office" ||
+      account === "insurance" ||
+      account === "other"
+        ? account
+        : "other",
+    amount: Number(row.amount),
+    incurredAt: row.incurred_at,
+    method:
+      method === "credit_card" ||
+      method === "debit" ||
+      method === "check" ||
+      method === "ach" ||
+      method === "cash"
+        ? method
+        : "credit_card",
+    memo: row.memo,
+    receiptUrl: row.receipt_url,
+    receiptStoragePath: row.receipt_storage_path,
+    qbStatus: row.qb_status === "entered" ? "entered" : "not_in_qb",
+    extractedByAi: Boolean(row.extracted_by_ai),
+    createdAt: row.created_at,
+    createdBy: row.created_by,
   };
 }
 

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { JobRecord } from "@/components/job-record";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
@@ -27,5 +28,9 @@ export default function JobDetailPage() {
     );
   }
 
-  return <JobRecord job={job} />;
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <JobRecord job={job} />
+    </Suspense>
+  );
 }

@@ -25,6 +25,7 @@ export function missingEstimateWriterMessage() {
 }
 
 export const SHARE_TOKEN_SQL = "supabase/migrations/20260819300000_share_tokens.sql";
+export const PROJECT_FINANCIALS_SQL = "supabase/migrations/20260819340000_project_financials.sql";
 
 export function isMissingShareToken(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -36,6 +37,25 @@ export function isMissingShareToken(error: { message?: string; code?: string } |
     message.includes("Could not find the") ||
     message.includes("share_token")
   );
+}
+
+export function isMissingFinancials(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("schema cache") ||
+    message.includes("Could not find the") ||
+    message.includes("qb_status") ||
+    message.includes("receipt_url") ||
+    message.includes("expenses") ||
+    message.includes("extracted_by_ai")
+  );
+}
+
+export function missingFinancialsMessage() {
+  return `Saved in this browser. Run ${PROJECT_FINANCIALS_SQL} in the SQL editor to keep receipts and the QuickBooks queue in Postgres.`;
 }
 
 export function isRequiredClientId(error: { message?: string; code?: string } | null | undefined) {
