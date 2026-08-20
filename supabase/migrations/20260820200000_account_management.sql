@@ -34,6 +34,32 @@ begin
   end if;
 end $$;
 
+alter table public.profiles
+  add column if not exists staff_id uuid references public.team_members (id) on delete set null;
+
+create or replace function public.current_is_company_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (
+      select p.role = 'company_admin'
+        and coalesce(tm.locked, false) = false
+        and coalesce(tm.restricted, false) = false
+      from public.profiles p
+      left join public.team_members tm on tm.id = p.staff_id
+      where p.id = auth.uid()
+    ),
+    false
+  )
+$$;
+
+revoke all on function public.current_is_company_admin() from public;
+grant execute on function public.current_is_company_admin() to authenticated;
+
 alter table public.account_invites enable row level security;
 
 drop policy if exists "admin manage invites" on public.account_invites;
@@ -60,6 +86,8 @@ create policy "admin delete company profiles" on public.profiles
 drop policy if exists "company isolation" on public.team_members;
 drop policy if exists "read company seats" on public.team_members;
 drop policy if exists "admin write seats" on public.team_members;
+drop policy if exists "admin update seats" on public.team_members;
+drop policy if exists "admin delete seats" on public.team_members;
 
 create policy "read company seats" on public.team_members
   for select to authenticated
@@ -77,26 +105,6 @@ create policy "admin update seats" on public.team_members
 create policy "admin delete seats" on public.team_members
   for delete to authenticated
   using (company_id = public.current_company_id() and public.current_is_company_admin());
-
-create or replace function public.current_is_company_admin()
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select coalesce(
-    (
-      select p.role = 'company_admin'
-        and coalesce(tm.locked, false) = false
-        and coalesce(tm.restricted, false) = false
-      from public.profiles p
-      left join public.team_members tm on tm.id = p.staff_id
-      where p.id = auth.uid()
-    ),
-    false
-  )
-$$;
 
 create or replace function public.invite_preview(p_token text)
 returns table (
