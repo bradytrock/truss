@@ -3,6 +3,7 @@ import { seedState } from "@/lib/seed";
 import { namesMatch } from "@/lib/seats";
 import { customFieldsJson } from "@/lib/job-record";
 import { insertOperations, wipeOperations } from "@/lib/supabase/ops-seed";
+import { isRequiredClientId, requiredClientIdMessage } from "@/lib/supabase/schema-errors";
 import { initialsFromName, NORTHLINE_STAFF, NORTHLINE_TEAMS, type SeatRole } from "@/lib/types";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -22,6 +23,31 @@ function remap(source: string, map: Map<string, string>) {
   const next = crypto.randomUUID();
   map.set(source, next);
   return next;
+}
+
+const HOUSEHOLD_KEY = "cli_households";
+
+async function ensureHouseholdClient(supabase: Client, companyId: string, ids: Map<string, string>) {
+  const existing = ids.get(HOUSEHOLD_KEY);
+  if (existing) return existing;
+  const id = crypto.randomUUID();
+  ids.set(HOUSEHOLD_KEY, id);
+  const { error } = await supabase.from("clients").insert({
+    id,
+    company_id: companyId,
+    name: "Homeowners",
+    type: "owner",
+    city: "Denver",
+    state: "CO",
+    notes: "People without a company. Run 20260819280000_nullable_company.sql to store them with a null client_id instead.",
+  });
+  if (error) throw error;
+  return id;
+}
+
+function clientRef(sourceId: string | null | undefined, ids: Map<string, string>, householdId: string | null) {
+  if (sourceId) return remap(sourceId, ids);
+  return householdId;
 }
 
 export async function seedCompanyBook(
@@ -141,27 +167,34 @@ export async function seedCompanyBook(
   );
   if (clientError) throw clientError;
 
-  const { error: contactError } = await supabase.from("contacts").insert(
+  let householdId: string | null = null;
+  const contactRows = () =>
     seed.contacts.map((contact) => ({
       id: remap(contact.id, ids),
       company_id: companyId,
-      client_id: contact.clientId ? remap(contact.clientId, ids) : null,
+      client_id: clientRef(contact.clientId, ids, householdId),
       name: contact.name,
       title: contact.title,
       email: contact.email,
       phone: contact.phone,
       owner_staff_id: contact.ownerStaffId ? remap(contact.ownerStaffId, ids) : null,
       is_referral_partner: contact.isReferralPartner,
-    }))
-  );
-  if (contactError) throw contactError;
+    }));
+  let { error: contactError } = await supabase.from("contacts").insert(contactRows());
+  if (isRequiredClientId(contactError)) {
+    householdId = await ensureHouseholdClient(supabase, companyId, ids);
+    ({ error: contactError } = await supabase.from("contacts").insert(contactRows()));
+  }
+  if (contactError) {
+    throw isRequiredClientId(contactError) ? new Error(requiredClientIdMessage()) : contactError;
+  }
 
   const { error: oppError } = await supabase.from("opportunities").insert(
     seed.opportunities.map((opportunity) => ({
       id: remap(opportunity.id, ids),
       company_id: companyId,
       name: opportunity.name,
-      client_id: opportunity.clientId ? remap(opportunity.clientId, ids) : null,
+      client_id: clientRef(opportunity.clientId, ids, householdId),
       primary_contact_id: opportunity.primaryContactId
         ? remap(opportunity.primaryContactId, ids)
         : null,
@@ -202,7 +235,7 @@ export async function seedCompanyBook(
         id: remap(opportunity.id, ids),
         company_id: companyId,
         name: opportunity.name,
-        client_id: opportunity.clientId ? remap(opportunity.clientId, ids) : null,
+        client_id: clientRef(opportunity.clientId, ids, householdId),
         primary_contact_id: opportunity.primaryContactId
           ? remap(opportunity.primaryContactId, ids)
           : null,
@@ -230,7 +263,7 @@ export async function seedCompanyBook(
     company_id: companyId,
     opportunity_id: job.opportunityId ? remap(job.opportunityId, ids) : null,
     name: job.name,
-    client_id: job.clientId ? remap(job.clientId, ids) : null,
+    client_id: clientRef(job.clientId, ids, householdId),
     primary_contact_id: job.primaryContactId ? remap(job.primaryContactId, ids) : null,
     status: job.status,
     contract_value: job.contractValue,
@@ -270,7 +303,7 @@ export async function seedCompanyBook(
         company_id: companyId,
         opportunity_id: job.opportunityId ? remap(job.opportunityId, ids) : null,
         name: job.name,
-        client_id: job.clientId ? remap(job.clientId, ids) : null,
+        client_id: clientRef(job.clientId, ids, householdId),
         primary_contact_id: job.primaryContactId ? remap(job.primaryContactId, ids) : null,
         status: job.status,
         contract_value: job.contractValue,
@@ -371,5 +404,5 @@ export async function seedCompanyBook(
     throw bulletinError;
   }
 
-  await insertOperations(supabase, companyId, ids);
+  await insertOperations(supabase, companyId, ids, householdId);
 }

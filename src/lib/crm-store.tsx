@@ -18,6 +18,7 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedOperationsIfMissing } from "@/lib/supabase/ops-seed";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
+import { isRequiredClientId, requiredClientIdMessage } from "@/lib/supabase/schema-errors";
 import { fillJobRecord, type JobDraft, customFieldsJson } from "@/lib/job-record";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -1323,7 +1324,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         .select("*")
         .single();
       if (error || !data) {
-        toast.error(error?.message ?? "Could not add the contact.");
+        toast.error(
+          isRequiredClientId(error) ? requiredClientIdMessage() : error?.message ?? "Could not add the contact."
+        );
         throw error ?? new Error("Could not add the contact.");
       }
       const mapped = mapContact(data);

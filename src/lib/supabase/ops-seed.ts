@@ -58,7 +58,8 @@ export async function mapExistingSeedIds(supabase: Client, companyId: string) {
 export async function insertOperations(
   supabase: Client,
   companyId: string,
-  ids: Map<string, string>
+  ids: Map<string, string>,
+  householdId: string | null = null,
 ) {
   const seed = seedState;
 
@@ -77,7 +78,9 @@ export async function insertOperations(
 
   const { error: estimateError } = await supabase.from("estimates").insert(
     seed.estimates.flatMap((estimate) => {
-      const clientId = estimate.clientId ? ids.get(estimate.clientId) ?? null : null;
+      const clientId = estimate.clientId
+        ? ids.get(estimate.clientId) ?? null
+        : householdId;
       if (estimate.clientId && !clientId) return [];
       return [
         {
@@ -123,7 +126,9 @@ export async function insertOperations(
 
   const { error: invoiceError } = await supabase.from("invoices").insert(
     seed.invoices.flatMap((invoice) => {
-      const clientId = invoice.clientId ? ids.get(invoice.clientId) ?? null : null;
+      const clientId = invoice.clientId
+        ? ids.get(invoice.clientId) ?? null
+        : householdId;
       if (invoice.clientId && !clientId) return [];
       return [
         {
