@@ -3,7 +3,14 @@ import { seedState } from "@/lib/seed";
 import { namesMatch } from "@/lib/seats";
 import { customFieldsJson } from "@/lib/job-record";
 import { insertOperations, wipeOperations } from "@/lib/supabase/ops-seed";
-import { isRequiredClientId, requiredClientIdMessage } from "@/lib/supabase/schema-errors";
+import {
+  isInvalidEnumValue,
+  isRequiredClientId,
+  legacyClientType,
+  legacyDeliveryMethod,
+  legacyProjectType,
+  requiredClientIdMessage,
+} from "@/lib/supabase/schema-errors";
 import { initialsFromName, NORTHLINE_STAFF, NORTHLINE_TEAMS, type SeatRole } from "@/lib/types";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -154,7 +161,7 @@ export async function seedCompanyBook(
     if (leadError) throw leadError;
   }
 
-  const { error: clientError } = await supabase.from("clients").insert(
+  let { error: clientError } = await supabase.from("clients").insert(
     seed.clients.map((client) => ({
       id: remap(client.id, ids),
       company_id: companyId,
@@ -165,6 +172,20 @@ export async function seedCompanyBook(
       notes: client.notes,
     }))
   );
+  if (clientError && isInvalidEnumValue(clientError)) {
+    const retry = await supabase.from("clients").insert(
+      seed.clients.map((client) => ({
+        id: remap(client.id, ids),
+        company_id: companyId,
+        name: client.name,
+        type: legacyClientType(client.type),
+        city: client.city,
+        state: client.state,
+        notes: client.notes,
+      })),
+    );
+    clientError = retry.error;
+  }
   if (clientError) throw clientError;
 
   let householdId: string | null = null;
@@ -189,49 +210,9 @@ export async function seedCompanyBook(
     throw isRequiredClientId(contactError) ? new Error(requiredClientIdMessage()) : contactError;
   }
 
-  const { error: oppError } = await supabase.from("opportunities").insert(
-    seed.opportunities.map((opportunity) => ({
-      id: remap(opportunity.id, ids),
-      company_id: companyId,
-      name: opportunity.name,
-      client_id: clientRef(opportunity.clientId, ids, householdId),
-      primary_contact_id: opportunity.primaryContactId
-        ? remap(opportunity.primaryContactId, ids)
-        : null,
-      stage: opportunity.stage,
-      value: opportunity.value,
-      bid_due_at: opportunity.bidDueAt,
-      pre_bid_walk_at: opportunity.preBidWalkAt,
-      location: opportunity.location,
-      project_type: opportunity.projectType,
-      delivery_method: opportunity.deliveryMethod,
-      estimator: opportunity.estimator,
-      owner_staff_id: opportunity.ownerStaffId ? remap(opportunity.ownerStaffId, ids) : null,
-      win_probability: opportunity.winProbability,
-      next_step: opportunity.nextStep,
-      lost_reason: opportunity.lostReason ?? null,
-      created_at: opportunity.createdAt,
-      code: opportunity.code,
-      lead_source: opportunity.leadSource ?? "",
-      referral_contact_id: opportunity.referralContactId
-        ? remap(opportunity.referralContactId, ids)
-        : null,
-      street: opportunity.street ?? "",
-      city: opportunity.city ?? "",
-      state: opportunity.state ?? "",
-      postal_code: opportunity.postalCode ?? "",
-      notes: opportunity.notes ?? "",
-    }))
-  );
-  if (oppError) {
-    const missing =
-      oppError.message.includes("schema cache") ||
-      oppError.code === "PGRST204" ||
-      oppError.message.includes("lead_source") ||
-      oppError.message.includes("Could not find the");
-    if (!missing) throw oppError;
-    const { error: retryError } = await supabase.from("opportunities").insert(
-      seed.opportunities.map((opportunity) => ({
+  const opportunityRows = (legacyEnums: boolean, slim: boolean) =>
+    seed.opportunities.map((opportunity) => {
+      const core = {
         id: remap(opportunity.id, ids),
         company_id: companyId,
         name: opportunity.name,
@@ -244,8 +225,10 @@ export async function seedCompanyBook(
         bid_due_at: opportunity.bidDueAt,
         pre_bid_walk_at: opportunity.preBidWalkAt,
         location: opportunity.location,
-        project_type: opportunity.projectType,
-        delivery_method: opportunity.deliveryMethod,
+        project_type: legacyEnums ? legacyProjectType(opportunity.projectType) : opportunity.projectType,
+        delivery_method: legacyEnums
+          ? legacyDeliveryMethod(opportunity.deliveryMethod)
+          : opportunity.deliveryMethod,
         estimator: opportunity.estimator,
         owner_staff_id: opportunity.ownerStaffId ? remap(opportunity.ownerStaffId, ids) : null,
         win_probability: opportunity.winProbability,
@@ -253,8 +236,39 @@ export async function seedCompanyBook(
         lost_reason: opportunity.lostReason ?? null,
         created_at: opportunity.createdAt,
         code: opportunity.code,
-      })),
-    );
+      };
+      if (slim) return core;
+      return {
+        ...core,
+        lead_source: opportunity.leadSource ?? "",
+        referral_contact_id: opportunity.referralContactId
+          ? remap(opportunity.referralContactId, ids)
+          : null,
+        street: opportunity.street ?? "",
+        city: opportunity.city ?? "",
+        state: opportunity.state ?? "",
+        postal_code: opportunity.postalCode ?? "",
+        notes: opportunity.notes ?? "",
+      };
+    });
+  let { error: oppError } = await supabase.from("opportunities").insert(opportunityRows(false, false));
+  if (oppError && isInvalidEnumValue(oppError)) {
+    const retry = await supabase.from("opportunities").insert(opportunityRows(true, false));
+    oppError = retry.error;
+  }
+  if (oppError) {
+    const missing =
+      oppError.message.includes("schema cache") ||
+      oppError.code === "PGRST204" ||
+      oppError.message.includes("lead_source") ||
+      oppError.message.includes("Could not find the");
+    if (!missing && !isInvalidEnumValue(oppError)) throw oppError;
+    let retryError = (
+      await supabase.from("opportunities").insert(opportunityRows(false, true))
+    ).error;
+    if (retryError && isInvalidEnumValue(retryError)) {
+      retryError = (await supabase.from("opportunities").insert(opportunityRows(true, true))).error;
+    }
     if (retryError) throw retryError;
   }
 
@@ -288,7 +302,16 @@ export async function seedCompanyBook(
     project_type: job.projectType || null,
     lead_source: job.leadSource ?? "",
   }));
-  const { error: jobError } = await supabase.from("jobs").insert(jobRows);
+  let { error: jobError } = await supabase.from("jobs").insert(jobRows);
+  if (jobError && isInvalidEnumValue(jobError)) {
+    const retry = await supabase.from("jobs").insert(
+      jobRows.map((row) => ({
+        ...row,
+        project_type: row.project_type ? legacyProjectType(row.project_type) : null,
+      })),
+    );
+    jobError = retry.error;
+  }
   if (jobError) {
     const missing =
       jobError.message.includes("schema cache") ||

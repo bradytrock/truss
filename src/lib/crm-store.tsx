@@ -18,7 +18,7 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedOperationsIfMissing } from "@/lib/supabase/ops-seed";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType } from "@/lib/supabase/schema-errors";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, parseLocation, type JobDraft, customFieldsJson } from "@/lib/job-record";
 import {
@@ -1242,6 +1242,22 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         notes: input.notes ?? "",
       };
       let { data, error } = await supabase.from("opportunities").insert(base).select("*").single();
+      if (error && isInvalidEnumValue(error)) {
+        const retry = await supabase
+          .from("opportunities")
+          .insert({
+            ...base,
+            project_type: legacyProjectType(base.project_type),
+            delivery_method: legacyDeliveryMethod(base.delivery_method),
+          })
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+        if (!error && data) {
+          toast.message(missingResidentialEnumsMessage());
+        }
+      }
       if (error && isMissingLeadIntake(error)) {
         const retry = await supabase
           .from("opportunities")
@@ -1255,8 +1271,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             bid_due_at: base.bid_due_at,
             pre_bid_walk_at: base.pre_bid_walk_at,
             location: base.location,
-            project_type: base.project_type,
-            delivery_method: base.delivery_method,
+            project_type: isInvalidEnumValue(error)
+              ? legacyProjectType(base.project_type)
+              : base.project_type,
+            delivery_method: isInvalidEnumValue(error)
+              ? legacyDeliveryMethod(base.delivery_method)
+              : base.delivery_method,
             estimator: base.estimator,
             owner_staff_id: base.owner_staff_id,
             win_probability: base.win_probability,
@@ -1267,15 +1287,48 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           .single();
         data = retry.data;
         error = retry.error;
+        if (error && isInvalidEnumValue(error)) {
+          const enumRetry = await supabase
+            .from("opportunities")
+            .insert({
+              company_id: base.company_id,
+              name: base.name,
+              client_id: base.client_id,
+              primary_contact_id: base.primary_contact_id,
+              stage: base.stage,
+              value: base.value,
+              bid_due_at: base.bid_due_at,
+              pre_bid_walk_at: base.pre_bid_walk_at,
+              location: base.location,
+              project_type: legacyProjectType(base.project_type),
+              delivery_method: legacyDeliveryMethod(base.delivery_method),
+              estimator: base.estimator,
+              owner_staff_id: base.owner_staff_id,
+              win_probability: base.win_probability,
+              next_step: base.next_step,
+              code: base.code,
+            })
+            .select("*")
+            .single();
+          data = enumRetry.data;
+          error = enumRetry.error;
+          if (!error && data) toast.message(missingResidentialEnumsMessage());
+        }
         if (error) {
           toast.error(
-            "Run supabase/migrations/20260819250000_lead_intake.sql in the SQL editor, then try again.",
+            isInvalidEnumValue(error)
+              ? missingResidentialEnumsMessage()
+              : "Run supabase/migrations/20260819250000_lead_intake.sql in the SQL editor, then try again.",
           );
           throw error;
         }
       }
       if (error || !data) {
-        toast.error(codeInsertError(error, "Could not open the pursuit."));
+        toast.error(
+          isInvalidEnumValue(error)
+            ? missingResidentialEnumsMessage()
+            : codeInsertError(error, "Could not open the pursuit.")
+        );
         throw error ?? new Error("Could not open the pursuit.");
       }
       const opportunity = mapOpportunity(data);
@@ -1445,6 +1498,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         lead_source: job.leadSource ?? "",
       };
       let { data, error } = await supabase.from("jobs").insert(payload).select("*").single();
+      if (error && isInvalidEnumValue(error)) {
+        const retry = await supabase
+          .from("jobs")
+          .insert({
+            ...payload,
+            project_type: payload.project_type ? legacyProjectType(payload.project_type) : null,
+          })
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+      }
       if (error && isMissingJobOverview(error)) {
         const retry = await supabase
           .from("jobs")

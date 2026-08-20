@@ -26,6 +26,7 @@ To attach a project that is already running:
    - [`supabase/migrations/20260819280000_nullable_company.sql`](supabase/migrations/20260819280000_nullable_company.sql) — homeowners and trades do not need a company (`contacts.client_id` can be null)
    - [`supabase/migrations/20260819290000_estimate_writer.sql`](supabase/migrations/20260819290000_estimate_writer.sql) — tax, discount, deposit, terms, job-site address, sections, and optional lines on estimates
    - [`supabase/migrations/20260819300000_share_tokens.sql`](supabase/migrations/20260819300000_share_tokens.sql) — client share tokens on estimates and invoices, plus public lookup RPCs
+   - [`supabase/migrations/20260819310000_ensure_residential_enums.sql`](supabase/migrations/20260819310000_ensure_residential_enums.sql) — `fixed_price`, insurance, and residential project types on the Postgres enums (safe to re-run)
 3. In Authentication → URL configuration, add `http://localhost:3847/auth/callback`. For local work you can turn off “Confirm email”.
 4. Create an account. Signup opens a company, a profile, a seat for you, and the Northline sample book in Postgres. The sample roster stays available under **Login As**; the app does not treat you as Jordan Hale.
 

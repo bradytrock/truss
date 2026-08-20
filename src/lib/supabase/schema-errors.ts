@@ -1,5 +1,8 @@
+import type { ClientType, DeliveryMethod, ProjectType } from "@/lib/types";
+
 export const NULLABLE_COMPANY_SQL = "supabase/migrations/20260819280000_nullable_company.sql";
 export const ESTIMATE_WRITER_SQL = "supabase/migrations/20260819290000_estimate_writer.sql";
+export const RESIDENTIAL_ENUMS_SQL = "supabase/migrations/20260819200000_residential_homeowners.sql";
 
 export function isMissingEstimateWriter(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -46,4 +49,39 @@ export function isRequiredClientId(error: { message?: string; code?: string } | 
 
 export function requiredClientIdMessage() {
   return `Homeowners do not have a company. Run ${NULLABLE_COMPANY_SQL} in the SQL editor, then reset demo data.`;
+}
+
+export function isInvalidEnumValue(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return error.code === "22P02" || message.includes("invalid input value for enum");
+}
+
+export function missingResidentialEnumsMessage() {
+  return `Run ${RESIDENTIAL_ENUMS_SQL} in the SQL editor so fixed-price, insurance claims, and residential work types store correctly.`;
+}
+
+export function legacyDeliveryMethod(value: string): DeliveryMethod {
+  if (value === "insurance_claim" || value === "fixed_price") return "design_bid_build";
+  if (value === "time_and_materials") return "design_build";
+  return value as DeliveryMethod;
+}
+
+export function legacyProjectType(value: string): ProjectType {
+  if (value === "remodel") return "tenant_improvement";
+  if (
+    value === "restoration" ||
+    value === "roofing" ||
+    value === "exterior" ||
+    value === "addition"
+  ) {
+    return "commercial";
+  }
+  return value as ProjectType;
+}
+
+export function legacyClientType(value: string): ClientType {
+  if (value === "insurance") return "owner";
+  if (value === "realtor" || value === "trade_partner") return "architect";
+  return value as ClientType;
 }
