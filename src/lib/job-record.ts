@@ -1,11 +1,12 @@
 import { formatJobSite } from "@/lib/leads";
 import type { Json } from "@/lib/supabase/database.types";
-import type {
-  Job,
-  JobCustomField,
-  LeadSource,
-  Opportunity,
-  ProjectType,
+import {
+  STAGE_LABELS,
+  type Job,
+  type JobCustomField,
+  type LeadSource,
+  type Opportunity,
+  type ProjectType,
 } from "@/lib/types";
 
 export type JobDraft = Omit<
@@ -185,6 +186,53 @@ export function fillJobRecord(job: JobDraft, opportunity?: Opportunity | null): 
         postalCode: job.postalCode?.trim() || opportunity?.postalCode?.trim() || parsed.postalCode,
       }) || job.location,
   };
+}
+
+/** Open pipeline cards are jobs for costing — dumpsters, permits, and P&L — not only after Job Sold. */
+export function jobDraftFromOpportunity(
+  opportunity: Opportunity,
+  extras?: { id?: string; ownerStaffId?: string; projectManager?: string },
+): JobDraft {
+  return {
+    id: extras?.id ?? `job_lead_${opportunity.id}`,
+    code: opportunity.code,
+    opportunityId: opportunity.id,
+    name: opportunity.name,
+    clientId: opportunity.clientId,
+    primaryContactId: opportunity.primaryContactId || null,
+    status: opportunity.stage === "lost" ? "on_hold" : "precon",
+    contractValue: opportunity.value,
+    startDate: (opportunity.createdAt || new Date().toISOString()).slice(0, 10),
+    substantialCompletion: null,
+    superintendent: "Tom Brennan",
+    projectManager: extras?.projectManager || opportunity.estimator,
+    location: opportunity.location,
+    ownerStaffId: extras?.ownerStaffId || opportunity.ownerStaffId,
+    description: opportunity.notes ?? "",
+    street: opportunity.street,
+    city: opportunity.city,
+    state: opportunity.state,
+    postalCode: opportunity.postalCode,
+    projectType: opportunity.projectType,
+    leadSource: opportunity.leadSource,
+    relatedContactIds: opportunity.referralContactId ? [opportunity.referralContactId] : [],
+  };
+}
+
+export function jobsFromOpenLeads(opportunities: Opportunity[], jobs: Job[]): Job[] {
+  const linked = new Set(jobs.map((job) => job.opportunityId).filter(Boolean));
+  return opportunities
+    .filter((opportunity) => opportunity.stage !== "lost" && !linked.has(opportunity.id))
+    .map((opportunity) => fillJobRecord(jobDraftFromOpportunity(opportunity), opportunity));
+}
+
+export function costCenterLabel(job: Job, opportunities: Opportunity[]) {
+  const lead = job.opportunityId
+    ? opportunities.find((opportunity) => opportunity.id === job.opportunityId)
+    : undefined;
+  const pipeline =
+    lead && lead.stage !== "awarded" && lead.stage !== "lost" ? `${STAGE_LABELS[lead.stage]} · ` : "";
+  return `${pipeline}${job.code ? `${job.code} · ` : ""}${job.name}`;
 }
 
 export function assignedCrewPatch(assigned: string[], staff: { name: string; role: string }[]): Partial<Job> {

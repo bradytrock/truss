@@ -24,7 +24,7 @@ export default function JobsPage() {
       <PageHeader
         eyebrow="Operations"
         title="Jobs"
-        description="Sold work in the field. Drag a card when the job moves — codes stay with the record from the first lead."
+        description="Every open pipeline lead is already a job. Drag a card when production moves — codes stay with the record from the first lead."
         actions={
           <Input
             value={query}

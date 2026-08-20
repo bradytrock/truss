@@ -195,7 +195,7 @@ export function CreateOpportunityDialog({
         relatedId: opportunity.id,
         assignee: owner?.name || crm.user.name,
       });
-      toast.success(`Lead opened: ${opportunity.code}`);
+      toast.success(`Lead opened: ${opportunity.code}. Costs post to this job.`);
       handleOpenChange(false);
     } catch {
       // Store already toasted the error.

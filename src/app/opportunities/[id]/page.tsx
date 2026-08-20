@@ -69,7 +69,7 @@ export default function OpportunityDetailPage() {
     void (async () => {
       const created = await crm.moveOpportunity(id, stage);
       if (stage === "awarded") {
-        toast.success(created ? "Job Sold. A precon job is now on the jobs list." : "Already on a job.");
+        toast.success(created ? "Job Sold. The pipeline job is now production." : "Already on a job.");
       } else if (stage === "lost") {
         toast.message("Marked lost.");
       }
@@ -180,18 +180,18 @@ export default function OpportunityDetailPage() {
           {job ? (
             <Card>
               <CardHeader className="border-b">
-                <CardTitle>Job</CardTitle>
+                <CardTitle>Job books</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-2">
                 <p className="text-sm">
-                  Awarded work lives on{" "}
-                  <Link href={`/jobs/${job.id}`} className="font-medium text-primary hover:underline">
+                  {opportunity.stage === "awarded" ? "Awarded work lives on " : "This lead is on the books as "}
+                  <Link href={`/jobs/${job.id}?tab=financials`} className="font-medium text-primary hover:underline">
                     {job.code ? `${job.code} · ${job.name}` : job.name}
                   </Link>
-                  . {job.projectManager} is PM.
+                  . Log expenses and payments against it like any other job.
                 </p>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
           ) : null}
 
           <Card>

@@ -45,6 +45,7 @@ export default function AccountingPage() {
       ...crm.invoices.map((invoice) => invoice.issuedAt),
       ...crm.payments.map((payment) => payment.paidAt),
       ...crm.expenses.map((expense) => expense.incurredAt),
+      ...crm.estimates.map((estimate) => estimate.sentAt || estimate.createdAt),
     ]
       .map((value) => value.slice(0, 10))
       .filter(Boolean)
@@ -58,6 +59,8 @@ export default function AccountingPage() {
       invoiceLines: crm.invoiceLines,
       payments: crm.payments,
       expenses: crm.expenses,
+      estimates: crm.estimates,
+      estimateLines: crm.estimateLines,
       basis,
       from,
       to,
@@ -66,6 +69,8 @@ export default function AccountingPage() {
   }, [
     basis,
     crm.company.name,
+    crm.estimateLines,
+    crm.estimates,
     crm.expenses,
     crm.invoiceLines,
     crm.invoices,

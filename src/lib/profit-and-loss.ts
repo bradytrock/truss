@@ -1,4 +1,6 @@
 import type {
+  Estimate,
+  EstimateLine,
   Expense,
   ExpenseAccount,
   Invoice,
@@ -8,6 +10,7 @@ import type {
 } from "@/lib/types";
 import { EXPENSE_ACCOUNT_LABELS } from "@/lib/types";
 import { invoiceTotal } from "@/lib/money";
+import { amountForEstimate } from "@/lib/estimate-totals";
 import type { JobBooksBasis } from "@/lib/job-financials";
 import { expensesForJob, paymentsForJob } from "@/lib/job-financials";
 
@@ -136,11 +139,46 @@ function postedInvoices(invoices: Invoice[], from: string | null, to: string | n
   );
 }
 
+function liveEstimates(estimates: Estimate[], from: string | null, to: string | null) {
+  return estimates.filter((estimate) => {
+    if (estimate.status !== "sent" && estimate.status !== "viewed" && estimate.status !== "accepted") {
+      return false;
+    }
+    return inRange(estimate.sentAt || estimate.createdAt, from, to);
+  });
+}
+
+function jobIdForInvoice(
+  invoice: Invoice,
+  estimates: Estimate[],
+  jobs: Job[],
+): string | null {
+  if (invoice.jobId) return invoice.jobId;
+  const estimate = invoice.estimateId
+    ? estimates.find((item) => item.id === invoice.estimateId)
+    : undefined;
+  if (estimate?.jobId) return estimate.jobId;
+  if (estimate?.opportunityId) {
+    return jobs.find((job) => job.opportunityId === estimate.opportunityId)?.id ?? null;
+  }
+  return null;
+}
+
+function jobIdForEstimate(estimate: Estimate, jobs: Job[]): string | null {
+  if (estimate.jobId) return estimate.jobId;
+  if (estimate.opportunityId) {
+    return jobs.find((job) => job.opportunityId === estimate.opportunityId)?.id ?? null;
+  }
+  return null;
+}
+
 function buildIncomeLines(input: {
   jobs: Job[];
   invoices: Invoice[];
   invoiceLines: InvoiceLine[];
   payments: Payment[];
+  estimates: Estimate[];
+  estimateLines: EstimateLine[];
   basis: JobBooksBasis;
   jobId: string | null;
   from: string | null;
@@ -164,7 +202,9 @@ function buildIncomeLines(input: {
       const invoice = payment.invoiceId
         ? input.invoices.find((item) => item.id === payment.invoiceId)
         : undefined;
-      const jobId = payment.jobId ?? invoice?.jobId ?? null;
+      const jobId =
+        payment.jobId ??
+        (invoice ? jobIdForInvoice(invoice, input.estimates, input.jobs) : null);
       if (!jobId) {
         unapplied += payment.amount;
         continue;
@@ -189,29 +229,57 @@ function buildIncomeLines(input: {
   }
 
   const invoices = postedInvoices(input.invoices, input.from, input.to);
-  if (input.jobId) {
-    return invoices
-      .filter((invoice) => invoice.jobId === input.jobId)
-      .map((invoice) => ({
-        id: invoice.id,
-        label: `${invoice.number} · ${invoice.name}`,
-        amount: invoiceTotal(invoice.id, input.invoiceLines),
-        href: `/invoices/${invoice.id}`,
-      }));
-  }
-  const byJob = new Map<string, number>();
+  const invoicedByJob = new Map<string, PnlLine[]>();
+  const invoicedJobs = new Set<string>();
   let other = 0;
   for (const invoice of invoices) {
     const amount = invoiceTotal(invoice.id, input.invoiceLines);
-    if (!invoice.jobId) {
+    const jobId = jobIdForInvoice(invoice, input.estimates, input.jobs);
+    if (input.jobId) {
+      if (jobId !== input.jobId) continue;
+      const list = invoicedByJob.get(input.jobId) ?? [];
+      list.push({
+        id: invoice.id,
+        label: `${invoice.number} · ${invoice.name}`,
+        amount,
+        href: `/invoices/${invoice.id}`,
+      });
+      invoicedByJob.set(input.jobId, list);
+      invoicedJobs.add(input.jobId);
+      continue;
+    }
+    if (!jobId) {
       other += amount;
       continue;
     }
-    byJob.set(invoice.jobId, (byJob.get(invoice.jobId) ?? 0) + amount);
+    invoicedJobs.add(jobId);
+    const list = invoicedByJob.get(jobId) ?? [];
+    list.push({
+      id: invoice.id,
+      label: invoice.name,
+      amount,
+      href: `/invoices/${invoice.id}`,
+    });
+    invoicedByJob.set(jobId, list);
   }
-  const lines: PnlLine[] = [...byJob.entries()]
-    .map(([jobId, amount]) => {
+
+  if (input.jobId) {
+    const billed = invoicedByJob.get(input.jobId) ?? [];
+    if (billed.length) return billed;
+    return liveEstimates(input.estimates, input.from, input.to)
+      .filter((estimate) => jobIdForEstimate(estimate, input.jobs) === input.jobId)
+      .map((estimate) => ({
+        id: estimate.id,
+        label: `${estimate.number} · ${estimate.name}`,
+        amount: amountForEstimate(estimate, input.estimateLines),
+        href: `/estimates/${estimate.id}`,
+      }));
+  }
+
+  const lines: PnlLine[] = [...invoicedByJob.entries()]
+    .map(([jobId, items]) => {
       const job = input.jobs.find((item) => item.id === jobId);
+      const amount = items.reduce((sum, item) => sum + item.amount, 0);
       return {
         id: jobId,
         label: job?.name ?? "Construction income",
@@ -220,6 +288,27 @@ function buildIncomeLines(input: {
       };
     })
     .sort((a, b) => b.amount - a.amount);
+
+  const estimateByJob = new Map<string, number>();
+  for (const estimate of liveEstimates(input.estimates, input.from, input.to)) {
+    const jobId = jobIdForEstimate(estimate, input.jobs);
+    if (!jobId || invoicedJobs.has(jobId)) continue;
+    estimateByJob.set(
+      jobId,
+      (estimateByJob.get(jobId) ?? 0) + amountForEstimate(estimate, input.estimateLines),
+    );
+  }
+  for (const [jobId, amount] of estimateByJob) {
+    if (!amount) continue;
+    const job = input.jobs.find((item) => item.id === jobId);
+    lines.push({
+      id: jobId,
+      label: job?.name ?? "Pipeline",
+      amount,
+      href: `/jobs/${jobId}?tab=financials`,
+    });
+  }
+  lines.sort((a, b) => b.amount - a.amount);
   if (other) lines.push({ id: "other-income", label: "Other income", amount: other });
   return lines;
 }
@@ -231,6 +320,8 @@ export function buildProfitAndLoss(input: {
   invoiceLines: InvoiceLine[];
   payments: Payment[];
   expenses: Expense[];
+  estimates?: Estimate[];
+  estimateLines?: EstimateLine[];
   basis: JobBooksBasis;
   job?: Job | null;
   from: string | null;
@@ -238,6 +329,8 @@ export function buildProfitAndLoss(input: {
   periodLabel: string;
 }): ProfitAndLossStatement {
   const jobId = input.job?.id ?? null;
+  const estimates = input.estimates ?? [];
+  const estimateLines = input.estimateLines ?? [];
   const rangedExpenses = input.expenses.filter((expense) => {
     if (!inRange(expense.incurredAt, input.from, input.to)) return false;
     if (jobId) return expense.jobId === jobId;
@@ -249,6 +342,8 @@ export function buildProfitAndLoss(input: {
     invoices: input.invoices,
     invoiceLines: input.invoiceLines,
     payments: input.payments,
+    estimates,
+    estimateLines,
     basis: input.basis,
     jobId,
     from: input.from,

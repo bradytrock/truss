@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCrm } from "@/lib/crm-store";
 import { localYmd } from "@/lib/format";
 import { compressReceipt } from "@/lib/job-financials";
+import { costCenterLabel } from "@/lib/job-record";
 import { invoiceBalance } from "@/lib/money";
 import {
   EXPENSE_ACCOUNT_LABELS,
@@ -34,6 +35,17 @@ import {
   type ExpenseAccount,
   type ExpenseMethod,
 } from "@/lib/types";
+
+function jobChoices(crm: ReturnType<typeof useCrm>) {
+  return [...crm.jobs]
+    .sort((a, b) =>
+      costCenterLabel(a, crm.opportunities).localeCompare(costCenterLabel(b, crm.opportunities)),
+    )
+    .map((job) => ({
+      value: job.id,
+      label: costCenterLabel(job, crm.opportunities),
+    }));
+}
 
 async function extractReceipt(imageDataUrl: string, kind: "expense" | "payment") {
   const response = await fetch("/api/receipts/extract", {
@@ -291,15 +303,15 @@ export function LogExpenseDialog({
           </div>
           <div className="grid gap-1.5">
             <Label>Job</Label>
+            <p className="text-xs text-muted-foreground">
+              Pipeline leads are jobs. Use Overhead only for office costs.
+            </p>
             <Select
               value={jobId || "none"}
               onValueChange={(value) => setJobId(value === "none" ? "" : String(value))}
               items={[
                 { value: "none", label: "Overhead — not a job" },
-                ...crm.jobs.map((job) => ({
-                  value: job.id,
-                  label: `${job.code ? `${job.code} · ` : ""}${job.name}`,
-                })),
+                ...jobChoices(crm),
               ]}
             >
               <SelectTrigger className="w-full">
@@ -307,10 +319,9 @@ export function LogExpenseDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Overhead — not a job</SelectItem>
-                {crm.jobs.map((job) => (
-                  <SelectItem key={job.id} value={job.id}>
-                    {job.code ? `${job.code} · ` : ""}
-                    {job.name}
+                {jobChoices(crm).map((job) => (
+                  <SelectItem key={job.value} value={job.value}>
+                    {job.label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -468,15 +479,15 @@ export function LogPaymentDialog({
           </Button>
           <div className="grid gap-1.5">
             <Label>Job</Label>
+            <p className="text-xs text-muted-foreground">
+              Pipeline leads are jobs. Pick the stage-labeled row when the check is for a bid still in play.
+            </p>
             <Select
               value={jobId || "none"}
               onValueChange={(value) => setJobId(value === "none" ? "" : String(value))}
               items={[
                 { value: "none", label: "Select a job" },
-                ...crm.jobs.map((job) => ({
-                  value: job.id,
-                  label: `${job.code ? `${job.code} · ` : ""}${job.name}`,
-                })),
+                ...jobChoices(crm),
               ]}
             >
               <SelectTrigger className="w-full">
@@ -484,10 +495,9 @@ export function LogPaymentDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Select a job</SelectItem>
-                {crm.jobs.map((job) => (
-                  <SelectItem key={job.id} value={job.id}>
-                    {job.code ? `${job.code} · ` : ""}
-                    {job.name}
+                {jobChoices(crm).map((job) => (
+                  <SelectItem key={job.value} value={job.value}>
+                    {job.label}
                   </SelectItem>
                 ))}
               </SelectContent>

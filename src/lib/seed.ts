@@ -1,7 +1,7 @@
 import { seedCalendarAccounts, seedCalendarShares } from "@/lib/calendar-seed";
 import { seedTrainingBulletins, seedTrainingProgress } from "@/lib/training/seed";
 import { backfillRecordCodes } from "@/lib/job-code";
-import { fillJobRecord, JOB_RECORD_EXTRAS } from "@/lib/job-record";
+import { fillJobRecord, JOB_RECORD_EXTRAS, jobsFromOpenLeads } from "@/lib/job-record";
 import { NORTHLINE_STAFF, NORTHLINE_TEAMS, type CrmState } from "@/lib/types";
 import { demoOps } from "@/lib/demo-ops";
 import {
@@ -23,6 +23,7 @@ const jobs = stamped.jobs.map((job) => {
   const opportunity = stamped.opportunities.find((item) => item.id === job.opportunityId);
   return fillJobRecord({ ...job, ...JOB_RECORD_EXTRAS[job.id] }, opportunity);
 });
+const allJobs = [...jobs, ...jobsFromOpenLeads(stamped.opportunities, jobs)];
 
 export const seedState: CrmState = {
   staff: structuredClone(NORTHLINE_STAFF),
@@ -30,11 +31,15 @@ export const seedState: CrmState = {
   clients: extraClients,
   contacts: extraContacts,
   opportunities: stamped.opportunities,
-  jobs,
+  jobs: allJobs,
   activities: extraActivities,
   tasks: extraTasks,
   catalog: demoOps.catalog,
-  estimates: demoOps.estimates,
+  estimates: demoOps.estimates.map((estimate) => {
+    if (estimate.jobId) return estimate;
+    const job = allJobs.find((item) => item.opportunityId === estimate.opportunityId);
+    return job ? { ...estimate, jobId: job.id } : estimate;
+  }),
   estimateLines: demoOps.estimateLines,
   invoices: demoOps.invoices,
   invoiceLines: demoOps.invoiceLines,

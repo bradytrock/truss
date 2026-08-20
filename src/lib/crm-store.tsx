@@ -20,7 +20,7 @@ import { seedOperationsIfMissing } from "@/lib/supabase/ops-seed";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
 import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage } from "@/lib/supabase/schema-errors";
 import { newShareToken } from "@/lib/share";
-import { fillJobRecord, parseLocation, type JobDraft, customFieldsJson } from "@/lib/job-record";
+import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson } from "@/lib/job-record";
 import {
   DEFAULT_ESTIMATE_TERMS,
   amountForEstimate,
@@ -261,6 +261,37 @@ function siteFromLinked(
     return parseLocation(opportunity.location);
   }
   return { street: "", city: "", state: "", postalCode: "" };
+}
+
+async function persistOpenLeadJobs(
+  supabase: ReturnType<typeof createClient>,
+  companyId: string,
+  opportunities: Opportunity[],
+  jobs: Job[],
+) {
+  const missing = jobsFromOpenLeads(opportunities, jobs);
+  for (const job of missing) {
+    const payload = {
+      company_id: companyId,
+      opportunity_id: job.opportunityId,
+      name: job.name,
+      client_id: job.clientId || null,
+      primary_contact_id: job.primaryContactId || null,
+      status: job.status,
+      contract_value: job.contractValue,
+      start_date: job.startDate,
+      superintendent: job.superintendent,
+      project_manager: job.projectManager,
+      location: job.location,
+      owner_staff_id: job.ownerStaffId || null,
+      code: job.code,
+    };
+    let { error } = await supabase.from("jobs").insert(payload);
+    if (error && isMissingCodeColumn(error)) {
+      error = (await supabase.from("jobs").insert(payloadWithoutCode(payload))).error;
+    }
+  }
+  return missing.length;
 }
 
 function isMissingJobOverview(error: { message?: string; code?: string }) {
@@ -678,11 +709,31 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         book.state.jobs,
         ensured.roster.length > 0 ? ensured.roster : NORTHLINE_STAFF,
       );
+      let opportunities = stamped.opportunities;
+      let jobs = stamped.jobs;
+      if (jobsFromOpenLeads(opportunities, jobs).length > 0 && !seeding.current) {
+        seeding.current = true;
+        try {
+          const added = await persistOpenLeadJobs(supabase, companyId, opportunities, jobs);
+          if (added) {
+            book = await fetchCompanyBook(supabase, companyId);
+            const restamped = backfillRecordCodes(
+              book.state.opportunities,
+              book.state.jobs,
+              ensured.roster.length > 0 ? ensured.roster : NORTHLINE_STAFF,
+            );
+            opportunities = restamped.opportunities;
+            jobs = restamped.jobs;
+          }
+        } finally {
+          seeding.current = false;
+        }
+      }
       setState({
         ...book.state,
         staff: ensured.roster,
-        opportunities: stamped.opportunities,
-        jobs: stamped.jobs,
+        opportunities,
+        jobs,
       });
       setHydrateError(null);
       setHydrated(true);
@@ -1010,38 +1061,27 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         setState((prev) => {
           const jobs = [...prev.jobs];
           let nextJobs = jobs;
-          if (stage === "awarded" && !jobs.some((job) => job.opportunityId === id)) {
+          if (stage !== "lost" && !jobs.some((job) => job.opportunityId === id)) {
             nextJobs = [
               fillJobRecord(
-                {
+                jobDraftFromOpportunity(current, {
                   id: crypto.randomUUID(),
-                  code: allocateCode(user.name, jobs, prev.opportunities, current.code),
-                  opportunityId: id,
-                  name: current.name,
-                  clientId: current.clientId,
-                  status: "precon",
-                  contractValue,
-                  startDate: new Date().toISOString().slice(0, 10),
-                  substantialCompletion: null,
-                  superintendent: "Tom Brennan",
-                  projectManager: user.name || "Luis Ortega",
-                  location,
                   ownerStaffId: user.staffId,
-                  primaryContactId: current.primaryContactId || null,
-                  description: current.notes ?? "",
-                  relatedContactIds: current.referralContactId ? [current.referralContactId] : [],
-                  street,
-                  city,
-                  state: stateCode,
-                  postalCode,
-                },
+                  projectManager: user.name || current.estimator,
+                }),
                 current
               ),
               ...jobs,
             ];
             createdJob = nextJobs[0];
-          } else if (stage === "awarded") {
+          } else {
             createdJob = jobs.find((job) => job.opportunityId === id) ?? null;
+            nextJobs = jobs.map((job) => {
+              if (job.opportunityId !== id) return job;
+              if (stage === "lost") return { ...job, status: "on_hold" as const };
+              if (stage === "awarded") return { ...job, contractValue, street, city, state: stateCode, postalCode, location };
+              return job;
+            });
           }
           return {
             ...prev,
@@ -1103,33 +1143,33 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }`,
       });
 
-      if (stage === "awarded") {
+      if (stage !== "lost") {
         const already = state.jobs.find((job) => job.opportunityId === id);
         if (already) {
           createdJob = already;
+          if (stage === "awarded") {
+            await supabase
+              .from("jobs")
+              .update({
+                contract_value: contractValue,
+                street,
+                city,
+                state: stateCode,
+                postal_code: postalCode,
+                location,
+              })
+              .eq("id", already.id);
+          }
         } else {
           const awarded = fillJobRecord(
-            {
-              id: crypto.randomUUID(),
-              opportunityId: id,
-              name: current.name,
-              clientId: current.clientId,
-              primaryContactId: current.primaryContactId || null,
-              status: "precon",
-              contractValue,
-              startDate: new Date().toISOString().slice(0, 10),
-              substantialCompletion: null,
-              superintendent: "Tom Brennan",
-              projectManager: user.name || "Luis Ortega",
-              location,
-              ownerStaffId: user.staffId,
-              description: current.notes ?? "",
-              relatedContactIds: current.referralContactId ? [current.referralContactId] : [],
-              street,
-              city,
-              state: stateCode,
-              postalCode,
-            },
+            jobDraftFromOpportunity(
+              { ...current, value: stage === "awarded" ? contractValue : current.value, street, city, state: stateCode, postalCode, location },
+              {
+                id: crypto.randomUUID(),
+                ownerStaffId: user.staffId,
+                projectManager: user.name || current.estimator,
+              },
+            ),
             current
           );
           const payload = {
@@ -1201,9 +1241,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               entityType: "job",
               entityId: data.id,
               type: "note",
-              body: "Job opened from an awarded bid. Assign precon lead and start buyout.",
+              body: "Job opened from the pipeline. Costs and receipts post to this job.",
             });
           }
+        }
+      }
+
+      if (stage === "lost") {
+        const existing = state.jobs.find((job) => job.opportunityId === id);
+        if (existing) {
+          await supabase.from("jobs").update({ status: "on_hold" }).eq("id", existing.id);
         }
       }
 
@@ -1294,7 +1341,21 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           postalCode: input.postalCode ?? "",
           notes: input.notes ?? "",
         };
-        setState((prev) => ({ ...prev, opportunities: [opportunity, ...prev.opportunities] }));
+        const pipelineJob =
+          input.stage === "lost"
+            ? null
+            : fillJobRecord(
+                jobDraftFromOpportunity(opportunity, {
+                  ownerStaffId,
+                  projectManager: opportunity.estimator,
+                }),
+                opportunity,
+              );
+        setState((prev) => ({
+          ...prev,
+          opportunities: [opportunity, ...prev.opportunities],
+          jobs: pipelineJob ? [pipelineJob, ...prev.jobs] : prev.jobs,
+        }));
         return opportunity;
       }
       const base = {
@@ -1413,7 +1474,78 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         throw error ?? new Error("Could not open the pursuit.");
       }
       const opportunity = { ...mapOpportunity(data), code: data.code || code };
-      setState((prev) => ({ ...prev, opportunities: [opportunity, ...prev.opportunities] }));
+      const pipelineJob =
+        opportunity.stage === "lost"
+          ? null
+          : fillJobRecord(
+              jobDraftFromOpportunity(opportunity, {
+                id: crypto.randomUUID(),
+                ownerStaffId,
+                projectManager: opportunity.estimator,
+              }),
+              opportunity,
+            );
+      if (pipelineJob) {
+        const jobPayload = {
+          id: pipelineJob.id,
+          company_id: user.companyId,
+          opportunity_id: opportunity.id,
+          name: pipelineJob.name,
+          client_id: pipelineJob.clientId || null,
+          primary_contact_id: pipelineJob.primaryContactId || null,
+          status: pipelineJob.status,
+          contract_value: pipelineJob.contractValue,
+          start_date: pipelineJob.startDate,
+          superintendent: pipelineJob.superintendent,
+          project_manager: pipelineJob.projectManager,
+          location: pipelineJob.location,
+          owner_staff_id: pipelineJob.ownerStaffId || null,
+          code: pipelineJob.code,
+        };
+        let { data: jobRow, error: jobError } = await supabase.from("jobs").insert(jobPayload).select("*").single();
+        if (jobError && isMissingCodeColumn(jobError)) {
+          const retry = await supabase.from("jobs").insert(payloadWithoutCode(jobPayload)).select("*").single();
+          jobRow = retry.data;
+          jobError = retry.error;
+          if (!jobError) toast.message(missingCodeColumnMessage());
+        }
+        if (jobError && isMissingJobOverview(jobError)) {
+          const slim = {
+            company_id: jobPayload.company_id,
+            opportunity_id: jobPayload.opportunity_id,
+            name: jobPayload.name,
+            client_id: jobPayload.client_id,
+            primary_contact_id: jobPayload.primary_contact_id,
+            status: jobPayload.status,
+            contract_value: jobPayload.contract_value,
+            start_date: jobPayload.start_date,
+            superintendent: jobPayload.superintendent,
+            project_manager: jobPayload.project_manager,
+            location: jobPayload.location,
+            owner_staff_id: jobPayload.owner_staff_id,
+            code: jobPayload.code,
+          };
+          const retry = await supabase.from("jobs").insert(slim).select("*").single();
+          jobRow = retry.data;
+          jobError = retry.error;
+          if (jobError && isMissingCodeColumn(jobError)) {
+            const withoutCode = await supabase.from("jobs").insert(payloadWithoutCode(slim)).select("*").single();
+            jobRow = withoutCode.data;
+            jobError = withoutCode.error;
+            if (!jobError) toast.message(missingCodeColumnMessage());
+          }
+        }
+        if (!jobError && jobRow) {
+          Object.assign(pipelineJob, mapJob(jobRow), { code: jobRow.code || pipelineJob.code });
+        } else if (jobError) {
+          toast.error(codeInsertError(jobError, "Lead opened. Could not open the job for costing."));
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        opportunities: [opportunity, ...prev.opportunities],
+        jobs: pipelineJob ? [pipelineJob, ...prev.jobs] : prev.jobs,
+      }));
       await addActivity({
         entityType: "opportunity",
         entityId: opportunity.id,
@@ -1766,14 +1898,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }) => {
       const opportunityId = await ensureLeadForEstimate(input);
       const number = nextNumber("EST", state.estimates.map((estimate) => estimate.number));
-      const linked = siteFromLinked(input.jobId, opportunityId, state.jobs, state.opportunities);
+      const pipelineJobId =
+        input.jobId ||
+        state.jobs.find((job) => job.opportunityId === opportunityId)?.id ||
+        null;
+      const linked = siteFromLinked(pipelineJobId, opportunityId, state.jobs, state.opportunities);
       const estimate = fillEstimate({
         id: crypto.randomUUID(),
         number,
         name: input.name,
         clientId: input.clientId,
         opportunityId,
-        jobId: input.jobId,
+        jobId: pipelineJobId,
         contactId: input.contactId ?? null,
         status: "draft",
         notes: input.notes ?? "",
