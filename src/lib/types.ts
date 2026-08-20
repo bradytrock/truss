@@ -212,6 +212,12 @@ export interface Opportunity {
   notes?: string;
 }
 
+export interface JobCustomField {
+  id: string;
+  label: string;
+  value: string;
+}
+
 export interface Job {
   id: string;
   code: string;
@@ -227,6 +233,19 @@ export interface Job {
   projectManager: string;
   location: string;
   ownerStaffId: string;
+  description: string;
+  tags: string[];
+  street: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  salesRep: string;
+  assigned: string[];
+  subcontractorIds: string[];
+  relatedContactIds: string[];
+  customFields: JobCustomField[];
+  projectType: ProjectType | "";
+  leadSource: LeadSource | "";
 }
 
 export interface Activity {

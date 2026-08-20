@@ -1,3 +1,4 @@
+import { fillJobRecord, parseCustomFields, customFieldsJson } from "@/lib/job-record";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import type {
   Activity,
@@ -167,7 +168,7 @@ export function mapOpportunity(row: OpportunityRow): Opportunity {
 }
 
 export function mapJob(row: JobRow): Job {
-  return {
+  return fillJobRecord({
     id: row.id,
     code: row.code || "",
     opportunityId: row.opportunity_id,
@@ -182,7 +183,20 @@ export function mapJob(row: JobRow): Job {
     projectManager: row.project_manager,
     location: row.location,
     ownerStaffId: row.owner_staff_id ?? "",
-  };
+    description: row.description ?? "",
+    tags: row.tags ?? [],
+    street: row.street ?? "",
+    city: row.city ?? "",
+    state: row.state ?? "",
+    postalCode: row.postal_code ?? "",
+    salesRep: row.sales_rep ?? "",
+    assigned: row.assigned ?? [],
+    subcontractorIds: row.subcontractor_ids ?? [],
+    relatedContactIds: row.related_contact_ids ?? [],
+    customFields: parseCustomFields(row.custom_fields),
+    projectType: row.project_type ?? "",
+    leadSource: (row.lead_source as Job["leadSource"]) ?? "",
+  });
 }
 
 export function mapActivity(row: ActivityRow): Activity {
@@ -256,6 +270,19 @@ export function jobPatch(patch: Partial<Job>) {
   if (patch.location !== undefined) row.location = patch.location;
   if (patch.ownerStaffId !== undefined) row.owner_staff_id = patch.ownerStaffId || null;
   if (patch.code !== undefined) row.code = patch.code;
+  if (patch.description !== undefined) row.description = patch.description;
+  if (patch.tags !== undefined) row.tags = patch.tags;
+  if (patch.street !== undefined) row.street = patch.street;
+  if (patch.city !== undefined) row.city = patch.city;
+  if (patch.state !== undefined) row.state = patch.state;
+  if (patch.postalCode !== undefined) row.postal_code = patch.postalCode;
+  if (patch.salesRep !== undefined) row.sales_rep = patch.salesRep;
+  if (patch.assigned !== undefined) row.assigned = patch.assigned;
+  if (patch.subcontractorIds !== undefined) row.subcontractor_ids = patch.subcontractorIds;
+  if (patch.relatedContactIds !== undefined) row.related_contact_ids = patch.relatedContactIds;
+  if (patch.customFields !== undefined) row.custom_fields = customFieldsJson(patch.customFields);
+  if (patch.projectType !== undefined) row.project_type = patch.projectType || null;
+  if (patch.leadSource !== undefined) row.lead_source = patch.leadSource ?? "";
   return row;
 }
 

@@ -22,6 +22,7 @@ To attach a project that is already running:
    - [`supabase/migrations/20260819240000_training.sql`](supabase/migrations/20260819240000_training.sql) — per-seat training progress, badges, attempts, and company training bulletins
    - [`supabase/migrations/20260819250000_lead_intake.sql`](supabase/migrations/20260819250000_lead_intake.sql) — lead source, referred-by contact, job-site address, and notes on pursuits
    - [`supabase/migrations/20260819260000_profile_staff.sql`](supabase/migrations/20260819260000_profile_staff.sql) — each signed-in profile gets its own seat so login does not land on the sample company admin
+   - [`supabase/migrations/20260819270000_job_overview.sql`](supabase/migrations/20260819270000_job_overview.sql) — job-site address, crew, tags, related contacts, and custom fields on the job record
 3. In Authentication → URL configuration, add `http://localhost:3847/auth/callback`. For local work you can turn off “Confirm email”.
 4. Create an account. Signup opens a company, a profile, a seat for you, and the Northline sample book in Postgres. The sample roster stays available under **Login As**; the app does not treat you as Jordan Hale.
 
@@ -40,12 +41,12 @@ To connect real Google Calendars, create an OAuth web client in Google Cloud (Ca
 - **Settings** — company name, main phone, office email, website, license, and office address. Only a company admin sees this, under the initials menu in the top right. The same block prints on estimates and invoices.
 - **Contacts** — homeowners first (no company required), plus adjusters, realtors, and one architect as referral partners
 - **Pipeline** — leads through sold and lost: hail, water, fire, kitchens, windows, an addition. Each card shows a job code (`BJ081926-A`) assigned when the lead is opened. **New lead** slides in from the right: assignee, homeowner name, phone, email, job-site address, and how they heard about you. If the source is Referral, search contacts this seat can see and connect the referrer.
-- **Jobs** — a status board of sold work. Codes carry over from the awarded lead; a job logged from scratch gets the next letter for that person’s day.
+- **Jobs** — a status board of sold work. Open a job for the field record: site photo, address, crew, tags, related contacts, and custom fields (claim number, deductible). Codes carry over from the awarded lead.
 - **Estimates / invoices** — EST-1001–1010 and INV-2001–2010 against homeowners, with insurance draws and retainage
 - **Calendar & photos** — Google Calendar per seat, team sharing, site walks, shingle days, punch, and job photos
 - **Price book** — roofing squares, extraction, cabinets, and the usual trades
 - **Estimates** — build a proposal from the catalog, send it, mark it accepted, convert it to an invoice
-- **Jobs** — field snapshot, activity, related billing, and job photos (upload or URL)
+- **Jobs** — field record (overview, photos, estimates/invoices, custom fields), activity, and job photos (upload or URL)
 - **Invoices** — draws and retainage with payment history and outstanding AR
 - **Calendar** — week view of Truss field events plus each person’s Google Calendar. Link is per seat. Share with your team; company admins see every calendar and whether it is linked.
 - **Training** — roofing certification course (companion to *Roofing Construction & Estimating, Revised* by Daniel Atcheson). Original lesson summaries, generated takeoff questions, 70% chapter/practice, 80% exam. Progress is per seat. Team leads and company admin see crew progress and can post training bulletins. Open jobs recommend chapters by project type.

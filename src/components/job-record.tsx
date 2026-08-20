@@ -1,0 +1,967 @@
+"use client";
+
+import Link from "next/link";
+import { useMemo, useState, type ReactNode } from "react";
+import {
+  Briefcase,
+  Building2,
+  Calendar,
+  ChevronDown,
+  ChevronsRight,
+  Copy,
+  ExternalLink,
+  ImageIcon,
+  Mail,
+  MapPin,
+  Pencil,
+  Phone,
+  Plus,
+  Sparkles,
+  Star,
+  User,
+  Users,
+  XIcon,
+} from "lucide-react";
+import { toast } from "sonner";
+import { ActivityComposer, ActivityList } from "@/components/activity";
+import { AddPhotoDialog, CreateEstimateDialog, CreateInvoiceDialog } from "@/components/create-ops-dialogs";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import { RecordCode } from "@/components/page-chrome";
+import {
+  EstimateStatusBadge,
+  InvoiceStatusBadge,
+  PhotoCategoryBadge,
+} from "@/components/status-badge";
+import { useCrm } from "@/lib/crm-store";
+import { formatCurrencyFull, formatDate } from "@/lib/format";
+import { assignedCrewPatch, jobAddress, mapsUrl, uniqueIds, uniqueNames } from "@/lib/job-record";
+import { leadSourceLabel } from "@/lib/leads";
+import { derivedInvoiceStatus, invoiceBalance, sumLines } from "@/lib/money";
+import { COURSE } from "@/lib/training/engine";
+import { recommendedChapterIds } from "@/lib/training/recommend";
+import {
+  JOB_STATUS_LABELS,
+  JOB_STATUSES,
+  LEAD_SOURCE_LABELS,
+  LEAD_SOURCES,
+  PROJECT_TYPE_LABELS,
+  PROJECT_TYPES,
+  type Contact,
+  type Job,
+  type JobCustomField,
+  type JobStatus,
+  type LeadSource,
+  type ProjectType,
+} from "@/lib/types";
+import { cn } from "@/lib/utils";
+
+function copyText(value: string, label: string) {
+  if (!value) return;
+  void navigator.clipboard.writeText(value).then(
+    () => toast.success(`${label} copied.`),
+    () => toast.error("Could not copy.")
+  );
+}
+
+function JobSection({
+  title,
+  defaultOpen = true,
+  actions,
+  children,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <section className="border-b">
+      <div className="flex items-center gap-2 px-4 py-3">
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <ChevronDown
+            className={cn("size-4 shrink-0 text-muted-foreground transition-transform", !open && "-rotate-90")}
+          />
+          <span className="text-[11px] font-semibold tracking-[0.16em] text-foreground uppercase">
+            {title}
+          </span>
+        </button>
+        {actions}
+      </div>
+      {open ? <div className="px-4 pb-4">{children}</div> : null}
+    </section>
+  );
+}
+
+function FieldRow({
+  icon: Icon,
+  label,
+  children,
+}: {
+  icon: typeof User;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="grid grid-cols-[1.25rem_7.5rem_minmax(0,1fr)] items-center gap-3 border-b py-2.5 last:border-b-0">
+      <Icon className="size-4 text-muted-foreground" />
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <div className="min-w-0 text-right text-sm">{children}</div>
+    </div>
+  );
+}
+
+const quietSelect =
+  "h-auto w-full justify-end border-0 bg-transparent p-0 shadow-none hover:bg-transparent dark:bg-transparent";
+
+function PeopleChips({
+  names,
+  onRemove,
+  onAdd,
+  options,
+  empty,
+}: {
+  names: string[];
+  onRemove: (name: string) => void;
+  onAdd: (name: string) => void;
+  options: string[];
+  empty: string;
+}) {
+  const remaining = options.filter((name) => !names.includes(name));
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-1">
+      {names.length === 0 ? <span className="text-muted-foreground">{empty}</span> : null}
+      {names.map((name) => (
+        <Badge key={name} variant="secondary" className="gap-1 pr-1">
+          {name}
+          <button
+            type="button"
+            className="rounded-sm p-0.5 hover:bg-foreground/10"
+            onClick={() => onRemove(name)}
+            aria-label={`Remove ${name}`}
+          >
+            <XIcon className="size-3" />
+          </button>
+        </Badge>
+      ))}
+      {remaining.length > 0 ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="ghost" size="icon-xs" className="size-6" />}>
+            <Plus className="size-3.5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="max-h-64 min-w-44 overflow-auto">
+            {remaining.map((name) => (
+              <DropdownMenuItem key={name} onClick={() => onAdd(name)}>
+                {name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
+    </div>
+  );
+}
+
+function contactKind(contact: Contact, job: Job) {
+  if (job.subcontractorIds.includes(contact.id)) return "Trade";
+  if (contact.isReferralPartner) return contact.title.includes("adjuster") ? "Adjuster" : "Referral";
+  if (contact.title.toLowerCase().includes("adjuster")) return "Adjuster";
+  if (contact.clientId) return contact.title || "Company";
+  return contact.title || "Homeowner";
+}
+
+export function JobRecord({ job }: { job: Job }) {
+  const crm = useCrm();
+  const [heroOpen, setHeroOpen] = useState(true);
+  const [addressOpen, setAddressOpen] = useState(false);
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const [estimateOpen, setEstimateOpen] = useState(false);
+  const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [tagDraft, setTagDraft] = useState("");
+  const [fieldLabel, setFieldLabel] = useState("");
+  const [fieldValue, setFieldValue] = useState("");
+  const [street, setStreet] = useState(job.street);
+  const [city, setCity] = useState(job.city);
+  const [state, setState] = useState(job.state);
+  const [postalCode, setPostalCode] = useState(job.postalCode);
+
+  const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
+  const client = crm.getClient(job.clientId);
+  const primary = crm.getContact(job.primaryContactId);
+  const photos = crm.photos.filter((photo) => photo.jobId === job.id);
+  const hero = photos[0];
+  const address = jobAddress(job);
+  const estimates = crm.estimates.filter((estimate) => estimate.jobId === job.id);
+  const invoices = crm.invoices.filter((invoice) => invoice.jobId === job.id);
+  const activities = crm.activities.filter(
+    (activity) =>
+      (activity.entityType === "job" && activity.entityId === job.id) ||
+      (job.opportunityId &&
+        activity.entityType === "opportunity" &&
+        activity.entityId === job.opportunityId)
+  );
+  const tasks = crm.tasks.filter((task) => task.relatedType === "job" && task.relatedId === job.id);
+
+  const related = useMemo(() => {
+    const ids = uniqueIds([
+      job.primaryContactId ?? "",
+      ...job.relatedContactIds,
+      ...job.subcontractorIds,
+    ]);
+    return ids
+      .map((id) => crm.getContact(id))
+      .filter((contact): contact is Contact => Boolean(contact));
+  }, [crm, job.primaryContactId, job.relatedContactIds, job.subcontractorIds]);
+
+  const relatedOptions = crm.contacts.filter(
+    (contact) =>
+      contact.id !== job.primaryContactId &&
+      !job.relatedContactIds.includes(contact.id) &&
+      !job.subcontractorIds.includes(contact.id)
+  );
+  const tradeOptions = crm.contacts.filter((contact) => !job.subcontractorIds.includes(contact.id));
+
+  function patch(next: Partial<Job>) {
+    void crm.updateJob(job.id, next);
+  }
+
+  function saveAddress() {
+    const location =
+      [street.trim(), [city.trim(), state.trim()].filter(Boolean).join(", "), postalCode.trim()]
+        .filter(Boolean)
+        .join(", ") || job.location;
+    patch({
+      street: street.trim(),
+      city: city.trim(),
+      state: state.trim(),
+      postalCode: postalCode.trim(),
+      location,
+    });
+    setAddressOpen(false);
+    toast.success("Job site saved.");
+  }
+
+  function addTag() {
+    const value = tagDraft.trim();
+    if (!value) return;
+    patch({ tags: uniqueNames([...job.tags, value]) });
+    setTagDraft("");
+  }
+
+  function addCustomField() {
+    const label = fieldLabel.trim();
+    if (!label) {
+      toast.error("Give the field a name.");
+      return;
+    }
+    const next: JobCustomField = {
+      id: crypto.randomUUID(),
+      label,
+      value: fieldValue.trim(),
+    };
+    patch({ customFields: [...job.customFields, next] });
+    setFieldLabel("");
+    setFieldValue("");
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-xl">
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          {job.code ? (
+            <p className="mb-1">
+              <RecordCode code={job.code} className="text-xs" />
+            </p>
+          ) : null}
+          <h1 className="font-heading text-2xl leading-tight font-medium text-balance">{job.name}</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {primary ? (
+              <Link href={`/contacts/${primary.id}`} className="hover:underline">
+                {primary.name}
+              </Link>
+            ) : client ? (
+              <Link href={`/clients/${client.id}`} className="hover:underline">
+                {client.name}
+              </Link>
+            ) : (
+              crm.customerName(job)
+            )}
+          </p>
+        </div>
+        <p className="font-heading text-2xl leading-none font-medium tabular-nums">
+          {formatCurrencyFull(job.contractValue)}
+        </p>
+      </div>
+
+      {heroOpen ? (
+        <div className="relative overflow-hidden border bg-muted">
+          {hero ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={hero.imageUrl}
+              alt={hero.caption || job.name}
+              className="aspect-[16/9] w-full object-cover"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setPhotoOpen(true)}
+              className="flex aspect-[16/9] w-full flex-col items-center justify-center gap-2 text-muted-foreground"
+            >
+              <ImageIcon className="size-8" />
+              <span className="text-sm">Add a job-site photo</span>
+            </button>
+          )}
+          <Button
+            variant="secondary"
+            size="icon"
+            className="absolute top-3 right-3 size-8 bg-background/90"
+            onClick={() => setHeroOpen(false)}
+            aria-label="Collapse photo"
+          >
+            <ChevronsRight className="size-4" />
+          </Button>
+        </div>
+      ) : (
+        <div className="flex justify-end border-x border-t px-3 py-2">
+          <Button variant="ghost" size="icon" className="size-8" onClick={() => setHeroOpen(true)} aria-label="Show photo">
+            <ChevronsRight className="size-4 rotate-180" />
+          </Button>
+        </div>
+      )}
+
+      <div className="flex items-start justify-between gap-3 border px-4 py-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+            Address
+          </p>
+          <p className="mt-1 text-sm leading-snug">{address || "Add a job-site address"}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
+          {address ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              nativeButton={false}
+              render={<a href={mapsUrl(address)} target="_blank" rel="noreferrer" />}
+              aria-label="Open in maps"
+            >
+              <MapPin className="size-4" />
+            </Button>
+          ) : null}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            onClick={() => copyText(address, "Address")}
+            aria-label="Copy address"
+            disabled={!address}
+          >
+            <Copy className="size-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            onClick={() => {
+              setStreet(job.street);
+              setCity(job.city);
+              setState(job.state);
+              setPostalCode(job.postalCode);
+              setAddressOpen(true);
+            }}
+            aria-label="Edit address"
+          >
+            <Pencil className="size-4" />
+          </Button>
+        </div>
+      </div>
+
+      <Tabs defaultValue="overview">
+        <TabsList variant="line" className="w-full justify-start rounded-none border-x px-2">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="photos">Photos</TabsTrigger>
+          <TabsTrigger value="paper">Paper</TabsTrigger>
+          <TabsTrigger value="fields">Custom fields</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="border-x border-b">
+          <JobSection title="Description">
+            <Textarea
+              defaultValue={job.description}
+              placeholder="Add a description"
+              rows={3}
+              onBlur={(event) => {
+                if (event.target.value !== job.description) {
+                  patch({ description: event.target.value });
+                }
+              }}
+            />
+          </JobSection>
+
+          <JobSection title="Details">
+            <FieldRow icon={Calendar} label="Status">
+              <Select
+                value={job.status}
+                onValueChange={(value) => {
+                  if (!value) return;
+                  patch({ status: value as JobStatus });
+                  toast.success("Job status updated.");
+                }}
+                items={JOB_STATUSES.map((status) => ({
+                  value: status,
+                  label: JOB_STATUS_LABELS[status],
+                }))}
+              >
+                <SelectTrigger className={quietSelect}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {JOB_STATUSES.map((status) => (
+                    <SelectItem key={status} value={status}>
+                      {JOB_STATUS_LABELS[status]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FieldRow>
+            <FieldRow icon={Briefcase} label="Type">
+              <Select
+                value={job.projectType || undefined}
+                onValueChange={(value) => {
+                  if (value) patch({ projectType: value as ProjectType });
+                }}
+                items={PROJECT_TYPES.map((type) => ({
+                  value: type,
+                  label: PROJECT_TYPE_LABELS[type],
+                }))}
+              >
+                <SelectTrigger className={cn(quietSelect, !job.projectType && "text-muted-foreground")}>
+                  <SelectValue placeholder="Add a type" />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {PROJECT_TYPES.map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {PROJECT_TYPE_LABELS[type]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FieldRow>
+            <FieldRow icon={ExternalLink} label="Lead source">
+              <Select
+                value={job.leadSource || undefined}
+                onValueChange={(value) => {
+                  if (value) patch({ leadSource: value as LeadSource });
+                }}
+                items={LEAD_SOURCES.map((source) => ({
+                  value: source,
+                  label: LEAD_SOURCE_LABELS[source],
+                }))}
+              >
+                <SelectTrigger className={cn(quietSelect, !job.leadSource && "text-muted-foreground")}>
+                  <SelectValue placeholder="How they found you" />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {LEAD_SOURCES.map((source) => (
+                    <SelectItem key={source} value={source}>
+                      {LEAD_SOURCE_LABELS[source]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FieldRow>
+            <FieldRow icon={User} label="Assigned">
+              <PeopleChips
+                names={job.assigned}
+                options={crm.teamMembers}
+                empty="Add crew"
+                onRemove={(name) => patch(assignedCrewPatch(job.assigned.filter((item) => item !== name), crm.staff))}
+                onAdd={(name) => patch(assignedCrewPatch([...job.assigned, name], crm.staff))}
+              />
+            </FieldRow>
+            <FieldRow icon={Building2} label="Company">
+              <span>{crm.company.name}</span>
+            </FieldRow>
+            <FieldRow icon={Calendar} label="Start date">
+              <Input
+                type="date"
+                value={job.startDate?.slice(0, 10) ?? ""}
+                onChange={(event) => patch({ startDate: event.target.value })}
+                className="h-7 border-0 bg-transparent px-0 text-right shadow-none"
+              />
+            </FieldRow>
+            <FieldRow icon={Calendar} label="End date">
+              <Input
+                type="date"
+                value={job.substantialCompletion?.slice(0, 10) ?? ""}
+                onChange={(event) => patch({ substantialCompletion: event.target.value || null })}
+                className="h-7 border-0 bg-transparent px-0 text-right shadow-none"
+              />
+            </FieldRow>
+            <FieldRow icon={Star} label="Sales rep">
+              <Select
+                value={job.salesRep || undefined}
+                onValueChange={(value) => {
+                  if (value) patch({ salesRep: String(value) });
+                }}
+                items={crm.teamMembers.map((person) => ({ value: person, label: person }))}
+              >
+                <SelectTrigger className={cn(quietSelect, !job.salesRep && "text-muted-foreground")}>
+                  <SelectValue placeholder="Add a sales rep" />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {crm.teamMembers.map((person) => (
+                    <SelectItem key={person} value={person}>
+                      {person}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FieldRow>
+            <FieldRow icon={Users} label="Subcontractors">
+              <PeopleChips
+                names={job.subcontractorIds.map((id) => crm.getContact(id)?.name ?? "").filter(Boolean)}
+                options={tradeOptions.map((contact) => contact.name)}
+                empty="Add a trade"
+                onRemove={(name) => {
+                  const contact = crm.contacts.find((item) => item.name === name);
+                  if (contact) {
+                    patch({
+                      subcontractorIds: job.subcontractorIds.filter((id) => id !== contact.id),
+                    });
+                  }
+                }}
+                onAdd={(name) => {
+                  const contact = crm.contacts.find((item) => item.name === name);
+                  if (contact) {
+                    patch({ subcontractorIds: uniqueIds([...job.subcontractorIds, contact.id]) });
+                  }
+                }}
+              />
+            </FieldRow>
+            <FieldRow icon={ImageIcon} label="Job photos">
+              <button
+                type="button"
+                className="inline-flex items-center justify-end gap-2"
+                onClick={() => setPhotoOpen(true)}
+              >
+                {photos.length > 0 ? (
+                  <span>{photos.length} linked</span>
+                ) : (
+                  <>
+                    <span className="size-1.5 rounded-full bg-destructive" />
+                    <span className="text-muted-foreground">Not linked</span>
+                  </>
+                )}
+              </button>
+            </FieldRow>
+            {opportunity ? (
+              <FieldRow icon={Briefcase} label="Came from">
+                <Link href={`/opportunities/${opportunity.id}`} className="text-primary hover:underline">
+                  {opportunity.code ? `${opportunity.code} · ` : ""}
+                  {opportunity.name}
+                </Link>
+              </FieldRow>
+            ) : null}
+            {job.leadSource ? (
+              <p className="sr-only">{leadSourceLabel(job.leadSource)}</p>
+            ) : null}
+          </JobSection>
+
+          <JobSection title="Tags">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {job.tags.map((tag) => (
+                <Badge key={tag} variant="secondary" className="gap-1 pr-1">
+                  {tag}
+                  <button
+                    type="button"
+                    className="rounded-sm p-0.5 hover:bg-foreground/10"
+                    onClick={() => patch({ tags: job.tags.filter((item) => item !== tag) })}
+                    aria-label={`Remove ${tag}`}
+                  >
+                    <XIcon className="size-3" />
+                  </button>
+                </Badge>
+              ))}
+              <Input
+                value={tagDraft}
+                onChange={(event) => setTagDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addTag();
+                  }
+                }}
+                placeholder="Add a tag"
+                className="h-7 w-28"
+              />
+            </div>
+          </JobSection>
+
+          <JobSection
+            title="Related contacts"
+            actions={
+              relatedOptions.length > 0 ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="size-7" />}>
+                    <Plus className="size-4" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="max-h-64 min-w-48 overflow-auto">
+                    {relatedOptions.map((contact) => (
+                      <DropdownMenuItem
+                        key={contact.id}
+                        onClick={() =>
+                          patch({ relatedContactIds: uniqueIds([...job.relatedContactIds, contact.id]) })
+                        }
+                      >
+                        {contact.name}
+                        <span className="ml-auto text-xs text-muted-foreground">{contact.title}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null
+            }
+          >
+            {related.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No contacts on this job yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {related.map((contact) => (
+                  <li key={contact.id} className="border bg-background p-3">
+                    <div className="mb-2 flex items-start justify-between gap-2">
+                      <div className="flex flex-wrap gap-1">
+                        {contact.id === job.primaryContactId ? (
+                          <Badge variant="secondary" className="gap-1">
+                            <Sparkles className="size-3" />
+                            Primary
+                          </Badge>
+                        ) : null}
+                        <Badge variant="outline">{contactKind(contact, job)}</Badge>
+                      </div>
+                      {contact.id !== job.primaryContactId ? (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7"
+                          onClick={() =>
+                            patch({
+                              relatedContactIds: job.relatedContactIds.filter((id) => id !== contact.id),
+                              subcontractorIds: job.subcontractorIds.filter((id) => id !== contact.id),
+                            })
+                          }
+                          aria-label={`Remove ${contact.name}`}
+                        >
+                          <XIcon className="size-3.5" />
+                        </Button>
+                      ) : null}
+                    </div>
+                    <Link href={`/contacts/${contact.id}`} className="flex items-center gap-2 text-sm font-medium hover:underline">
+                      <User className="size-3.5 text-muted-foreground" />
+                      {contact.name}
+                    </Link>
+                    {contact.phone ? (
+                      <p className="mt-1.5 flex items-center gap-2 text-sm">
+                        <Phone className="size-3.5 text-muted-foreground" />
+                        <a href={`tel:${contact.phone}`} className="hover:underline">
+                          {contact.phone}
+                        </a>
+                        <button type="button" onClick={() => copyText(contact.phone, "Phone")} aria-label="Copy phone">
+                          <Copy className="size-3.5 text-muted-foreground" />
+                        </button>
+                      </p>
+                    ) : null}
+                    {contact.email ? (
+                      <p className="mt-1 flex items-center gap-2 text-sm">
+                        <Mail className="size-3.5 text-muted-foreground" />
+                        <a href={`mailto:${contact.email}`} className="truncate hover:underline">
+                          {contact.email}
+                        </a>
+                        <button type="button" onClick={() => copyText(contact.email, "Email")} aria-label="Copy email">
+                          <Copy className="size-3.5 text-muted-foreground" />
+                        </button>
+                      </p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </JobSection>
+
+          <JobSection title="Training for this job" defaultOpen={false}>
+            <ul className="space-y-2">
+              {recommendedChapterIds(job.projectType || opportunity?.projectType).map((chapterId) => {
+                const chapter = COURSE.chapters.find((item) => item.id === chapterId);
+                if (!chapter) return null;
+                return (
+                  <li key={chapterId}>
+                    <Link href={`/training/${chapter.id}`} className="text-sm font-medium hover:underline">
+                      {chapter.title}
+                    </Link>
+                    <p className="text-xs text-muted-foreground">{chapter.tagline}</p>
+                  </li>
+                );
+              })}
+            </ul>
+          </JobSection>
+
+          <div className="px-4 py-4">
+            <p className="mb-3 text-[11px] font-semibold tracking-[0.16em] text-foreground uppercase">
+              Activity
+            </p>
+            <ActivityComposer entityType="job" entityId={job.id} />
+            <div className="mt-4">
+              <ActivityList
+                items={activities}
+                empty="No field notes yet. Log what the homeowner and the crew need to see."
+              />
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="photos" className="border-x border-b p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              {photos.length === 0 ? "No photos on this job." : `${photos.length} photos`}
+            </p>
+            <Button size="sm" variant="outline" onClick={() => setPhotoOpen(true)}>
+              Add photo
+            </Button>
+          </div>
+          {photos.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {photos.map((photo) => (
+                <figure key={photo.id} className="overflow-hidden border">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={photo.imageUrl}
+                    alt={photo.caption || "Job photo"}
+                    className="aspect-[4/3] w-full object-cover"
+                  />
+                  <figcaption className="space-y-1 p-2.5">
+                    <PhotoCategoryBadge category={photo.category} />
+                    <p className="text-sm leading-snug">{photo.caption || "Untitled"}</p>
+                    <p className="text-xs text-muted-foreground">{formatDate(photo.takenAt)}</p>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          ) : null}
+        </TabsContent>
+
+        <TabsContent value="paper" className="space-y-4 border-x border-b p-4">
+          {tasks.length > 0 ? (
+            <div>
+              <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">Tasks</p>
+              <ul className="space-y-2">
+                {tasks.map((task) => (
+                  <li key={task.id} className="text-sm">
+                    <p className={task.completed ? "text-muted-foreground line-through" : ""}>{task.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {task.assignee} · {formatDate(task.dueAt)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Estimates</p>
+              <Button size="sm" variant="ghost" onClick={() => setEstimateOpen(true)}>
+                New
+              </Button>
+            </div>
+            {estimates.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No estimates tied to this job.</p>
+            ) : (
+              <ul className="space-y-2">
+                {estimates.map((estimate) => (
+                  <li key={estimate.id}>
+                    <Link href={`/estimates/${estimate.id}`} className="text-sm font-medium hover:underline">
+                      {estimate.number}
+                    </Link>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <EstimateStatusBadge status={estimate.status} />
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {formatCurrencyFull(
+                          sumLines(crm.estimateLines.filter((line) => line.estimateId === estimate.id))
+                        )}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Invoices</p>
+              <Button size="sm" variant="ghost" onClick={() => setInvoiceOpen(true)}>
+                New
+              </Button>
+            </div>
+            {invoices.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No invoices on this job.</p>
+            ) : (
+              <ul className="space-y-2">
+                {invoices.map((invoice) => (
+                  <li key={invoice.id}>
+                    <Link href={`/invoices/${invoice.id}`} className="text-sm font-medium hover:underline">
+                      {invoice.number}
+                    </Link>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <InvoiceStatusBadge
+                        status={derivedInvoiceStatus(invoice, crm.invoiceLines, crm.payments)}
+                      />
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {formatCurrencyFull(invoiceBalance(invoice.id, crm.invoiceLines, crm.payments))} due
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </TabsContent>
+
+        <TabsContent value="fields" className="border-x border-b p-4">
+          {job.customFields.length === 0 ? (
+            <p className="mb-4 text-sm text-muted-foreground">
+              Claim numbers, deductibles, HOA notes — fields that do not belong on every job.
+            </p>
+          ) : (
+            <ul className="mb-4 divide-y border">
+              {job.customFields.map((field) => (
+                <li key={field.id} className="flex items-start gap-3 px-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground">{field.label}</p>
+                    <Input
+                      defaultValue={field.value}
+                      onBlur={(event) => {
+                        if (event.target.value === field.value) return;
+                        patch({
+                          customFields: job.customFields.map((item) =>
+                            item.id === field.id ? { ...item, value: event.target.value } : item
+                          ),
+                        });
+                      }}
+                      className="mt-1 h-8"
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="mt-5 size-7"
+                    onClick={() =>
+                      patch({ customFields: job.customFields.filter((item) => item.id !== field.id) })
+                    }
+                    aria-label={`Remove ${field.label}`}
+                  >
+                    <XIcon className="size-3.5" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <Input
+              value={fieldLabel}
+              onChange={(event) => setFieldLabel(event.target.value)}
+              placeholder="Field name"
+            />
+            <Input
+              value={fieldValue}
+              onChange={(event) => setFieldValue(event.target.value)}
+              placeholder="Value"
+            />
+            <Button variant="outline" onClick={addCustomField}>
+              Add field
+            </Button>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      <Dialog open={addressOpen} onOpenChange={setAddressOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Job site</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="job-street">Street</Label>
+              <Input id="job-street" value={street} onChange={(event) => setStreet(event.target.value)} />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-[1fr_5rem_6rem]">
+              <div className="grid gap-1.5">
+                <Label htmlFor="job-city">City</Label>
+                <Input id="job-city" value={city} onChange={(event) => setCity(event.target.value)} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="job-state">State</Label>
+                <Input id="job-state" value={state} onChange={(event) => setState(event.target.value)} />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="job-zip">ZIP</Label>
+                <Input id="job-zip" value={postalCode} onChange={(event) => setPostalCode(event.target.value)} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddressOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveAddress}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AddPhotoDialog open={photoOpen} onOpenChange={setPhotoOpen} jobId={job.id} />
+      <CreateEstimateDialog
+        open={estimateOpen}
+        onOpenChange={setEstimateOpen}
+        defaultClientId={job.clientId}
+        defaultJobId={job.id}
+        defaultOpportunityId={job.opportunityId ?? undefined}
+        defaultContactId={job.primaryContactId}
+      />
+      <CreateInvoiceDialog
+        open={invoiceOpen}
+        onOpenChange={setInvoiceOpen}
+        defaultClientId={job.clientId}
+        defaultJobId={job.id}
+      />
+    </div>
+  );
+}

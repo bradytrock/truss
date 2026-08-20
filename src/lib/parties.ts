@@ -31,6 +31,8 @@ export function resolveCustomerName(record: CustomerRecord, book: PartyBook): st
 export function jobsForContact(contact: Contact, jobs: Job[]) {
   return jobs.filter((job) => {
     if (job.primaryContactId === contact.id) return true;
+    if (job.relatedContactIds.includes(contact.id)) return true;
+    if (job.subcontractorIds.includes(contact.id)) return true;
     if (contact.clientId && job.clientId === contact.clientId) return true;
     return false;
   });

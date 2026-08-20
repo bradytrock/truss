@@ -1,4 +1,5 @@
-import type { Activity, Client, Contact, Job, Opportunity, Task } from "@/lib/types";
+import type { Activity, Client, Contact, Opportunity, Task } from "@/lib/types";
+import { type JobDraft } from "@/lib/job-record";
 
 export const extraClients: Client[] = [
   {
@@ -123,6 +124,26 @@ export const extraContacts: Contact[] = [
     phone: "(303) 555-0194",
     ownerStaffId: "staff_elena",
     isReferralPartner: true,
+  },
+  {
+    id: "con_trade_ruiz",
+    clientId: null,
+    name: "David Ruiz",
+    title: "Roofing subcontractor",
+    email: "david@ruizroofing.co",
+    phone: "(720) 555-2210",
+    ownerStaffId: "staff_tom",
+    isReferralPartner: false,
+  },
+  {
+    id: "con_trade_vale",
+    clientId: null,
+    name: "Vale Dry-Out",
+    title: "Water extraction",
+    email: "dispatch@valedryout.com",
+    phone: "(303) 555-7720",
+    ownerStaffId: "staff_elena",
+    isReferralPartner: false,
   },
 ];
 
@@ -573,7 +594,7 @@ export const extraOpportunities: Omit<Opportunity, "code">[] = [
   },
 ];
 
-export const extraJobs: Omit<Job, "code">[] = [
+export const extraJobs: JobDraft[] = [
   {
     id: "job_alvarez_roof",
     opportunityId: "opp_alvarez_roof",

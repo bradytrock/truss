@@ -1,6 +1,7 @@
 import { seedCalendarAccounts, seedCalendarShares } from "@/lib/calendar-seed";
 import { seedTrainingBulletins, seedTrainingProgress } from "@/lib/training/seed";
 import { backfillRecordCodes } from "@/lib/job-code";
+import { fillJobRecord, JOB_RECORD_EXTRAS } from "@/lib/job-record";
 import { NORTHLINE_STAFF, NORTHLINE_TEAMS, type CrmState } from "@/lib/types";
 import { demoOps } from "@/lib/demo-ops";
 import {
@@ -18,13 +19,18 @@ const stamped = backfillRecordCodes(
   NORTHLINE_STAFF,
 );
 
+const jobs = stamped.jobs.map((job) => {
+  const opportunity = stamped.opportunities.find((item) => item.id === job.opportunityId);
+  return fillJobRecord({ ...job, ...JOB_RECORD_EXTRAS[job.id] }, opportunity);
+});
+
 export const seedState: CrmState = {
   staff: structuredClone(NORTHLINE_STAFF),
   teams: structuredClone(NORTHLINE_TEAMS),
   clients: extraClients,
   contacts: extraContacts,
   opportunities: stamped.opportunities,
-  jobs: stamped.jobs,
+  jobs,
   activities: extraActivities,
   tasks: extraTasks,
   catalog: demoOps.catalog,

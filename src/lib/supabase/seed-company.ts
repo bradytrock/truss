@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { seedState } from "@/lib/seed";
 import { namesMatch } from "@/lib/seats";
+import { customFieldsJson } from "@/lib/job-record";
 import { insertOperations, wipeOperations } from "@/lib/supabase/ops-seed";
 import { initialsFromName, NORTHLINE_STAFF, NORTHLINE_TEAMS, type SeatRole } from "@/lib/types";
 import type { Database } from "@/lib/supabase/database.types";
@@ -224,26 +225,66 @@ export async function seedCompanyBook(
     if (retryError) throw retryError;
   }
 
-  const { error: jobError } = await supabase.from("jobs").insert(
-    seed.jobs.map((job) => ({
-      id: remap(job.id, ids),
-      company_id: companyId,
-      opportunity_id: job.opportunityId ? remap(job.opportunityId, ids) : null,
-      name: job.name,
-      client_id: job.clientId ? remap(job.clientId, ids) : null,
-      primary_contact_id: job.primaryContactId ? remap(job.primaryContactId, ids) : null,
-      status: job.status,
-      contract_value: job.contractValue,
-      start_date: job.startDate,
-      substantial_completion: job.substantialCompletion,
-      superintendent: job.superintendent,
-      project_manager: job.projectManager,
-      location: job.location,
-      owner_staff_id: job.ownerStaffId ? remap(job.ownerStaffId, ids) : null,
-      code: job.code,
-    }))
-  );
-  if (jobError) throw jobError;
+  const jobRows = seed.jobs.map((job) => ({
+    id: remap(job.id, ids),
+    company_id: companyId,
+    opportunity_id: job.opportunityId ? remap(job.opportunityId, ids) : null,
+    name: job.name,
+    client_id: job.clientId ? remap(job.clientId, ids) : null,
+    primary_contact_id: job.primaryContactId ? remap(job.primaryContactId, ids) : null,
+    status: job.status,
+    contract_value: job.contractValue,
+    start_date: job.startDate,
+    substantial_completion: job.substantialCompletion,
+    superintendent: job.superintendent,
+    project_manager: job.projectManager,
+    location: job.location,
+    owner_staff_id: job.ownerStaffId ? remap(job.ownerStaffId, ids) : null,
+    code: job.code,
+    description: job.description,
+    tags: job.tags,
+    street: job.street,
+    city: job.city,
+    state: job.state,
+    postal_code: job.postalCode,
+    sales_rep: job.salesRep,
+    assigned: job.assigned,
+    subcontractor_ids: job.subcontractorIds.map((id) => remap(id, ids)),
+    related_contact_ids: job.relatedContactIds.map((id) => remap(id, ids)),
+    custom_fields: customFieldsJson(job.customFields),
+    project_type: job.projectType || null,
+    lead_source: job.leadSource ?? "",
+  }));
+  const { error: jobError } = await supabase.from("jobs").insert(jobRows);
+  if (jobError) {
+    const missing =
+      jobError.message.includes("schema cache") ||
+      jobError.code === "PGRST204" ||
+      jobError.message.includes("description") ||
+      jobError.message.includes("custom_fields") ||
+      jobError.message.includes("Could not find the");
+    if (!missing) throw jobError;
+    const { error: retryError } = await supabase.from("jobs").insert(
+      seed.jobs.map((job) => ({
+        id: remap(job.id, ids),
+        company_id: companyId,
+        opportunity_id: job.opportunityId ? remap(job.opportunityId, ids) : null,
+        name: job.name,
+        client_id: job.clientId ? remap(job.clientId, ids) : null,
+        primary_contact_id: job.primaryContactId ? remap(job.primaryContactId, ids) : null,
+        status: job.status,
+        contract_value: job.contractValue,
+        start_date: job.startDate,
+        substantial_completion: job.substantialCompletion,
+        superintendent: job.superintendent,
+        project_manager: job.projectManager,
+        location: job.location,
+        owner_staff_id: job.ownerStaffId ? remap(job.ownerStaffId, ids) : null,
+        code: job.code,
+      })),
+    );
+    if (retryError) throw retryError;
+  }
 
   const { error: activityError } = await supabase.from("activities").insert(
     seed.activities.map((activity) => ({

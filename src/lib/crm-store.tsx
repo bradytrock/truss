@@ -18,6 +18,7 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedOperationsIfMissing } from "@/lib/supabase/ops-seed";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
+import { fillJobRecord, type JobDraft, customFieldsJson } from "@/lib/job-record";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { findStaffForProfile, isUnsignedDemo, namesMatch, staffMemberFromProfile } from "@/lib/seats";
@@ -197,6 +198,18 @@ function requireClient() {
   return createClient();
 }
 
+function isMissingJobOverview(error: { message?: string; code?: string }) {
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("schema cache") ||
+    message.includes("custom_fields") ||
+    message.includes("related_contact_ids") ||
+    message.includes("Could not find the")
+  );
+}
+
 function isMissingLeadIntake(error: { message?: string; code?: string }) {
   const message = error.message ?? "";
   return (
@@ -334,7 +347,7 @@ type CrmContextValue = CrmState & {
     }
   ) => Promise<Client>;
   addContact: (input: Omit<Contact, "id">) => Promise<Contact>;
-  addJob: (input: Omit<Job, "id" | "code" | "ownerStaffId"> & { ownerStaffId?: string }) => Promise<Job>;
+  addJob: (input: Omit<JobDraft, "id" | "ownerStaffId"> & { ownerStaffId?: string }) => Promise<Job>;
   addActivity: (input: {
     entityType: "opportunity" | "job" | "client";
     entityId: string;
@@ -882,22 +895,27 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           let nextJobs = jobs;
           if (stage === "awarded" && !jobs.some((job) => job.opportunityId === id)) {
             nextJobs = [
-              {
-                id: crypto.randomUUID(),
-                code: allocateCode(user.name, jobs, prev.opportunities, current.code),
-                opportunityId: id,
-                name: current.name,
-                clientId: current.clientId,
-                status: "precon",
-                contractValue: current.value,
-                startDate: new Date().toISOString().slice(0, 10),
-                substantialCompletion: null,
-                superintendent: "Tom Brennan",
-                projectManager: user.name || "Luis Ortega",
-                location: current.location,
-                ownerStaffId: user.staffId,
-                primaryContactId: current.primaryContactId || null,
-              },
+              fillJobRecord(
+                {
+                  id: crypto.randomUUID(),
+                  code: allocateCode(user.name, jobs, prev.opportunities, current.code),
+                  opportunityId: id,
+                  name: current.name,
+                  clientId: current.clientId,
+                  status: "precon",
+                  contractValue: current.value,
+                  startDate: new Date().toISOString().slice(0, 10),
+                  substantialCompletion: null,
+                  superintendent: "Tom Brennan",
+                  projectManager: user.name || "Luis Ortega",
+                  location: current.location,
+                  ownerStaffId: user.staffId,
+                  primaryContactId: current.primaryContactId || null,
+                  description: current.notes ?? "",
+                  relatedContactIds: current.referralContactId ? [current.referralContactId] : [],
+                },
+                current
+              ),
               ...jobs,
             ];
             createdJob = nextJobs[0];
@@ -958,25 +976,78 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (stage === "awarded") {
         const already = state.jobs.some((job) => job.opportunityId === id);
         if (!already) {
-          const { data, error: jobError } = await supabase
-            .from("jobs")
-            .insert({
-              company_id: user.companyId,
-              opportunity_id: id,
+          const awarded = fillJobRecord(
+            {
+              id: crypto.randomUUID(),
+              opportunityId: id,
               name: current.name,
-              client_id: current.clientId,
-              primary_contact_id: current.primaryContactId || null,
+              clientId: current.clientId,
+              primaryContactId: current.primaryContactId || null,
               status: "precon",
-              contract_value: current.value,
-              start_date: new Date().toISOString().slice(0, 10),
+              contractValue: current.value,
+              startDate: new Date().toISOString().slice(0, 10),
+              substantialCompletion: null,
               superintendent: "Tom Brennan",
-              project_manager: user.name || "Luis Ortega",
+              projectManager: user.name || "Luis Ortega",
               location: current.location,
-              owner_staff_id: user.staffId || null,
-              code: allocateCode(user.name, state.jobs, state.opportunities, current.code),
-            })
-            .select("*")
-            .single();
+              ownerStaffId: user.staffId,
+              description: current.notes ?? "",
+              relatedContactIds: current.referralContactId ? [current.referralContactId] : [],
+            },
+            current
+          );
+          const payload = {
+            company_id: user.companyId,
+            opportunity_id: id,
+            name: awarded.name,
+            client_id: awarded.clientId,
+            primary_contact_id: awarded.primaryContactId || null,
+            status: awarded.status,
+            contract_value: awarded.contractValue,
+            start_date: awarded.startDate,
+            superintendent: awarded.superintendent,
+            project_manager: awarded.projectManager,
+            location: awarded.location,
+            owner_staff_id: awarded.ownerStaffId || null,
+            code: allocateCode(user.name, state.jobs, state.opportunities, current.code),
+            description: awarded.description,
+            tags: awarded.tags,
+            street: awarded.street,
+            city: awarded.city,
+            state: awarded.state,
+            postal_code: awarded.postalCode,
+            sales_rep: awarded.salesRep,
+            assigned: awarded.assigned,
+            subcontractor_ids: awarded.subcontractorIds,
+            related_contact_ids: awarded.relatedContactIds,
+            custom_fields: customFieldsJson(awarded.customFields),
+            project_type: awarded.projectType || null,
+            lead_source: awarded.leadSource ?? "",
+          };
+          let { data, error: jobError } = await supabase.from("jobs").insert(payload).select("*").single();
+          if (jobError && isMissingJobOverview(jobError)) {
+            const retry = await supabase
+              .from("jobs")
+              .insert({
+                company_id: payload.company_id,
+                opportunity_id: payload.opportunity_id,
+                name: payload.name,
+                client_id: payload.client_id,
+                primary_contact_id: payload.primary_contact_id,
+                status: payload.status,
+                contract_value: payload.contract_value,
+                start_date: payload.start_date,
+                superintendent: payload.superintendent,
+                project_manager: payload.project_manager,
+                location: payload.location,
+                owner_staff_id: payload.owner_staff_id,
+                code: payload.code,
+              })
+              .select("*")
+              .single();
+            data = retry.data;
+            jobError = retry.error;
+          }
           if (jobError) {
             toast.error(codeInsertError(jobError, "Could not open the job."));
           } else if (data) {
@@ -1025,23 +1096,29 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const updateJob = useCallback(async (id: string, patch: Partial<Job>) => {
-    const supabase = requireClient();
-    if (!supabase) {
+    const apply = () =>
       setState((prev) => ({
         ...prev,
-        jobs: prev.jobs.map((job) => (job.id === id ? { ...job, ...patch } : job)),
+        jobs: prev.jobs.map((job) => (job.id === id ? fillJobRecord({ ...job, ...patch }) : job)),
       }));
+    const supabase = requireClient();
+    if (!supabase) {
+      apply();
       return;
     }
     const { error } = await supabase.from("jobs").update(jobPatch(patch)).eq("id", id);
     if (error) {
+      if (isMissingJobOverview(error)) {
+        apply();
+        toast.message(
+          "Saved in this browser. Run supabase/migrations/20260819270000_job_overview.sql in the SQL editor to keep it in Postgres."
+        );
+        return;
+      }
       toast.error(error.message);
       return;
     }
-    setState((prev) => ({
-      ...prev,
-      jobs: prev.jobs.map((job) => (job.id === id ? { ...job, ...patch } : job)),
-    }));
+    apply();
   }, []);
 
   const addOpportunity = useCallback(
@@ -1257,7 +1334,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const addJob = useCallback(
-    async (input: Omit<Job, "id" | "code" | "ownerStaffId"> & { ownerStaffId?: string }) => {
+    async (input: Omit<JobDraft, "id" | "ownerStaffId"> & { ownerStaffId?: string }) => {
       const ownerStaffId =
         input.ownerStaffId ||
         staffByName(input.projectManager, state.staff)?.id ||
@@ -1266,45 +1343,79 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ? state.opportunities.find((opportunity) => opportunity.id === input.opportunityId)
         : undefined;
       const code = allocateCode(user.name, state.jobs, state.opportunities, linked?.code);
+      const job = fillJobRecord({ ...input, id: crypto.randomUUID(), ownerStaffId, code }, linked);
       const supabase = requireClient();
       if (!supabase) {
-        const job: Job = { ...input, id: crypto.randomUUID(), ownerStaffId, code };
         setState((prev) => ({ ...prev, jobs: [job, ...prev.jobs] }));
         return job;
       }
-      const { data, error } = await supabase
-        .from("jobs")
-        .insert({
-          company_id: user.companyId,
-          opportunity_id: input.opportunityId,
-          name: input.name,
-          client_id: input.clientId || null,
-          primary_contact_id: input.primaryContactId || null,
-          status: input.status,
-          contract_value: input.contractValue,
-          start_date: input.startDate,
-          substantial_completion: input.substantialCompletion,
-          superintendent: input.superintendent,
-          project_manager: input.projectManager,
-          location: input.location,
-          owner_staff_id: ownerStaffId || null,
-          code,
-        })
-        .select("*")
-        .single();
+      const payload = {
+        company_id: user.companyId,
+        opportunity_id: job.opportunityId,
+        name: job.name,
+        client_id: job.clientId || null,
+        primary_contact_id: job.primaryContactId || null,
+        status: job.status,
+        contract_value: job.contractValue,
+        start_date: job.startDate,
+        substantial_completion: job.substantialCompletion,
+        superintendent: job.superintendent,
+        project_manager: job.projectManager,
+        location: job.location,
+        owner_staff_id: ownerStaffId || null,
+        code,
+        description: job.description,
+        tags: job.tags,
+        street: job.street,
+        city: job.city,
+        state: job.state,
+        postal_code: job.postalCode,
+        sales_rep: job.salesRep,
+        assigned: job.assigned,
+        subcontractor_ids: job.subcontractorIds,
+        related_contact_ids: job.relatedContactIds,
+        custom_fields: customFieldsJson(job.customFields),
+        project_type: job.projectType || null,
+        lead_source: job.leadSource ?? "",
+      };
+      let { data, error } = await supabase.from("jobs").insert(payload).select("*").single();
+      if (error && isMissingJobOverview(error)) {
+        const retry = await supabase
+          .from("jobs")
+          .insert({
+            company_id: payload.company_id,
+            opportunity_id: payload.opportunity_id,
+            name: payload.name,
+            client_id: payload.client_id,
+            primary_contact_id: payload.primary_contact_id,
+            status: payload.status,
+            contract_value: payload.contract_value,
+            start_date: payload.start_date,
+            substantial_completion: payload.substantial_completion,
+            superintendent: payload.superintendent,
+            project_manager: payload.project_manager,
+            location: payload.location,
+            owner_staff_id: payload.owner_staff_id,
+            code: payload.code,
+          })
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+      }
       if (error || !data) {
         toast.error(codeInsertError(error, "Could not log the job."));
         throw error ?? new Error("Could not log the job.");
       }
-      const job = mapJob(data);
-      setState((prev) => ({ ...prev, jobs: [job, ...prev.jobs] }));
+      const mapped = fillJobRecord({ ...job, id: data.id, code: data.code || code }, linked);
+      setState((prev) => ({ ...prev, jobs: [mapped, ...prev.jobs] }));
       await addActivity({
         entityType: "job",
-        entityId: job.id,
+        entityId: mapped.id,
         type: "note",
         body: "Job logged. Set the field team and confirm contract value.",
       });
-      return job;
+      return mapped;
     },
     [addActivity, state.jobs, state.opportunities, state.staff, user.companyId, user.name, user.staffId]
   );
