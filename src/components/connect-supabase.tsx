@@ -43,9 +43,12 @@ export function ConnectSupabaseForm({ onConnected }: { onConnected?: () => void 
   return (
     <form onSubmit={onSubmit} className="grid gap-3">
       <p className="text-sm text-muted-foreground">
-        Your project is live — paste the API URL and the <span className="text-foreground">publishable</span> or
-        legacy anon key from Settings → API. Then run both files in{" "}
-        <code className="text-foreground">supabase/migrations</code> in the SQL editor once.
+        This host is missing{" "}
+        <code className="text-foreground">NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
+        <code className="text-foreground">NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code>. Paste the project URL and
+        the publishable or legacy anon key from Settings → API to connect this browser, or set those names on
+        the host and redeploy so every visitor gets email sign-in. Then run the files in{" "}
+        <code className="text-foreground">supabase/migrations</code> in the SQL editor.
       </p>
       <div className="grid gap-1.5">
         <Label htmlFor="sb-url">Project URL</Label>

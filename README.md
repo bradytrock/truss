@@ -13,7 +13,7 @@ npm install
 npm run dev
 ```
 
-The app listens on port 3847. The unsigned demo loads Northline’s sample book in the browser. Sign in after you attach a Supabase project.
+The app listens on port 3847. Everyone signs in. After you attach a Supabase project, create an account or use an existing one — Truss no longer opens the Northline book without a session.
 
 Production (`npm run build`) uses webpack instead of Turbopack. Restricted hosts that block extra localhost ports otherwise panic while compiling `globals.css`. Honors `PORT` on `npm start`.
 
@@ -23,7 +23,7 @@ The hosted MCP at `https://mcp.supabase.com/mcp` is online. This cloud agent can
 
 To attach a project that is already running:
 
-1. Open [http://localhost:3847/login](http://localhost:3847/login) and paste the project URL plus the **publishable** (or anon) key from Settings → API. Truss checks that the project is reachable, then stores the keys for this browser and writes `.env.local`.
+1. Set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in `.env.local` (or on the host, then redeploy). Without those names the hosted app shows a paste-keys form instead of email sign-in. You can also open [http://localhost:3847/login](http://localhost:3847/login) and paste the project URL plus the **publishable** (or anon) key from Settings → API; that only connects this browser. Truss checks that the project is reachable, then stores the keys for this browser and writes `.env.local` in development.
 2. In the SQL editor, run the migrations, in order:
    - [`supabase/migrations/20260819170000_truss_crm.sql`](supabase/migrations/20260819170000_truss_crm.sql) — companies, profiles, pipeline, jobs, RLS, signup trigger, Realtime
    - [`supabase/migrations/20260819180000_estimates_invoices_schedule.sql`](supabase/migrations/20260819180000_estimates_invoices_schedule.sql) — price book, estimates, invoices, payments, schedule, job photos, Storage bucket
@@ -61,7 +61,7 @@ To connect real Google Calendars, create an OAuth web client in Google Cloud (Ca
 - **Settings** — company name, main phone, office email, website, license, and office address. Only a company admin sees this, under the initials menu in the top right. The same block prints on estimates and invoices.
 - **Contacts** — homeowners first (no company required), plus adjusters, realtors, and one architect as referral partners
 - **Pipeline** — leads through Job Sold and lost. Every new lead (and every new estimate) opens a job for costing so expenses and P&L treat it like production work. When the homeowner signs, the card moves to Job Sold. Each card shows a job code (`BJ081926-A`) assigned when the lead is opened. **New lead** slides in from the right: assignee, homeowner name, phone, email, job-site address, and how they heard about you. If the source is Referral, search contacts this seat can see and connect the referrer. Business development keeps credit (`Sourced by`) when they assign the lead to a PM or estimator.
-- **Business development** — sample seats Priya Shah and Claire Duvall. Their nav is pipeline, jobs from the agents they brought in, contacts, and ROI. They see company BD return (cash on sourced jobs ÷ office spend they logged) as well as their own numbers. Switch seat in the unsigned demo to try it.
+- **Business development** — sample seats Priya Shah and Claire Duvall. Their nav is pipeline, jobs from the agents they brought in, contacts, and ROI. They see company BD return (cash on sourced jobs ÷ office spend they logged) as well as their own numbers. Use **Login As** after you sign in to try those seats.
 - **Jobs** — a status board of every cost center, including open pipeline leads in Preconstruction. Open a job for the field record: site photo, address, crew, tags, related contacts, and custom fields (claim number, deductible). Codes are assigned when the lead is opened. If Postgres has not added `jobs.primary_contact_id` yet, Truss still opens the job and asks you to run `20260819200000_residential_homeowners.sql`.
 - **Estimates** — Joist-style writer: sections, optional lines, tax, discount, deposit, terms, and a client preview. Download a PDF, send a copyable client link, mark it signed (Job Sold — the job was already open for costing), convert included lines to an invoice. EST-1001–1010 against homeowners.
 - **Calendar & photos** — Google Calendar per seat, team sharing, site walks, shingle days, punch, and job photos
@@ -75,7 +75,7 @@ To connect real Google Calendars, create an OAuth web client in Google Cloud (Ca
 - **Calendar** — week view of Truss field events plus each person’s Google Calendar. Link is per seat. Share with your team; company admins see every calendar and whether it is linked.
 - **Training** — roofing certification course (companion to *Roofing Construction & Estimating, Revised* by Daniel Atcheson). Original lesson summaries, generated takeoff questions, 70% chapter/practice, 80% exam. Progress is per seat. Team leads and company admin see crew progress and can post training bulletins. Open jobs recommend chapters by project type.
 
-The Northline sample book loads locally with no sign-in. Avatar menu → **Reset demo data** restores it in memory, or (after migrations and a signed-in company) wipes that company’s CRM tables and reloads this book. Your signed-in seat is put back on the roster. It does not delete the Auth user. **Switch seat** is only for the unsigned sample; when you are signed in, use **Login As** to look at someone else’s book.
+The Northline sample book is loaded into Postgres when a company is created (or when you use **Reset demo data** while signed in). It does not delete the Auth user. Use **Login As** to look at someone else’s book.
 
 ## What lives in Supabase
 

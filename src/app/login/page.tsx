@@ -56,7 +56,7 @@ function LoginForm() {
   return (
     <AuthFrame
       title="Sign in to Truss"
-      description="Auth, Postgres, Realtime, and Storage run on your Supabase project. Confirm email is currently on for this project, so a new account will not get a session until that setting is off."
+      description="Use the email and password for your company account. New companies create an account first."
     >
       {configured ? (
         <form onSubmit={onSubmit} className="grid gap-3">
@@ -94,31 +94,14 @@ function LoginForm() {
       ) : (
         <ConnectSupabaseForm onConnected={() => setConfigured(true)} />
       )}
-      <p className="mt-4 text-center text-sm text-muted-foreground">
-        {configured ? (
-          <>
-            New company?{" "}
-            <Link href="/signup" className="font-medium text-primary hover:underline">
-              Create an account
-            </Link>
-            <span className="block mt-2">
-              Or{" "}
-              <Link href="/" className="font-medium text-primary hover:underline">
-                open the Northline sample book
-              </Link>{" "}
-              without signing in.
-            </span>
-          </>
-        ) : (
-          <>
-            Or{" "}
-            <Link href="/" className="font-medium text-primary hover:underline">
-              browse the Northline sample book
-            </Link>{" "}
-            without a project.
-          </>
-        )}
-      </p>
+      {configured ? (
+        <p className="mt-4 text-center text-sm text-muted-foreground">
+          New company?{" "}
+          <Link href="/signup" className="font-medium text-primary hover:underline">
+            Create an account
+          </Link>
+        </p>
+      ) : null}
     </AuthFrame>
   );
 }

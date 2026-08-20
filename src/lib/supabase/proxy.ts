@@ -1,3 +1,4 @@
+import { isPublicAppPath } from "@/lib/auth-paths";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import {
@@ -7,13 +8,24 @@ import {
   SB_URL_COOKIE,
 } from "@/lib/supabase/env";
 
+function redirectToLogin(request: NextRequest) {
+  const login = request.nextUrl.clone();
+  login.pathname = "/login";
+  login.search = "";
+  const next = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+  if (next && next !== "/") login.searchParams.set("next", next);
+  return NextResponse.redirect(login);
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
   const url = getSupabaseUrl() || request.cookies.get(SB_URL_COOKIE)?.value || "";
   const key = getSupabaseKey() || request.cookies.get(SB_KEY_COOKIE)?.value || "";
+  const path = request.nextUrl.pathname;
 
   if (!url || !key) {
-    return NextResponse.next({ request });
+    if (isPublicAppPath(path)) return NextResponse.next({ request });
+    return redirectToLogin(request);
   }
 
   const supabase = createServerClient(url, key, {
@@ -38,12 +50,16 @@ export async function updateSession(request: NextRequest) {
 
   const { data } = await supabase.auth.getUser();
   const signedIn = Boolean(data.user);
-  const path = request.nextUrl.pathname;
 
   if (signedIn && (path.startsWith("/login") || path.startsWith("/signup"))) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    return NextResponse.redirect(url);
+    const home = request.nextUrl.clone();
+    home.pathname = "/";
+    home.search = "";
+    return NextResponse.redirect(home);
+  }
+
+  if (!signedIn && !isPublicAppPath(path)) {
+    return redirectToLogin(request);
   }
 
   return supabaseResponse;

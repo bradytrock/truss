@@ -4,7 +4,7 @@ export function authErrorMessage(error: { message?: string; code?: string } | st
   const text = `${code} ${raw}`.toLowerCase();
 
   if (text.includes("email_not_confirmed") || text.includes("email not confirmed")) {
-    return "This project requires a confirmed email. In Supabase go to Authentication → Providers → Email and turn off Confirm email, then try again. You can still open the sample book without signing in.";
+    return "This project requires a confirmed email. In Supabase go to Authentication → Providers → Email and turn off Confirm email, then try again.";
   }
   if (text.includes("invalid login") || text.includes("invalid_credentials")) {
     return "That email and password were not accepted. Create an account first, or turn off Confirm email if you just signed up and never got a message.";

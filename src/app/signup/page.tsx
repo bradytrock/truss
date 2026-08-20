@@ -61,7 +61,7 @@ export default function SignupPage() {
         return;
       }
       const message =
-        "Account created, but this project requires email confirmation, so you cannot sign in yet. In Supabase: Authentication → Providers → Email → turn off Confirm email. Then sign in. Until then, open the sample book.";
+        "Account created, but this project requires email confirmation, so you cannot sign in yet. In Supabase: Authentication → Providers → Email → turn off Confirm email. Then sign in.";
       setFormError(message);
       toast.message(message);
     } catch (error) {
@@ -151,13 +151,6 @@ export default function SignupPage() {
         <Link href="/login" className="font-medium text-primary hover:underline">
           Sign in
         </Link>
-        <span className="block mt-2">
-          Or{" "}
-          <Link href="/" className="font-medium text-primary hover:underline">
-            open the Northline sample book
-          </Link>{" "}
-          without signing in.
-        </span>
       </p>
     </AuthFrame>
   );

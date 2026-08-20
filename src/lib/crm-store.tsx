@@ -30,6 +30,7 @@ import {
   fillEstimateLine,
   invoiceLinesFromEstimate,
 } from "@/lib/estimate-totals";
+import { isPublicAppPath } from "@/lib/auth-paths";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { findStaffForProfile, isUnsignedDemo, namesMatch, staffMemberFromProfile } from "@/lib/seats";
@@ -174,12 +175,6 @@ const guestUser: CurrentUser = {
   teamId: null,
 };
 
-const northlineUser = userFromStaff(NORTHLINE_STAFF[0], {
-  id: "local",
-  companyId: "local",
-  company: "Northline Construction",
-});
-
 const DEMO_STAFF_KEY = "truss.demoStaffId";
 const COMPANY_SETTINGS_KEY = "truss.companySettings";
 
@@ -218,7 +213,7 @@ function writeLocalCompany(settings: CompanySettings) {
 
 function requireClient() {
   if (!isSupabaseConfigured()) {
-    toast.message("Connect a Supabase project to save. You are browsing the Northline sample book locally.");
+    toast.message("Connect a Supabase project first, then sign in.");
     return null;
   }
   return createClient();
@@ -563,44 +558,34 @@ const CrmContext = createContext<CrmContextValue | null>(null);
 export function CrmProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const configured = isSupabaseConfigured();
-  const [state, setState] = useState<CrmState>(configured ? emptyState : structuredClone(seedState));
-  const [user, setUser] = useState<CurrentUser>(configured ? guestUser : northlineUser);
+  const [state, setState] = useState<CrmState>(emptyState);
+  const [user, setUser] = useState<CurrentUser>(guestUser);
   const [companySettings, setCompanySettings] = useState<CompanySettings>(NORTHLINE_COMPANY);
   const [impersonatedStaffId, setImpersonatedStaffId] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(!configured);
+  const [hydrated, setHydrated] = useState(false);
   const [hydrateError, setHydrateError] = useState<string | null>(null);
   const seeding = useRef(false);
 
   const load = useCallback(async () => {
-    if (!isSupabaseConfigured()) return;
+    if (!isSupabaseConfigured()) {
+      setHydrated(true);
+      return;
+    }
     const supabase = createClient();
     const {
       data: { user: authUser },
       error: authError,
     } = await supabase.auth.getUser();
     if (authError || !authUser) {
-      const local = readLocalCompany();
-      const seed = structuredClone(seedState);
-      setCompanySettings(local);
-      setState({
-        ...seed,
-        ...readLocalCalendar(seed),
-        ...readLocalTraining(seed),
-      });
-      let restored: StaffMember | undefined;
-      try {
-        const saved = window.localStorage.getItem(DEMO_STAFF_KEY);
-        restored = seed.staff.find((item) => item.id === saved);
-      } catch {
-        restored = undefined;
-      }
-      setUser(
-        restored
-          ? userFromStaff(restored, { id: "local", companyId: "local", company: local.name })
-          : { ...northlineUser, company: local.name }
-      );
+      setCompanySettings(NORTHLINE_COMPANY);
+      setState(emptyState);
+      setUser(guestUser);
       setHydrateError(null);
       setHydrated(true);
+      const here = `${window.location.pathname}${window.location.search}`;
+      if (!isPublicAppPath(window.location.pathname)) {
+        router.replace(here && here !== "/" ? `/login?next=${encodeURIComponent(here)}` : "/login");
+      }
       return;
     }
 
@@ -742,10 +727,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       setHydrateError(error instanceof Error ? error.message : "Could not load the book of work.");
       setHydrated(true);
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
-    if (!configured) return;
+    if (!configured) {
+      setHydrated(true);
+      return;
+    }
     const timer = window.setTimeout(() => {
       void load();
     }, 0);
@@ -827,38 +815,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       void supabase.removeChannel(channel);
     };
   }, [configured, load, user.companyId, user.id]);
-
-  useEffect(() => {
-    if (configured) return;
-    const timer = window.setTimeout(() => {
-      try {
-        const saved = window.localStorage.getItem(DEMO_STAFF_KEY);
-        const member = state.staff.find((item) => item.id === saved) ?? state.staff[0];
-        const local = readLocalCompany();
-        setCompanySettings(local);
-        setState((prev) => ({
-          ...prev,
-          ...readLocalCalendar(prev),
-          ...readLocalTraining(prev),
-        }));
-        if (!member) {
-          setUser((current) => ({ ...current, company: local.name }));
-          return;
-        }
-        setUser((current) =>
-          userFromStaff(member, {
-            id: current.id || "local",
-            companyId: current.companyId || "local",
-            company: local.name,
-          })
-        );
-      } catch {
-        // ignore storage
-      }
-    }, 0);
-    return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- restore once from seed
-  }, [configured]);
 
   const viewer = useMemo(() => {
     const byId = user.staffId ? state.staff.find((member) => member.id === user.staffId) : undefined;
@@ -3506,14 +3462,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const resetDemo = useCallback(async () => {
-    if (!isSupabaseConfigured()) {
-      clearLocalCalendar();
-      clearLocalTraining();
-      setState(structuredClone(seedState));
-      toast.success("Northline sample book restored.");
+    if (!isSupabaseConfigured() || !user.companyId || isUnsignedDemo(user)) {
+      toast.error("Sign in to restore the sample book for your company.");
       return;
     }
-    if (!user.companyId) return;
     const supabase = createClient();
     try {
       await seedCompanyBook(supabase, user.companyId, { preserve: preserveFromUser(user) });
