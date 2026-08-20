@@ -16,8 +16,10 @@ import { JobStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency, formatCurrencyFull, formatRelative } from "@/lib/format";
 import { buildReports } from "@/lib/reports";
+import { BdRoiPanel } from "@/components/bd-roi";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { accessScope, canViewReports } from "@/lib/visibility";
+import { isBusinessDevelopment } from "@/lib/bd";
 
 export default function ReportsPage() {
   const crm = useCrm();
@@ -47,7 +49,7 @@ export default function ReportsPage() {
   if (!report) return <LoadingScreen />;
 
   const scope = accessScope(viewer.role);
-  const isBd = viewer.role === "business_development";
+  const isBd = isBusinessDevelopment(viewer.role);
   const showTeamActivity = scope === "team" || scope === "company";
 
   return (
@@ -57,16 +59,20 @@ export default function ReportsPage() {
       ) : null}
       <PageHeader
         eyebrow="Reporting"
-        title={isBd ? "Business development" : scope === "team" ? "Team reports" : "Company reports"}
+        title={isBd ? "Business development ROI" : scope === "team" ? "Team reports" : "Company reports"}
         description={
           isBd
-            ? `Restricted view for ${report.year}: open jobs, closed jobs year-to-date, referral partners in each PM’s book, and YTD revenue.`
+            ? `Your numbers and the company BD book for ${report.year}. Credit stays with the person who opened the lead.`
             : scope === "team"
               ? "Every job owned by your team, plus activity from people assigned to you. Login As a teammate to inspect their book."
-              : "Company-wide jobs, revenue, and team activity."
+              : "Company-wide jobs, revenue, BD ROI, and team activity."
         }
       />
 
+      {isBd || scope === "company" ? <BdRoiPanel state={crm.book} viewer={viewer} /> : null}
+
+      {isBd ? null : (
+        <>
       <MetricStrip className="sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Open jobs" value={String(report.openJobs.length)} hint="Precon, in progress, punch" />
         <Metric
@@ -129,12 +135,8 @@ export default function ReportsPage() {
 
       <Card>
         <CardHeader className="border-b">
-          <CardTitle>{isBd ? "Open jobs" : "Jobs in this view"}</CardTitle>
-          <CardDescription>
-            {isBd
-              ? "Business development sees every job. Detail below is the open book."
-              : "Jobs this seat is allowed to report on."}
-          </CardDescription>
+          <CardTitle>Jobs in this view</CardTitle>
+          <CardDescription>Jobs this seat is allowed to report on.</CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
           <Table>
@@ -147,7 +149,7 @@ export default function ReportsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(isBd ? report.openJobs : report.jobs).map((job) => (
+              {report.jobs.map((job) => (
                 <TableRow key={job.id}>
                   <TableCell>
                     <Link href={`/jobs/${job.id}`} className="font-medium hover:underline">
@@ -171,7 +173,7 @@ export default function ReportsPage() {
         </CardContent>
       </Card>
 
-      {showTeamActivity && !isBd ? (
+      {showTeamActivity ? (
         <Card>
           <CardHeader className="border-b">
             <CardTitle>Team activity</CardTitle>
@@ -195,6 +197,8 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
       ) : null}
+        </>
+      )}
     </div>
   );
 }

@@ -159,6 +159,7 @@ export function mapOpportunity(row: OpportunityRow): Opportunity {
     createdAt: row.created_at,
     lostReason: row.lost_reason ?? undefined,
     ownerStaffId: row.owner_staff_id ?? "",
+    originatorStaffId: row.originator_staff_id ?? row.owner_staff_id ?? "",
     leadSource: (row.lead_source ?? "") as Opportunity["leadSource"],
     referralContactId: row.referral_contact_id,
     street: row.street ?? "",
@@ -244,6 +245,7 @@ export function opportunityPatch(patch: Partial<Opportunity>) {
   if (patch.nextStep !== undefined) row.next_step = patch.nextStep;
   if (patch.lostReason !== undefined) row.lost_reason = patch.lostReason ?? null;
   if (patch.ownerStaffId !== undefined) row.owner_staff_id = patch.ownerStaffId || null;
+  if (patch.originatorStaffId !== undefined) row.originator_staff_id = patch.originatorStaffId || null;
   if (patch.code !== undefined) row.code = patch.code;
   if (patch.leadSource !== undefined) row.lead_source = patch.leadSource ?? "";
   if (patch.referralContactId !== undefined) row.referral_contact_id = patch.referralContactId || null;

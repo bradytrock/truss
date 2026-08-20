@@ -28,7 +28,7 @@ export default function TeamTrainingPage() {
     if (!viewer) return [];
     const scope = accessScope(viewer.role);
     const visible =
-      scope === "company" || scope === "all_jobs"
+      scope === "company"
         ? crm.book.staff
         : scope === "team"
           ? crm.book.staff.filter((member) => teamMemberIds(viewer.teamId, crm.book.staff).has(member.id))

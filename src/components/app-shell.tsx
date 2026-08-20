@@ -43,29 +43,40 @@ import {
 } from "@/components/create-ops-dialogs";
 import { LogExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
 import { canViewReports, canManageSettings, canViewAccounting } from "@/lib/visibility";
+import { isBusinessDevelopment } from "@/lib/bd";
 import { COURSE } from "@/lib/training/engine";
 import { isUnsignedDemo } from "@/lib/seats";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand";
 
-function navItems(showReports: boolean, showAccounting: boolean) {
+function navItems(options: { showReports: boolean; showAccounting: boolean; bdOnly: boolean }) {
+  if (options.bdOnly) {
+    return [
+      { href: "/", label: "Home" },
+      { href: "/pipeline", label: "Pipeline" },
+      { href: "/jobs", label: "Jobs" },
+      { href: "/contacts", label: "Agents & contacts" },
+      { href: "/reports", label: "ROI" },
+    ];
+  }
   return [
     { href: "/", label: "Home" },
     { href: "/pipeline", label: "Pipeline" },
     { href: "/estimates", label: "Estimates" },
     { href: "/jobs", label: "Jobs" },
     { href: "/invoices", label: "Invoices" },
-    ...(showAccounting ? [{ href: "/accounting", label: "Accounting" }] : []),
+    ...(options.showAccounting ? [{ href: "/accounting", label: "Accounting" }] : []),
     { href: "/calendar", label: "Calendar" },
     { href: "/training", label: "Training" },
     { href: "/contacts", label: "Contacts" },
-    ...(showReports ? [{ href: "/reports", label: "Reports" }] : []),
+    ...(options.showReports ? [{ href: "/reports", label: "Reports" }] : []),
   ];
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const { viewer } = useCrm();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [create, setCreate] = useState<
     "opportunity" | "client" | "job" | "estimate" | "invoice" | "event" | "expense" | "payment" | null
@@ -112,6 +123,21 @@ export function AppShell({ children }: { children: ReactNode }) {
                 Create
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-44">
+                {viewer && isBusinessDevelopment(viewer.role) ? (
+                  <>
+                    <DropdownMenuItem onClick={() => setCreate("opportunity")}>
+                      New lead
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setCreate("client")}>
+                      New contact
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setCreate("expense")}>
+                      Log expense
+                    </DropdownMenuItem>
+                  </>
+                ) : (
+                  <>
                 <DropdownMenuItem onClick={() => setCreate("expense")}>
                   Log expense
                 </DropdownMenuItem>
@@ -137,6 +163,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <DropdownMenuItem onClick={() => setCreate("job")}>
                   Log a job
                 </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
             <UserMenu />
@@ -197,10 +225,11 @@ function Brand() {
 
 function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   const { viewer } = useCrm();
-  const items = navItems(
-    Boolean(viewer && canViewReports(viewer.role)),
-    Boolean(viewer && canViewAccounting(viewer.role)),
-  );
+  const items = navItems({
+    showReports: Boolean(viewer && canViewReports(viewer.role)),
+    showAccounting: Boolean(viewer && canViewAccounting(viewer.role)),
+    bdOnly: Boolean(viewer && isBusinessDevelopment(viewer.role)),
+  });
   return (
     <nav className="flex flex-col px-2 py-3">
       {items.map((item) => {

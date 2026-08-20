@@ -25,6 +25,8 @@ import { cn } from "@/lib/utils";
 import { COURSE, overallProgress, staffProgress } from "@/lib/training/engine";
 import { qbQueue } from "@/lib/job-financials";
 import { canViewAccounting } from "@/lib/visibility";
+import { isBusinessDevelopment } from "@/lib/bd";
+import { BdRoiPanel } from "@/components/bd-roi";
 
 export default function HomePage() {
   const crm = useCrm();
@@ -124,7 +126,7 @@ export default function HomePage() {
           crm.viewer?.role === "accountant"
             ? "Books for every job: expenses, receipts, and what still needs to be typed into QuickBooks."
             : crm.viewer?.role === "business_development"
-            ? "All jobs in the company, plus the restricted BD report: open jobs, closed YTD, referral partners by PM, and YTD revenue."
+            ? "Your pipeline, the agents you brought in, and ROI. Assign the work — you still keep the numbers."
             : crm.viewer?.role === "project_manager" || crm.viewer?.role === "superintendent"
               ? "Your jobs, your contact book, and the work assigned to you."
               : crm.viewer?.role === "team_lead" || crm.viewer?.role === "team_admin"
@@ -159,6 +161,10 @@ export default function HomePage() {
           hint={`${stats.awardedCount} sold / ${stats.closedCount} closed`}
         />
       </MetricStrip>
+
+      {crm.viewer && isBusinessDevelopment(crm.viewer.role) ? (
+        <BdRoiPanel state={crm.book} viewer={crm.viewer} />
+      ) : null}
 
       <MetricStrip className="sm:grid-cols-3">
         <Metric

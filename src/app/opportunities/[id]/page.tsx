@@ -29,6 +29,7 @@ import {
   type PipelineStage,
 } from "@/lib/types";
 import { formatJobSite, leadSourceLabel } from "@/lib/leads";
+import { originatorStaffId } from "@/lib/bd";
 
 export default function OpportunityDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -321,6 +322,14 @@ export default function OpportunityDetailPage() {
                 <RecordProperty label="Notes">{opportunity.notes}</RecordProperty>
               ) : null}
               <RecordProperty label="Delivery">{DELIVERY_LABELS[opportunity.deliveryMethod]}</RecordProperty>
+              <RecordProperty label="Sourced by">
+                {crm.book.staff.find((member) => member.id === originatorStaffId(opportunity))?.name ??
+                  "—"}
+              </RecordProperty>
+              <RecordProperty label="Assigned to">
+                {crm.book.staff.find((member) => member.id === opportunity.ownerStaffId)?.name ??
+                  opportunity.estimator}
+              </RecordProperty>
               <RecordProperty label="Estimator">
                 <Select
                   value={opportunity.estimator}

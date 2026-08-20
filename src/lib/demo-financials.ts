@@ -115,6 +115,57 @@ export const extraExpenses: Expense[] = [
     createdAt: "2026-08-15T17:00:00.000Z",
     createdBy: "Nora Keene",
   },
+  {
+    id: "exp_bd_nari",
+    number: "EXP-4007",
+    jobId: null,
+    vendor: "NARI Colorado",
+    account: "office",
+    amount: 420,
+    incurredAt: "2026-08-08",
+    method: "credit_card",
+    memo: "Remodeler mixer — Priya. BD spend, not a job.",
+    receiptUrl: RECEIPT_CARD,
+    receiptStoragePath: null,
+    qbStatus: "not_in_qb",
+    extractedByAi: false,
+    createdAt: "2026-08-08T21:00:00.000Z",
+    createdBy: "Priya Shah",
+  },
+  {
+    id: "exp_bd_ads",
+    number: "EXP-4008",
+    jobId: null,
+    vendor: "Google Ads",
+    account: "office",
+    amount: 890,
+    incurredAt: "2026-08-01",
+    method: "credit_card",
+    memo: "Storm / roof search ads — August. BD spend.",
+    receiptUrl: RECEIPT_CARD,
+    receiptStoragePath: null,
+    qbStatus: "entered",
+    extractedByAi: false,
+    createdAt: "2026-08-01T12:00:00.000Z",
+    createdBy: "Priya Shah",
+  },
+  {
+    id: "exp_bd_chamber",
+    number: "EXP-4009",
+    jobId: null,
+    vendor: "Cherry Creek Chamber",
+    account: "office",
+    amount: 65,
+    incurredAt: "2026-08-12",
+    method: "debit",
+    memo: "Lunch with Kate Ruiz. Claire’s BD spend.",
+    receiptUrl: RECEIPT_HARDWARE,
+    receiptStoragePath: null,
+    qbStatus: "not_in_qb",
+    extractedByAi: false,
+    createdAt: "2026-08-12T18:20:00.000Z",
+    createdBy: "Claire Duvall",
+  },
 ];
 
 export const PAYMENT_RECEIPTS: Record<string, string> = {
@@ -124,6 +175,7 @@ export const PAYMENT_RECEIPTS: Record<string, string> = {
   pay_r4: RECEIPT_CHECK,
   pay_r5: RECEIPT_CARD,
   pay_r6: RECEIPT_CARD,
+  pay_r7: RECEIPT_CHECK,
 };
 
 export const PAYMENT_JOBS: Record<string, string> = {
@@ -133,6 +185,7 @@ export const PAYMENT_JOBS: Record<string, string> = {
   pay_r4: "job_nguyen_windows",
   pay_r5: "job_nash_deck",
   pay_r6: "job_copper_200",
+  pay_r7: "job_alvarez_roof",
 };
 
 export function seedPaymentsFromExtra(

@@ -191,6 +191,7 @@ export type Database = {
           next_step: string;
           lost_reason: string | null;
           owner_staff_id: string | null;
+          originator_staff_id: string | null;
           created_at: string;
           code: string;
           lead_source: string;
@@ -219,6 +220,7 @@ export type Database = {
           next_step?: string;
           lost_reason?: string | null;
           owner_staff_id?: string | null;
+          originator_staff_id?: string | null;
           created_at?: string;
           code?: string;
           lead_source?: string;

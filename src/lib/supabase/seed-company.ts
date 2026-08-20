@@ -254,6 +254,11 @@ export async function seedCompanyBook(
       if (slim) return core;
       return {
         ...core,
+        originator_staff_id: opportunity.originatorStaffId
+          ? remap(opportunity.originatorStaffId, ids)
+          : opportunity.ownerStaffId
+            ? remap(opportunity.ownerStaffId, ids)
+            : null,
         lead_source: opportunity.leadSource ?? "",
         referral_contact_id: opportunity.referralContactId
           ? remap(opportunity.referralContactId, ids)
@@ -275,6 +280,7 @@ export async function seedCompanyBook(
       oppError.message.includes("schema cache") ||
       oppError.code === "PGRST204" ||
       oppError.message.includes("lead_source") ||
+      oppError.message.includes("originator_staff_id") ||
       oppError.message.includes("Could not find the");
     if (!missing && !isInvalidEnumValue(oppError)) throw oppError;
     let retryError = (

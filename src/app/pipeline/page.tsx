@@ -8,6 +8,7 @@ import { CreateOpportunityDialog } from "@/components/create-records";
 import { Button } from "@/components/ui/button";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency } from "@/lib/format";
+import { isBusinessDevelopment } from "@/lib/bd";
 
 export default function PipelinePage() {
   const crm = useCrm();
@@ -29,7 +30,11 @@ export default function PipelinePage() {
       <PageHeader
         eyebrow="Preconstruction"
         title="Pipeline"
-        description="Leads to sold jobs. Every new estimate opens a Lead. When the homeowner signs, it moves to Job Sold and a job is created."
+        description={
+          crm.viewer && isBusinessDevelopment(crm.viewer.role)
+            ? "Leads you sourced and work from the agents you brought in. Assign a card to production; it stays on your ROI."
+            : "Leads to sold jobs. Every new estimate opens a Lead. When the homeowner signs, it moves to Job Sold and a job is created."
+        }
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
             <Input

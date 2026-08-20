@@ -4,12 +4,13 @@ import type {
   StaffMember,
   Team,
 } from "@/lib/types";
+import { bdOpportunityIds, jobInBdBook, referralPartnerIds } from "@/lib/bd";
 
-export type AccessScope = "company" | "all_jobs" | "team" | "own";
+export type AccessScope = "company" | "bd" | "team" | "own";
 
 export function accessScope(role: SeatRole): AccessScope {
   if (role === "company_admin" || role === "accountant") return "company";
-  if (role === "business_development") return "all_jobs";
+  if (role === "business_development") return "bd";
   if (role === "team_lead" || role === "team_admin") return "team";
   return "own";
 }
@@ -33,12 +34,7 @@ export function canManageSettings(role: SeatRole) {
 }
 
 export function canViewTeamTraining(role: SeatRole) {
-  return (
-    role === "company_admin" ||
-    role === "business_development" ||
-    role === "team_lead" ||
-    role === "team_admin"
-  );
+  return role === "company_admin" || role === "team_lead" || role === "team_admin";
 }
 
 export function canPostTrainingBulletin(role: SeatRole) {
@@ -48,7 +44,7 @@ export function canPostTrainingBulletin(role: SeatRole) {
 export function assignableStaff(viewer: StaffMember | undefined, staff: StaffMember[]) {
   if (!viewer) return staff;
   const scope = accessScope(viewer.role);
-  if (scope === "company" || scope === "all_jobs") return staff;
+  if (scope === "company" || scope === "bd") return staff;
   if (scope === "team") {
     return staff.filter((member) => member.teamId === viewer.teamId || member.id === viewer.id);
   }
@@ -85,7 +81,7 @@ export function teamMemberNames(teamId: string | null, staff: StaffMember[]) {
 
 function visibleStaffIdsForScope(effective: StaffMember, staff: StaffMember[]) {
   const scope = accessScope(effective.role);
-  if (scope === "company" || scope === "all_jobs") {
+  if (scope === "company") {
     return new Set(staff.map((member) => member.id));
   }
   if (scope === "team") return teamMemberIds(effective.teamId, staff);
@@ -106,9 +102,12 @@ export function scopeBook(
   );
   names.add(effective.name);
 
+  const bdOppIds = scope === "bd" ? bdOpportunityIds(state, effective) : new Set<string>();
+  const partnerIds = scope === "bd" ? referralPartnerIds(state.contacts, effective.id) : new Set<string>();
+
   const jobs =
-    scope === "all_jobs"
-      ? state.jobs
+    scope === "bd"
+      ? state.jobs.filter((job) => jobInBdBook(job, bdOppIds, state.opportunities))
       : state.jobs.filter((job) => {
           if (staffIds.has(job.ownerStaffId)) return true;
           if (names.has(job.projectManager) || names.has(job.superintendent)) return true;
@@ -117,8 +116,8 @@ export function scopeBook(
   const jobIds = new Set(jobs.map((job) => job.id));
 
   const opportunities =
-    scope === "all_jobs"
-      ? state.opportunities
+    scope === "bd"
+      ? state.opportunities.filter((opportunity) => bdOppIds.has(opportunity.id))
       : state.opportunities.filter((opportunity) => {
           if (staffIds.has(opportunity.ownerStaffId) || names.has(opportunity.estimator)) {
             return true;
@@ -128,8 +127,15 @@ export function scopeBook(
   const opportunityIds = new Set(opportunities.map((opportunity) => opportunity.id));
 
   const contacts =
-    scope === "all_jobs"
-      ? state.contacts
+    scope === "bd"
+      ? state.contacts.filter((contact) => {
+          if (contact.ownerStaffId === effective.id) return true;
+          if (partnerIds.has(contact.id)) return true;
+          return opportunities.some(
+            (opportunity) =>
+              opportunity.primaryContactId === contact.id || opportunity.referralContactId === contact.id,
+          );
+        })
       : state.contacts.filter((contact) => {
           if (staffIds.has(contact.ownerStaffId)) return true;
           return opportunities.some((opportunity) => opportunity.primaryContactId === contact.id);
@@ -144,14 +150,14 @@ export function scopeBook(
   const estimates = state.estimates.filter((estimate) => {
     if (estimate.jobId && jobIds.has(estimate.jobId)) return true;
     if (estimate.opportunityId && opportunityIds.has(estimate.opportunityId)) return true;
-    return Boolean(estimate.clientId && clientIds.has(estimate.clientId) && scope === "all_jobs");
+    return Boolean(estimate.clientId && clientIds.has(estimate.clientId) && scope === "bd");
   });
   const estimateIds = new Set(estimates.map((estimate) => estimate.id));
 
   const invoices = state.invoices.filter((invoice) => {
     if (invoice.jobId && jobIds.has(invoice.jobId)) return true;
     if (invoice.estimateId && estimateIds.has(invoice.estimateId)) return true;
-    return Boolean(invoice.clientId && clientIds.has(invoice.clientId) && (scope === "all_jobs" || jobIds.size > 0));
+    return Boolean(invoice.clientId && clientIds.has(invoice.clientId) && (scope === "bd" || jobIds.size > 0));
   });
   const invoiceIds = new Set(invoices.map((invoice) => invoice.id));
 
@@ -160,8 +166,9 @@ export function scopeBook(
     return Boolean(payment.invoiceId && invoiceIds.has(payment.invoiceId));
   });
   const expenses = state.expenses.filter((expense) => {
-    if (!expense.jobId) return false;
-    return jobIds.has(expense.jobId);
+    if (expense.jobId && jobIds.has(expense.jobId)) return true;
+    if (scope === "bd" && !expense.jobId && expense.createdBy === effective.name) return true;
+    return false;
   });
   const photos = state.photos.filter((photo) => jobIds.has(photo.jobId));
   const events = state.events.filter((event) => {
@@ -223,8 +230,8 @@ export function scopeDescription(
     }
     return "Company admin — every job, contact, and report in the company.";
   }
-  if (scope === "all_jobs") {
-    return "Business development — all jobs, plus restricted reports (open / closed YTD, referral partners by PM, YTD revenue).";
+  if (scope === "bd") {
+    return "Business development — pipeline you sourced, jobs from the agents you brought in, and company BD ROI. Assign the work; you still keep the numbers.";
   }
   if (scope === "team") {
     return `${team?.name ?? "Your team"} — every job and contact owned by people on this team. Login As a teammate to inspect their book.`;

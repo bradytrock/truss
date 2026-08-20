@@ -6,6 +6,7 @@ import { JobsBoard } from "@/components/jobs-board";
 import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency } from "@/lib/format";
+import { isBusinessDevelopment } from "@/lib/bd";
 
 export default function JobsPage() {
   const crm = useCrm();
@@ -24,7 +25,11 @@ export default function JobsPage() {
       <PageHeader
         eyebrow="Operations"
         title="Jobs"
-        description="Every open pipeline lead is already a job. Drag a card when production moves — codes stay with the record from the first lead."
+        description={
+          crm.viewer && isBusinessDevelopment(crm.viewer.role)
+            ? "Jobs from your sourced leads and from the agents in your book — even after you assign the lead to a PM."
+            : "Every open pipeline lead is already a job. Drag a card when production moves — codes stay with the record from the first lead."
+        }
         actions={
           <Input
             value={query}

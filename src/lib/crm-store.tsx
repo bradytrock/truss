@@ -18,7 +18,7 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedOperationsIfMissing } from "@/lib/supabase/ops-seed";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage } from "@/lib/supabase/schema-errors";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson } from "@/lib/job-record";
 import {
@@ -1323,6 +1323,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         input.ownerStaffId ||
         staffByName(input.estimator, state.staff)?.id ||
         user.staffId;
+      const originatorStaffId = input.originatorStaffId || user.staffId;
       const code = allocateCode(user.name, state.jobs, state.opportunities);
       const supabase = maybeClient();
       if (!supabase) {
@@ -1333,6 +1334,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           createdAt: new Date().toISOString(),
           winProbability: STAGE_PROBABILITY[input.stage],
           ownerStaffId,
+          originatorStaffId,
           leadSource: input.leadSource ?? "",
           referralContactId: input.referralContactId ?? null,
           street: input.street ?? "",
@@ -1372,6 +1374,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         delivery_method: input.deliveryMethod,
         estimator: input.estimator,
         owner_staff_id: ownerStaffId || null,
+        originator_staff_id: originatorStaffId || null,
         win_probability: STAGE_PROBABILITY[input.stage],
         next_step: input.nextStep,
         code,
@@ -1405,6 +1408,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         data = retry.data;
         error = retry.error;
         if (!error) toast.message(missingCodeColumnMessage());
+      }
+      if (error && isMissingOriginator(error)) {
+        const { originator_staff_id: _originator, ...withoutOriginator } = base;
+        const retry = await supabase.from("opportunities").insert(withoutOriginator).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingOriginatorMessage());
       }
       if (error && isMissingLeadIntake(error)) {
         const slim = {
@@ -1473,7 +1483,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         );
         throw error ?? new Error("Could not open the pursuit.");
       }
-      const opportunity = { ...mapOpportunity(data), code: data.code || code };
+      const opportunity = {
+        ...mapOpportunity(data),
+        code: data.code || code,
+        originatorStaffId: data.originator_staff_id || originatorStaffId,
+      };
       const pipelineJob =
         opportunity.stage === "lost"
           ? null

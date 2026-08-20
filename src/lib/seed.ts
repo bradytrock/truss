@@ -14,7 +14,11 @@ import {
 } from "@/lib/northline-extra";
 
 const stamped = backfillRecordCodes(
-  extraOpportunities.map((opportunity) => ({ ...opportunity, code: "" })),
+  extraOpportunities.map((opportunity) => ({
+    ...opportunity,
+    code: "",
+    originatorStaffId: opportunity.originatorStaffId || opportunity.ownerStaffId,
+  })),
   extraJobs.map((job) => ({ ...job, code: "" })),
   NORTHLINE_STAFF,
 );

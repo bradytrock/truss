@@ -381,6 +381,14 @@ export const extraPayments: Array<{
     paidAt: "2026-05-12",
     reference: "Copperline retainage",
   },
+  {
+    id: "pay_r7",
+    invoiceId: "inv_alvarez_1",
+    amount: 12400,
+    method: "ACH",
+    paidAt: "2026-08-14",
+    reference: "Alvarez progress — State Farm",
+  },
 ];
 
 export const extraEvents: ScheduleEvent[] = [

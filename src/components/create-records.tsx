@@ -51,6 +51,7 @@ import {
   type LeadSource,
 } from "@/lib/types";
 import { assignableStaff } from "@/lib/visibility";
+import { isBusinessDevelopment } from "@/lib/bd";
 
 export function CreateOpportunityDialog({
   open,
@@ -166,6 +167,7 @@ export function CreateOpportunityDialog({
         deliveryMethod: defaultDeliveryForSource(source),
         estimator: owner?.name || crm.user.name,
         ownerStaffId: owner?.id,
+        originatorStaffId: crm.user.staffId,
         nextStep: "Call back within 5 minutes.",
         leadSource: source,
         referralContactId: source === "referral" ? referralId : null,
@@ -214,7 +216,9 @@ export function CreateOpportunityDialog({
         <SheetHeader className="relative border-b pr-14">
           <SheetTitle className="font-heading text-xl">New Lead</SheetTitle>
           <SheetDescription>
-            This slides in so you can finish a quick task without leaving your page.
+            {crm.viewer && isBusinessDevelopment(crm.viewer.role)
+              ? "You keep credit on this lead. Assign it to the estimator or PM who will run it."
+              : "This slides in so you can finish a quick task without leaving your page."}
           </SheetDescription>
           <Button
             type="button"
@@ -232,7 +236,11 @@ export function CreateOpportunityDialog({
             <div className="grid gap-1.5">
               <div className="flex items-end justify-between gap-2">
                 <Label htmlFor="lead-assignee">Assigned to</Label>
-                {isMe ? <span className="text-[11px] text-muted-foreground">Me</span> : null}
+                {isMe ? (
+                  <span className="text-[11px] text-muted-foreground">Me</span>
+                ) : crm.viewer && isBusinessDevelopment(crm.viewer.role) ? (
+                  <span className="text-[11px] text-muted-foreground">You still keep the numbers</span>
+                ) : null}
               </div>
               <div className="relative">
                 <User className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />

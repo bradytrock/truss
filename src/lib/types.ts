@@ -205,6 +205,7 @@ export interface Opportunity {
   createdAt: string;
   lostReason?: string;
   ownerStaffId: string;
+  originatorStaffId?: string;
   leadSource?: LeadSource | "";
   referralContactId?: string | null;
   street?: string;
@@ -707,6 +708,14 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     role: "business_development",
     teamId: null,
     initials: "PS",
+  },
+  {
+    id: "staff_claire",
+    name: "Claire Duvall",
+    title: "Business development",
+    role: "business_development",
+    teamId: null,
+    initials: "CD",
   },
   {
     id: "staff_luis",
