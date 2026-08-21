@@ -345,9 +345,17 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   const [pending, setPending] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [sectionName, setSectionName] = useState("");
+  const [emptySections, setEmptySections] = useState<string[]>([]);
 
   const lines = linesForEstimate(crm.estimateLines, estimate.id);
   const groups = groupEstimateLines(lines);
+  const pendingSections = emptySections.filter(
+    (name) => !groups.some((group) => group.name === name),
+  );
+  const displayGroups = [
+    ...groups,
+    ...pendingSections.map((name) => ({ name, lines: [] as EstimateLine[] })),
+  ];
   const relatedInvoice = crm.invoices.find((invoice) => invoice.estimateId === estimate.id);
   const editable = estimate.status === "draft";
   const optionalOpen = estimate.status === "draft" || estimate.status === "sent" || estimate.status === "viewed";
@@ -396,8 +404,13 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   }
 
   function lastGroup() {
-    return groups[groups.length - 1]?.name;
+    return pendingSections.at(-1) || groups.at(-1)?.name;
   }
+
+  useEffect(() => {
+    setEmptySections([]);
+    setSectionName("");
+  }, [estimate.id]);
 
   async function handleConvert() {
     setPending(true);
@@ -647,6 +660,36 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       </Card>
 
       <div className="space-y-4">
+        {editable ? (
+          <div className="space-y-2">
+            <h2 className="font-heading text-lg font-medium">Sections</h2>
+            <form
+              className="flex flex-col gap-2 sm:flex-row"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const name = sectionName.trim() || "New section";
+                if (!displayGroups.some((group) => group.name === name)) {
+                  setEmptySections((prev) => [...prev, name]);
+                }
+                setSectionName("");
+                setBookGroup(name);
+              }}
+            >
+              <Input
+                value={sectionName}
+                onChange={(event) => setSectionName(event.target.value)}
+                placeholder="New section name — Demo, Roof, Allowances"
+              />
+              <Button type="submit" variant="outline">
+                Add section
+              </Button>
+            </form>
+            <p className="text-xs text-muted-foreground">
+              Name the section first, then add price-book or custom lines into it.
+            </p>
+          </div>
+        ) : null}
+
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="font-heading text-lg font-medium">Line items</h2>
           {editable ? (
@@ -673,12 +716,12 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           ) : null}
         </div>
 
-        {lines.length === 0 ? (
+        {displayGroups.length === 0 ? (
           <div className="border border-dashed px-4 py-8">
             <p className="font-medium">No lines yet</p>
             <p className="mt-1 max-w-md text-sm text-muted-foreground">
-              Pull items from the price book or add a lump-sum line. Optional work stays out of the
-              total until you check it.
+              Add a section above, then pull items from the price book or add a lump-sum line.
+              Optional work stays out of the total until you check it.
             </p>
             {editable ? (
               <div className="mt-4 flex flex-wrap gap-2">
@@ -692,7 +735,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
             ) : null}
           </div>
         ) : (
-          groups.map((group) => (
+          displayGroups.map((group) => (
             <section key={group.name} className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <CommitInput
@@ -705,56 +748,53 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                     for (const line of group.lines) {
                       void crm.updateEstimateLine(line.id, { groupName: next });
                     }
+                    setEmptySections((prev) =>
+                      prev.map((name) => (name === group.name ? next : name)).filter((name, index, all) => all.indexOf(name) === index),
+                    );
                   }}
                 />
                 {editable ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setBookGroup(group.name);
-                      setBookOpen(true);
-                    }}
-                  >
-                    Add to section
-                  </Button>
+                  <div className="flex flex-wrap gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setBookGroup(group.name);
+                        setBookOpen(true);
+                      }}
+                    >
+                      Add to section
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => void crm.addCustomEstimateLine(estimate.id, group.name)}
+                    >
+                      Custom item
+                    </Button>
+                  </div>
                 ) : null}
               </div>
-              {group.lines.map((line) => (
-                <LineCard
-                  key={line.id}
-                  line={line}
-                  editable={editable}
-                  showTax={!residential}
-                  onPatch={(patch) => void crm.updateEstimateLine(line.id, patch)}
-                  onMove={(direction) => void crm.reorderEstimateLine(line.id, direction)}
-                  onRemove={() => void crm.removeEstimateLine(line.id)}
-                />
-              ))}
+              {group.lines.length === 0 ? (
+                <p className="border border-dashed px-3 py-4 text-sm text-muted-foreground">
+                  No items in this section yet. Add from the price book or a custom line.
+                </p>
+              ) : (
+                group.lines.map((line) => (
+                  <LineCard
+                    key={line.id}
+                    line={line}
+                    editable={editable}
+                    showTax={!residential}
+                    onPatch={(patch) => void crm.updateEstimateLine(line.id, patch)}
+                    onMove={(direction) => void crm.reorderEstimateLine(line.id, direction)}
+                    onRemove={() => void crm.removeEstimateLine(line.id)}
+                  />
+                ))
+              )}
             </section>
           ))
         )}
-
-        {editable ? (
-          <form
-            className="flex flex-col gap-2 sm:flex-row"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const name = sectionName.trim() || "New section";
-              void crm.addCustomEstimateLine(estimate.id, name);
-              setSectionName("");
-            }}
-          >
-            <Input
-              value={sectionName}
-              onChange={(event) => setSectionName(event.target.value)}
-              placeholder="New section name — Demo, Roof, Allowances"
-            />
-            <Button type="submit" variant="outline">
-              Add section
-            </Button>
-          </form>
-        ) : null}
       </div>
 
       <Card>
