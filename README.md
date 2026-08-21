@@ -23,7 +23,11 @@ Truss ships pointed at one shared project (`cxrgdjvkmvnuztubxldh`). Signup still
 
 The hosted MCP at `https://mcp.supabase.com/mcp` is online. This cloud agent cannot complete the OAuth click-through — authenticate Supabase under **Cursor Settings → MCP** in the desktop app if you want the agent to create projects for you.
 
-On that shared project, run the migrations in the SQL editor (in order) if they are not applied yet:
+On that shared project, paste and run one file in the SQL editor:
+
+- [`supabase/bootstrap.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/bootstrap.sql) — every migration, in order, safe to re-run
+
+Use the **Raw** link so the editor does not pick up a collapsed GitHub page. The numbered files under `supabase/migrations/` are the same SQL split up, if you ever need them one at a time.
    - [`supabase/migrations/20260819170000_truss_crm.sql`](supabase/migrations/20260819170000_truss_crm.sql) — companies, profiles, pipeline, jobs, RLS, signup trigger, Realtime
    - [`supabase/migrations/20260819180000_estimates_invoices_schedule.sql`](supabase/migrations/20260819180000_estimates_invoices_schedule.sql) — price book, estimates, invoices, payments, schedule, job photos, Storage bucket
    - [`supabase/migrations/20260819190000_seats_contacts.sql`](supabase/migrations/20260819190000_seats_contacts.sql) — seats, teams, contact-book ownership, referral partners

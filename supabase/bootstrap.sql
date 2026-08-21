@@ -1,0 +1,2136 @@
+-- Truss schema bootstrap. Paste this entire file into the Supabase SQL editor and run once.
+-- Safe to re-run if objects already exist. Individual files remain in supabase/migrations/.
+
+-- ========== 20260819170000_truss_crm.sql ==========
+-- Truss CRM: companies, profiles, pipeline, jobs, activity.
+-- RLS isolates every row to the signed-in user's company.
+
+create extension if not exists "pgcrypto";
+
+do $$ begin
+  create type public.pipeline_stage as enum (
+  'pursuing',
+  'estimating',
+  'bid_submitted',
+  'interview',
+  'awarded',
+  'lost'
+);
+exception
+  when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.job_status as enum (
+  'precon',
+  'in_progress',
+  'punch',
+  'complete',
+  'on_hold'
+);
+exception
+  when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.project_type as enum (
+  'commercial',
+  'multifamily',
+  'healthcare',
+  'education',
+  'industrial',
+  'hospitality',
+  'civic',
+  'tenant_improvement'
+);
+exception
+  when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.delivery_method as enum (
+  'design_bid_build',
+  'cm_at_risk',
+  'design_build',
+  'gc_mp'
+);
+exception
+  when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.client_type as enum (
+  'owner',
+  'developer',
+  'public',
+  'healthcare_system',
+  'architect'
+);
+exception
+  when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.activity_type as enum (
+  'note',
+  'call',
+  'email',
+  'meeting',
+  'site_walk',
+  'stage_change'
+);
+exception
+  when duplicate_object then null;
+end $$;
+
+do $$ begin
+  create type public.entity_kind as enum (
+  'opportunity',
+  'job',
+  'client'
+);
+exception
+  when duplicate_object then null;
+end $$;
+
+create table if not exists public.companies (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.profiles (
+  id uuid primary key references auth.users (id) on delete cascade,
+  company_id uuid not null references public.companies (id) on delete cascade,
+  full_name text not null,
+  title text not null default 'Team member',
+  initials text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists profiles_company_id_idx on public.profiles (company_id);
+
+create table if not exists public.team_members (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  name text not null,
+  title text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists team_members_company_id_idx on public.team_members (company_id);
+
+create table if not exists public.clients (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  name text not null,
+  type public.client_type not null,
+  city text not null,
+  state text not null,
+  notes text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists clients_company_id_idx on public.clients (company_id);
+
+create table if not exists public.contacts (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  client_id uuid not null references public.clients (id) on delete cascade,
+  name text not null,
+  title text not null default '',
+  email text not null default '',
+  phone text not null default ''
+);
+
+create index if not exists contacts_company_id_idx on public.contacts (company_id);
+create index if not exists contacts_client_id_idx on public.contacts (client_id);
+
+create table if not exists public.opportunities (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  name text not null,
+  client_id uuid not null references public.clients (id) on delete restrict,
+  primary_contact_id uuid references public.contacts (id) on delete set null,
+  stage public.pipeline_stage not null default 'pursuing',
+  value numeric(14, 2) not null default 0,
+  bid_due_at date,
+  pre_bid_walk_at date,
+  location text not null default '',
+  project_type public.project_type not null,
+  delivery_method public.delivery_method not null,
+  estimator text not null default '',
+  win_probability integer not null default 15,
+  next_step text not null default '',
+  lost_reason text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists opportunities_company_id_stage_idx on public.opportunities (company_id, stage);
+create index if not exists opportunities_client_id_idx on public.opportunities (client_id);
+
+create table if not exists public.jobs (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  opportunity_id uuid references public.opportunities (id) on delete set null,
+  name text not null,
+  client_id uuid not null references public.clients (id) on delete restrict,
+  status public.job_status not null default 'precon',
+  contract_value numeric(14, 2) not null default 0,
+  start_date date not null default current_date,
+  substantial_completion date,
+  superintendent text not null default '',
+  project_manager text not null default '',
+  location text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists jobs_company_id_status_idx on public.jobs (company_id, status);
+create index if not exists jobs_opportunity_id_idx on public.jobs (opportunity_id);
+
+create table if not exists public.activities (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  entity_type public.entity_kind not null,
+  entity_id uuid not null,
+  type public.activity_type not null default 'note',
+  body text not null,
+  author text not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists activities_company_entity_idx
+  on public.activities (company_id, entity_type, entity_id, created_at desc);
+
+create table if not exists public.tasks (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  title text not null,
+  due_at date not null,
+  completed boolean not null default false,
+  related_type public.entity_kind,
+  related_id uuid,
+  assignee text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists tasks_company_open_due_idx
+  on public.tasks (company_id, completed, due_at);
+
+create or replace function public.current_company_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select company_id from public.profiles where id = auth.uid()
+$$;
+
+revoke all on function public.current_company_id() from public;
+grant execute on function public.current_company_id() to authenticated;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_company_id uuid;
+  full_name text;
+  title text;
+  company_name text;
+begin
+  full_name := coalesce(nullif(trim(new.raw_user_meta_data->>'full_name'), ''), split_part(new.email, '@', 1));
+  title := coalesce(nullif(trim(new.raw_user_meta_data->>'title'), ''), 'VP, Preconstruction');
+  company_name := coalesce(nullif(trim(new.raw_user_meta_data->>'company'), ''), 'Northline Construction');
+
+  insert into public.companies (name)
+  values (company_name)
+  returning id into new_company_id;
+
+  insert into public.profiles (id, company_id, full_name, title, initials)
+  values (
+    new.id,
+    new_company_id,
+    full_name,
+    title,
+    upper(left(regexp_replace(full_name, '\s+', ' ', 'g'), 1))
+      || coalesce(upper(left(split_part(full_name, ' ', 2), 1)), '')
+  );
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+alter table public.companies enable row level security;
+alter table public.profiles enable row level security;
+alter table public.team_members enable row level security;
+alter table public.clients enable row level security;
+alter table public.contacts enable row level security;
+alter table public.opportunities enable row level security;
+alter table public.jobs enable row level security;
+alter table public.activities enable row level security;
+alter table public.tasks enable row level security;
+
+drop policy if exists "read own company" on public.companies;
+create policy "read own company" on public.companies
+  for select to authenticated
+  using (id = public.current_company_id());
+
+drop policy if exists "update own company" on public.companies;
+create policy "update own company" on public.companies
+  for update to authenticated
+  using (id = public.current_company_id())
+  with check (id = public.current_company_id());
+
+drop policy if exists "read company profiles" on public.profiles;
+create policy "read company profiles" on public.profiles
+  for select to authenticated
+  using (company_id = public.current_company_id());
+
+drop policy if exists "update own profile" on public.profiles;
+create policy "update own profile" on public.profiles
+  for update to authenticated
+  using (id = auth.uid())
+  with check (id = auth.uid());
+
+drop policy if exists "company isolation" on public.team_members;
+create policy "company isolation" on public.team_members
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+drop policy if exists "company isolation" on public.clients;
+create policy "company isolation" on public.clients
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+drop policy if exists "company isolation" on public.contacts;
+create policy "company isolation" on public.contacts
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+drop policy if exists "company isolation" on public.opportunities;
+create policy "company isolation" on public.opportunities
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+drop policy if exists "company isolation" on public.jobs;
+create policy "company isolation" on public.jobs
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+drop policy if exists "company isolation" on public.activities;
+create policy "company isolation" on public.activities
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+drop policy if exists "company isolation" on public.tasks;
+create policy "company isolation" on public.tasks
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+do $$
+declare
+  tbl text;
+begin
+  foreach tbl in array array[
+    'companies',
+    'profiles',
+    'team_members',
+    'clients',
+    'contacts',
+    'opportunities',
+    'jobs',
+    'activities',
+    'tasks'
+  ]
+  loop
+    begin
+      execute format('alter publication supabase_realtime add table public.%I', tbl);
+    exception
+      when duplicate_object then null;
+    end;
+  end loop;
+end $$;
+
+-- ========== 20260819180000_estimates_invoices_schedule.sql ==========
+-- Estimates, price book, invoices, payments, schedule, and job photos.
+
+do $$ begin
+  create type public.catalog_kind as enum ('labor', 'material', 'equipment', 'allowance', 'subcontract');
+exception
+  when duplicate_object then null;
+end $$;
+do $$ begin
+  create type public.estimate_status as enum ('draft', 'sent', 'viewed', 'accepted', 'declined');
+exception
+  when duplicate_object then null;
+end $$;
+do $$ begin
+  create type public.invoice_status as enum ('draft', 'sent', 'partial', 'paid', 'overdue', 'void');
+exception
+  when duplicate_object then null;
+end $$;
+do $$ begin
+  create type public.event_kind as enum (
+  'site_walk',
+  'pre_bid',
+  'inspection',
+  'production',
+  'meeting',
+  'punch'
+);
+exception
+  when duplicate_object then null;
+end $$;
+do $$ begin
+  create type public.photo_category as enum ('before', 'progress', 'after', 'issue');
+exception
+  when duplicate_object then null;
+end $$;
+
+create table if not exists public.catalog_items (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  name text not null,
+  kind public.catalog_kind not null,
+  unit text not null default 'LS',
+  unit_cost numeric(14, 2) not null default 0,
+  cost_code text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists catalog_items_company_id_idx on public.catalog_items (company_id);
+
+create table if not exists public.estimates (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  number text not null,
+  name text not null,
+  client_id uuid not null references public.clients (id) on delete restrict,
+  opportunity_id uuid references public.opportunities (id) on delete set null,
+  job_id uuid references public.jobs (id) on delete set null,
+  status public.estimate_status not null default 'draft',
+  notes text not null default '',
+  valid_until date,
+  sent_at timestamptz,
+  accepted_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists estimates_company_status_idx on public.estimates (company_id, status);
+create unique index if not exists estimates_company_number_idx on public.estimates (company_id, number);
+
+create table if not exists public.estimate_lines (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  estimate_id uuid not null references public.estimates (id) on delete cascade,
+  catalog_item_id uuid references public.catalog_items (id) on delete set null,
+  description text not null,
+  quantity numeric(14, 2) not null default 1,
+  unit text not null default 'LS',
+  unit_cost numeric(14, 2) not null default 0,
+  sort_order integer not null default 0
+);
+
+create index if not exists estimate_lines_estimate_id_idx on public.estimate_lines (estimate_id);
+
+create table if not exists public.invoices (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  number text not null,
+  name text not null,
+  client_id uuid not null references public.clients (id) on delete restrict,
+  job_id uuid references public.jobs (id) on delete set null,
+  estimate_id uuid references public.estimates (id) on delete set null,
+  status public.invoice_status not null default 'draft',
+  issued_at date not null default current_date,
+  due_at date,
+  notes text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists invoices_company_status_idx on public.invoices (company_id, status);
+create unique index if not exists invoices_company_number_idx on public.invoices (company_id, number);
+
+create table if not exists public.invoice_lines (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  invoice_id uuid not null references public.invoices (id) on delete cascade,
+  description text not null,
+  quantity numeric(14, 2) not null default 1,
+  unit text not null default 'LS',
+  unit_cost numeric(14, 2) not null default 0,
+  sort_order integer not null default 0
+);
+
+create index if not exists invoice_lines_invoice_id_idx on public.invoice_lines (invoice_id);
+
+create table if not exists public.payments (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  invoice_id uuid not null references public.invoices (id) on delete cascade,
+  amount numeric(14, 2) not null,
+  method text not null default 'check',
+  paid_at date not null default current_date,
+  reference text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists payments_invoice_id_idx on public.payments (invoice_id);
+
+create table if not exists public.schedule_events (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  title text not null,
+  kind public.event_kind not null default 'meeting',
+  starts_at timestamptz not null,
+  ends_at timestamptz not null,
+  location text not null default '',
+  assignee text not null default '',
+  opportunity_id uuid references public.opportunities (id) on delete set null,
+  job_id uuid references public.jobs (id) on delete set null,
+  client_id uuid references public.clients (id) on delete set null,
+  notes text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists schedule_events_company_starts_idx on public.schedule_events (company_id, starts_at);
+
+create table if not exists public.job_photos (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  job_id uuid not null references public.jobs (id) on delete cascade,
+  caption text not null default '',
+  category public.photo_category not null default 'progress',
+  taken_at date not null default current_date,
+  image_url text not null,
+  storage_path text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists job_photos_job_id_idx on public.job_photos (job_id);
+
+alter table public.catalog_items enable row level security;
+alter table public.estimates enable row level security;
+alter table public.estimate_lines enable row level security;
+alter table public.invoices enable row level security;
+alter table public.invoice_lines enable row level security;
+alter table public.payments enable row level security;
+alter table public.schedule_events enable row level security;
+alter table public.job_photos enable row level security;
+
+drop policy if exists "company isolation" on public.catalog_items;
+create policy "company isolation" on public.catalog_items
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+drop policy if exists "company isolation" on public.estimates;
+create policy "company isolation" on public.estimates
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+drop policy if exists "company isolation" on public.estimate_lines;
+create policy "company isolation" on public.estimate_lines
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+drop policy if exists "company isolation" on public.invoices;
+create policy "company isolation" on public.invoices
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+drop policy if exists "company isolation" on public.invoice_lines;
+create policy "company isolation" on public.invoice_lines
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+drop policy if exists "company isolation" on public.payments;
+create policy "company isolation" on public.payments
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+drop policy if exists "company isolation" on public.schedule_events;
+create policy "company isolation" on public.schedule_events
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+drop policy if exists "company isolation" on public.job_photos;
+create policy "company isolation" on public.job_photos
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+do $$
+declare
+  tbl text;
+begin
+  foreach tbl in array array[
+    'catalog_items',
+    'estimates',
+    'estimate_lines',
+    'invoices',
+    'invoice_lines',
+    'payments',
+    'schedule_events',
+    'job_photos'
+  ]
+  loop
+    begin
+      execute format('alter publication supabase_realtime add table public.%I', tbl);
+    exception
+      when duplicate_object then null;
+    end;
+  end loop;
+end $$;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'job-photos',
+  'job-photos',
+  true,
+  10485760,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+)
+on conflict (id) do nothing;
+
+drop policy if exists "public read job photos" on storage.objects;
+create policy "public read job photos"
+on storage.objects for select
+to public
+using (bucket_id = 'job-photos');
+
+drop policy if exists "company photo files" on storage.objects;
+create policy "company photo files"
+on storage.objects for all to authenticated
+using (
+  bucket_id = 'job-photos'
+  and (storage.foldername(name))[1] = public.current_company_id()::text
+)
+with check (
+  bucket_id = 'job-photos'
+  and (storage.foldername(name))[1] = public.current_company_id()::text
+);
+
+-- ========== 20260819190000_seats_contacts.sql ==========
+-- Seats, teams, contact-book ownership, referral partners.
+
+do $$ begin
+  create type public.seat_role as enum (
+  'company_admin',
+  'business_development',
+  'team_lead',
+  'team_admin',
+  'project_manager',
+  'estimator',
+  'superintendent'
+);
+exception
+  when duplicate_object then null;
+end $$;
+
+alter table public.profiles
+  add column if not exists role public.seat_role not null default 'project_manager';
+
+create table if not exists public.teams (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  name text not null,
+  lead_staff_id uuid,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists teams_company_id_idx on public.teams (company_id);
+
+alter table public.team_members
+  add column if not exists role public.seat_role not null default 'project_manager',
+  add column if not exists team_id uuid references public.teams (id) on delete set null,
+  add column if not exists initials text not null default '';
+
+create index if not exists team_members_team_id_idx on public.team_members (team_id);
+
+alter table public.teams
+  drop constraint if exists teams_lead_staff_id_fkey;
+
+alter table public.teams
+  add constraint teams_lead_staff_id_fkey
+  foreign key (lead_staff_id) references public.team_members (id) on delete set null;
+
+alter table public.contacts
+  add column if not exists owner_staff_id uuid references public.team_members (id) on delete set null,
+  add column if not exists is_referral_partner boolean not null default false;
+
+alter table public.opportunities
+  add column if not exists owner_staff_id uuid references public.team_members (id) on delete set null;
+
+alter table public.jobs
+  add column if not exists owner_staff_id uuid references public.team_members (id) on delete set null;
+
+create index if not exists contacts_owner_staff_id_idx on public.contacts (owner_staff_id);
+create index if not exists jobs_owner_staff_id_idx on public.jobs (owner_staff_id);
+create index if not exists opportunities_owner_staff_id_idx on public.opportunities (owner_staff_id);
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_company_id uuid;
+  full_name text;
+  title text;
+  company_name text;
+begin
+  full_name := coalesce(nullif(trim(new.raw_user_meta_data->>'full_name'), ''), split_part(new.email, '@', 1));
+  title := coalesce(nullif(trim(new.raw_user_meta_data->>'title'), ''), 'Company admin');
+  company_name := coalesce(nullif(trim(new.raw_user_meta_data->>'company'), ''), 'Northline Construction');
+
+  insert into public.companies (name)
+  values (company_name)
+  returning id into new_company_id;
+
+  insert into public.profiles (id, company_id, full_name, title, initials, role)
+  values (
+    new.id,
+    new_company_id,
+    full_name,
+    title,
+    upper(left(regexp_replace(full_name, '\s+', ' ', 'g'), 1))
+      || coalesce(upper(left(split_part(full_name, ' ', 2), 1)), ''),
+    'company_admin'
+  );
+
+  return new;
+end;
+$$;
+
+alter table public.teams enable row level security;
+
+drop policy if exists "company isolation" on public.teams;
+create policy "company isolation" on public.teams
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+do $$
+begin
+  execute 'alter publication supabase_realtime add table public.teams';
+exception
+  when duplicate_object then null;
+end $$;
+
+-- ========== 20260819200000_residential_homeowners.sql ==========
+-- Homeowners do not need a company. Residential project types and claim/T&M delivery.
+
+alter type public.project_type add value if not exists 'restoration';
+alter type public.project_type add value if not exists 'remodel';
+alter type public.project_type add value if not exists 'roofing';
+alter type public.project_type add value if not exists 'exterior';
+alter type public.project_type add value if not exists 'addition';
+
+alter type public.delivery_method add value if not exists 'insurance_claim';
+alter type public.delivery_method add value if not exists 'fixed_price';
+alter type public.delivery_method add value if not exists 'time_and_materials';
+
+alter type public.client_type add value if not exists 'insurance';
+alter type public.client_type add value if not exists 'realtor';
+alter type public.client_type add value if not exists 'trade_partner';
+
+alter table public.contacts
+  alter column client_id drop not null;
+
+alter table public.contacts
+  drop constraint if exists contacts_client_id_fkey;
+
+alter table public.contacts
+  add constraint contacts_client_id_fkey
+  foreign key (client_id) references public.clients (id) on delete set null;
+
+alter table public.opportunities
+  alter column client_id drop not null;
+
+alter table public.jobs
+  alter column client_id drop not null;
+
+alter table public.jobs
+  add column if not exists primary_contact_id uuid references public.contacts (id) on delete set null;
+
+create index if not exists jobs_primary_contact_id_idx on public.jobs (primary_contact_id);
+
+alter table public.estimates
+  alter column client_id drop not null;
+
+alter table public.invoices
+  alter column client_id drop not null;
+
+-- ========== 20260819210000_company_settings.sql ==========
+-- Company business profile: phone, email, address, license.
+-- Used by Settings and shown on estimates / invoices.
+
+alter table public.companies
+  add column if not exists phone text not null default '',
+  add column if not exists email text not null default '',
+  add column if not exists website text not null default '',
+  add column if not exists street text not null default '',
+  add column if not exists city text not null default '',
+  add column if not exists state text not null default '',
+  add column if not exists postal_code text not null default '',
+  add column if not exists license_number text not null default '',
+  add column if not exists updated_at timestamptz not null default now();
+
+drop policy if exists "update own company" on public.companies;
+drop policy if exists "admins update company" on public.companies;
+
+drop policy if exists "admins update company" on public.companies;
+create policy "admins update company" on public.companies
+  for update to authenticated
+  using (
+    id = public.current_company_id()
+    and exists (
+      select 1
+      from public.profiles
+      where id = auth.uid()
+        and role = 'company_admin'
+    )
+  )
+  with check (
+    id = public.current_company_id()
+    and exists (
+      select 1
+      from public.profiles
+      where id = auth.uid()
+        and role = 'company_admin'
+    )
+  );
+
+-- ========== 20260819220000_job_codes.sql ==========
+-- Job / pipeline record codes: BJ081926-A (creator initials + MMDDYY + daily letter).
+
+alter table public.opportunities
+  add column if not exists code text not null default '';
+
+alter table public.jobs
+  add column if not exists code text not null default '';
+
+create index if not exists opportunities_company_code_idx
+  on public.opportunities (company_id, code);
+
+create index if not exists jobs_company_code_idx
+  on public.jobs (company_id, code);
+
+-- ========== 20260819230000_google_calendars.sql ==========
+-- Per-user Google Calendar links, team sharing, and admin visibility.
+
+create table if not exists public.calendar_accounts (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  staff_id uuid not null references public.team_members (id) on delete cascade,
+  google_email text not null default '',
+  google_calendar_id text not null default 'primary',
+  linked boolean not null default false,
+  linked_at timestamptz,
+  share_with_team boolean not null default false,
+  source text not null default 'demo' check (source in ('demo', 'google')),
+  created_at timestamptz not null default now(),
+  unique (company_id, staff_id)
+);
+
+create index if not exists calendar_accounts_company_idx on public.calendar_accounts (company_id);
+
+create table if not exists public.calendar_tokens (
+  account_id uuid primary key references public.calendar_accounts (id) on delete cascade,
+  refresh_token text,
+  access_token text,
+  token_expires_at timestamptz
+);
+
+create table if not exists public.calendar_shares (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  owner_staff_id uuid not null references public.team_members (id) on delete cascade,
+  viewer_staff_id uuid not null references public.team_members (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (owner_staff_id, viewer_staff_id)
+);
+
+create index if not exists calendar_shares_company_idx on public.calendar_shares (company_id);
+
+alter table public.calendar_accounts enable row level security;
+alter table public.calendar_tokens enable row level security;
+alter table public.calendar_shares enable row level security;
+
+drop policy if exists "company isolation" on public.calendar_accounts;
+create policy "company isolation" on public.calendar_accounts
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+drop policy if exists "company isolation" on public.calendar_shares;
+create policy "company isolation" on public.calendar_shares
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+-- Tokens never leave through the Data API. Access is RPC-only.
+revoke all on public.calendar_tokens from anon, authenticated, public;
+
+create or replace function public.current_staff_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select tm.id
+  from public.profiles p
+  join public.team_members tm
+    on tm.company_id = p.company_id
+   and tm.name = p.full_name
+  where p.id = auth.uid()
+  limit 1
+$$;
+
+revoke all on function public.current_staff_id() from public;
+grant execute on function public.current_staff_id() to authenticated;
+
+create or replace function public.current_is_company_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (select role = 'company_admin' from public.profiles where id = auth.uid()),
+    false
+  )
+$$;
+
+revoke all on function public.current_is_company_admin() from public;
+grant execute on function public.current_is_company_admin() to authenticated;
+
+create or replace function public.can_view_staff_calendar(target_staff_id uuid)
+returns boolean
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+declare
+  viewer uuid;
+  viewer_team uuid;
+  owner_team uuid;
+  shared_team boolean;
+begin
+  viewer := public.current_staff_id();
+  if viewer is not null and viewer = target_staff_id then
+    return true;
+  end if;
+  if public.current_is_company_admin() then
+    return true;
+  end if;
+  if viewer is null then
+    return false;
+  end if;
+
+  select tm.team_id into viewer_team from public.team_members tm where tm.id = viewer;
+  select tm.team_id into owner_team from public.team_members tm where tm.id = target_staff_id;
+  select coalesce(ca.share_with_team, false) into shared_team
+    from public.calendar_accounts ca
+    where ca.staff_id = target_staff_id
+      and ca.company_id = public.current_company_id();
+
+  if shared_team and viewer_team is not null and viewer_team = owner_team then
+    return true;
+  end if;
+
+  return exists (
+    select 1
+    from public.calendar_shares s
+    where s.owner_staff_id = target_staff_id
+      and s.viewer_staff_id = viewer
+      and s.company_id = public.current_company_id()
+  );
+end;
+$$;
+
+revoke all on function public.can_view_staff_calendar(uuid) from public;
+grant execute on function public.can_view_staff_calendar(uuid) to authenticated;
+
+create or replace function public.save_google_calendar_tokens(
+  p_staff_id uuid,
+  p_google_email text,
+  p_calendar_id text,
+  p_refresh_token text,
+  p_access_token text,
+  p_token_expires_at timestamptz
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  account uuid;
+  company uuid;
+begin
+  company := public.current_company_id();
+  if company is null then
+    raise exception 'Not signed in';
+  end if;
+  if public.current_staff_id() is distinct from p_staff_id and not public.current_is_company_admin() then
+    raise exception 'You can only connect your own Google Calendar';
+  end if;
+
+  insert into public.calendar_accounts (
+    company_id, staff_id, google_email, google_calendar_id, linked, linked_at, source
+  )
+  values (
+    company, p_staff_id, p_google_email, coalesce(nullif(p_calendar_id, ''), 'primary'),
+    true, now(), 'google'
+  )
+  on conflict (company_id, staff_id) do update
+    set google_email = excluded.google_email,
+        google_calendar_id = excluded.google_calendar_id,
+        linked = true,
+        linked_at = now(),
+        source = 'google';
+
+  select id into account
+  from public.calendar_accounts
+  where company_id = company and staff_id = p_staff_id;
+
+  insert into public.calendar_tokens (account_id, refresh_token, access_token, token_expires_at)
+  values (
+    account,
+    coalesce(nullif(p_refresh_token, ''), (select refresh_token from public.calendar_tokens where account_id = account)),
+    p_access_token,
+    p_token_expires_at
+  )
+  on conflict (account_id) do update
+    set refresh_token = coalesce(nullif(excluded.refresh_token, ''), public.calendar_tokens.refresh_token),
+        access_token = excluded.access_token,
+        token_expires_at = excluded.token_expires_at;
+end;
+$$;
+
+revoke all on function public.save_google_calendar_tokens(uuid, text, text, text, text, timestamptz) from public;
+grant execute on function public.save_google_calendar_tokens(uuid, text, text, text, text, timestamptz) to authenticated;
+
+create or replace function public.google_calendar_credentials(target_staff_id uuid)
+returns table (
+  refresh_token text,
+  access_token text,
+  token_expires_at timestamptz,
+  google_email text,
+  google_calendar_id text
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.can_view_staff_calendar(target_staff_id) then
+    raise exception 'Not allowed to read that calendar';
+  end if;
+  return query
+    select
+      t.refresh_token,
+      t.access_token,
+      t.token_expires_at,
+      a.google_email,
+      a.google_calendar_id
+    from public.calendar_accounts a
+    join public.calendar_tokens t on t.account_id = a.id
+    where a.staff_id = target_staff_id
+      and a.company_id = public.current_company_id()
+      and a.linked = true
+      and a.source = 'google';
+end;
+$$;
+
+revoke all on function public.google_calendar_credentials(uuid) from public;
+grant execute on function public.google_calendar_credentials(uuid) to authenticated;
+
+create or replace function public.disconnect_google_calendar(p_staff_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.current_staff_id() is distinct from p_staff_id and not public.current_is_company_admin() then
+    raise exception 'You can only disconnect your own Google Calendar';
+  end if;
+  delete from public.calendar_tokens t
+    using public.calendar_accounts a
+    where t.account_id = a.id
+      and a.staff_id = p_staff_id
+      and a.company_id = public.current_company_id();
+  update public.calendar_accounts
+    set linked = false,
+        google_email = '',
+        linked_at = null,
+        source = 'demo'
+    where staff_id = p_staff_id
+      and company_id = public.current_company_id();
+end;
+$$;
+
+revoke all on function public.disconnect_google_calendar(uuid) from public;
+grant execute on function public.disconnect_google_calendar(uuid) to authenticated;
+
+-- ========== 20260819240000_training.sql ==========
+-- Training progress per seat, plus company training bulletins.
+
+create table if not exists public.training_progress (
+  company_id uuid not null references public.companies (id) on delete cascade,
+  staff_id uuid not null references public.team_members (id) on delete cascade,
+  read jsonb not null default '{}'::jsonb,
+  badges jsonb not null default '{}'::jsonb,
+  attempts jsonb not null default '[]'::jsonb,
+  updated_at timestamptz not null default now(),
+  primary key (company_id, staff_id)
+);
+
+create table if not exists public.training_bulletins (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  title text not null,
+  body text not null default '',
+  author text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists training_bulletins_company_idx on public.training_bulletins (company_id, created_at desc);
+
+alter table public.training_progress enable row level security;
+alter table public.training_bulletins enable row level security;
+
+drop policy if exists "company isolation" on public.training_progress;
+create policy "company isolation" on public.training_progress
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+drop policy if exists "company isolation" on public.training_bulletins;
+create policy "company isolation" on public.training_bulletins
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+-- ========== 20260819250000_lead_intake.sql ==========
+-- Lead intake: source, referred-by contact, and job-site address on pursuits.
+
+alter table public.opportunities
+  add column if not exists lead_source text not null default '',
+  add column if not exists referral_contact_id uuid references public.contacts (id) on delete set null,
+  add column if not exists street text not null default '',
+  add column if not exists city text not null default '',
+  add column if not exists state text not null default '',
+  add column if not exists postal_code text not null default '',
+  add column if not exists notes text not null default '';
+
+create index if not exists opportunities_referral_contact_idx
+  on public.opportunities (referral_contact_id)
+  where referral_contact_id is not null;
+
+-- ========== 20260819260000_profile_staff.sql ==========
+-- Tie each signed-in profile to its own team_members seat so login never
+-- falls back onto a sample company_admin (Jordan Hale).
+
+alter table public.profiles
+  add column if not exists staff_id uuid references public.team_members (id) on delete set null;
+
+create index if not exists profiles_staff_id_idx on public.profiles (staff_id);
+
+insert into public.team_members (company_id, name, title, role, initials)
+select p.company_id, p.full_name, p.title, p.role, p.initials
+from public.profiles p
+where not exists (
+  select 1
+  from public.team_members tm
+  where tm.company_id = p.company_id
+    and lower(tm.name) = lower(p.full_name)
+);
+
+update public.profiles p
+set staff_id = tm.id
+from public.team_members tm
+where p.staff_id is null
+  and tm.company_id = p.company_id
+  and lower(tm.name) = lower(p.full_name);
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_company_id uuid;
+  new_staff_id uuid;
+  full_name text;
+  title text;
+  company_name text;
+  initials text;
+begin
+  full_name := coalesce(nullif(trim(new.raw_user_meta_data->>'full_name'), ''), split_part(new.email, '@', 1));
+  title := coalesce(nullif(trim(new.raw_user_meta_data->>'title'), ''), 'Company admin');
+  company_name := coalesce(nullif(trim(new.raw_user_meta_data->>'company'), ''), 'Northline Construction');
+  initials := upper(left(regexp_replace(full_name, '\s+', ' ', 'g'), 1))
+    || coalesce(upper(left(split_part(full_name, ' ', 2), 1)), '');
+
+  insert into public.companies (name)
+  values (company_name)
+  returning id into new_company_id;
+
+  insert into public.team_members (company_id, name, title, role, initials)
+  values (new_company_id, full_name, title, 'company_admin', initials)
+  returning id into new_staff_id;
+
+  insert into public.profiles (id, company_id, full_name, title, initials, role, staff_id)
+  values (
+    new.id,
+    new_company_id,
+    full_name,
+    title,
+    initials,
+    'company_admin',
+    new_staff_id
+  );
+
+  return new;
+end;
+$$;
+
+create or replace function public.current_staff_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (
+      select p.staff_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and p.staff_id is not null
+    ),
+    (
+      select tm.id
+      from public.profiles p
+      join public.team_members tm
+        on tm.company_id = p.company_id
+       and lower(tm.name) = lower(p.full_name)
+      where p.id = auth.uid()
+      limit 1
+    )
+  )
+$$;
+
+-- ========== 20260819270000_job_overview.sql ==========
+-- Job overview: address, crew, tags, related people, and custom fields
+-- so the job record can carry the field/production flow.
+
+alter table public.jobs
+  add column if not exists description text not null default '',
+  add column if not exists tags text[] not null default '{}',
+  add column if not exists street text not null default '',
+  add column if not exists city text not null default '',
+  add column if not exists state text not null default '',
+  add column if not exists postal_code text not null default '',
+  add column if not exists sales_rep text not null default '',
+  add column if not exists assigned text[] not null default '{}',
+  add column if not exists subcontractor_ids uuid[] not null default '{}',
+  add column if not exists related_contact_ids uuid[] not null default '{}',
+  add column if not exists custom_fields jsonb not null default '[]'::jsonb,
+  add column if not exists project_type public.project_type,
+  add column if not exists lead_source text not null default '';
+
+-- ========== 20260819280000_nullable_company.sql ==========
+-- Homeowners, trades, and DTC jobs do not need a company on file.
+-- Repeats 20260819200000 so a project that never ran that file can still seed.
+
+alter table public.contacts
+  alter column client_id drop not null;
+
+alter table public.contacts
+  drop constraint if exists contacts_client_id_fkey;
+
+alter table public.contacts
+  add constraint contacts_client_id_fkey
+  foreign key (client_id) references public.clients (id) on delete set null;
+
+alter table public.opportunities
+  alter column client_id drop not null;
+
+alter table public.jobs
+  alter column client_id drop not null;
+
+alter table public.estimates
+  alter column client_id drop not null;
+
+alter table public.invoices
+  alter column client_id drop not null;
+
+-- ========== 20260819290000_estimate_writer.sql ==========
+-- Joist-style estimate writing: tax, discount, deposit, terms, sections, optional lines.
+
+alter table public.estimates
+  add column if not exists contact_id uuid references public.contacts (id) on delete set null,
+  add column if not exists tax_rate numeric(6, 3) not null default 0,
+  add column if not exists discount_kind text not null default 'percent',
+  add column if not exists discount_value numeric(14, 2) not null default 0,
+  add column if not exists deposit_kind text not null default 'percent',
+  add column if not exists deposit_value numeric(14, 2) not null default 0,
+  add column if not exists intro text not null default '',
+  add column if not exists terms text not null default '',
+  add column if not exists street text not null default '',
+  add column if not exists city text not null default '',
+  add column if not exists state text not null default '',
+  add column if not exists postal_code text not null default '';
+
+alter table public.estimate_lines
+  add column if not exists title text not null default '',
+  add column if not exists group_name text not null default '',
+  add column if not exists optional boolean not null default false,
+  add column if not exists selected boolean not null default true,
+  add column if not exists taxable boolean not null default true;
+
+update public.estimate_lines
+set title = description
+where title = '' and description <> '';
+
+-- ========== 20260819300000_share_tokens.sql ==========
+-- Client share links for estimates and invoices.
+
+alter table public.estimates
+  add column if not exists share_token text not null default '';
+
+alter table public.invoices
+  add column if not exists share_token text not null default '';
+
+update public.estimates
+set share_token = replace(gen_random_uuid()::text, '-', '')
+where share_token = '';
+
+update public.invoices
+set share_token = replace(gen_random_uuid()::text, '-', '')
+where share_token = '';
+
+create unique index if not exists estimates_share_token_idx
+  on public.estimates (share_token)
+  where share_token <> '';
+
+create unique index if not exists invoices_share_token_idx
+  on public.invoices (share_token)
+  where share_token <> '';
+
+create or replace function public.shared_estimate(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  est public.estimates%rowtype;
+  company public.companies%rowtype;
+  contact_name text;
+begin
+  if p_token is null or length(trim(p_token)) < 6 then
+    return null;
+  end if;
+  select * into est
+  from public.estimates
+  where share_token = trim(p_token)
+  limit 1;
+  if not found then
+    return null;
+  end if;
+  if est.status = 'sent' then
+    update public.estimates set status = 'viewed' where id = est.id;
+    est.status := 'viewed';
+  end if;
+  select * into company from public.companies where id = est.company_id;
+  select name into contact_name from public.contacts where id = est.contact_id;
+  return jsonb_build_object(
+    'customer', coalesce(contact_name, 'Homeowner'),
+    'company', jsonb_build_object(
+      'name', coalesce(company.name, ''),
+      'phone', coalesce(company.phone, ''),
+      'email', coalesce(company.email, ''),
+      'website', coalesce(company.website, ''),
+      'street', coalesce(company.street, ''),
+      'city', coalesce(company.city, ''),
+      'state', coalesce(company.state, ''),
+      'postalCode', coalesce(company.postal_code, ''),
+      'licenseNumber', coalesce(company.license_number, '')
+    ),
+    'estimate', jsonb_build_object(
+      'id', est.id,
+      'number', est.number,
+      'name', est.name,
+      'clientId', est.client_id,
+      'opportunityId', est.opportunity_id,
+      'jobId', est.job_id,
+      'contactId', est.contact_id,
+      'status', est.status,
+      'notes', '',
+      'validUntil', est.valid_until,
+      'sentAt', est.sent_at,
+      'acceptedAt', est.accepted_at,
+      'createdAt', est.created_at,
+      'taxRate', est.tax_rate,
+      'discountKind', est.discount_kind,
+      'discountValue', est.discount_value,
+      'depositKind', est.deposit_kind,
+      'depositValue', est.deposit_value,
+      'intro', est.intro,
+      'terms', est.terms,
+      'street', est.street,
+      'city', est.city,
+      'state', est.state,
+      'postalCode', est.postal_code,
+      'shareToken', est.share_token
+    ),
+    'lines', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', line.id,
+        'estimateId', line.estimate_id,
+        'catalogItemId', line.catalog_item_id,
+        'title', line.title,
+        'description', line.description,
+        'quantity', line.quantity,
+        'unit', line.unit,
+        'unitCost', line.unit_cost,
+        'sortOrder', line.sort_order,
+        'groupName', line.group_name,
+        'optional', line.optional,
+        'selected', line.selected,
+        'taxable', line.taxable
+      ) order by line.sort_order)
+      from public.estimate_lines line
+      where line.estimate_id = est.id
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+create or replace function public.shared_invoice(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  inv public.invoices%rowtype;
+  company public.companies%rowtype;
+  contact_name text;
+begin
+  if p_token is null or length(trim(p_token)) < 6 then
+    return null;
+  end if;
+  select * into inv
+  from public.invoices
+  where share_token = trim(p_token)
+  limit 1;
+  if not found then
+    return null;
+  end if;
+  select * into company from public.companies where id = inv.company_id;
+  select c.name into contact_name
+  from public.jobs j
+  join public.contacts c on c.id = j.primary_contact_id
+  where j.id = inv.job_id;
+  return jsonb_build_object(
+    'customer', coalesce(contact_name, 'Homeowner'),
+    'company', jsonb_build_object(
+      'name', coalesce(company.name, ''),
+      'phone', coalesce(company.phone, ''),
+      'email', coalesce(company.email, ''),
+      'website', coalesce(company.website, ''),
+      'street', coalesce(company.street, ''),
+      'city', coalesce(company.city, ''),
+      'state', coalesce(company.state, ''),
+      'postalCode', coalesce(company.postal_code, ''),
+      'licenseNumber', coalesce(company.license_number, '')
+    ),
+    'invoice', jsonb_build_object(
+      'id', inv.id,
+      'number', inv.number,
+      'name', inv.name,
+      'clientId', inv.client_id,
+      'jobId', inv.job_id,
+      'estimateId', inv.estimate_id,
+      'status', inv.status,
+      'issuedAt', inv.issued_at,
+      'dueAt', inv.due_at,
+      'notes', '',
+      'shareToken', inv.share_token
+    ),
+    'lines', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', line.id,
+        'invoiceId', line.invoice_id,
+        'description', line.description,
+        'quantity', line.quantity,
+        'unit', line.unit,
+        'unitCost', line.unit_cost,
+        'sortOrder', line.sort_order
+      ) order by line.sort_order)
+      from public.invoice_lines line
+      where line.invoice_id = inv.id
+    ), '[]'::jsonb),
+    'payments', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', payment.id,
+        'invoiceId', payment.invoice_id,
+        'amount', payment.amount,
+        'method', payment.method,
+        'paidAt', payment.paid_at,
+        'reference', payment.reference
+      ) order by payment.paid_at)
+      from public.payments payment
+      where payment.invoice_id = inv.id
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+revoke all on function public.shared_estimate(text) from public;
+revoke all on function public.shared_invoice(text) from public;
+grant execute on function public.shared_estimate(text) to anon, authenticated;
+grant execute on function public.shared_invoice(text) to anon, authenticated;
+
+-- ========== 20260819310000_ensure_residential_enums.sql ==========
+-- Ensure residential delivery, project, and client enum values exist.
+-- Safe to re-run. The original 20260819200000 file already adds these; this
+-- covers projects that applied later migrations without that one.
+
+alter type public.project_type add value if not exists 'restoration';
+alter type public.project_type add value if not exists 'remodel';
+alter type public.project_type add value if not exists 'roofing';
+alter type public.project_type add value if not exists 'exterior';
+alter type public.project_type add value if not exists 'addition';
+
+alter type public.delivery_method add value if not exists 'insurance_claim';
+alter type public.delivery_method add value if not exists 'fixed_price';
+alter type public.delivery_method add value if not exists 'time_and_materials';
+
+alter type public.client_type add value if not exists 'insurance';
+alter type public.client_type add value if not exists 'realtor';
+alter type public.client_type add value if not exists 'trade_partner';
+
+-- ========== 20260819320000_sign_shared_estimate.sql ==========
+-- Homeowner can sign a shared estimate: accept it, move the lead to awarded (Job Sold),
+-- and open a precon job. Mirrors the office "Mark signed" path.
+
+create or replace function public.sign_shared_estimate(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  est public.estimates%rowtype;
+  opp public.opportunities%rowtype;
+  job_id uuid;
+  v_total numeric(14, 2);
+  v_subtotal numeric(14, 2);
+  v_discount numeric(14, 2);
+  v_taxable numeric(14, 2);
+  v_code text;
+begin
+  if p_token is null or length(trim(p_token)) < 6 then
+    return null;
+  end if;
+
+  select * into est
+  from public.estimates
+  where share_token = trim(p_token)
+  limit 1;
+  if not found then
+    return null;
+  end if;
+
+  select coalesce(sum(line.quantity * line.unit_cost), 0) into v_subtotal
+  from public.estimate_lines line
+  where line.estimate_id = est.id
+    and (coalesce(line.optional, false) = false or coalesce(line.selected, true) = true);
+
+  if coalesce(est.discount_kind, 'percent') = 'percent' then
+    v_discount := round(v_subtotal * coalesce(est.discount_value, 0) / 100, 2);
+  else
+    v_discount := least(v_subtotal, coalesce(est.discount_value, 0));
+  end if;
+  v_discount := coalesce(v_discount, 0);
+
+  select coalesce(sum(line.quantity * line.unit_cost), 0) into v_taxable
+  from public.estimate_lines line
+  where line.estimate_id = est.id
+    and coalesce(line.taxable, true) = true
+    and (coalesce(line.optional, false) = false or coalesce(line.selected, true) = true);
+
+  v_total := greatest(0, v_subtotal - v_discount);
+  if v_subtotal > 0 then
+    v_total := v_total + round(
+      greatest(0, v_taxable - v_discount * (v_taxable / v_subtotal)) * coalesce(est.tax_rate, 0) / 100,
+      2
+    );
+  end if;
+
+  update public.estimates
+  set status = 'accepted', accepted_at = coalesce(accepted_at, now())
+  where id = est.id
+  returning * into est;
+
+  if est.opportunity_id is null then
+    insert into public.opportunities (
+      company_id,
+      name,
+      client_id,
+      primary_contact_id,
+      stage,
+      value,
+      location,
+      project_type,
+      delivery_method,
+      estimator,
+      win_probability,
+      next_step,
+      code
+    ) values (
+      est.company_id,
+      est.name,
+      est.client_id,
+      est.contact_id,
+      'awarded',
+      v_total,
+      trim(both ', ' from concat_ws(', ', nullif(est.street, ''), nullif(est.city, ''))),
+      'restoration',
+      'fixed_price',
+      '',
+      100,
+      'Job sold. Start precon.',
+      est.number
+    )
+    returning * into opp;
+
+    update public.estimates
+    set opportunity_id = opp.id
+    where id = est.id
+    returning * into est;
+  else
+    update public.opportunities
+    set
+      stage = 'awarded',
+      win_probability = 100,
+      value = v_total,
+      next_step = 'Job sold. Start precon.'
+    where id = est.opportunity_id
+    returning * into opp;
+  end if;
+
+  select j.id into job_id
+  from public.jobs j
+  where j.opportunity_id = opp.id
+  limit 1;
+
+  if job_id is null then
+    v_code := coalesce(nullif(opp.code, ''), est.number);
+    insert into public.jobs (
+      company_id,
+      opportunity_id,
+      name,
+      client_id,
+      primary_contact_id,
+      status,
+      contract_value,
+      start_date,
+      location,
+      project_manager,
+      superintendent,
+      owner_staff_id,
+      code
+    ) values (
+      est.company_id,
+      opp.id,
+      opp.name,
+      opp.client_id,
+      opp.primary_contact_id,
+      'precon',
+      v_total,
+      current_date,
+      opp.location,
+      coalesce(opp.estimator, ''),
+      '',
+      opp.owner_staff_id,
+      v_code
+    )
+    returning id into job_id;
+  end if;
+
+  if job_id is not null then
+    update public.estimates set job_id = job_id where id = est.id;
+  end if;
+
+  return public.shared_estimate(trim(p_token));
+end;
+$$;
+
+revoke all on function public.sign_shared_estimate(text) from public;
+grant execute on function public.sign_shared_estimate(text) to anon, authenticated;
+
+-- ========== 20260819340000_project_financials.sql ==========
+-- Project financials: expenses with required receipts, QuickBooks entry queue, accounting seat.
+
+alter type public.seat_role add value if not exists 'accountant';
+
+alter table public.invoices
+  add column if not exists qb_status text not null default 'not_in_qb';
+
+alter table public.payments
+  alter column invoice_id drop not null;
+
+alter table public.payments
+  add column if not exists job_id uuid references public.jobs (id) on delete set null,
+  add column if not exists receipt_url text not null default '',
+  add column if not exists receipt_storage_path text,
+  add column if not exists qb_status text not null default 'not_in_qb',
+  add column if not exists created_by text not null default '';
+
+create index if not exists payments_job_id_idx on public.payments (job_id);
+
+create table if not exists public.expenses (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  number text not null,
+  job_id uuid references public.jobs (id) on delete set null,
+  vendor text not null default '',
+  account text not null default 'materials',
+  amount numeric(14, 2) not null default 0,
+  incurred_at date not null default current_date,
+  method text not null default 'credit_card',
+  memo text not null default '',
+  receipt_url text not null,
+  receipt_storage_path text,
+  qb_status text not null default 'not_in_qb',
+  extracted_by_ai boolean not null default false,
+  created_at timestamptz not null default now(),
+  created_by text not null default ''
+);
+
+create unique index if not exists expenses_company_number_idx on public.expenses (company_id, number);
+create index if not exists expenses_job_id_idx on public.expenses (job_id);
+create index if not exists expenses_qb_status_idx on public.expenses (company_id, qb_status);
+
+alter table public.expenses enable row level security;
+
+drop policy if exists "company isolation" on public.expenses;
+drop policy if exists "company isolation" on public.expenses;
+create policy "company isolation" on public.expenses
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+do $$
+begin
+  begin
+    execute 'alter publication supabase_realtime add table public.expenses';
+  exception
+    when duplicate_object then null;
+  end;
+end $$;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'receipts',
+  'receipts',
+  true,
+  10485760,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']
+)
+on conflict (id) do nothing;
+
+drop policy if exists "public read receipts" on storage.objects;
+drop policy if exists "public read receipts" on storage.objects;
+create policy "public read receipts"
+on storage.objects for select
+to public
+using (bucket_id = 'receipts');
+
+drop policy if exists "company receipt files" on storage.objects;
+drop policy if exists "company receipt files" on storage.objects;
+create policy "company receipt files"
+on storage.objects for all to authenticated
+using (
+  bucket_id = 'receipts'
+  and (storage.foldername(name))[1] = public.current_company_id()::text
+)
+with check (
+  bucket_id = 'receipts'
+  and (storage.foldername(name))[1] = public.current_company_id()::text
+);
+
+-- ========== 20260820120000_opportunity_originator.sql ==========
+-- Who sourced the lead stays on the record when it is assigned to production.
+
+alter table public.opportunities
+  add column if not exists originator_staff_id uuid references public.team_members (id) on delete set null;
+
+update public.opportunities
+set originator_staff_id = owner_staff_id
+where originator_staff_id is null
+  and owner_staff_id is not null;
+
+create index if not exists opportunities_originator_staff_id_idx
+  on public.opportunities (originator_staff_id);
+
+-- ========== 20260820200000_account_management.sql ==========
+-- Account management: invite teammates into an existing company, lock, and restrict.
+-- Safe to re-run after a failed attempt.
+
+alter table public.team_members
+  add column if not exists email text not null default '',
+  add column if not exists locked boolean not null default false,
+  add column if not exists restricted boolean not null default false,
+  add column if not exists invite_expires_at timestamptz;
+
+create unique index if not exists team_members_company_email_idx
+  on public.team_members (company_id, lower(email))
+  where email <> '';
+
+create table if not exists public.account_invites (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  staff_id uuid not null references public.team_members (id) on delete cascade,
+  email text not null,
+  token text not null unique,
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  created_by uuid references public.profiles (id) on delete set null
+);
+
+create index if not exists account_invites_company_id_idx on public.account_invites (company_id);
+create index if not exists account_invites_token_idx on public.account_invites (token);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint where conname = 'account_invites_staff_id_key'
+  ) then
+    alter table public.account_invites
+      add constraint account_invites_staff_id_key unique (staff_id);
+  end if;
+end $$;
+
+alter table public.profiles
+  add column if not exists staff_id uuid references public.team_members (id) on delete set null;
+
+create or replace function public.current_is_company_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (
+      select p.role = 'company_admin'
+        and coalesce(tm.locked, false) = false
+        and coalesce(tm.restricted, false) = false
+      from public.profiles p
+      left join public.team_members tm on tm.id = p.staff_id
+      where p.id = auth.uid()
+    ),
+    false
+  )
+$$;
+
+revoke all on function public.current_is_company_admin() from public;
+grant execute on function public.current_is_company_admin() to authenticated;
+
+alter table public.account_invites enable row level security;
+
+drop policy if exists "admin manage invites" on public.account_invites;
+drop policy if exists "admin manage invites" on public.account_invites;
+create policy "admin manage invites" on public.account_invites
+  for all to authenticated
+  using (company_id = public.current_company_id() and public.current_is_company_admin())
+  with check (company_id = public.current_company_id() and public.current_is_company_admin());
+
+drop policy if exists "admin update company profiles" on public.profiles;
+drop policy if exists "admin update company profiles" on public.profiles;
+create policy "admin update company profiles" on public.profiles
+  for update to authenticated
+  using (company_id = public.current_company_id() and public.current_is_company_admin())
+  with check (company_id = public.current_company_id() and public.current_is_company_admin());
+
+drop policy if exists "admin delete company profiles" on public.profiles;
+drop policy if exists "admin delete company profiles" on public.profiles;
+create policy "admin delete company profiles" on public.profiles
+  for delete to authenticated
+  using (
+    company_id = public.current_company_id()
+    and public.current_is_company_admin()
+    and id is distinct from auth.uid()
+  );
+
+drop policy if exists "company isolation" on public.team_members;
+drop policy if exists "read company seats" on public.team_members;
+drop policy if exists "admin write seats" on public.team_members;
+drop policy if exists "admin update seats" on public.team_members;
+drop policy if exists "admin delete seats" on public.team_members;
+
+drop policy if exists "read company seats" on public.team_members;
+create policy "read company seats" on public.team_members
+  for select to authenticated
+  using (company_id = public.current_company_id());
+
+drop policy if exists "admin write seats" on public.team_members;
+create policy "admin write seats" on public.team_members
+  for insert to authenticated
+  with check (company_id = public.current_company_id() and public.current_is_company_admin());
+
+drop policy if exists "admin update seats" on public.team_members;
+create policy "admin update seats" on public.team_members
+  for update to authenticated
+  using (company_id = public.current_company_id() and public.current_is_company_admin())
+  with check (company_id = public.current_company_id() and public.current_is_company_admin());
+
+drop policy if exists "admin delete seats" on public.team_members;
+create policy "admin delete seats" on public.team_members
+  for delete to authenticated
+  using (company_id = public.current_company_id() and public.current_is_company_admin());
+
+create or replace function public.invite_preview(p_token text)
+returns table (
+  company_name text,
+  seat_name text,
+  seat_title text,
+  seat_role public.seat_role,
+  email text,
+  expires_at timestamptz
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  return query
+  select
+    c.name,
+    tm.name,
+    tm.title,
+    tm.role,
+    i.email,
+    i.expires_at
+  from public.account_invites i
+  join public.team_members tm on tm.id = i.staff_id
+  join public.companies c on c.id = i.company_id
+  where i.token = p_token
+    and i.expires_at > now()
+    and tm.locked = false
+  limit 1;
+end;
+$$;
+
+revoke all on function public.invite_preview(text) from public;
+grant execute on function public.invite_preview(text) to anon, authenticated;
+
+create or replace function public.claim_invite(p_token text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+  user_email text;
+  invite_company uuid;
+  invite_staff uuid;
+  invite_email text;
+  invite_role public.seat_role;
+  seat_title text;
+  full_name text;
+  initials text;
+begin
+  if uid is null then
+    raise exception 'Sign in to accept this invite.';
+  end if;
+
+  select u.email, coalesce(nullif(trim(u.raw_user_meta_data->>'full_name'), ''), split_part(u.email, '@', 1))
+    into user_email, full_name
+  from auth.users u
+  where u.id = uid;
+
+  select i.company_id, i.staff_id, i.email, tm.role, tm.title
+    into invite_company, invite_staff, invite_email, invite_role, seat_title
+  from public.account_invites i
+  join public.team_members tm on tm.id = i.staff_id
+  where i.token = p_token
+    and i.expires_at > now()
+    and tm.locked = false;
+
+  if invite_company is null then
+    raise exception 'That invite is missing or expired.';
+  end if;
+
+  if lower(invite_email) is distinct from lower(coalesce(user_email, '')) then
+    raise exception 'Sign in with the email this invite was sent to.';
+  end if;
+
+  initials := upper(left(regexp_replace(full_name, '\s+', ' ', 'g'), 1))
+    || coalesce(upper(left(split_part(full_name, ' ', 2), 1)), '');
+
+  insert into public.profiles (id, company_id, full_name, title, initials, role, staff_id)
+  values (uid, invite_company, full_name, seat_title, initials, invite_role, invite_staff)
+  on conflict (id) do update
+    set company_id = excluded.company_id,
+        full_name = excluded.full_name,
+        title = excluded.title,
+        initials = excluded.initials,
+        role = excluded.role,
+        staff_id = excluded.staff_id;
+
+  update public.team_members
+  set
+    name = full_name,
+    title = seat_title,
+    initials = initials,
+    email = coalesce(user_email, email),
+    invite_expires_at = null,
+    locked = false
+  where id = invite_staff;
+
+  delete from public.account_invites where staff_id = invite_staff;
+  return invite_company;
+end;
+$$;
+
+revoke all on function public.claim_invite(text) from public;
+grant execute on function public.claim_invite(text) to authenticated;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_company_id uuid;
+  new_staff_id uuid;
+  full_name text;
+  title text;
+  company_name text;
+  initials text;
+  invite_token text;
+  invite_company uuid;
+  invite_staff uuid;
+  invite_email text;
+  invite_role public.seat_role;
+begin
+  full_name := coalesce(nullif(trim(new.raw_user_meta_data->>'full_name'), ''), split_part(new.email, '@', 1));
+  title := coalesce(nullif(trim(new.raw_user_meta_data->>'title'), ''), 'Company admin');
+  company_name := coalesce(nullif(trim(new.raw_user_meta_data->>'company'), ''), 'Truss');
+  initials := upper(left(regexp_replace(full_name, '\s+', ' ', 'g'), 1))
+    || coalesce(upper(left(split_part(full_name, ' ', 2), 1)), '');
+  invite_token := nullif(trim(new.raw_user_meta_data->>'invite_token'), '');
+
+  if invite_token is not null then
+    select i.company_id, i.staff_id, i.email, tm.role
+      into invite_company, invite_staff, invite_email, invite_role
+    from public.account_invites i
+    join public.team_members tm on tm.id = i.staff_id
+    where i.token = invite_token
+      and i.expires_at > now()
+      and tm.locked = false;
+
+    if invite_company is null then
+      raise exception 'That invite is missing or expired.';
+    end if;
+
+    if lower(invite_email) is distinct from lower(new.email) then
+      raise exception 'Sign up with the email this invite was sent to.';
+    end if;
+
+    insert into public.profiles (id, company_id, full_name, title, initials, role, staff_id)
+    values (
+      new.id,
+      invite_company,
+      full_name,
+      coalesce(nullif(trim(new.raw_user_meta_data->>'title'), ''), title),
+      initials,
+      invite_role,
+      invite_staff
+    );
+
+    update public.team_members
+    set
+      name = full_name,
+      title = coalesce(nullif(trim(new.raw_user_meta_data->>'title'), ''), title),
+      initials = initials,
+      email = new.email,
+      invite_expires_at = null,
+      locked = false
+    where id = invite_staff;
+
+    delete from public.account_invites where staff_id = invite_staff;
+    return new;
+  end if;
+
+  insert into public.companies (name)
+  values (company_name)
+  returning id into new_company_id;
+
+  insert into public.team_members (company_id, name, title, role, initials, email)
+  values (new_company_id, full_name, title, 'company_admin', initials, coalesce(new.email, ''))
+  returning id into new_staff_id;
+
+  insert into public.profiles (id, company_id, full_name, title, initials, role, staff_id)
+  values (
+    new.id,
+    new_company_id,
+    full_name,
+    title,
+    initials,
+    'company_admin',
+    new_staff_id
+  );
+
+  return new;
+end;
+$$;
+
+do $$
+begin
+  execute 'alter publication supabase_realtime add table public.account_invites';
+exception
+  when duplicate_object then null;
+end $$;
