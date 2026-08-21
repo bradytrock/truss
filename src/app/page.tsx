@@ -20,6 +20,7 @@ import {
 } from "@/lib/format";
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
 import { amountForEstimate } from "@/lib/estimate-totals";
+import { marketForEstimate } from "@/lib/market";
 import { PIPELINE_STAGES, STAGE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { COURSE, overallProgress, staffProgress } from "@/lib/training/engine";
@@ -58,7 +59,12 @@ export default function HomePage() {
     );
     const proposalValue = proposals.reduce(
       (sum, estimate) =>
-        sum + amountForEstimate(estimate, crm.estimateLines),
+        sum +
+        amountForEstimate(
+          estimate,
+          crm.estimateLines,
+          marketForEstimate(estimate, crm.jobs, crm.opportunities),
+        ),
       0
     );
     const ar = crm.invoices.reduce((sum, invoice) => {

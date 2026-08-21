@@ -248,6 +248,8 @@ export function CreateOpportunityDialog({
         </SheetHeader>
         <form onSubmit={handleSubmit} className="flex flex-1 flex-col">
           <div className="grid gap-3.5 px-4 py-4">
+            <MarketField value={market} onChange={setMarket} id="lead-market" />
+
             <div className="grid gap-1.5">
               <div className="flex items-end justify-between gap-2">
                 <Label htmlFor="lead-assignee">Assigned to</Label>
@@ -268,8 +270,6 @@ export function CreateOpportunityDialog({
                 />
               </div>
             </div>
-
-            <MarketField value={market} onChange={setMarket} id="lead-market" />
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="First name" htmlFor="lead-first">

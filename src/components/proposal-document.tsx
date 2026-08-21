@@ -15,7 +15,7 @@ import {
 } from "@/lib/estimate-totals";
 import { formatDate, formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
-import type { CompanySettings, Estimate, EstimateLine } from "@/lib/types";
+import type { CompanySettings, Estimate, EstimateLine, JobMarket } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function EstimateTotals({
@@ -76,6 +76,7 @@ export function ProposalDocument({
   lines,
   customer,
   company,
+  market,
   onToggleOptional,
   selectable,
   showInternalNotes = false,
@@ -85,6 +86,7 @@ export function ProposalDocument({
   lines: EstimateLine[];
   customer: string;
   company?: CompanySettings;
+  market?: JobMarket | "" | null;
   onToggleOptional?: (line: EstimateLine, selected: boolean) => void;
   selectable?: boolean;
   showInternalNotes?: boolean;
@@ -106,7 +108,10 @@ export function ProposalDocument({
     fallbackStaffId: crm?.user.staffId,
     inBook: Boolean(crm?.estimates.some((item) => item.id === estimate.id)),
   });
-  const billed = billingEstimate(estimate, workMarket(job, opportunity));
+  const billed = billingEstimate(
+    estimate,
+    market || (job || opportunity ? workMarket(job, opportunity) : undefined),
+  );
   return (
     <div className="space-y-6 rounded-md border bg-card p-5 sm:p-7">
       <CompanyLetterhead company={letterhead} />

@@ -33,7 +33,7 @@ If invite signup fails with **Database error saving new user**, you do not need 
 
 Photo reports need [`20260821140000_photo_reports.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821140000_photo_reports.sql) (or a fresh bootstrap) so they persist in Postgres. The builder still works in the browser until that runs.
 
-Residential vs commercial on leads and jobs needs [`20260821160000_job_market.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821160000_job_market.sql) (or a fresh bootstrap) so the choice persists. Until that runs, Truss still applies residential (no tax) vs commercial (taxed) in the browser.
+Residential vs commercial on leads and jobs needs [`20260821160000_job_market.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821160000_job_market.sql) and [`20260821170000_residential_share_tax.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821170000_residential_share_tax.sql) (or a fresh bootstrap) so the choice persists and residential share links stay untaxed. Until those run, Truss still applies residential (no tax) vs commercial (taxed) in the browser.
 
 In Authentication → URL configuration, add `http://localhost:3847/auth/callback` (and the hosted app origin). For local work you can turn off “Confirm email”. Signup opens a company, a profile, and a seat for you. It does not add sample people. Add real teammates from Settings → People.
 

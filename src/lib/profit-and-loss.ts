@@ -6,11 +6,13 @@ import type {
   Invoice,
   InvoiceLine,
   Job,
+  Opportunity,
   Payment,
 } from "@/lib/types";
 import { EXPENSE_ACCOUNT_LABELS } from "@/lib/types";
 import { invoiceTotal } from "@/lib/money";
 import { amountForEstimate } from "@/lib/estimate-totals";
+import { marketForEstimate } from "@/lib/market";
 import type { JobBooksBasis } from "@/lib/job-financials";
 import { expensesForJob, paymentsForJob } from "@/lib/job-financials";
 
@@ -164,6 +166,19 @@ function jobIdForInvoice(
   return null;
 }
 
+function billedEstimateAmount(
+  estimate: Estimate,
+  jobs: Job[],
+  opportunities: Opportunity[],
+  estimateLines: EstimateLine[],
+) {
+  return amountForEstimate(
+    estimate,
+    estimateLines,
+    marketForEstimate(estimate, jobs, opportunities),
+  );
+}
+
 function jobIdForEstimate(estimate: Estimate, jobs: Job[]): string | null {
   if (estimate.jobId) return estimate.jobId;
   if (estimate.opportunityId) {
@@ -174,6 +189,7 @@ function jobIdForEstimate(estimate: Estimate, jobs: Job[]): string | null {
 
 function buildIncomeLines(input: {
   jobs: Job[];
+  opportunities: Opportunity[];
   invoices: Invoice[];
   invoiceLines: InvoiceLine[];
   payments: Payment[];
@@ -271,7 +287,12 @@ function buildIncomeLines(input: {
       .map((estimate) => ({
         id: estimate.id,
         label: `${estimate.number} · ${estimate.name}`,
-        amount: amountForEstimate(estimate, input.estimateLines),
+        amount: billedEstimateAmount(
+          estimate,
+          input.jobs,
+          input.opportunities,
+          input.estimateLines,
+        ),
         href: `/estimates/${estimate.id}`,
       }));
   }
@@ -295,7 +316,8 @@ function buildIncomeLines(input: {
     if (!jobId || invoicedJobs.has(jobId)) continue;
     estimateByJob.set(
       jobId,
-      (estimateByJob.get(jobId) ?? 0) + amountForEstimate(estimate, input.estimateLines),
+      (estimateByJob.get(jobId) ?? 0) +
+        billedEstimateAmount(estimate, input.jobs, input.opportunities, input.estimateLines),
     );
   }
   for (const [jobId, amount] of estimateByJob) {
@@ -316,6 +338,7 @@ function buildIncomeLines(input: {
 export function buildProfitAndLoss(input: {
   companyName: string;
   jobs: Job[];
+  opportunities?: Opportunity[];
   invoices: Invoice[];
   invoiceLines: InvoiceLine[];
   payments: Payment[];
@@ -339,6 +362,7 @@ export function buildProfitAndLoss(input: {
   const jobExpenses = jobId ? expensesForJob(jobId, rangedExpenses) : rangedExpenses;
   const incomeLines = buildIncomeLines({
     jobs: input.jobs,
+    opportunities: input.opportunities ?? [],
     invoices: input.invoices,
     invoiceLines: input.invoiceLines,
     payments: input.payments,

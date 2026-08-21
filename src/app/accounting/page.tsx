@@ -55,6 +55,7 @@ export default function AccountingPage() {
     return buildProfitAndLoss({
       companyName: crm.company.name,
       jobs: crm.jobs,
+      opportunities: crm.opportunities,
       invoices: crm.invoices,
       invoiceLines: crm.invoiceLines,
       payments: crm.payments,
@@ -75,6 +76,7 @@ export default function AccountingPage() {
     crm.invoiceLines,
     crm.invoices,
     crm.jobs,
+    crm.opportunities,
     crm.payments,
     span,
     ytd.from,

@@ -25,6 +25,7 @@ import { EstimateStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatDate, formatMoney } from "@/lib/format";
 import { amountForEstimate } from "@/lib/estimate-totals";
+import { marketForEstimate } from "@/lib/market";
 import {
   ESTIMATE_STATUS_LABELS,
   ESTIMATE_STATUSES,
@@ -124,7 +125,8 @@ export default function EstimatesPage() {
               {rows.map((estimate) => {
                 const total = amountForEstimate(
                   estimate,
-                  crm.estimateLines
+                  crm.estimateLines,
+                  marketForEstimate(estimate, crm.jobs, crm.opportunities),
                 );
                 return (
                   <TableRow key={estimate.id}>

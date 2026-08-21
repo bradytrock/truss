@@ -40,6 +40,18 @@ export function workMarket(
   return marketFromProjectType(job?.projectType || opportunity?.projectType);
 }
 
+export function marketForEstimate(
+  estimate: { jobId?: string | null; opportunityId?: string | null },
+  jobs: Array<{ id: string; market?: JobMarket | ""; projectType?: ProjectType | "" }>,
+  opportunities: Array<{ id: string; market?: JobMarket | ""; projectType?: ProjectType | "" }>,
+): JobMarket {
+  const job = estimate.jobId ? jobs.find((item) => item.id === estimate.jobId) : undefined;
+  const opportunity = estimate.opportunityId
+    ? opportunities.find((item) => item.id === estimate.opportunityId)
+    : undefined;
+  return workMarket(job, opportunity);
+}
+
 export function isResidentialMarket(market?: JobMarket | "" | null) {
   return market !== "commercial";
 }
@@ -53,7 +65,7 @@ export function projectTypeForMarket(market: JobMarket): ProjectType {
 }
 
 export function billingEstimate<T extends Pick<Estimate, "taxRate">>(estimate: T, market?: JobMarket | "" | null): T {
-  if (!isResidentialMarket(market)) return estimate;
+  if (market !== "residential") return estimate;
   if (estimate.taxRate === 0) return estimate;
   return { ...estimate, taxRate: 0 };
 }

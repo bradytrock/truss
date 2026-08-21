@@ -41,7 +41,7 @@ import {
   wouldLeaveNoAdmin,
 } from "@/lib/accounts";
 import { isPublicAppPath } from "@/lib/auth-paths";
-import { defaultTaxRateForMarket, parseMarket, projectTypeForMarket, workMarket } from "@/lib/market";
+import { defaultTaxRateForMarket, isResidentialMarket, marketForEstimate, parseMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { findStaffForProfile, isUnsignedDemo, namesMatch, staffMemberFromProfile } from "@/lib/seats";
@@ -1052,7 +1052,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       const contractValue =
         extras?.contractValue ??
-        contractValueForOpportunity(id, state.estimates, state.estimateLines, current.value);
+        contractValueForOpportunity(
+          id,
+          state.estimates,
+          state.estimateLines,
+          current.value,
+          parseMarket(current.market, current.projectType),
+        );
       const street = extras?.street ?? current.street ?? "";
       const city = extras?.city ?? current.city ?? "";
       const stateCode = extras?.state ?? current.state ?? "";
@@ -2132,7 +2138,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (opportunityId && opportunityId !== current.opportunityId) {
         await updateEstimate(id, { opportunityId });
       }
-      const total = amountForEstimate(current, state.estimateLines);
+      const total = amountForEstimate(
+        current,
+        state.estimateLines,
+        marketForEstimate(current, state.jobs, state.opportunities),
+      );
       const job = opportunityId
         ? await moveOpportunity(opportunityId, "awarded", undefined, {
             contractValue: total,
@@ -2237,8 +2247,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         intro: source.intro,
         terms: source.terms,
       });
+      const market = marketForEstimate(source, state.jobs, state.opportunities);
+      const taxRate = isResidentialMarket(market)
+        ? 0
+        : source.taxRate || defaultTaxRateForMarket("commercial");
       await updateEstimate(copy.id, {
-        taxRate: source.taxRate,
+        taxRate,
         discountKind: source.discountKind,
         discountValue: source.discountValue,
         depositKind: source.depositKind,
@@ -2257,7 +2271,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const supabase = maybeClient();
       if (!supabase) {
         setState((prev) => ({ ...prev, estimateLines: [...prev.estimateLines, ...copied] }));
-        return fillEstimate({ ...copy, taxRate: source.taxRate, discountKind: source.discountKind, discountValue: source.discountValue, depositKind: source.depositKind, depositValue: source.depositValue });
+        return fillEstimate({
+          ...copy,
+          taxRate,
+          discountKind: source.discountKind,
+          discountValue: source.discountValue,
+          depositKind: source.depositKind,
+          depositValue: source.depositValue,
+        });
       }
       if (copied.length) {
         const payload = copied.map((line) => ({
@@ -2301,14 +2322,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       setState((prev) => ({ ...prev, estimateLines: [...prev.estimateLines, ...copied] }));
       return fillEstimate({
         ...copy,
-        taxRate: source.taxRate,
+        taxRate,
         discountKind: source.discountKind,
         discountValue: source.discountValue,
         depositKind: source.depositKind,
         depositValue: source.depositValue,
       });
     },
-    [addEstimate, state.estimateLines, state.estimates, updateEstimate, user.companyId]
+    [addEstimate, state.estimateLines, state.estimates, state.jobs, state.opportunities, updateEstimate, user.companyId]
   );
 
   const addEstimateLineFromCatalog = useCallback(
@@ -2524,7 +2545,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     async (estimateId: string) => {
       const estimate = state.estimates.find((item) => item.id === estimateId);
       if (!estimate) throw new Error("Estimate not found.");
-      const billed = invoiceLinesFromEstimate(estimate, state.estimateLines);
+      const billed = invoiceLinesFromEstimate(
+        estimate,
+        state.estimateLines,
+        marketForEstimate(estimate, state.jobs, state.opportunities),
+      );
       if (billed.length === 0) {
         toast.error("Add at least one included line before converting.");
         throw new Error("No included lines.");

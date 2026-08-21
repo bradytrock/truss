@@ -10,6 +10,7 @@ import { downloadEstimatePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
 import { letterheadCompanyForRecord } from "@/lib/document-owner";
 import { linesForEstimate } from "@/lib/estimate-totals";
+import { billingEstimate, workMarket } from "@/lib/market";
 import { parseSharedEstimate, type SharedEstimatePayload } from "@/lib/share";
 
 export default function SharedEstimatePage() {
@@ -119,7 +120,7 @@ export default function SharedEstimatePage() {
               disabled={lines.length === 0}
               onClick={() =>
                 void downloadEstimatePdf({
-                  estimate: fromStore,
+                  estimate: billingEstimate(fromStore, workMarket(job, opportunity)),
                   lines,
                   company: letterhead,
                   customer,
@@ -167,14 +168,14 @@ export default function SharedEstimatePage() {
         <>
           <SharePdfButton
             disabled={remote.lines.length === 0}
-            onClick={() =>
-              void downloadEstimatePdf({
-                estimate: remote.estimate,
-                lines: remote.lines,
-                company: remote.company,
-                customer: remote.customer,
-              }).catch(() => toast.error("Could not build the PDF."))
-            }
+              onClick={() =>
+                void downloadEstimatePdf({
+                  estimate: billingEstimate(remote.estimate, remote.market),
+                  lines: remote.lines,
+                  company: remote.company,
+                  customer: remote.customer,
+                }).catch(() => toast.error("Could not build the PDF."))
+              }
           />
           {canSignRemote ? (
             <Button disabled={signing} onClick={() => void signRemote()}>
@@ -194,6 +195,7 @@ export default function SharedEstimatePage() {
         estimate={remote.estimate}
         lines={remote.lines}
         customer={remote.customer}
+        market={remote.market}
         showStatus={false}
       />
     </ShareFrame>

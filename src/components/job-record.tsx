@@ -66,6 +66,7 @@ import { createPhotoReport } from "@/lib/photo-report";
 import { leadSourceChoices, leadSourceLabel } from "@/lib/leads";
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
 import { amountForEstimate } from "@/lib/estimate-totals";
+import { workMarket } from "@/lib/market";
 import { COURSE } from "@/lib/training/engine";
 import { recommendedChapterIds } from "@/lib/training/recommend";
 import {
@@ -493,7 +494,10 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                   }
                   if (market === "residential") {
                     for (const estimate of crm.estimates.filter(
-                      (item) => item.jobId === job.id && item.taxRate !== 0,
+                      (item) =>
+                        item.taxRate !== 0 &&
+                        (item.jobId === job.id ||
+                          (job.opportunityId && item.opportunityId === job.opportunityId)),
                     )) {
                       void crm.updateEstimate(estimate.id, { taxRate: 0 });
                     }
@@ -905,7 +909,11 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                       <EstimateStatusBadge status={estimate.status} />
                       <span className="text-xs tabular-nums text-muted-foreground">
                         {formatCurrencyFull(
-                          amountForEstimate(estimate, crm.estimateLines)
+                          amountForEstimate(
+                            estimate,
+                            crm.estimateLines,
+                            workMarket(job, opportunity),
+                          )
                         )}
                       </span>
                     </div>

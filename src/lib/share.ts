@@ -90,6 +90,7 @@ export type SharedCompany = {
 export type SharedEstimatePayload = {
   customer: string;
   company: SharedCompany;
+  market?: "residential" | "commercial";
   estimate: {
     id: string;
     number: string;
@@ -201,6 +202,7 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
   return {
     customer: asString(raw.customer, "Homeowner"),
     company: parseCompany(raw.company),
+    market: asString(raw.market) === "commercial" ? "commercial" : asString(raw.market) === "residential" ? "residential" : undefined,
     estimate: {
       id: asString(estimate.id),
       number: asString(estimate.number),
@@ -215,7 +217,7 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
       sentAt: asNullable(estimate.sentAt),
       acceptedAt: asNullable(estimate.acceptedAt),
       createdAt: asString(estimate.createdAt),
-      taxRate: asNumber(estimate.taxRate),
+      taxRate: asString(raw.market) === "residential" ? 0 : asNumber(estimate.taxRate),
       discountKind: estimate.discountKind === "amount" ? "amount" : "percent",
       discountValue: asNumber(estimate.discountValue),
       depositKind: estimate.depositKind === "amount" ? "amount" : "percent",

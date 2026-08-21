@@ -232,7 +232,11 @@ export default function OpportunityDetailPage() {
                         </Link>
                         <p className="text-xs tabular-nums text-muted-foreground">
                           {formatCurrencyFull(
-                            amountForEstimate(estimate, crm.estimateLines)
+                            amountForEstimate(
+                              estimate,
+                              crm.estimateLines,
+                              parseMarket(opportunity.market, opportunity.projectType),
+                            )
                           )}
                         </p>
                       </div>

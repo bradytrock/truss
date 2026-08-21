@@ -1,5 +1,6 @@
 import { seedShareToken } from "@/lib/share";
-import type { Estimate, EstimateLine } from "@/lib/types";
+import { billingEstimate } from "@/lib/market";
+import type { Estimate, EstimateLine, JobMarket } from "@/lib/types";
 
 export type AdjustmentKind = "percent" | "amount";
 
@@ -77,8 +78,8 @@ export function linesForEstimate(lines: EstimateLine[], estimateId: string) {
     .sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
-export function amountForEstimate(estimate: Estimate, lines: EstimateLine[]) {
-  return estimateTotals(estimate, linesForEstimate(lines, estimate.id)).total;
+export function amountForEstimate(estimate: Estimate, lines: EstimateLine[], market?: JobMarket | "" | null) {
+  return estimateTotals(billingEstimate(estimate, market), linesForEstimate(lines, estimate.id)).total;
 }
 
 export function contractValueForOpportunity(
@@ -86,6 +87,7 @@ export function contractValueForOpportunity(
   estimates: Estimate[],
   lines: EstimateLine[],
   fallback = 0,
+  market?: JobMarket | "" | null,
 ) {
   const related = estimates.filter(
     (estimate) => estimate.opportunityId === opportunityId && estimate.status !== "declined",
@@ -95,7 +97,7 @@ export function contractValueForOpportunity(
     related.find((estimate) => estimate.status === "sent" || estimate.status === "viewed") ??
     related[0];
   if (!preferred) return fallback;
-  return amountForEstimate(preferred, lines);
+  return amountForEstimate(preferred, lines, market);
 }
 
 export function lineLabel(line: Pick<EstimateLine, "title" | "description">) {
@@ -105,9 +107,14 @@ export function lineLabel(line: Pick<EstimateLine, "title" | "description">) {
   return title || description || "Item";
 }
 
-export function invoiceLinesFromEstimate(estimate: Estimate, lines: EstimateLine[]) {
+export function invoiceLinesFromEstimate(
+  estimate: Estimate,
+  lines: EstimateLine[],
+  market?: JobMarket | "" | null,
+) {
+  const billedEstimate = billingEstimate(estimate, market);
   const billed = includedLines(linesForEstimate(lines, estimate.id));
-  const totals = estimateTotals(estimate, billed);
+  const totals = estimateTotals(billedEstimate, billed);
   const out = billed.map((line, index) => ({
     description: lineLabel(line),
     quantity: line.quantity,
@@ -129,7 +136,7 @@ export function invoiceLinesFromEstimate(estimate: Estimate, lines: EstimateLine
   }
   if (totals.tax > 0) {
     out.push({
-      description: `Tax (${estimate.taxRate}%)`,
+      description: `Tax (${billedEstimate.taxRate}%)`,
       quantity: 1,
       unit: "LS",
       unitCost: totals.tax,
