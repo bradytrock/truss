@@ -24,11 +24,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { CompanyLetterhead } from "@/components/company-letterhead";
 import { useCrm } from "@/lib/crm-store";
 import { formatDate } from "@/lib/format";
-import { jobAddress } from "@/lib/job-record";
 import { downloadPhotoReportPdf } from "@/lib/photo-report-pdf";
+import { photoReportCoverModel } from "@/lib/photo-report-cover";
 import {
   emptyCoverPage,
   emptyPhotosPage,
@@ -41,11 +40,14 @@ import {
   PHOTO_CATEGORY_LABELS,
   PHOTO_PAGE_LAYOUT_LABELS,
   PHOTO_PAGE_LAYOUTS,
+  type CompanySettings,
+  type Contact,
   type Job,
   type JobPhoto,
   type PhotoPageLayout,
   type PhotoReport,
   type PhotoReportPage,
+  type StaffMember,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -178,6 +180,9 @@ export function PhotoReportBuilder({
         job,
         photos,
         company: crm.company,
+        contacts: crm.contacts,
+        staff: crm.staff,
+        customerName: crm.customerName(job),
       });
       toast.success("PDF downloaded.");
     } catch (error) {
@@ -254,7 +259,16 @@ export function PhotoReportBuilder({
 
         <div className="min-h-0 overflow-y-auto bg-muted/40 p-4 sm:p-6">
           {selected ? (
-            <ReportPagePreview page={selected} job={job} photos={photos} companyName={crm.company.name} />
+            <ReportPagePreview
+              page={selected}
+              job={job}
+              photos={photos}
+              report={draft}
+              company={crm.company}
+              contacts={crm.contacts}
+              staff={crm.staff}
+              customerName={crm.customerName(job)}
+            />
           ) : (
             <p className="text-sm text-muted-foreground">Add a page to start this report.</p>
           )}
@@ -385,7 +399,28 @@ function PageInspector({
                 ))}
               </SelectContent>
             </Select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              This is the hero on the PDF cover. It is cropped to fill the page, like a drone shot on a printed report.
+            </p>
           </Field>
+          <div className="grid grid-cols-2 gap-2">
+            <Field label="Date of loss" htmlFor="cover-loss">
+              <Input
+                id="cover-loss"
+                value={page.dateOfLoss}
+                onChange={(event) => onChange({ dateOfLoss: event.target.value })}
+                placeholder="06.14.2026"
+              />
+            </Field>
+            <Field label="Claim number" htmlFor="cover-claim">
+              <Input
+                id="cover-claim"
+                value={page.claimNumber}
+                onChange={(event) => onChange({ claimNumber: event.target.value })}
+                placeholder="Claim #"
+              />
+            </Field>
+          </div>
           <Field label="Cover notes" htmlFor="cover-notes">
             <Textarea
               id="cover-notes"
@@ -552,25 +587,40 @@ function ReportPagePreview({
   page,
   job,
   photos,
-  companyName,
+  report,
+  company,
+  contacts,
+  staff,
+  customerName,
 }: {
   page: PhotoReportPage;
   job: Job;
   photos: JobPhoto[];
-  companyName: string;
+  report: PhotoReport;
+  company: CompanySettings;
+  contacts: Contact[];
+  staff: StaffMember[];
+  customerName: string;
 }) {
   return (
     <article className="mx-auto aspect-[8.5/11] w-full max-w-[28rem] overflow-hidden border bg-white text-neutral-900 shadow-sm">
-      <div className="flex h-full flex-col p-5">
-        {page.type === "cover" ? (
-          <CoverPreview page={page} job={job} photos={photos} />
-        ) : page.type === "text" ? (
-          <TextPreview page={page} />
-        ) : (
-          <PhotosPreview page={page} photos={photos} />
-        )}
-        <p className="mt-auto pt-3 text-[10px] tracking-wide text-neutral-400 uppercase">{companyName}</p>
-      </div>
+      {page.type === "cover" ? (
+        <CoverPreview
+          page={page}
+          job={job}
+          photos={photos}
+          report={report}
+          company={company}
+          contacts={contacts}
+          staff={staff}
+          customerName={customerName}
+        />
+      ) : (
+        <div className="flex h-full flex-col p-5">
+          {page.type === "text" ? <TextPreview page={page} /> : <PhotosPreview page={page} photos={photos} />}
+          <p className="mt-auto pt-3 text-[10px] tracking-wide text-neutral-400 uppercase">{company.name}</p>
+        </div>
+      )}
     </article>
   );
 }
@@ -579,30 +629,121 @@ function CoverPreview({
   page,
   job,
   photos,
+  report,
+  company,
+  contacts,
+  staff,
+  customerName,
 }: {
   page: Extract<PhotoReportPage, { type: "cover" }>;
   job: Job;
   photos: JobPhoto[];
+  report: PhotoReport;
+  company: CompanySettings;
+  contacts: Contact[];
+  staff: StaffMember[];
+  customerName: string;
 }) {
-  const hero = photoById(photos, page.heroPhotoId);
+  const cover = photoReportCoverModel({
+    page,
+    report,
+    job,
+    photos,
+    company,
+    contacts,
+    staff,
+    customerName,
+  });
+  const logoUrl = company.logoUrl?.trim();
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <CompanyLetterhead className="text-neutral-800 [&_p]:text-neutral-500" />
-      <h2 className="font-heading mt-6 text-2xl leading-tight">{page.title.trim() || "Photo report"}</h2>
-      {page.subtitle.trim() ? <p className="mt-2 text-sm text-neutral-600">{page.subtitle}</p> : null}
-      {page.showAddress && (jobAddress(job) || job.location) ? (
-        <p className="mt-3 text-xs text-neutral-500">{jobAddress(job) || job.location}</p>
-      ) : null}
-      {page.showDate ? <p className="text-xs text-neutral-500">{formatDate(new Date().toISOString())}</p> : null}
-      {hero ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={hero.imageUrl} alt="" className="mt-4 min-h-0 flex-1 object-cover" />
-      ) : (
-        <div className="mt-4 flex flex-1 items-center justify-center bg-neutral-100 text-xs text-neutral-400">
-          No cover photo
+    <div className="flex h-full min-h-0 flex-col bg-white text-neutral-900">
+      <header className="flex shrink-0 items-center justify-between gap-3 border-b-2 border-[#c4182a] px-3 py-2.5">
+        <div className="flex min-w-0 items-center gap-2">
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt="" className="h-8 w-auto max-w-[4.5rem] object-contain object-left" />
+          ) : (
+            <span className="flex size-8 items-center justify-center bg-neutral-950 text-[10px] font-semibold tracking-wide text-white">
+              {company.name
+                .split(" ")
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((part) => part[0]?.toUpperCase() ?? "")
+                .join("") || "TR"}
+            </span>
+          )}
+          <div className="min-w-0">
+            <p className="truncate text-[11px] font-semibold leading-tight">{cover.companyName}</p>
+            {cover.companyTag ? (
+              <p className="truncate text-[8px] tracking-[0.12em] text-neutral-500 uppercase">{cover.companyTag}</p>
+            ) : null}
+          </div>
         </div>
-      )}
-      {page.notes.trim() ? <p className="mt-3 text-xs leading-relaxed text-neutral-700">{page.notes}</p> : null}
+        <div className="shrink-0 text-right">
+          <p className="text-[11px] font-bold tracking-wide uppercase">{cover.kicker}</p>
+          <p className="text-[9px] font-bold tracking-wide text-[#c4182a] uppercase">{cover.reportTitle}</p>
+        </div>
+      </header>
+
+      <div className="relative min-h-0 flex-1 bg-neutral-950">
+        {cover.hero ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={cover.hero.imageUrl} alt="" className="size-full object-cover" />
+        ) : (
+          <p className="flex size-full items-center justify-center text-[10px] text-neutral-400">
+            Assign a cover photo
+          </p>
+        )}
+        {cover.street ? (
+          <div className="absolute bottom-3 left-3 max-w-[70%] bg-black/80 px-2.5 py-1.5 text-white">
+            <p className="text-[7px] font-semibold tracking-[0.16em] text-[#c4182a] uppercase">Property inspected</p>
+            <p className="mt-0.5 text-[11px] font-semibold uppercase leading-tight">{cover.street}</p>
+            {cover.cityLine ? <p className="text-[8px] uppercase text-white/80">{cover.cityLine}</p> : null}
+          </div>
+        ) : null}
+      </div>
+
+      <footer className="shrink-0 bg-neutral-950 px-3 pb-2 pt-2.5 text-white">
+        <div className="grid grid-cols-4 gap-2 border-b border-white/10 pb-2">
+          {[
+            ["Inspection date", cover.inspectionDate],
+            ["Date of loss", cover.dateOfLoss],
+            ["Claim number", cover.claimNumber],
+            ["Job number", cover.jobNumber],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <p className="text-[6px] font-semibold tracking-[0.14em] text-[#c4182a] uppercase">{label}</p>
+              <p className="mt-0.5 truncate text-[9px] font-semibold">{value || "—"}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-[6px] font-semibold tracking-[0.14em] text-[#c4182a] uppercase">Prepared for</p>
+            <p className="mt-0.5 text-[11px] font-semibold leading-tight">{cover.preparedForName}</p>
+            {cover.preparedForDetail.map((line) => (
+              <p key={line} className="truncate text-[8px] text-white/70">
+                {line}
+              </p>
+            ))}
+          </div>
+          <div>
+            <p className="text-[6px] font-semibold tracking-[0.14em] text-[#c4182a] uppercase">Prepared by</p>
+            <p className="mt-0.5 text-[11px] font-semibold leading-tight">{cover.preparedByName}</p>
+            {cover.preparedByTitle ? <p className="truncate text-[8px] text-white/70">{cover.preparedByTitle}</p> : null}
+            {cover.preparedByContact ? (
+              <p className="truncate text-[8px] text-white/70">{cover.preparedByContact}</p>
+            ) : null}
+          </div>
+        </div>
+        <div className="mt-2 flex items-end justify-between gap-2 border-t border-white/10 pt-1.5">
+          <p className="truncate text-[7px] font-semibold tracking-wide uppercase">{cover.footerLeft}</p>
+          {cover.footerRight ? (
+            <p className="truncate text-[7px] tracking-wide text-white/50 uppercase">{cover.footerRight}</p>
+          ) : null}
+        </div>
+      </footer>
     </div>
   );
 }

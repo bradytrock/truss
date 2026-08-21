@@ -1,15 +1,17 @@
 import type {
   CompanySettings,
+  Contact,
   Job,
   JobPhoto,
   PhotoReport,
   PhotoReportPage,
   PhotoReportPhotosPage,
+  StaffMember,
 } from "@/lib/types";
-import { formatDate } from "@/lib/format";
-import { jobAddress } from "@/lib/job-record";
-import { writePdfLetterhead } from "@/lib/letterhead-pdf";
+import { formatDate, initials } from "@/lib/format";
+import { loadLogoForPdf, writePdfLetterhead } from "@/lib/letterhead-pdf";
 import { PHOTO_CATEGORY_LABELS } from "@/lib/types";
+import { COVER_RED, photoReportCoverModel } from "@/lib/photo-report-cover";
 import { layoutCapacity, photoById } from "@/lib/photo-report";
 import { downloadBlob } from "@/lib/share";
 
@@ -42,6 +44,36 @@ type Doc = {
 async function createDoc() {
   const { jsPDF } = await import("jspdf");
   return new jsPDF({ unit: "pt", format: "letter" }) as unknown as Doc;
+}
+
+async function imageToCoverJpeg(url: string, targetW: number, targetH: number): Promise<string | null> {
+  if (typeof document === "undefined") return null;
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const node = new Image();
+      node.crossOrigin = "anonymous";
+      node.onload = () => resolve(node);
+      node.onerror = () => reject(new Error("Could not load photo."));
+      node.src = url;
+    });
+    const srcW = image.naturalWidth || image.width;
+    const srcH = image.naturalHeight || image.height;
+    if (!srcW || !srcH) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(targetW));
+    canvas.height = Math.max(1, Math.round(targetH));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    const scale = Math.max(canvas.width / srcW, canvas.height / srcH);
+    const w = srcW * scale;
+    const h = srcH * scale;
+    ctx.fillStyle = "#111";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(image, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+    return canvas.toDataURL("image/jpeg", 0.88);
+  } catch {
+    return null;
+  }
 }
 
 async function imageToJpeg(url: string): Promise<string | null> {
@@ -169,63 +201,200 @@ async function drawPhotosPage(
 async function drawCover(
   doc: Doc,
   page: Extract<PhotoReportPage, { type: "cover" }>,
-  job: Job,
-  photos: JobPhoto[],
-  company: CompanySettings,
-  cache: Map<string, string | null>,
+  input: {
+    report: PhotoReport;
+    job: Job;
+    photos: JobPhoto[];
+    company: CompanySettings;
+    contacts: Contact[];
+    staff: StaffMember[];
+    customerName: string;
+  },
 ) {
   const width = doc.internal.pageSize.getWidth();
   const height = doc.internal.pageSize.getHeight();
-  let y = await writeHeader(doc, company, 54);
-  y += 24;
-  doc.setFont("times", "bold");
-  doc.setFontSize(26);
-  doc.setTextColor(28, 28, 28);
-  const title = doc.splitTextToSize(page.title.trim() || "Photo report", width - 96);
-  doc.text(title, 48, y);
-  y += title.length * 28 + 8;
-  if (page.subtitle.trim()) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(12);
-    doc.setTextColor(70, 70, 70);
-    doc.text(page.subtitle.trim(), 48, y);
-    y += 18;
-  }
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(90, 90, 90);
-  if (page.showAddress) {
-    const address = jobAddress(job) || job.location;
-    if (address) {
-      doc.text(address, 48, y);
-      y += 14;
+  const cover = photoReportCoverModel({
+    page,
+    report: input.report,
+    job: input.job,
+    photos: input.photos,
+    company: input.company,
+    contacts: input.contacts,
+    staff: input.staff,
+    customerName: input.customerName,
+  });
+  const headerH = 78;
+  const footerH = 228;
+  const heroY = headerH;
+  const heroH = height - headerH - footerH;
+  const inset = 26;
+  const red = COVER_RED;
+
+  doc.setFillColor(18, 18, 18);
+  doc.rect(0, heroY, width, heroH, "F");
+  if (cover.hero) {
+    const data = await imageToCoverJpeg(cover.hero.imageUrl, width * 2, heroH * 2);
+    if (data) {
+      try {
+        doc.addImage(data, "JPEG", 0, heroY, width, heroH);
+      } catch {
+        // Gray hero already painted.
+      }
     }
-  }
-  if (page.showDate) {
-    doc.text(formatDate(new Date().toISOString()), 48, y);
-    y += 18;
-  }
-  const hero = photoById(photos, page.heroPhotoId);
-  if (hero) {
-    y += 8;
-    const boxW = width - 96;
-    const boxH = Math.min(320, height - y - 120);
-    doc.setFillColor(245, 245, 245);
-    doc.rect(48, y, boxW, boxH, "F");
-    let data = cache.get(hero.imageUrl);
-    if (data === undefined) {
-      data = await imageToJpeg(hero.imageUrl);
-      cache.set(hero.imageUrl, data);
-    }
-    if (data) fitImage(doc, data, 52, y + 4, boxW - 8, boxH - 8);
-    y += boxH + 16;
-  }
-  if (page.notes.trim()) {
+  } else {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.setTextColor(40, 40, 40);
-    const wrapped = doc.splitTextToSize(page.notes.trim(), width - 96);
-    doc.text(wrapped, 48, y);
+    doc.setTextColor(180, 180, 180);
+    doc.text("Assign a cover photo in the report", width / 2, heroY + heroH / 2, { align: "center" });
+  }
+
+  if (cover.street) {
+    const boxW = Math.min(340, width * 0.62);
+    const boxH = cover.cityLine ? 58 : 44;
+    const boxX = inset;
+    const boxY = heroY + heroH - boxH - 16;
+    doc.setFillColor(12, 12, 12);
+    doc.rect(boxX, boxY, boxW, boxH, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(red.r, red.g, red.b);
+    doc.text("PROPERTY INSPECTED", boxX + 12, boxY + 14);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    const street = doc.splitTextToSize(cover.street, boxW - 24);
+    doc.text(street[0], boxX + 12, boxY + 30);
+    if (cover.cityLine) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(cover.cityLine, boxX + 12, boxY + 44);
+    }
+  }
+
+  doc.setFillColor(255, 255, 255);
+  doc.rect(0, 0, width, headerH, "F");
+  doc.setFillColor(red.r, red.g, red.b);
+  doc.rect(0, headerH - 2, width, 2, "F");
+
+  const logo = input.company.logoUrl?.trim() ? await loadLogoForPdf(input.company.logoUrl) : null;
+  let textX = inset;
+  if (logo) {
+    const maxH = 46;
+    const maxW = 92;
+    const scale = Math.min(maxW / logo.width, maxH / logo.height);
+    const w = logo.width * scale;
+    const h = logo.height * scale;
+    doc.addImage(logo.data, logo.format, inset, (headerH - 2 - h) / 2, w, h);
+    textX = inset + w + 12;
+  } else {
+    const mark = 40;
+    doc.setFillColor(16, 16, 16);
+    doc.rect(inset, 18, mark, mark, "F");
+    doc.setFillColor(red.r, red.g, red.b);
+    doc.rect(inset, 18, 4, mark, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(255, 255, 255);
+    doc.text(initials(input.company.name) || "TR", inset + mark / 2 + 1, 44, { align: "center" });
+    textX = inset + mark + 12;
+  }
+
+  const nameMax = width - textX - 210;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(16, 16, 16);
+  const nameLines = doc.splitTextToSize(cover.companyName, Math.max(120, nameMax));
+  doc.text(nameLines[0], textX, 34);
+  if (cover.companyTag) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(120, 120, 120);
+    doc.text(cover.companyTag, textX, 48);
+  }
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(16, 16, 16);
+  doc.text(cover.kicker, width - inset, 32, { align: "right" });
+  doc.setFontSize(11);
+  doc.setTextColor(red.r, red.g, red.b);
+  doc.text(cover.reportTitle, width - inset, 48, { align: "right" });
+
+  const footerY = height - footerH;
+  doc.setFillColor(8, 8, 8);
+  doc.rect(0, footerY, width, footerH, "F");
+
+  const meta = [
+    { label: "INSPECTION DATE", value: cover.inspectionDate || "—" },
+    { label: "DATE OF LOSS", value: cover.dateOfLoss || "—" },
+    { label: "CLAIM NUMBER", value: cover.claimNumber || "—" },
+    { label: "JOB NUMBER", value: cover.jobNumber || "—" },
+  ];
+  const colW = (width - inset * 2) / 4;
+  const metaY = footerY + 28;
+  meta.forEach((item, index) => {
+    const x = inset + index * colW;
+    if (index > 0) {
+      doc.setDrawColor(red.r, red.g, red.b);
+      doc.setFillColor(red.r, red.g, red.b);
+      doc.rect(x - 8, metaY - 8, 0.8, 36, "F");
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(red.r, red.g, red.b);
+    doc.text(item.label, x, metaY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    doc.text(item.value, x, metaY + 16);
+  });
+
+  const splitX = width / 2;
+  const peopleY = footerY + 84;
+  doc.setDrawColor(55, 55, 55);
+  doc.line(splitX, peopleY - 6, splitX, footerY + footerH - 40);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.5);
+  doc.setTextColor(red.r, red.g, red.b);
+  doc.text("PREPARED FOR", inset, peopleY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(255, 255, 255);
+  const forName = doc.splitTextToSize(cover.preparedForName, splitX - inset - 16);
+  doc.text(forName[0], inset, peopleY + 18);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(200, 200, 200);
+  cover.preparedForDetail.slice(0, 2).forEach((line, index) => {
+    doc.text(line, inset, peopleY + 34 + index * 12);
+  });
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(6.5);
+  doc.setTextColor(red.r, red.g, red.b);
+  doc.text("PREPARED BY", splitX + 16, peopleY);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(255, 255, 255);
+  doc.text(cover.preparedByName, splitX + 16, peopleY + 18);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(200, 200, 200);
+  if (cover.preparedByTitle) doc.text(cover.preparedByTitle, splitX + 16, peopleY + 34);
+  if (cover.preparedByContact) doc.text(cover.preparedByContact, splitX + 16, peopleY + 46);
+
+  doc.setFillColor(0, 0, 0);
+  doc.rect(0, height - 28, width, 28, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(255, 255, 255);
+  doc.text(cover.footerLeft, inset, height - 12);
+  if (cover.footerRight) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.setTextColor(170, 170, 170);
+    doc.text(cover.footerRight, width - inset, height - 12, { align: "right" });
   }
 }
 
@@ -248,11 +417,12 @@ async function drawTextPage(doc: Doc, page: Extract<PhotoReportPage, { type: "te
   }
 }
 
-function stampFooter(doc: Doc, company: CompanySettings, reportTitle: string) {
+function stampFooter(doc: Doc, company: CompanySettings, reportTitle: string, skipFirst: boolean) {
   const pages = doc.getNumberOfPages();
   const width = doc.internal.pageSize.getWidth();
   const height = doc.internal.pageSize.getHeight();
   for (let page = 1; page <= pages; page++) {
+    if (skipFirst && page === 1) continue;
     doc.setPage(page);
     doc.setDrawColor(220, 220, 220);
     doc.line(48, height - 36, width - 48, height - 36);
@@ -270,6 +440,9 @@ export async function downloadPhotoReportPdf(input: {
   job: Job;
   photos: JobPhoto[];
   company: CompanySettings;
+  contacts: Contact[];
+  staff: StaffMember[];
+  customerName: string;
 }) {
   const doc = await createDoc();
   const cache = new Map<string, string | null>();
@@ -277,7 +450,7 @@ export async function downloadPhotoReportPdf(input: {
   for (const [index, page] of pages.entries()) {
     if (index > 0) doc.addPage();
     if (page.type === "cover") {
-      await drawCover(doc, page, input.job, input.photos, input.company, cache);
+      await drawCover(doc, page, input);
     } else if (page.type === "text") {
       await drawTextPage(doc, page, input.company);
     } else {
@@ -285,7 +458,7 @@ export async function downloadPhotoReportPdf(input: {
     }
   }
   const title = input.report.title.trim() || "Photo report";
-  stampFooter(doc, input.company, title);
+  stampFooter(doc, input.company, title, pages[0]?.type === "cover");
   const safe = title.replace(/[^\w]+/g, "-").replace(/^-|-$/g, "") || "photo-report";
   downloadBlob(doc.output("blob"), `${safe}.pdf`);
 }

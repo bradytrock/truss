@@ -50,6 +50,8 @@ export function emptyCoverPage(input?: Partial<Extract<PhotoReportPage, { type: 
     showAddress: input?.showAddress ?? true,
     showDate: input?.showDate ?? true,
     heroPhotoId: input?.heroPhotoId ?? null,
+    dateOfLoss: input?.dateOfLoss ?? "",
+    claimNumber: input?.claimNumber ?? "",
   };
 }
 
@@ -100,6 +102,10 @@ export function photosPagesFromPhotos(
   return pages;
 }
 
+function jobField(job: Job, match: RegExp) {
+  return job.customFields.find((field) => match.test(field.label))?.value.trim() ?? "";
+}
+
 export function createPhotoReport(input: {
   job: Job;
   customer: string;
@@ -117,6 +123,8 @@ export function createPhotoReport(input: {
         title: input.job.name,
         subtitle: input.customer,
         heroPhotoId: input.photos[0]?.id ?? null,
+        dateOfLoss: jobField(input.job, /date of loss|loss date/i),
+        claimNumber: jobField(input.job, /claim/),
       }),
       ...photosPagesFromPhotos(input.photos),
     ],
@@ -161,6 +169,8 @@ export function parsePhotoReportPages(raw: unknown): PhotoReportPage[] {
         showAddress: asBool(row.showAddress, true),
         showDate: asBool(row.showDate, true),
         heroPhotoId: asString(row.heroPhotoId) || null,
+        dateOfLoss: asString(row.dateOfLoss),
+        claimNumber: asString(row.claimNumber),
       });
       continue;
     }

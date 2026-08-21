@@ -550,6 +550,8 @@ export interface PhotoReportCoverPage {
   showAddress: boolean;
   showDate: boolean;
   heroPhotoId: string | null;
+  dateOfLoss: string;
+  claimNumber: string;
 }
 
 export interface PhotoReportPhotoItem {
