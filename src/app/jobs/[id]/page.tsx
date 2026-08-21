@@ -1,36 +1,14 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import { Suspense } from "react";
-import { Button } from "@/components/ui/button";
-import { JobRecord } from "@/components/job-record";
-import { EmptyState, LoadingScreen } from "@/components/page-chrome";
-import { useCrm } from "@/lib/crm-store";
-
-export default function JobDetailPage() {
-  const { id } = useParams<{ id: string }>();
-  const crm = useCrm();
-  const job = crm.getJob(id);
-
-  if (!crm.hydrated) return <LoadingScreen />;
-  if (!job) {
-    return (
-      <EmptyState
-        title="Job not in this book"
-        description="This job belongs to another seat. Team leads can Login As the project manager; company admin sees every job."
-        action={
-          <Button nativeButton={false} render={<Link href="/jobs" />}>
-            Back to jobs
-          </Button>
-        }
-      />
-    );
-  }
-
-  return (
-    <Suspense fallback={<LoadingScreen />}>
-      <JobRecord job={job} />
-    </Suspense>
-  );
+export default async function JobDetailRedirect({
+  params,
+  searchParams,
+}: PageProps<"/jobs/[id]">) {
+  const { id } = await params;
+  const query = await searchParams;
+  const next = new URLSearchParams();
+  next.set("job", id);
+  const tab = typeof query.tab === "string" ? query.tab : undefined;
+  if (tab) next.set("tab", tab);
+  redirect(`/jobs?${next.toString()}`);
 }

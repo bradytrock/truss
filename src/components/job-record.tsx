@@ -202,7 +202,7 @@ function contactKind(contact: Contact, job: Job) {
   return contact.title || "Homeowner";
 }
 
-export function JobRecord({ job }: { job: Job }) {
+export function JobRecord({ job, className }: { job: Job; className?: string }) {
   const crm = useCrm();
   const searchParams = useSearchParams();
   const initialTab = searchParams.get("tab") ?? "overview";
@@ -299,7 +299,7 @@ export function JobRecord({ job }: { job: Job }) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-xl">
+    <div className={cn("mx-auto w-full max-w-xl", className)}>
       <div className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           {job.code ? (
@@ -307,7 +307,12 @@ export function JobRecord({ job }: { job: Job }) {
               <RecordCode code={job.code} className="text-xs" />
             </p>
           ) : null}
-          <h1 className="font-heading text-2xl leading-tight font-medium text-balance">{job.name}</h1>
+          <h1
+            id="job-window-title"
+            className="font-heading text-2xl leading-tight font-medium text-balance"
+          >
+            {job.name}
+          </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {primary ? (
               <Link href={`/contacts/${primary.id}`} className="hover:underline">

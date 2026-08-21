@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import {
   DndContext,
@@ -38,7 +37,13 @@ const columnAccent: Record<JobStatus, string> = {
   on_hold: "bg-foreground/15",
 };
 
-export function JobsBoard({ query }: { query: string }) {
+export function JobsBoard({
+  query,
+  onSelectJob,
+}: {
+  query: string;
+  onSelectJob: (jobId: string) => void;
+}) {
   const { jobs, customerName, updateJob } = useCrm();
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -115,7 +120,12 @@ export function JobsBoard({ query }: { query: string }) {
             return (
               <JobColumn key={status} status={status} count={cards.length} total={total}>
                 {cards.map((job) => (
-                  <JobCard key={job.id} job={job} customerName={customerName(job)} />
+                  <JobCard
+                    key={job.id}
+                    job={job}
+                    customerName={customerName(job)}
+                    onSelectJob={onSelectJob}
+                  />
                 ))}
               </JobColumn>
             );
@@ -125,7 +135,12 @@ export function JobsBoard({ query }: { query: string }) {
       </ScrollArea>
       <DragOverlay>
         {active ? (
-          <JobCard job={active} customerName={customerName(active)} overlay />
+          <JobCard
+            job={active}
+            customerName={customerName(active)}
+            overlay
+            onSelectJob={onSelectJob}
+          />
         ) : null}
       </DragOverlay>
     </DndContext>
@@ -172,10 +187,12 @@ function JobCard({
   job,
   customerName,
   overlay,
+  onSelectJob,
 }: {
   job: Job;
   customerName: string;
   overlay?: boolean;
+  onSelectJob: (jobId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: job.id,
@@ -203,27 +220,42 @@ function JobCard({
           >
             <GripVertical className="size-3.5" />
           </button>
-          <div className="min-w-0 flex-1">
+          <button
+            type="button"
+            className="min-w-0 flex-1 text-left"
+            onClick={() => {
+              if (!overlay) onSelectJob(job.id);
+            }}
+          >
             <RecordCode code={job.code} />
-            <Link
-              href={`/jobs/${job.id}`}
-              className="mt-0.5 block text-sm font-medium leading-snug hover:underline"
-            >
+            <span className="mt-0.5 block text-sm font-medium leading-snug hover:underline">
               {job.name}
-            </Link>
+            </span>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">{customerName}</p>
-          </div>
+          </button>
         </div>
-        <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 text-left"
+          onClick={() => {
+            if (!overlay) onSelectJob(job.id);
+          }}
+        >
           <span className="font-heading text-sm font-medium tabular-nums">
             {formatCurrency(job.contractValue)}
           </span>
           <JobStatusBadge status={job.status} />
-        </div>
-        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        </button>
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-2 text-left text-xs text-muted-foreground"
+          onClick={() => {
+            if (!overlay) onSelectJob(job.id);
+          }}
+        >
           <span className="min-w-0 truncate">{job.location}</span>
           <span className="shrink-0 truncate">{job.projectManager}</span>
-        </div>
+        </button>
       </CardContent>
     </Card>
   );

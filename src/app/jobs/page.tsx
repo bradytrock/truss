@@ -1,16 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { JobsBoard } from "@/components/jobs-board";
+import { JobRecordWindow } from "@/components/job-window";
 import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency } from "@/lib/format";
 import { isBusinessDevelopment } from "@/lib/bd";
 
 export default function JobsPage() {
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <JobsBoardPage />
+    </Suspense>
+  );
+}
+
+function JobsBoardPage() {
   const crm = useCrm();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
+  const jobId = searchParams.get("job");
+  const openJob = jobId ? crm.getJob(jobId) : undefined;
+
+  const selectJob = useCallback(
+    (id: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("job", id);
+      router.replace(`/jobs?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
+
+  const closeJob = useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("job");
+    params.delete("tab");
+    const qs = params.toString();
+    router.replace(qs ? `/jobs?${qs}` : "/jobs", { scroll: false });
+  }, [router, searchParams]);
+
+  useEffect(() => {
+    if (!crm.hydrated || !jobId || openJob) return;
+    closeJob();
+  }, [closeJob, crm.hydrated, jobId, openJob]);
 
   const active = crm.jobs.filter((job) => job.status !== "complete");
   const bookValue = active.reduce((sum, job) => sum + job.contractValue, 0);
@@ -42,7 +78,8 @@ export default function JobsPage() {
       <p className="text-sm text-muted-foreground">
         {active.length} active jobs · {formatCurrency(bookValue)} under contract
       </p>
-      <JobsBoard query={query} />
+      <JobsBoard query={query} onSelectJob={selectJob} />
+      {openJob ? <JobRecordWindow key={openJob.id} job={openJob} onClose={closeJob} /> : null}
     </div>
   );
 }
