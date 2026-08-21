@@ -1,4 +1,5 @@
 -- Account management: invite teammates into an existing company, lock, and restrict.
+-- Safe to re-run after a failed attempt.
 
 alter table public.team_members
   add column if not exists email text not null default '',
@@ -108,6 +109,7 @@ create policy "admin delete seats" on public.team_members
 
 create or replace function public.invite_preview(p_token text)
 returns table (
+  company_id uuid,
   company_name text,
   seat_name text,
   seat_title text,
@@ -123,6 +125,7 @@ as $$
 begin
   return query
   select
+    c.id,
     c.name,
     tm.name,
     tm.title,
@@ -234,12 +237,23 @@ declare
   invite_email text;
   invite_role public.seat_role;
 begin
-  full_name := coalesce(nullif(trim(new.raw_user_meta_data->>'full_name'), ''), split_part(new.email, '@', 1));
+  -- Auth runs this as supabase_auth_admin. Turn off RLS so the invite row is visible.
+  begin
+    perform set_config('row_security', 'off', true);
+  exception
+    when others then null;
+  end;
+
+  full_name := coalesce(nullif(trim(new.raw_user_meta_data->>'full_name'), ''), split_part(coalesce(new.email, ''), '@', 1));
   title := coalesce(nullif(trim(new.raw_user_meta_data->>'title'), ''), 'Company admin');
   company_name := coalesce(nullif(trim(new.raw_user_meta_data->>'company'), ''), 'Truss');
   initials := upper(left(regexp_replace(full_name, '\s+', ' ', 'g'), 1))
     || coalesce(upper(left(split_part(full_name, ' ', 2), 1)), '');
-  invite_token := nullif(trim(new.raw_user_meta_data->>'invite_token'), '');
+  invite_token := nullif(trim(coalesce(
+    new.raw_user_meta_data->>'invite_token',
+    new.raw_user_meta_data->>'inviteToken',
+    ''
+  )), '');
 
   if invite_token is not null then
     select i.company_id, i.staff_id, i.email, tm.role
@@ -248,16 +262,16 @@ begin
     join public.team_members tm on tm.id = i.staff_id
     where i.token = invite_token
       and i.expires_at > now()
-      and tm.locked = false;
+      and coalesce(tm.locked, false) = false;
 
-    if invite_company is null then
-      raise exception 'That invite is missing or expired.';
-    end if;
-
-    if lower(invite_email) is distinct from lower(new.email) then
-      raise exception 'Sign up with the email this invite was sent to.';
-    end if;
-
+    -- Do not RAISE here: GoTrue turns any exception into "Database error saving new user"
+    -- and rolls back the Auth user. If the invite is missing or the email does not match,
+    -- fall through and open a company; the signup page will call claim_invite next.
+    if invite_company is not null
+       and (
+         nullif(trim(invite_email), '') is null
+         or lower(trim(invite_email)) = lower(trim(coalesce(new.email, '')))
+       ) then
     insert into public.profiles (id, company_id, full_name, title, initials, role, staff_id)
     values (
       new.id,
@@ -267,20 +281,28 @@ begin
       initials,
       invite_role,
       invite_staff
-    );
+    )
+    on conflict (id) do update
+      set company_id = excluded.company_id,
+          full_name = excluded.full_name,
+          title = excluded.title,
+          initials = excluded.initials,
+          role = excluded.role,
+          staff_id = excluded.staff_id;
 
     update public.team_members
     set
       name = full_name,
       title = coalesce(nullif(trim(new.raw_user_meta_data->>'title'), ''), title),
       initials = initials,
-      email = new.email,
+      email = coalesce(new.email, email),
       invite_expires_at = null,
       locked = false
     where id = invite_staff;
 
     delete from public.account_invites where staff_id = invite_staff;
     return new;
+    end if;
   end if;
 
   insert into public.companies (name)
@@ -300,11 +322,52 @@ begin
     initials,
     'company_admin',
     new_staff_id
-  );
+  )
+  on conflict (id) do update
+    set company_id = excluded.company_id,
+        full_name = excluded.full_name,
+        title = excluded.title,
+        initials = excluded.initials,
+        role = excluded.role,
+        staff_id = excluded.staff_id;
 
   return new;
 end;
 $$;
+
+alter function public.handle_new_user() owner to postgres;
+
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') then
+    grant usage on schema public to supabase_auth_admin;
+    grant select, insert, update, delete on public.companies, public.profiles, public.team_members to supabase_auth_admin;
+    grant select, insert, update, delete on public.account_invites to supabase_auth_admin;
+    grant execute on function public.handle_new_user() to supabase_auth_admin;
+  end if;
+exception
+  when undefined_table then null;
+end $$;
+
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'supabase_auth_admin') then
+    execute 'drop policy if exists "auth admin invites" on public.account_invites';
+    execute $p$create policy "auth admin invites" on public.account_invites
+      for all to supabase_auth_admin using (true) with check (true)$p$;
+    execute 'drop policy if exists "auth admin profiles" on public.profiles';
+    execute $p$create policy "auth admin profiles" on public.profiles
+      for all to supabase_auth_admin using (true) with check (true)$p$;
+    execute 'drop policy if exists "auth admin seats" on public.team_members';
+    execute $p$create policy "auth admin seats" on public.team_members
+      for all to supabase_auth_admin using (true) with check (true)$p$;
+    execute 'drop policy if exists "auth admin companies" on public.companies';
+    execute $p$create policy "auth admin companies" on public.companies
+      for all to supabase_auth_admin using (true) with check (true)$p$;
+  end if;
+exception
+  when undefined_table then null;
+end $$;
 
 do $$
 begin

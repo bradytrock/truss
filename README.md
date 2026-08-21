@@ -28,25 +28,8 @@ On that shared project, paste and run one file in the SQL editor:
 - [`supabase/bootstrap.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/bootstrap.sql) — every migration, in order, safe to re-run
 
 Use the **Raw** link so the editor does not pick up a collapsed GitHub page. The numbered files under `supabase/migrations/` are the same SQL split up, if you ever need them one at a time.
-   - [`supabase/migrations/20260819170000_truss_crm.sql`](supabase/migrations/20260819170000_truss_crm.sql) — companies, profiles, pipeline, jobs, RLS, signup trigger, Realtime
-   - [`supabase/migrations/20260819180000_estimates_invoices_schedule.sql`](supabase/migrations/20260819180000_estimates_invoices_schedule.sql) — price book, estimates, invoices, payments, schedule, job photos, Storage bucket
-   - [`supabase/migrations/20260819190000_seats_contacts.sql`](supabase/migrations/20260819190000_seats_contacts.sql) — seats, teams, contact-book ownership, referral partners
-   - [`supabase/migrations/20260819200000_residential_homeowners.sql`](supabase/migrations/20260819200000_residential_homeowners.sql) — optional company on contacts/jobs, residential types, insurance / T&M delivery
-   - [`supabase/migrations/20260819210000_company_settings.sql`](supabase/migrations/20260819210000_company_settings.sql) — business name, phone, email, address, and license on `companies`
-   - [`supabase/migrations/20260819220000_job_codes.sql`](supabase/migrations/20260819220000_job_codes.sql) — job / pipeline codes (`BJ081926-A`)
-   - [`supabase/migrations/20260819230000_google_calendars.sql`](supabase/migrations/20260819230000_google_calendars.sql) — per-user Google Calendar links, team sharing, admin visibility
-   - [`supabase/migrations/20260819240000_training.sql`](supabase/migrations/20260819240000_training.sql) — per-seat training progress, badges, attempts, and company training bulletins
-   - [`supabase/migrations/20260819250000_lead_intake.sql`](supabase/migrations/20260819250000_lead_intake.sql) — lead source, referred-by contact, job-site address, and notes on pursuits
-   - [`supabase/migrations/20260819260000_profile_staff.sql`](supabase/migrations/20260819260000_profile_staff.sql) — each signed-in profile gets its own seat so login does not land on the sample company admin
-   - [`supabase/migrations/20260819270000_job_overview.sql`](supabase/migrations/20260819270000_job_overview.sql) — job-site address, crew, tags, related contacts, and custom fields on the job record
-   - [`supabase/migrations/20260819280000_nullable_company.sql`](supabase/migrations/20260819280000_nullable_company.sql) — homeowners and trades do not need a company (`contacts.client_id` can be null)
-   - [`supabase/migrations/20260819290000_estimate_writer.sql`](supabase/migrations/20260819290000_estimate_writer.sql) — tax, discount, deposit, terms, job-site address, sections, and optional lines on estimates
-   - [`supabase/migrations/20260819300000_share_tokens.sql`](supabase/migrations/20260819300000_share_tokens.sql) — client share tokens on estimates and invoices, plus public lookup RPCs
-   - [`supabase/migrations/20260819310000_ensure_residential_enums.sql`](supabase/migrations/20260819310000_ensure_residential_enums.sql) — `fixed_price`, insurance, and residential project types on the Postgres enums (safe to re-run)
-   - [`supabase/migrations/20260819320000_sign_shared_estimate.sql`](supabase/migrations/20260819320000_sign_shared_estimate.sql) — homeowner can sign a shared estimate, which awards the lead and opens a job
-   - [`supabase/migrations/20260819340000_project_financials.sql`](supabase/migrations/20260819340000_project_financials.sql) — Accounting seat, expenses with required receipts, payment images, QuickBooks entry queue
-   - [`supabase/migrations/20260820120000_opportunity_originator.sql`](supabase/migrations/20260820120000_opportunity_originator.sql) — who sourced the lead (`originator_staff_id`) stays when it is assigned
-   - [`supabase/migrations/20260820200000_account_management.sql`](supabase/migrations/20260820200000_account_management.sql) — People settings: invite tokens, lock, restrict, and join-an-existing-company on signup
+
+If invite signup already fails with **Database error saving new user**, you do not need to re-paste the whole bootstrap. Run only the Raw file [`supabase/migrations/20260821010000_invite_signup.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821010000_invite_signup.sql), then sign up again with the **same email the invite was sent to**.
 
 In Authentication → URL configuration, add `http://localhost:3847/auth/callback` (and the hosted app origin). For local work you can turn off “Confirm email”. Signup opens a company, a profile, and a seat for you. It does not add sample people. Add real teammates from Settings → People.
 

@@ -1,10 +1,19 @@
 import type { SeatRole, StaffMember } from "@/lib/types";
 
 export const ACCOUNT_MANAGEMENT_SQL = "supabase/migrations/20260820200000_account_management.sql";
+export const INVITE_SIGNUP_SQL = "supabase/migrations/20260821010000_invite_signup.sql";
+export const BOOTSTRAP_SQL_RAW =
+  "https://raw.githubusercontent.com/bradytrock/truss/main/supabase/bootstrap.sql";
+export const INVITE_SIGNUP_SQL_RAW =
+  "https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821010000_invite_signup.sql";
 export const INVITE_DAYS = 14;
 
 export function missingAccountManagementMessage() {
   return `Run ${ACCOUNT_MANAGEMENT_SQL} in the SQL editor so you can invite, lock, and remove people.`;
+}
+
+export function inviteSignupPatchMessage() {
+  return `Postgres blocked creating this login while joining from an invite. Paste the Raw SQL from ${INVITE_SIGNUP_SQL} in the Supabase SQL editor, run it, then sign up again with the email the invite was sent to.`;
 }
 
 export function isMissingAccountManagement(error: { message?: string; code?: string } | null | undefined) {

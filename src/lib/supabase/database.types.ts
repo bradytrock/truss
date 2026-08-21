@@ -836,6 +836,7 @@ export type Database = {
       invite_preview: {
         Args: { p_token: string };
         Returns: {
+          company_id: string;
           company_name: string;
           seat_name: string;
           seat_title: string;

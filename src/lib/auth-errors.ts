@@ -1,3 +1,5 @@
+import { inviteSignupPatchMessage } from "@/lib/accounts";
+
 export function authErrorMessage(error: { message?: string; code?: string } | string | null | undefined) {
   const raw = typeof error === "string" ? error : error?.message ?? "";
   const code = typeof error === "object" && error ? error.code ?? "" : "";
@@ -17,6 +19,9 @@ export function authErrorMessage(error: { message?: string; code?: string } | st
   }
   if (text.includes("signup_disabled") || text.includes("signups not allowed")) {
     return "Signups are disabled on this project. Enable email signups under Authentication → Providers → Email.";
+  }
+  if (text.includes("database error saving new user")) {
+    return inviteSignupPatchMessage();
   }
   return raw || "Could not sign in.";
 }

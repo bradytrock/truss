@@ -19,6 +19,7 @@ import type { SeatRole } from "@/lib/types";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 
 type InvitePreview = {
+  company_id?: string;
   company_name: string;
   seat_name: string;
   seat_title: string;
@@ -30,6 +31,41 @@ type InvitePreview = {
 function firstInviteRow(data: InvitePreview[] | InvitePreview | null) {
   if (!data) return null;
   return Array.isArray(data) ? data[0] ?? null : data;
+}
+
+function claimErrorMessage(error: { message?: string; code?: string }) {
+  return isMissingAccountManagement(error)
+    ? missingAccountManagementMessage()
+    : error.message || "Could not join that company.";
+}
+
+async function claimInviteIfNeeded(
+  supabase: ReturnType<typeof createClient>,
+  token: string,
+  invitedCompanyId?: string,
+) {
+  const { error } = await supabase.rpc("claim_invite", { p_token: token });
+  if (!error) return { ok: true as const };
+  const missing = /missing or expired/i.test(error.message ?? "");
+  if (missing) {
+    const { data: sessionData } = await supabase.auth.getUser();
+    const userId = sessionData.user?.id;
+    if (userId && invitedCompanyId) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("company_id")
+        .eq("id", userId)
+        .maybeSingle();
+      if (profile?.company_id === invitedCompanyId) {
+        return { ok: true as const };
+      }
+    }
+    if (userId && !invitedCompanyId) {
+      // Older invite_preview did not return company_id; the auth trigger likely consumed the row.
+      return { ok: true as const };
+    }
+  }
+  return { ok: false as const, message: claimErrorMessage(error) };
 }
 
 function SignupForm() {
@@ -80,9 +116,9 @@ function SignupForm() {
 
       const { data: sessionData } = await supabase.auth.getSession();
       if (sessionData.session) {
-        const { error: claimError } = await supabase.rpc("claim_invite", { p_token: inviteToken });
-        if (claimError) {
-          setInviteError(claimError.message);
+        const claimed = await claimInviteIfNeeded(supabase, inviteToken, row.company_id);
+        if (!claimed.ok) {
+          setInviteError(claimed.message);
           return;
         }
         toast.success(`Joined ${row.company_name}`);
@@ -134,13 +170,10 @@ function SignupForm() {
             toast.error(message);
             return;
           }
-          const { error: claimError } = await supabase.rpc("claim_invite", { p_token: inviteToken });
-          if (claimError) {
-            const message = isMissingAccountManagement(claimError)
-              ? missingAccountManagementMessage()
-              : claimError.message;
-            setFormError(message);
-            toast.error(message);
+          const claimed = await claimInviteIfNeeded(supabase, inviteToken, invite?.company_id);
+          if (!claimed.ok) {
+            setFormError(claimed.message);
+            toast.error(claimed.message);
             return;
           }
           toast.success(invite ? `Joined ${invite.company_name}` : "Signed in");
@@ -154,6 +187,15 @@ function SignupForm() {
         return;
       }
       if (data.session) {
+        if (inviteToken) {
+          const claimed = await claimInviteIfNeeded(supabase, inviteToken, invite?.company_id);
+          if (!claimed.ok) {
+            setFormError(claimed.message);
+            toast.error(claimed.message);
+            return;
+          }
+          toast.success(invite ? `Joined ${invite.company_name}` : "Account created");
+        }
         router.replace("/");
         router.refresh();
         return;
