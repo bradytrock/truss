@@ -413,14 +413,17 @@ export function CreateEstimateDialog({
               onChange={(event) => setValidUntil(event.target.value)}
             />
           </Field>
-          <Field label="Notes" htmlFor="est-notes">
+          <Field label="Internal notes" htmlFor="est-notes">
             <Textarea
               id="est-notes"
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               rows={2}
-              placeholder="Allowances, exclusions, insurance notes..."
+              placeholder="Hold points, insurance notes, things the homeowner should not see."
             />
+            <p className="text-xs text-muted-foreground">
+              Stays on the job. It does not print on the proposal.
+            </p>
           </Field>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
