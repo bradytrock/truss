@@ -48,6 +48,7 @@ import { COURSE } from "@/lib/training/engine";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand";
+import { AssistantPanel } from "@/components/assistant-panel";
 
 function navItems(options: { showReports: boolean; showAccounting: boolean; bdOnly: boolean }) {
   if (options.bdOnly) {
@@ -114,6 +115,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Button>
           <SearchTrigger />
           <div className="ml-auto flex items-center gap-1.5">
+            <AssistantPanel />
             <DropdownMenu>
               <DropdownMenuTrigger render={<Button size="sm" />}>
                 <Plus data-icon="inline-start" />

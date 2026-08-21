@@ -529,7 +529,7 @@ type CrmContextValue = CrmState & {
       ownerStaffId?: string;
       market?: Opportunity["market"];
     }
-  ) => Promise<Opportunity>;
+  ) => Promise<Opportunity & { costingJob?: Job | null }>;
   addClient: (
     input: Omit<Client, "id"> & {
       contactName?: string;
@@ -593,8 +593,8 @@ type CrmContextValue = CrmState & {
     estimateId: string,
     catalogItemId: string,
     groupName?: string
-  ) => Promise<void>;
-  addCustomEstimateLine: (estimateId: string, groupName?: string) => Promise<void>;
+  ) => Promise<EstimateLine | undefined>;
+  addCustomEstimateLine: (estimateId: string, groupName?: string) => Promise<EstimateLine | undefined>;
   updateEstimateLine: (id: string, patch: Partial<EstimateLine>) => Promise<void>;
   removeEstimateLine: (id: string) => Promise<void>;
   reorderEstimateLine: (id: string, direction: "up" | "down") => Promise<void>;
@@ -1645,7 +1645,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           opportunities: [opportunity, ...prev.opportunities],
           jobs: pipelineJob ? dedupeJobsByOpportunity([pipelineJob, ...prev.jobs]) : prev.jobs,
         }));
-        return opportunity;
+        return Object.assign(opportunity, { costingJob: pipelineJob });
       }
       const base = {
         company_id: user.companyId,
@@ -1844,7 +1844,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         type: "note",
         body: `Opened pursuit. Next step: ${opportunity.nextStep || "qualify the bid."}`,
       });
-      return opportunity;
+      return Object.assign(opportunity, { costingJob: pipelineJob });
     },
     [addActivity, state.jobs, state.opportunities, state.staff, user.companyId, user.name, user.staffId]
   );
@@ -3131,7 +3131,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const supabase = maybeClient();
       if (!supabase) {
         setState((prev) => ({ ...prev, estimateLines: [...prev.estimateLines, line] }));
-        return;
+        return line;
       }
       const payload = {
         company_id: user.companyId,
@@ -3172,10 +3172,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error(error?.message ?? "Could not add the line.");
         return;
       }
+      const saved = fillEstimateLine({ ...line, ...mapEstimateLine(data), id: data.id });
       setState((prev) => ({
         ...prev,
-        estimateLines: [...prev.estimateLines, fillEstimateLine({ ...line, ...mapEstimateLine(data), id: data.id })],
+        estimateLines: [...prev.estimateLines, saved],
       }));
+      return saved;
     },
     [state.catalog, state.estimateLines, user.companyId]
   );
@@ -3204,7 +3206,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const supabase = maybeClient();
       if (!supabase) {
         setState((prev) => ({ ...prev, estimateLines: [...prev.estimateLines, line] }));
-        return;
+        return line;
       }
       const payload = {
         company_id: user.companyId,
@@ -3243,10 +3245,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error(error?.message ?? "Could not add the line.");
         return;
       }
+      const saved = fillEstimateLine({ ...line, ...mapEstimateLine(data), id: data.id });
       setState((prev) => ({
         ...prev,
-        estimateLines: [...prev.estimateLines, fillEstimateLine({ ...line, ...mapEstimateLine(data), id: data.id })],
+        estimateLines: [...prev.estimateLines, saved],
       }));
+      return saved;
     },
     [state.estimateLines, user.companyId]
   );
