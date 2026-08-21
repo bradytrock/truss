@@ -147,8 +147,8 @@ function inferredTags(opportunity?: Opportunity | null): string[] {
   if (opportunity.projectType === "roofing") tags.push("roof");
   if (opportunity.projectType === "restoration") tags.push("restoration");
   if (opportunity.projectType === "remodel") tags.push("remodel");
-  if (opportunity.leadSource === "storm") tags.push("hail");
   if (opportunity.leadSource === "referral") tags.push("referral");
+  if (String(opportunity.leadSource) === "storm") tags.push("hail");
   return tags;
 }
 
@@ -272,7 +272,7 @@ export const JOB_RECORD_EXTRAS: Record<string, Partial<Job>> = {
       { id: "cf_alvarez_deductible", label: "Deductible", value: "$2,500" },
     ],
     projectType: "roofing",
-    leadSource: "storm",
+    leadSource: "sales_team",
   },
   job_hart_water: {
     description:
@@ -288,7 +288,7 @@ export const JOB_RECORD_EXTRAS: Record<string, Partial<Job>> = {
       { id: "cf_hart_deductible", label: "Deductible", value: "$1,000" },
     ],
     projectType: "restoration",
-    leadSource: "insurance",
+    leadSource: "phone",
   },
   job_solano_fire: {
     description: "Kitchen fire. Contents out. Waiting on the engineer letter before we open walls in the addition.",
@@ -301,7 +301,7 @@ export const JOB_RECORD_EXTRAS: Record<string, Partial<Job>> = {
       { id: "cf_solano_carrier", label: "Carrier", value: "Farmers" },
     ],
     projectType: "restoration",
-    leadSource: "insurance",
+    leadSource: "phone",
   },
   job_whitfield_bsmt: {
     description: "Bonnie Brae basement finish. Framing is up; mechanical rough next week.",
@@ -309,7 +309,7 @@ export const JOB_RECORD_EXTRAS: Record<string, Partial<Job>> = {
     postalCode: "80209",
     salesRep: "Maya Chen",
     projectType: "remodel",
-    leadSource: "repeat",
+    leadSource: "past_client",
   },
   job_calder_siding: {
     description: "Boulder north elevation at punch. Two window wraps remaining.",
@@ -348,6 +348,6 @@ export const JOB_RECORD_EXTRAS: Record<string, Partial<Job>> = {
       { id: "cf_ortiz_carrier", label: "Carrier", value: "Allstate" },
     ],
     projectType: "roofing",
-    leadSource: "storm",
+    leadSource: "sales_team",
   },
 };

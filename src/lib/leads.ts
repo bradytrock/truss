@@ -1,5 +1,5 @@
 import type { DeliveryMethod, LeadSource } from "@/lib/types";
-import { LEAD_SOURCE_LABELS } from "@/lib/types";
+import { LEAD_SOURCE_LABELS, LEAD_SOURCES, LEGACY_LEAD_SOURCE_LABELS } from "@/lib/types";
 
 export function formatJobSite(input: {
   street?: string;
@@ -18,10 +18,18 @@ export function formatJobSite(input: {
 
 export function leadSourceLabel(source: string | null | undefined) {
   if (!source) return "";
-  return (LEAD_SOURCE_LABELS as Record<string, string>)[source] ?? source;
+  return LEAD_SOURCE_LABELS[source as LeadSource] ?? LEGACY_LEAD_SOURCE_LABELS[source] ?? source;
 }
 
-export function defaultDeliveryForSource(source: LeadSource | ""): DeliveryMethod {
+export function leadSourceChoices(current?: string | null): string[] {
+  const value = current?.trim() ?? "";
+  if (value && !LEAD_SOURCES.includes(value as LeadSource)) {
+    return [value, ...LEAD_SOURCES];
+  }
+  return [...LEAD_SOURCES];
+}
+
+export function defaultDeliveryForSource(source: string): DeliveryMethod {
   if (source === "insurance" || source === "storm") return "insurance_claim";
   return "fixed_price";
 }

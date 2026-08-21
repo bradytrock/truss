@@ -418,7 +418,7 @@ export const extraOpportunities: Omit<Opportunity, "code">[] = [
     winProbability: 15,
             nextStep: "Walk Wednesday. She wants a number before her HOA meeting.",
     createdAt: "2026-08-16T18:00:00.000Z",
-    leadSource: "google",
+    leadSource: "google_ad",
     city: "Englewood",
     state: "CO",
   },

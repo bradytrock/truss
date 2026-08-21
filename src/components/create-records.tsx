@@ -142,7 +142,7 @@ export function CreateOpportunityDialog({
       return;
     }
     if (!source) {
-      toast.error("How did they hear about us?");
+      toast.error("Pick a seed.");
       return;
     }
     if (source === "referral" && !referralId) {
@@ -192,7 +192,7 @@ export function CreateOpportunityDialog({
         entityId: opportunity.id,
         type: "note",
         body: [
-          `Lead opened for ${fullName}. Source: ${LEAD_SOURCE_LABELS[source]}.`,
+          `Lead opened for ${fullName}. Seed: ${LEAD_SOURCE_LABELS[source]}.`,
           referrer ? `Referred by ${referrer.name}.` : "",
           notes.trim() ? notes.trim() : "",
         ]
@@ -351,7 +351,7 @@ export function CreateOpportunityDialog({
               </Field>
             </div>
 
-            <Field label="How did they hear about us?">
+            <Field label="Seed">
               <Select
                 value={source || null}
                 onValueChange={(value) => {
@@ -368,7 +368,7 @@ export function CreateOpportunityDialog({
                 }))}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select source" />
+                  <SelectValue placeholder="Select seed" />
                 </SelectTrigger>
                 <SelectContent>
                   {LEAD_SOURCES.map((item) => (

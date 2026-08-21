@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +18,7 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -33,6 +34,8 @@ import {
   type EventKind,
   type PhotoCategory,
 } from "@/lib/types";
+
+const NEW_HOMEOWNER = "__new__";
 
 export function CreateEstimateDialog({
   open,
@@ -50,17 +53,20 @@ export function CreateEstimateDialog({
   defaultContactId?: string | null;
 }) {
   const router = useRouter();
-  const { contacts, opportunities, jobs, addEstimate } = useCrm();
-  const jobDefault = defaultJobId ? jobs.find((job) => job.id === defaultJobId) : undefined;
+  const { contacts, opportunities, jobs, addEstimate, addContact, addClient, user } = useCrm();
   const [name, setName] = useState("");
-  const [contactId, setContactId] = useState(
-    defaultContactId || jobDefault?.primaryContactId || contacts[0]?.id || ""
-  );
-  const [opportunityId, setOpportunityId] = useState(defaultOpportunityId ?? "");
-  const [jobId, setJobId] = useState(defaultJobId ?? "");
+  const [contactId, setContactId] = useState(NEW_HOMEOWNER);
+  const [opportunityId, setOpportunityId] = useState("");
+  const [jobId, setJobId] = useState("");
   const [validUntil, setValidUntil] = useState("");
   const [notes, setNotes] = useState("");
+  const [personName, setPersonName] = useState("");
+  const [personPhone, setPersonPhone] = useState("");
+  const [personEmail, setPersonEmail] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [saving, setSaving] = useState(false);
 
+  const isNewHomeowner = contactId === NEW_HOMEOWNER;
   const contact = contacts.find((item) => item.id === contactId);
   const relatedOpps = opportunities.filter(
     (opportunity) =>
@@ -72,28 +78,85 @@ export function CreateEstimateDialog({
       job.primaryContactId === contactId || (contact?.clientId && job.clientId === contact.clientId)
   );
 
+  useEffect(() => {
+    if (!open) return;
+    const jobDefault = defaultJobId ? jobs.find((job) => job.id === defaultJobId) : undefined;
+    const initial =
+      defaultContactId ||
+      jobDefault?.primaryContactId ||
+      (contacts.length > 0 ? contacts[0].id : NEW_HOMEOWNER);
+    setContactId(initial);
+    setOpportunityId(defaultOpportunityId ?? "");
+    setJobId(defaultJobId ?? "");
+    setName("");
+    setValidUntil("");
+    setNotes("");
+    setPersonName("");
+    setPersonPhone("");
+    setPersonEmail("");
+    setCompanyName("");
+    setSaving(false);
+    // Snapshot the book when the dialog opens so typing a new homeowner is not wiped by a later load.
+  }, [open]);
+
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!name.trim() || !contactId) {
-      toast.error("A name and homeowner are required.");
+    if (!name.trim()) {
+      toast.error("Give the estimate a name.");
       return;
     }
+    if (!isNewHomeowner && !contactId) {
+      toast.error("Pick a homeowner or add a new one.");
+      return;
+    }
+    if (isNewHomeowner && !personName.trim()) {
+      toast.error("Homeowner name is required.");
+      return;
+    }
+    setSaving(true);
     try {
+      let resolvedContactId = contactId;
+      let resolvedClientId = contact?.clientId ?? defaultClientId ?? null;
+      if (isNewHomeowner) {
+        if (companyName.trim()) {
+          const client = await addClient({
+            name: companyName.trim(),
+            type: "owner",
+            city: "",
+            state: "",
+            notes: "",
+          });
+          resolvedClientId = client.id;
+        } else {
+          resolvedClientId = null;
+        }
+        const created = await addContact({
+          clientId: resolvedClientId,
+          name: personName.trim(),
+          title: "Homeowner",
+          email: personEmail.trim(),
+          phone: personPhone.trim(),
+          ownerStaffId: user.staffId,
+          isReferralPartner: false,
+        });
+        resolvedContactId = created.id;
+      }
       const estimate = await addEstimate({
         name: name.trim(),
-        clientId: contact?.clientId ?? defaultClientId ?? null,
+        clientId: resolvedClientId,
         opportunityId: opportunityId || null,
         jobId: jobId || null,
-        contactId,
+        contactId: resolvedContactId,
         validUntil: validUntil || null,
         notes,
       });
       toast.success(`${estimate.number} drafted.`);
       onOpenChange(false);
-      setName("");
       router.push(`/estimates/${estimate.id}`);
     } catch {
       // Store already toasted.
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -103,7 +166,7 @@ export function CreateEstimateDialog({
         <DialogHeader>
           <DialogTitle>New estimate</DialogTitle>
           <DialogDescription>
-            Price from the catalog, send the proposal, then mark it signed. The homeowner lands on Lead; signing opens the job and moves the card to Job Sold.
+            Price from the catalog, send the proposal, then mark it signed. Add a new homeowner here if they are not in Contacts yet. They land on Lead; signing opens the job and moves the card to Job Sold.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-3">
@@ -123,12 +186,17 @@ export function CreateEstimateDialog({
                 setOpportunityId("");
                 setJobId("");
               }}
-              items={contacts.map((item) => ({ value: item.id, label: item.name }))}
+              items={[
+                { value: NEW_HOMEOWNER, label: "New homeowner…" },
+                ...contacts.map((item) => ({ value: item.id, label: item.name })),
+              ]}
             >
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <SelectValue placeholder="Pick or add a homeowner" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={NEW_HOMEOWNER}>New homeowner…</SelectItem>
+                {contacts.length > 0 ? <SelectSeparator /> : null}
                 {contacts.map((item) => (
                   <SelectItem key={item.id} value={item.id}>
                     {item.name}
@@ -137,6 +205,51 @@ export function CreateEstimateDialog({
               </SelectContent>
             </Select>
           </Field>
+          {isNewHomeowner ? (
+            <div className="grid gap-3 rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">
+                Add them here. They go on the proposal and into Contacts — no extra step.
+              </p>
+              <Field label="Name" htmlFor="est-person">
+                <Input
+                  id="est-person"
+                  value={personName}
+                  onChange={(event) => setPersonName(event.target.value)}
+                  placeholder="Dana Alvarez"
+                  autoComplete="name"
+                />
+              </Field>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Phone" htmlFor="est-phone">
+                  <Input
+                    id="est-phone"
+                    value={personPhone}
+                    onChange={(event) => setPersonPhone(event.target.value)}
+                    placeholder="(303) 555-0100"
+                    autoComplete="tel"
+                  />
+                </Field>
+                <Field label="Email" htmlFor="est-email">
+                  <Input
+                    id="est-email"
+                    type="email"
+                    value={personEmail}
+                    onChange={(event) => setPersonEmail(event.target.value)}
+                    placeholder="dana@example.com"
+                    autoComplete="email"
+                  />
+                </Field>
+              </div>
+              <Field label="Company (optional)" htmlFor="est-company">
+                <Input
+                  id="est-company"
+                  value={companyName}
+                  onChange={(event) => setCompanyName(event.target.value)}
+                  placeholder="Leave blank for a homeowner"
+                />
+              </Field>
+            </div>
+          ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Lead (optional)">
               <Select
@@ -210,7 +323,9 @@ export function CreateEstimateDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit">Create draft</Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Creating…" : "Create draft"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

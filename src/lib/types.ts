@@ -50,19 +50,18 @@ export const DELIVERY_METHODS = [
 export type DeliveryMethod = (typeof DELIVERY_METHODS)[number];
 
 export const LEAD_SOURCES = [
-  "referral",
-  "google",
+  "podium",
   "website",
-  "facebook",
-  "instagram",
-  "yard_sign",
-  "truck",
-  "storm",
-  "insurance",
+  "google_ad",
+  "phone",
+  "angies_list",
   "realtor",
-  "repeat",
-  "neighbor",
-  "other",
+  "referral",
+  "sales_team",
+  "text_main_line",
+  "past_client",
+  "chatgpt",
+  "social_media",
 ] as const;
 
 export type LeadSource = (typeof LEAD_SOURCES)[number];
@@ -646,16 +645,29 @@ export const DELIVERY_LABELS: Record<DeliveryMethod, string> = {
 };
 
 export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
-  referral: "Referral",
-  google: "Google search",
+  podium: "Podium",
   website: "Website",
+  google_ad: "Google Ad",
+  phone: "Phone",
+  angies_list: "Angie's List",
+  realtor: "Realtor",
+  referral: "Referral",
+  sales_team: "Sales Team",
+  text_main_line: "Text Main Line",
+  past_client: "Past Client",
+  chatgpt: "ChatGPT",
+  social_media: "Social Media",
+};
+
+/** Older books may still store these; they stay readable, but the picker uses LEAD_SOURCES. */
+export const LEGACY_LEAD_SOURCE_LABELS: Record<string, string> = {
+  google: "Google search",
   facebook: "Facebook",
   instagram: "Instagram",
   yard_sign: "Yard sign",
   truck: "Truck / wrap",
   storm: "Storm canvass",
   insurance: "Insurance adjuster",
-  realtor: "Realtor",
   repeat: "Repeat customer",
   neighbor: "Neighbor",
   other: "Other",

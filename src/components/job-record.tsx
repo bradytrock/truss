@@ -63,7 +63,7 @@ import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate } from "@/lib/format";
 import { assignedCrewPatch, jobAddress, mapsUrl, uniqueIds, uniqueNames } from "@/lib/job-record";
 import { createPhotoReport } from "@/lib/photo-report";
-import { leadSourceLabel } from "@/lib/leads";
+import { leadSourceChoices, leadSourceLabel } from "@/lib/leads";
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
 import { amountForEstimate } from "@/lib/estimate-totals";
 import { COURSE } from "@/lib/training/engine";
@@ -71,8 +71,6 @@ import { recommendedChapterIds } from "@/lib/training/recommend";
 import {
   JOB_STATUS_LABELS,
   JOB_STATUSES,
-  LEAD_SOURCE_LABELS,
-  LEAD_SOURCES,
   PROJECT_TYPE_LABELS,
   PROJECT_TYPES,
   type Contact,
@@ -506,24 +504,24 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                 </SelectContent>
               </Select>
             </FieldRow>
-            <FieldRow icon={ExternalLink} label="Lead source">
+            <FieldRow icon={ExternalLink} label="Seed">
               <Select
                 value={job.leadSource || undefined}
                 onValueChange={(value) => {
                   if (value) patch({ leadSource: value as LeadSource });
                 }}
-                items={LEAD_SOURCES.map((source) => ({
+                items={leadSourceChoices(job.leadSource).map((source) => ({
                   value: source,
-                  label: LEAD_SOURCE_LABELS[source],
+                  label: leadSourceLabel(source),
                 }))}
               >
                 <SelectTrigger className={cn(quietSelect, !job.leadSource && "text-muted-foreground")}>
                   <SelectValue placeholder="How they found you" />
                 </SelectTrigger>
                 <SelectContent align="end">
-                  {LEAD_SOURCES.map((source) => (
+                  {leadSourceChoices(job.leadSource).map((source) => (
                     <SelectItem key={source} value={source}>
-                      {LEAD_SOURCE_LABELS[source]}
+                      {leadSourceLabel(source)}
                     </SelectItem>
                   ))}
                 </SelectContent>
