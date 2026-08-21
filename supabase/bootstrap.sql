@@ -1974,7 +1974,7 @@ declare
   invite_role public.seat_role;
   seat_title text;
   full_name text;
-  initials text;
+  v_initials text;
 begin
   if uid is null then
     raise exception 'Sign in to accept this invite.';
@@ -2001,11 +2001,11 @@ begin
     raise exception 'Sign in with the email this invite was sent to.';
   end if;
 
-  initials := upper(left(regexp_replace(full_name, '\s+', ' ', 'g'), 1))
+  v_initials := upper(left(regexp_replace(full_name, '\s+', ' ', 'g'), 1))
     || coalesce(upper(left(split_part(full_name, ' ', 2), 1)), '');
 
   insert into public.profiles (id, company_id, full_name, title, initials, role, staff_id)
-  values (uid, invite_company, full_name, seat_title, initials, invite_role, invite_staff)
+  values (uid, invite_company, full_name, seat_title, v_initials, invite_role, invite_staff)
   on conflict (id) do update
     set company_id = excluded.company_id,
         full_name = excluded.full_name,
@@ -2018,7 +2018,7 @@ begin
   set
     name = full_name,
     title = seat_title,
-    initials = initials,
+    initials = v_initials,
     email = coalesce(user_email, email),
     invite_expires_at = null,
     locked = false
@@ -2044,7 +2044,7 @@ declare
   full_name text;
   title text;
   company_name text;
-  initials text;
+  v_initials text;
   invite_token text;
   invite_company uuid;
   invite_staff uuid;
@@ -2061,7 +2061,7 @@ begin
   full_name := coalesce(nullif(trim(new.raw_user_meta_data->>'full_name'), ''), split_part(coalesce(new.email, ''), '@', 1));
   title := coalesce(nullif(trim(new.raw_user_meta_data->>'title'), ''), 'Company admin');
   company_name := coalesce(nullif(trim(new.raw_user_meta_data->>'company'), ''), 'Truss');
-  initials := upper(left(regexp_replace(full_name, '\s+', ' ', 'g'), 1))
+  v_initials := upper(left(regexp_replace(full_name, '\s+', ' ', 'g'), 1))
     || coalesce(upper(left(split_part(full_name, ' ', 2), 1)), '');
   invite_token := nullif(trim(coalesce(
     new.raw_user_meta_data->>'invite_token',
@@ -2092,7 +2092,7 @@ begin
       invite_company,
       full_name,
       coalesce(nullif(trim(new.raw_user_meta_data->>'title'), ''), title),
-      initials,
+      v_initials,
       invite_role,
       invite_staff
     )
@@ -2108,7 +2108,7 @@ begin
     set
       name = full_name,
       title = coalesce(nullif(trim(new.raw_user_meta_data->>'title'), ''), title),
-      initials = initials,
+      initials = v_initials,
       email = coalesce(new.email, email),
       invite_expires_at = null,
       locked = false
@@ -2124,7 +2124,7 @@ begin
   returning id into new_company_id;
 
   insert into public.team_members (company_id, name, title, role, initials, email)
-  values (new_company_id, full_name, title, 'company_admin', initials, coalesce(new.email, ''))
+  values (new_company_id, full_name, title, 'company_admin', v_initials, coalesce(new.email, ''))
   returning id into new_staff_id;
 
   insert into public.profiles (id, company_id, full_name, title, initials, role, staff_id)
@@ -2133,7 +2133,7 @@ begin
     new_company_id,
     full_name,
     title,
-    initials,
+    v_initials,
     'company_admin',
     new_staff_id
   )
@@ -2233,10 +2233,10 @@ as $$
 declare
   new_company_id uuid;
   new_staff_id uuid;
-  full_name text;
-  title text;
-  company_name text;
-  initials text;
+  v_full_name text;
+  v_title text;
+  v_company_name text;
+  v_initials text;
   invite_token text;
   invite_company uuid;
   invite_staff uuid;
@@ -2250,15 +2250,15 @@ begin
     when others then null;
   end;
 
-  full_name := coalesce(
+  v_full_name := coalesce(
     nullif(trim(coalesce(p_meta->>'full_name', '')), ''),
     split_part(coalesce(p_email, ''), '@', 1),
     'Owner'
   );
-  title := coalesce(nullif(trim(coalesce(p_meta->>'title', '')), ''), 'Company admin');
-  company_name := coalesce(nullif(trim(coalesce(p_meta->>'company', '')), ''), 'Truss');
-  initials := upper(left(regexp_replace(full_name, '\s+', ' ', 'g'), 1))
-    || coalesce(upper(left(split_part(full_name, ' ', 2), 1)), '');
+  v_title := coalesce(nullif(trim(coalesce(p_meta->>'title', '')), ''), 'Company admin');
+  v_company_name := coalesce(nullif(trim(coalesce(p_meta->>'company', '')), ''), 'Truss');
+  v_initials := upper(left(regexp_replace(v_full_name, '\s+', ' ', 'g'), 1))
+    || coalesce(upper(left(split_part(v_full_name, ' ', 2), 1)), '');
   invite_token := nullif(trim(coalesce(
     p_meta->>'invite_token',
     p_meta->>'inviteToken',
@@ -2283,9 +2283,9 @@ begin
       values (
         p_id,
         invite_company,
-        full_name,
-        title,
-        initials,
+        v_full_name,
+        v_title,
+        v_initials,
         invite_role,
         invite_staff
       )
@@ -2299,9 +2299,9 @@ begin
 
       update public.team_members
       set
-        name = full_name,
-        title = title,
-        initials = initials,
+        name = v_full_name,
+        title = v_title,
+        initials = v_initials,
         email = coalesce(p_email, email),
         invite_expires_at = null,
         locked = false
@@ -2321,20 +2321,20 @@ begin
   end if;
 
   insert into public.companies (name)
-  values (company_name)
+  values (v_company_name)
   returning id into new_company_id;
 
   insert into public.team_members (company_id, name, title, role, initials, email)
-  values (new_company_id, full_name, title, 'company_admin', initials, coalesce(p_email, ''))
+  values (new_company_id, v_full_name, v_title, 'company_admin', v_initials, coalesce(p_email, ''))
   returning id into new_staff_id;
 
   insert into public.profiles (id, company_id, full_name, title, initials, role, staff_id)
   values (
     p_id,
     new_company_id,
-    full_name,
-    title,
-    initials,
+    v_full_name,
+    v_title,
+    v_initials,
     'company_admin',
     new_staff_id
   )
@@ -2389,8 +2389,8 @@ declare
   invite_email text;
   invite_role public.seat_role;
   seat_title text;
-  full_name text;
-  initials text;
+  v_full_name text;
+  v_initials text;
   old_company uuid;
 begin
   begin
@@ -2405,7 +2405,7 @@ begin
 
   select u.email,
          coalesce(nullif(trim(u.raw_user_meta_data->>'full_name'), ''), split_part(u.email, '@', 1))
-    into user_email, full_name
+    into user_email, v_full_name
   from auth.users u
   where u.id = uid;
 
@@ -2430,11 +2430,11 @@ begin
   from public.profiles
   where id = uid;
 
-  initials := upper(left(regexp_replace(full_name, '\s+', ' ', 'g'), 1))
-    || coalesce(upper(left(split_part(full_name, ' ', 2), 1)), '');
+  v_initials := upper(left(regexp_replace(v_full_name, '\s+', ' ', 'g'), 1))
+    || coalesce(upper(left(split_part(v_full_name, ' ', 2), 1)), '');
 
   insert into public.profiles (id, company_id, full_name, title, initials, role, staff_id)
-  values (uid, invite_company, full_name, seat_title, initials, invite_role, invite_staff)
+  values (uid, invite_company, v_full_name, seat_title, v_initials, invite_role, invite_staff)
   on conflict (id) do update
     set company_id = excluded.company_id,
         full_name = excluded.full_name,
@@ -2445,10 +2445,10 @@ begin
 
   update public.team_members
   set
-    name = full_name,
+    name = v_full_name,
     title = seat_title,
-    initials = initials,
-    email = coalesce(user_email, email),
+    initials = v_initials,
+    email = coalesce(user_email, team_members.email),
     invite_expires_at = null,
     locked = false
   where id = invite_staff;
