@@ -29,8 +29,9 @@ import {
   type PipelineStage,
 } from "@/lib/types";
 import { formatJobSite, leadSourceLabel } from "@/lib/leads";
+import { LeadAssigneeSelect } from "@/components/lead-assignee";
 import { originatorStaffId } from "@/lib/bd";
-import { assignmentOptions, staffAssignmentLabel } from "@/lib/visibility";
+import { assignmentOptions, canAssignLeadsToAnyone } from "@/lib/visibility";
 
 export default function OpportunityDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -66,8 +67,11 @@ export default function OpportunityDetailPage() {
   const estimates = crm.estimates.filter((estimate) => estimate.opportunityId === opportunity.id);
   const due = daysUntil(opportunity.bidDueAt);
   const step = nextStep ?? opportunity.nextStep;
-  const assignees = assignmentOptions(crm.viewer, crm.book.staff, opportunity.ownerStaffId);
-  const canReassign = assignees.length > 1 || assignees.some((member) => member.id !== opportunity.ownerStaffId);
+  const assignees = assignmentOptions(crm.viewer, crm.book.staff, opportunity.ownerStaffId, crm.user.role);
+  const canReassign =
+    canAssignLeadsToAnyone(crm.viewer, crm.user.role) ||
+    assignees.length > 1 ||
+    assignees.some((member) => member.id !== opportunity.ownerStaffId);
 
   function handleStage(stage: PipelineStage) {
     void (async () => {
@@ -331,30 +335,15 @@ export default function OpportunityDetailPage() {
               </RecordProperty>
               <RecordProperty label="Assigned to">
                 {canReassign ? (
-                  <Select
+                  <LeadAssigneeSelect
                     value={opportunity.ownerStaffId}
-                    onValueChange={(value) => {
-                      if (!value || value === opportunity.ownerStaffId) return;
-                      void crm.assignOpportunityOwner(opportunity.id, String(value)).then((ok) => {
+                    people={assignees}
+                    onChange={(staffId) => {
+                      void crm.assignOpportunityOwner(opportunity.id, staffId).then((ok) => {
                         if (ok) toast.success("Lead assigned.");
                       });
                     }}
-                    items={assignees.map((member) => ({
-                      value: member.id,
-                      label: staffAssignmentLabel(member),
-                    }))}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {assignees.map((member) => (
-                        <SelectItem key={member.id} value={member.id}>
-                          {staffAssignmentLabel(member)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  />
                 ) : (
                   crm.book.staff.find((member) => member.id === opportunity.ownerStaffId)?.name ??
                     opportunity.estimator

@@ -51,8 +51,9 @@ import {
   type JobStatus,
   type LeadSource,
 } from "@/lib/types";
-import { assignmentOptions, staffAssignmentLabel } from "@/lib/visibility";
-import { isBusinessDevelopment } from "@/lib/bd";
+import { LeadAssigneeSelect } from "@/components/lead-assignee";
+import { assignmentOptions } from "@/lib/visibility";
+import { hasBusinessDevelopmentSeat } from "@/lib/bd";
 
 export function CreateOpportunityDialog({
   open,
@@ -62,8 +63,9 @@ export function CreateOpportunityDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const crm = useCrm();
-  const people = assignmentOptions(crm.viewer, crm.book.staff, crm.user.staffId);
+  const people = assignmentOptions(crm.viewer, crm.book.staff, crm.user.staffId, crm.user.role);
   const defaultAssignee = people.find((member) => member.id === crm.user.staffId)?.id ?? people[0]?.id ?? "";
+  const bdSeat = hasBusinessDevelopmentSeat(crm.viewer, crm.user.role);
   const [assigneeId, setAssigneeId] = useState(defaultAssignee);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -81,6 +83,12 @@ export function CreateOpportunityDialog({
 
   const assignee = people.find((member) => member.id === assigneeId);
   const isMe = Boolean(assignee && assignee.id === crm.user.staffId);
+
+  useEffect(() => {
+    if (!open) return;
+    if (assigneeId && people.some((member) => member.id === assigneeId)) return;
+    if (defaultAssignee) setAssigneeId(defaultAssignee);
+  }, [assigneeId, defaultAssignee, open, people]);
 
   const referralMatches = useMemo(() => {
     const needle = referralQuery.trim().toLowerCase();
@@ -217,8 +225,8 @@ export function CreateOpportunityDialog({
         <SheetHeader className="relative border-b pr-14">
           <SheetTitle className="font-heading text-xl">New Lead</SheetTitle>
           <SheetDescription>
-            {crm.viewer && isBusinessDevelopment(crm.viewer.role)
-              ? "You keep credit on this lead. Assign it to the estimator or PM who will run it."
+            {bdSeat
+              ? "You keep credit on this lead. Assign it to anyone with an unlocked seat — estimator, PM, or another closer."
               : "This slides in so you can finish a quick task without leaving your page."}
           </SheetDescription>
           <Button
@@ -239,31 +247,19 @@ export function CreateOpportunityDialog({
                 <Label htmlFor="lead-assignee">Assigned to</Label>
                 {isMe ? (
                   <span className="text-[11px] text-muted-foreground">Me</span>
-                ) : crm.viewer && isBusinessDevelopment(crm.viewer.role) ? (
+                ) : bdSeat ? (
                   <span className="text-[11px] text-muted-foreground">You still keep the numbers</span>
                 ) : null}
               </div>
               <div className="relative">
                 <User className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Select
+                <LeadAssigneeSelect
+                  id="lead-assignee"
+                  className="pl-8"
                   value={assigneeId}
-                  onValueChange={(value) => setAssigneeId(String(value ?? ""))}
-                  items={people.map((member) => ({
-                    value: member.id,
-                    label: staffAssignmentLabel(member),
-                  }))}
-                >
-                  <SelectTrigger id="lead-assignee" className="w-full pl-8">
-                    <SelectValue placeholder="Select a person" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {people.map((member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        {staffAssignmentLabel(member)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  people={people}
+                  onChange={setAssigneeId}
+                />
               </div>
             </div>
 
@@ -711,10 +707,10 @@ export function EditContactDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { updateContact, clients, viewer, book } = useCrm();
+  const { updateContact, clients, viewer, book, user } = useCrm();
   const owners = useMemo(
-    () => assignmentOptions(viewer, book.staff, contact.ownerStaffId),
-    [book.staff, contact.ownerStaffId, viewer],
+    () => assignmentOptions(viewer, book.staff, contact.ownerStaffId, user.role),
+    [book.staff, contact.ownerStaffId, user.role, viewer],
   );
 
   const [name, setName] = useState(contact.name);
@@ -862,25 +858,11 @@ export function EditContactDialog({
           ) : null}
           {owners.length > 0 ? (
             <Field label="Book owner">
-              <Select
+              <LeadAssigneeSelect
                 value={ownerStaffId}
-                onValueChange={(value) => setOwnerStaffId(String(value ?? ""))}
-                items={owners.map((member) => ({
-                  value: member.id,
-                  label: staffAssignmentLabel(member),
-                }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {owners.map((member) => (
-                    <SelectItem key={member.id} value={member.id}>
-                      {staffAssignmentLabel(member)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                people={owners}
+                onChange={setOwnerStaffId}
+              />
             </Field>
           ) : null}
           <label className="flex items-center gap-2 text-sm">

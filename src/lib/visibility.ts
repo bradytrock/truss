@@ -5,7 +5,7 @@ import type {
   Team,
 } from "@/lib/types";
 import { SEAT_ROLE_LABELS, isNorthlineDemoName } from "@/lib/types";
-import { bdOpportunityIds, jobInBdBook, referralPartnerIds } from "@/lib/bd";
+import { bdOpportunityIds, hasBusinessDevelopmentSeat, jobInBdBook, referralPartnerIds } from "@/lib/bd";
 
 export type AccessScope = "company" | "bd" | "team" | "own";
 
@@ -44,24 +44,56 @@ export function canPostTrainingBulletin(role: SeatRole) {
   return role === "company_admin" || role === "team_lead" || role === "team_admin";
 }
 
-export function assignableStaff(viewer: StaffMember | undefined, staff: StaffMember[]) {
-  const pool = staff.filter((member) => !member.locked);
-  if (!viewer) return pool;
-  // BD hands work to the whole company, even when their book is restricted to what they sourced.
-  if (viewer.role === "business_development") return pool;
-  const scope = accessScope(viewer.role, viewer.restricted);
-  if (scope === "company") return pool;
-  if (scope === "team") {
-    return pool.filter((member) => member.teamId === viewer.teamId || member.id === viewer.id);
-  }
-  return pool.filter((member) => member.id === viewer.id);
+export function canAssignLeadsToAnyone(
+  viewer: StaffMember | undefined,
+  extraRole?: SeatRole,
+) {
+  if (hasBusinessDevelopmentSeat(viewer, extraRole)) return true;
+  if (!viewer) return true;
+  return accessScope(viewer.role, viewer.restricted) === "company";
 }
 
-export function assignmentOptions(viewer: StaffMember | undefined, staff: StaffMember[], currentId?: string) {
-  const allowed = assignableStaff(viewer, staff);
+function sortAssignable(pool: StaffMember[], viewer?: StaffMember) {
+  return [...pool].sort((left, right) => {
+    if (viewer) {
+      if (left.id === viewer.id && right.id !== viewer.id) return -1;
+      if (right.id === viewer.id && left.id !== viewer.id) return 1;
+    }
+    return left.name.localeCompare(right.name);
+  });
+}
+
+export function assignableStaff(
+  viewer: StaffMember | undefined,
+  staff: StaffMember[],
+  extraRole?: SeatRole,
+) {
+  const pool = staff.filter((member) => !member.locked);
+  if (canAssignLeadsToAnyone(viewer, extraRole)) return sortAssignable(pool, viewer);
+  if (!viewer) return sortAssignable(pool);
+  const scope = accessScope(viewer.role, viewer.restricted);
+  if (scope === "team") {
+    return sortAssignable(
+      pool.filter((member) => member.teamId === viewer.teamId || member.id === viewer.id),
+      viewer,
+    );
+  }
+  return sortAssignable(
+    pool.filter((member) => member.id === viewer.id),
+    viewer,
+  );
+}
+
+export function assignmentOptions(
+  viewer: StaffMember | undefined,
+  staff: StaffMember[],
+  currentId?: string,
+  extraRole?: SeatRole,
+) {
+  const allowed = assignableStaff(viewer, staff, extraRole);
   if (currentId && !allowed.some((member) => member.id === currentId)) {
     const current = staff.find((member) => member.id === currentId);
-    if (current) return [current, ...allowed];
+    if (current) return sortAssignable([current, ...allowed], viewer);
   }
   return allowed;
 }

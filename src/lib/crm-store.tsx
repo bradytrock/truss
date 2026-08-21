@@ -854,9 +854,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const viewer = useMemo(() => {
     const byId = user.staffId ? state.staff.find((member) => member.id === user.staffId) : undefined;
-    if (byId && (isUnsignedDemo(user) || namesMatch(byId.name, user.name) || !user.name.trim())) {
-      return byId;
-    }
+    // The linked seat is the source of truth, even when the profile name drifted.
+    if (byId) return byId;
     const byName = user.name.trim()
       ? state.staff.find((member) => namesMatch(member.name, user.name))
       : undefined;
@@ -870,7 +869,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         initials: user.initials,
       });
     }
-    return byId ?? state.staff[0];
+    return state.staff[0];
   }, [state.staff, user]);
   const impersonatedStaff = useMemo(
     () => state.staff.find((member) => member.id === impersonatedStaffId),

@@ -6,6 +6,15 @@ export function isBusinessDevelopment(role: SeatRole | undefined) {
   return role === "business_development";
 }
 
+export function hasBusinessDevelopmentSeat(
+  member?: Pick<StaffMember, "role" | "title"> | null,
+  extraRole?: SeatRole,
+) {
+  if (isBusinessDevelopment(member?.role) || isBusinessDevelopment(extraRole)) return true;
+  const title = member?.title?.trim().toLowerCase() ?? "";
+  return title.includes("business development") || title.includes("business-development");
+}
+
 export function originatorStaffId(opportunity: Pick<Opportunity, "originatorStaffId" | "ownerStaffId">) {
   return opportunity.originatorStaffId || opportunity.ownerStaffId;
 }
