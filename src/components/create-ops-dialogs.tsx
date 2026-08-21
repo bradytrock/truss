@@ -79,15 +79,6 @@ export function CreateEstimateDialog({
   const isNewHomeowner = contactId === NEW_HOMEOWNER;
   const contact = contacts.find((item) => item.id === contactId);
   const contactSites = [...jobs, ...opportunities, ...estimates];
-  const relatedOpps = opportunities.filter(
-    (opportunity) =>
-      opportunity.primaryContactId === contactId ||
-      (contact?.clientId && opportunity.clientId === contact.clientId)
-  );
-  const relatedJobs = jobs.filter(
-    (job) =>
-      job.primaryContactId === contactId || (contact?.clientId && job.clientId === contact.clientId)
-  );
 
   function applySite(record?: Parameters<typeof siteFieldsFromRecord>[0]) {
     const fields = siteFieldsFromRecord(record);
@@ -206,7 +197,7 @@ export function CreateEstimateDialog({
         <DialogHeader>
           <DialogTitle>New estimate</DialogTitle>
           <DialogDescription>
-            Price from the catalog, send the proposal, then mark it signed. Add a new homeowner here if they are not in Contacts yet. The proposal is titled with the property address.
+            Price from the catalog, send the proposal, then mark it signed. Add a new homeowner here if they are not in Contacts yet. The proposal is titled with the property address and stays on that person.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-3">
@@ -336,74 +327,6 @@ export function CreateEstimateDialog({
                 />
               </Field>
             </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Lead (optional)">
-              <Select
-                value={opportunityId || "none"}
-                onValueChange={(value) => {
-                  const next = value === "none" ? "" : String(value ?? "");
-                  setOpportunityId(next);
-                  if (next) {
-                    const selected = opportunities.find((item) => item.id === next);
-                    applySite(selected);
-                    if (selected) setMarket(workMarket(undefined, selected));
-                  }
-                }}
-                items={[
-                  { value: "none", label: "Open a new Lead" },
-                  ...relatedOpps.map((opportunity) => ({
-                    value: opportunity.id,
-                    label: opportunity.name,
-                  })),
-                ]}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Open a new Lead</SelectItem>
-                  {relatedOpps.map((opportunity) => (
-                    <SelectItem key={opportunity.id} value={opportunity.id}>
-                      {opportunity.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                Every estimate shows on the pipeline. Leave this blank to put it in Lead.
-              </p>
-            </Field>
-            <Field label="Job (optional)">
-              <Select
-                value={jobId || "none"}
-                onValueChange={(value) => {
-                  const next = value === "none" ? "" : String(value ?? "");
-                  setJobId(next);
-                  if (next) {
-                    const selected = jobs.find((item) => item.id === next);
-                    applySite(selected);
-                    if (selected) setMarket(workMarket(selected, undefined));
-                  }
-                }}
-                items={[
-                  { value: "none", label: "None" },
-                  ...relatedJobs.map((job) => ({ value: job.id, label: job.name })),
-                ]}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {relatedJobs.map((job) => (
-                    <SelectItem key={job.id} value={job.id}>
-                      {job.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
           </div>
           <Field label="Valid until" htmlFor="est-valid">
             <Input
