@@ -12,12 +12,9 @@ import {
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  ChevronDown,
-  ChevronUp,
   Download,
   FileText,
   GripVertical,
-  ImageIcon,
   Link2,
   Plus,
   Trash2,
@@ -34,6 +31,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -43,7 +46,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { PhotoReportPagePreview } from "@/components/photo-report-preview";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { useCrm } from "@/lib/crm-store";
@@ -53,15 +55,15 @@ import {
   emptyPhotosPage,
   emptyTextPage,
   layoutCapacity,
+  LETTERHEAD_TEMPLATES,
   pageLabel,
   photoById,
 } from "@/lib/photo-report";
 import { shareUrl } from "@/lib/share";
 import {
-  PHOTO_PAGE_LAYOUT_LABELS,
-  PHOTO_PAGE_LAYOUTS,
   type Job,
   type JobPhoto,
+  type LetterheadKind,
   type PhotoPageLayout,
   type PhotoReport,
   type PhotoReportPage,
@@ -137,21 +139,16 @@ export function PhotoReportBuilder({
     );
   }
 
-  function addPage(type: PhotoReportPage["type"]) {
-    const page =
-      type === "cover" ? emptyCoverPage({ title: job.name }) : type === "text" ? emptyTextPage() : emptyPhotosPage();
+  function addPage(type: "photos" | "cover") {
+    const page = type === "cover" ? emptyCoverPage({ title: job.name }) : emptyPhotosPage();
     commit([...draft.pages, page]);
     setSelectedId(page.id);
   }
 
-  function movePage(pageId: string, direction: -1 | 1) {
-    const index = draft.pages.findIndex((page) => page.id === pageId);
-    const nextIndex = index + direction;
-    if (index < 0 || nextIndex < 0 || nextIndex >= draft.pages.length) return;
-    const pages = [...draft.pages];
-    const [page] = pages.splice(index, 1);
-    pages.splice(nextIndex, 0, page);
-    commit(pages);
+  function addLetterhead(kind: LetterheadKind) {
+    const page = emptyTextPage({ kind });
+    commit([...draft.pages, page]);
+    setSelectedId(page.id);
   }
 
   function removePage(pageId: string) {
@@ -183,6 +180,10 @@ export function PhotoReportBuilder({
     const to = draft.pages.findIndex((page) => page.id === overId);
     if (from < 0 || to < 0) return;
     commit(arrayMove(draft.pages, from, to));
+  }
+
+  function removePhotoFromPage(page: Extract<PhotoReportPage, { type: "photos" }>, index: number) {
+    patchPage(page.id, { items: page.items.filter((_, entryIndex) => entryIndex !== index) });
   }
 
   function addPhotos(page: Extract<PhotoReportPage, { type: "photos" }>, photoIds: string[]) {
@@ -277,10 +278,19 @@ export function PhotoReportBuilder({
             <Plus data-icon="inline-start" />
             Photos
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => addPage("text")}>
-            <FileText data-icon="inline-start" />
-            Text
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button type="button" variant="outline" size="sm" />}>
+              <FileText data-icon="inline-start" />
+              Letterhead
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-48">
+              {LETTERHEAD_TEMPLATES.map((template) => (
+                <DropdownMenuItem key={template.id} onClick={() => addLetterhead(template.id)}>
+                  {template.title}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button type="button" variant="outline" size="sm" onClick={() => addPage("cover")}>
             Cover
           </Button>
@@ -298,7 +308,14 @@ export function PhotoReportBuilder({
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[16rem_minmax(0,1fr)_18rem]">
+      <div
+        className={cn(
+          "grid min-h-0 flex-1",
+          selected?.type === "cover"
+            ? "lg:grid-cols-[16rem_minmax(0,1fr)_18rem]"
+            : "lg:grid-cols-[16rem_minmax(0,1fr)]",
+        )}
+      >
         <aside className="min-h-0 overflow-y-auto border-b p-2 lg:border-r lg:border-b-0">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={reorderPages}>
             <SortableContext items={draft.pages.map((page) => page.id)} strategy={verticalListSortingStrategy}>
@@ -317,6 +334,16 @@ export function PhotoReportBuilder({
               </ul>
             </SortableContext>
           </DndContext>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="mt-3 w-full justify-start text-destructive"
+            onClick={() => void removeReport()}
+          >
+            <Trash2 data-icon="inline-start" />
+            Delete document
+          </Button>
         </aside>
 
         <div className="min-h-0 overflow-y-auto bg-muted/40 p-4 sm:p-6">
@@ -330,40 +357,33 @@ export function PhotoReportBuilder({
               contacts={crm.contacts}
               staff={crm.staff}
               customerName={crm.customerName(job)}
+              edit={{
+                onChange: (patch) => patchPage(selected.id, patch),
+                onAddPhotos:
+                  selected.type === "photos"
+                    ? () => setPickerOpen(true)
+                    : undefined,
+                onRemovePhoto:
+                  selected.type === "photos"
+                    ? (index) => removePhotoFromPage(selected, index)
+                    : undefined,
+              }}
             />
           ) : (
             <p className="text-sm text-muted-foreground">Add a page to start this document.</p>
           )}
         </div>
 
-        <aside className="min-h-0 overflow-y-auto border-t p-3 lg:border-t-0 lg:border-l">
-          {selected ? (
+        {selected?.type === "cover" ? (
+          <aside className="min-h-0 overflow-y-auto border-t p-3 lg:border-t-0 lg:border-l">
             <PageInspector
               page={selected}
               photos={photos}
-              pickerOpen={pickerOpen}
-              onPickerOpenChange={setPickerOpen}
               onChange={(patch) => patchPage(selected.id, patch)}
-              onMove={(direction) => movePage(selected.id, direction)}
               onRemove={() => requestRemove(selected.id)}
-              onAddPhotos={(ids) => {
-                if (selected.type === "photos") addPhotos(selected, ids);
-              }}
-              canMoveUp={draft.pages[0]?.id !== selected.id}
-              canMoveDown={draft.pages.at(-1)?.id !== selected.id}
             />
-          ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="mt-6 text-destructive"
-            onClick={() => void removeReport()}
-          >
-            <Trash2 data-icon="inline-start" />
-            Delete page
-          </Button>
-        </aside>
+          </aside>
+        ) : null}
       </div>
       <ShareLinkDialog
         open={shareOpen}
@@ -392,6 +412,23 @@ export function PhotoReportBuilder({
               Remove page
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add photos</DialogTitle>
+            <DialogDescription>Choose shots from this job. Extra photos open a new page.</DialogDescription>
+          </DialogHeader>
+          {selected?.type === "photos" ? (
+            <PhotoPicker
+              photos={photos.filter((photo) => !selected.items.some((item) => item.photoId === photo.id))}
+              remaining={Math.max(0, layoutCapacity(selected.layout) - selected.items.length)}
+              onAdd={(ids) => addPhotos(selected, ids)}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">Open a photo page to add shots.</p>
+          )}
         </DialogContent>
       </Dialog>
     </div>
@@ -477,239 +514,97 @@ function chunkAsPages(photos: JobPhoto[], layout: PhotoPageLayout) {
 function PageInspector({
   page,
   photos,
-  pickerOpen,
-  onPickerOpenChange,
   onChange,
-  onMove,
   onRemove,
-  onAddPhotos,
-  canMoveUp,
-  canMoveDown,
 }: {
-  page: PhotoReportPage;
+  page: Extract<PhotoReportPage, { type: "cover" }>;
   photos: JobPhoto[];
-  pickerOpen: boolean;
-  onPickerOpenChange: (open: boolean) => void;
   onChange: (patch: Partial<PhotoReportPage> | PhotoReportPage) => void;
-  onMove: (direction: -1 | 1) => void;
   onRemove: () => void;
-  onAddPhotos: (photoIds: string[]) => void;
-  canMoveUp: boolean;
-  canMoveDown: boolean;
 }) {
-  const unused = photos.filter((photo) => {
-    if (page.type !== "photos") return true;
-    return !page.items.some((item) => item.photoId === photo.id);
-  });
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-1">
-        <Button type="button" variant="outline" size="icon-xs" disabled={!canMoveUp} onClick={() => onMove(-1)} aria-label="Move page up">
-          <ChevronUp />
-        </Button>
-        <Button type="button" variant="outline" size="icon-xs" disabled={!canMoveDown} onClick={() => onMove(1)} aria-label="Move page down">
-          <ChevronDown />
-        </Button>
-        <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={onRemove}>
+      <div className="flex items-center justify-end">
+        <Button type="button" variant="ghost" size="sm" onClick={onRemove}>
           Remove page
         </Button>
       </div>
-
-      {page.type === "cover" ? (
-        <>
-          <Field label="Title" htmlFor="cover-title">
-            <Input id="cover-title" value={page.title} onChange={(event) => onChange({ title: event.target.value })} />
-          </Field>
-          <Field label="Prepared for" htmlFor="cover-sub">
-            <Input id="cover-sub" value={page.subtitle} onChange={(event) => onChange({ subtitle: event.target.value })} />
-          </Field>
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={page.showAddress} onCheckedChange={(value) => onChange({ showAddress: Boolean(value) })} />
-            Show job-site address
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={page.showDate} onCheckedChange={(value) => onChange({ showDate: Boolean(value) })} />
-            Show report date
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox
-              checked={page.showDateOfLoss}
-              onCheckedChange={(value) => onChange({ showDateOfLoss: Boolean(value) })}
-            />
-            Show date of loss
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox
-              checked={page.showClaimNumber}
-              onCheckedChange={(value) => onChange({ showClaimNumber: Boolean(value) })}
-            />
-            Show claim number
-          </label>
-          <Field label="Cover photo">
-            <Select
-              value={page.heroPhotoId ?? "none"}
-              onValueChange={(value) => onChange({ heroPhotoId: !value || value === "none" ? null : String(value) })}
-              items={[
-                { value: "none", label: "None" },
-                ...photos.map((photo) => ({ value: photo.id, label: photo.caption || "Untitled photo" })),
-              ]}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Choose a photo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None</SelectItem>
-                {photos.map((photo) => (
-                  <SelectItem key={photo.id} value={photo.id}>
-                    {photo.caption || "Untitled photo"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="mt-1 text-xs text-muted-foreground">
-              This is the hero on the PDF cover. It is cropped to fill the page, like a drone shot on a printed report.
-            </p>
-          </Field>
-          {page.showDateOfLoss || page.showClaimNumber ? (
-            <div
-              className={
-                page.showDateOfLoss && page.showClaimNumber ? "grid grid-cols-2 gap-2" : "grid gap-2"
-              }
-            >
-              {page.showDateOfLoss ? (
-                <Field label="Date of loss" htmlFor="cover-loss">
-                  <Input
-                    id="cover-loss"
-                    value={page.dateOfLoss}
-                    onChange={(event) => onChange({ dateOfLoss: event.target.value })}
-                    placeholder="06.14.2026"
-                  />
-                </Field>
-              ) : null}
-              {page.showClaimNumber ? (
-                <Field label="Claim number" htmlFor="cover-claim">
-                  <Input
-                    id="cover-claim"
-                    value={page.claimNumber}
-                    onChange={(event) => onChange({ claimNumber: event.target.value })}
-                    placeholder="Claim #"
-                  />
-                </Field>
-              ) : null}
-            </div>
-          ) : null}
-          <Field label="Cover notes" htmlFor="cover-notes">
-            <Textarea
-              id="cover-notes"
-              rows={4}
-              value={page.notes}
-              onChange={(event) => onChange({ notes: event.target.value })}
-              placeholder="What this report is for — insurance update, homeowner recap, punch list."
-            />
-          </Field>
-        </>
-      ) : null}
-
-      {page.type === "text" ? (
-        <>
-          <Field label="Heading" htmlFor="text-heading">
-            <Input id="text-heading" value={page.heading} onChange={(event) => onChange({ heading: event.target.value })} />
-          </Field>
-          <Field label="Body" htmlFor="text-body">
-            <Textarea
-              id="text-body"
-              rows={10}
-              value={page.body}
-              onChange={(event) => onChange({ body: event.target.value })}
-              placeholder="Scope notes, materials, next steps, or a daily log."
-            />
-          </Field>
-        </>
-      ) : null}
-
-      {page.type === "photos" ? (
-        <>
-          <Field label="Page heading" htmlFor="photos-heading">
-            <Input
-              id="photos-heading"
-              value={page.heading}
-              onChange={(event) => onChange({ heading: event.target.value })}
-              placeholder="Before, south slope, kitchen…"
-            />
-          </Field>
-          <Field label="Layout">
-            <Select
-              value={page.layout}
-              onValueChange={(value) => {
-                if (value === "one" || value === "two" || value === "four") onChange({ layout: value });
-              }}
-              items={PHOTO_PAGE_LAYOUTS.map((layout) => ({
-                value: layout,
-                label: PHOTO_PAGE_LAYOUT_LABELS[layout],
-              }))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PHOTO_PAGE_LAYOUTS.map((layout) => (
-                  <SelectItem key={layout} value={layout}>
-                    {PHOTO_PAGE_LAYOUT_LABELS[layout]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={page.showCaptions} onCheckedChange={(value) => onChange({ showCaptions: Boolean(value) })} />
-            Show captions
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={page.showTakenAt} onCheckedChange={(value) => onChange({ showTakenAt: Boolean(value) })} />
-            Show date taken
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={page.showCategory} onCheckedChange={(value) => onChange({ showCategory: Boolean(value) })} />
-            Show before / after
-          </label>
-          <div className="space-y-2">
-            {page.items.map((item, index) => (
-              <div key={`${item.photoId}-${index}`} className="rounded-md border p-2">
-                <p className="mb-1 truncate text-xs text-muted-foreground">
-                  {photoById(photos, item.photoId)?.caption || "Photo"}
-                </p>
-                <Input
-                  value={item.caption}
-                  onChange={(event) =>
-                    onChange({
-                      items: page.items.map((entry, entryIndex) =>
-                        entryIndex === index ? { ...entry, caption: event.target.value } : entry,
-                      ),
-                    })
-                  }
-                  placeholder="Caption on this report"
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  className="mt-1"
-                  onClick={() => onChange({ items: page.items.filter((_, entryIndex) => entryIndex !== index) })}
-                >
-                  Remove from page
-                </Button>
-              </div>
+      <Field label="Title" htmlFor="cover-title">
+        <Input id="cover-title" value={page.title} onChange={(event) => onChange({ title: event.target.value })} />
+      </Field>
+      <Field label="Prepared for" htmlFor="cover-sub">
+        <Input id="cover-sub" value={page.subtitle} onChange={(event) => onChange({ subtitle: event.target.value })} />
+      </Field>
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox checked={page.showAddress} onCheckedChange={(value) => onChange({ showAddress: Boolean(value) })} />
+        Show job-site address
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox checked={page.showDate} onCheckedChange={(value) => onChange({ showDate: Boolean(value) })} />
+        Show report date
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox
+          checked={page.showDateOfLoss}
+          onCheckedChange={(value) => onChange({ showDateOfLoss: Boolean(value) })}
+        />
+        Show date of loss
+      </label>
+      <label className="flex items-center gap-2 text-sm">
+        <Checkbox
+          checked={page.showClaimNumber}
+          onCheckedChange={(value) => onChange({ showClaimNumber: Boolean(value) })}
+        />
+        Show claim number
+      </label>
+      <Field label="Cover photo">
+        <Select
+          value={page.heroPhotoId ?? "none"}
+          onValueChange={(value) => onChange({ heroPhotoId: !value || value === "none" ? null : String(value) })}
+          items={[
+            { value: "none", label: "None" },
+            ...photos.map((photo) => ({ value: photo.id, label: photo.caption || "Untitled photo" })),
+          ]}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Choose a photo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">None</SelectItem>
+            {photos.map((photo) => (
+              <SelectItem key={photo.id} value={photo.id}>
+                {photo.caption || "Untitled photo"}
+              </SelectItem>
             ))}
-          </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => onPickerOpenChange(!pickerOpen)}>
-            <ImageIcon data-icon="inline-start" />
-            Add photos
-          </Button>
-          {pickerOpen ? (
-            <PhotoPicker photos={unused} remaining={Math.max(0, layoutCapacity(page.layout) - page.items.length)} onAdd={onAddPhotos} />
+          </SelectContent>
+        </Select>
+        <p className="mt-1 text-xs text-muted-foreground">
+          This is the hero on the PDF cover. It is cropped to fill the page, like a drone shot on a printed report.
+        </p>
+      </Field>
+      {page.showDateOfLoss || page.showClaimNumber ? (
+        <div className={page.showDateOfLoss && page.showClaimNumber ? "grid grid-cols-2 gap-2" : "grid gap-2"}>
+          {page.showDateOfLoss ? (
+            <Field label="Date of loss" htmlFor="cover-loss">
+              <Input
+                id="cover-loss"
+                value={page.dateOfLoss}
+                onChange={(event) => onChange({ dateOfLoss: event.target.value })}
+                placeholder="06.14.2026"
+              />
+            </Field>
           ) : null}
-        </>
+          {page.showClaimNumber ? (
+            <Field label="Claim number" htmlFor="cover-claim">
+              <Input
+                id="cover-claim"
+                value={page.claimNumber}
+                onChange={(event) => onChange({ claimNumber: event.target.value })}
+                placeholder="Claim #"
+              />
+            </Field>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

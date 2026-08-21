@@ -542,6 +542,27 @@ export const PHOTO_PAGE_LAYOUT_LABELS: Record<PhotoPageLayout, string> = {
   four: "4 photos",
 };
 
+export const LETTERHEAD_KINDS = [
+  "blank",
+  "introduction",
+  "findings",
+  "scope",
+  "next_steps",
+  "materials",
+  "punch",
+] as const;
+export type LetterheadKind = (typeof LETTERHEAD_KINDS)[number];
+
+export const LETTERHEAD_KIND_LABELS: Record<LetterheadKind, string> = {
+  blank: "Letterhead",
+  introduction: "Introduction",
+  findings: "Findings",
+  scope: "Scope of work",
+  next_steps: "Next steps",
+  materials: "Materials",
+  punch: "Punch list",
+};
+
 export interface PhotoReportCoverPage {
   id: string;
   type: "cover";
@@ -566,6 +587,7 @@ export interface PhotoReportPhotosPage {
   id: string;
   type: "photos";
   heading: string;
+  notes: string;
   layout: PhotoPageLayout;
   showCaptions: boolean;
   showTakenAt: boolean;
@@ -576,6 +598,7 @@ export interface PhotoReportPhotosPage {
 export interface PhotoReportTextPage {
   id: string;
   type: "text";
+  kind: LetterheadKind;
   heading: string;
   body: string;
 }

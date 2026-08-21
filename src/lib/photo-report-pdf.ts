@@ -12,7 +12,7 @@ import { formatDate, initials } from "@/lib/format";
 import { loadLogoForPdf, writePdfLetterhead } from "@/lib/letterhead-pdf";
 import { PHOTO_CATEGORY_LABELS } from "@/lib/types";
 import { COVER_RED, photoReportCoverModel } from "@/lib/photo-report-cover";
-import { layoutCapacity, photoById } from "@/lib/photo-report";
+import { layoutCapacity, photoById, photoPageColumns } from "@/lib/photo-report";
 import { downloadBlob } from "@/lib/share";
 
 type Doc = {
@@ -157,12 +157,13 @@ async function drawPhotosPage(
   }
   const cap = layoutCapacity(page.layout);
   const items = page.items.slice(0, cap);
-  const slots = Math.max(items.length, 1);
   const gap = 12;
-  const captionH = page.showCaptions || page.showTakenAt || page.showCategory ? 28 : 8;
-  const availableH = height - y - 56;
-  const cols = page.layout === "four" ? 2 : 1;
-  const rows = page.layout === "four" ? 2 : slots;
+  const captionH = page.showCaptions || page.showTakenAt || page.showCategory ? 32 : 8;
+  const notes = page.notes.trim();
+  const notesReserve = notes ? 96 : 0;
+  const availableH = height - y - 56 - notesReserve;
+  const cols = photoPageColumns(page.layout);
+  const rows = page.layout === "four" ? 2 : page.layout === "two" ? 1 : Math.max(items.length, 1);
   const cellW = cols === 1 ? right - left : (right - left - gap) / 2;
   const cellH = (availableH - gap * (rows - 1)) / rows;
 
@@ -195,6 +196,14 @@ async function drawPhotosPage(
         doc.text(doc.splitTextToSize(lines[1], cellW), x, top + boxH + 22);
       }
     }
+  }
+  if (notes) {
+    const notesY = y + rows * cellH + gap * Math.max(0, rows - 1) + 18;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(40, 40, 40);
+    const wrapped = doc.splitTextToSize(notes, right - left);
+    doc.text(wrapped.slice(0, 6), left, notesY);
   }
 }
 
@@ -467,7 +476,8 @@ function emptyFallback(): PhotoReportPage {
   return {
     id: "empty",
     type: "text",
+    kind: "blank",
     heading: "Page",
-    body: "Add a cover, photos, or a notes page.",
+    body: "Add a cover, photos, or a letterhead page.",
   };
 }

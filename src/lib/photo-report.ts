@@ -1,12 +1,14 @@
 import type {
   Job,
   JobPhoto,
+  LetterheadKind,
   PageTemplateId,
   PhotoPageLayout,
   PhotoReport,
   PhotoReportPage,
   PhotoReportPhotosPage,
 } from "@/lib/types";
+import { LETTERHEAD_KIND_LABELS, LETTERHEAD_KINDS } from "@/lib/types";
 
 export const PHOTO_REPORTS_SQL = "supabase/migrations/20260821140000_photo_reports.sql";
 export const PHOTO_REPORTS_SQL_RAW =
@@ -46,6 +48,38 @@ export const PAGE_TEMPLATE_OPTIONS: Array<{
     description: "Cover and an empty notes page. Build the rest yourself.",
   },
 ];
+
+export const LETTERHEAD_TEMPLATES: Array<{
+  id: LetterheadKind;
+  title: string;
+  heading: string;
+  body: string;
+}> = [
+  { id: "blank", title: "Blank", heading: "", body: "" },
+  {
+    id: "introduction",
+    title: "Introduction",
+    heading: "Introduction",
+    body: "Thank you for the opportunity to inspect this property. This report documents what we found on site and the recommended work.",
+  },
+  { id: "findings", title: "Findings", heading: "Findings", body: "" },
+  { id: "scope", title: "Scope of work", heading: "Scope of work", body: "" },
+  {
+    id: "next_steps",
+    title: "Next steps",
+    heading: "Next steps",
+    body: "1. \n2. \n3. ",
+  },
+  { id: "materials", title: "Materials", heading: "Materials", body: "" },
+  { id: "punch", title: "Punch list", heading: "Punch list", body: "" },
+];
+
+export function parseLetterheadKind(value: unknown): LetterheadKind {
+  if (typeof value === "string" && (LETTERHEAD_KINDS as readonly string[]).includes(value)) {
+    return value as LetterheadKind;
+  }
+  return "blank";
+}
 
 export function parsePageTemplate(value: unknown): PageTemplateId {
   if (value === "inspection" || value === "completion" || value === "claim" || value === "blank" || value === "photos") {
@@ -99,6 +133,10 @@ export function layoutCapacity(layout: PhotoPageLayout) {
   return 4;
 }
 
+export function photoPageColumns(layout: PhotoPageLayout) {
+  return layout === "one" ? 1 : 2;
+}
+
 export function newPageId() {
   return crypto.randomUUID();
 }
@@ -128,6 +166,7 @@ export function emptyPhotosPage(layout: PhotoPageLayout = "two"): PhotoReportPho
     id: newPageId(),
     type: "photos",
     heading: "",
+    notes: "",
     layout,
     showCaptions: true,
     showTakenAt: true,
@@ -136,21 +175,27 @@ export function emptyPhotosPage(layout: PhotoPageLayout = "two"): PhotoReportPho
   };
 }
 
-export function emptyTextPage(input?: { heading?: string; body?: string }): Extract<
-  PhotoReportPage,
-  { type: "text" }
-> {
+export function emptyTextPage(input?: {
+  heading?: string;
+  body?: string;
+  kind?: LetterheadKind;
+}): Extract<PhotoReportPage, { type: "text" }> {
+  const kind = parseLetterheadKind(input?.kind);
+  const template = LETTERHEAD_TEMPLATES.find((item) => item.id === kind);
   return {
     id: newPageId(),
     type: "text",
-    heading: input?.heading ?? "",
-    body: input?.body ?? "",
+    kind,
+    heading: input?.heading ?? template?.heading ?? "",
+    body: input?.body ?? template?.body ?? "",
   };
 }
 
 export function pageLabel(page: PhotoReportPage, index: number) {
   if (page.type === "cover") return page.title.trim() || "Cover";
-  if (page.type === "text") return page.heading.trim() || `Notes · page ${index + 1}`;
+  if (page.type === "text") {
+    return page.heading.trim() || LETTERHEAD_KIND_LABELS[page.kind] || "Letterhead";
+  }
   if (page.heading.trim()) return page.heading.trim();
   const count = page.items.length;
   return count === 1 ? "1 photo" : `${count} photos`;
@@ -204,13 +249,13 @@ export function createPhotoReport(input: {
   });
   const pages: PhotoReportPage[] =
     template === "blank"
-      ? [cover, emptyTextPage({ heading: "Notes" })]
+      ? [cover, emptyTextPage({ kind: "blank" })]
       : template === "inspection"
-        ? [...[cover], ...photosPagesFromPhotos(photos), emptyTextPage({ heading: "Findings" })]
+        ? [...[cover], ...photosPagesFromPhotos(photos), emptyTextPage({ kind: "findings" })]
         : template === "completion"
-          ? [...[cover], ...photosPagesFromPhotos(photos), emptyTextPage({ heading: "Work completed" })]
+          ? [...[cover], ...photosPagesFromPhotos(photos), emptyTextPage({ kind: "punch", heading: "Work completed" })]
           : template === "claim"
-            ? [...[cover], ...photosPagesFromPhotos(photos), emptyTextPage({ heading: "Scope of damage" })]
+            ? [...[cover], ...photosPagesFromPhotos(photos), emptyTextPage({ kind: "scope", heading: "Scope of damage" })]
             : [cover, ...photosPagesFromPhotos(photos)];
   return {
     id: crypto.randomUUID(),
@@ -243,6 +288,17 @@ function parseLayout(value: unknown): PhotoPageLayout {
   return "two";
 }
 
+function inferKindFromHeading(heading: string): LetterheadKind {
+  const value = heading.trim().toLowerCase();
+  if (value.includes("introduction")) return "introduction";
+  if (value.includes("finding")) return "findings";
+  if (value.includes("scope")) return "scope";
+  if (value.includes("next")) return "next_steps";
+  if (value.includes("material")) return "materials";
+  if (value.includes("punch") || value.includes("completed")) return "punch";
+  return "blank";
+}
+
 export function parsePhotoReportPages(raw: unknown): PhotoReportPage[] {
   if (!Array.isArray(raw)) return [];
   const pages: PhotoReportPage[] = [];
@@ -271,6 +327,7 @@ export function parsePhotoReportPages(raw: unknown): PhotoReportPage[] {
       pages.push({
         id,
         type: "text",
+        kind: parseLetterheadKind(row.kind || inferKindFromHeading(asString(row.heading))),
         heading: asString(row.heading),
         body: asString(row.body),
       });
@@ -291,6 +348,7 @@ export function parsePhotoReportPages(raw: unknown): PhotoReportPage[] {
         id,
         type: "photos",
         heading: asString(row.heading),
+        notes: asString(row.notes),
         layout: parseLayout(row.layout),
         showCaptions: asBool(row.showCaptions, true),
         showTakenAt: asBool(row.showTakenAt, true),
