@@ -9,7 +9,7 @@ import type { Job } from "@/lib/types";
 export function JobRecordWindow({ job, onClose }: { job: Job; onClose: () => void }) {
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && !event.defaultPrevented) onClose();
     }
     document.addEventListener("keydown", onKey);
     const previous = document.body.style.overflow;

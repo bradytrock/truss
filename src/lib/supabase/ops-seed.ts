@@ -22,12 +22,13 @@ export async function wipeOperations(supabase: Client, companyId: string) {
     "estimate_lines",
     "estimates",
     "job_photos",
+    "photo_reports",
     "schedule_events",
     "catalog_items",
   ] as const;
   for (const table of tables) {
     const { error } = await supabase.from(table).delete().eq("company_id", companyId);
-    if (error && (error.code === "PGRST205" || error.message.includes("schema cache") || error.message.includes("expenses"))) {
+    if (error && (error.code === "PGRST205" || error.message.includes("schema cache") || error.message.includes("Could not find the") || error.message.includes("expenses"))) {
       continue;
     }
     if (error) throw error;

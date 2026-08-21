@@ -689,6 +689,30 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["job_photos"]["Insert"]>;
         Relationships: [];
       };
+      photo_reports: {
+        Row: {
+          id: string;
+          company_id: string;
+          job_id: string;
+          title: string;
+          pages: Json;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          job_id: string;
+          title?: string;
+          pages?: Json;
+          created_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["photo_reports"]["Insert"]>;
+        Relationships: [];
+      };
       calendar_accounts: {
         Row: {
           id: string;

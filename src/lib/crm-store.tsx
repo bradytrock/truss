@@ -59,6 +59,7 @@ import {
   mapInvoice,
   mapJob,
   mapJobPhoto,
+  mapPhotoReport,
   mapOpportunity,
   mapPayment,
   mapExpense,
@@ -88,6 +89,7 @@ import {
   type Job,
   type Opportunity,
   type PhotoCategory,
+  type PhotoReport,
   type PipelineStage,
   type ScheduleEvent,
   type SeatRole,
@@ -130,6 +132,7 @@ import {
 import { formatJobSite } from "@/lib/leads";
 import { fillPayment, fileToDataUrl } from "@/lib/job-financials";
 import { resolveCustomerName, type CustomerRecord } from "@/lib/parties";
+import { isMissingPhotoReports, missingPhotoReportsMessage } from "@/lib/photo-report";
 import { canLoginAs, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 
 const emptyState: CrmState = {
@@ -149,6 +152,7 @@ const emptyState: CrmState = {
   payments: [],
   events: [],
   photos: [],
+  photoReports: [],
   expenses: [],
   calendarAccounts: [],
   calendarShares: [],
@@ -573,6 +577,9 @@ type CrmContextValue = CrmState & {
     imageUrl?: string;
     file?: File;
   }) => Promise<void>;
+  addPhotoReport: (report: PhotoReport) => Promise<PhotoReport>;
+  updatePhotoReport: (id: string, patch: Partial<Omit<PhotoReport, "id" | "jobId" | "createdAt">>) => Promise<boolean>;
+  deletePhotoReport: (id: string) => Promise<boolean>;
   resetDemo: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -816,6 +823,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       "training_progress",
       "training_bulletins",
       "account_invites",
+      "photo_reports",
     ] as const;
     let timer: number | undefined;
     const channel = supabase.channel(`truss-company-${user.companyId}`);
@@ -3485,6 +3493,98 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [user.companyId]
   );
 
+  const addPhotoReport = useCallback(
+    async (report: PhotoReport) => {
+      const next: PhotoReport = {
+        ...report,
+        updatedAt: new Date().toISOString(),
+      };
+      setState((prev) => ({ ...prev, photoReports: [next, ...prev.photoReports] }));
+      const supabase = maybeClient();
+      if (!supabase || !user.companyId || user.companyId === "local") return next;
+      const { data, error } = await supabase
+        .from("photo_reports")
+        .insert({
+          id: next.id,
+          company_id: user.companyId,
+          job_id: next.jobId,
+          title: next.title,
+          pages: next.pages as unknown as Json,
+          created_by: next.createdBy,
+          created_at: next.createdAt,
+          updated_at: next.updatedAt,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        toast.error(
+          isMissingPhotoReports(error) ? missingPhotoReportsMessage() : error?.message ?? "Could not save the photo report.",
+        );
+        return next;
+      }
+      const saved = mapPhotoReport(data);
+      setState((prev) => ({
+        ...prev,
+        photoReports: prev.photoReports.map((item) => (item.id === next.id ? saved : item)),
+      }));
+      return saved;
+    },
+    [user.companyId],
+  );
+
+  const updatePhotoReport = useCallback(
+    async (id: string, patch: Partial<Omit<PhotoReport, "id" | "jobId" | "createdAt">>) => {
+      const updatedAt = patch.updatedAt || new Date().toISOString();
+      let next: PhotoReport | undefined;
+      setState((prev) => {
+        next = prev.photoReports.find((item) => item.id === id);
+        if (!next) return prev;
+        next = { ...next, ...patch, updatedAt };
+        return {
+          ...prev,
+          photoReports: prev.photoReports.map((item) => (item.id === id ? next! : item)),
+        };
+      });
+      if (!next) return false;
+      const supabase = maybeClient();
+      if (!supabase || !user.companyId || user.companyId === "local") return true;
+      const { error } = await supabase
+        .from("photo_reports")
+        .update({
+          title: next.title,
+          pages: next.pages as unknown as Json,
+          updated_at: next.updatedAt,
+        })
+        .eq("id", id);
+      if (error) {
+        toast.error(
+          isMissingPhotoReports(error) ? missingPhotoReportsMessage() : error.message || "Could not save the photo report.",
+        );
+        return false;
+      }
+      return true;
+    },
+    [user.companyId],
+  );
+
+  const deletePhotoReport = useCallback(
+    async (id: string) => {
+      setState((prev) => ({
+        ...prev,
+        photoReports: prev.photoReports.filter((item) => item.id !== id),
+      }));
+      const supabase = maybeClient();
+      if (!supabase || !user.companyId || user.companyId === "local") return true;
+      const { error } = await supabase.from("photo_reports").delete().eq("id", id);
+      if (error && !isMissingPhotoReports(error)) {
+        toast.error(error.message || "Could not delete the photo report.");
+        return false;
+      }
+      return true;
+    },
+    [user.companyId],
+  );
+
   const canEditCompany = Boolean(viewer && canManageSettings(viewer.role, viewer));
 
   const updateCompany = useCallback(
@@ -3947,6 +4047,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       submitQuiz,
       addTrainingBulletin,
       addJobPhoto,
+      addPhotoReport,
+      updatePhotoReport,
+      deletePhotoReport,
       resetDemo,
       signOut,
     }),
@@ -4024,6 +4127,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       submitQuiz,
       addTrainingBulletin,
       addJobPhoto,
+      addPhotoReport,
+      updatePhotoReport,
+      deletePhotoReport,
       resetDemo,
       signOut,
     ]

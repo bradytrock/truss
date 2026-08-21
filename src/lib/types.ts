@@ -486,6 +486,61 @@ export interface JobPhoto {
   storagePath: string | null;
 }
 
+export const PHOTO_PAGE_LAYOUTS = ["one", "two", "four"] as const;
+export type PhotoPageLayout = (typeof PHOTO_PAGE_LAYOUTS)[number];
+
+export const PHOTO_PAGE_LAYOUT_LABELS: Record<PhotoPageLayout, string> = {
+  one: "1 photo",
+  two: "2 photos",
+  four: "4 photos",
+};
+
+export interface PhotoReportCoverPage {
+  id: string;
+  type: "cover";
+  title: string;
+  subtitle: string;
+  notes: string;
+  showAddress: boolean;
+  showDate: boolean;
+  heroPhotoId: string | null;
+}
+
+export interface PhotoReportPhotoItem {
+  photoId: string;
+  caption: string;
+}
+
+export interface PhotoReportPhotosPage {
+  id: string;
+  type: "photos";
+  heading: string;
+  layout: PhotoPageLayout;
+  showCaptions: boolean;
+  showTakenAt: boolean;
+  showCategory: boolean;
+  items: PhotoReportPhotoItem[];
+}
+
+export interface PhotoReportTextPage {
+  id: string;
+  type: "text";
+  heading: string;
+  body: string;
+}
+
+export type PhotoReportPage = PhotoReportCoverPage | PhotoReportPhotosPage | PhotoReportTextPage;
+
+export interface PhotoReport {
+  id: string;
+  jobId: string;
+  title: string;
+  pages: PhotoReportPage[];
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+}
+
 export interface TrainingAttempt {
   id: string;
   staffId: string;
@@ -531,6 +586,7 @@ export interface CrmState {
   expenses: Expense[];
   events: ScheduleEvent[];
   photos: JobPhoto[];
+  photoReports: PhotoReport[];
   calendarAccounts: CalendarAccount[];
   calendarShares: CalendarShare[];
   trainingProgress: TrainingProgress[];

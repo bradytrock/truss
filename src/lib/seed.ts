@@ -50,6 +50,7 @@ export const seedState: CrmState = {
   payments: demoOps.payments,
   events: demoOps.events,
   photos: demoOps.photos,
+  photoReports: [],
   expenses: demoOps.expenses,
   calendarAccounts: structuredClone(seedCalendarAccounts),
   calendarShares: structuredClone(seedCalendarShares),

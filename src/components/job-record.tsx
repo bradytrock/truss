@@ -62,6 +62,7 @@ import {
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate } from "@/lib/format";
 import { assignedCrewPatch, jobAddress, mapsUrl, uniqueIds, uniqueNames } from "@/lib/job-record";
+import { createPhotoReport } from "@/lib/photo-report";
 import { leadSourceLabel } from "@/lib/leads";
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
 import { amountForEstimate } from "@/lib/estimate-totals";
@@ -82,6 +83,7 @@ import {
   type ProjectType,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { PhotoReportBuilder } from "@/components/photo-report-builder";
 
 function copyText(value: string, label: string) {
   if (!value) return;
@@ -211,6 +213,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
   const [photoOpen, setPhotoOpen] = useState(false);
   const [estimateOpen, setEstimateOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [reportId, setReportId] = useState<string | null>(null);
   const [tagDraft, setTagDraft] = useState("");
   const [fieldLabel, setFieldLabel] = useState("");
   const [fieldValue, setFieldValue] = useState("");
@@ -223,6 +226,8 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
   const client = crm.getClient(job.clientId);
   const primary = crm.getContact(job.primaryContactId);
   const photos = crm.photos.filter((photo) => photo.jobId === job.id);
+  const reports = crm.photoReports.filter((report) => report.jobId === job.id);
+  const openReport = reportId ? reports.find((report) => report.id === reportId) : undefined;
   const hero = photos[0];
   const address = jobAddress(job);
   const estimates = crm.estimates.filter((estimate) => estimate.jobId === job.id);
@@ -254,6 +259,18 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
       !job.subcontractorIds.includes(contact.id)
   );
   const tradeOptions = crm.contacts.filter((contact) => !job.subcontractorIds.includes(contact.id));
+
+  async function startPhotoReport() {
+    const created = await crm.addPhotoReport(
+      createPhotoReport({
+        job,
+        customer: crm.customerName(job),
+        photos,
+        author: crm.user.name,
+      }),
+    );
+    setReportId(created.id);
+  }
 
   function patch(next: Partial<Job>) {
     void crm.updateJob(job.id, next);
@@ -762,14 +779,41 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
         </TabsContent>
 
         <TabsContent value="photos" className="border-x border-b p-4">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex items-center justify-between gap-2">
             <p className="text-sm text-muted-foreground">
               {photos.length === 0 ? "No photos on this job." : `${photos.length} photos`}
             </p>
-            <Button size="sm" variant="outline" onClick={() => setPhotoOpen(true)}>
-              Add photo
-            </Button>
+            <div className="flex gap-1.5">
+              <Button size="sm" variant="outline" onClick={() => setPhotoOpen(true)}>
+                Add photo
+              </Button>
+              <Button size="sm" onClick={() => void startPhotoReport()}>
+                New photo report
+              </Button>
+            </div>
           </div>
+          {reports.length > 0 ? (
+            <ul className="mb-4 space-y-1.5">
+              {reports.map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => setReportId(item.id)}
+                    className="flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm hover:bg-muted/50"
+                  >
+                    <span className="min-w-0 truncate font-medium">{item.title || "Untitled report"}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {item.pages.length} page{item.pages.length === 1 ? "" : "s"}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mb-4 text-sm text-muted-foreground">
+              Build a letter-size report for the adjuster or homeowner: cover, photo pages, and notes. Download it as a PDF.
+            </p>
+          )}
           {photos.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
               {photos.map((photo) => (
@@ -977,6 +1021,9 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
         defaultClientId={job.clientId}
         defaultJobId={job.id}
       />
+      {openReport ? (
+        <PhotoReportBuilder job={job} report={openReport} onClose={() => setReportId(null)} />
+      ) : null}
     </div>
   );
 }

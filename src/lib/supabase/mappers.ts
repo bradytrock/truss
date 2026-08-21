@@ -1,4 +1,5 @@
 import { fillEstimate, fillEstimateLine } from "@/lib/estimate-totals";
+import { parsePhotoReportPages } from "@/lib/photo-report";
 import { customFieldsJson, fillJobRecord, parseCustomFields } from "@/lib/job-record";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import type {
@@ -17,6 +18,7 @@ import type {
   JobPhoto,
   Opportunity,
   Payment,
+  PhotoReport,
   Expense,
   ScheduleEvent,
   StaffMember,
@@ -41,6 +43,7 @@ type InvoiceLineRow = Database["public"]["Tables"]["invoice_lines"]["Row"];
 type PaymentRow = Database["public"]["Tables"]["payments"]["Row"];
 type EventRow = Database["public"]["Tables"]["schedule_events"]["Row"];
 type PhotoRow = Database["public"]["Tables"]["job_photos"]["Row"];
+type PhotoReportRow = Database["public"]["Tables"]["photo_reports"]["Row"];
 type StaffRow = Database["public"]["Tables"]["team_members"]["Row"];
 type TeamRow = Database["public"]["Tables"]["teams"]["Row"];
 type CompanyRow = Database["public"]["Tables"]["companies"]["Row"];
@@ -539,6 +542,18 @@ export function mapJobPhoto(row: PhotoRow): JobPhoto {
     takenAt: row.taken_at,
     imageUrl: row.image_url,
     storagePath: row.storage_path,
+  };
+}
+
+export function mapPhotoReport(row: PhotoReportRow): PhotoReport {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    title: row.title,
+    pages: parsePhotoReportPages(row.pages),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    createdBy: row.created_by,
   };
 }
 

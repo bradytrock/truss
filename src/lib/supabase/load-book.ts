@@ -12,6 +12,7 @@ import {
   mapInvoiceLine,
   mapJob,
   mapJobPhoto,
+  mapPhotoReport,
   mapOpportunity,
   mapPayment,
   mapExpense,
@@ -64,6 +65,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     calendarSharesRes,
     trainingProgressRes,
     trainingBulletinsRes,
+    photoReportsRes,
   ] = await Promise.all([
     supabase.from("clients").select("*").eq("company_id", companyId).order("name"),
     supabase.from("contacts").select("*").eq("company_id", companyId).order("name"),
@@ -94,6 +96,9 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     supabase.from("calendar_shares").select("*").eq("company_id", companyId),
     supabase.from("training_progress").select("*").eq("company_id", companyId),
     supabase.from("training_bulletins").select("*").eq("company_id", companyId).order("created_at", {
+      ascending: false,
+    }),
+    supabase.from("photo_reports").select("*").eq("company_id", companyId).order("updated_at", {
       ascending: false,
     }),
   ]);
@@ -184,6 +189,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     expenses: expensesRes.error ? [] : (expensesRes.data ?? []).map(mapExpense),
     events: (eventsRes.data ?? []).map(mapScheduleEvent),
     photos: (photosRes.data ?? []).map(mapJobPhoto),
+    photoReports: photoReportsRes.error ? [] : (photoReportsRes.data ?? []).map(mapPhotoReport),
     calendarAccounts: calendarAccountsRes.error
       ? []
       : (calendarAccountsRes.data ?? []).map(mapCalendarAccount),
