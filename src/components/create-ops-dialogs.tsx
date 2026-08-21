@@ -23,8 +23,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { contactOptionLabel, siteFieldsFromRecord } from "@/lib/contacts";
+import { MarketField } from "@/components/market-field";
 import { useCrm } from "@/lib/crm-store";
 import { localYmd } from "@/lib/format";
+import { formatJobSite } from "@/lib/leads";
+import { workMarket } from "@/lib/market";
 import { LogPaymentDialog } from "@/components/log-financial-dialogs";
 import {
   EVENT_KIND_LABELS,
@@ -32,6 +36,7 @@ import {
   PHOTO_CATEGORIES,
   PHOTO_CATEGORY_LABELS,
   type EventKind,
+  type JobMarket,
   type PhotoCategory,
 } from "@/lib/types";
 
@@ -54,20 +59,25 @@ export function CreateEstimateDialog({
 }) {
   const router = useRouter();
   const { contacts, opportunities, jobs, addEstimate, addContact, addClient, user } = useCrm();
-  const [name, setName] = useState("");
   const [contactId, setContactId] = useState(NEW_HOMEOWNER);
   const [opportunityId, setOpportunityId] = useState("");
   const [jobId, setJobId] = useState("");
+  const [street, setStreet] = useState("");
+  const [city, setCity] = useState("");
+  const [region, setRegion] = useState("");
+  const [postalCode, setPostalCode] = useState("");
   const [validUntil, setValidUntil] = useState("");
   const [notes, setNotes] = useState("");
   const [personName, setPersonName] = useState("");
   const [personPhone, setPersonPhone] = useState("");
   const [personEmail, setPersonEmail] = useState("");
   const [companyName, setCompanyName] = useState("");
+  const [market, setMarket] = useState<JobMarket>("residential");
   const [saving, setSaving] = useState(false);
 
   const isNewHomeowner = contactId === NEW_HOMEOWNER;
   const contact = contacts.find((item) => item.id === contactId);
+  const contactSites = [...jobs, ...opportunities];
   const relatedOpps = opportunities.filter(
     (opportunity) =>
       opportunity.primaryContactId === contactId ||
@@ -78,31 +88,55 @@ export function CreateEstimateDialog({
       job.primaryContactId === contactId || (contact?.clientId && job.clientId === contact.clientId)
   );
 
+  function applySite(record?: Parameters<typeof siteFieldsFromRecord>[0]) {
+    const fields = siteFieldsFromRecord(record);
+    setStreet(fields.street);
+    setCity(fields.city);
+    setRegion(fields.state);
+    setPostalCode(fields.postalCode);
+  }
+
   useEffect(() => {
     if (!open) return;
     const jobDefault = defaultJobId ? jobs.find((job) => job.id === defaultJobId) : undefined;
+    const oppDefault = defaultOpportunityId
+      ? opportunities.find((item) => item.id === defaultOpportunityId)
+      : undefined;
     const initial =
       defaultContactId ||
       jobDefault?.primaryContactId ||
+      oppDefault?.primaryContactId ||
       (contacts.length > 0 ? contacts[0].id : NEW_HOMEOWNER);
     setContactId(initial);
     setOpportunityId(defaultOpportunityId ?? "");
     setJobId(defaultJobId ?? "");
-    setName("");
+    applySite(
+      jobDefault ||
+        oppDefault ||
+        jobs.find((job) => job.primaryContactId === initial) ||
+        opportunities.find((item) => item.primaryContactId === initial)
+    );
     setValidUntil("");
     setNotes("");
     setPersonName("");
     setPersonPhone("");
     setPersonEmail("");
     setCompanyName("");
+    setMarket(
+      workMarket(
+        jobDefault || (defaultJobId ? undefined : jobs.find((job) => job.primaryContactId === initial)),
+        oppDefault,
+      ),
+    );
     setSaving(false);
     // Snapshot the book when the dialog opens so typing a new homeowner is not wiped by a later load.
   }, [open]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!name.trim()) {
-      toast.error("Give the estimate a name.");
+    const site = formatJobSite({ street, city, state: region, postalCode });
+    if (!street.trim()) {
+      toast.error("Add the property street address.");
       return;
     }
     if (!isNewHomeowner && !contactId) {
@@ -122,8 +156,8 @@ export function CreateEstimateDialog({
           const client = await addClient({
             name: companyName.trim(),
             type: "owner",
-            city: "",
-            state: "",
+            city: city.trim(),
+            state: region.trim(),
             notes: "",
           });
           resolvedClientId = client.id;
@@ -142,13 +176,18 @@ export function CreateEstimateDialog({
         resolvedContactId = created.id;
       }
       const estimate = await addEstimate({
-        name: name.trim(),
+        name: site,
         clientId: resolvedClientId,
         opportunityId: opportunityId || null,
         jobId: jobId || null,
         contactId: resolvedContactId,
         validUntil: validUntil || null,
         notes,
+        street: street.trim(),
+        city: city.trim(),
+        state: region.trim(),
+        postalCode: postalCode.trim(),
+        market,
       });
       toast.success(`${estimate.number} drafted.`);
       onOpenChange(false);
@@ -162,33 +201,35 @@ export function CreateEstimateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[min(90vh,44rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>New estimate</DialogTitle>
           <DialogDescription>
-            Price from the catalog, send the proposal, then mark it signed. Add a new homeowner here if they are not in Contacts yet. They land on Lead; signing opens the job and moves the card to Job Sold.
+            Price from the catalog, send the proposal, then mark it signed. Add a new homeowner here if they are not in Contacts yet. The proposal is titled with the property address.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-3">
-          <Field label="Name" htmlFor="est-name">
-            <Input
-              id="est-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="e.g. Ellison kitchen — Wash Park"
-            />
-          </Field>
           <Field label="Homeowner / contact">
             <Select
               value={contactId}
               onValueChange={(value) => {
-                setContactId(String(value ?? ""));
+                const next = String(value ?? "");
+                setContactId(next);
                 setOpportunityId("");
                 setJobId("");
+                if (next && next !== NEW_HOMEOWNER) {
+                  applySite(
+                    jobs.find((job) => job.primaryContactId === next) ||
+                      opportunities.find((item) => item.primaryContactId === next)
+                  );
+                }
               }}
               items={[
                 { value: NEW_HOMEOWNER, label: "New homeowner…" },
-                ...contacts.map((item) => ({ value: item.id, label: item.name })),
+                ...contacts.map((item) => ({
+                  value: item.id,
+                  label: contactOptionLabel(item, contactSites),
+                })),
               ]}
             >
               <SelectTrigger className="w-full">
@@ -199,7 +240,7 @@ export function CreateEstimateDialog({
                 {contacts.length > 0 ? <SelectSeparator /> : null}
                 {contacts.map((item) => (
                   <SelectItem key={item.id} value={item.id}>
-                    {item.name}
+                    {contactOptionLabel(item, contactSites)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -250,11 +291,64 @@ export function CreateEstimateDialog({
               </Field>
             </div>
           ) : null}
+          <MarketField value={market} onChange={setMarket} id="est-market" />
+          <Field label="Property address" htmlFor="est-street">
+            <Input
+              id="est-street"
+              value={street}
+              onChange={(event) => setStreet(event.target.value)}
+              placeholder="860 S Washington St"
+              autoComplete="street-address"
+            />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-6">
+            <div className="sm:col-span-3">
+              <Field label="City" htmlFor="est-city">
+                <Input
+                  id="est-city"
+                  value={city}
+                  onChange={(event) => setCity(event.target.value)}
+                  placeholder="Denver"
+                  autoComplete="address-level2"
+                />
+              </Field>
+            </div>
+            <div className="sm:col-span-1">
+              <Field label="State" htmlFor="est-state">
+                <Input
+                  id="est-state"
+                  value={region}
+                  onChange={(event) => setRegion(event.target.value.toUpperCase().slice(0, 2))}
+                  placeholder="CO"
+                  autoComplete="address-level1"
+                />
+              </Field>
+            </div>
+            <div className="sm:col-span-2">
+              <Field label="ZIP" htmlFor="est-zip">
+                <Input
+                  id="est-zip"
+                  value={postalCode}
+                  onChange={(event) => setPostalCode(event.target.value)}
+                  placeholder="80209"
+                  autoComplete="postal-code"
+                />
+              </Field>
+            </div>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Lead (optional)">
               <Select
                 value={opportunityId || "none"}
-                onValueChange={(value) => setOpportunityId(value === "none" ? "" : String(value ?? ""))}
+                onValueChange={(value) => {
+                  const next = value === "none" ? "" : String(value ?? "");
+                  setOpportunityId(next);
+                  if (next) {
+                    const selected = opportunities.find((item) => item.id === next);
+                    applySite(selected);
+                    if (selected) setMarket(workMarket(undefined, selected));
+                  }
+                }}
                 items={[
                   { value: "none", label: "Open a new Lead" },
                   ...relatedOpps.map((opportunity) => ({
@@ -282,7 +376,15 @@ export function CreateEstimateDialog({
             <Field label="Job (optional)">
               <Select
                 value={jobId || "none"}
-                onValueChange={(value) => setJobId(value === "none" ? "" : String(value ?? ""))}
+                onValueChange={(value) => {
+                  const next = value === "none" ? "" : String(value ?? "");
+                  setJobId(next);
+                  if (next) {
+                    const selected = jobs.find((item) => item.id === next);
+                    applySite(selected);
+                    if (selected) setMarket(workMarket(selected, undefined));
+                  }
+                }}
                 items={[
                   { value: "none", label: "None" },
                   ...relatedJobs.map((job) => ({ value: job.id, label: job.name })),

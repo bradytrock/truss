@@ -15,6 +15,7 @@ import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { InvoiceStatusBadge } from "@/components/status-badge";
 import { downloadInvoicePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
+import { letterheadCompanyForRecord } from "@/lib/document-owner";
 import { formatCurrencyFull, formatDate, formatMoney } from "@/lib/format";
 import { shareUrl } from "@/lib/share";
 import type { Invoice } from "@/lib/types";
@@ -60,6 +61,16 @@ export default function InvoiceDetailPage() {
   const paid = paidOnInvoice(record.id, crm.payments);
   const balance = invoiceBalance(record.id, crm.invoiceLines, crm.payments);
   const customer = crm.customerName(record);
+  const opportunityId = job?.opportunityId || estimate?.opportunityId;
+  const opportunity = opportunityId ? crm.getOpportunity(opportunityId) : undefined;
+  const letterhead = letterheadCompanyForRecord({
+    company: crm.company,
+    job,
+    opportunity,
+    staff: crm.staff,
+    fallbackStaffId: crm.user.staffId,
+    inBook: true,
+  });
 
   function downloadPdf() {
     if (lines.length === 0) {
@@ -70,7 +81,7 @@ export default function InvoiceDetailPage() {
       invoice: record,
       lines,
       payments,
-      company: crm.company,
+      company: letterhead,
       customer,
     });
   }

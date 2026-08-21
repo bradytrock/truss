@@ -1,6 +1,7 @@
 import { fillEstimate, fillEstimateLine } from "@/lib/estimate-totals";
 import { parsePhotoReportPages } from "@/lib/photo-report";
 import { customFieldsJson, fillJobRecord, parseCustomFields } from "@/lib/job-record";
+import { parseMarket } from "@/lib/market";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import type {
   Activity,
@@ -160,6 +161,7 @@ export function mapOpportunity(row: OpportunityRow): Opportunity {
     preBidWalkAt: row.pre_bid_walk_at,
     location: row.location,
     projectType: row.project_type,
+    market: parseMarket(row.market, row.project_type),
     deliveryMethod: row.delivery_method,
     estimator: row.estimator,
     winProbability: row.win_probability,
@@ -206,6 +208,7 @@ export function mapJob(row: JobRow): Job {
     relatedContactIds: row.related_contact_ids ?? [],
     customFields: parseCustomFields(row.custom_fields),
     projectType: row.project_type ?? "",
+    market: parseMarket(row.market, row.project_type),
     leadSource: (row.lead_source as Job["leadSource"]) ?? "",
   });
 }
@@ -247,6 +250,7 @@ export function opportunityPatch(patch: Partial<Opportunity>) {
   if (patch.preBidWalkAt !== undefined) row.pre_bid_walk_at = patch.preBidWalkAt;
   if (patch.location !== undefined) row.location = patch.location;
   if (patch.projectType !== undefined) row.project_type = patch.projectType;
+  if (patch.market !== undefined) row.market = patch.market;
   if (patch.deliveryMethod !== undefined) row.delivery_method = patch.deliveryMethod;
   if (patch.estimator !== undefined) row.estimator = patch.estimator;
   if (patch.winProbability !== undefined) row.win_probability = patch.winProbability;
@@ -306,6 +310,7 @@ export function jobPatch(patch: Partial<Job>) {
   if (patch.relatedContactIds !== undefined) row.related_contact_ids = patch.relatedContactIds;
   if (patch.customFields !== undefined) row.custom_fields = customFieldsJson(patch.customFields);
   if (patch.projectType !== undefined) row.project_type = patch.projectType || null;
+  if (patch.market !== undefined) row.market = patch.market;
   if (patch.leadSource !== undefined) row.lead_source = patch.leadSource ?? "";
   return row;
 }

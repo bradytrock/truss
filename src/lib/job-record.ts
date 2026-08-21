@@ -1,4 +1,5 @@
 import { formatJobSite } from "@/lib/leads";
+import { parseMarket, workMarket } from "@/lib/market";
 import type { Json } from "@/lib/supabase/database.types";
 import {
   STAGE_LABELS,
@@ -25,6 +26,7 @@ export type JobDraft = Omit<
   | "customFields"
   | "projectType"
   | "leadSource"
+  | "market"
 > &
   Partial<
     Pick<
@@ -43,6 +45,7 @@ export type JobDraft = Omit<
       | "customFields"
       | "projectType"
       | "leadSource"
+      | "market"
     >
   >;
 
@@ -177,6 +180,7 @@ export function fillJobRecord(job: JobDraft, opportunity?: Opportunity | null): 
     relatedContactIds: related,
     customFields: job.customFields ?? [],
     projectType: (job.projectType || opportunity?.projectType || "") as ProjectType | "",
+    market: workMarket(job, opportunity),
     leadSource: (job.leadSource || opportunity?.leadSource || "") as LeadSource | "",
     location:
       formatJobSite({
@@ -214,6 +218,7 @@ export function jobDraftFromOpportunity(
     state: opportunity.state,
     postalCode: opportunity.postalCode,
     projectType: opportunity.projectType,
+    market: parseMarket(opportunity.market, opportunity.projectType),
     leadSource: opportunity.leadSource,
     relatedContactIds: opportunity.referralContactId ? [opportunity.referralContactId] : [],
   };

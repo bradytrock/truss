@@ -37,6 +37,10 @@ export const PROJECT_TYPES = [
 
 export type ProjectType = (typeof PROJECT_TYPES)[number];
 
+export const JOB_MARKETS = ["residential", "commercial"] as const;
+
+export type JobMarket = (typeof JOB_MARKETS)[number];
+
 export const DELIVERY_METHODS = [
   "insurance_claim",
   "fixed_price",
@@ -202,6 +206,7 @@ export interface Opportunity {
   preBidWalkAt: string | null;
   location: string;
   projectType: ProjectType;
+  market?: JobMarket;
   deliveryMethod: DeliveryMethod;
   estimator: string;
   winProbability: number;
@@ -252,6 +257,7 @@ export interface Job {
   relatedContactIds: string[];
   customFields: JobCustomField[];
   projectType: ProjectType | "";
+  market: JobMarket;
   leadSource: LeadSource | "";
 }
 
@@ -616,6 +622,11 @@ export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
   punch: "Punch list",
   complete: "Complete",
   on_hold: "On hold",
+};
+
+export const JOB_MARKET_LABELS: Record<JobMarket, string> = {
+  residential: "Residential",
+  commercial: "Commercial",
 };
 
 export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {

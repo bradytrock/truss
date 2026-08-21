@@ -4,6 +4,9 @@ import { CompanyLetterhead } from "@/components/company-letterhead";
 import { EstimateStatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useCrmOptional } from "@/lib/crm-store";
+import { letterheadCompanyForRecord } from "@/lib/document-owner";
+import { billingEstimate, workMarket } from "@/lib/market";
 import {
   estimateTotals,
   groupEstimateLines,
@@ -89,17 +92,36 @@ export function ProposalDocument({
 }) {
   const groups = groupEstimateLines(lines);
   const site = formatJobSite(estimate);
+  const crm = useCrmOptional();
+  const job = estimate.jobId && crm ? crm.jobs.find((item) => item.id === estimate.jobId) : undefined;
+  const opportunity =
+    estimate.opportunityId && crm
+      ? crm.opportunities.find((item) => item.id === estimate.opportunityId)
+      : undefined;
+  const letterhead = letterheadCompanyForRecord({
+    company: company ?? crm?.company,
+    job,
+    opportunity,
+    staff: crm?.staff ?? [],
+    fallbackStaffId: crm?.user.staffId,
+    inBook: Boolean(crm?.estimates.some((item) => item.id === estimate.id)),
+  });
+  const billed = billingEstimate(estimate, workMarket(job, opportunity));
   return (
     <div className="space-y-6 rounded-md border bg-card p-5 sm:p-7">
-      <CompanyLetterhead company={company} />
+      <CompanyLetterhead company={letterhead} />
       <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
             {estimate.number}
           </p>
-          <h2 className="font-heading mt-1 text-2xl font-medium text-balance">{estimate.name}</h2>
+          <h2 className="font-heading mt-1 text-2xl font-medium text-balance">
+            {site || estimate.name}
+          </h2>
           <p className="mt-2 text-sm text-muted-foreground">Prepared for {customer}</p>
-          {site ? <p className="text-sm text-muted-foreground">{site}</p> : null}
+          {site && site !== estimate.name ? (
+            <p className="text-sm text-muted-foreground">{site}</p>
+          ) : null}
         </div>
         <div className="text-sm sm:text-right">
           {showStatus ? <EstimateStatusBadge status={estimate.status} /> : null}
@@ -163,7 +185,7 @@ export function ProposalDocument({
           ))}
         </div>
       )}
-      <EstimateTotals estimate={estimate} lines={lines} className="ml-auto max-w-xs" />
+      <EstimateTotals estimate={billed} lines={lines} className="ml-auto max-w-xs" />
       {estimate.terms ? (
         <div>
           <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>

@@ -18,12 +18,13 @@ import { GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { TypeBadge } from "@/components/status-badge";
+import { MarketBadge, TypeBadge } from "@/components/status-badge";
 import { EmptyState, RecordCode } from "@/components/page-chrome";
 import { LeadAssigneeSelect } from "@/components/lead-assignee";
 import { useCrm } from "@/lib/crm-store";
 import { daysUntil, formatCurrency, formatDateShort } from "@/lib/format";
 import { leadSourceLabel } from "@/lib/leads";
+import { parseMarket } from "@/lib/market";
 import {
   PIPELINE_STAGES,
   STAGE_LABELS,
@@ -266,6 +267,7 @@ function OpportunityCard({
           <span className="font-heading text-sm font-medium tabular-nums">
             {formatCurrency(opportunity.value)}
           </span>
+          <MarketBadge market={parseMarket(opportunity.market, opportunity.projectType)} />
           <TypeBadge type={opportunity.projectType} />
         </div>
         <div

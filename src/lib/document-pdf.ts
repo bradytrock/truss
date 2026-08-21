@@ -90,7 +90,7 @@ export async function downloadEstimatePdf(input: {
   doc.setFont("times", "bold");
   doc.setFontSize(18);
   doc.setTextColor(28, 28, 28);
-  const title = doc.splitTextToSize(input.estimate.name, 400);
+  const title = doc.splitTextToSize(site || input.estimate.name, 400);
   doc.text(title, 54, y);
   y += title.length * 20 + 6;
   doc.setFont("helvetica", "normal");
@@ -98,7 +98,7 @@ export async function downloadEstimatePdf(input: {
   doc.setTextColor(70, 70, 70);
   doc.text(`Prepared for ${input.customer}`, 54, y);
   y += 14;
-  if (site) {
+  if (site && site !== input.estimate.name) {
     doc.text(site, 54, y);
     y += 16;
   }

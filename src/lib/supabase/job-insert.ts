@@ -23,6 +23,7 @@ const OVERVIEW_KEYS = [
   "custom_fields",
   "project_type",
   "lead_source",
+  "market",
 ] as const;
 
 const FIRST_MIGRATION_KEYS = [

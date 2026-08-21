@@ -233,6 +233,7 @@ export type Database = {
           state: string;
           postal_code: string;
           notes: string;
+          market: string;
         };
         Insert: {
           id?: string;
@@ -262,6 +263,7 @@ export type Database = {
           state?: string;
           postal_code?: string;
           notes?: string;
+          market?: string;
         };
         Update: Partial<Database["public"]["Tables"]["opportunities"]["Insert"]>;
         Relationships: [];
@@ -297,6 +299,7 @@ export type Database = {
           custom_fields: Json;
           project_type: Database["public"]["Enums"]["project_type"] | null;
           lead_source: string;
+          market: string;
         };
         Insert: {
           id?: string;
@@ -327,6 +330,7 @@ export type Database = {
           custom_fields?: Json;
           project_type?: Database["public"]["Enums"]["project_type"] | null;
           lead_source?: string;
+          market?: string;
         };
         Update: Partial<Database["public"]["Tables"]["jobs"]["Insert"]>;
         Relationships: [];

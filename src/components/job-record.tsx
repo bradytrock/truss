@@ -481,6 +481,38 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                 </SelectContent>
               </Select>
             </FieldRow>
+            <FieldRow icon={Building2} label="Residential or commercial">
+              <Select
+                value={job.market || "residential"}
+                onValueChange={(value) => {
+                  const market = value as Job["market"];
+                  if (market !== "residential" && market !== "commercial") return;
+                  patch({ market });
+                  if (opportunity && opportunity.market !== market) {
+                    void crm.updateOpportunity(opportunity.id, { market });
+                  }
+                  if (market === "residential") {
+                    for (const estimate of crm.estimates.filter(
+                      (item) => item.jobId === job.id && item.taxRate !== 0,
+                    )) {
+                      void crm.updateEstimate(estimate.id, { taxRate: 0 });
+                    }
+                  }
+                }}
+                items={[
+                  { value: "residential", label: "Residential" },
+                  { value: "commercial", label: "Commercial" },
+                ]}
+              >
+                <SelectTrigger className={quietSelect}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  <SelectItem value="residential">Residential</SelectItem>
+                  <SelectItem value="commercial">Commercial</SelectItem>
+                </SelectContent>
+              </Select>
+            </FieldRow>
             <FieldRow icon={Briefcase} label="Type">
               <Select
                 value={job.projectType || undefined}

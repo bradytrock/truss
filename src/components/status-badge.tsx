@@ -5,6 +5,7 @@ import {
   ESTIMATE_STATUS_LABELS,
   EVENT_KIND_LABELS,
   INVOICE_STATUS_LABELS,
+  JOB_MARKET_LABELS,
   JOB_STATUS_LABELS,
   PHOTO_CATEGORY_LABELS,
   PROJECT_TYPE_LABELS,
@@ -13,6 +14,7 @@ import {
   type EstimateStatus,
   type EventKind,
   type InvoiceStatus,
+  type JobMarket,
   type JobStatus,
   type PhotoCategory,
   type PipelineStage,
@@ -72,6 +74,14 @@ export function JobStatusBadge({ status }: { status: JobStatus }) {
   return (
     <Badge variant="outline" className={cn(jobClass[status])}>
       {JOB_STATUS_LABELS[status]}
+    </Badge>
+  );
+}
+
+export function MarketBadge({ market }: { market: JobMarket }) {
+  return (
+    <Badge variant="outline" className="font-normal text-muted-foreground">
+      {JOB_MARKET_LABELS[market]}
     </Badge>
   );
 }

@@ -7,6 +7,7 @@ import { InvoiceDocument } from "@/components/invoice-document";
 import { ShareFrame, ShareLoading, ShareMissing, SharePdfButton } from "@/components/share-frame";
 import { downloadInvoicePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
+import { letterheadCompanyForRecord } from "@/lib/document-owner";
 import { derivedInvoiceStatus } from "@/lib/money";
 import { parseSharedInvoice, type SharedInvoicePayload } from "@/lib/share";
 
@@ -65,6 +66,22 @@ export default function SharedInvoicePage() {
     const payments = crm.payments.filter((payment) => payment.invoiceId === fromStore.id);
     const status = derivedInvoiceStatus(fromStore, crm.invoiceLines, crm.payments);
     const customer = crm.customerName(fromStore);
+    const job = fromStore.jobId ? crm.jobs.find((item) => item.id === fromStore.jobId) : undefined;
+    const linkedEstimate = fromStore.estimateId
+      ? crm.estimates.find((item) => item.id === fromStore.estimateId)
+      : undefined;
+    const opportunityId = job?.opportunityId || linkedEstimate?.opportunityId;
+    const opportunity = opportunityId
+      ? crm.opportunities.find((item) => item.id === opportunityId)
+      : undefined;
+    const letterhead = letterheadCompanyForRecord({
+      company: crm.company,
+      job,
+      opportunity,
+      staff: crm.staff,
+      fallbackStaffId: crm.user.staffId,
+      inBook: true,
+    });
     return (
       <ShareFrame
         actions={
@@ -75,7 +92,7 @@ export default function SharedInvoicePage() {
                 invoice: fromStore,
                 lines,
                 payments,
-                company: crm.company,
+                company: letterhead,
                 customer,
               }).catch(() => toast.error("Could not build the PDF."))
             }

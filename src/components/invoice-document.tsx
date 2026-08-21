@@ -2,6 +2,8 @@
 
 import { CompanyLetterhead } from "@/components/company-letterhead";
 import { InvoiceStatusBadge } from "@/components/status-badge";
+import { useCrmOptional } from "@/lib/crm-store";
+import { letterheadCompanyForRecord } from "@/lib/document-owner";
 import type { CompanySettings, Invoice, InvoiceLine, InvoiceStatus, Payment } from "@/lib/types";
 import { formatDate, formatMoney } from "@/lib/format";
 import { invoiceBalance, invoiceTotal, lineAmount, paidOnInvoice } from "@/lib/money";
@@ -27,10 +29,25 @@ export function InvoiceDocument({
   const total = invoiceTotal(invoice.id, lines);
   const paid = paidOnInvoice(invoice.id, payments);
   const balance = invoiceBalance(invoice.id, lines, payments);
+  const crm = useCrmOptional();
+  const job = invoice.jobId && crm ? crm.jobs.find((item) => item.id === invoice.jobId) : undefined;
+  const linkedEstimate =
+    invoice.estimateId && crm ? crm.estimates.find((item) => item.id === invoice.estimateId) : undefined;
+  const opportunityId = job?.opportunityId || linkedEstimate?.opportunityId;
+  const opportunity =
+    opportunityId && crm ? crm.opportunities.find((item) => item.id === opportunityId) : undefined;
+  const letterhead = letterheadCompanyForRecord({
+    company: company ?? crm?.company,
+    job,
+    opportunity,
+    staff: crm?.staff ?? [],
+    fallbackStaffId: crm?.user.staffId,
+    inBook: Boolean(crm?.invoices.some((item) => item.id === invoice.id)),
+  });
 
   return (
     <div className="space-y-6 rounded-md border bg-card p-5 sm:p-7">
-      <CompanyLetterhead company={company} />
+      <CompanyLetterhead company={letterhead} />
       <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">

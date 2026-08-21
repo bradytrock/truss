@@ -112,6 +112,21 @@ export function missingJobOverviewMessage() {
   return `Saved in this browser. Run ${JOB_OVERVIEW_SQL} in the SQL editor to keep it in Postgres.`;
 }
 
+export const JOB_MARKET_SQL = "supabase/migrations/20260821160000_job_market.sql";
+
+export function isMissingMarketColumn(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    (error.code === "PGRST204" || error.code === "PGRST205" || message.includes("schema cache") || message.includes("Could not find the")) &&
+    message.toLowerCase().includes("market")
+  );
+}
+
+export function missingMarketMessage() {
+  return `Saved in this browser. Run ${JOB_MARKET_SQL} in the SQL editor so residential vs commercial persists.`;
+}
+
 export function missingPrimaryContactHint() {
   return `Run ${RESIDENTIAL_ENUMS_SQL} in the SQL editor so jobs can store a homeowner, then try again.`;
 }

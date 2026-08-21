@@ -17,19 +17,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { ActivityComposer, ActivityList } from "@/components/activity";
 import { RecordProperty } from "@/components/app-shell";
 import { EmptyState, LoadingScreen, RecordCode } from "@/components/page-chrome";
-import { EstimateStatusBadge, StageBadge, TypeBadge } from "@/components/status-badge";
+import { EstimateStatusBadge, MarketBadge, StageBadge, TypeBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { daysUntil, formatCurrencyFull, formatDate } from "@/lib/format";
 import { amountForEstimate } from "@/lib/estimate-totals";
 import { CreateEstimateDialog } from "@/components/create-ops-dialogs";
+import { formatJobSite, leadSourceLabel } from "@/lib/leads";
+import { parseMarket } from "@/lib/market";
+import { LeadAssigneeSelect } from "@/components/lead-assignee";
 import {
   DELIVERY_LABELS,
+  JOB_MARKET_LABELS,
+  JOB_MARKETS,
   PIPELINE_STAGES,
   STAGE_LABELS,
+  type JobMarket,
   type PipelineStage,
 } from "@/lib/types";
-import { formatJobSite, leadSourceLabel } from "@/lib/leads";
-import { LeadAssigneeSelect } from "@/components/lead-assignee";
 import { originatorStaffId } from "@/lib/bd";
 import { assignmentOptions, canAssignLeadsToAnyone } from "@/lib/visibility";
 
@@ -102,6 +106,7 @@ export default function OpportunityDetailPage() {
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <StageBadge stage={opportunity.stage} />
+            <MarketBadge market={parseMarket(opportunity.market, opportunity.projectType)} />
             <TypeBadge type={opportunity.projectType} />
             <span className="text-sm text-muted-foreground">
               {contact ? (
@@ -328,6 +333,40 @@ export default function OpportunityDetailPage() {
               {opportunity.notes ? (
                 <RecordProperty label="Notes">{opportunity.notes}</RecordProperty>
               ) : null}
+              <RecordProperty label="Residential or commercial">
+                <Select
+                  value={parseMarket(opportunity.market, opportunity.projectType)}
+                  onValueChange={(value) => {
+                    const market = String(value ?? "") as JobMarket;
+                    if (!JOB_MARKETS.includes(market)) return;
+                    void crm.updateOpportunity(opportunity.id, { market });
+                    const job = crm.jobs.find((item) => item.opportunityId === opportunity.id);
+                    if (job) void crm.updateJob(job.id, { market });
+                    if (market === "residential") {
+                      for (const estimate of crm.estimates.filter(
+                        (item) => item.opportunityId === opportunity.id && item.taxRate !== 0,
+                      )) {
+                        void crm.updateEstimate(estimate.id, { taxRate: 0 });
+                      }
+                    }
+                  }}
+                  items={JOB_MARKETS.map((item) => ({
+                    value: item,
+                    label: JOB_MARKET_LABELS[item],
+                  }))}
+                >
+                  <SelectTrigger className="h-8 w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {JOB_MARKETS.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {JOB_MARKET_LABELS[item]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </RecordProperty>
               <RecordProperty label="Delivery">{DELIVERY_LABELS[opportunity.deliveryMethod]}</RecordProperty>
               <RecordProperty label="Sourced by">
                 {crm.book.staff.find((member) => member.id === originatorStaffId(opportunity))?.name ??

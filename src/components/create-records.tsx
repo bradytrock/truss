@@ -32,6 +32,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { MarketField } from "@/components/market-field";
 import { useCrm } from "@/lib/crm-store";
 import { localYmd } from "@/lib/format";
 import {
@@ -39,6 +40,7 @@ import {
   formatJobSite,
   leadName,
 } from "@/lib/leads";
+import { projectTypeForMarket } from "@/lib/market";
 import {
   CLIENT_TYPE_LABELS,
   CLIENT_TYPES,
@@ -48,6 +50,7 @@ import {
   LEAD_SOURCES,
   type ClientType,
   type Contact,
+  type JobMarket,
   type JobStatus,
   type LeadSource,
 } from "@/lib/types";
@@ -76,6 +79,7 @@ export function CreateOpportunityDialog({
   const [region, setRegion] = useState("");
   const [postalCode, setPostalCode] = useState("");
   const [source, setSource] = useState<LeadSource | "">("");
+  const [market, setMarket] = useState<JobMarket>("residential");
   const [referralId, setReferralId] = useState("");
   const [referralQuery, setReferralQuery] = useState("");
   const [notes, setNotes] = useState("");
@@ -118,6 +122,7 @@ export function CreateOpportunityDialog({
     setRegion("");
     setPostalCode("");
     setSource("");
+    setMarket("residential");
     setReferralId("");
     setReferralQuery("");
     setNotes("");
@@ -172,7 +177,8 @@ export function CreateOpportunityDialog({
         bidDueAt: null,
         preBidWalkAt: null,
         location: site || city.trim() || "Address TBD",
-        projectType: "restoration",
+        projectType: projectTypeForMarket(market),
+        market,
         deliveryMethod: defaultDeliveryForSource(source),
         estimator: owner?.name || crm.user.name,
         ownerStaffId: owner?.id,
@@ -262,6 +268,8 @@ export function CreateOpportunityDialog({
                 />
               </div>
             </div>
+
+            <MarketField value={market} onChange={setMarket} id="lead-market" />
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="First name" htmlFor="lead-first">
@@ -903,6 +911,7 @@ export function CreateJobDialog({
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [projectManager, setProjectManager] = useState(user.name || "Elena Voss");
   const [superintendent, setSuperintendent] = useState("Tom Brennan");
+  const [market, setJobMarket] = useState<JobMarket>("residential");
 
   const contact = contacts.find((item) => item.id === contactId);
 
@@ -925,6 +934,8 @@ export function CreateJobDialog({
         superintendent,
         projectManager,
         location,
+        market,
+        projectType: projectTypeForMarket(market),
       });
       toast.success(`Job logged: ${job.code}`);
       onOpenChange(false);
@@ -952,6 +963,7 @@ export function CreateJobDialog({
               placeholder="e.g. Hart water restoration"
             />
           </Field>
+          <MarketField value={market} onChange={setJobMarket} id="job-market" />
           <Field label="Homeowner / contact">
             <Select
               value={contactId}

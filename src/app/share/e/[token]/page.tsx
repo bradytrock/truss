@@ -8,6 +8,7 @@ import { ProposalDocument } from "@/components/proposal-document";
 import { ShareFrame, ShareLoading, ShareMissing, SharePdfButton } from "@/components/share-frame";
 import { downloadEstimatePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
+import { letterheadCompanyForRecord } from "@/lib/document-owner";
 import { linesForEstimate } from "@/lib/estimate-totals";
 import { parseSharedEstimate, type SharedEstimatePayload } from "@/lib/share";
 
@@ -94,6 +95,18 @@ export default function SharedEstimatePage() {
   if (fromStore) {
     const lines = linesForEstimate(crm.estimateLines, fromStore.id);
     const customer = crm.customerName(fromStore);
+    const job = fromStore.jobId ? crm.jobs.find((item) => item.id === fromStore.jobId) : undefined;
+    const opportunity = fromStore.opportunityId
+      ? crm.opportunities.find((item) => item.id === fromStore.opportunityId)
+      : undefined;
+    const letterhead = letterheadCompanyForRecord({
+      company: crm.company,
+      job,
+      opportunity,
+      staff: crm.staff,
+      fallbackStaffId: crm.user.staffId,
+      inBook: true,
+    });
     const optionalOpen =
       fromStore.status === "draft" || fromStore.status === "sent" || fromStore.status === "viewed";
     const canSign =
@@ -108,7 +121,7 @@ export default function SharedEstimatePage() {
                 void downloadEstimatePdf({
                   estimate: fromStore,
                   lines,
-                  company: crm.company,
+                  company: letterhead,
                   customer,
                 }).catch(() => toast.error("Could not build the PDF."))
               }

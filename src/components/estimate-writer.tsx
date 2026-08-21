@@ -51,7 +51,9 @@ import {
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { contactOptionLabel } from "@/lib/contacts";
 import { useCrm } from "@/lib/crm-store";
+import { letterheadCompanyForRecord } from "@/lib/document-owner";
 import {
   COMMON_UNITS,
   estimateTotals,
@@ -63,6 +65,7 @@ import {
 import { downloadEstimatePdf } from "@/lib/document-pdf";
 import { shareUrl } from "@/lib/share";
 import { formatMoney } from "@/lib/format";
+import { billingEstimate, isResidentialMarket, workMarket } from "@/lib/market";
 import { formatJobSite } from "@/lib/leads";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -188,12 +191,14 @@ function PriceBookSheet({
 function LineCard({
   line,
   editable,
+  showTax,
   onPatch,
   onMove,
   onRemove,
 }: {
   line: EstimateLine;
   editable: boolean;
+  showTax: boolean;
   onPatch: (patch: Partial<EstimateLine>) => void;
   onMove: (direction: "up" | "down") => void;
   onRemove: () => void;
@@ -315,6 +320,7 @@ function LineCard({
             Include in total
           </label>
         ) : null}
+        {showTax ? (
         <label className="flex items-center gap-2">
           <Checkbox
             checked={line.taxable}
@@ -323,6 +329,7 @@ function LineCard({
           />
           Taxable
         </label>
+        ) : null}
       </div>
     </div>
   );
@@ -340,7 +347,6 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
 
   const lines = linesForEstimate(crm.estimateLines, estimate.id);
   const groups = groupEstimateLines(lines);
-  const totals = estimateTotals(estimate, lines);
   const relatedInvoice = crm.invoices.find((invoice) => invoice.estimateId === estimate.id);
   const editable = estimate.status === "draft";
   const optionalOpen = estimate.status === "draft" || estimate.status === "sent" || estimate.status === "viewed";
@@ -359,6 +365,34 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       state: estimate.state,
       postalCode: estimate.postalCode,
     }) || "";
+  const title = site || estimate.name;
+  const market = workMarket(job, opportunity);
+  const residential = isResidentialMarket(market);
+  const billed = billingEstimate(estimate, market);
+  const totals = estimateTotals(billed, lines);
+  const letterhead = letterheadCompanyForRecord({
+    company: crm.company,
+    job,
+    opportunity,
+    staff: crm.staff,
+    fallbackStaffId: crm.user.staffId,
+    inBook: true,
+  });
+
+  function patchSite(
+    patch: Partial<Pick<Estimate, "street" | "city" | "state" | "postalCode">>,
+  ) {
+    const next = {
+      street: patch.street ?? estimate.street,
+      city: patch.city ?? estimate.city,
+      state: patch.state ?? estimate.state,
+      postalCode: patch.postalCode ?? estimate.postalCode,
+    };
+    void crm.updateEstimate(estimate.id, {
+      ...patch,
+      name: formatJobSite(next) || estimate.name,
+    });
+  }
 
   function lastGroup() {
     return groups[groups.length - 1]?.name;
@@ -381,9 +415,9 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       return;
     }
     return downloadEstimatePdf({
-      estimate,
+      estimate: billed,
       lines,
-      company: crm.company,
+      company: letterhead,
       customer,
     });
   }
@@ -498,7 +532,10 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                 }}
                 items={[
                   { value: "none", label: "Choose a contact" },
-                  ...crm.contacts.map((item) => ({ value: item.id, label: item.name })),
+                  ...crm.contacts.map((item) => ({
+                    value: item.id,
+                    label: contactOptionLabel(item, [...crm.jobs, ...crm.opportunities]),
+                  })),
                 ]}
               >
                 <SelectTrigger className="w-full">
@@ -508,7 +545,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                   <SelectItem value="none">Choose a contact</SelectItem>
                   {crm.contacts.map((item) => (
                     <SelectItem key={item.id} value={item.id}>
-                      {item.name}
+                      {contactOptionLabel(item, [...crm.jobs, ...crm.opportunities])}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -539,7 +576,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
               disabled={!editable}
               value={estimate.street}
               placeholder="860 S Washington St"
-              onCommit={(value) => void crm.updateEstimate(estimate.id, { street: value })}
+              onCommit={(value) => patchSite({ street: value })}
             />
           </div>
           <div>
@@ -547,7 +584,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
             <CommitInput
               disabled={!editable}
               value={estimate.city}
-              onCommit={(value) => void crm.updateEstimate(estimate.id, { city: value })}
+              onCommit={(value) => patchSite({ city: value })}
             />
           </div>
           <div>
@@ -555,7 +592,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
             <CommitInput
               disabled={!editable}
               value={estimate.state}
-              onCommit={(value) => void crm.updateEstimate(estimate.id, { state: value })}
+              onCommit={(value) => patchSite({ state: value })}
             />
           </div>
           <div>
@@ -563,7 +600,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
             <CommitInput
               disabled={!editable}
               value={estimate.postalCode}
-              onCommit={(value) => void crm.updateEstimate(estimate.id, { postalCode: value })}
+              onCommit={(value) => patchSite({ postalCode: value })}
             />
           </div>
           <div>
@@ -687,6 +724,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                   key={line.id}
                   line={line}
                   editable={editable}
+                  showTax={!residential}
                   onPatch={(patch) => void crm.updateEstimateLine(line.id, patch)}
                   onMove={(direction) => void crm.reorderEstimateLine(line.id, direction)}
                   onRemove={() => void crm.removeEstimateLine(line.id)}
@@ -729,11 +767,15 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
               type="number"
               min={0}
               step="0.01"
-              disabled={!editable}
-              value={estimate.taxRate}
+              disabled={!editable || residential}
+              value={residential ? 0 : estimate.taxRate}
               onCommit={(value) => void crm.updateEstimate(estimate.id, { taxRate: Number(value) || 0 })}
             />
-            <p className="mt-1 text-xs text-muted-foreground">Applied only to taxable included lines, after discount.</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {residential
+                ? "Residential work is not taxed."
+                : "Applied only to taxable included lines, after discount."}
+            </p>
           </div>
           <div>
             <Label>Valid until</Label>
@@ -816,7 +858,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
             <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
               {estimate.number}
             </p>
-            {editable ? (
+            {editable && !site ? (
               <CommitInput
                 className="font-heading h-auto border-0 bg-transparent px-0 text-[1.85rem] leading-[1.1] font-medium shadow-none focus-visible:ring-0"
                 value={estimate.name}
@@ -826,13 +868,12 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
               />
             ) : (
               <h1 className="font-heading text-[1.85rem] leading-[1.1] font-medium text-balance">
-                {estimate.name}
+                {title}
               </h1>
             )}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <EstimateStatusBadge status={estimate.status} />
               <span className="text-sm text-muted-foreground">{customer}</span>
-              {site ? <span className="text-sm text-muted-foreground">· {site}</span> : null}
             </div>
           </div>
           {actions}

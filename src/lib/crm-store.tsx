@@ -17,7 +17,7 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
 import { retireDemoStaff } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson } from "@/lib/job-record";
@@ -41,6 +41,7 @@ import {
   wouldLeaveNoAdmin,
 } from "@/lib/accounts";
 import { isPublicAppPath } from "@/lib/auth-paths";
+import { defaultTaxRateForMarket, parseMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { findStaffForProfile, isUnsignedDemo, namesMatch, staffMemberFromProfile } from "@/lib/seats";
@@ -295,6 +296,7 @@ async function persistOpenLeadJobs(
       location: job.location,
       owner_staff_id: job.ownerStaffId || null,
       code: job.code,
+      market: job.market,
     };
     await insertJobWithFallbacks(payload, async (row) => {
       const { error } = await supabase.from("jobs").insert(row as never);
@@ -456,8 +458,9 @@ type CrmContextValue = CrmState & {
   assignOpportunityOwner: (id: string, staffId: string) => Promise<boolean>;
   updateJob: (id: string, patch: Partial<Job>) => Promise<void>;
   addOpportunity: (
-    input: Omit<Opportunity, "id" | "code" | "createdAt" | "winProbability" | "ownerStaffId"> & {
+    input: Omit<Opportunity, "id" | "code" | "createdAt" | "winProbability" | "ownerStaffId" | "market"> & {
       ownerStaffId?: string;
+      market?: Opportunity["market"];
     }
   ) => Promise<Opportunity>;
   addClient: (
@@ -498,6 +501,7 @@ type CrmContextValue = CrmState & {
     postalCode?: string;
     intro?: string;
     terms?: string;
+    market?: Opportunity["market"];
   }) => Promise<Estimate>;
   updateEstimate: (id: string, patch: Partial<Estimate>) => Promise<void>;
   sendEstimate: (id: string) => Promise<void>;
@@ -1248,6 +1252,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       const { error } = await supabase.from("opportunities").update(opportunityPatch(patch)).eq("id", id);
       if (error) {
+        if (isMissingMarketColumn(error)) {
+          setState((prev) => ({
+            ...prev,
+            opportunities: prev.opportunities.map((opportunity) =>
+              opportunity.id === id ? { ...opportunity, ...patch } : opportunity
+            ),
+          }));
+          toast.message(missingMarketMessage());
+          return true;
+        }
         toast.error(error.message);
         return false;
       }
@@ -1274,6 +1288,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return;
     }
     let { error } = await supabase.from("jobs").update(jobPatch(patch)).eq("id", id);
+    if (error && isMissingMarketColumn(error)) {
+      apply();
+      toast.message(missingMarketMessage());
+      return;
+    }
     if (error && isMissingPrimaryContactColumn(error)) {
       error = (await supabase.from("jobs").update(omitPrimaryContact(jobPatch(patch)) as never).eq("id", id)).error;
       if (!error) {
@@ -1296,8 +1315,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const addOpportunity = useCallback(
     async (
-      input: Omit<Opportunity, "id" | "code" | "createdAt" | "winProbability" | "ownerStaffId"> & {
+      input: Omit<Opportunity, "id" | "code" | "createdAt" | "winProbability" | "ownerStaffId" | "market"> & {
         ownerStaffId?: string;
+        market?: Opportunity["market"];
       }
     ) => {
       const ownerStaffId =
@@ -1317,6 +1337,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           ownerStaffId,
           originatorStaffId,
           leadSource: input.leadSource ?? "",
+          market: parseMarket(input.market, input.projectType),
           referralContactId: input.referralContactId ?? null,
           street: input.street ?? "",
           city: input.city ?? "",
@@ -1352,6 +1373,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         pre_bid_walk_at: input.preBidWalkAt,
         location: input.location,
         project_type: input.projectType,
+        market: parseMarket(input.market, input.projectType),
         delivery_method: input.deliveryMethod,
         estimator: input.estimator,
         owner_staff_id: ownerStaffId || null,
@@ -1396,6 +1418,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         data = retry.data;
         error = retry.error;
         if (!error) toast.message(missingOriginatorMessage());
+      }
+      if (error && isMissingMarketColumn(error)) {
+        const { market: _market, ...withoutMarket } = base;
+        const retry = await supabase.from("opportunities").insert(withoutMarket).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingMarketMessage());
       }
       if (error && isMissingLeadIntake(error)) {
         const slim = {
@@ -1537,6 +1566,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       city?: string;
       state?: string;
       postalCode?: string;
+      market?: Opportunity["market"];
     }) => {
       if (input.opportunityId) return input.opportunityId;
       const job = input.jobId ? state.jobs.find((item) => item.id === input.jobId) : undefined;
@@ -1559,7 +1589,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         bidDueAt: null,
         preBidWalkAt: null,
         location: site,
-        projectType: job?.projectType || "restoration",
+        projectType: job?.projectType || projectTypeForMarket(input.market ?? job?.market ?? "residential"),
+        market: input.market ?? workMarket(job, undefined),
         deliveryMethod: "fixed_price",
         estimator: user.name,
         nextStep: "Write and send the proposal.",
@@ -1786,6 +1817,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         custom_fields: customFieldsJson(job.customFields),
         project_type: job.projectType || null,
         lead_source: job.leadSource ?? "",
+        market: job.market,
       };
       const inserted = await insertJobWithFallbacks(payload, async (row) => {
         const result = await supabase.from("jobs").insert(row as never).select("*").single();
@@ -1883,6 +1915,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       postalCode?: string;
       intro?: string;
       terms?: string;
+      market?: import("@/lib/types").JobMarket;
     }) => {
       const opportunityId = await ensureLeadForEstimate(input);
       const number = nextNumber("EST", state.estimates.map((estimate) => estimate.number));
@@ -1912,6 +1945,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         state: input.state ?? linked.state,
         postalCode: input.postalCode ?? linked.postalCode,
         shareToken: newShareToken(),
+        taxRate: defaultTaxRateForMarket(
+          input.market ??
+            workMarket(
+              pipelineJobId ? state.jobs.find((item) => item.id === pipelineJobId) : undefined,
+              state.opportunities.find((item) => item.id === opportunityId),
+            ),
+        ),
       });
       const supabase = maybeClient();
       if (!supabase) {
