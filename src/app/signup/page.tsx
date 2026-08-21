@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthFrame } from "@/components/auth-frame";
-import { ConnectSupabaseForm } from "@/components/connect-supabase";
 import {
   isMissingAccountManagement,
   missingAccountManagementMessage,
@@ -16,7 +15,6 @@ import {
 } from "@/lib/accounts";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { createClient } from "@/lib/supabase/client";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { SeatRole } from "@/lib/types";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 
@@ -38,7 +36,6 @@ function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get("invite")?.trim() ?? "";
-  const [configured, setConfigured] = useState(isSupabaseConfigured());
   const [pending, setPending] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(Boolean(inviteToken));
   const [invite, setInvite] = useState<InvitePreview | null>(null);
@@ -51,7 +48,7 @@ function SignupForm() {
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!inviteToken || !isSupabaseConfigured()) {
+    if (!inviteToken) {
       setInviteLoading(false);
       return;
     }
@@ -101,12 +98,6 @@ function SignupForm() {
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setFormError(null);
-    if (!isSupabaseConfigured()) {
-      const message = "Connect the Supabase project first.";
-      setFormError(message);
-      toast.error(message);
-      return;
-    }
     if (invite && normalizeSeatEmail(email) !== normalizeSeatEmail(invite.email)) {
       const message = "Sign up with the email this invite was sent to.";
       setFormError(message);
@@ -189,8 +180,7 @@ function SignupForm() {
 
   return (
     <AuthFrame title={titleText} description={description}>
-      {configured ? (
-        <form onSubmit={onSubmit} className="grid gap-3">
+      <form onSubmit={onSubmit} className="grid gap-3">
           {inviteLoading ? (
             <p className="text-sm text-muted-foreground">Looking up the invite…</p>
           ) : null}
@@ -275,9 +265,6 @@ function SignupForm() {
             {pending ? "Working…" : joining ? "Join company" : "Create account"}
           </Button>
         </form>
-      ) : (
-        <ConnectSupabaseForm onConnected={() => setConfigured(true)} />
-      )}
       <p className="mt-4 text-center text-sm text-muted-foreground">
         Already on Truss?{" "}
         <Link
