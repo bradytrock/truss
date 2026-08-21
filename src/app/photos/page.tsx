@@ -26,13 +26,16 @@ import {
   groupPhotosByDay,
   PHOTO_DATE_RANGE_LABELS,
   PHOTO_TAG_FILTERS,
+  photoFeedTakenBy,
+  photoFeedTitle,
   photoInDateRange,
   photoJobLabel,
   photoTimeLabel,
+  resolvePhotoPhotographer,
   type PhotoDateRange,
   type PhotoFeedItem,
 } from "@/lib/photos-feed";
-import { PHOTO_CATEGORY_LABELS, type PhotoCategory } from "@/lib/types";
+import type { PhotoCategory } from "@/lib/types";
 
 export default function PhotosPage() {
   const crm = useCrm();
@@ -61,11 +64,11 @@ export default function PhotosPage() {
         job,
         contact,
         label: photoJobLabel(job, contact),
-        photographer: photo.createdBy?.trim() || "",
+        photographer: resolvePhotoPhotographer(photo, crm.book.staff),
       };
       return feed;
     });
-  }, [contactsById, crm.photos, jobsById]);
+  }, [contactsById, crm.book.staff, crm.photos, jobsById]);
 
   const jobOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -110,7 +113,7 @@ export default function PhotosPage() {
       <PageHeader
         eyebrow="Field"
         title="Photos"
-        description="Every shot from the company, newest first. Job books stay private — you can open a job from here only if it is already in your seat."
+        description="Every shot from the company, newest first. Thumbnails show who took the photo, then the job. You can open a job from here only if it is already in your seat."
       />
 
       <div className="flex flex-wrap gap-2">
@@ -200,9 +203,9 @@ export default function PhotosPage() {
               <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                 {group.items.map((item) => {
                   const time = photoTimeLabel(item.photo.takenAt);
-                  const meta = [time, item.photographer || PHOTO_CATEGORY_LABELS[item.photo.category]]
-                    .filter(Boolean)
-                    .join(" · ");
+                  const person = item.photographer || "Unknown";
+                  const meta = [item.label, time].filter(Boolean).join(" · ");
+                  const title = photoFeedTitle(item);
                   return (
                     <li key={item.photo.id}>
                       <button
@@ -213,15 +216,15 @@ export default function PhotosPage() {
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={item.photo.imageUrl}
-                          alt={item.photo.caption || item.label}
+                          alt={title}
                           className="size-full object-cover transition-transform group-hover:scale-[1.03]"
                         />
                         <span className="absolute inset-x-0 bottom-0 flex items-end gap-2 bg-gradient-to-t from-black/80 to-transparent p-2 pt-8 text-white">
                           <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-white/20 text-[10px] font-medium">
-                            {initials(item.photographer || item.label) || "•"}
+                            {initials(item.photographer) || "•"}
                           </span>
                           <span className="min-w-0">
-                            <span className="block truncate text-xs font-medium">{item.label}</span>
+                            <span className="block truncate text-xs font-medium">{person}</span>
                             <span className="block truncate text-[10px] text-white/75">{meta}</span>
                           </span>
                         </span>
@@ -242,18 +245,26 @@ export default function PhotosPage() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={openItem.photo.imageUrl}
-                alt={openItem.photo.caption || openItem.label}
+                alt={photoFeedTitle(openItem)}
                 className="max-h-[70vh] w-full object-contain bg-black"
               />
               <div className="space-y-3 p-5">
                 <DialogHeader className="p-0">
-                  <DialogTitle>{openItem.photo.caption || openItem.label}</DialogTitle>
+                  <DialogTitle>{photoFeedTitle(openItem)}</DialogTitle>
                   <DialogDescription>
-                    {openItem.label}
-                    {openItem.job?.code ? ` · ${openItem.job.code}` : ""}
-                    {openItem.photographer ? ` · ${openItem.photographer}` : ""}
-                    {` · ${formatDate(openItem.photo.takenAt)}`}
-                    {photoTimeLabel(openItem.photo.takenAt) ? ` ${photoTimeLabel(openItem.photo.takenAt)}` : ""}
+                    {[
+                      photoFeedTakenBy(openItem.photographer),
+                      openItem.label,
+                      openItem.job?.code,
+                      [
+                        formatDate(openItem.photo.takenAt),
+                        photoTimeLabel(openItem.photo.takenAt),
+                      ]
+                        .filter(Boolean)
+                        .join(" "),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="flex flex-wrap items-center gap-2">

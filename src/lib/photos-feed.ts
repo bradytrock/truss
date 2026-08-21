@@ -1,5 +1,6 @@
 import { localYmd } from "@/lib/format";
-import type { Contact, Job, JobPhoto, PhotoCategory } from "@/lib/types";
+import { namesMatch } from "@/lib/seats";
+import { PHOTO_CATEGORY_LABELS, type Contact, type Job, type JobPhoto, type PhotoCategory, type StaffMember } from "@/lib/types";
 
 function parseTakenAt(iso: string) {
   if (iso.includes("T")) return new Date(iso);
@@ -33,6 +34,36 @@ export function photoJobLabel(job: Job | undefined, contact: Contact | undefined
   return "Job photo";
 }
 
+export type PhotoFeedItem = {
+  photo: JobPhoto;
+  job?: Job;
+  contact?: Contact;
+  label: string;
+  photographer: string;
+};
+
+/** Who took the shot — never the job owner or homeowner unless they are stored on the photo. */
+export function resolvePhotoPhotographer(photo: JobPhoto, staff: StaffMember[]): string {
+  const raw = photo.createdBy?.trim() ?? "";
+  if (!raw) return "";
+  const byId = staff.find((member) => member.id === raw);
+  if (byId) return byId.name;
+  const byName = staff.find((member) => namesMatch(member.name, raw));
+  if (byName) return byName.name;
+  return raw;
+}
+
+export function photoFeedTitle(item: PhotoFeedItem): string {
+  const caption = item.photo.caption.trim();
+  if (caption) return caption;
+  if (item.photographer) return item.photographer;
+  return `${PHOTO_CATEGORY_LABELS[item.photo.category]} photo`;
+}
+
+export function photoFeedTakenBy(photographer: string) {
+  return photographer ? `Taken by ${photographer}` : "";
+}
+
 export type PhotoDateRange = "all" | "today" | "7d" | "30d" | "month";
 
 export function photoInDateRange(iso: string, range: PhotoDateRange) {
@@ -47,14 +78,6 @@ export function photoInDateRange(iso: string, range: PhotoDateRange) {
   if (range === "30d") return diff >= 0 && diff <= 30;
   return taken.getMonth() === today.getMonth() && taken.getFullYear() === today.getFullYear();
 }
-
-export type PhotoFeedItem = {
-  photo: JobPhoto;
-  job?: Job;
-  contact?: Contact;
-  label: string;
-  photographer: string;
-};
 
 export function groupPhotosByDay(items: PhotoFeedItem[]) {
   const order: string[] = [];

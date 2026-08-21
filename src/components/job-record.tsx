@@ -906,7 +906,11 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                   <figcaption className="space-y-1 p-2.5">
                     <PhotoCategoryBadge category={photo.category} />
                     <p className="text-sm leading-snug">{photo.caption || "Untitled"}</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(photo.takenAt)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {photo.createdBy?.trim()
+                        ? `Taken by ${photo.createdBy.trim()} · ${formatDate(photo.takenAt)}`
+                        : formatDate(photo.takenAt)}
+                    </p>
                   </figcaption>
                 </figure>
               ))}

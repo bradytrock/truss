@@ -4322,6 +4322,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         takenAt =
           takenAt === localYmd(new Date()) ? new Date().toISOString() : `${takenAt}T12:00:00`;
       }
+      const photographer = (effectiveStaff?.name || user.name).trim();
       const payload = {
         company_id: user.companyId,
         job_id: input.jobId,
@@ -4330,7 +4331,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         taken_at: takenAt,
         image_url: imageUrl,
         storage_path: storagePath,
-        created_by: user.name,
+        created_by: photographer,
       };
       let { data, error } = await supabase.from("job_photos").insert(payload).select("*").single();
       if (error && isMissingPhotoCreatedBy(error)) {
@@ -4344,9 +4345,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error(error?.message ?? "Could not save the photo.");
         return;
       }
-      setState((prev) => ({ ...prev, photos: [mapJobPhoto(data), ...prev.photos] }));
+      const mapped = mapJobPhoto(data);
+      setState((prev) => ({
+        ...prev,
+        photos: [{ ...mapped, createdBy: mapped.createdBy?.trim() || photographer }, ...prev.photos],
+      }));
     },
-    [user.companyId, user.name]
+    [effectiveStaff?.name, user.companyId, user.name]
   );
 
   const addPhotoReport = useCallback(
