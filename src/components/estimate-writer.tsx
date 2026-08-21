@@ -52,6 +52,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { contactOptionLabel } from "@/lib/contacts";
+import { ContactSelectOption } from "@/components/contact-option";
 import { useCrm } from "@/lib/crm-store";
 import { letterheadCompanyForRecord } from "@/lib/document-owner";
 import {
@@ -534,7 +535,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                   { value: "none", label: "Choose a contact" },
                   ...crm.contacts.map((item) => ({
                     value: item.id,
-                    label: contactOptionLabel(item, [...crm.jobs, ...crm.opportunities]),
+                    label: contactOptionLabel(item, [...crm.jobs, ...crm.opportunities, ...crm.estimates]),
                   })),
                 ]}
               >
@@ -544,8 +545,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                 <SelectContent>
                   <SelectItem value="none">Choose a contact</SelectItem>
                   {crm.contacts.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>
-                      {contactOptionLabel(item, [...crm.jobs, ...crm.opportunities])}
+                    <SelectItem key={item.id} value={item.id} className="h-auto items-start py-1.5">
+                      <ContactSelectOption contact={item} sites={[...crm.jobs, ...crm.opportunities, ...crm.estimates]} />
                     </SelectItem>
                   ))}
                 </SelectContent>

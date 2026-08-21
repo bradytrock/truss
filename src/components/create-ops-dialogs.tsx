@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { contactOptionLabel, siteFieldsFromRecord } from "@/lib/contacts";
+import { ContactSelectOption } from "@/components/contact-option";
 import { MarketField } from "@/components/market-field";
 import { useCrm } from "@/lib/crm-store";
 import { localYmd } from "@/lib/format";
@@ -58,7 +59,7 @@ export function CreateEstimateDialog({
   defaultContactId?: string | null;
 }) {
   const router = useRouter();
-  const { contacts, opportunities, jobs, addEstimate, addContact, addClient, user } = useCrm();
+  const { contacts, opportunities, jobs, estimates, addEstimate, addContact, addClient, user } = useCrm();
   const [contactId, setContactId] = useState(NEW_HOMEOWNER);
   const [opportunityId, setOpportunityId] = useState("");
   const [jobId, setJobId] = useState("");
@@ -77,7 +78,7 @@ export function CreateEstimateDialog({
 
   const isNewHomeowner = contactId === NEW_HOMEOWNER;
   const contact = contacts.find((item) => item.id === contactId);
-  const contactSites = [...jobs, ...opportunities];
+  const contactSites = [...jobs, ...opportunities, ...estimates];
   const relatedOpps = opportunities.filter(
     (opportunity) =>
       opportunity.primaryContactId === contactId ||
@@ -239,8 +240,8 @@ export function CreateEstimateDialog({
                 <SelectItem value={NEW_HOMEOWNER}>New homeowner…</SelectItem>
                 {contacts.length > 0 ? <SelectSeparator /> : null}
                 {contacts.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {contactOptionLabel(item, contactSites)}
+                  <SelectItem key={item.id} value={item.id} className="h-auto items-start py-1.5">
+                    <ContactSelectOption contact={item} sites={contactSites} />
                   </SelectItem>
                 ))}
               </SelectContent>
