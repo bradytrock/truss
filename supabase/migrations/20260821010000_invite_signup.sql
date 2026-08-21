@@ -237,6 +237,9 @@ begin
 end;
 $$;
 
+-- CREATE OR REPLACE cannot add OUT columns; drop first when the return row changes.
+drop function if exists public.invite_preview(text);
+
 create or replace function public.invite_preview(p_token text)
 returns table (
   company_id uuid,

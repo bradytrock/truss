@@ -107,6 +107,8 @@ create policy "admin delete seats" on public.team_members
   for delete to authenticated
   using (company_id = public.current_company_id() and public.current_is_company_admin());
 
+drop function if exists public.invite_preview(text);
+
 create or replace function public.invite_preview(p_token text)
 returns table (
   company_id uuid,
