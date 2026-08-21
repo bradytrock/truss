@@ -17,7 +17,7 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
 import { retireDemoStaff } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson } from "@/lib/job-record";
@@ -42,6 +42,7 @@ import {
 } from "@/lib/accounts";
 import { isPublicAppPath } from "@/lib/auth-paths";
 import { defaultTaxRateForMarket, isResidentialMarket, marketForEstimate, parseMarket, projectTypeForMarket, workMarket } from "@/lib/market";
+import { COMPANY_ASSETS_BUCKET, logoExtension, validateLogoFile } from "@/lib/company-logo";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { findStaffForProfile, isUnsignedDemo, namesMatch, staffMemberFromProfile } from "@/lib/seats";
@@ -436,6 +437,8 @@ type CrmContextValue = CrmState & {
   company: CompanySettings;
   canEditCompany: boolean;
   updateCompany: (settings: CompanySettings) => Promise<boolean>;
+  uploadCompanyLogo: (file: File) => Promise<CompanySettings | null>;
+  removeCompanyLogo: () => Promise<boolean>;
   inviteStaff: (input: {
     name: string;
     email: string;
@@ -3652,16 +3655,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const canEditCompany = Boolean(viewer && canManageSettings(viewer.role, viewer));
 
-  const updateCompany = useCallback(
-    async (next: CompanySettings) => {
+  const persistCompany = useCallback(
+    async (next: CompanySettings, quiet = false) => {
       const name = next.name.trim();
       if (!name) {
         toast.error("Company name is required.");
-        return false;
+        return null;
       }
       if (!canEditCompany) {
         toast.error("Only a company admin can change business settings.");
-        return false;
+        return null;
       }
       const settings: CompanySettings = {
         name,
@@ -3673,32 +3676,44 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         state: next.state.trim(),
         postalCode: next.postalCode.trim(),
         licenseNumber: next.licenseNumber.trim(),
+        logoUrl: next.logoUrl?.trim() ?? "",
+        logoStoragePath: next.logoStoragePath?.trim() ?? "",
       };
       if (!isSupabaseConfigured() || !user.companyId || user.companyId === "local") {
         setCompanySettings(settings);
         setUser((current) => ({ ...current, company: settings.name }));
         writeLocalCompany(settings);
-        toast.success("Business settings saved.");
-        return true;
+        if (!quiet) toast.success("Business settings saved.");
+        return settings;
       }
       const supabase = createClient();
-      const { data, error } = await supabase
+      const payload = {
+        name: settings.name,
+        phone: settings.phone,
+        email: settings.email,
+        website: settings.website,
+        street: settings.street,
+        city: settings.city,
+        state: settings.state,
+        postal_code: settings.postalCode,
+        license_number: settings.licenseNumber,
+        logo_url: settings.logoUrl,
+        logo_storage_path: settings.logoStoragePath,
+        updated_at: new Date().toISOString(),
+      };
+      let { data, error } = await supabase
         .from("companies")
-        .update({
-          name: settings.name,
-          phone: settings.phone,
-          email: settings.email,
-          website: settings.website,
-          street: settings.street,
-          city: settings.city,
-          state: settings.state,
-          postal_code: settings.postalCode,
-          license_number: settings.licenseNumber,
-          updated_at: new Date().toISOString(),
-        })
+        .update(payload)
         .eq("id", user.companyId)
         .select("*")
         .single();
+      if (error && isMissingLogoColumn(error)) {
+        const { logo_url: _logoUrl, logo_storage_path: _logoPath, ...rest } = payload;
+        const retry = await supabase.from("companies").update(rest).eq("id", user.companyId).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingLogoMessage());
+      }
       if (error || !data) {
         const missingColumn =
           error?.message?.includes("schema cache") ||
@@ -3709,16 +3724,80 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             ? "Run supabase/migrations/20260819210000_company_settings.sql in the SQL editor, then try again."
             : error?.message ?? "Could not save business settings."
         );
-        return false;
+        return null;
       }
-      const saved = mapCompany(data);
+      const saved = { ...mapCompany(data), logoUrl: settings.logoUrl, logoStoragePath: settings.logoStoragePath };
       setCompanySettings(saved);
       setUser((current) => ({ ...current, company: saved.name }));
-      toast.success("Business settings saved.");
-      return true;
+      if (!quiet) toast.success("Business settings saved.");
+      return saved;
     },
     [canEditCompany, user.companyId]
   );
+
+  const updateCompany = useCallback(
+    async (next: CompanySettings) => Boolean(await persistCompany(next)),
+    [persistCompany]
+  );
+
+  const uploadCompanyLogo = useCallback(
+    async (file: File) => {
+      const invalid = validateLogoFile(file);
+      if (invalid) {
+        toast.error(invalid);
+        return null;
+      }
+      if (!canEditCompany) {
+        toast.error("Only a company admin can change business settings.");
+        return null;
+      }
+      const previousPath = companySettings.logoStoragePath?.trim() ?? "";
+      let logoUrl = "";
+      let logoStoragePath = "";
+      const supabase = maybeClient();
+      if (supabase && user.companyId && user.companyId !== "local") {
+        const path = `${user.companyId}/logo/${crypto.randomUUID()}.${logoExtension(file)}`;
+        const { error } = await supabase.storage
+          .from(COMPANY_ASSETS_BUCKET)
+          .upload(path, file, { contentType: file.type, upsert: false });
+        if (error) {
+          const missingBucket =
+            /bucket/i.test(error.message) || /not found/i.test(error.message) || error.message.includes("404");
+          toast.error(missingBucket ? missingLogoMessage() : error.message);
+          return null;
+        }
+        logoUrl = supabase.storage.from(COMPANY_ASSETS_BUCKET).getPublicUrl(path).data.publicUrl;
+        logoStoragePath = path;
+        if (previousPath && previousPath !== path) {
+          void supabase.storage.from(COMPANY_ASSETS_BUCKET).remove([previousPath]);
+        }
+      } else {
+        logoUrl = await fileToDataUrl(file);
+      }
+      const saved = await persistCompany(
+        { ...companySettings, logoUrl, logoStoragePath },
+        true,
+      );
+      if (saved) toast.success("Logo added to estimates, invoices, and reports.");
+      return saved;
+    },
+    [canEditCompany, companySettings, persistCompany, user.companyId]
+  );
+
+  const removeCompanyLogo = useCallback(async () => {
+    if (!canEditCompany) {
+      toast.error("Only a company admin can change business settings.");
+      return false;
+    }
+    const previousPath = companySettings.logoStoragePath?.trim() ?? "";
+    const supabase = maybeClient();
+    if (previousPath && supabase) {
+      void supabase.storage.from(COMPANY_ASSETS_BUCKET).remove([previousPath]);
+    }
+    const saved = await persistCompany({ ...companySettings, logoUrl: "", logoStoragePath: "" }, true);
+    if (saved) toast.success("Logo removed.");
+    return Boolean(saved);
+  }, [canEditCompany, companySettings, persistCompany]);
 
   const persistStaffFields = useCallback(
     async (
@@ -4064,6 +4143,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       company: companySettings,
       canEditCompany,
       updateCompany,
+      uploadCompanyLogo,
+      removeCompanyLogo,
       inviteStaff,
       updateStaffAccount,
       refreshStaffInvite,
@@ -4144,6 +4225,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       companySettings,
       canEditCompany,
       updateCompany,
+      uploadCompanyLogo,
+      removeCompanyLogo,
       inviteStaff,
       updateStaffAccount,
       refreshStaffInvite,

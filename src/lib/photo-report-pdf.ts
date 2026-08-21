@@ -6,8 +6,9 @@ import type {
   PhotoReportPage,
   PhotoReportPhotosPage,
 } from "@/lib/types";
-import { formatCompanyAddress, formatCompanyContact, formatDate } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { jobAddress } from "@/lib/job-record";
+import { writePdfLetterhead } from "@/lib/letterhead-pdf";
 import { PHOTO_CATEGORY_LABELS } from "@/lib/types";
 import { layoutCapacity, photoById } from "@/lib/photo-report";
 import { downloadBlob } from "@/lib/share";
@@ -68,28 +69,8 @@ async function imageToJpeg(url: string): Promise<string | null> {
   }
 }
 
-function writeHeader(doc: Doc, company: CompanySettings, y: number) {
-  const width = doc.internal.pageSize.getWidth();
-  doc.setFont("times", "bold");
-  doc.setFontSize(14);
-  doc.setTextColor(28, 28, 28);
-  doc.text(company.name, 48, y);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.setTextColor(90, 90, 90);
-  const contact = [formatCompanyAddress(company), formatCompanyContact(company)].filter(Boolean).join("  ·  ");
-  let next = y + 12;
-  if (contact) {
-    doc.text(contact, 48, next);
-    next += 11;
-  }
-  if (company.licenseNumber) {
-    doc.text(`License ${company.licenseNumber}`, 48, next);
-    next += 11;
-  }
-  doc.setDrawColor(210, 210, 210);
-  doc.line(48, next + 2, width - 48, next + 2);
-  return next + 16;
+async function writeHeader(doc: Doc, company: CompanySettings, y: number) {
+  return writePdfLetterhead(doc, company, y, 48);
 }
 
 function fitImage(
@@ -195,7 +176,7 @@ async function drawCover(
 ) {
   const width = doc.internal.pageSize.getWidth();
   const height = doc.internal.pageSize.getHeight();
-  let y = writeHeader(doc, company, 54);
+  let y = await writeHeader(doc, company, 54);
   y += 24;
   doc.setFont("times", "bold");
   doc.setFontSize(26);
@@ -248,8 +229,8 @@ async function drawCover(
   }
 }
 
-function drawTextPage(doc: Doc, page: Extract<PhotoReportPage, { type: "text" }>, company: CompanySettings) {
-  let y = writeHeader(doc, company, 54);
+async function drawTextPage(doc: Doc, page: Extract<PhotoReportPage, { type: "text" }>, company: CompanySettings) {
+  let y = await writeHeader(doc, company, 54);
   if (page.heading.trim()) {
     doc.setFont("times", "bold");
     doc.setFontSize(18);
@@ -298,7 +279,7 @@ export async function downloadPhotoReportPdf(input: {
     if (page.type === "cover") {
       await drawCover(doc, page, input.job, input.photos, input.company, cache);
     } else if (page.type === "text") {
-      drawTextPage(doc, page, input.company);
+      await drawTextPage(doc, page, input.company);
     } else {
       await drawPhotosPage(doc, page, input.photos, cache);
     }

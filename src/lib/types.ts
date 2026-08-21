@@ -140,6 +140,8 @@ export interface CompanySettings {
   state: string;
   postalCode: string;
   licenseNumber: string;
+  logoUrl?: string;
+  logoStoragePath?: string;
 }
 
 export const NORTHLINE_COMPANY: CompanySettings = {

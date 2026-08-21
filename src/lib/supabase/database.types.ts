@@ -15,6 +15,8 @@ export type Database = {
           state: string;
           postal_code: string;
           license_number: string;
+          logo_url: string;
+          logo_storage_path: string;
           created_at: string;
           updated_at: string;
         };
@@ -29,6 +31,8 @@ export type Database = {
           state?: string;
           postal_code?: string;
           license_number?: string;
+          logo_url?: string;
+          logo_storage_path?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -43,6 +47,8 @@ export type Database = {
           state?: string;
           postal_code?: string;
           license_number?: string;
+          logo_url?: string;
+          logo_storage_path?: string;
           created_at?: string;
           updated_at?: string;
         };

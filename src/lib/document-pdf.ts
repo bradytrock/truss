@@ -1,7 +1,8 @@
 import type { CompanySettings, Estimate, EstimateLine, Invoice, InvoiceLine, Payment } from "@/lib/types";
 import { estimateTotals, groupEstimateLines, lineAmount, lineIncluded } from "@/lib/estimate-totals";
-import { formatCompanyAddress, formatCompanyContact, formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
+import { writePdfLetterhead } from "@/lib/letterhead-pdf";
 import { invoiceBalance, invoiceTotal, lineAmount as invoiceLineAmount, paidOnInvoice } from "@/lib/money";
 import { downloadBlob } from "@/lib/share";
 
@@ -13,6 +14,14 @@ type Doc = {
   splitTextToSize: (text: string, width: number) => string[];
   line: (x1: number, y1: number, x2: number, y2: number) => void;
   addPage: () => void;
+  addImage: (
+    imageData: string,
+    format: string,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ) => void;
   output: (type: "blob") => Blob;
   internal: { pageSize: { getWidth: () => number; getHeight: () => number } };
 };
@@ -20,35 +29,6 @@ type Doc = {
 async function createDoc() {
   const { jsPDF } = await import("jspdf");
   return new jsPDF({ unit: "pt", format: "letter" }) as unknown as Doc;
-}
-
-function writeLetterhead(doc: Doc, company: CompanySettings, y: number) {
-  const width = doc.internal.pageSize.getWidth();
-  doc.setFont("times", "bold");
-  doc.setFontSize(16);
-  doc.setTextColor(28, 28, 28);
-  doc.text(company.name, 54, y);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
-  doc.setTextColor(90, 90, 90);
-  const address = formatCompanyAddress(company);
-  const contact = formatCompanyContact(company);
-  let next = y + 14;
-  if (address) {
-    doc.text(address, 54, next);
-    next += 12;
-  }
-  if (contact) {
-    doc.text(contact, 54, next);
-    next += 12;
-  }
-  if (company.licenseNumber) {
-    doc.text(`License ${company.licenseNumber}`, 54, next);
-    next += 12;
-  }
-  doc.setTextColor(210, 210, 210);
-  doc.line(54, next + 4, width - 54, next + 4);
-  return next + 22;
 }
 
 function ensureSpace(doc: Doc, y: number, needed: number) {
@@ -77,7 +57,7 @@ export async function downloadEstimatePdf(input: {
   const doc = await createDoc();
   const width = doc.internal.pageSize.getWidth();
   const right = width - 54;
-  let y = writeLetterhead(doc, input.company, 54);
+  let y = await writePdfLetterhead(doc, input.company, 54);
   const site = formatJobSite(input.estimate);
   const totals = estimateTotals(input.estimate, input.lines);
 
@@ -221,7 +201,7 @@ export async function downloadInvoicePdf(input: {
   const doc = await createDoc();
   const width = doc.internal.pageSize.getWidth();
   const right = width - 54;
-  let y = writeLetterhead(doc, input.company, 54);
+  let y = await writePdfLetterhead(doc, input.company, 54);
   const total = invoiceTotal(input.invoice.id, input.lines);
   const paid = paidOnInvoice(input.invoice.id, input.payments);
   const balance = invoiceBalance(input.invoice.id, input.lines, input.payments);

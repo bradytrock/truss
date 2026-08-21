@@ -85,6 +85,7 @@ export type SharedCompany = {
   state: string;
   postalCode: string;
   licenseNumber: string;
+  logoUrl?: string;
 };
 
 export type SharedEstimatePayload = {
@@ -188,6 +189,7 @@ function parseCompany(raw: unknown): SharedCompany {
     state: asString(data.state),
     postalCode: asString(data.postalCode),
     licenseNumber: asString(data.licenseNumber),
+    logoUrl: asString(data.logoUrl),
   };
 }
 

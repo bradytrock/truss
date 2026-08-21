@@ -97,6 +97,8 @@ export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>):
     state: row.state ?? "",
     postalCode: row.postal_code ?? "",
     licenseNumber: row.license_number ?? "",
+    logoUrl: row.logo_url ?? "",
+    logoStoragePath: row.logo_storage_path ?? "",
   };
 }
 

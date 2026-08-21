@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { ErrorBanner, LoadingScreen, PageHeader, EmptyState } from "@/components/page-chrome";
 import { PeopleSettings } from "@/components/people-settings";
 import { useCrm } from "@/lib/crm-store";
+import { LOGO_ACCEPT } from "@/lib/company-logo";
 import type { CompanySettings } from "@/lib/types";
 import { canManageSettings } from "@/lib/visibility";
 
@@ -16,6 +17,7 @@ export default function SettingsPage() {
   const crm = useCrm();
   const [draft, setDraft] = useState<CompanySettings | null>(null);
   const [pending, setPending] = useState(false);
+  const [logoBusy, setLogoBusy] = useState(false);
   const form = draft ?? crm.company;
   const dirty = useMemo(
     () => draft !== null && JSON.stringify(draft) !== JSON.stringify(crm.company),
@@ -46,7 +48,11 @@ export default function SettingsPage() {
     event.preventDefault();
     setPending(true);
     try {
-      const saved = await crm.updateCompany(form);
+      const saved = await crm.updateCompany({
+        ...form,
+        logoUrl: crm.company.logoUrl,
+        logoStoragePath: crm.company.logoStoragePath,
+      });
       if (saved) setDraft(null);
     } finally {
       setPending(false);
@@ -112,6 +118,49 @@ export default function SettingsPage() {
                 placeholder="CO-GC-00000"
               />
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Logo</CardTitle>
+            <CardDescription>
+              Prints on estimates, invoices, photo reports, and client share links.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 pt-4">
+            <LogoField
+              url={crm.company.logoUrl || form.logoUrl}
+              busy={logoBusy}
+              onPick={async (file) => {
+                setLogoBusy(true);
+                try {
+                  const next = await crm.uploadCompanyLogo(file);
+                  if (next) {
+                    setDraft((current) =>
+                      current
+                        ? { ...current, logoUrl: next.logoUrl, logoStoragePath: next.logoStoragePath }
+                        : null,
+                    );
+                  }
+                } finally {
+                  setLogoBusy(false);
+                }
+              }}
+              onRemove={async () => {
+                setLogoBusy(true);
+                try {
+                  const ok = await crm.removeCompanyLogo();
+                  if (ok) {
+                    setDraft((current) =>
+                      current ? { ...current, logoUrl: "", logoStoragePath: "" } : null,
+                    );
+                  }
+                } finally {
+                  setLogoBusy(false);
+                }
+              }}
+            />
           </CardContent>
         </Card>
 
@@ -218,6 +267,55 @@ function Field({
         required={required}
         placeholder={placeholder}
       />
+    </div>
+  );
+}
+
+function LogoField({
+  url,
+  busy,
+  onPick,
+  onRemove,
+}: {
+  url?: string;
+  busy: boolean;
+  onPick: (file: File) => Promise<void>;
+  onRemove: () => Promise<void>;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const preview = url?.trim() ?? "";
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="flex h-20 w-36 items-center justify-center border bg-muted/40">
+        {preview ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={preview} alt="Company logo" className="max-h-16 max-w-32 object-contain" />
+        ) : (
+          <p className="px-2 text-center text-xs text-muted-foreground">No logo yet</p>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <input
+          ref={inputRef}
+          type="file"
+          accept={LOGO_ACCEPT}
+          className="sr-only"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            event.target.value = "";
+            if (file) void onPick(file);
+          }}
+        />
+        <Button type="button" variant="outline" disabled={busy} onClick={() => inputRef.current?.click()}>
+          {busy ? "Uploading…" : preview ? "Replace logo" : "Upload logo"}
+        </Button>
+        {preview ? (
+          <Button type="button" variant="ghost" disabled={busy} onClick={() => void onRemove()}>
+            Remove
+          </Button>
+        ) : null}
+        <p className="basis-full text-xs text-muted-foreground">PNG, JPG, WebP, or GIF. Under 2 MB.</p>
+      </div>
     </div>
   );
 }

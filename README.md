@@ -35,6 +35,8 @@ Photo reports need [`20260821140000_photo_reports.sql`](https://raw.githubuserco
 
 Residential vs commercial on leads and jobs needs [`20260821160000_job_market.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821160000_job_market.sql) and [`20260821170000_residential_share_tax.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821170000_residential_share_tax.sql) (or a fresh bootstrap) so the choice persists and residential share links stay untaxed. Until those run, Truss still applies residential (no tax) vs commercial (taxed) in the browser.
 
+A company logo on estimates, invoices, and photo reports needs [`20260821180000_company_logo.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821180000_company_logo.sql) (or a fresh bootstrap). Until that runs, you can still upload a logo in this browser.
+
 In Authentication → URL configuration, add `http://localhost:3847/auth/callback` (and the hosted app origin). For local work you can turn off “Confirm email”. Signup opens a company, a profile, and a seat for you. It does not add sample people. Add real teammates from Settings → People.
 
 `.env.local` is optional. Copy `.env.example` only if you want to override the shared project.
@@ -43,7 +45,7 @@ To connect real Google Calendars, create an OAuth web client in Google Cloud (Ca
 
 ## What you can do
 
-- **Settings** — company name, main phone, office email, website, license, and office address, plus **People**: add a roster seat, copy a 14-day signup invite into this company, restrict someone to their own book, lock a login, or remove them. Only a company admin sees this, under the initials menu in the top right. The business block prints on estimates and invoices. Invites are not emailed from Truss — copy the link. A locked account is signed out on the next load. Restrict keeps the role but forces access to that person’s jobs only. You cannot lock, restrict, or remove the last unlocked company admin.
+- **Settings** — company name, logo, main phone, office email, website, license, and office address, plus **People**: add a roster seat, copy a 14-day signup invite into this company, restrict someone to their own book, lock a login, or remove them. Only a company admin sees this, under the initials menu in the top right. The logo and business block print on estimates, invoices, and photo reports. Invites are not emailed from Truss — copy the link. A locked account is signed out on the next load. Restrict keeps the role but forces access to that person’s jobs only. You cannot lock, restrict, or remove the last unlocked company admin.
 - **Contacts** — homeowners first (no company required), plus adjusters, realtors, and one architect as referral partners. Open a person to **Edit contact**: name, title, phone, email, company, book owner, and referral flag.
 - **Pipeline** — leads through Job Sold and lost. Every new lead (and every new estimate) opens a job for costing so expenses and P&L treat it like production work. When the homeowner signs, the card moves to Job Sold. Each card shows a job code (`BJ081926-A`) assigned when the lead is opened. **New lead** slides in so you can pick who owns it, then capture **Residential or commercial** (residential proposals are not taxed; commercial includes sales tax), the homeowner, job site, and **Seed** (Podium, Website, Google Ad, Phone, Angie's List, Realtor, Referral, Sales Team, Text Main Line, Past Client, ChatGPT, Social Media). Business development sees every unlocked seat in the company on that list, on each pipeline card, and on the lead record — assigning hands the owner, costing job, and homeowner over; sourced-by stays with BD.
 - **Business development** — nav is pipeline, jobs from the agents they brought in, contacts, and ROI. They see company BD return (cash on sourced jobs ÷ office spend they logged) as well as their own numbers. Assigning a lead (new, pipeline card, or open record) hands the owner, the costing job, and the homeowner to that person; sourced-by stays with BD.
@@ -68,7 +70,7 @@ Signup creates your seat only — no sample roster. Existing companies drop Nort
 - **Postgres** — contacts, homeowners, pursuits, jobs, catalog, estimates, invoices, payments, expenses, schedule, calendar accounts, photos, teams, seats, account invites, training progress, training bulletins
 - **RLS** — every query is limited to `current_company_id()`
 - **Realtime** — the board and records refresh when anyone in the company writes
-- **Storage** — `job-photos` bucket (`{companyId}/{jobId}/{uuid}`) and `receipts` bucket (`{companyId}/expenses|payments/{uuid}`)
+- **Storage** — `job-photos` bucket (`{companyId}/{jobId}/{uuid}`), `receipts` bucket (`{companyId}/expenses|payments/{uuid}`), and `company-assets` bucket (`{companyId}/logo/{uuid}`) for the letterhead logo
 - **Google Calendar** — refresh tokens stay in `calendar_tokens` (RPC only). Metadata and shares are company-visible; company admins can read every linked calendar.
 
 **Reset company data** (avatar menu) wipes that company’s CRM tables and leaves your signed-in seat. It does not delete the Auth user.

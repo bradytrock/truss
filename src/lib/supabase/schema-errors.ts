@@ -127,6 +127,24 @@ export function missingMarketMessage() {
   return `Saved in this browser. Run ${JOB_MARKET_SQL} in the SQL editor so residential vs commercial persists.`;
 }
 
+export const COMPANY_LOGO_SQL = "supabase/migrations/20260821180000_company_logo.sql";
+
+export function isMissingLogoColumn(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    (error.code === "PGRST204" ||
+      error.code === "PGRST205" ||
+      message.includes("schema cache") ||
+      message.includes("Could not find the")) &&
+    message.toLowerCase().includes("logo")
+  );
+}
+
+export function missingLogoMessage() {
+  return `Saved in this browser. Run ${COMPANY_LOGO_SQL} in the SQL editor so the logo persists and prints on documents.`;
+}
+
 export function missingPrimaryContactHint() {
   return `Run ${RESIDENTIAL_ENUMS_SQL} in the SQL editor so jobs can store a homeowner, then try again.`;
 }
