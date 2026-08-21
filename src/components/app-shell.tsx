@@ -55,6 +55,7 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
     return [
       { href: "/", label: "Home" },
       { href: "/jobs", label: "Jobs" },
+      { href: "/photos", label: "Photos" },
       { href: "/contacts", label: "Agents & contacts" },
       { href: "/reports", label: "ROI" },
     ];
@@ -62,6 +63,7 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
   return [
     { href: "/", label: "Home" },
     { href: "/jobs", label: "Jobs" },
+    { href: "/photos", label: "Photos" },
     { href: "/estimates", label: "Estimates" },
     { href: "/invoices", label: "Invoices" },
     ...(options.showAccounting ? [{ href: "/accounting", label: "Accounting" }] : []),
@@ -328,6 +330,17 @@ function SearchTrigger() {
                   ) : null}
                 </CommandItem>
               ))}
+            </CommandGroup>
+            <CommandGroup heading="Photos">
+              <CommandItem
+                value="photos company feed field"
+                onSelect={() => {
+                  setOpen(false);
+                  router.push("/photos");
+                }}
+              >
+                All company photos
+              </CommandItem>
             </CommandGroup>
             <CommandGroup heading="Contacts">
               {contacts.map((contact) => (

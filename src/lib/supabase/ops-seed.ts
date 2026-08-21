@@ -358,6 +358,7 @@ export async function insertOperations(
         taken_at: photo.takenAt,
         image_url: photo.imageUrl,
         storage_path: photo.storagePath,
+        created_by: photo.createdBy ?? "",
       },
     ];
   });

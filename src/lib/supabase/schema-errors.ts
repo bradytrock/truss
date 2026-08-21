@@ -181,6 +181,18 @@ export function missingDeletedColumnMessage() {
   return `Saved in this browser. Run ${JOB_SOFT_DELETE_SQL} in the SQL editor so deleted jobs stay in Postgres and can be restored.`;
 }
 
+export const JOB_PHOTO_CREATED_BY_SQL = "supabase/migrations/20260821230000_job_photo_created_by.sql";
+
+export function isMissingPhotoCreatedBy(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return message.includes("created_by");
+}
+
+export function missingPhotoCreatedByMessage() {
+  return `Saved in this browser. Run ${JOB_PHOTO_CREATED_BY_SQL} in the SQL editor so the Photos feed can show who took each shot.`;
+}
+
 export function missingPrimaryContactHint() {
   return `Run ${RESIDENTIAL_ENUMS_SQL} in the SQL editor so jobs can store a homeowner, then try again.`;
 }

@@ -634,6 +634,7 @@ export function mapJobPhoto(row: PhotoRow): JobPhoto {
     takenAt: row.taken_at,
     imageUrl: row.image_url,
     storagePath: row.storage_path,
+    createdBy: "created_by" in row ? String(row.created_by ?? "") : "",
   };
 }
 

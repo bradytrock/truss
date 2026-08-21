@@ -530,6 +530,7 @@ export interface JobPhoto {
   takenAt: string;
   imageUrl: string;
   storagePath: string | null;
+  createdBy?: string;
 }
 
 export const PHOTO_PAGE_LAYOUTS = ["one", "two", "four"] as const;

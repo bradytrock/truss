@@ -769,6 +769,7 @@ export type Database = {
           image_url: string;
           storage_path: string | null;
           created_at: string;
+          created_by: string;
         };
         Insert: {
           id?: string;
@@ -779,6 +780,7 @@ export type Database = {
           taken_at?: string;
           image_url: string;
           storage_path?: string | null;
+          created_by?: string;
         };
         Update: Partial<Database["public"]["Tables"]["job_photos"]["Insert"]>;
         Relationships: [];

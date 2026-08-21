@@ -3399,3 +3399,10 @@ create index if not exists jobs_company_deleted_idx
   on public.jobs (company_id, deleted_at);
 
 alter type public.activity_type add value if not exists 'audit';
+
+-- ========== 20260821230000_job_photo_created_by.sql ==========
+-- Who took a job photo, so the company Photos feed can show a name on each thumbnail.
+-- Job access stays scoped; photos are visible to every seat in the company.
+
+alter table public.job_photos
+  add column if not exists created_by text not null default '';

@@ -230,7 +230,7 @@ export function scopeBook(
     if (scope === "bd" && !expense.jobId && expense.createdBy === effective.name) return true;
     return false;
   });
-  const photos = state.photos.filter((photo) => jobIds.has(photo.jobId));
+  const photos = state.photos;
   const photoReports = state.photoReports.filter((report) => jobIds.has(report.jobId));
   const events = state.events.filter((event) => {
     if (event.jobId && jobIds.has(event.jobId)) return true;

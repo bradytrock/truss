@@ -17,7 +17,7 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingSignatureColumn, missingSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingSignatureColumn, missingSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId } from "@/lib/job-record";
@@ -147,6 +147,7 @@ import {
   payloadWithoutCode,
 } from "@/lib/job-code";
 import { formatJobSite } from "@/lib/leads";
+import { localYmd } from "@/lib/format";
 import { fillPayment, fileToDataUrl } from "@/lib/job-financials";
 import { resolveCustomerName, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage } from "@/lib/photo-report";
@@ -4313,26 +4314,36 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error("Add a photo file or an image URL.");
         return;
       }
-      const { data, error } = await supabase
-        .from("job_photos")
-        .insert({
-          company_id: user.companyId,
-          job_id: input.jobId,
-          caption: input.caption,
-          category: input.category,
-          taken_at: input.takenAt,
-          image_url: imageUrl,
-          storage_path: storagePath,
-        })
-        .select("*")
-        .single();
+      let takenAt = input.takenAt;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(takenAt)) {
+        takenAt =
+          takenAt === localYmd(new Date()) ? new Date().toISOString() : `${takenAt}T12:00:00`;
+      }
+      const payload = {
+        company_id: user.companyId,
+        job_id: input.jobId,
+        caption: input.caption,
+        category: input.category,
+        taken_at: takenAt,
+        image_url: imageUrl,
+        storage_path: storagePath,
+        created_by: user.name,
+      };
+      let { data, error } = await supabase.from("job_photos").insert(payload).select("*").single();
+      if (error && isMissingPhotoCreatedBy(error)) {
+        const { created_by: _createdBy, ...without } = payload;
+        const retry = await supabase.from("job_photos").insert(without).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingPhotoCreatedByMessage());
+      }
       if (error || !data) {
         toast.error(error?.message ?? "Could not save the photo.");
         return;
       }
       setState((prev) => ({ ...prev, photos: [mapJobPhoto(data), ...prev.photos] }));
     },
-    [user.companyId]
+    [user.companyId, user.name]
   );
 
   const addPhotoReport = useCallback(
