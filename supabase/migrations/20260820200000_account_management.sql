@@ -334,10 +334,14 @@ begin
         staff_id = excluded.staff_id;
 
   return new;
+exception
+  when others then
+    return new;
 end;
 $$;
 
 alter function public.handle_new_user() owner to postgres;
+alter function public.handle_new_user() reset row_security;
 
 do $$
 begin

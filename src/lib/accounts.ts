@@ -13,7 +13,7 @@ export function missingAccountManagementMessage() {
 }
 
 export function inviteSignupPatchMessage() {
-  return `Postgres blocked creating this login while joining from an invite. Paste the Raw SQL from ${INVITE_SIGNUP_SQL} in the Supabase SQL editor, run it, then sign up again with the email the invite was sent to.`;
+  return `The invite trigger is still blocking this login. In the Supabase SQL editor, paste the Raw file (not the GitHub page) ${INVITE_SIGNUP_SQL_RAW}, run it until it says Success, then sign up again with the email the invite was sent to.`;
 }
 
 export function isMissingAccountManagement(error: { message?: string; code?: string } | null | undefined) {

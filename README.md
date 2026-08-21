@@ -29,7 +29,7 @@ On that shared project, paste and run one file in the SQL editor:
 
 Use the **Raw** link so the editor does not pick up a collapsed GitHub page. The numbered files under `supabase/migrations/` are the same SQL split up, if you ever need them one at a time.
 
-If invite signup already fails with **Database error saving new user**, you do not need to re-paste the whole bootstrap. Run only the Raw file [`supabase/migrations/20260821010000_invite_signup.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821010000_invite_signup.sql), then sign up again with the **same email the invite was sent to**.
+If invite signup fails with **Database error saving new user**, you do not need to re-paste the whole bootstrap. Open the **Raw** file [`20260821010000_invite_signup.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821010000_invite_signup.sql), paste it in the SQL editor, and run it until the editor says **Success**. Then sign up again with the **same email the invite was sent to**. Hard-refresh the Raw page if you still see the old copy.
 
 In Authentication → URL configuration, add `http://localhost:3847/auth/callback` (and the hosted app origin). For local work you can turn off “Confirm email”. Signup opens a company, a profile, and a seat for you. It does not add sample people. Add real teammates from Settings → People.
 

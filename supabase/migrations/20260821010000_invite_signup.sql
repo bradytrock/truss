@@ -1,8 +1,27 @@
--- Fix invite signup: GoTrue reports "Database error saving new user" when
--- handle_new_user raises. The trigger often ran as supabase_auth_admin, so RLS
--- hid account_invites and the function raised. Provisioning now runs in a
--- postgres-owned helper (bypasses RLS), and a missing invite no longer aborts
--- Auth — the signup page calls claim_invite once a session exists.
+-- Safe to re-run. Unblocks invite signup ("Database error saving new user").
+-- SET row_security = off on handle_new_user aborts Auth when the function is
+-- still owned by supabase_auth_admin (CREATE OR REPLACE does not change owner).
+-- Strip that setting and take ownership before recreating anything else.
+
+do $$
+begin
+  if to_regprocedure('public.handle_new_user()') is not null then
+    execute 'alter function public.handle_new_user() reset row_security';
+    execute 'alter function public.handle_new_user() owner to postgres';
+  end if;
+  if to_regprocedure('public.provision_auth_user(uuid, text, jsonb)') is not null then
+    execute 'alter function public.provision_auth_user(uuid, text, jsonb) reset row_security';
+    execute 'alter function public.provision_auth_user(uuid, text, jsonb) owner to postgres';
+  end if;
+  if to_regprocedure('public.claim_invite(text)') is not null then
+    execute 'alter function public.claim_invite(text) reset row_security';
+    execute 'alter function public.claim_invite(text) owner to postgres';
+  end if;
+  if to_regprocedure('public.invite_preview(text)') is not null then
+    execute 'alter function public.invite_preview(text) reset row_security';
+    execute 'alter function public.invite_preview(text) owner to postgres';
+  end if;
+end $$;
 
 create or replace function public.provision_auth_user(
   p_id uuid,
@@ -13,7 +32,6 @@ returns void
 language plpgsql
 security definer
 set search_path = public
-set row_security = off
 as $$
 declare
   new_company_id uuid;
@@ -29,15 +47,19 @@ declare
   invite_role public.seat_role;
   old_company uuid;
 begin
-  perform set_config('row_security', 'off', true);
+  begin
+    perform set_config('row_security', 'off', true);
+  exception
+    when others then null;
+  end;
 
   full_name := coalesce(
-    nullif(trim(p_meta->>'full_name'), ''),
+    nullif(trim(coalesce(p_meta->>'full_name', '')), ''),
     split_part(coalesce(p_email, ''), '@', 1),
     'Owner'
   );
-  title := coalesce(nullif(trim(p_meta->>'title'), ''), 'Company admin');
-  company_name := coalesce(nullif(trim(p_meta->>'company'), ''), 'Truss');
+  title := coalesce(nullif(trim(coalesce(p_meta->>'title', '')), ''), 'Company admin');
+  company_name := coalesce(nullif(trim(coalesce(p_meta->>'company', '')), ''), 'Truss');
   initials := upper(left(regexp_replace(full_name, '\s+', ' ', 'g'), 1))
     || coalesce(upper(left(split_part(full_name, ' ', 2), 1)), '');
   invite_token := nullif(trim(coalesce(
@@ -65,7 +87,7 @@ begin
         p_id,
         invite_company,
         full_name,
-        coalesce(nullif(trim(p_meta->>'title'), ''), title),
+        title,
         initials,
         invite_role,
         invite_staff
@@ -81,7 +103,7 @@ begin
       update public.team_members
       set
         name = full_name,
-        title = coalesce(nullif(trim(p_meta->>'title'), ''), title),
+        title = title,
         initials = initials,
         email = coalesce(p_email, email),
         invite_expires_at = null,
@@ -129,25 +151,38 @@ begin
 end;
 $$;
 
+alter function public.provision_auth_user(uuid, text, jsonb) owner to postgres;
+alter function public.provision_auth_user(uuid, text, jsonb) reset row_security;
+
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql
 security definer
 set search_path = public
-set row_security = off
 as $$
 begin
-  perform public.provision_auth_user(new.id, new.email, new.raw_user_meta_data);
+  begin
+    perform public.provision_auth_user(new.id, new.email, new.raw_user_meta_data);
+  exception
+    when others then null;
+  end;
   return new;
 end;
 $$;
+
+alter function public.handle_new_user() owner to postgres;
+alter function public.handle_new_user() reset row_security;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
 
 create or replace function public.claim_invite(p_token text)
 returns uuid
 language plpgsql
 security definer
 set search_path = public
-set row_security = off
 as $$
 declare
   uid uuid := auth.uid();
@@ -161,7 +196,11 @@ declare
   initials text;
   old_company uuid;
 begin
-  perform set_config('row_security', 'off', true);
+  begin
+    perform set_config('row_security', 'off', true);
+  exception
+    when others then null;
+  end;
 
   if uid is null then
     raise exception 'Sign in to accept this invite.';
@@ -237,7 +276,9 @@ begin
 end;
 $$;
 
--- CREATE OR REPLACE cannot add OUT columns; drop first when the return row changes.
+alter function public.claim_invite(text) owner to postgres;
+alter function public.claim_invite(text) reset row_security;
+
 drop function if exists public.invite_preview(text);
 
 create or replace function public.invite_preview(p_token text)
@@ -254,7 +295,6 @@ language plpgsql
 stable
 security definer
 set search_path = public
-set row_security = off
 as $$
 begin
   return query
@@ -276,9 +316,6 @@ begin
 end;
 $$;
 
-alter function public.provision_auth_user(uuid, text, jsonb) owner to postgres;
-alter function public.handle_new_user() owner to postgres;
-alter function public.claim_invite(text) owner to postgres;
 alter function public.invite_preview(text) owner to postgres;
 
 revoke all on function public.provision_auth_user(uuid, text, jsonb) from public;
