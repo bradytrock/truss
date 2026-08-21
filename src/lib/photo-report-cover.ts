@@ -75,8 +75,12 @@ export function photoReportCoverModel(input: {
       (job.relatedContactIds.includes(contact.id) || contact.id === job.primaryContactId) && isAdjuster(contact),
   );
   const carrier = fieldValue(job, /carrier|insurance company|insurance carrier/i);
-  const claimNumber = page.claimNumber.trim() || fieldValue(job, /claim/);
-  const dateOfLoss = page.dateOfLoss.trim() || fieldValue(job, /date of loss|loss date/i);
+  const claimNumber = page.showClaimNumber
+    ? page.claimNumber.trim() || fieldValue(job, /claim/)
+    : "";
+  const dateOfLoss = page.showDateOfLoss
+    ? page.dateOfLoss.trim() || fieldValue(job, /date of loss|loss date/i)
+    : "";
 
   const author =
     input.staff.find((member) => member.name === report.createdBy) ||
@@ -104,8 +108,11 @@ export function photoReportCoverModel(input: {
     companyTag,
     street: page.showAddress ? street : "",
     cityLine: page.showAddress ? cityLine : "",
+    showInspectionDate: page.showDate,
+    showDateOfLoss: page.showDateOfLoss,
+    showClaimNumber: page.showClaimNumber,
     inspectionDate: page.showDate ? dottedDate(report.createdAt || new Date().toISOString()) : "",
-    dateOfLoss: dottedDate(dateOfLoss) || dateOfLoss,
+    dateOfLoss: page.showDateOfLoss ? dottedDate(dateOfLoss) || dateOfLoss : "",
     claimNumber,
     jobNumber: job.code || "",
     preparedForName: homeowner || "Homeowner",

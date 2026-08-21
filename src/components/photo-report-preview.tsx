@@ -85,6 +85,12 @@ function CoverPreview({
     customerName,
   });
   const logoUrl = company.logoUrl?.trim();
+  const meta = [
+    cover.showInspectionDate ? { label: "Inspection date", value: cover.inspectionDate } : null,
+    cover.showDateOfLoss ? { label: "Date of loss", value: cover.dateOfLoss } : null,
+    cover.showClaimNumber ? { label: "Claim number", value: cover.claimNumber } : null,
+    { label: "Job number", value: cover.jobNumber },
+  ].filter((item): item is { label: string; value: string } => Boolean(item));
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white text-neutral-900">
@@ -135,16 +141,14 @@ function CoverPreview({
       </div>
 
       <footer className="shrink-0 bg-neutral-950 px-3 pb-2 pt-2.5 text-white">
-        <div className="grid grid-cols-4 gap-2 border-b border-white/10 pb-2">
-          {[
-            ["Inspection date", cover.inspectionDate],
-            ["Date of loss", cover.dateOfLoss],
-            ["Claim number", cover.claimNumber],
-            ["Job number", cover.jobNumber],
-          ].map(([label, value]) => (
-            <div key={label}>
-              <p className="text-[6px] font-semibold tracking-[0.14em] text-[#c4182a] uppercase">{label}</p>
-              <p className="mt-0.5 truncate text-[9px] font-semibold">{value || "—"}</p>
+        <div
+          className="grid gap-2 border-b border-white/10 pb-2"
+          style={{ gridTemplateColumns: `repeat(${meta.length}, minmax(0, 1fr))` }}
+        >
+          {meta.map((item) => (
+            <div key={item.label}>
+              <p className="text-[6px] font-semibold tracking-[0.14em] text-[#c4182a] uppercase">{item.label}</p>
+              <p className="mt-0.5 truncate text-[9px] font-semibold">{item.value || "—"}</p>
             </div>
           ))}
         </div>

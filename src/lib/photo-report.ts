@@ -38,7 +38,7 @@ export const PAGE_TEMPLATE_OPTIONS: Array<{
   {
     id: "claim",
     title: "Claim",
-    description: "Cover with date of loss and claim number, photos, and a damage-scope page.",
+    description: "Cover, photos, and a damage-scope page for the carrier.",
   },
   {
     id: "blank",
@@ -115,6 +115,8 @@ export function emptyCoverPage(input?: Partial<Extract<PhotoReportPage, { type: 
     notes: input?.notes ?? "",
     showAddress: input?.showAddress ?? true,
     showDate: input?.showDate ?? true,
+    showDateOfLoss: input?.showDateOfLoss ?? false,
+    showClaimNumber: input?.showClaimNumber ?? false,
     heroPhotoId: input?.heroPhotoId ?? null,
     dateOfLoss: input?.dateOfLoss ?? "",
     claimNumber: input?.claimNumber ?? "",
@@ -171,10 +173,6 @@ export function photosPagesFromPhotos(
   return pages;
 }
 
-function jobField(job: Job, match: RegExp) {
-  return job.customFields.find((field) => match.test(field.label))?.value.trim() ?? "";
-}
-
 function photosForTemplate(template: PageTemplateId, photos: JobPhoto[]) {
   if (template !== "completion") return photos;
   const after = photos.filter((photo) => photo.category === "after");
@@ -203,8 +201,6 @@ export function createPhotoReport(input: {
     title: input.job.name,
     subtitle: input.customer,
     heroPhotoId: photos[0]?.id ?? input.photos[0]?.id ?? null,
-    dateOfLoss: jobField(input.job, /date of loss|loss date/i),
-    claimNumber: jobField(input.job, /claim/),
   });
   const pages: PhotoReportPage[] =
     template === "blank"
@@ -263,6 +259,8 @@ export function parsePhotoReportPages(raw: unknown): PhotoReportPage[] {
         notes: asString(row.notes),
         showAddress: asBool(row.showAddress, true),
         showDate: asBool(row.showDate, true),
+        showDateOfLoss: asBool(row.showDateOfLoss, false),
+        showClaimNumber: asBool(row.showClaimNumber, false),
         heroPhotoId: asString(row.heroPhotoId) || null,
         dateOfLoss: asString(row.dateOfLoss),
         claimNumber: asString(row.claimNumber),

@@ -325,12 +325,12 @@ async function drawCover(
   doc.rect(0, footerY, width, footerH, "F");
 
   const meta = [
-    { label: "INSPECTION DATE", value: cover.inspectionDate || "—" },
-    { label: "DATE OF LOSS", value: cover.dateOfLoss || "—" },
-    { label: "CLAIM NUMBER", value: cover.claimNumber || "—" },
+    cover.showInspectionDate ? { label: "INSPECTION DATE", value: cover.inspectionDate || "—" } : null,
+    cover.showDateOfLoss ? { label: "DATE OF LOSS", value: cover.dateOfLoss || "—" } : null,
+    cover.showClaimNumber ? { label: "CLAIM NUMBER", value: cover.claimNumber || "—" } : null,
     { label: "JOB NUMBER", value: cover.jobNumber || "—" },
-  ];
-  const colW = (width - inset * 2) / 4;
+  ].filter((item): item is { label: string; value: string } => Boolean(item));
+  const colW = (width - inset * 2) / Math.max(1, meta.length);
   const metaY = footerY + 28;
   meta.forEach((item, index) => {
     const x = inset + index * colW;

@@ -550,6 +550,8 @@ export interface PhotoReportCoverPage {
   notes: string;
   showAddress: boolean;
   showDate: boolean;
+  showDateOfLoss: boolean;
+  showClaimNumber: boolean;
   heroPhotoId: string | null;
   dateOfLoss: string;
   claimNumber: string;

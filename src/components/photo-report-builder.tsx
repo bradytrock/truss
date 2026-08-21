@@ -403,6 +403,20 @@ function PageInspector({
             <Checkbox checked={page.showDate} onCheckedChange={(value) => onChange({ showDate: Boolean(value) })} />
             Show report date
           </label>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={page.showDateOfLoss}
+              onCheckedChange={(value) => onChange({ showDateOfLoss: Boolean(value) })}
+            />
+            Show date of loss
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={page.showClaimNumber}
+              onCheckedChange={(value) => onChange({ showClaimNumber: Boolean(value) })}
+            />
+            Show claim number
+          </label>
           <Field label="Cover photo">
             <Select
               value={page.heroPhotoId ?? "none"}
@@ -428,24 +442,34 @@ function PageInspector({
               This is the hero on the PDF cover. It is cropped to fill the page, like a drone shot on a printed report.
             </p>
           </Field>
-          <div className="grid grid-cols-2 gap-2">
-            <Field label="Date of loss" htmlFor="cover-loss">
-              <Input
-                id="cover-loss"
-                value={page.dateOfLoss}
-                onChange={(event) => onChange({ dateOfLoss: event.target.value })}
-                placeholder="06.14.2026"
-              />
-            </Field>
-            <Field label="Claim number" htmlFor="cover-claim">
-              <Input
-                id="cover-claim"
-                value={page.claimNumber}
-                onChange={(event) => onChange({ claimNumber: event.target.value })}
-                placeholder="Claim #"
-              />
-            </Field>
-          </div>
+          {page.showDateOfLoss || page.showClaimNumber ? (
+            <div
+              className={
+                page.showDateOfLoss && page.showClaimNumber ? "grid grid-cols-2 gap-2" : "grid gap-2"
+              }
+            >
+              {page.showDateOfLoss ? (
+                <Field label="Date of loss" htmlFor="cover-loss">
+                  <Input
+                    id="cover-loss"
+                    value={page.dateOfLoss}
+                    onChange={(event) => onChange({ dateOfLoss: event.target.value })}
+                    placeholder="06.14.2026"
+                  />
+                </Field>
+              ) : null}
+              {page.showClaimNumber ? (
+                <Field label="Claim number" htmlFor="cover-claim">
+                  <Input
+                    id="cover-claim"
+                    value={page.claimNumber}
+                    onChange={(event) => onChange({ claimNumber: event.target.value })}
+                    placeholder="Claim #"
+                  />
+                </Field>
+              ) : null}
+            </div>
+          ) : null}
           <Field label="Cover notes" htmlFor="cover-notes">
             <Textarea
               id="cover-notes"
