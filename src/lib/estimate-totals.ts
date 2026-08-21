@@ -57,9 +57,9 @@ export function estimateTotals(
   };
 }
 
-export function groupEstimateLines(lines: EstimateLine[]) {
+export function groupEstimateLines<T extends Pick<EstimateLine, "groupName" | "sortOrder">>(lines: T[]) {
   const order: string[] = [];
-  const grouped = new Map<string, EstimateLine[]>();
+  const grouped = new Map<string, T[]>();
   const sorted = [...lines].sort((a, b) => a.sortOrder - b.sortOrder);
   for (const line of sorted) {
     const key = line.groupName.trim() || "Items";

@@ -509,6 +509,80 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["estimate_lines"]["Insert"]>;
         Relationships: [];
       };
+      estimate_templates: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          description: string;
+          market: string;
+          intro: string;
+          terms: string;
+          notes: string;
+          tax_rate: number;
+          discount_kind: string;
+          discount_value: number;
+          deposit_kind: string;
+          deposit_value: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          description?: string;
+          market?: string;
+          intro?: string;
+          terms?: string;
+          notes?: string;
+          tax_rate?: number;
+          discount_kind?: string;
+          discount_value?: number;
+          deposit_kind?: string;
+          deposit_value?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["estimate_templates"]["Insert"]>;
+        Relationships: [];
+      };
+      estimate_template_lines: {
+        Row: {
+          id: string;
+          company_id: string;
+          template_id: string;
+          catalog_item_id: string | null;
+          title: string;
+          description: string;
+          quantity: number;
+          unit: string;
+          unit_cost: number;
+          sort_order: number;
+          group_name: string;
+          optional: boolean;
+          selected: boolean;
+          taxable: boolean;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          template_id: string;
+          catalog_item_id?: string | null;
+          title?: string;
+          description?: string;
+          quantity?: number;
+          unit?: string;
+          unit_cost?: number;
+          sort_order?: number;
+          group_name?: string;
+          optional?: boolean;
+          selected?: boolean;
+          taxable?: boolean;
+        };
+        Update: Partial<Database["public"]["Tables"]["estimate_template_lines"]["Insert"]>;
+        Relationships: [];
+      };
       invoices: {
         Row: {
           id: string;

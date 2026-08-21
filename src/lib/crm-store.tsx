@@ -30,6 +30,15 @@ import {
   invoiceLinesFromEstimate,
 } from "@/lib/estimate-totals";
 import {
+  estimateFieldsFromTemplate,
+  estimateLinesFromTemplate,
+  fillEstimateTemplate,
+  fillEstimateTemplateLine,
+  isMissingEstimateTemplates,
+  missingEstimateTemplatesMessage,
+  templateFromEstimate,
+} from "@/lib/estimate-templates";
+import {
   defaultTitleForRole,
   inviteExpiry,
   inviteSignupUrl,
@@ -59,6 +68,9 @@ import {
   mapContact,
   mapEstimate,
   mapEstimateLine,
+  mapEstimateTemplate,
+  estimateTemplatePatch,
+  estimateTemplateLinePatch,
   mapInvoice,
   mapJob,
   mapJobPhoto,
@@ -88,6 +100,8 @@ import {
   type CurrentUser,
   type Estimate,
   type EstimateLine,
+  type EstimateTemplate,
+  type EstimateTemplateLine,
   type Invoice,
   type Job,
   type Opportunity,
@@ -150,6 +164,8 @@ const emptyState: CrmState = {
   catalog: [],
   estimates: [],
   estimateLines: [],
+  estimateTemplates: [],
+  estimateTemplateLines: [],
   invoices: [],
   invoiceLines: [],
   payments: [],
@@ -507,6 +523,7 @@ type CrmContextValue = CrmState & {
     intro?: string;
     terms?: string;
     market?: Opportunity["market"];
+    templateId?: string | null;
   }) => Promise<Estimate>;
   updateEstimate: (id: string, patch: Partial<Estimate>) => Promise<void>;
   sendEstimate: (id: string) => Promise<void>;
@@ -516,6 +533,16 @@ type CrmContextValue = CrmState & {
   ensureEstimateShareToken: (id: string) => Promise<string>;
   ensureInvoiceShareToken: (id: string) => Promise<string>;
   duplicateEstimate: (id: string) => Promise<Estimate>;
+  addEstimateTemplate: (input?: { name?: string; market?: EstimateTemplate["market"] }) => Promise<EstimateTemplate>;
+  updateEstimateTemplate: (id: string, patch: Partial<EstimateTemplate>) => Promise<void>;
+  removeEstimateTemplate: (id: string) => Promise<void>;
+  saveEstimateAsTemplate: (estimateId: string, name: string) => Promise<EstimateTemplate>;
+  addTemplateLineFromCatalog: (templateId: string, catalogItemId: string, groupName?: string) => Promise<void>;
+  addCustomTemplateLine: (templateId: string, groupName?: string) => Promise<void>;
+  updateTemplateLine: (id: string, patch: Partial<EstimateTemplateLine>) => Promise<void>;
+  removeTemplateLine: (id: string) => Promise<void>;
+  reorderTemplateLine: (id: string, direction: "up" | "down") => Promise<void>;
+  getEstimateTemplate: (id: string) => EstimateTemplate | undefined;
   addEstimateLineFromCatalog: (
     estimateId: string,
     catalogItemId: string,
@@ -821,6 +848,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       "catalog_items",
       "estimates",
       "estimate_lines",
+      "estimate_templates",
+      "estimate_template_lines",
       "invoices",
       "invoice_lines",
       "payments",
@@ -985,6 +1014,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const getEstimate = useCallback(
     (id: string) => scoped.estimates.find((estimate) => estimate.id === id),
     [scoped.estimates]
+  );
+  const getEstimateTemplate = useCallback(
+    (id: string) => scoped.estimateTemplates.find((template) => template.id === id),
+    [scoped.estimateTemplates]
   );
   const getInvoice = useCallback(
     (id: string) => scoped.invoices.find((invoice) => invoice.id === id),
@@ -2005,6 +2038,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       intro?: string;
       terms?: string;
       market?: import("@/lib/types").JobMarket;
+      templateId?: string | null;
     }) => {
       const opportunityId = await ensureLeadForEstimate(input);
       const number = nextNumber("EST", state.estimates.map((estimate) => estimate.number));
@@ -2013,6 +2047,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         state.jobs.find((job) => job.opportunityId === opportunityId)?.id ||
         null;
       const linked = siteFromLinked(pipelineJobId, opportunityId, state.jobs, state.opportunities);
+      const template = input.templateId
+        ? state.estimateTemplates.find((item) => item.id === input.templateId)
+        : undefined;
+      const templateFields = template ? estimateFieldsFromTemplate(template) : null;
+      const market =
+        input.market ??
+        templateFields?.market ??
+        workMarket(
+          pipelineJobId ? state.jobs.find((item) => item.id === pipelineJobId) : undefined,
+          state.opportunities.find((item) => item.id === opportunityId),
+        );
       const estimate = fillEstimate({
         id: crypto.randomUUID(),
         number,
@@ -2022,29 +2067,34 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         jobId: pipelineJobId,
         contactId: input.contactId ?? null,
         status: "draft",
-        notes: input.notes ?? "",
+        notes: input.notes || templateFields?.notes || "",
         validUntil: input.validUntil ?? null,
         sentAt: null,
         acceptedAt: null,
         createdAt: new Date().toISOString(),
-        intro: input.intro ?? "",
-        terms: input.terms ?? DEFAULT_ESTIMATE_TERMS,
+        intro: input.intro || templateFields?.intro || "",
+        terms: input.terms || templateFields?.terms || DEFAULT_ESTIMATE_TERMS,
         street: input.street ?? linked.street,
         city: input.city ?? linked.city,
         state: input.state ?? linked.state,
         postalCode: input.postalCode ?? linked.postalCode,
         shareToken: newShareToken(),
-        taxRate: defaultTaxRateForMarket(
-          input.market ??
-            workMarket(
-              pipelineJobId ? state.jobs.find((item) => item.id === pipelineJobId) : undefined,
-              state.opportunities.find((item) => item.id === opportunityId),
-            ),
-        ),
+        taxRate: defaultTaxRateForMarket(market) === 0 ? 0 : templateFields?.taxRate ?? defaultTaxRateForMarket(market),
+        discountKind: templateFields?.discountKind,
+        discountValue: templateFields?.discountValue,
+        depositKind: templateFields?.depositKind,
+        depositValue: templateFields?.depositValue,
       });
+      const copiedLines = template
+        ? estimateLinesFromTemplate(template.id, estimate.id, state.estimateTemplateLines)
+        : [];
       const supabase = maybeClient();
       if (!supabase) {
-        setState((prev) => ({ ...prev, estimates: [estimate, ...prev.estimates] }));
+        setState((prev) => ({
+          ...prev,
+          estimates: [estimate, ...prev.estimates],
+          estimateLines: [...prev.estimateLines, ...copiedLines],
+        }));
         return estimate;
       }
       const payload = {
@@ -2095,10 +2145,45 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         throw error ?? new Error("Could not create the estimate.");
       }
       const mapped = fillEstimate({ ...estimate, ...mapEstimate(data), id: data.id, number: data.number || number });
-      setState((prev) => ({ ...prev, estimates: [mapped, ...prev.estimates] }));
+      const lines = copiedLines.map((line) => ({ ...line, estimateId: mapped.id }));
+      if (lines.length) {
+        const linePayload = lines.map((line) => ({
+          id: line.id,
+          company_id: user.companyId,
+          estimate_id: mapped.id,
+          catalog_item_id: line.catalogItemId,
+          title: line.title,
+          description: line.description,
+          quantity: line.quantity,
+          unit: line.unit,
+          unit_cost: line.unitCost,
+          sort_order: line.sortOrder,
+          group_name: line.groupName,
+          optional: line.optional,
+          selected: line.selected,
+          taxable: line.taxable,
+        }));
+        const inserted = await supabase.from("estimate_lines").insert(linePayload);
+        if (inserted.error && !isMissingEstimateWriter(inserted.error)) {
+          toast.error(inserted.error.message);
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        estimates: [mapped, ...prev.estimates],
+        estimateLines: [...prev.estimateLines, ...lines],
+      }));
       return mapped;
     },
-    [ensureLeadForEstimate, state.estimates, state.jobs, state.opportunities, user.companyId]
+    [
+      ensureLeadForEstimate,
+      state.estimateTemplateLines,
+      state.estimateTemplates,
+      state.estimates,
+      state.jobs,
+      state.opportunities,
+      user.companyId,
+    ]
   );
 
   const updateEstimate = useCallback(async (id: string, patch: Partial<Estimate>) => {
@@ -2428,6 +2513,373 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
     },
     [addEstimate, state.estimateLines, state.estimates, state.jobs, state.opportunities, updateEstimate, user.companyId]
+  );
+
+  const touchTemplate = (id: string) => {
+    const updatedAt = new Date().toISOString();
+    return (prev: CrmState): CrmState => ({
+      ...prev,
+      estimateTemplates: prev.estimateTemplates.map((template) =>
+        template.id === id ? { ...template, updatedAt } : template,
+      ),
+    });
+  };
+
+  const addEstimateTemplate = useCallback(
+    async (input?: { name?: string; market?: EstimateTemplate["market"] }) => {
+      const now = new Date().toISOString();
+      const template = fillEstimateTemplate({
+        id: crypto.randomUUID(),
+        name: input?.name?.trim() || "New template",
+        market: input?.market ?? "residential",
+        createdAt: now,
+        updatedAt: now,
+      });
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({ ...prev, estimateTemplates: [template, ...prev.estimateTemplates] }));
+        return template;
+      }
+      const { data, error } = await supabase
+        .from("estimate_templates")
+        .insert({
+          id: template.id,
+          company_id: user.companyId,
+          name: template.name,
+          description: template.description,
+          market: template.market,
+          intro: template.intro,
+          terms: template.terms,
+          notes: template.notes,
+          tax_rate: template.taxRate,
+          discount_kind: template.discountKind,
+          discount_value: template.discountValue,
+          deposit_kind: template.depositKind,
+          deposit_value: template.depositValue,
+        })
+        .select("*")
+        .single();
+      if (error) {
+        if (isMissingEstimateTemplates(error)) {
+          setState((prev) => ({ ...prev, estimateTemplates: [template, ...prev.estimateTemplates] }));
+          toast.message(missingEstimateTemplatesMessage());
+          return template;
+        }
+        toast.error(error.message);
+        throw error;
+      }
+      const mapped = data ? mapEstimateTemplate(data) : template;
+      setState((prev) => ({ ...prev, estimateTemplates: [mapped, ...prev.estimateTemplates] }));
+      return mapped;
+    },
+    [user.companyId],
+  );
+
+  const updateEstimateTemplate = useCallback(async (id: string, patch: Partial<EstimateTemplate>) => {
+    const updatedAt = new Date().toISOString();
+    const next = { ...patch, updatedAt };
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        estimateTemplates: prev.estimateTemplates.map((template) =>
+          template.id === id ? fillEstimateTemplate({ ...template, ...next }) : template,
+        ),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("estimate_templates").update(estimateTemplatePatch(next)).eq("id", id);
+    if (error) {
+      if (isMissingEstimateTemplates(error)) {
+        apply();
+        toast.message(missingEstimateTemplatesMessage());
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
+
+  const removeEstimateTemplate = useCallback(async (id: string) => {
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        estimateTemplates: prev.estimateTemplates.filter((template) => template.id !== id),
+        estimateTemplateLines: prev.estimateTemplateLines.filter((line) => line.templateId !== id),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("estimate_templates").delete().eq("id", id);
+    if (error) {
+      if (isMissingEstimateTemplates(error)) {
+        apply();
+        toast.message(missingEstimateTemplatesMessage());
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
+
+  const saveEstimateAsTemplate = useCallback(
+    async (estimateId: string, name: string) => {
+      const estimate = state.estimates.find((item) => item.id === estimateId);
+      if (!estimate) throw new Error("Estimate not found.");
+      const { template, lines } = templateFromEstimate(estimate, state.estimateLines, {
+        id: crypto.randomUUID(),
+        name,
+        market: marketForEstimate(estimate, state.jobs, state.opportunities),
+      });
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({
+          ...prev,
+          estimateTemplates: [template, ...prev.estimateTemplates],
+          estimateTemplateLines: [...prev.estimateTemplateLines, ...lines],
+        }));
+        return template;
+      }
+      const { data, error } = await supabase
+        .from("estimate_templates")
+        .insert({
+          id: template.id,
+          company_id: user.companyId,
+          name: template.name,
+          description: template.description,
+          market: template.market,
+          intro: template.intro,
+          terms: template.terms,
+          notes: template.notes,
+          tax_rate: template.taxRate,
+          discount_kind: template.discountKind,
+          discount_value: template.discountValue,
+          deposit_kind: template.depositKind,
+          deposit_value: template.depositValue,
+        })
+        .select("*")
+        .single();
+      if (error) {
+        if (isMissingEstimateTemplates(error)) {
+          setState((prev) => ({
+            ...prev,
+            estimateTemplates: [template, ...prev.estimateTemplates],
+            estimateTemplateLines: [...prev.estimateTemplateLines, ...lines],
+          }));
+          toast.message(missingEstimateTemplatesMessage());
+          return template;
+        }
+        toast.error(error.message);
+        throw error;
+      }
+      const mapped = data ? mapEstimateTemplate(data) : template;
+      if (lines.length) {
+        const payload = lines.map((line) => ({
+          id: line.id,
+          company_id: user.companyId,
+          template_id: mapped.id,
+          catalog_item_id: line.catalogItemId,
+          title: line.title,
+          description: line.description,
+          quantity: line.quantity,
+          unit: line.unit,
+          unit_cost: line.unitCost,
+          sort_order: line.sortOrder,
+          group_name: line.groupName,
+          optional: line.optional,
+          selected: line.selected,
+          taxable: line.taxable,
+        }));
+        const inserted = await supabase.from("estimate_template_lines").insert(payload);
+        if (inserted.error && !isMissingEstimateTemplates(inserted.error)) {
+          toast.error(inserted.error.message);
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        estimateTemplates: [mapped, ...prev.estimateTemplates],
+        estimateTemplateLines: [...prev.estimateTemplateLines, ...lines],
+      }));
+      return mapped;
+    },
+    [state.estimateLines, state.estimates, state.jobs, state.opportunities, user.companyId],
+  );
+
+  const addTemplateLineFromCatalog = useCallback(
+    async (templateId: string, catalogItemId: string, groupName?: string) => {
+      const item = state.catalog.find((entry) => entry.id === catalogItemId);
+      if (!item) return;
+      const sortOrder =
+        Math.max(
+          0,
+          ...state.estimateTemplateLines.filter((line) => line.templateId === templateId).map((line) => line.sortOrder),
+        ) + 1;
+      const line = fillEstimateTemplateLine({
+        id: crypto.randomUUID(),
+        templateId,
+        catalogItemId: item.id,
+        title: item.name,
+        description: item.name,
+        quantity: 1,
+        unit: item.unit,
+        unitCost: item.unitCost,
+        sortOrder,
+        groupName: groupName ?? "",
+      });
+      await persistTemplateLine(line);
+    },
+    [state.catalog, state.estimateTemplateLines, user.companyId],
+  );
+
+  const addCustomTemplateLine = useCallback(
+    async (templateId: string, groupName?: string) => {
+      const sortOrder =
+        Math.max(
+          0,
+          ...state.estimateTemplateLines.filter((line) => line.templateId === templateId).map((line) => line.sortOrder),
+        ) + 1;
+      const line = fillEstimateTemplateLine({
+        id: crypto.randomUUID(),
+        templateId,
+        catalogItemId: null,
+        title: "New item",
+        description: "",
+        quantity: 1,
+        unit: "LS",
+        unitCost: 0,
+        sortOrder,
+        groupName: groupName ?? "",
+      });
+      await persistTemplateLine(line);
+    },
+    [state.estimateTemplateLines, user.companyId],
+  );
+
+  async function persistTemplateLine(line: EstimateTemplateLine) {
+    const supabase = maybeClient();
+    if (!supabase) {
+      setState((prev) => ({
+        ...touchTemplate(line.templateId)(prev),
+        estimateTemplateLines: [...prev.estimateTemplateLines, line],
+      }));
+      return;
+    }
+    const { error } = await supabase.from("estimate_template_lines").insert({
+      id: line.id,
+      company_id: user.companyId,
+      template_id: line.templateId,
+      catalog_item_id: line.catalogItemId,
+      title: line.title,
+      description: line.description,
+      quantity: line.quantity,
+      unit: line.unit,
+      unit_cost: line.unitCost,
+      sort_order: line.sortOrder,
+      group_name: line.groupName,
+      optional: line.optional,
+      selected: line.selected,
+      taxable: line.taxable,
+    });
+    if (error) {
+      if (isMissingEstimateTemplates(error)) {
+        setState((prev) => ({
+          ...touchTemplate(line.templateId)(prev),
+          estimateTemplateLines: [...prev.estimateTemplateLines, line],
+        }));
+        toast.message(missingEstimateTemplatesMessage());
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    setState((prev) => ({
+      ...touchTemplate(line.templateId)(prev),
+      estimateTemplateLines: [...prev.estimateTemplateLines, line],
+    }));
+  }
+
+  const updateTemplateLine = useCallback(async (id: string, patch: Partial<EstimateTemplateLine>) => {
+    const current = state.estimateTemplateLines.find((line) => line.id === id);
+    const apply = () =>
+      setState((prev) => {
+        const lines = prev.estimateTemplateLines.map((line) =>
+          line.id === id ? fillEstimateTemplateLine({ ...line, ...patch }) : line,
+        );
+        const templateId = lines.find((line) => line.id === id)?.templateId;
+        return templateId
+          ? { ...touchTemplate(templateId)(prev), estimateTemplateLines: lines }
+          : { ...prev, estimateTemplateLines: lines };
+      });
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("estimate_template_lines").update(estimateTemplateLinePatch(patch)).eq("id", id);
+    if (error) {
+      if (isMissingEstimateTemplates(error)) {
+        apply();
+        toast.message(missingEstimateTemplatesMessage());
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    apply();
+    if (current) {
+      const { error: stampError } = await supabase
+        .from("estimate_templates")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", current.templateId);
+      if (stampError && !isMissingEstimateTemplates(stampError)) toast.error(stampError.message);
+    }
+  }, [state.estimateTemplateLines]);
+
+  const removeTemplateLine = useCallback(async (id: string) => {
+    const current = state.estimateTemplateLines.find((line) => line.id === id);
+    const apply = () =>
+      setState((prev) => {
+        const lines = prev.estimateTemplateLines.filter((line) => line.id !== id);
+        return current ? { ...touchTemplate(current.templateId)(prev), estimateTemplateLines: lines } : { ...prev, estimateTemplateLines: lines };
+      });
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("estimate_template_lines").delete().eq("id", id);
+    if (error) {
+      if (isMissingEstimateTemplates(error)) {
+        apply();
+        toast.message(missingEstimateTemplatesMessage());
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, [state.estimateTemplateLines]);
+
+  const reorderTemplateLine = useCallback(
+    async (id: string, direction: "up" | "down") => {
+      const current = state.estimateTemplateLines.find((line) => line.id === id);
+      if (!current) return;
+      const siblings = state.estimateTemplateLines
+        .filter((line) => line.templateId === current.templateId)
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+      const index = siblings.findIndex((line) => line.id === id);
+      const swapWith = direction === "up" ? siblings[index - 1] : siblings[index + 1];
+      if (!swapWith) return;
+      await updateTemplateLine(id, { sortOrder: swapWith.sortOrder });
+      await updateTemplateLine(swapWith.id, { sortOrder: current.sortOrder });
+    },
+    [state.estimateTemplateLines, updateTemplateLine],
   );
 
   const addEstimateLineFromCatalog = useCallback(
@@ -4233,6 +4685,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       getOpportunity,
       getJob,
       getEstimate,
+      getEstimateTemplate,
       getInvoice,
       jobForOpportunity,
       company: companySettings,
@@ -4270,6 +4723,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       removeEstimateLine,
       reorderEstimateLine,
       duplicateEstimate,
+      addEstimateTemplate,
+      updateEstimateTemplate,
+      removeEstimateTemplate,
+      saveEstimateAsTemplate,
+      addTemplateLineFromCatalog,
+      addCustomTemplateLine,
+      updateTemplateLine,
+      removeTemplateLine,
+      reorderTemplateLine,
       convertEstimateToInvoice,
       addInvoice,
       sendInvoice,
@@ -4316,6 +4778,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       getOpportunity,
       getJob,
       getEstimate,
+      getEstimateTemplate,
       getInvoice,
       jobForOpportunity,
       companySettings,
@@ -4353,6 +4816,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       removeEstimateLine,
       reorderEstimateLine,
       duplicateEstimate,
+      addEstimateTemplate,
+      updateEstimateTemplate,
+      removeEstimateTemplate,
+      saveEstimateAsTemplate,
+      addTemplateLineFromCatalog,
+      addCustomTemplateLine,
+      updateTemplateLine,
+      removeTemplateLine,
+      reorderTemplateLine,
       convertEstimateToInvoice,
       addInvoice,
       sendInvoice,

@@ -50,6 +50,7 @@ export function CreateEstimateDialog({
   defaultOpportunityId,
   defaultJobId,
   defaultContactId,
+  defaultTemplateId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -57,9 +58,10 @@ export function CreateEstimateDialog({
   defaultOpportunityId?: string;
   defaultJobId?: string;
   defaultContactId?: string | null;
+  defaultTemplateId?: string;
 }) {
   const router = useRouter();
-  const { contacts, opportunities, jobs, estimates, addEstimate, addContact, addClient, user } = useCrm();
+  const { contacts, opportunities, jobs, estimates, estimateTemplates, addEstimate, addContact, addClient, user } = useCrm();
   const [contactId, setContactId] = useState(NEW_HOMEOWNER);
   const [opportunityId, setOpportunityId] = useState("");
   const [jobId, setJobId] = useState("");
@@ -74,6 +76,7 @@ export function CreateEstimateDialog({
   const [personEmail, setPersonEmail] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [market, setMarket] = useState<JobMarket>("residential");
+  const [templateId, setTemplateId] = useState("");
   const [saving, setSaving] = useState(false);
 
   const isNewHomeowner = contactId === NEW_HOMEOWNER;
@@ -109,16 +112,21 @@ export function CreateEstimateDialog({
         opportunities.find((item) => item.primaryContactId === initial)
     );
     setValidUntil("");
-    setNotes("");
     setPersonName("");
     setPersonPhone("");
     setPersonEmail("");
     setCompanyName("");
+    const startingTemplate = defaultTemplateId
+      ? estimateTemplates.find((item) => item.id === defaultTemplateId)
+      : undefined;
+    setTemplateId(startingTemplate?.id ?? "");
+    setNotes(startingTemplate?.notes ?? "");
     setMarket(
-      workMarket(
-        jobDefault || (defaultJobId ? undefined : jobs.find((job) => job.primaryContactId === initial)),
-        oppDefault,
-      ),
+      startingTemplate?.market ??
+        workMarket(
+          jobDefault || (defaultJobId ? undefined : jobs.find((job) => job.primaryContactId === initial)),
+          oppDefault,
+        ),
     );
     setSaving(false);
     // Snapshot the book when the dialog opens so typing a new homeowner is not wiped by a later load.
@@ -180,6 +188,7 @@ export function CreateEstimateDialog({
         state: region.trim(),
         postalCode: postalCode.trim(),
         market,
+        templateId: templateId || null,
       });
       toast.success(`${estimate.number} drafted.`);
       onOpenChange(false);
@@ -201,6 +210,45 @@ export function CreateEstimateDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-3">
+          <Field label="Start from">
+            <Select
+              value={templateId || "blank"}
+              onValueChange={(value) => {
+                const next = value === "blank" ? "" : String(value ?? "");
+                setTemplateId(next);
+                const template = estimateTemplates.find((item) => item.id === next);
+                if (template) {
+                  setMarket(template.market);
+                  setNotes(template.notes);
+                }
+              }}
+              items={[
+                { value: "blank", label: "Blank estimate" },
+                ...estimateTemplates.map((template) => ({
+                  value: template.id,
+                  label: template.name,
+                })),
+              ]}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="blank">Blank estimate</SelectItem>
+                {estimateTemplates.length > 0 ? <SelectSeparator /> : null}
+                {estimateTemplates.map((template) => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {estimateTemplates.length === 0
+                ? "No company templates yet. Build one under Estimates → Templates, or save an estimate as a template."
+                : "Copies sections, prices, cover note, and terms. You still pick the homeowner and job site."}
+            </p>
+          </Field>
           <Field label="Homeowner / contact">
             <Select
               value={contactId}

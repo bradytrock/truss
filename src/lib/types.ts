@@ -380,6 +380,39 @@ export interface EstimateLine {
   taxable: boolean;
 }
 
+export interface EstimateTemplate {
+  id: string;
+  name: string;
+  description: string;
+  market: JobMarket;
+  intro: string;
+  terms: string;
+  notes: string;
+  taxRate: number;
+  discountKind: "percent" | "amount";
+  discountValue: number;
+  depositKind: "percent" | "amount";
+  depositValue: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EstimateTemplateLine {
+  id: string;
+  templateId: string;
+  catalogItemId: string | null;
+  title: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitCost: number;
+  sortOrder: number;
+  groupName: string;
+  optional: boolean;
+  selected: boolean;
+  taxable: boolean;
+}
+
 export interface Invoice {
   id: string;
   number: string;
@@ -587,6 +620,8 @@ export interface CrmState {
   catalog: CatalogItem[];
   estimates: Estimate[];
   estimateLines: EstimateLine[];
+  estimateTemplates: EstimateTemplate[];
+  estimateTemplateLines: EstimateTemplateLine[];
   invoices: Invoice[];
   invoiceLines: InvoiceLine[];
   payments: Payment[];

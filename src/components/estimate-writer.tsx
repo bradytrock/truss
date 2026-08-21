@@ -20,6 +20,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Command,
   CommandEmpty,
   CommandGroup,
@@ -71,7 +79,7 @@ import { formatJobSite } from "@/lib/leads";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-function CommitInput({
+export function CommitInput({
   value,
   onCommit,
   className,
@@ -101,7 +109,7 @@ function CommitInput({
   );
 }
 
-function CommitTextarea({
+export function CommitTextarea({
   value,
   onCommit,
   ...props
@@ -125,7 +133,7 @@ function CommitTextarea({
   );
 }
 
-function PriceBookSheet({
+export function PriceBookSheet({
   open,
   onOpenChange,
   onPick,
@@ -189,7 +197,18 @@ function PriceBookSheet({
   );
 }
 
-function LineCard({
+export type PricedLine = {
+  title: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitCost: number;
+  optional: boolean;
+  selected: boolean;
+  taxable: boolean;
+};
+
+export function LineCard({
   line,
   editable,
   showTax,
@@ -197,10 +216,10 @@ function LineCard({
   onMove,
   onRemove,
 }: {
-  line: EstimateLine;
+  line: PricedLine;
   editable: boolean;
   showTax: boolean;
-  onPatch: (patch: Partial<EstimateLine>) => void;
+  onPatch: (patch: Partial<PricedLine>) => void;
   onMove: (direction: "up" | "down") => void;
   onRemove: () => void;
 }) {
@@ -346,6 +365,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   const [shareOpen, setShareOpen] = useState(false);
   const [sectionName, setSectionName] = useState("");
   const [emptySections, setEmptySections] = useState<string[]>([]);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState("");
 
   const lines = linesForEstimate(crm.estimateLines, estimate.id);
   const groups = groupEstimateLines(lines);
@@ -518,6 +539,14 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           >
             <Copy />
             Duplicate
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => {
+              setTemplateName(estimate.name.replace(/\s+—\s+.+$/, "").trim() || estimate.name);
+              setSaveTemplateOpen(true);
+            }}
+          >
+            Save as template
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -962,11 +991,52 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         url={estimate.shareToken ? shareUrl("e", estimate.shareToken) : ""}
         onDownloadPdf={downloadPdf}
       />
+      <Dialog open={saveTemplateOpen} onOpenChange={setSaveTemplateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save as company template</DialogTitle>
+            <DialogDescription>
+              Sections, prices, cover note, terms, and internal notes are copied. The next estimate can start from this instead of a blank page.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-1.5">
+            <Label htmlFor="template-name">Template name</Label>
+            <Input
+              id="template-name"
+              value={templateName}
+              onChange={(event) => setTemplateName(event.target.value)}
+              placeholder="Hail roof — architectural shingles"
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setSaveTemplateOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={pending || !templateName.trim()}
+              onClick={() => {
+                setPending(true);
+                void crm
+                  .saveEstimateAsTemplate(estimate.id, templateName.trim())
+                  .then((template) => {
+                    toast.success(`${template.name} is in company templates.`);
+                    setSaveTemplateOpen(false);
+                    router.push(`/estimates/templates/${template.id}`);
+                  })
+                  .finally(() => setPending(false));
+              }}
+            >
+              Save template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
-function AdjustmentFields({
+export function AdjustmentFields({
   label,
   kind,
   value,

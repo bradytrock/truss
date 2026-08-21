@@ -1,4 +1,5 @@
 import { fillEstimate, fillEstimateLine } from "@/lib/estimate-totals";
+import { fillEstimateTemplate, fillEstimateTemplateLine } from "@/lib/estimate-templates";
 import { parsePhotoReportPages } from "@/lib/photo-report";
 import { customFieldsJson, fillJobRecord, parseCustomFields } from "@/lib/job-record";
 import { parseMarket } from "@/lib/market";
@@ -13,6 +14,8 @@ import type {
   Contact,
   Estimate,
   EstimateLine,
+  EstimateTemplate,
+  EstimateTemplateLine,
   Invoice,
   InvoiceLine,
   Job,
@@ -39,6 +42,8 @@ type TaskRow = Database["public"]["Tables"]["tasks"]["Row"];
 type CatalogRow = Database["public"]["Tables"]["catalog_items"]["Row"];
 type EstimateRow = Database["public"]["Tables"]["estimates"]["Row"];
 type EstimateLineRow = Database["public"]["Tables"]["estimate_lines"]["Row"];
+type EstimateTemplateRow = Database["public"]["Tables"]["estimate_templates"]["Row"];
+type EstimateTemplateLineRow = Database["public"]["Tables"]["estimate_template_lines"]["Row"];
 type InvoiceRow = Database["public"]["Tables"]["invoices"]["Row"];
 type InvoiceLineRow = Database["public"]["Tables"]["invoice_lines"]["Row"];
 type PaymentRow = Database["public"]["Tables"]["payments"]["Row"];
@@ -378,6 +383,76 @@ export function mapEstimateLine(row: EstimateLineRow): EstimateLine {
     selected: row.selected ?? true,
     taxable: row.taxable ?? true,
   });
+}
+
+export function mapEstimateTemplate(row: EstimateTemplateRow): EstimateTemplate {
+  return fillEstimateTemplate({
+    id: row.id,
+    name: row.name,
+    description: row.description,
+    market: parseMarket(row.market),
+    intro: row.intro,
+    terms: row.terms,
+    notes: row.notes,
+    taxRate: Number(row.tax_rate ?? 0),
+    discountKind: adjustmentKind(row.discount_kind),
+    discountValue: Number(row.discount_value ?? 0),
+    depositKind: adjustmentKind(row.deposit_kind),
+    depositValue: Number(row.deposit_value ?? 0),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+}
+
+export function mapEstimateTemplateLine(row: EstimateTemplateLineRow): EstimateTemplateLine {
+  return fillEstimateTemplateLine({
+    id: row.id,
+    templateId: row.template_id,
+    catalogItemId: row.catalog_item_id,
+    title: row.title ?? "",
+    description: row.description,
+    quantity: Number(row.quantity),
+    unit: row.unit,
+    unitCost: Number(row.unit_cost),
+    sortOrder: row.sort_order,
+    groupName: row.group_name ?? "",
+    optional: Boolean(row.optional),
+    selected: row.selected ?? true,
+    taxable: row.taxable ?? true,
+  });
+}
+
+export function estimateTemplatePatch(patch: Partial<EstimateTemplate>) {
+  const row: Database["public"]["Tables"]["estimate_templates"]["Update"] = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.description !== undefined) row.description = patch.description;
+  if (patch.market !== undefined) row.market = patch.market;
+  if (patch.intro !== undefined) row.intro = patch.intro;
+  if (patch.terms !== undefined) row.terms = patch.terms;
+  if (patch.notes !== undefined) row.notes = patch.notes;
+  if (patch.taxRate !== undefined) row.tax_rate = patch.taxRate;
+  if (patch.discountKind !== undefined) row.discount_kind = patch.discountKind;
+  if (patch.discountValue !== undefined) row.discount_value = patch.discountValue;
+  if (patch.depositKind !== undefined) row.deposit_kind = patch.depositKind;
+  if (patch.depositValue !== undefined) row.deposit_value = patch.depositValue;
+  if (patch.updatedAt !== undefined) row.updated_at = patch.updatedAt;
+  return row;
+}
+
+export function estimateTemplateLinePatch(patch: Partial<EstimateTemplateLine>) {
+  const row: Database["public"]["Tables"]["estimate_template_lines"]["Update"] = {};
+  if (patch.catalogItemId !== undefined) row.catalog_item_id = patch.catalogItemId;
+  if (patch.title !== undefined) row.title = patch.title;
+  if (patch.description !== undefined) row.description = patch.description;
+  if (patch.quantity !== undefined) row.quantity = patch.quantity;
+  if (patch.unit !== undefined) row.unit = patch.unit;
+  if (patch.unitCost !== undefined) row.unit_cost = patch.unitCost;
+  if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder;
+  if (patch.groupName !== undefined) row.group_name = patch.groupName;
+  if (patch.optional !== undefined) row.optional = patch.optional;
+  if (patch.selected !== undefined) row.selected = patch.selected;
+  if (patch.taxable !== undefined) row.taxable = patch.taxable;
+  return row;
 }
 
 export function estimatePatch(patch: Partial<Estimate>) {

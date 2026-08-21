@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -33,10 +34,24 @@ import {
 } from "@/lib/types";
 
 export default function EstimatesPage() {
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <EstimatesList />
+    </Suspense>
+  );
+}
+
+function EstimatesList() {
   const crm = useCrm();
+  const searchParams = useSearchParams();
+  const fromTemplate = searchParams.get("from") ?? "";
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<EstimateStatus | "all">("all");
   const [create, setCreate] = useState(false);
+
+  useEffect(() => {
+    if (fromTemplate) setCreate(true);
+  }, [fromTemplate]);
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -94,6 +109,9 @@ export default function EstimatesPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Button nativeButton={false} variant="outline" render={<Link href="/estimates/templates" />}>
+              Templates
+            </Button>
             <Button onClick={() => setCreate(true)}>New estimate</Button>
           </div>
         }
@@ -105,7 +123,7 @@ export default function EstimatesPage() {
           description={
             query || status !== "all"
               ? "Clear the search or status filter."
-              : "Draft a proposal from the price book, then send it to the owner."
+              : "Draft a proposal from a company template or the price book, then send it to the owner."
           }
           action={<Button onClick={() => setCreate(true)}>New estimate</Button>}
         />
@@ -160,7 +178,11 @@ export default function EstimatesPage() {
         . Totals include tax and skip optional lines that are not selected.
       </p>
 
-      <CreateEstimateDialog open={create} onOpenChange={setCreate} />
+      <CreateEstimateDialog
+        open={create}
+        onOpenChange={setCreate}
+        defaultTemplateId={fromTemplate || undefined}
+      />
     </div>
   );
 }

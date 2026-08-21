@@ -342,6 +342,15 @@ function SearchTrigger() {
               ))}
             </CommandGroup>
             <CommandGroup heading="Estimates">
+              <CommandItem
+                value="estimate templates company"
+                onSelect={() => {
+                  setOpen(false);
+                  router.push("/estimates/templates");
+                }}
+              >
+                Company templates
+              </CommandItem>
               {estimates.map((estimate) => (
                 <CommandItem
                   key={estimate.id}
