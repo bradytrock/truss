@@ -14,6 +14,7 @@ import { isBusinessDevelopment } from "@/lib/bd";
 import { acceptedAmountForJob } from "@/lib/estimate-totals";
 import { workMarket } from "@/lib/market";
 import { boardValue, workColumnFor } from "@/lib/work-board";
+import { dedupeJobsByOpportunity } from "@/lib/job-record";
 
 export default function JobsPage() {
   return (
@@ -54,7 +55,7 @@ function JobsBoardPage() {
     closeJob();
   }, [closeJob, crm.hydrated, jobId, openJob]);
 
-  const active = crm.jobs.filter((job) => {
+  const active = dedupeJobsByOpportunity(crm.jobs).filter((job) => {
     const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
     const column = workColumnFor(job, opportunity);
     return column !== "complete" && column !== "lost";

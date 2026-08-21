@@ -910,7 +910,7 @@ export function CreateJobDialog({
   const [status, setStatus] = useState<JobStatus>("precon");
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [projectManager, setProjectManager] = useState(user.name || "Elena Voss");
-  const [superintendent, setSuperintendent] = useState("Tom Brennan");
+  const [superintendent, setSuperintendent] = useState("");
   const [market, setJobMarket] = useState<JobMarket>("residential");
 
   const contact = contacts.find((item) => item.id === contactId);

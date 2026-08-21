@@ -208,7 +208,7 @@ export function jobDraftFromOpportunity(
     contractValue: opportunity.value,
     startDate: (opportunity.createdAt || new Date().toISOString()).slice(0, 10),
     substantialCompletion: null,
-    superintendent: "Tom Brennan",
+    superintendent: "",
     projectManager: extras?.projectManager || opportunity.estimator,
     location: opportunity.location,
     ownerStaffId: extras?.ownerStaffId || opportunity.ownerStaffId,
@@ -224,11 +224,54 @@ export function jobDraftFromOpportunity(
   };
 }
 
-export function jobsFromOpenLeads(opportunities: Opportunity[], jobs: Job[]): Job[] {
+export function jobsFromOpenLeads(
+  opportunities: Opportunity[],
+  jobs: Pick<Job, "opportunityId">[],
+): Job[] {
   const linked = new Set(jobs.map((job) => job.opportunityId).filter(Boolean));
   return opportunities
     .filter((opportunity) => opportunity.stage !== "lost" && !linked.has(opportunity.id))
     .map((opportunity) => fillJobRecord(jobDraftFromOpportunity(opportunity), opportunity));
+}
+
+function isSyntheticLeadJob(job: Pick<Job, "id">) {
+  return job.id.startsWith("job_lead_");
+}
+
+export function preferLeadJob(a: Job, b: Job) {
+  const aSynth = isSyntheticLeadJob(a) ? 1 : 0;
+  const bSynth = isSyntheticLeadJob(b) ? 1 : 0;
+  if (aSynth !== bSynth) return aSynth < bSynth ? a : b;
+  if (a.contractValue !== b.contractValue) return a.contractValue >= b.contractValue ? a : b;
+  return a.id.localeCompare(b.id) <= 0 ? a : b;
+}
+
+export function duplicateLeadJobs(jobs: Job[]) {
+  const groups = new Map<string, Job[]>();
+  for (const job of jobs) {
+    if (!job.opportunityId) continue;
+    const list = groups.get(job.opportunityId) ?? [];
+    list.push(job);
+    groups.set(job.opportunityId, list);
+  }
+  return [...groups.values()]
+    .map((group) => {
+      const keep = group.reduce(preferLeadJob);
+      return { keep, drop: group.filter((job) => job.id !== keep.id) };
+    })
+    .filter((group) => group.drop.length > 0);
+}
+
+/** One board card per lead. A costing job is created with the lead; a reload must not add a second. */
+export function dedupeJobsByOpportunity(jobs: Job[]) {
+  const extras = new Set(duplicateLeadJobs(jobs).flatMap((group) => group.drop.map((job) => job.id)));
+  if (extras.size === 0) return jobs;
+  return jobs.filter((job) => !extras.has(job.id));
+}
+
+export function remapDroppedJobId(jobId: string | null | undefined, dropped: Map<string, string>) {
+  if (!jobId) return jobId ?? null;
+  return dropped.get(jobId) ?? jobId;
 }
 
 export function costCenterLabel(job: Job, opportunities: Opportunity[]) {

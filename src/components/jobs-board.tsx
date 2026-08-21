@@ -34,6 +34,7 @@ import {
   type WorkColumn,
 } from "@/lib/work-board";
 import { assignmentOptions, canAssignLeadsToAnyone } from "@/lib/visibility";
+import { dedupeJobsByOpportunity } from "@/lib/job-record";
 import type { Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -64,7 +65,7 @@ export function JobsBoard({
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return crm.jobs.filter((job) => {
+    return dedupeJobsByOpportunity(crm.jobs).filter((job) => {
       if (!needle) return true;
       const customer = crm.customerName(job);
       const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
