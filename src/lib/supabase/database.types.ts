@@ -441,6 +441,8 @@ export type Database = {
           state: string;
           postal_code: string;
           share_token: string;
+          signature_name: string;
+          signature_image: string;
         };
         Insert: {
           id?: string;
@@ -469,6 +471,8 @@ export type Database = {
           state?: string;
           postal_code?: string;
           share_token?: string;
+          signature_name?: string;
+          signature_image?: string;
         };
         Update: Partial<Database["public"]["Tables"]["estimates"]["Insert"]>;
         Relationships: [];
@@ -938,7 +942,7 @@ export type Database = {
         Returns: Json;
       };
       sign_shared_estimate: {
-        Args: { p_token: string };
+        Args: { p_token: string; p_signer_name: string; p_signature: string };
         Returns: Json;
       };
       invite_preview: {

@@ -77,7 +77,7 @@ function EstimatesList() {
       <PageHeader
         eyebrow="Preconstruction"
         title="Estimates"
-        description="Write a proposal the way a production crew actually prices work: sections, optional lines, tax, and a client preview. Send it, get it accepted, convert it to an invoice."
+        description="Write a proposal the way a production crew actually prices work: sections, optional lines, tax, and a client preview. Send it for signature, collect the drawing on the estimate, convert it to an invoice."
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Input

@@ -10,7 +10,7 @@ You are implementing the **estimate writing** surface of **Truss**, a contractor
 
 Truss already has contacts (homeowners first; no company required), pipeline, jobs, a CSI-style price book, invoices, calendar, and training. Estimates sit between a lead/job and an invoice.
 
-The web writer is a Joist-style office/field tool: you write a proposal in sections, mark some lines optional, set tax / discount / deposit / terms, preview what the homeowner sees, send it, mark it accepted, and convert included lines to an invoice.
+The web writer is a Joist-style office/field tool: you write a proposal in sections, mark some lines optional, set tax / discount / deposit / terms, preview what the homeowner sees, send it for signature, collect a drawn signature (office or share link), and convert included lines to an invoice.
 
 **Do not build:** card payments, satellite takeoff / roof measurement, SMS, e-sign vendors, public client magic links, or a second catalog. Deposit is informational (amount due after accept), not a charge. Convert-to-invoice copies line items; it does not collect money.
 
@@ -18,11 +18,11 @@ The unsigned web demo hydrates from in-memory Northline seed and mutates locally
 
 ## Status machine
 
-`draft` → **Send proposal** → `sent` → (optional) `viewed` → **Mark accepted** → `accepted` **or** **Decline** → `declined`.
+`draft` → **Send for signature** → `sent` → (optional) `viewed` → **Collect signature** → `accepted` **or** **Decline** → `declined`.
 
-- `draft` — full edit (name, client, job site, lines, tax, discount, deposit, intro, terms, notes).
-- `sent` / `viewed` — lock prices and structure. Homeowner (and office) may still toggle **optional line selected**. Office may accept or decline.
-- `accepted` — read-only except convert to invoice. Optional selection is frozen.
+- `draft` — full edit (name, client, job site, lines, tax, discount, deposit, intro, terms, notes). Office may still **Collect signature** in person.
+- `sent` / `viewed` — lock prices and structure. Homeowner (and office) may still toggle **optional line selected**. Homeowner signs on the share link (printed name + drawn signature). Office may collect the same signature or decline.
+- `accepted` — read-only except convert to invoice. Optional selection is frozen. `signatureName` / `signatureImage` print on the proposal and PDF.
 - `declined` — read-only.
 
 **Convert to invoice** is allowed from `sent`, `viewed`, or `accepted` if no invoice already points at this estimate. Do not convert a draft. Do not convert if there are zero included lines. Conversion does **not** change estimate status.
@@ -85,8 +85,10 @@ Unselected optional work should be summarized (“$X in optional work is not in 
 | intro | string | Cover note the homeowner reads |
 | terms | string | Default: “This proposal is good through the valid-until date. Work starts after you accept and pay any deposit. Changes on site will be written as a change order before we proceed.” |
 | street, city, state, postalCode | string | Job site on the proposal (not the office letterhead) |
+| signatureName | string | Printed name under the drawing. Empty until signed. |
+| signatureImage | string | PNG data URL of the drawn signature. Empty until signed. Prints on the proposal and PDF. |
 
-Postgres: `estimates` plus columns from `supabase/migrations/20260819290000_estimate_writer.sql` (`contact_id`, `tax_rate`, `discount_kind`, `discount_value`, `deposit_kind`, `deposit_value`, `intro`, `terms`, `street`, `city`, `state`, `postal_code`). If those columns are missing, keep working locally and tell the user to run that SQL.
+Postgres: `estimates` plus columns from `supabase/migrations/20260819290000_estimate_writer.sql` (`contact_id`, `tax_rate`, `discount_kind`, `discount_value`, `deposit_kind`, `deposit_value`, `intro`, `terms`, `street`, `city`, `state`, `postal_code`) and `supabase/migrations/20260821200000_estimate_signature.sql` (`signature_name`, `signature_image`). If those columns are missing, keep working locally and tell the user to run that SQL.
 
 ### Estimate line
 

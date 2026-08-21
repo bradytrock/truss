@@ -118,6 +118,8 @@ export type SharedEstimatePayload = {
     state: string;
     postalCode: string;
     shareToken: string;
+    signatureName: string;
+    signatureImage: string;
   };
   lines: Array<{
     id: string;
@@ -231,6 +233,8 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
       state: asString(estimate.state),
       postalCode: asString(estimate.postalCode),
       shareToken: asString(estimate.shareToken),
+      signatureName: asString(estimate.signatureName),
+      signatureImage: asString(estimate.signatureImage),
     },
     lines: raw.lines.filter(isRecord).map((line, index) => ({
       id: asString(line.id, `line-${index}`),

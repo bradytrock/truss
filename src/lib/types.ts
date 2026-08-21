@@ -362,6 +362,8 @@ export interface Estimate {
   state: string;
   postalCode: string;
   shareToken: string;
+  signatureName: string;
+  signatureImage: string;
 }
 
 export interface EstimateLine {

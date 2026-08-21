@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { seedState } from "@/lib/seed";
-import { isMissingEstimateWriter, isMissingShareToken, isMissingFinancials } from "@/lib/supabase/schema-errors";
+import { isMissingEstimateWriter, isMissingShareToken, isMissingFinancials, isMissingSignatureColumn } from "@/lib/supabase/schema-errors";
 import type { Database } from "@/lib/supabase/database.types";
 
 type Client = SupabaseClient<Database>;
@@ -126,10 +126,18 @@ export async function insertOperations(
         state: estimate.state,
         postal_code: estimate.postalCode,
         share_token: estimate.shareToken,
+        signature_name: estimate.signatureName,
+        signature_image: estimate.signatureImage,
       },
     ];
   });
   let { error: estimateError } = await supabase.from("estimates").insert(estimateRows);
+  if (estimateError && isMissingSignatureColumn(estimateError)) {
+    const retry = await supabase.from("estimates").insert(
+      estimateRows.map(({ signature_name: _name, signature_image: _image, ...row }) => row),
+    );
+    estimateError = retry.error;
+  }
   if (estimateError && isMissingShareToken(estimateError)) {
     const retry = await supabase.from("estimates").insert(
       estimateRows.map(({ share_token: _shareToken, ...row }) => row),

@@ -66,6 +66,7 @@ import { createPhotoReport } from "@/lib/photo-report";
 import { leadSourceChoices, leadSourceLabel } from "@/lib/leads";
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
 import { acceptedAmountForJob, amountForEstimate } from "@/lib/estimate-totals";
+import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { workMarket } from "@/lib/market";
 import { boardValue } from "@/lib/work-board";
 import { COURSE } from "@/lib/training/engine";
@@ -924,6 +925,13 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                         )}
                       </span>
                     </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {hasEstimateSignature(estimate)
+                        ? `Signed by ${estimate.signatureName}`
+                        : estimate.status === "declined"
+                          ? "Declined"
+                          : "Open to collect a signature"}
+                    </p>
                   </li>
                 ))}
               </ul>

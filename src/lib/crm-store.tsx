@@ -17,7 +17,7 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
 import { retireDemoStaff } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingSignatureColumn, missingSignatureMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson } from "@/lib/job-record";
@@ -527,7 +527,7 @@ type CrmContextValue = CrmState & {
   }) => Promise<Estimate>;
   updateEstimate: (id: string, patch: Partial<Estimate>) => Promise<void>;
   sendEstimate: (id: string) => Promise<void>;
-  acceptEstimate: (id: string) => Promise<void>;
+  acceptEstimate: (id: string, signature?: { name: string; image: string }) => Promise<void>;
   declineEstimate: (id: string) => Promise<void>;
   markEstimateViewed: (id: string) => Promise<void>;
   ensureEstimateShareToken: (id: string) => Promise<string>;
@@ -2201,6 +2201,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     const { error } = await supabase.from("estimates").update(estimatePatch(patch)).eq("id", id);
     if (error) {
+      if (isMissingSignatureColumn(error) && (patch.signatureName !== undefined || patch.signatureImage !== undefined)) {
+        apply();
+        toast.message(missingSignatureMessage());
+        return;
+      }
       if (isMissingEstimateWriter(error)) {
         apply();
         toast.message(missingEstimateWriterMessage());
@@ -2279,29 +2284,51 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const acceptEstimate = useCallback(
-    async (id: string) => {
+    async (id: string, signature?: { name: string; image: string }) => {
       const current = state.estimates.find((estimate) => estimate.id === id);
       if (!current) return;
-      const acceptedAt = new Date().toISOString();
+      const acceptedAt = current.acceptedAt || new Date().toISOString();
+      const signatureName = signature?.name.trim() || current.signatureName;
+      const signatureImage = signature?.image || current.signatureImage;
       const apply = () =>
         setState((prev) => ({
           ...prev,
           estimates: prev.estimates.map((estimate) =>
-            estimate.id === id ? { ...estimate, status: "accepted" as const, acceptedAt } : estimate
+            estimate.id === id
+              ? {
+                  ...estimate,
+                  status: "accepted" as const,
+                  acceptedAt,
+                  signatureName,
+                  signatureImage,
+                }
+              : estimate,
           ),
         }));
       const supabase = maybeClient();
       if (supabase) {
-        const { error } = await supabase
-          .from("estimates")
-          .update({ status: "accepted", accepted_at: acceptedAt })
-          .eq("id", id);
+        const payload = {
+          status: "accepted" as const,
+          accepted_at: acceptedAt,
+          signature_name: signatureName,
+          signature_image: signatureImage,
+        };
+        let { error } = await supabase.from("estimates").update(payload).eq("id", id);
+        if (error && isMissingSignatureColumn(error)) {
+          const retry = await supabase
+            .from("estimates")
+            .update({ status: "accepted", accepted_at: acceptedAt })
+            .eq("id", id);
+          error = retry.error;
+          if (!retry.error) toast.message(missingSignatureMessage());
+        }
         if (error) {
           toast.error(error.message);
           return;
         }
       }
       apply();
+      if (current.status === "accepted") return;
       const opportunityId = current.opportunityId || (await ensureLeadForEstimate(current));
       if (opportunityId && opportunityId !== current.opportunityId) {
         await updateEstimate(id, { opportunityId });
@@ -2339,7 +2366,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           entityType: "opportunity",
           entityId: opportunityId,
           type: "note",
-          body: `Owner signed proposal ${current.number}. Job value updated from the signed estimate.`,
+          body: signatureName
+            ? `Owner signed proposal ${current.number} (${signatureName}). Job value updated from the signed estimate.`
+            : `Owner signed proposal ${current.number}. Job value updated from the signed estimate.`,
         });
       }
     },

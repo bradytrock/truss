@@ -145,6 +145,26 @@ export function missingLogoMessage() {
   return `Saved in this browser. Run ${COMPANY_LOGO_SQL} in the SQL editor so the logo persists and prints on documents.`;
 }
 
+export const ESTIMATE_SIGNATURE_SQL = "supabase/migrations/20260821200000_estimate_signature.sql";
+
+export function isMissingSignatureColumn(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  if (message.includes("signature_name") || message.includes("signature_image")) return true;
+  return (
+    message.includes("sign_shared_estimate") &&
+    (error.code === "PGRST202" ||
+      error.code === "PGRST204" ||
+      error.code === "PGRST205" ||
+      message.includes("schema cache") ||
+      message.includes("Could not find the"))
+  );
+}
+
+export function missingSignatureMessage() {
+  return `Saved in this browser. Run ${ESTIMATE_SIGNATURE_SQL} in the SQL editor so the client signature stays on the estimate and PDF.`;
+}
+
 export function missingPrimaryContactHint() {
   return `Run ${RESIDENTIAL_ENUMS_SQL} in the SQL editor so jobs can store a homeowner, then try again.`;
 }

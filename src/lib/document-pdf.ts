@@ -2,9 +2,10 @@ import type { CompanySettings, Estimate, EstimateLine, Invoice, InvoiceLine, Pay
 import { estimateTotals, groupEstimateLines, lineAmount, lineIncluded } from "@/lib/estimate-totals";
 import { formatDate, formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
-import { writePdfLetterhead } from "@/lib/letterhead-pdf";
+import { writePdfLetterhead, loadLogoForPdf } from "@/lib/letterhead-pdf";
 import { invoiceBalance, invoiceTotal, lineAmount as invoiceLineAmount, paidOnInvoice } from "@/lib/money";
 import { downloadBlob } from "@/lib/share";
+import { hasEstimateSignature } from "@/lib/estimate-signature";
 
 type Doc = {
   setFont: (face: string, style?: string) => void;
@@ -186,6 +187,48 @@ export async function downloadEstimatePdf(input: {
     doc.text("TERMS", 54, y);
     y += 14;
     y = writeParagraph(doc, input.estimate.terms, y);
+  }
+
+  y += 10;
+  y = ensureSpace(doc, y, 96);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(90, 90, 90);
+  doc.text("AUTHORIZATION", 54, y);
+  y += 16;
+  if (hasEstimateSignature(input.estimate)) {
+    const ink = await loadLogoForPdf(input.estimate.signatureImage);
+    const sigWidth = 220;
+    const sigHeight = ink ? Math.min(56, (ink.height / ink.width) * sigWidth) : 48;
+    y = ensureSpace(doc, y, sigHeight + 36);
+    if (ink) {
+      doc.addImage(ink.data, ink.format, 54, y, sigWidth, sigHeight);
+    }
+    y += sigHeight + 8;
+    doc.setTextColor(200, 200, 200);
+    doc.line(54, y, 280, y);
+    doc.line(300, y, right, y);
+    y += 14;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(70, 70, 70);
+    doc.text(input.estimate.signatureName || "Homeowner", 54, y);
+    doc.text(formatDate(input.estimate.acceptedAt), 300, y);
+    y += 12;
+    doc.setTextColor(120, 120, 120);
+    doc.text("Homeowner signature", 54, y);
+    doc.text("Date signed", 300, y);
+  } else {
+    y += 36;
+    doc.setTextColor(200, 200, 200);
+    doc.line(54, y, 280, y);
+    doc.line(300, y, right, y);
+    y += 14;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(120, 120, 120);
+    doc.text("Homeowner signature", 54, y);
+    doc.text("Date", 300, y);
   }
 
   downloadBlob(doc.output("blob"), `${input.estimate.number}.pdf`);

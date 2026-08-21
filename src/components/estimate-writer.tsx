@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { ProposalDocument } from "@/components/proposal-document";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
+import { CollectSignatureDialog } from "@/components/signature-pad";
 import { EstimateStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -72,6 +73,7 @@ import {
   type AdjustmentKind,
 } from "@/lib/estimate-totals";
 import { downloadEstimatePdf } from "@/lib/document-pdf";
+import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { shareUrl } from "@/lib/share";
 import { formatMoney } from "@/lib/format";
 import { billingEstimate, isResidentialMarket, workMarket } from "@/lib/market";
@@ -367,6 +369,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   const [emptySections, setEmptySections] = useState<string[]>([]);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
+  const [signOpen, setSignOpen] = useState(false);
 
   const lines = linesForEstimate(crm.estimateLines, estimate.id);
   const groups = groupEstimateLines(lines);
@@ -481,34 +484,34 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       </Button>
       {estimate.status === "draft" ? (
         <Button disabled={pending || totals.includedCount === 0} onClick={() => void openShare(true)}>
-          Send proposal
+          Send for signature
         </Button>
       ) : (
         <Button variant="outline" disabled={pending} onClick={() => void openShare(false)}>
           Share
         </Button>
       )}
+      {estimate.status === "draft" ||
+      estimate.status === "sent" ||
+      estimate.status === "viewed" ||
+      (estimate.status === "accepted" && !hasEstimateSignature(estimate)) ? (
+        <Button
+          disabled={pending || totals.includedCount === 0}
+          onClick={() => setSignOpen(true)}
+        >
+          {estimate.status === "accepted" ? "Add signature" : "Collect signature"}
+        </Button>
+      ) : null}
       {estimate.status === "sent" || estimate.status === "viewed" ? (
-        <>
-          <Button
-            onClick={() => {
-              void crm.acceptEstimate(estimate.id).then(() => {
-                toast.success("Signed. The job value on the card is the signed estimate total.");
-              });
-            }}
-          >
-            Mark signed
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              void crm.declineEstimate(estimate.id);
-              toast.message("Marked declined.");
-            }}
-          >
-            Decline
-          </Button>
-        </>
+        <Button
+          variant="outline"
+          onClick={() => {
+            void crm.declineEstimate(estimate.id);
+            toast.message("Marked declined.");
+          }}
+        >
+          Decline
+        </Button>
       ) : null}
       {canConvert ? (
         <Button disabled={pending} variant={estimate.status === "accepted" ? "default" : "outline"} onClick={() => void handleConvert()}>
@@ -987,9 +990,26 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         open={shareOpen}
         onOpenChange={setShareOpen}
         title={`Share ${estimate.number}`}
-        description="Copy this link for the homeowner. They can review the proposal, pick optional items, and download a PDF — no login required."
+        description="Send this link so the homeowner can review the proposal, pick optional items, and sign. The signature is stored on the estimate and prints on the PDF."
         url={estimate.shareToken ? shareUrl("e", estimate.shareToken) : ""}
         onDownloadPdf={downloadPdf}
+      />
+      <CollectSignatureDialog
+        open={signOpen}
+        onOpenChange={setSignOpen}
+        defaultName={customer === "—" ? "" : customer}
+        estimateNumber={estimate.number}
+        pending={pending}
+        onSubmit={async ({ name, image }) => {
+          setPending(true);
+          try {
+            await crm.acceptEstimate(estimate.id, { name, image });
+            setSignOpen(false);
+            toast.success("Signed. The signature is on the estimate and the PDF.");
+          } finally {
+            setPending(false);
+          }
+        }}
       />
       <Dialog open={saveTemplateOpen} onOpenChange={setSaveTemplateOpen}>
         <DialogContent>
