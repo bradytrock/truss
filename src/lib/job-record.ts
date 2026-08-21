@@ -3,6 +3,7 @@ import { parseMarket, workMarket } from "@/lib/market";
 import type { Json } from "@/lib/supabase/database.types";
 import {
   STAGE_LABELS,
+  isNorthlineDemoName,
   type Job,
   type JobCustomField,
   type LeadSource,
@@ -166,7 +167,7 @@ export function fillJobRecord(job: JobDraft, opportunity?: Opportunity | null): 
   const assigned = uniqueNames(
     job.assigned?.length
       ? job.assigned
-      : [job.projectManager, job.superintendent]
+      : [job.projectManager, job.superintendent].filter((name) => !isNorthlineDemoName(name)),
   );
   const related = uniqueIds(job.relatedContactIds ?? []).filter(
     (id) => id && id !== job.primaryContactId
@@ -180,7 +181,6 @@ export function fillJobRecord(job: JobDraft, opportunity?: Opportunity | null): 
     city: job.city?.trim() || opportunity?.city?.trim() || parsed.city,
     state: job.state?.trim() || opportunity?.state?.trim() || parsed.state,
     postalCode: job.postalCode?.trim() || opportunity?.postalCode?.trim() || parsed.postalCode,
-    salesRep: job.salesRep?.trim() || opportunity?.estimator || "",
     assigned,
     subcontractorIds: uniqueIds(job.subcontractorIds ?? []),
     relatedContactIds: related,
@@ -191,6 +191,13 @@ export function fillJobRecord(job: JobDraft, opportunity?: Opportunity | null): 
     deletedAt: job.deletedAt ?? null,
     deletedReason: job.deletedReason ?? "",
     deletedBy: job.deletedBy ?? "",
+    superintendent: isNorthlineDemoName(job.superintendent ?? "") ? "" : (job.superintendent ?? ""),
+    salesRep:
+      job.salesRep?.trim() && !isNorthlineDemoName(job.salesRep)
+        ? job.salesRep.trim()
+        : opportunity?.estimator && !isNorthlineDemoName(opportunity.estimator)
+          ? opportunity.estimator
+          : "",
     location:
       formatJobSite({
         street: job.street?.trim() || opportunity?.street?.trim() || parsed.street,
@@ -285,6 +292,26 @@ export function remapDroppedJobId(jobId: string | null | undefined, dropped: Map
 
 export function isDeletedJob(job: Pick<Job, "deletedAt">) {
   return Boolean(job.deletedAt);
+}
+
+/** Drop sample Northline names that leaked onto a live company's jobs. */
+export function stripNorthlineCrew(job: Job, keepName: string): Job {
+  const assigned = uniqueNames(job.assigned).filter((name) => !isNorthlineDemoName(name));
+  const superintendent = isNorthlineDemoName(job.superintendent) ? "" : job.superintendent;
+  const projectManager = isNorthlineDemoName(job.projectManager)
+    ? keepName.trim() || assigned[0] || ""
+    : job.projectManager;
+  const salesRep = isNorthlineDemoName(job.salesRep) ? keepName.trim() || "" : job.salesRep;
+  if (
+    assigned.length === job.assigned.length &&
+    assigned.every((name, index) => name === job.assigned[index]) &&
+    superintendent === job.superintendent &&
+    projectManager === job.projectManager &&
+    salesRep === job.salesRep
+  ) {
+    return job;
+  }
+  return { ...job, assigned, superintendent, projectManager, salesRep };
 }
 
 export function costCenterLabel(job: Job, opportunities: Opportunity[]) {

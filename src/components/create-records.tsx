@@ -909,7 +909,7 @@ export function CreateJobDialog({
   const [location, setLocation] = useState("Denver, CO");
   const [status, setStatus] = useState<JobStatus>("precon");
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
-  const [projectManager, setProjectManager] = useState(user.name || "Elena Voss");
+  const [projectManager, setProjectManager] = useState(user.name);
   const [superintendent, setSuperintendent] = useState("");
   const [market, setJobMarket] = useState<JobMarket>("residential");
 

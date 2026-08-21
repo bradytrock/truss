@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
-import { retireDemoStaff } from "@/lib/supabase/retire-demo-staff";
+import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
 import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingSignatureColumn, missingSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
@@ -840,7 +840,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
       const pruned = await pruneDuplicateLeadJobs(supabase, jobs);
-      jobs = pruned.jobs;
+      jobs = await scrubNorthlineCrewFromJobs(supabase, pruned.jobs, profile.full_name);
       const remapJob = (jobId: string | null) => remapDroppedJobId(jobId, pruned.dropped);
       setState({
         ...book.state,

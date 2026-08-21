@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { namesMatch } from "@/lib/seats";
-import { isNorthlineDemoName, NORTHLINE_TEAMS } from "@/lib/types";
+import { stripNorthlineCrew } from "@/lib/job-record";
+import { isNorthlineDemoName, NORTHLINE_TEAMS, type Job } from "@/lib/types";
 import type { Database } from "@/lib/supabase/database.types";
 
 type Client = SupabaseClient<Database>;
@@ -110,4 +111,26 @@ export async function retireDemoStaff(
   }
 
   return true;
+}
+
+export async function scrubNorthlineCrewFromJobs(supabase: Client, jobs: Job[], keepName: string) {
+  const next = jobs.map((job) => stripNorthlineCrew(job, keepName));
+  for (let index = 0; index < jobs.length; index += 1) {
+    const job = next[index];
+    const previous = jobs[index];
+    if (!job || !previous || job === previous) continue;
+    const { error } = await supabase
+      .from("jobs")
+      .update({
+        assigned: job.assigned,
+        superintendent: job.superintendent,
+        project_manager: job.projectManager,
+        sales_rep: job.salesRep,
+      } as never)
+      .eq("id", job.id);
+    if (error && !ignoreMissing(error)) {
+      // Keep the in-memory scrub even if this row cannot persist yet.
+    }
+  }
+  return next;
 }
