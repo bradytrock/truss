@@ -2230,6 +2230,7 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+#variable_conflict use_variable
 declare
   new_company_id uuid;
   new_staff_id uuid;
@@ -2297,15 +2298,15 @@ begin
             role = excluded.role,
             staff_id = excluded.staff_id;
 
-      update public.team_members
+      update public.team_members tm
       set
         name = v_full_name,
         title = v_title,
         initials = v_initials,
-        email = coalesce(p_email, email),
+        email = coalesce(p_email, tm.email),
         invite_expires_at = null,
         locked = false
-      where id = invite_staff;
+      where tm.id = invite_staff;
 
       delete from public.account_invites where staff_id = invite_staff;
       return;
@@ -2381,6 +2382,7 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+#variable_conflict use_variable
 declare
   uid uuid := auth.uid();
   user_email text;
@@ -2434,7 +2436,7 @@ begin
     || coalesce(upper(left(split_part(v_full_name, ' ', 2), 1)), '');
 
   insert into public.profiles (id, company_id, full_name, title, initials, role, staff_id)
-  values (uid, invite_company, v_full_name, seat_title, v_initials, invite_role, invite_staff)
+  select uid, invite_company, v_full_name, seat_title, v_initials, invite_role, invite_staff
   on conflict (id) do update
     set company_id = excluded.company_id,
         full_name = excluded.full_name,
@@ -2443,15 +2445,15 @@ begin
         role = excluded.role,
         staff_id = excluded.staff_id;
 
-  update public.team_members
+  update public.team_members tm
   set
     name = v_full_name,
     title = seat_title,
     initials = v_initials,
-    email = coalesce(user_email, team_members.email),
+    email = coalesce(user_email, tm.email),
     invite_expires_at = null,
     locked = false
-  where id = invite_staff;
+  where tm.id = invite_staff;
 
   delete from public.account_invites where staff_id = invite_staff;
 
@@ -2488,13 +2490,11 @@ returns table (
   email text,
   expires_at timestamptz
 )
-language plpgsql
+language sql
 stable
 security definer
 set search_path = public
 as $$
-begin
-  return query
   select
     c.id,
     c.name,
@@ -2510,7 +2510,6 @@ begin
     and i.expires_at > now()
     and coalesce(tm.locked, false) = false
   limit 1;
-end;
 $$;
 
 alter function public.invite_preview(text) owner to postgres;

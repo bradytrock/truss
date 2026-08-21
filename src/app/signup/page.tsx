@@ -82,6 +82,7 @@ function SignupForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [alreadySignedIn, setAlreadySignedIn] = useState(false);
 
   useEffect(() => {
     if (!inviteToken) {
@@ -116,14 +117,7 @@ function SignupForm() {
 
       const { data: sessionData } = await supabase.auth.getSession();
       if (sessionData.session) {
-        const claimed = await claimInviteIfNeeded(supabase, inviteToken, row.company_id);
-        if (!claimed.ok) {
-          setInviteError(claimed.message);
-          return;
-        }
-        toast.success(`Joined ${row.company_name}`);
-        router.replace("/");
-        router.refresh();
+        setAlreadySignedIn(true);
       }
     })();
     return () => {
@@ -143,6 +137,18 @@ function SignupForm() {
     setPending(true);
     try {
       const supabase = createClient();
+      if (alreadySignedIn && inviteToken) {
+        const claimed = await claimInviteIfNeeded(supabase, inviteToken, invite?.company_id);
+        if (!claimed.ok) {
+          setFormError(claimed.message);
+          toast.error(claimed.message);
+          return;
+        }
+        toast.success(invite ? `Joined ${invite.company_name}` : "Joined company");
+        router.replace("/");
+        router.refresh();
+        return;
+      }
       const origin = window.location.origin;
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -217,7 +223,9 @@ function SignupForm() {
   const joining = Boolean(invite);
   const titleText = joining ? `Join ${invite?.company_name}` : "Create your GC workspace";
   const description = joining
-    ? `This invite is for ${invite?.email} as ${invite?.seat_title || SEAT_ROLE_LABELS[invite?.seat_role ?? "project_manager"]}. You will land on the existing company, not a new one.`
+    ? alreadySignedIn
+      ? `You're already signed in. Join ${invite?.company_name} as ${invite?.email} — you will land on that company, not a new one.`
+      : `This invite is for ${invite?.email} as ${invite?.seat_title || SEAT_ROLE_LABELS[invite?.seat_role ?? "project_manager"]}. You will land on the existing company, not a new one.`
     : "A company, your profile, and your seat are created in Postgres on first sign-in.";
 
   return (
@@ -291,6 +299,7 @@ function SignupForm() {
               readOnly={joining}
             />
           </div>
+          {alreadySignedIn && joining ? null : (
           <div className="grid gap-1.5">
             <Label htmlFor="password">Password</Label>
             <Input
@@ -300,10 +309,15 @@ function SignupForm() {
               minLength={8}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              required
+              required={!alreadySignedIn}
             />
           </div>
-          <Button type="submit" nativeButton disabled={pending || inviteLoading || Boolean(inviteError && inviteToken)}>
+          )}
+          <Button
+            type="submit"
+            nativeButton
+            disabled={pending || inviteLoading || Boolean(inviteToken && !invite)}
+          >
             {pending ? "Working…" : joining ? "Join company" : "Create account"}
           </Button>
         </form>
