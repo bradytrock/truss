@@ -150,7 +150,7 @@ import { formatJobSite } from "@/lib/leads";
 import { localYmd } from "@/lib/format";
 import { fillPayment, fileToDataUrl } from "@/lib/job-financials";
 import { resolveCustomerName, type CustomerRecord } from "@/lib/parties";
-import { isMissingPhotoReports, missingPhotoReportsMessage } from "@/lib/photo-report";
+import { isMissingPhotoReports, missingPhotoReportsMessage, missingPageShareMessage, isMissingPageShare, parsePageTemplate } from "@/lib/photo-report";
 import { canDeleteJobs, canLoginAs, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 
 const emptyState: CrmState = {
@@ -663,6 +663,7 @@ type CrmContextValue = CrmState & {
   addPhotoReport: (report: PhotoReport) => Promise<PhotoReport>;
   updatePhotoReport: (id: string, patch: Partial<Omit<PhotoReport, "id" | "jobId" | "createdAt">>) => Promise<boolean>;
   deletePhotoReport: (id: string) => Promise<boolean>;
+  ensurePageShareToken: (id: string) => Promise<string>;
   resetDemo: () => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -875,6 +876,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         photoReports: book.state.photoReports.map((report) => ({
           ...report,
           jobId: remapDroppedJobId(report.jobId, pruned.dropped) ?? report.jobId,
+          template: parsePageTemplate(report.template),
+          shareToken: report.shareToken ?? "",
         })),
       });
       setHydrateError(null);
@@ -4350,37 +4353,54 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     async (report: PhotoReport) => {
       const next: PhotoReport = {
         ...report,
+        template: parsePageTemplate(report.template),
+        shareToken: report.shareToken || newShareToken(),
         updatedAt: new Date().toISOString(),
       };
       setState((prev) => ({ ...prev, photoReports: [next, ...prev.photoReports] }));
       const supabase = maybeClient();
       if (!supabase || !user.companyId || user.companyId === "local") return next;
-      const { data, error } = await supabase
-        .from("photo_reports")
-        .insert({
-          id: next.id,
-          company_id: user.companyId,
-          job_id: next.jobId,
-          title: next.title,
-          pages: next.pages as unknown as Json,
-          created_by: next.createdBy,
-          created_at: next.createdAt,
-          updated_at: next.updatedAt,
-        })
-        .select("*")
-        .single();
+      const payload = {
+        id: next.id,
+        company_id: user.companyId,
+        job_id: next.jobId,
+        title: next.title,
+        pages: next.pages as unknown as Json,
+        template: next.template,
+        share_token: next.shareToken,
+        created_by: next.createdBy,
+        created_at: next.createdAt,
+        updated_at: next.updatedAt,
+      };
+      let { data, error } = await supabase.from("photo_reports").insert(payload).select("*").single();
+      if (error && isMissingPageShare(error)) {
+        const { template: _template, share_token: _share, ...legacy } = payload;
+        const retry = await supabase.from("photo_reports").insert(legacy).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.error(missingPageShareMessage());
+      }
       if (error || !data) {
         toast.error(
-          isMissingPhotoReports(error) ? missingPhotoReportsMessage() : error?.message ?? "Could not save the photo report.",
+          isMissingPageShare(error)
+            ? missingPageShareMessage()
+            : isMissingPhotoReports(error)
+              ? missingPhotoReportsMessage()
+              : error?.message ?? "Could not save the page.",
         );
         return next;
       }
       const saved = mapPhotoReport(data);
+      const merged: PhotoReport = {
+        ...saved,
+        shareToken: saved.shareToken || next.shareToken,
+        template: "template" in data && data.template ? parsePageTemplate(data.template) : next.template,
+      };
       setState((prev) => ({
         ...prev,
-        photoReports: prev.photoReports.map((item) => (item.id === next.id ? saved : item)),
+        photoReports: prev.photoReports.map((item) => (item.id === next.id ? merged : item)),
       }));
-      return saved;
+      return merged;
     },
     [user.companyId],
   );
@@ -4401,17 +4421,28 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (!next) return false;
       const supabase = maybeClient();
       if (!supabase || !user.companyId || user.companyId === "local") return true;
-      const { error } = await supabase
-        .from("photo_reports")
-        .update({
-          title: next.title,
-          pages: next.pages as unknown as Json,
-          updated_at: next.updatedAt,
-        })
-        .eq("id", id);
+      const payload = {
+        title: next.title,
+        pages: next.pages as unknown as Json,
+        template: next.template,
+        share_token: next.shareToken,
+        updated_at: next.updatedAt,
+        created_by: next.createdBy,
+      };
+      let { error } = await supabase.from("photo_reports").update(payload).eq("id", id);
+      if (error && isMissingPageShare(error)) {
+        const { template: _template, share_token: _share, ...legacy } = payload;
+        const retry = await supabase.from("photo_reports").update(legacy).eq("id", id);
+        error = retry.error;
+        if (!error) toast.error(missingPageShareMessage());
+      }
       if (error) {
         toast.error(
-          isMissingPhotoReports(error) ? missingPhotoReportsMessage() : error.message || "Could not save the photo report.",
+          isMissingPageShare(error)
+            ? missingPageShareMessage()
+            : isMissingPhotoReports(error)
+              ? missingPhotoReportsMessage()
+              : error.message || "Could not save the page.",
         );
         return false;
       }
@@ -4430,12 +4461,24 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (!supabase || !user.companyId || user.companyId === "local") return true;
       const { error } = await supabase.from("photo_reports").delete().eq("id", id);
       if (error && !isMissingPhotoReports(error)) {
-        toast.error(error.message || "Could not delete the photo report.");
+        toast.error(error.message || "Could not delete the page.");
         return false;
       }
       return true;
     },
     [user.companyId],
+  );
+
+  const ensurePageShareToken = useCallback(
+    async (id: string) => {
+      const current = state.photoReports.find((report) => report.id === id);
+      if (!current) throw new Error("Page not found.");
+      if (current.shareToken) return current.shareToken;
+      const shareToken = newShareToken();
+      await updatePhotoReport(id, { shareToken });
+      return shareToken;
+    },
+    [state.photoReports, updatePhotoReport],
   );
 
   const canEditCompany = Boolean(viewer && canManageSettings(viewer.role, viewer));
@@ -4994,6 +5037,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addPhotoReport,
       updatePhotoReport,
       deletePhotoReport,
+      ensurePageShareToken,
       resetDemo,
       signOut,
     }),
@@ -5089,6 +5133,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addPhotoReport,
       updatePhotoReport,
       deletePhotoReport,
+      ensurePageShareToken,
       resetDemo,
       signOut,
     ]

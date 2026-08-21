@@ -11,6 +11,7 @@ import {
   ChevronsRight,
   Copy,
   ExternalLink,
+  FileText,
   ImageIcon,
   Mail,
   MapPin,
@@ -28,6 +29,7 @@ import {
 import { toast } from "sonner";
 import { ActivityComposer, ActivityList } from "@/components/activity";
 import { AddPhotoDialog, CreateEstimateDialog, CreateInvoiceDialog } from "@/components/create-ops-dialogs";
+import { CreatePageDialog } from "@/components/create-page-dialog";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
 import { JobFinancials } from "@/components/job-financials";
 import { Badge } from "@/components/ui/badge";
@@ -65,7 +67,8 @@ import {
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate } from "@/lib/format";
 import { assignedCrewPatch, isDeletedJob, jobAddress, mapsUrl, uniqueIds, uniqueNames } from "@/lib/job-record";
-import { createPhotoReport } from "@/lib/photo-report";
+import { createPhotoReport, PAGE_TEMPLATE_OPTIONS } from "@/lib/photo-report";
+import { shareUrl } from "@/lib/share";
 import { leadSourceChoices, leadSourceLabel } from "@/lib/leads";
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
 import { acceptedAmountForJob, amountForEstimate } from "@/lib/estimate-totals";
@@ -84,6 +87,7 @@ import {
   type JobCustomField,
   type JobStatus,
   type LeadSource,
+  type PageTemplateId,
   type ProjectType,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -219,6 +223,8 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
   const [estimateOpen, setEstimateOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [reportId, setReportId] = useState<string | null>(null);
+  const [pageCreateOpen, setPageCreateOpen] = useState(false);
+  const [pageCreating, setPageCreating] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
   const [fieldLabel, setFieldLabel] = useState("");
   const [fieldValue, setFieldValue] = useState("");
@@ -270,16 +276,23 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
   );
   const tradeOptions = crm.contacts.filter((contact) => !job.subcontractorIds.includes(contact.id));
 
-  async function startPhotoReport() {
-    const created = await crm.addPhotoReport(
-      createPhotoReport({
-        job,
-        customer: crm.customerName(job),
-        photos,
-        author: crm.user.name,
-      }),
-    );
-    setReportId(created.id);
+  async function startPage(template: PageTemplateId) {
+    setPageCreating(true);
+    try {
+      const created = await crm.addPhotoReport(
+        createPhotoReport({
+          job,
+          customer: crm.customerName(job),
+          photos,
+          author: crm.user.name,
+          template,
+        }),
+      );
+      setPageCreateOpen(false);
+      setReportId(created.id);
+    } finally {
+      setPageCreating(false);
+    }
   }
 
   function patch(next: Partial<Job>) {
@@ -490,10 +503,11 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
         </div>
       ) : null}
 
-      <Tabs defaultValue={["overview", "photos", "financials", "paper", "fields"].includes(initialTab) ? initialTab : "overview"}>
+      <Tabs defaultValue={["overview", "photos", "pages", "financials", "paper", "fields"].includes(initialTab) ? initialTab : "overview"}>
         <TabsList variant="line" className="w-full justify-start overflow-x-auto rounded-none border-x px-2">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="photos">Photos</TabsTrigger>
+          <TabsTrigger value="pages">Pages</TabsTrigger>
           <TabsTrigger value="financials">Financials</TabsTrigger>
           <TabsTrigger value="paper">Paper</TabsTrigger>
           <TabsTrigger value="fields">Custom fields</TabsTrigger>
@@ -875,37 +889,10 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
             <p className="text-sm text-muted-foreground">
               {photos.length === 0 ? "No photos on this job." : `${photos.length} photos`}
             </p>
-            <div className="flex gap-1.5">
-              <Button size="sm" variant="outline" onClick={() => setPhotoOpen(true)}>
-                Add photo
-              </Button>
-              <Button size="sm" onClick={() => void startPhotoReport()}>
-                New photo report
-              </Button>
-            </div>
+            <Button size="sm" variant="outline" onClick={() => setPhotoOpen(true)}>
+              Add photo
+            </Button>
           </div>
-          {reports.length > 0 ? (
-            <ul className="mb-4 space-y-1.5">
-              {reports.map((item) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => setReportId(item.id)}
-                    className="flex w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm hover:bg-muted/50"
-                  >
-                    <span className="min-w-0 truncate font-medium">{item.title || "Untitled report"}</span>
-                    <span className="shrink-0 text-xs text-muted-foreground">
-                      {item.pages.length} page{item.pages.length === 1 ? "" : "s"}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="mb-4 text-sm text-muted-foreground">
-              Build a letter-size report for the adjuster or homeowner: cover, photo pages, and notes. Download it as a PDF.
-            </p>
-          )}
           {photos.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
               {photos.map((photo) => (
@@ -925,6 +912,65 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
               ))}
             </div>
           ) : null}
+        </TabsContent>
+
+        <TabsContent value="pages" className="border-x border-b p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground">
+              {reports.length === 0
+                ? "No pages on this job."
+                : `${reports.length} page${reports.length === 1 ? "" : "s"}`}
+            </p>
+            <Button size="sm" onClick={() => setPageCreateOpen(true)}>
+              <FileText data-icon="inline-start" />
+              New page
+            </Button>
+          </div>
+          {reports.length > 0 ? (
+            <ul className="space-y-1.5">
+              {reports.map((item) => {
+                const templateLabel =
+                  PAGE_TEMPLATE_OPTIONS.find((option) => option.id === item.template)?.title ?? "Page";
+                return (
+                  <li key={item.id} className="flex items-center gap-2 rounded-md border px-3 py-2">
+                    <button
+                      type="button"
+                      onClick={() => setReportId(item.id)}
+                      className="min-w-0 flex-1 text-left"
+                    >
+                      <span className="block truncate text-sm font-medium">{item.title || "Untitled page"}</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {templateLabel} · {item.pages.length} sheet{item.pages.length === 1 ? "" : "s"}
+                      </span>
+                    </button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="shrink-0"
+                      onClick={() => {
+                        void (async () => {
+                          try {
+                            const token = await crm.ensurePageShareToken(item.id);
+                            copyText(shareUrl("p", token), "Client link");
+                          } catch {
+                            toast.error("Could not create a share link.");
+                          }
+                        })();
+                      }}
+                    >
+                      Share
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Pages are branded job documents you send out — photo documentation, inspections, closeouts, and
+              claim packets. Pick a template, then share a link or download a PDF.
+            </p>
+          )}
         </TabsContent>
 
         <TabsContent value="financials" className="border-x border-b p-4">
@@ -1110,6 +1156,12 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
       </Dialog>
 
       <AddPhotoDialog open={photoOpen} onOpenChange={setPhotoOpen} jobId={job.id} />
+      <CreatePageDialog
+        open={pageCreateOpen}
+        onOpenChange={setPageCreateOpen}
+        pending={pageCreating}
+        onCreate={(template) => void startPage(template)}
+      />
       <CreateEstimateDialog
         open={estimateOpen}
         onOpenChange={setEstimateOpen}

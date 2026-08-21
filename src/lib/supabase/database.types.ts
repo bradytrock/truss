@@ -792,6 +792,8 @@ export type Database = {
           job_id: string;
           title: string;
           pages: Json;
+          template: string;
+          share_token: string;
           created_by: string;
           created_at: string;
           updated_at: string;
@@ -802,6 +804,8 @@ export type Database = {
           job_id: string;
           title?: string;
           pages?: Json;
+          template?: string;
+          share_token?: string;
           created_by?: string;
           created_at?: string;
           updated_at?: string;
@@ -946,6 +950,10 @@ export type Database = {
         Returns: Json;
       };
       shared_invoice: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      shared_page: {
         Args: { p_token: string };
         Returns: Json;
       };

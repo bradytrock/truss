@@ -580,11 +580,16 @@ export interface PhotoReportTextPage {
 
 export type PhotoReportPage = PhotoReportCoverPage | PhotoReportPhotosPage | PhotoReportTextPage;
 
+export const PAGE_TEMPLATES = ["photos", "inspection", "completion", "claim", "blank"] as const;
+export type PageTemplateId = (typeof PAGE_TEMPLATES)[number];
+
 export interface PhotoReport {
   id: string;
   jobId: string;
   title: string;
   pages: PhotoReportPage[];
+  template: PageTemplateId;
+  shareToken: string;
   createdAt: string;
   updatedAt: string;
   createdBy: string;

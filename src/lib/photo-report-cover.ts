@@ -1,5 +1,5 @@
 import { jobAddress, parseLocation } from "@/lib/job-record";
-import { photoById } from "@/lib/photo-report";
+import { pageCoverCopy, photoById } from "@/lib/photo-report";
 import type {
   CompanySettings,
   Contact,
@@ -96,9 +96,10 @@ export function photoReportCoverModel(input: {
   const region = [company.city, company.state].filter(Boolean).join(" · ").toUpperCase();
   const companyTag = region || displayWebsite(company.website);
 
+  const copy = pageCoverCopy(report.template);
   return {
-    kicker: photoReportCoverKicker(job),
-    reportTitle: "DOCUMENTATION REPORT",
+    kicker: copy.kicker || photoReportCoverKicker(job),
+    reportTitle: copy.reportTitle,
     companyName: company.name,
     companyTag,
     street: page.showAddress ? street : "",

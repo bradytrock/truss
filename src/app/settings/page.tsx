@@ -125,7 +125,7 @@ export default function SettingsPage() {
           <CardHeader className="border-b">
             <CardTitle>Logo</CardTitle>
             <CardDescription>
-              Prints on estimates, invoices, photo reports, and client share links.
+              Prints on estimates, invoices, Pages, and client share links.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 pt-4">

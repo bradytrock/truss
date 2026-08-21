@@ -1,3 +1,7 @@
+import { fillJobRecord, parseCustomFields } from "@/lib/job-record";
+import { parsePageTemplate, parsePhotoReportPages } from "@/lib/photo-report";
+import type { CompanySettings, Job, JobPhoto, PhotoReport } from "@/lib/types";
+
 export function newShareToken() {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
@@ -9,11 +13,11 @@ export function seedShareToken(kind: "e" | "i", number: string) {
   return digits ? `nl-${kind}-${digits}` : newShareToken();
 }
 
-export function sharePath(kind: "e" | "i", token: string) {
+export function sharePath(kind: "e" | "i" | "p", token: string) {
   return `/share/${kind}/${token}`;
 }
 
-export function shareUrl(kind: "e" | "i", token: string, origin = "") {
+export function shareUrl(kind: "e" | "i" | "p", token: string, origin = "") {
   const path = sharePath(kind, token);
   if (origin) return `${origin.replace(/\/+$/, "")}${path}`;
   if (typeof window !== "undefined") return `${window.location.origin}${path}`;
@@ -299,5 +303,127 @@ export function parseSharedInvoice(raw: unknown): SharedInvoicePayload | null {
       qbStatus: "not_in_qb",
       createdBy: "",
     })),
+  };
+}
+
+export type SharedPagePayload = {
+  customer: string;
+  company: SharedCompany;
+  report: PhotoReport;
+  job: Job;
+  photos: JobPhoto[];
+  contacts: Array<{
+    id: string;
+    name: string;
+    title: string;
+    phone: string;
+  }>;
+  staff: Array<{
+    id: string;
+    name: string;
+    title: string;
+  }>;
+};
+
+export function companySettingsFromShared(company: SharedCompany): CompanySettings {
+  return {
+    name: company.name,
+    phone: company.phone,
+    email: company.email,
+    website: company.website,
+    street: company.street,
+    city: company.city,
+    state: company.state,
+    postalCode: company.postalCode,
+    licenseNumber: company.licenseNumber,
+    logoUrl: company.logoUrl,
+  };
+}
+
+export function parseSharedPage(raw: unknown): SharedPagePayload | null {
+  if (!isRecord(raw) || !isRecord(raw.report) || !isRecord(raw.job)) return null;
+  const report = raw.report;
+  const id = asString(report.id);
+  const jobId = asString(report.jobId) || asString(raw.job.id);
+  if (!id || !jobId) return null;
+
+  const jobRaw = raw.job;
+  const photosRaw = Array.isArray(raw.photos) ? raw.photos.filter(isRecord) : [];
+  const contactsRaw = Array.isArray(raw.contacts) ? raw.contacts.filter(isRecord) : [];
+  const staffRaw = Array.isArray(raw.staff) ? raw.staff.filter(isRecord) : [];
+  const photoCategories = new Set(["before", "progress", "after", "issue"]);
+  const projectType = asString(jobRaw.projectType) as Job["projectType"];
+
+  return {
+    customer: asString(raw.customer, "Homeowner"),
+    company: parseCompany(raw.company),
+    report: {
+      id,
+      jobId,
+      title: asString(report.title, "Page"),
+      pages: parsePhotoReportPages(report.pages),
+      template: parsePageTemplate(report.template),
+      shareToken: asString(report.shareToken),
+      createdAt: asString(report.createdAt),
+      updatedAt: asString(report.updatedAt),
+      createdBy: asString(report.createdBy),
+    },
+    job: fillJobRecord({
+      id: asString(jobRaw.id, jobId),
+      opportunityId: asNullable(jobRaw.opportunityId),
+      name: asString(jobRaw.name, "Job"),
+      clientId: asNullable(jobRaw.clientId),
+      primaryContactId: asNullable(jobRaw.primaryContactId),
+      status: "in_progress",
+      contractValue: 0,
+      startDate: "",
+      substantialCompletion: null,
+      superintendent: "",
+      projectManager: asString(jobRaw.projectManager),
+      location: asString(jobRaw.location),
+      ownerStaffId: asString(jobRaw.ownerStaffId),
+      code: asString(jobRaw.code),
+      street: asString(jobRaw.street),
+      city: asString(jobRaw.city),
+      state: asString(jobRaw.state),
+      postalCode: asString(jobRaw.postalCode),
+      relatedContactIds: Array.isArray(jobRaw.relatedContactIds)
+        ? jobRaw.relatedContactIds.filter((item): item is string => typeof item === "string")
+        : [],
+      customFields: parseCustomFields(jobRaw.customFields),
+      projectType,
+    }),
+    photos: photosRaw.flatMap((photo, index) => {
+      const photoId = asString(photo.id, `photo-${index}`);
+      const url = asString(photo.imageUrl);
+      if (!photoId || !url) return [];
+      const category = asString(photo.category, "progress");
+      const row: JobPhoto = {
+        id: photoId,
+        jobId: asString(photo.jobId, jobId),
+        caption: asString(photo.caption),
+        category: (photoCategories.has(category) ? category : "progress") as JobPhoto["category"],
+        takenAt: asString(photo.takenAt),
+        imageUrl: url,
+        storagePath: asNullable(photo.storagePath),
+        createdBy: asString(photo.createdBy),
+      };
+      return [row];
+    }),
+    contacts: contactsRaw
+      .map((contact, index) => ({
+        id: asString(contact.id, `contact-${index}`),
+        name: asString(contact.name),
+        title: asString(contact.title),
+        phone: asString(contact.phone),
+      }))
+      .filter((contact) => contact.name),
+    staff: staffRaw
+      .map((member, index) => ({
+        id: asString(member.id, `staff-${index}`),
+        name: asString(member.name),
+        title: asString(member.title),
+      }))
+      .filter((member) => member.name),
   };
 }

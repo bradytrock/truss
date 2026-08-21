@@ -19,7 +19,7 @@ export function ShareFrame({
   );
 }
 
-export function ShareMissing({ kind }: { kind: "estimate" | "invoice" }) {
+export function ShareMissing({ kind }: { kind: "estimate" | "invoice" | "page" }) {
   return (
     <ShareFrame>
       <div className="border bg-card px-5 py-10">

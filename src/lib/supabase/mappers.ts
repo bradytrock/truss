@@ -1,6 +1,6 @@
 import { fillEstimate, fillEstimateLine } from "@/lib/estimate-totals";
 import { fillEstimateTemplate, fillEstimateTemplateLine } from "@/lib/estimate-templates";
-import { parsePhotoReportPages } from "@/lib/photo-report";
+import { parsePageTemplate, parsePhotoReportPages } from "@/lib/photo-report";
 import { customFieldsJson, fillJobRecord, parseCustomFields } from "@/lib/job-record";
 import { parseMarket } from "@/lib/market";
 import type { Database, Json } from "@/lib/supabase/database.types";
@@ -644,6 +644,8 @@ export function mapPhotoReport(row: PhotoReportRow): PhotoReport {
     jobId: row.job_id,
     title: row.title,
     pages: parsePhotoReportPages(row.pages),
+    template: parsePageTemplate("template" in row ? row.template : "photos"),
+    shareToken: "share_token" in row ? String(row.share_token ?? "") : "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     createdBy: row.created_by,

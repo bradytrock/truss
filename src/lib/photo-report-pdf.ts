@@ -457,9 +457,9 @@ export async function downloadPhotoReportPdf(input: {
       await drawPhotosPage(doc, page, input.photos, cache);
     }
   }
-  const title = input.report.title.trim() || "Photo report";
+  const title = input.report.title.trim() || "Page";
   stampFooter(doc, input.company, title, pages[0]?.type === "cover");
-  const safe = title.replace(/[^\w]+/g, "-").replace(/^-|-$/g, "") || "photo-report";
+  const safe = title.replace(/[^\w]+/g, "-").replace(/^-|-$/g, "") || "page";
   downloadBlob(doc.output("blob"), `${safe}.pdf`);
 }
 
@@ -467,7 +467,7 @@ function emptyFallback(): PhotoReportPage {
   return {
     id: "empty",
     type: "text",
-    heading: "Photo report",
+    heading: "Page",
     body: "Add a cover, photos, or a notes page.",
   };
 }
