@@ -179,7 +179,7 @@ export default function ClientDetailPage() {
                 <ul className="space-y-3">
                   {contacts.map((contact) => (
                     <li key={contact.id}>
-                      <Link href={`/contacts/${contact.id}`} className="text-sm font-medium hover:underline">
+                      <Link href={`/contacts?contact=${contact.id}`} className="text-sm font-medium hover:underline">
                         {contact.name}
                       </Link>
                       <p className="text-xs text-muted-foreground">{contact.title}</p>

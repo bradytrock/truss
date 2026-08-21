@@ -342,7 +342,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {primary ? (
-              <Link href={`/contacts/${primary.id}`} className="hover:underline">
+              <Link href={`/contacts?contact=${primary.id}`} className="hover:underline">
                 {primary.name}
               </Link>
             ) : client ? (
@@ -807,7 +807,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                         </Button>
                       ) : null}
                     </div>
-                    <Link href={`/contacts/${contact.id}`} className="flex items-center gap-2 text-sm font-medium hover:underline">
+                    <Link href={`/contacts?contact=${contact.id}`} className="flex items-center gap-2 text-sm font-medium hover:underline">
                       <User className="size-3.5 text-muted-foreground" />
                       {contact.name}
                     </Link>

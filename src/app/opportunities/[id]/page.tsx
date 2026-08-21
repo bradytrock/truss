@@ -110,7 +110,7 @@ export default function OpportunityDetailPage() {
             <TypeBadge type={opportunity.projectType} />
             <span className="text-sm text-muted-foreground">
               {contact ? (
-                <Link href={`/contacts/${contact.id}`} className="hover:underline">
+                <Link href={`/contacts?contact=${contact.id}`} className="hover:underline">
                   {contact.name}
                 </Link>
               ) : (
@@ -270,7 +270,7 @@ export default function OpportunityDetailPage() {
             <CardContent>
               <RecordProperty label="Customer">
                 {contact ? (
-                  <Link href={`/contacts/${contact.id}`} className="hover:underline">
+                  <Link href={`/contacts?contact=${contact.id}`} className="hover:underline">
                     {contact.name}
                   </Link>
                 ) : client ? (
@@ -312,7 +312,7 @@ export default function OpportunityDetailPage() {
                 <RecordProperty label="Referred by">
                   {crm.getContact(opportunity.referralContactId) ? (
                     <Link
-                      href={`/contacts/${opportunity.referralContactId}`}
+                      href={`/contacts?contact=${opportunity.referralContactId}`}
                       className="hover:underline"
                     >
                       {crm.getContact(opportunity.referralContactId)?.name}

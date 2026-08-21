@@ -599,7 +599,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
             ) : (
               <p className="mt-1 text-sm">
                 {contact ? (
-                  <Link href={`/contacts/${contact.id}`} className="hover:underline">
+                  <Link href={`/contacts?contact=${contact.id}`} className="hover:underline">
                     {contact.name}
                   </Link>
                 ) : (

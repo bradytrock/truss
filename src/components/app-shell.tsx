@@ -334,7 +334,7 @@ function SearchTrigger() {
                   value={`${contact.name} ${contact.title} ${contact.email}`}
                   onSelect={() => {
                     setOpen(false);
-                    router.push(`/contacts/${contact.id}`);
+                    router.push(`/contacts?contact=${contact.id}`);
                   }}
                 >
                   {contact.name}

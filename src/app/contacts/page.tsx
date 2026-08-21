@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -19,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { ContactRecordWindow } from "@/components/contact-window";
 import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
@@ -26,9 +28,42 @@ import { SEAT_ROLE_LABELS } from "@/lib/types";
 type BookFilter = "all" | "referral" | "mine";
 
 export default function ContactsPage() {
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <ContactsBookPage />
+    </Suspense>
+  );
+}
+
+function ContactsBookPage() {
   const crm = useCrm();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<BookFilter>("all");
+  const contactId = searchParams.get("contact");
+  const openContact = contactId ? crm.getContact(contactId) : undefined;
+
+  const selectContact = useCallback(
+    (id: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("contact", id);
+      router.replace(`/contacts?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
+
+  const closeContact = useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("contact");
+    const qs = params.toString();
+    router.replace(qs ? `/contacts?${qs}` : "/contacts", { scroll: false });
+  }, [router, searchParams]);
+
+  useEffect(() => {
+    if (!crm.hydrated || !contactId || openContact) return;
+    closeContact();
+  }, [closeContact, crm.hydrated, contactId, openContact]);
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -115,16 +150,30 @@ export default function ContactsPage() {
                 const company = crm.getClient(contact.clientId);
                 const owner = crm.staff.find((member) => member.id === contact.ownerStaffId);
                 return (
-                  <TableRow key={contact.id}>
+                  <TableRow
+                    key={contact.id}
+                    data-state={contact.id === contactId ? "selected" : undefined}
+                    className="cursor-pointer"
+                    onClick={() => selectContact(contact.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        selectContact(contact.id);
+                      }
+                    }}
+                    tabIndex={0}
+                  >
                     <TableCell>
-                      <Link href={`/contacts/${contact.id}`} className="font-medium hover:underline">
-                        {contact.name}
-                      </Link>
+                      <p className="font-medium">{contact.name}</p>
                       <p className="text-xs text-muted-foreground">{contact.title}</p>
                     </TableCell>
                     <TableCell>
                       {company ? (
-                        <Link href={`/clients/${company.id}`} className="hover:underline">
+                        <Link
+                          href={`/clients/${company.id}`}
+                          className="hover:underline"
+                          onClick={(event) => event.stopPropagation()}
+                        >
                           {company.name}
                         </Link>
                       ) : (
@@ -154,6 +203,9 @@ export default function ContactsPage() {
           </Table>
         </div>
       )}
+      {openContact ? (
+        <ContactRecordWindow key={openContact.id} contact={openContact} onClose={closeContact} />
+      ) : null}
     </div>
   );
 }
