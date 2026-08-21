@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RecordProperty } from "@/components/app-shell";
+import { EditContactDialog } from "@/components/create-records";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { JobStatusBadge, StageBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
@@ -17,6 +19,7 @@ export default function ContactDetailPage() {
   const { id } = useParams<{ id: string }>();
   const crm = useCrm();
   const contact = crm.getContact(id);
+  const [editOpen, setEditOpen] = useState(false);
 
   if (!crm.hydrated) return <LoadingScreen />;
   if (!contact) {
@@ -40,16 +43,22 @@ export default function ContactDetailPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          Contact
-        </p>
-        <h1 className="font-heading text-[1.85rem] leading-[1.1] font-medium">{contact.name}</h1>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <span className="text-sm text-muted-foreground">{contact.title}</span>
-          {contact.isReferralPartner ? <Badge variant="secondary">Referral partner</Badge> : null}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+            Contact
+          </p>
+          <h1 className="font-heading text-[1.85rem] leading-[1.1] font-medium">{contact.name}</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">{contact.title}</span>
+            {contact.isReferralPartner ? <Badge variant="secondary">Referral partner</Badge> : null}
+          </div>
         </div>
+        <Button variant="outline" className="shrink-0 self-start" onClick={() => setEditOpen(true)}>
+          Edit contact
+        </Button>
       </div>
+      <EditContactDialog contact={contact} open={editOpen} onOpenChange={setEditOpen} />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="space-y-4">

@@ -46,6 +46,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { findStaffForProfile, isUnsignedDemo, namesMatch, staffMemberFromProfile } from "@/lib/seats";
 import {
   jobPatch,
+  contactPatch,
   estimatePatch,
   estimateLinePatch,
   invoicePatch,
@@ -462,6 +463,7 @@ type CrmContextValue = CrmState & {
     }
   ) => Promise<Client>;
   addContact: (input: Omit<Contact, "id">) => Promise<Contact>;
+  updateContact: (id: string, patch: Partial<Omit<Contact, "id">>) => Promise<boolean>;
   addJob: (input: Omit<JobDraft, "id" | "ownerStaffId"> & { ownerStaffId?: string }) => Promise<Job>;
   addActivity: (input: {
     entityType: "opportunity" | "job" | "client";
@@ -1671,6 +1673,33 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return mapped;
     },
     [user.companyId, user.staffId]
+  );
+
+  const updateContact = useCallback(
+    async (id: string, patch: Partial<Omit<Contact, "id">>) => {
+      const apply = () =>
+        setState((prev) => ({
+          ...prev,
+          contacts: prev.contacts.map((contact) =>
+            contact.id === id ? { ...contact, ...patch } : contact
+          ),
+        }));
+      const supabase = requireClient();
+      if (!supabase) {
+        apply();
+        return true;
+      }
+      const { error } = await supabase.from("contacts").update(contactPatch(patch)).eq("id", id);
+      if (error) {
+        toast.error(
+          isRequiredClientId(error) ? requiredClientIdMessage() : error.message || "Could not save the contact."
+        );
+        return false;
+      }
+      apply();
+      return true;
+    },
+    []
   );
 
   const addJob = useCallback(
@@ -3848,6 +3877,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addOpportunity,
       addClient,
       addContact,
+      updateContact,
       addJob,
       addActivity,
       toggleTask,
@@ -3923,6 +3953,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addOpportunity,
       addClient,
       addContact,
+      updateContact,
       addJob,
       addActivity,
       toggleTask,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { MapPin, Search, User, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,7 @@ import {
   LEAD_SOURCE_LABELS,
   LEAD_SOURCES,
   type ClientType,
+  type Contact,
   type JobStatus,
   type LeadSource,
 } from "@/lib/types";
@@ -691,6 +692,209 @@ export function CreateClientDialog({
               Cancel
             </Button>
             <Button type="submit">Add contact</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function EditContactDialog({
+  contact,
+  open,
+  onOpenChange,
+}: {
+  contact: Contact;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { updateContact, clients, viewer, book } = useCrm();
+  const owners = useMemo(() => {
+    const allowed = assignableStaff(viewer, book.staff);
+    if (contact.ownerStaffId && !allowed.some((member) => member.id === contact.ownerStaffId)) {
+      const current = book.staff.find((member) => member.id === contact.ownerStaffId);
+      if (current) return [current, ...allowed];
+    }
+    return allowed;
+  }, [book.staff, contact.ownerStaffId, viewer]);
+
+  const [name, setName] = useState(contact.name);
+  const [title, setTitle] = useState(contact.title);
+  const [email, setEmail] = useState(contact.email);
+  const [phone, setPhone] = useState(contact.phone);
+  const [companyMode, setCompanyMode] = useState<"none" | "existing">(
+    contact.clientId ? "existing" : "none"
+  );
+  const [existingClientId, setExistingClientId] = useState(contact.clientId ?? clients[0]?.id ?? "");
+  const [ownerStaffId, setOwnerStaffId] = useState(contact.ownerStaffId);
+  const [referral, setReferral] = useState(contact.isReferralPartner);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setName(contact.name);
+    setTitle(contact.title);
+    setEmail(contact.email);
+    setPhone(contact.phone);
+    setCompanyMode(contact.clientId ? "existing" : "none");
+    setExistingClientId(contact.clientId ?? clients[0]?.id ?? "");
+    setOwnerStaffId(contact.ownerStaffId);
+    setReferral(contact.isReferralPartner);
+  }, [open, contact, clients]);
+
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    const nextName = name.trim();
+    if (!nextName) {
+      toast.error("A name is required.");
+      return;
+    }
+    if (companyMode === "existing" && !existingClientId) {
+      toast.error("Pick a company, or set company to none.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const ok = await updateContact(contact.id, {
+        name: nextName,
+        title: title.trim() || "Homeowner",
+        email: email.trim(),
+        phone: phone.trim(),
+        clientId: companyMode === "existing" ? existingClientId || null : null,
+        ownerStaffId: ownerStaffId || contact.ownerStaffId,
+        isReferralPartner: referral,
+      });
+      if (!ok) return;
+      toast.success(`Saved ${nextName}`);
+      onOpenChange(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Edit contact</DialogTitle>
+          <DialogDescription>
+            Update this person’s details, company, and who owns them in the book.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="grid gap-3">
+          <Field label="Name" htmlFor="edit-contact-name">
+            <Input
+              id="edit-contact-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="e.g. Dana Alvarez"
+            />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Title" htmlFor="edit-contact-title">
+              <Input
+                id="edit-contact-title"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Homeowner"
+              />
+            </Field>
+            <Field label="Phone" htmlFor="edit-contact-phone">
+              <Input
+                id="edit-contact-phone"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="(303) 555-0100"
+              />
+            </Field>
+          </div>
+          <Field label="Email" htmlFor="edit-contact-email">
+            <Input
+              id="edit-contact-email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="dana@example.com"
+            />
+          </Field>
+          <Field label="Company">
+            <Select
+              value={companyMode}
+              onValueChange={(value) => setCompanyMode((value as typeof companyMode) ?? "none")}
+              items={[
+                { value: "none", label: "None — homeowner / DTC" },
+                { value: "existing", label: "Existing company" },
+              ]}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None — homeowner / DTC</SelectItem>
+                <SelectItem value="existing">Existing company</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          {companyMode === "existing" ? (
+            <Field label="Which company">
+              {clients.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No companies in this book yet. Set company to none, or add a company from New contact.
+                </p>
+              ) : (
+                <Select
+                  value={existingClientId}
+                  onValueChange={(value) => setExistingClientId(String(value ?? ""))}
+                  items={clients.map((client) => ({ value: client.id, label: client.name }))}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </Field>
+          ) : null}
+          {owners.length > 0 ? (
+            <Field label="Book owner">
+              <Select
+                value={ownerStaffId}
+                onValueChange={(value) => setOwnerStaffId(String(value ?? ""))}
+                items={owners.map((member) => ({ value: member.id, label: member.name }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {owners.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+          ) : null}
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={referral}
+              onCheckedChange={(value) => setReferral(Boolean(value))}
+            />
+            Referral partner — realtor, adjuster, or specifier in this seat’s book
+          </label>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving…" : "Save contact"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

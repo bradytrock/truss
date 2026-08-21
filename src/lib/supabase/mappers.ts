@@ -262,6 +262,18 @@ export function opportunityPatch(patch: Partial<Opportunity>) {
   return row;
 }
 
+export function contactPatch(patch: Partial<Contact>) {
+  const row: Database["public"]["Tables"]["contacts"]["Update"] = {};
+  if (patch.clientId !== undefined) row.client_id = patch.clientId || null;
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.title !== undefined) row.title = patch.title;
+  if (patch.email !== undefined) row.email = patch.email;
+  if (patch.phone !== undefined) row.phone = patch.phone;
+  if (patch.ownerStaffId !== undefined) row.owner_staff_id = patch.ownerStaffId || null;
+  if (patch.isReferralPartner !== undefined) row.is_referral_partner = patch.isReferralPartner;
+  return row;
+}
+
 export function jobPatch(patch: Partial<Job>) {
   const row: Database["public"]["Tables"]["jobs"]["Update"] = {};
   if (patch.name !== undefined) row.name = patch.name;
