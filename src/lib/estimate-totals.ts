@@ -82,6 +82,24 @@ export function amountForEstimate(estimate: Estimate, lines: EstimateLine[], mar
   return estimateTotals(billingEstimate(estimate, market), linesForEstimate(lines, estimate.id)).total;
 }
 
+export function acceptedAmountForJob(
+  job: { id: string; opportunityId?: string | null },
+  estimates: Estimate[],
+  lines: EstimateLine[],
+  market?: JobMarket | "" | null,
+) {
+  const related = estimates.filter(
+    (estimate) =>
+      estimate.status === "accepted" &&
+      (estimate.jobId === job.id ||
+        Boolean(job.opportunityId && estimate.opportunityId === job.opportunityId)),
+  );
+  if (related.length === 0) return 0;
+  const preferred = [...related].sort((a, b) => (b.acceptedAt ?? "").localeCompare(a.acceptedAt ?? ""))[0];
+  if (!preferred) return 0;
+  return amountForEstimate(preferred, lines, market);
+}
+
 export function contractValueForOpportunity(
   opportunityId: string,
   estimates: Estimate[],

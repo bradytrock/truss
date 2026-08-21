@@ -65,8 +65,9 @@ import { assignedCrewPatch, jobAddress, mapsUrl, uniqueIds, uniqueNames } from "
 import { createPhotoReport } from "@/lib/photo-report";
 import { leadSourceChoices, leadSourceLabel } from "@/lib/leads";
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
-import { amountForEstimate } from "@/lib/estimate-totals";
+import { acceptedAmountForJob, amountForEstimate } from "@/lib/estimate-totals";
 import { workMarket } from "@/lib/market";
+import { boardValue } from "@/lib/work-board";
 import { COURSE } from "@/lib/training/engine";
 import { recommendedChapterIds } from "@/lib/training/recommend";
 import {
@@ -344,7 +345,13 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
           </p>
         </div>
         <p className="font-heading text-2xl leading-none font-medium tabular-nums">
-          {formatCurrencyFull(job.contractValue)}
+          {formatCurrencyFull(
+            boardValue(
+              job,
+              opportunity,
+              acceptedAmountForJob(job, crm.estimates, crm.estimateLines, workMarket(job, opportunity)),
+            ),
+          )}
         </p>
       </div>
 

@@ -3,12 +3,17 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { JobsBoard } from "@/components/jobs-board";
 import { JobRecordWindow } from "@/components/job-window";
 import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
+import { CreateOpportunityDialog } from "@/components/create-records";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency } from "@/lib/format";
 import { isBusinessDevelopment } from "@/lib/bd";
+import { acceptedAmountForJob } from "@/lib/estimate-totals";
+import { workMarket } from "@/lib/market";
+import { boardValue, workColumnFor } from "@/lib/work-board";
 
 export default function JobsPage() {
   return (
@@ -23,6 +28,7 @@ function JobsBoardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
+  const [create, setCreate] = useState(false);
   const jobId = searchParams.get("job");
   const openJob = jobId ? crm.getJob(jobId) : undefined;
 
@@ -48,8 +54,21 @@ function JobsBoardPage() {
     closeJob();
   }, [closeJob, crm.hydrated, jobId, openJob]);
 
-  const active = crm.jobs.filter((job) => job.status !== "complete");
-  const bookValue = active.reduce((sum, job) => sum + job.contractValue, 0);
+  const active = crm.jobs.filter((job) => {
+    const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
+    const column = workColumnFor(job, opportunity);
+    return column !== "complete" && column !== "lost";
+  });
+  const bookValue = active.reduce((sum, job) => {
+    const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
+    const signed = acceptedAmountForJob(
+      job,
+      crm.estimates,
+      crm.estimateLines,
+      workMarket(job, opportunity),
+    );
+    return sum + boardValue(job, opportunity, signed);
+  }, 0);
 
   if (!crm.hydrated) return <LoadingScreen />;
 
@@ -63,23 +82,27 @@ function JobsBoardPage() {
         title="Jobs"
         description={
           crm.viewer && isBusinessDevelopment(crm.viewer.role)
-            ? "Jobs from your sourced leads and from the agents in your book — even after you assign the lead to a PM."
-            : "Every open pipeline lead is already a job. Drag a card when production moves — codes stay with the record from the first lead."
+            ? "Leads you sourced and work from the agents you brought in — one board from the first call through punch."
+            : "One board from new lead through punch. Drag a card when the work moves. Codes stay with the record from day one."
         }
         actions={
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Filter by code, homeowner, or city"
-            className="w-full sm:w-72"
-          />
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Filter by code, homeowner, or city"
+              className="w-full sm:w-72"
+            />
+            <Button onClick={() => setCreate(true)}>New lead</Button>
+          </div>
         }
       />
       <p className="text-sm text-muted-foreground">
-        {active.length} active jobs · {formatCurrency(bookValue)} under contract
+        {active.length} open · {formatCurrency(bookValue)} on the board
       </p>
       <JobsBoard query={query} onSelectJob={selectJob} />
       {openJob ? <JobRecordWindow key={openJob.id} job={openJob} onClose={closeJob} /> : null}
+      <CreateOpportunityDialog open={create} onOpenChange={setCreate} />
     </div>
   );
 }

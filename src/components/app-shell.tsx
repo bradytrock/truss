@@ -53,7 +53,6 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
   if (options.bdOnly) {
     return [
       { href: "/", label: "Home" },
-      { href: "/pipeline", label: "Pipeline" },
       { href: "/jobs", label: "Jobs" },
       { href: "/contacts", label: "Agents & contacts" },
       { href: "/reports", label: "ROI" },
@@ -61,9 +60,8 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
   }
   return [
     { href: "/", label: "Home" },
-    { href: "/pipeline", label: "Pipeline" },
-    { href: "/estimates", label: "Estimates" },
     { href: "/jobs", label: "Jobs" },
+    { href: "/estimates", label: "Estimates" },
     { href: "/invoices", label: "Invoices" },
     ...(options.showAccounting ? [{ href: "/accounting", label: "Accounting" }] : []),
     { href: "/calendar", label: "Calendar" },

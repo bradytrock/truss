@@ -20,6 +20,7 @@ import {
   type PipelineStage,
   type ProjectType,
 } from "@/lib/types";
+import { WORK_COLUMN_LABELS, type WorkColumn } from "@/lib/work-board";
 
 const quiet =
   "border-border bg-transparent font-medium text-foreground/80";
@@ -74,6 +75,25 @@ export function JobStatusBadge({ status }: { status: JobStatus }) {
   return (
     <Badge variant="outline" className={cn(jobClass[status])}>
       {JOB_STATUS_LABELS[status]}
+    </Badge>
+  );
+}
+
+const workClass: Record<WorkColumn, string> = {
+  lead: quiet,
+  estimating: quiet,
+  proposal_sent: hot,
+  in_progress: hot,
+  punch: hot,
+  complete: done,
+  on_hold: mute,
+  lost: mute,
+};
+
+export function WorkColumnBadge({ column }: { column: WorkColumn }) {
+  return (
+    <Badge variant="outline" className={cn(workClass[column])}>
+      {WORK_COLUMN_LABELS[column]}
     </Badge>
   );
 }
