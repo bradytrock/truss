@@ -27,6 +27,9 @@ export type JobDraft = Omit<
   | "projectType"
   | "leadSource"
   | "market"
+  | "deletedAt"
+  | "deletedReason"
+  | "deletedBy"
 > &
   Partial<
     Pick<
@@ -46,6 +49,9 @@ export type JobDraft = Omit<
       | "projectType"
       | "leadSource"
       | "market"
+      | "deletedAt"
+      | "deletedReason"
+      | "deletedBy"
     >
   >;
 
@@ -182,6 +188,9 @@ export function fillJobRecord(job: JobDraft, opportunity?: Opportunity | null): 
     projectType: (job.projectType || opportunity?.projectType || "") as ProjectType | "",
     market: workMarket(job, opportunity),
     leadSource: (job.leadSource || opportunity?.leadSource || "") as LeadSource | "",
+    deletedAt: job.deletedAt ?? null,
+    deletedReason: job.deletedReason ?? "",
+    deletedBy: job.deletedBy ?? "",
     location:
       formatJobSite({
         street: job.street?.trim() || opportunity?.street?.trim() || parsed.street,
@@ -272,6 +281,10 @@ export function dedupeJobsByOpportunity(jobs: Job[]) {
 export function remapDroppedJobId(jobId: string | null | undefined, dropped: Map<string, string>) {
   if (!jobId) return jobId ?? null;
   return dropped.get(jobId) ?? jobId;
+}
+
+export function isDeletedJob(job: Pick<Job, "deletedAt">) {
+  return Boolean(job.deletedAt);
 }
 
 export function costCenterLabel(job: Job, opportunities: Opportunity[]) {

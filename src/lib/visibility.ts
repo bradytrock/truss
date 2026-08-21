@@ -36,6 +36,11 @@ export function canManageSettings(role: SeatRole, member?: StaffMember) {
   return role === "company_admin";
 }
 
+export function canDeleteJobs(viewer: StaffMember | undefined) {
+  if (!viewer || viewer.restricted || viewer.locked) return false;
+  return viewer.role === "company_admin";
+}
+
 export function canViewTeamTraining(role: SeatRole) {
   return role === "company_admin" || role === "team_lead" || role === "team_admin";
 }

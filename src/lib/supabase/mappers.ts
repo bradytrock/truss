@@ -217,6 +217,9 @@ export function mapJob(row: JobRow): Job {
     projectType: row.project_type ?? "",
     market: parseMarket(row.market, row.project_type),
     leadSource: (row.lead_source as Job["leadSource"]) ?? "",
+    deletedAt: row.deleted_at ?? null,
+    deletedReason: row.deleted_reason ?? "",
+    deletedBy: row.deleted_by ?? "",
   });
 }
 
@@ -319,6 +322,9 @@ export function jobPatch(patch: Partial<Job>) {
   if (patch.projectType !== undefined) row.project_type = patch.projectType || null;
   if (patch.market !== undefined) row.market = patch.market;
   if (patch.leadSource !== undefined) row.lead_source = patch.leadSource ?? "";
+  if (patch.deletedAt !== undefined) row.deleted_at = patch.deletedAt;
+  if (patch.deletedReason !== undefined) row.deleted_reason = patch.deletedReason;
+  if (patch.deletedBy !== undefined) row.deleted_by = patch.deletedBy;
   return row;
 }
 

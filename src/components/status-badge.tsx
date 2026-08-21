@@ -88,6 +88,7 @@ const workClass: Record<WorkColumn, string> = {
   complete: done,
   on_hold: mute,
   lost: mute,
+  deleted: danger,
 };
 
 export function WorkColumnBadge({ column }: { column: WorkColumn }) {

@@ -22,7 +22,7 @@ import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
 import { amountForEstimate } from "@/lib/estimate-totals";
 import { marketForEstimate } from "@/lib/market";
 import { PIPELINE_STAGES, STAGE_LABELS } from "@/lib/types";
-import { dedupeJobsByOpportunity } from "@/lib/job-record";
+import { dedupeJobsByOpportunity, isDeletedJob } from "@/lib/job-record";
 import { cn } from "@/lib/utils";
 import { COURSE, overallProgress, staffProgress } from "@/lib/training/engine";
 import { qbQueue } from "@/lib/job-financials";
@@ -51,7 +51,7 @@ export default function HomePage() {
       return days !== null && days >= 0 && days <= 7;
     });
     const activeJobs = dedupeJobsByOpportunity(crm.jobs).filter(
-      (job) => job.status !== "complete" && job.status !== "on_hold"
+      (job) => job.status !== "complete" && job.status !== "on_hold" && !isDeletedJob(job)
     );
     const activeValue = activeJobs.reduce((sum, job) => sum + job.contractValue, 0);
     const winRate = closed.length === 0 ? 0 : Math.round((awarded.length / closed.length) * 100);

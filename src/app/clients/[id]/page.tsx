@@ -36,7 +36,7 @@ export default function ClientDetailPage() {
   const opportunities = crm.opportunities.filter(
     (opportunity) => opportunity.clientId === client.id
   );
-  const jobs = crm.jobs.filter((job) => job.clientId === client.id);
+  const jobs = crm.jobs.filter((job) => job.clientId === client.id && !job.deletedAt);
   const activities = crm.activities.filter(
     (activity) => activity.entityType === "client" && activity.entityId === client.id
   );

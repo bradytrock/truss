@@ -28,7 +28,7 @@ export function buildReports(state: CrmState, viewer: StaffMember, now = new Dat
         )
       : state.jobs;
 
-  const openJobs = jobs.filter((job) => OPEN_JOB_STATUSES.has(job.status));
+  const openJobs = jobs.filter((job) => OPEN_JOB_STATUSES.has(job.status) && !job.deletedAt);
   const closedYtd = jobs.filter((job) => {
     if (job.status !== "complete") return false;
     const closedYear = yearOf(job.substantialCompletion) ?? yearOf(job.startDate);

@@ -38,6 +38,7 @@ import {
 
 function jobChoices(crm: ReturnType<typeof useCrm>) {
   return [...crm.jobs]
+    .filter((job) => !job.deletedAt)
     .sort((a, b) =>
       costCenterLabel(a, crm.opportunities).localeCompare(costCenterLabel(b, crm.opportunities)),
     )

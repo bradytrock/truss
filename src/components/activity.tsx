@@ -20,7 +20,7 @@ export function ActivityComposer({
 }) {
   const { addActivity } = useCrm();
   const [body, setBody] = useState("");
-  const [type, setType] = useState<Exclude<ActivityType, "stage_change">>("note");
+  const [type, setType] = useState<Exclude<ActivityType, "stage_change" | "audit">>("note");
 
   function submit() {
     if (!body.trim()) {
@@ -83,7 +83,11 @@ export function ActivityList({
           <span
             className={cn(
               "relative z-10 mt-1.5 size-1.5 shrink-0 rounded-full",
-              activity.type === "stage_change" ? "bg-primary" : "bg-foreground/35"
+              activity.type === "audit"
+                ? "bg-destructive/70"
+                : activity.type === "stage_change"
+                  ? "bg-primary"
+                  : "bg-foreground/35"
             )}
           />
           <div className="min-w-0 flex-1">

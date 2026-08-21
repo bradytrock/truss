@@ -13,13 +13,15 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { GripVertical } from "lucide-react";
+import { GripVertical, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { EmptyState, RecordCode } from "@/components/page-chrome";
 import { MarketBadge } from "@/components/status-badge";
 import { LeadAssigneeSelect } from "@/components/lead-assignee";
+import { DeleteJobDialog } from "@/components/delete-job-dialog";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency } from "@/lib/format";
 import { leadSourceLabel } from "@/lib/leads";
@@ -33,8 +35,8 @@ import {
   workColumnFor,
   type WorkColumn,
 } from "@/lib/work-board";
-import { assignmentOptions, canAssignLeadsToAnyone } from "@/lib/visibility";
-import { dedupeJobsByOpportunity } from "@/lib/job-record";
+import { assignmentOptions, canAssignLeadsToAnyone, canDeleteJobs } from "@/lib/visibility";
+import { dedupeJobsByOpportunity, isDeletedJob } from "@/lib/job-record";
 import type { Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +49,7 @@ const columnAccent: Record<WorkColumn, string> = {
   complete: "bg-foreground/40",
   on_hold: "bg-foreground/15",
   lost: "bg-foreground/15",
+  deleted: "bg-destructive/60",
 };
 
 export function JobsBoard({
@@ -58,6 +61,9 @@ export function JobsBoard({
 }) {
   const crm = useCrm();
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Job | null>(null);
+  const canTrash = canDeleteJobs(crm.viewer) && !crm.impersonatedStaff;
+  const columns = canTrash ? WORK_COLUMNS : WORK_COLUMNS.filter((column) => column !== "deleted");
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -66,6 +72,7 @@ export function JobsBoard({
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return dedupeJobsByOpportunity(crm.jobs).filter((job) => {
+      if (!canTrash && isDeletedJob(job)) return false;
       if (!needle) return true;
       const customer = crm.customerName(job);
       const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
@@ -78,7 +85,7 @@ export function JobsBoard({
         (opportunity?.code.toLowerCase().includes(needle) ?? false)
       );
     });
-  }, [crm, query]);
+  }, [canTrash, crm, query]);
 
   const active = crm.jobs.find((job) => job.id === activeId) ?? null;
 
@@ -107,9 +114,18 @@ export function JobsBoard({
         })();
 
     if (!overColumn || overColumn === columnOf(job)) return;
+    if (overColumn === "deleted") {
+      if (!canTrash) return;
+      setPendingDelete(job);
+      return;
+    }
     void (async () => {
       await crm.moveWork(job.id, overColumn);
-      toast.success(`${job.code || job.name} → ${WORK_COLUMN_LABELS[overColumn]}.`);
+      toast.success(
+        isDeletedJob(job)
+          ? `${job.code || job.name} restored to ${WORK_COLUMN_LABELS[overColumn]}.`
+          : `${job.code || job.name} → ${WORK_COLUMN_LABELS[overColumn]}.`,
+      );
     })();
   }
 
@@ -136,7 +152,7 @@ export function JobsBoard({
     >
       <ScrollArea className="w-full">
         <div className="flex min-h-[32rem] gap-3 pb-3">
-          {WORK_COLUMNS.map((column) => {
+          {columns.map((column) => {
             const cards = filtered.filter((job) => columnOf(job) === column);
             const total = cards.reduce((sum, job) => {
               const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
@@ -174,6 +190,13 @@ export function JobsBoard({
           />
         ) : null}
       </DragOverlay>
+      <DeleteJobDialog
+        job={pendingDelete}
+        open={Boolean(pendingDelete)}
+        onOpenChange={(open) => {
+          if (!open) setPendingDelete(null);
+        }}
+      />
     </DndContext>
   );
 }
@@ -206,7 +229,11 @@ function JobColumn({
           <span className="ml-auto text-xs tabular-nums text-muted-foreground">{count}</span>
         </div>
         <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
-          {count === 0 ? "No work in this stage" : formatCurrency(total)}
+          {count === 0
+            ? column === "deleted"
+              ? "Nothing in the trash"
+              : "No work in this stage"
+            : formatCurrency(total)}
         </p>
       </div>
       <div className="flex flex-1 flex-col gap-2 p-2">{children}</div>
@@ -226,6 +253,8 @@ function JobCard({
   onSelectJob: (jobId: string) => void;
 }) {
   const crm = useCrm();
+  const canTrash = canDeleteJobs(crm.viewer) && !crm.impersonatedStaff;
+  const deleted = isDeletedJob(job);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: job.id,
     disabled: overlay,
@@ -255,6 +284,7 @@ function JobCard({
         "bg-card shadow-none",
         isDragging && !overlay && "opacity-40",
         overlay && "w-[248px] shadow-md",
+        deleted && "opacity-80",
       )}
     >
       <CardContent className="space-y-2">
@@ -325,6 +355,27 @@ function JobCard({
           ) : (
             <p className="truncate text-[11px] text-muted-foreground">{ownerName}</p>
           )}
+          {canTrash && deleted && !overlay ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              className="mt-1 w-full"
+              onClick={() => {
+                void crm.restoreJob(job.id).then((ok) => {
+                  if (ok) toast.success(`${job.code || job.name} is back on the board.`);
+                });
+              }}
+            >
+              <RotateCcw className="size-3" />
+              Restore
+            </Button>
+          ) : null}
+          {deleted && job.deletedReason ? (
+            <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
+              {job.deletedReason}
+            </p>
+          ) : null}
         </div>
         <button
           type="button"

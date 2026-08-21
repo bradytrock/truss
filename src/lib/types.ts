@@ -90,6 +90,7 @@ export const ACTIVITY_TYPES = [
   "meeting",
   "site_walk",
   "stage_change",
+  "audit",
 ] as const;
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
@@ -261,6 +262,9 @@ export interface Job {
   projectType: ProjectType | "";
   market: JobMarket;
   leadSource: LeadSource | "";
+  deletedAt: string | null;
+  deletedReason: string;
+  deletedBy: string;
 }
 
 export interface Activity {
@@ -741,6 +745,7 @@ export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   meeting: "Meeting",
   site_walk: "Site walk",
   stage_change: "Stage change",
+  audit: "Audit",
 };
 
 export const CATALOG_KIND_LABELS: Record<CatalogKind, string> = {

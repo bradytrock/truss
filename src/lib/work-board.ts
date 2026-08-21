@@ -9,6 +9,7 @@ export const WORK_COLUMNS = [
   "complete",
   "on_hold",
   "lost",
+  "deleted",
 ] as const;
 
 export type WorkColumn = (typeof WORK_COLUMNS)[number];
@@ -22,12 +23,14 @@ export const WORK_COLUMN_LABELS: Record<WorkColumn, string> = {
   complete: "Complete",
   on_hold: "On hold",
   lost: "Lost",
+  deleted: "Deleted",
 };
 
 export function workColumnFor(
-  job: Pick<Job, "status" | "opportunityId">,
+  job: Pick<Job, "status" | "opportunityId" | "deletedAt">,
   opportunity?: Pick<Opportunity, "stage"> | null,
 ): WorkColumn {
+  if (job.deletedAt) return "deleted";
   if (opportunity?.stage === "lost") return "lost";
   if (job.status === "complete") return "complete";
   if (job.status === "punch") return "punch";
@@ -69,6 +72,8 @@ export function patchForWorkColumn(column: WorkColumn): {
       return { status: "on_hold", stage: null };
     case "lost":
       return { status: "on_hold", stage: "lost" };
+    case "deleted":
+      return { status: "on_hold", stage: null };
   }
 }
 

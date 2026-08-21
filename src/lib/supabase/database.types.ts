@@ -306,6 +306,9 @@ export type Database = {
           project_type: Database["public"]["Enums"]["project_type"] | null;
           lead_source: string;
           market: string;
+          deleted_at: string | null;
+          deleted_reason: string;
+          deleted_by: string;
         };
         Insert: {
           id?: string;
@@ -337,6 +340,9 @@ export type Database = {
           project_type?: Database["public"]["Enums"]["project_type"] | null;
           lead_source?: string;
           market?: string;
+          deleted_at?: string | null;
+          deleted_reason?: string;
+          deleted_by?: string;
         };
         Update: Partial<Database["public"]["Tables"]["jobs"]["Insert"]>;
         Relationships: [];
@@ -1002,7 +1008,7 @@ export type Database = {
         | "insurance"
         | "realtor"
         | "trade_partner";
-      activity_type: "note" | "call" | "email" | "meeting" | "site_walk" | "stage_change";
+      activity_type: "note" | "call" | "email" | "meeting" | "site_walk" | "stage_change" | "audit";
       entity_kind: "opportunity" | "job" | "client";
       seat_role:
         | "company_admin"

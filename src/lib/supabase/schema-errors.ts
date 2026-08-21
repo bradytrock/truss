@@ -165,6 +165,22 @@ export function missingSignatureMessage() {
   return `Saved in this browser. Run ${ESTIMATE_SIGNATURE_SQL} in the SQL editor so the client signature stays on the estimate and PDF.`;
 }
 
+export const JOB_SOFT_DELETE_SQL = "supabase/migrations/20260821220000_job_soft_delete.sql";
+
+export function isMissingDeletedColumn(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("deleted_at") ||
+    message.includes("deleted_reason") ||
+    message.includes("deleted_by")
+  );
+}
+
+export function missingDeletedColumnMessage() {
+  return `Saved in this browser. Run ${JOB_SOFT_DELETE_SQL} in the SQL editor so deleted jobs stay in Postgres and can be restored.`;
+}
+
 export function missingPrimaryContactHint() {
   return `Run ${RESIDENTIAL_ENUMS_SQL} in the SQL editor so jobs can store a homeowner, then try again.`;
 }

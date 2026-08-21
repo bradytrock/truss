@@ -17,7 +17,7 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
 import { retireDemoStaff } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingSignatureColumn, missingSignatureMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingSignatureColumn, missingSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId } from "@/lib/job-record";
@@ -150,7 +150,7 @@ import { formatJobSite } from "@/lib/leads";
 import { fillPayment, fileToDataUrl } from "@/lib/job-financials";
 import { resolveCustomerName, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage } from "@/lib/photo-report";
-import { canLoginAs, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
+import { canDeleteJobs, canLoginAs, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 
 const emptyState: CrmState = {
   staff: [],
@@ -521,7 +521,9 @@ type CrmContextValue = CrmState & {
   moveWork: (jobId: string, column: WorkColumn) => Promise<void>;
   updateOpportunity: (id: string, patch: Partial<Opportunity>) => Promise<boolean>;
   assignOpportunityOwner: (id: string, staffId: string) => Promise<boolean>;
-  updateJob: (id: string, patch: Partial<Job>) => Promise<void>;
+  updateJob: (id: string, patch: Partial<Job>) => Promise<boolean>;
+  deleteJob: (id: string, reason: string) => Promise<boolean>;
+  restoreJob: (id: string) => Promise<boolean>;
   addOpportunity: (
     input: Omit<Opportunity, "id" | "code" | "createdAt" | "winProbability" | "ownerStaffId" | "market"> & {
       ownerStaffId?: string;
@@ -1127,7 +1129,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }));
         return;
       }
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from("activities")
         .insert({
           company_id: user.companyId,
@@ -1139,8 +1141,24 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         })
         .select("*")
         .single();
-      if (error) {
-        toast.error(error.message);
+      if (error && input.type === "audit" && isInvalidEnumValue(error)) {
+        const retry = await supabase
+          .from("activities")
+          .insert({
+            company_id: user.companyId,
+            entity_type: input.entityType,
+            entity_id: input.entityId,
+            type: "stage_change",
+            body: input.body,
+            author: user.name,
+          })
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+      }
+      if (error || !data) {
+        toast.error(error?.message ?? "Could not log activity.");
         return;
       }
       setState((prev) => ({
@@ -1463,42 +1481,112 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     const supabase = requireClient();
     if (!supabase) {
       apply();
-      return;
+      return true;
     }
     let { error } = await supabase.from("jobs").update(jobPatch(patch)).eq("id", id);
+    if (error && isMissingDeletedColumn(error)) {
+      apply();
+      toast.message(missingDeletedColumnMessage());
+      return true;
+    }
     if (error && isMissingMarketColumn(error)) {
       apply();
       toast.message(missingMarketMessage());
-      return;
+      return true;
     }
     if (error && isMissingPrimaryContactColumn(error)) {
       error = (await supabase.from("jobs").update(omitPrimaryContact(jobPatch(patch)) as never).eq("id", id)).error;
       if (!error) {
         apply();
         toast.message(missingPrimaryContactMessage());
-        return;
+        return true;
       }
     }
     if (error) {
       if (isMissingJobOverview(error)) {
         apply();
         toast.message(missingJobOverviewMessage());
-        return;
+        return true;
       }
       toast.error(error.message);
-      return;
+      return false;
     }
     apply();
+    return true;
   }, []);
+
+  const deleteJob = useCallback(
+    async (id: string, reason: string) => {
+      const trimmed = reason.trim();
+      if (!trimmed) {
+        toast.error("Write why this job is being deleted.");
+        return false;
+      }
+      if (!canDeleteJobs(viewer) || impersonatedStaff) {
+        toast.error("Only a company admin can delete a job.");
+        return false;
+      }
+      const job = state.jobs.find((item) => item.id === id);
+      if (!job) return false;
+      if (job.deletedAt) {
+        toast.message("This job is already in Deleted.");
+        return false;
+      }
+      const ok = await updateJob(id, {
+        deletedAt: new Date().toISOString(),
+        deletedReason: trimmed,
+        deletedBy: user.name,
+      });
+      if (!ok) return false;
+      await addActivity({
+        entityType: "job",
+        entityId: id,
+        type: "audit",
+        body: `Deleted this job. Reason: ${trimmed}`,
+      });
+      return true;
+    },
+    [addActivity, impersonatedStaff, state.jobs, updateJob, user.name, viewer],
+  );
+
+  const restoreJob = useCallback(
+    async (id: string) => {
+      if (!canDeleteJobs(viewer) || impersonatedStaff) {
+        toast.error("Only a company admin can restore a job.");
+        return false;
+      }
+      const job = state.jobs.find((item) => item.id === id);
+      if (!job?.deletedAt) return false;
+      const ok = await updateJob(id, {
+        deletedAt: null,
+        deletedReason: "",
+        deletedBy: "",
+      });
+      if (!ok) return false;
+      await addActivity({
+        entityType: "job",
+        entityId: id,
+        type: "audit",
+        body: "Restored this job to the board.",
+      });
+      return true;
+    },
+    [addActivity, impersonatedStaff, state.jobs, updateJob, viewer],
+  );
 
   const moveWork = useCallback(
     async (jobId: string, column: WorkColumn) => {
       const job = state.jobs.find((item) => item.id === jobId);
       if (!job) return;
+      if (column === "deleted") return;
+      if (job.deletedAt) {
+        const restored = await restoreJob(jobId);
+        if (!restored) return;
+      }
       const opportunity = job.opportunityId
         ? state.opportunities.find((item) => item.id === job.opportunityId)
         : undefined;
-      if (workColumnFor(job, opportunity) === column) return;
+      if (workColumnFor({ ...job, deletedAt: null }, opportunity) === column) return;
       const next = patchForWorkColumn(column);
       if (opportunity && next.stage && opportunity.stage !== next.stage) {
         await moveOpportunity(opportunity.id, next.stage);
@@ -1507,7 +1595,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         await updateJob(jobId, { status: next.status });
       }
     },
-    [moveOpportunity, state.jobs, state.opportunities, updateJob],
+    [moveOpportunity, restoreJob, state.jobs, state.opportunities, updateJob],
   );
 
   const addOpportunity = useCallback(
@@ -4837,6 +4925,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateOpportunity,
       assignOpportunityOwner,
       updateJob,
+      deleteJob,
+      restoreJob,
       addOpportunity,
       addClient,
       addContact,
@@ -4930,6 +5020,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateOpportunity,
       assignOpportunityOwner,
       updateJob,
+      deleteJob,
+      restoreJob,
       addOpportunity,
       addClient,
       addContact,

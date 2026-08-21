@@ -27,7 +27,9 @@ export default function TrainingHubPage() {
   const canPost = Boolean(crm.viewer && canPostTrainingBulletin(crm.viewer.role));
 
   const recommended = useMemo(() => {
-    const openJobs = crm.jobs.filter((job) => job.status !== "complete" && job.status !== "on_hold");
+    const openJobs = crm.jobs.filter(
+      (job) => job.status !== "complete" && job.status !== "on_hold" && !job.deletedAt,
+    );
     const types = [
       ...openJobs.map((job) => {
         const opportunity = job.opportunityId ? crm.opportunities.find((item) => item.id === job.opportunityId) : undefined;

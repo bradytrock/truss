@@ -17,8 +17,10 @@ import {
   Pencil,
   Phone,
   Plus,
+  RotateCcw,
   Sparkles,
   Star,
+  Trash2,
   User,
   Users,
   XIcon,
@@ -26,6 +28,7 @@ import {
 import { toast } from "sonner";
 import { ActivityComposer, ActivityList } from "@/components/activity";
 import { AddPhotoDialog, CreateEstimateDialog, CreateInvoiceDialog } from "@/components/create-ops-dialogs";
+import { DeleteJobDialog } from "@/components/delete-job-dialog";
 import { JobFinancials } from "@/components/job-financials";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,7 +64,7 @@ import {
 } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate } from "@/lib/format";
-import { assignedCrewPatch, jobAddress, mapsUrl, uniqueIds, uniqueNames } from "@/lib/job-record";
+import { assignedCrewPatch, isDeletedJob, jobAddress, mapsUrl, uniqueIds, uniqueNames } from "@/lib/job-record";
 import { createPhotoReport } from "@/lib/photo-report";
 import { leadSourceChoices, leadSourceLabel } from "@/lib/leads";
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
@@ -85,6 +88,7 @@ import {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { PhotoReportBuilder } from "@/components/photo-report-builder";
+import { canDeleteJobs } from "@/lib/visibility";
 
 function copyText(value: string, label: string) {
   if (!value) return;
@@ -222,6 +226,11 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
   const [city, setCity] = useState(job.city);
   const [state, setState] = useState(job.state);
   const [postalCode, setPostalCode] = useState(job.postalCode);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
+  const canTrash = canDeleteJobs(crm.viewer) && !crm.impersonatedStaff;
+  const deleted = isDeletedJob(job);
 
   const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
   const client = crm.getClient(job.clientId);
@@ -438,8 +447,48 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
           >
             <Pencil className="size-4" />
           </Button>
+          {canTrash && deleted ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8"
+              disabled={restoring}
+              onClick={() => {
+                setRestoring(true);
+                void crm.restoreJob(job.id).then((ok) => {
+                  setRestoring(false);
+                  if (ok) toast.success(`${job.code || job.name} is back on the board.`);
+                });
+              }}
+              aria-label="Restore job"
+            >
+              <RotateCcw className="size-4" />
+            </Button>
+          ) : null}
+          {canTrash && !deleted ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setDeleteOpen(true)}
+              aria-label="Delete job"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          ) : null}
         </div>
       </div>
+
+      {deleted ? (
+        <div className="border border-t-0 bg-muted/60 px-4 py-3">
+          <p className="text-sm font-medium">This job is in Deleted.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {job.deletedBy ? `${job.deletedBy} removed it` : "Removed"}
+            {job.deletedAt ? ` ${formatDate(job.deletedAt)}` : ""}.
+            {job.deletedReason ? ` Reason: ${job.deletedReason}` : ""}
+          </p>
+        </div>
+      ) : null}
 
       <Tabs defaultValue={["overview", "photos", "financials", "paper", "fields"].includes(initialTab) ? initialTab : "overview"}>
         <TabsList variant="line" className="w-full justify-start overflow-x-auto rounded-none border-x px-2">
@@ -468,8 +517,9 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
             <FieldRow icon={Calendar} label="Status">
               <Select
                 value={job.status}
+                disabled={deleted}
                 onValueChange={(value) => {
-                  if (!value) return;
+                  if (!value || deleted) return;
                   patch({ status: value as JobStatus });
                   toast.success("Job status updated.");
                 }}
@@ -1077,6 +1127,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
       {openReport ? (
         <PhotoReportBuilder job={job} report={openReport} onClose={() => setReportId(null)} />
       ) : null}
+      <DeleteJobDialog job={job} open={deleteOpen} onOpenChange={setDeleteOpen} />
     </div>
   );
 }
