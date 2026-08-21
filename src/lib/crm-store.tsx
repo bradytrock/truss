@@ -448,7 +448,8 @@ type CrmContextValue = CrmState & {
     lostReason?: string,
     extras?: { contractValue?: number; street?: string; city?: string; state?: string; postalCode?: string }
   ) => Promise<Job | null>;
-  updateOpportunity: (id: string, patch: Partial<Opportunity>) => Promise<void>;
+  updateOpportunity: (id: string, patch: Partial<Opportunity>) => Promise<boolean>;
+  assignOpportunityOwner: (id: string, staffId: string) => Promise<boolean>;
   updateJob: (id: string, patch: Partial<Job>) => Promise<void>;
   addOpportunity: (
     input: Omit<Opportunity, "id" | "code" | "createdAt" | "winProbability" | "ownerStaffId"> & {
@@ -1236,12 +1237,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             opportunity.id === id ? { ...opportunity, ...patch } : opportunity
           ),
         }));
-        return;
+        return true;
       }
       const { error } = await supabase.from("opportunities").update(opportunityPatch(patch)).eq("id", id);
       if (error) {
         toast.error(error.message);
-        return;
+        return false;
       }
       setState((prev) => ({
         ...prev,
@@ -1249,6 +1250,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           opportunity.id === id ? { ...opportunity, ...patch } : opportunity
         ),
       }));
+      return true;
     },
     []
   );
@@ -1700,6 +1702,37 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return true;
     },
     []
+  );
+
+  const assignOpportunityOwner = useCallback(
+    async (id: string, staffId: string) => {
+      const member = state.staff.find((item) => item.id === staffId);
+      if (!member || member.locked) {
+        toast.error("Pick someone with an active seat.");
+        return false;
+      }
+      const opportunity = state.opportunities.find((item) => item.id === id);
+      if (!opportunity) return false;
+      const previousOwnerId = opportunity.ownerStaffId;
+      const ok = await updateOpportunity(id, { ownerStaffId: staffId, estimator: member.name });
+      if (!ok) return false;
+      const job = state.jobs.find((item) => item.opportunityId === id);
+      if (job) {
+        await updateJob(job.id, { ownerStaffId: staffId, projectManager: member.name });
+      }
+      const contact = opportunity.primaryContactId
+        ? state.contacts.find((item) => item.id === opportunity.primaryContactId)
+        : undefined;
+      if (
+        contact &&
+        !contact.isReferralPartner &&
+        (!contact.ownerStaffId || contact.ownerStaffId === previousOwnerId)
+      ) {
+        await updateContact(contact.id, { ownerStaffId: staffId });
+      }
+      return true;
+    },
+    [state.contacts, state.jobs, state.opportunities, state.staff, updateContact, updateJob, updateOpportunity]
   );
 
   const addJob = useCallback(
@@ -3873,6 +3906,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       removeStaff,
       moveOpportunity,
       updateOpportunity,
+      assignOpportunityOwner,
       updateJob,
       addOpportunity,
       addClient,
@@ -3949,6 +3983,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       removeStaff,
       moveOpportunity,
       updateOpportunity,
+      assignOpportunityOwner,
       updateJob,
       addOpportunity,
       addClient,

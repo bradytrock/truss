@@ -51,7 +51,7 @@ import {
   type JobStatus,
   type LeadSource,
 } from "@/lib/types";
-import { assignableStaff } from "@/lib/visibility";
+import { assignmentOptions, staffAssignmentLabel } from "@/lib/visibility";
 import { isBusinessDevelopment } from "@/lib/bd";
 
 export function CreateOpportunityDialog({
@@ -62,7 +62,7 @@ export function CreateOpportunityDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const crm = useCrm();
-  const people = assignableStaff(crm.viewer, crm.book.staff);
+  const people = assignmentOptions(crm.viewer, crm.book.staff, crm.user.staffId);
   const defaultAssignee = people.find((member) => member.id === crm.user.staffId)?.id ?? people[0]?.id ?? "";
   const [assigneeId, setAssigneeId] = useState(defaultAssignee);
   const [firstName, setFirstName] = useState("");
@@ -248,7 +248,10 @@ export function CreateOpportunityDialog({
                 <Select
                   value={assigneeId}
                   onValueChange={(value) => setAssigneeId(String(value ?? ""))}
-                  items={people.map((member) => ({ value: member.id, label: member.name }))}
+                  items={people.map((member) => ({
+                    value: member.id,
+                    label: staffAssignmentLabel(member),
+                  }))}
                 >
                   <SelectTrigger id="lead-assignee" className="w-full pl-8">
                     <SelectValue placeholder="Select a person" />
@@ -256,7 +259,7 @@ export function CreateOpportunityDialog({
                   <SelectContent>
                     {people.map((member) => (
                       <SelectItem key={member.id} value={member.id}>
-                        {member.name}
+                        {staffAssignmentLabel(member)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -709,14 +712,10 @@ export function EditContactDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const { updateContact, clients, viewer, book } = useCrm();
-  const owners = useMemo(() => {
-    const allowed = assignableStaff(viewer, book.staff);
-    if (contact.ownerStaffId && !allowed.some((member) => member.id === contact.ownerStaffId)) {
-      const current = book.staff.find((member) => member.id === contact.ownerStaffId);
-      if (current) return [current, ...allowed];
-    }
-    return allowed;
-  }, [book.staff, contact.ownerStaffId, viewer]);
+  const owners = useMemo(
+    () => assignmentOptions(viewer, book.staff, contact.ownerStaffId),
+    [book.staff, contact.ownerStaffId, viewer],
+  );
 
   const [name, setName] = useState(contact.name);
   const [title, setTitle] = useState(contact.title);
@@ -866,7 +865,10 @@ export function EditContactDialog({
               <Select
                 value={ownerStaffId}
                 onValueChange={(value) => setOwnerStaffId(String(value ?? ""))}
-                items={owners.map((member) => ({ value: member.id, label: member.name }))}
+                items={owners.map((member) => ({
+                  value: member.id,
+                  label: staffAssignmentLabel(member),
+                }))}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -874,7 +876,7 @@ export function EditContactDialog({
                 <SelectContent>
                   {owners.map((member) => (
                     <SelectItem key={member.id} value={member.id}>
-                      {member.name}
+                      {staffAssignmentLabel(member)}
                     </SelectItem>
                   ))}
                 </SelectContent>

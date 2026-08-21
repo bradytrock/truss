@@ -30,6 +30,7 @@ import {
 } from "@/lib/types";
 import { formatJobSite, leadSourceLabel } from "@/lib/leads";
 import { originatorStaffId } from "@/lib/bd";
+import { assignmentOptions, staffAssignmentLabel } from "@/lib/visibility";
 
 export default function OpportunityDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -65,6 +66,8 @@ export default function OpportunityDetailPage() {
   const estimates = crm.estimates.filter((estimate) => estimate.opportunityId === opportunity.id);
   const due = daysUntil(opportunity.bidDueAt);
   const step = nextStep ?? opportunity.nextStep;
+  const assignees = assignmentOptions(crm.viewer, crm.book.staff, opportunity.ownerStaffId);
+  const canReassign = assignees.length > 1 || assignees.some((member) => member.id !== opportunity.ownerStaffId);
 
   function handleStage(stage: PipelineStage) {
     void (async () => {
@@ -327,28 +330,35 @@ export default function OpportunityDetailPage() {
                   "—"}
               </RecordProperty>
               <RecordProperty label="Assigned to">
-                {crm.book.staff.find((member) => member.id === opportunity.ownerStaffId)?.name ??
-                  opportunity.estimator}
-              </RecordProperty>
-              <RecordProperty label="Estimator">
-                <Select
-                  value={opportunity.estimator}
-                  onValueChange={(value) => {
-                    if (value) crm.updateOpportunity(opportunity.id, { estimator: String(value) });
-                  }}
-                  items={crm.teamMembers.map((person) => ({ value: person, label: person }))}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {crm.teamMembers.map((person) => (
-                      <SelectItem key={person} value={person}>
-                        {person}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {canReassign ? (
+                  <Select
+                    value={opportunity.ownerStaffId}
+                    onValueChange={(value) => {
+                      if (!value || value === opportunity.ownerStaffId) return;
+                      void crm.assignOpportunityOwner(opportunity.id, String(value)).then((ok) => {
+                        if (ok) toast.success("Lead assigned.");
+                      });
+                    }}
+                    items={assignees.map((member) => ({
+                      value: member.id,
+                      label: staffAssignmentLabel(member),
+                    }))}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {assignees.map((member) => (
+                        <SelectItem key={member.id} value={member.id}>
+                          {staffAssignmentLabel(member)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  crm.book.staff.find((member) => member.id === opportunity.ownerStaffId)?.name ??
+                    opportunity.estimator
+                )}
               </RecordProperty>
               <RecordProperty label="Win probability">
                 {opportunity.winProbability}%

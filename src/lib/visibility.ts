@@ -4,7 +4,7 @@ import type {
   StaffMember,
   Team,
 } from "@/lib/types";
-import { isNorthlineDemoName } from "@/lib/types";
+import { SEAT_ROLE_LABELS, isNorthlineDemoName } from "@/lib/types";
 import { bdOpportunityIds, jobInBdBook, referralPartnerIds } from "@/lib/bd";
 
 export type AccessScope = "company" | "bd" | "team" | "own";
@@ -45,13 +45,29 @@ export function canPostTrainingBulletin(role: SeatRole) {
 }
 
 export function assignableStaff(viewer: StaffMember | undefined, staff: StaffMember[]) {
-  if (!viewer) return staff;
+  const pool = staff.filter((member) => !member.locked);
+  if (!viewer) return pool;
+  // BD hands work to the whole company, even when their book is restricted to what they sourced.
+  if (viewer.role === "business_development") return pool;
   const scope = accessScope(viewer.role, viewer.restricted);
-  if (scope === "company" || scope === "bd") return staff;
+  if (scope === "company") return pool;
   if (scope === "team") {
-    return staff.filter((member) => member.teamId === viewer.teamId || member.id === viewer.id);
+    return pool.filter((member) => member.teamId === viewer.teamId || member.id === viewer.id);
   }
-  return staff.filter((member) => member.id === viewer.id);
+  return pool.filter((member) => member.id === viewer.id);
+}
+
+export function assignmentOptions(viewer: StaffMember | undefined, staff: StaffMember[], currentId?: string) {
+  const allowed = assignableStaff(viewer, staff);
+  if (currentId && !allowed.some((member) => member.id === currentId)) {
+    const current = staff.find((member) => member.id === currentId);
+    if (current) return [current, ...allowed];
+  }
+  return allowed;
+}
+
+export function staffAssignmentLabel(member: StaffMember) {
+  return `${member.name} · ${SEAT_ROLE_LABELS[member.role]}`;
 }
 
 export function canLoginAs(viewer: StaffMember) {
