@@ -2,10 +2,21 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import {
+  DndContext,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
   ChevronDown,
   ChevronUp,
   Download,
   FileText,
+  GripVertical,
   ImageIcon,
   Link2,
   Plus,
@@ -15,6 +26,14 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -66,8 +85,13 @@ export function PhotoReportBuilder({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const selected = draft.pages.find((page) => page.id === selectedId) ?? draft.pages[0];
+  const pendingDelete = pendingDeleteId ? draft.pages.find((page) => page.id === pendingDeleteId) : undefined;
+  const pendingDeleteIndex = pendingDelete ? draft.pages.findIndex((page) => page.id === pendingDelete.id) : -1;
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -136,6 +160,29 @@ export function PhotoReportBuilder({
       return;
     }
     commit(draft.pages.filter((page) => page.id !== pageId));
+  }
+
+  function requestRemove(pageId: string) {
+    if (draft.pages.length === 1) {
+      toast.error("Keep at least one page.");
+      return;
+    }
+    setPendingDeleteId(pageId);
+  }
+
+  function confirmRemove() {
+    if (!pendingDeleteId) return;
+    removePage(pendingDeleteId);
+    setPendingDeleteId(null);
+  }
+
+  function reorderPages(event: DragEndEvent) {
+    const overId = event.over?.id;
+    if (!overId || event.active.id === overId) return;
+    const from = draft.pages.findIndex((page) => page.id === event.active.id);
+    const to = draft.pages.findIndex((page) => page.id === overId);
+    if (from < 0 || to < 0) return;
+    commit(arrayMove(draft.pages, from, to));
   }
 
   function addPhotos(page: Extract<PhotoReportPage, { type: "photos" }>, photoIds: string[]) {
@@ -251,27 +298,25 @@ export function PhotoReportBuilder({
         </div>
       </header>
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[13rem_minmax(0,1fr)_18rem]">
+      <div className="grid min-h-0 flex-1 lg:grid-cols-[16rem_minmax(0,1fr)_18rem]">
         <aside className="min-h-0 overflow-y-auto border-b p-2 lg:border-r lg:border-b-0">
-          <ul className="space-y-1">
-            {draft.pages.map((page, index) => (
-              <li key={page.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(page.id)}
-                  className={cn(
-                    "w-full rounded-md border px-2 py-2 text-left text-sm",
-                    page.id === selected?.id ? "border-primary bg-primary/8" : "hover:bg-muted/60",
-                  )}
-                >
-                  <span className="block text-[10px] tracking-wide text-muted-foreground uppercase">
-                    Page {index + 1}
-                  </span>
-                  <span className="mt-0.5 block truncate">{pageLabel(page, index)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={reorderPages}>
+            <SortableContext items={draft.pages.map((page) => page.id)} strategy={verticalListSortingStrategy}>
+              <ul className="space-y-1">
+                {draft.pages.map((page, index) => (
+                  <SortablePageCard
+                    key={page.id}
+                    page={page}
+                    index={index}
+                    selected={page.id === selected?.id}
+                    canDelete={draft.pages.length > 1}
+                    onSelect={() => setSelectedId(page.id)}
+                    onDelete={() => requestRemove(page.id)}
+                  />
+                ))}
+              </ul>
+            </SortableContext>
+          </DndContext>
         </aside>
 
         <div className="min-h-0 overflow-y-auto bg-muted/40 p-4 sm:p-6">
@@ -300,7 +345,7 @@ export function PhotoReportBuilder({
               onPickerOpenChange={setPickerOpen}
               onChange={(patch) => patchPage(selected.id, patch)}
               onMove={(direction) => movePage(selected.id, direction)}
-              onRemove={() => removePage(selected.id)}
+              onRemove={() => requestRemove(selected.id)}
               onAddPhotos={(ids) => {
                 if (selected.type === "photos") addPhotos(selected, ids);
               }}
@@ -328,7 +373,91 @@ export function PhotoReportBuilder({
         url={draft.shareToken ? shareUrl("p", draft.shareToken) : ""}
         onDownloadPdf={downloadPdf}
       />
+      <Dialog open={Boolean(pendingDelete)} onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}>
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Remove this page?</DialogTitle>
+            <DialogDescription>
+              {pendingDelete
+                ? `Page ${pendingDeleteIndex + 1} · ${pageLabel(pendingDelete, pendingDeleteIndex)} will be taken out of this document.`
+                : "This page will be taken out of this document."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPendingDeleteId(null)}>
+              Keep it
+            </Button>
+            <Button type="button" variant="destructive" onClick={confirmRemove}>
+              <Trash2 data-icon="inline-start" />
+              Remove page
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function SortablePageCard({
+  page,
+  index,
+  selected,
+  canDelete,
+  onSelect,
+  onDelete,
+}: {
+  page: PhotoReportPage;
+  index: number;
+  selected: boolean;
+  canDelete: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: page.id });
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(isDragging && "z-10")}
+    >
+      <div
+        className={cn(
+          "flex items-start rounded-md border",
+          selected ? "border-primary bg-primary/8" : "hover:bg-muted/60",
+          isDragging && "bg-background shadow-sm",
+        )}
+      >
+        <button
+          type="button"
+          className="mt-1.5 shrink-0 cursor-grab touch-none px-1 py-1 text-muted-foreground hover:text-foreground active:cursor-grabbing"
+          aria-label={`Drag page ${index + 1} to reorder`}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-3.5" />
+        </button>
+        <button type="button" onClick={onSelect} className="min-w-0 flex-1 py-2 pr-1 text-left text-sm">
+          <span className="block text-[10px] tracking-wide text-muted-foreground uppercase">Page {index + 1}</span>
+          <span className="mt-0.5 block truncate">{pageLabel(page, index)}</span>
+        </button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="mt-1 mr-0.5 text-muted-foreground hover:text-destructive"
+          disabled={!canDelete}
+          aria-label={`Remove page ${index + 1}`}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onDelete();
+          }}
+        >
+          <Trash2 />
+        </Button>
+      </div>
+    </li>
   );
 }
 
