@@ -441,11 +441,3 @@ export function toOpenAiTools(tools: AssistantToolDef[]) {
     },
   }));
 }
-
-export function toAnthropicTools(tools: AssistantToolDef[]) {
-  return tools.map((tool) => ({
-    name: tool.name,
-    description: tool.description,
-    input_schema: tool.parameters,
-  }));
-}

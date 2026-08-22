@@ -92,7 +92,7 @@ export async function POST(request: Request) {
         ok: false,
         code: "no_key",
         message:
-          "Ask Truss needs OPENAI_API_KEY or ANTHROPIC_API_KEY on the server. Add one to .env.local and restart.",
+          "Ask Truss needs OPENAI_API_KEY on the server. Add it to .env.local and restart.",
       } satisfies AssistantResponse,
       { status: 503 },
     );
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         code: "provider",
-        message: "The assistant could not reach OpenAI or Anthropic. Try again in a moment.",
+        message: "Ask Truss could not reach OpenAI. Check OPENAI_API_KEY and try again in a moment.",
       } satisfies AssistantResponse,
       { status: 502 },
     );

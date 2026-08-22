@@ -220,7 +220,7 @@ export function AssistantPanel() {
     const content = text.trim();
     if (!content || busy || pending) return;
     if (configured === false) {
-      setError("Ask Truss needs OPENAI_API_KEY or ANTHROPIC_API_KEY on the server.");
+      setError("Ask Truss needs OPENAI_API_KEY on the server.");
       return;
     }
     const userText = attachment ? `${content}\n\n[Photo attached: ${attachment.name}]` : content;
@@ -272,9 +272,8 @@ export function AssistantPanel() {
             <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
               {configured === false ? (
                 <p className="text-sm text-muted-foreground">
-                  Ask Truss needs an OpenAI or Anthropic key on the server. Add <code className="font-mono text-xs">OPENAI_API_KEY</code> or{" "}
-                  <code className="font-mono text-xs">ANTHROPIC_API_KEY</code> to <code className="font-mono text-xs">.env.local</code> and
-                  restart. It will not invent jobs or numbers without a key.
+                  Ask Truss uses OpenAI. Add <code className="font-mono text-xs">OPENAI_API_KEY</code> to{" "}
+                  <code className="font-mono text-xs">.env.local</code> and restart. It will not invent jobs or numbers without a key.
                 </p>
               ) : shown.length === 0 ? (
                 <div className="space-y-3">
