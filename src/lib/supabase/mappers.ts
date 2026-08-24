@@ -319,6 +319,8 @@ export function mapEstimate(row: EstimateRow): Estimate {
     sentAt: row.sent_at,
     acceptedAt: row.accepted_at,
     secondAcceptedAt: row.second_accepted_at ?? null,
+    ownerSignedAt: row.owner_signed_at ?? null,
+    ownerSignedName: row.owner_signed_name ?? "",
     createdAt: row.created_at,
     taxRate: Number(row.tax_rate ?? 0),
     discountKind: adjustmentKind(row.discount_kind),
@@ -367,6 +369,8 @@ export function estimatePatch(patch: Partial<Estimate>) {
   if (patch.sentAt !== undefined) row.sent_at = patch.sentAt;
   if (patch.acceptedAt !== undefined) row.accepted_at = patch.acceptedAt;
   if (patch.secondAcceptedAt !== undefined) row.second_accepted_at = patch.secondAcceptedAt;
+  if (patch.ownerSignedAt !== undefined) row.owner_signed_at = patch.ownerSignedAt;
+  if (patch.ownerSignedName !== undefined) row.owner_signed_name = patch.ownerSignedName;
   if (patch.taxRate !== undefined) row.tax_rate = patch.taxRate;
   if (patch.discountKind !== undefined) row.discount_kind = patch.discountKind;
   if (patch.discountValue !== undefined) row.discount_value = patch.discountValue;

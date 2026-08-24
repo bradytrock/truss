@@ -8,7 +8,7 @@ import { ProposalDocument } from "@/components/proposal-document";
 import { ShareFrame, ShareLoading, ShareMissing, SharePdfButton } from "@/components/share-frame";
 import { downloadEstimatePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
-import { estimateFullySigned, nextEstimateSignature, type EstimateSigner } from "@/lib/estimate-signers";
+import { estimateFullySigned, nextEstimateSignature, resolveProjectOwner, type EstimateSigner } from "@/lib/estimate-signers";
 import { linesForEstimate } from "@/lib/estimate-totals";
 import { parseSharedEstimate, type SharedEstimatePayload } from "@/lib/share";
 import type { Estimate } from "@/lib/types";
@@ -119,6 +119,14 @@ export default function SharedEstimatePage() {
       fromStore.status === "draft" || fromStore.status === "sent" || fromStore.status === "viewed";
     const openForSignatures =
       fromStore.status === "draft" || fromStore.status === "sent" || fromStore.status === "viewed";
+    const owner = resolveProjectOwner({
+      estimate: fromStore,
+      jobs: crm.jobs,
+      opportunities: crm.opportunities,
+      staff: crm.staff,
+      user: crm.user,
+      companyName: crm.company.name,
+    });
     return (
       <ShareFrame
         actions={
@@ -152,6 +160,7 @@ export default function SharedEstimatePage() {
           customer={customer}
           primaryName={primaryName}
           secondName={secondName}
+          companyName={crm.company.name}
         />
         <ProposalDocument
           company={crm.company}
@@ -159,6 +168,7 @@ export default function SharedEstimatePage() {
           lines={lines}
           customer={customer}
           secondCustomer={secondName}
+          contractorName={owner.name}
           selectable={optionalOpen}
           showStatus={false}
           onToggleOptional={(line, selected) => void crm.updateEstimateLine(line.id, { selected })}
@@ -211,6 +221,7 @@ export default function SharedEstimatePage() {
         customer={remote.customer}
         primaryName={remotePrimary}
         secondName={remoteSecond}
+        companyName={remote.company.name}
       />
       <ProposalDocument
         company={remote.company}
@@ -218,6 +229,7 @@ export default function SharedEstimatePage() {
         lines={remote.lines}
         customer={remote.customer}
         secondCustomer={remoteSecond}
+        contractorName={remote.estimate.ownerSignedName || remote.company.name}
         showStatus={false}
       />
     </ShareFrame>
@@ -229,11 +241,16 @@ function SignatureBanner({
   customer,
   primaryName,
   secondName,
+  companyName,
 }: {
-  estimate: Pick<Estimate, "status" | "number" | "secondContactId" | "acceptedAt" | "secondAcceptedAt">;
+  estimate: Pick<
+    Estimate,
+    "status" | "number" | "secondContactId" | "acceptedAt" | "secondAcceptedAt" | "ownerSignedAt" | "sentAt"
+  >;
   customer: string;
   primaryName: string;
   secondName: string | null;
+  companyName: string;
 }) {
   if (estimate.status === "accepted" || estimateFullySigned(estimate)) {
     return (
@@ -242,16 +259,27 @@ function SignatureBanner({
       </p>
     );
   }
-  if (!estimate.secondContactId) return null;
-  const waiting: string[] = [];
-  if (!estimate.acceptedAt) waiting.push(primaryName);
-  if (!estimate.secondAcceptedAt) waiting.push(secondName || "the other homeowner");
-  if (waiting.length === 2) return null;
-  return (
-    <p className="rounded-md border bg-card px-4 py-3 text-sm">
-      Waiting on {waiting.join(" and ")} to sign {estimate.number}.
-    </p>
-  );
+  if (estimate.secondContactId) {
+    const waiting: string[] = [];
+    if (!estimate.acceptedAt) waiting.push(primaryName);
+    if (!estimate.secondAcceptedAt) waiting.push(secondName || "the other homeowner");
+    if (waiting.length === 1) {
+      return (
+        <p className="rounded-md border bg-card px-4 py-3 text-sm">
+          Waiting on {waiting[0]} to sign {estimate.number}.
+        </p>
+      );
+    }
+  }
+  if (estimate.ownerSignedAt || estimate.sentAt) {
+    return (
+      <p className="rounded-md border bg-card px-4 py-3 text-sm">
+        {companyName} signed this proposal when it was sent. Your signature accepts it and makes it
+        binding.
+      </p>
+    );
+  }
+  return null;
 }
 
 function ShareSignActions({

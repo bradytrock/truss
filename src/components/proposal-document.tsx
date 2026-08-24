@@ -75,6 +75,7 @@ export function ProposalDocument({
   customer,
   secondCustomer,
   company,
+  contractorName,
   onToggleOptional,
   selectable,
   showInternalNotes = false,
@@ -85,6 +86,7 @@ export function ProposalDocument({
   customer: string;
   secondCustomer?: string | null;
   company?: CompanySettings;
+  contractorName?: string | null;
   onToggleOptional?: (line: EstimateLine, selected: boolean) => void;
   selectable?: boolean;
   showInternalNotes?: boolean;
@@ -93,6 +95,7 @@ export function ProposalDocument({
   const groups = groupEstimateLines(lines);
   const site = formatJobSite(estimate);
   const signers = estimateSignatureLines(estimate, {
+    contractor: contractorName || company?.name,
     primary: primaryNameFromJoined(customer, secondCustomer),
     second: secondCustomer,
   });
@@ -184,19 +187,38 @@ export function ProposalDocument({
         <div className={signers.length > 1 ? "grid gap-6 sm:grid-cols-2" : "max-w-md"}>
           {signers.map((signer) => (
             <div key={signer.role} className="space-y-3">
-              <div className="h-12 border-b border-foreground/40" />
+              <div className="relative h-12 border-b border-foreground/40">
+                {signer.signedAt ? (
+                  <p className="absolute inset-x-0 bottom-1 font-serif text-xl italic leading-none">
+                    {signer.name}
+                  </p>
+                ) : null}
+              </div>
               <div>
                 <p className="text-sm font-medium">{signer.name}</p>
+                {signer.party === "contractor" && company?.name ? (
+                  <p className="text-xs text-muted-foreground">{company.name}</p>
+                ) : null}
                 <p className="text-xs text-muted-foreground">
-                  {signer.signedAt ? `Signed ${formatDate(signer.signedAt)}` : "Homeowner signature"}
+                  {signer.signedAt
+                    ? `Signed ${formatDate(signer.signedAt)}`
+                    : signer.party === "contractor"
+                      ? "Contractor signature"
+                      : "Homeowner signature"}
                 </p>
               </div>
             </div>
           ))}
         </div>
-        {signers.length > 1 && (!estimate.acceptedAt || !estimate.secondAcceptedAt) ? (
+        {estimate.secondContactId && (!estimate.acceptedAt || !estimate.secondAcceptedAt) ? (
           <p className="mt-3 text-xs text-muted-foreground">
             Both homeowners must sign before this proposal is accepted.
+          </p>
+        ) : null}
+        {signers[0]?.signedAt && !estimate.acceptedAt ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            {company?.name || "The contractor"} signed this proposal when it was sent. Your
+            signature accepts it.
           </p>
         ) : null}
       </div>

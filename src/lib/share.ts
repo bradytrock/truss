@@ -107,6 +107,8 @@ export type SharedEstimatePayload = {
     sentAt: string | null;
     acceptedAt: string | null;
     secondAcceptedAt: string | null;
+    ownerSignedAt: string | null;
+    ownerSignedName: string;
     createdAt: string;
     taxRate: number;
     discountKind: "percent" | "amount";
@@ -222,6 +224,8 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
       sentAt: asNullable(estimate.sentAt),
       acceptedAt: asNullable(estimate.acceptedAt),
       secondAcceptedAt: asNullable(estimate.secondAcceptedAt),
+      ownerSignedAt: asNullable(estimate.ownerSignedAt),
+      ownerSignedName: asString(estimate.ownerSignedName),
       createdAt: asString(estimate.createdAt),
       taxRate: asNumber(estimate.taxRate),
       discountKind: estimate.discountKind === "amount" ? "amount" : "percent",

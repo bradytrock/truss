@@ -386,6 +386,8 @@ export type Database = {
           sent_at: string | null;
           accepted_at: string | null;
           second_accepted_at: string | null;
+          owner_signed_at: string | null;
+          owner_signed_name: string;
           created_at: string;
           tax_rate: number;
           discount_kind: string;
@@ -416,6 +418,8 @@ export type Database = {
           sent_at?: string | null;
           accepted_at?: string | null;
           second_accepted_at?: string | null;
+          owner_signed_at?: string | null;
+          owner_signed_name?: string;
           created_at?: string;
           tax_rate?: number;
           discount_kind?: string;

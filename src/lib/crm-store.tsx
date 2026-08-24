@@ -18,8 +18,8 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedOperationsIfMissing } from "@/lib/supabase/ops-seed";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage } from "@/lib/supabase/schema-errors";
-import { estimateFullySigned, nextEstimateSignature, type EstimateSigner } from "@/lib/estimate-signers";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage } from "@/lib/supabase/schema-errors";
+import { estimateFullySigned, nextEstimateSignature, resolveProjectOwner, type EstimateSigner } from "@/lib/estimate-signers";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson } from "@/lib/job-record";
 import {
@@ -2023,6 +2023,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     const { error } = await supabase.from("estimates").update(estimatePatch(patch)).eq("id", id);
     if (error) {
+      if (isMissingOwnerSignature(error)) {
+        apply();
+        toast.message(missingOwnerSignatureMessage());
+        return;
+      }
       if (isMissingSecondSigner(error)) {
         apply();
         toast.message(missingSecondSignerMessage());
@@ -2045,29 +2050,68 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (!current) return;
       const sentAt = new Date().toISOString();
       const shareToken = current.shareToken || newShareToken();
+      const owner = resolveProjectOwner({
+        estimate: current,
+        jobs: state.jobs,
+        opportunities: state.opportunities,
+        staff: state.staff,
+        user: displayUser,
+        companyName: companySettings.name,
+      });
+      const ownerSignedAt = current.ownerSignedAt ?? sentAt;
+      const ownerSignedName = current.ownerSignedName.trim() || owner.name;
       const apply = () =>
         setState((prev) => ({
           ...prev,
           estimates: prev.estimates.map((estimate) =>
             estimate.id === id
-              ? { ...estimate, status: "sent" as const, sentAt, shareToken }
+              ? {
+                  ...estimate,
+                  status: "sent" as const,
+                  sentAt,
+                  shareToken,
+                  ownerSignedAt,
+                  ownerSignedName,
+                }
               : estimate
           ),
         }));
       const supabase = maybeClient();
       if (supabase) {
-        const payload: { status: "sent"; sent_at: string; share_token?: string } = {
-          status: "sent",
+        const payload = {
+          status: "sent" as const,
           sent_at: sentAt,
           share_token: shareToken,
+          owner_signed_at: ownerSignedAt,
+          owner_signed_name: ownerSignedName,
         };
         let { error } = await supabase.from("estimates").update(payload).eq("id", id);
+        if (error && isMissingOwnerSignature(error)) {
+          toast.message(missingOwnerSignatureMessage());
+          const retry = await supabase
+            .from("estimates")
+            .update({ status: "sent", sent_at: sentAt, share_token: shareToken })
+            .eq("id", id);
+          error = retry.error;
+        }
         if (error && isMissingShareToken(error)) {
           const retry = await supabase
             .from("estimates")
-            .update({ status: "sent", sent_at: sentAt })
+            .update({
+              status: "sent",
+              sent_at: sentAt,
+              owner_signed_at: ownerSignedAt,
+              owner_signed_name: ownerSignedName,
+            })
             .eq("id", id);
           error = retry.error;
+          if (error && isMissingOwnerSignature(error)) {
+            const last = await supabase
+              .from("estimates")
+              .update({ status: "sent", sent_at: sentAt })
+              .eq("id", id);
+            error = last.error;
+          }
         }
         if (error) {
           toast.error(error.message);
@@ -2097,10 +2141,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     },
     [
       addActivity,
+      companySettings.name,
+      displayUser,
       ensureLeadForEstimate,
       moveOpportunity,
       state.estimates,
+      state.jobs,
       state.opportunities,
+      state.staff,
       updateEstimate,
     ]
   );

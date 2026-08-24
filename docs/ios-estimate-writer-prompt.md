@@ -20,7 +20,7 @@ The unsigned web demo hydrates from in-memory Northline seed and mutates locally
 
 `draft` → **Send proposal** → `sent` → (optional) `viewed` → **Mark accepted** → `accepted` **or** **Decline** → `declined`.
 
-If `secondContactId` is set, do not move to `accepted` until both `acceptedAt` and `secondAcceptedAt` are set. Office **Mark signed** records both signatures. The public share link shows **Sign as {name}** for each homeowner.
+Sending a proposal stamps the project owner's signature (`ownerSignedAt`, `ownerSignedName`) from the job owner, else the lead owner, else the signed-in seat. The document already shows that contractor signature, so the homeowner's signature is what makes it binding. If `secondContactId` is set, do not move to `accepted` until both `acceptedAt` and `secondAcceptedAt` are set. Office **Mark signed** records both homeowner signatures; it does not wait on the contractor line. The public share link shows **Sign as {name}** for each homeowner.
 
 - `draft` — full edit (name, client, second homeowner, job site, lines, tax, discount, deposit, intro, terms, notes).
 - `sent` / `viewed` — lock prices and structure. Homeowner (and office) may still toggle **optional line selected**. Office may accept or decline.
@@ -29,7 +29,7 @@ If `secondContactId` is set, do not move to `accepted` until both `acceptedAt` a
 
 **Convert to invoice** is allowed from `sent`, `viewed`, or `accepted` if no invoice already points at this estimate. Do not convert a draft. Do not convert if there are zero included lines. Conversion does **not** change estimate status.
 
-Duplicate always creates a new `draft` with a new `EST-####` number, copied lines, copied tax/discount/deposit/terms/site, copied `secondContactId`, `sentAt`/`acceptedAt`/`secondAcceptedAt` cleared, and name suffixed ` (copy)` if it does not already end that way.
+Duplicate always creates a new `draft` with a new `EST-####` number, copied lines, copied tax/discount/deposit/terms/site, copied `secondContactId`, `sentAt`/`acceptedAt`/`secondAcceptedAt`/`ownerSignedAt`/`ownerSignedName` cleared, and name suffixed ` (copy)` if it does not already end that way.
 
 ## Totals formula (must match web, to the cent)
 
@@ -76,20 +76,22 @@ Unselected optional work should be summarized (“$X in optional work is not in 
 | jobId | string? | Sold job |
 | contactId | string? | Homeowner / primary person |
 | secondContactId | string? | Optional second homeowner. When set, both people must sign before the estimate is accepted. |
-| status | draft \| sent \| viewed \| accepted \| declined | Accepted only after every required signature. |
+| ownerSignedAt | ISO? | Set automatically when the proposal is sent. |
+| ownerSignedName | string | Project owner (job owner, else lead owner, else the person who sent it). |
+| status | draft \| sent \| viewed \| accepted \| declined | Accepted only after every required homeowner signature. |
 | notes | string | **Internal only.** Do not put this on the client PDF/preview as body copy unless you label it Internal notes for office. |
 | validUntil | date | Defaults to 30 days from the created date. |
-| sentAt / acceptedAt / secondAcceptedAt / createdAt | ISO | `secondAcceptedAt` is when the second homeowner signed. |
+| sentAt / acceptedAt / secondAcceptedAt / ownerSignedAt / createdAt | ISO | `secondAcceptedAt` is when the second homeowner signed. `ownerSignedAt` is when the contractor signed (on send). |
 | taxRate | number | Percent, e.g. 8.31 |
 | discountKind | percent \| amount | |
 | discountValue | number | |
 | depositKind | percent \| amount | |
 | depositValue | number | |
 | intro | string | Cover note the homeowner reads |
-| terms | string | Default: “This proposal is good through the valid-until date. Work starts after you accept and pay any deposit. Changes on site will be written as a change order before we proceed.” |
+| terms | string | Default: “This proposal is good through the valid-until date. Sending it signs for the contractor. Work starts after you sign and pay any deposit. Changes on site will be written as a change order before we proceed.” |
 | street, city, state, postalCode | string | Job site on the proposal (not the office letterhead) |
 
-Postgres: `estimates` plus columns from `supabase/migrations/20260819290000_estimate_writer.sql` (`contact_id`, `tax_rate`, `discount_kind`, `discount_value`, `deposit_kind`, `deposit_value`, `intro`, `terms`, `street`, `city`, `state`, `postal_code`) and `supabase/migrations/20260819350000_estimate_second_signer.sql` (`second_contact_id`, `second_accepted_at`). If those columns are missing, keep working locally and tell the user to run that SQL.
+Postgres: `estimates` plus columns from `supabase/migrations/20260819290000_estimate_writer.sql` (`contact_id`, `tax_rate`, `discount_kind`, `discount_value`, `deposit_kind`, `deposit_value`, `intro`, `terms`, `street`, `city`, `state`, `postal_code`), `supabase/migrations/20260819350000_estimate_second_signer.sql` (`second_contact_id`, `second_accepted_at`), and `supabase/migrations/20260819360000_estimate_owner_signature.sql` (`owner_signed_at`, `owner_signed_name`). If those columns are missing, keep working locally and tell the user to run that SQL.
 
 ### Estimate line
 
@@ -134,7 +136,7 @@ Mirror the web, adapted to iPhone/iPad.
 
    Empty draft: “No lines yet. Pull items from the price book or add a lump-sum line. Optional work stays out of the total until you check it.”
 
-4. **Preview (client document)** — company letterhead (name, office address, phone/email, license). Number, name, “Prepared for {homeowner}” (join two names with “and” when a second homeowner is set), job site, valid until, intro, sections, line amounts, optional badges, totals (subtotal, discount, tax, total, deposit due), terms, then a signature line for each homeowner. Optional lines that are off are visually muted / struck on the amount. On `sent`/`viewed`, optional lines have a checkbox so the homeowner can add them. Internal notes are office-only; do not print them on a customer PDF.
+4. **Preview (client document)** — company letterhead (name, office address, phone/email, license). Number, name, “Prepared for {homeowner}” (join two names with “and” when a second homeowner is set), job site, valid until, intro, sections, line amounts, optional badges, totals (subtotal, discount, tax, total, deposit due), terms, then signatures: contractor first (signed when the proposal is sent), then each homeowner. Optional lines that are off are visually muted / struck on the amount. On `sent`/`viewed`, optional lines have a checkbox so the homeowner can add them. Internal notes are office-only; do not print them on a customer PDF.
 
    iPhone: Write | Preview tabs. iPad: writer + preview side by side.
 

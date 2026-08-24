@@ -338,6 +338,8 @@ export interface Estimate {
   sentAt: string | null;
   acceptedAt: string | null;
   secondAcceptedAt: string | null;
+  ownerSignedAt: string | null;
+  ownerSignedName: string;
   createdAt: string;
   taxRate: number;
   discountKind: "percent" | "amount";

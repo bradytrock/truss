@@ -61,6 +61,7 @@ import {
   type AdjustmentKind,
 } from "@/lib/estimate-totals";
 import { downloadEstimatePdf } from "@/lib/document-pdf";
+import { resolveProjectOwner } from "@/lib/estimate-signers";
 import { shareUrl } from "@/lib/share";
 import { formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
@@ -854,6 +855,15 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     </div>
   );
 
+  const owner = resolveProjectOwner({
+    estimate,
+    jobs: crm.jobs,
+    opportunities: crm.opportunities,
+    staff: crm.staff,
+    user: crm.user,
+    companyName: crm.company.name,
+  });
+
   const preview = (
     <ProposalDocument
       company={crm.company}
@@ -861,6 +871,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       lines={lines}
       customer={customer}
       secondCustomer={secondContact?.name ?? null}
+      contractorName={owner.name}
       selectable={optionalOpen}
       showInternalNotes
       onToggleOptional={(line, selected) => void crm.updateEstimateLine(line.id, { selected })}

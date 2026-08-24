@@ -211,10 +211,12 @@ export async function downloadEstimatePdf(input: {
   }
 
   const signers = estimateSignatureLines(input.estimate, {
+    contractor: input.estimate.ownerSignedName || input.company.name,
     primary: primaryNameFromJoined(input.customer, input.secondCustomer),
     second: input.secondCustomer,
   });
-  y = ensureSpace(doc, y + 8, 28 + signers.length * 52);
+  const signerRows = Math.ceil(signers.length / 2);
+  y = ensureSpace(doc, y + 8, 28 + signerRows * 52);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(90, 90, 90);
@@ -222,8 +224,16 @@ export async function downloadEstimatePdf(input: {
   y += 18;
   const colWidth = signers.length > 1 ? (right - 54 - 24) / 2 : right - 54;
   signers.forEach((signer, index) => {
-    const x = signers.length > 1 && index === 1 ? 54 + colWidth + 24 : 54;
-    const lineY = y + 28;
+    const col = signers.length > 1 ? index % 2 : 0;
+    const row = signers.length > 1 ? Math.floor(index / 2) : 0;
+    const x = col === 1 ? 54 + colWidth + 24 : 54;
+    const lineY = y + 28 + row * 52;
+    if (signer.signedAt) {
+      doc.setFont("times", "italic");
+      doc.setFontSize(14);
+      doc.setTextColor(40, 40, 40);
+      doc.text(signer.name, x, lineY - 6);
+    }
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setTextColor(40, 40, 40);
@@ -231,9 +241,14 @@ export async function downloadEstimatePdf(input: {
     doc.text(signer.name, x, lineY + 14);
     doc.setFontSize(9);
     doc.setTextColor(90, 90, 90);
-    doc.text(signer.signedAt ? `Signed ${formatDate(signer.signedAt)}` : "Homeowner signature", x, lineY + 26);
+    const caption = signer.signedAt
+      ? `Signed ${formatDate(signer.signedAt)}`
+      : signer.party === "contractor"
+        ? "Contractor signature"
+        : "Homeowner signature";
+    doc.text(caption, x, lineY + 26);
   });
-  y += 52;
+  y += signerRows * 52;
 
   downloadBlob(doc.output("blob"), `${input.estimate.number}.pdf`);
 }

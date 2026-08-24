@@ -140,7 +140,7 @@ export function invoiceLinesFromEstimate(estimate: Estimate, lines: EstimateLine
 }
 
 export const DEFAULT_ESTIMATE_TERMS =
-  "This proposal is good through the valid-until date. Work starts after you accept and pay any deposit. Changes on site will be written as a change order before we proceed.";
+  "This proposal is good through the valid-until date. Sending it signs for the contractor. Work starts after you sign and pay any deposit. Changes on site will be written as a change order before we proceed.";
 
 export const COMMON_UNITS = ["LS", "ea", "sq", "sf", "lf", "cy", "hr", "day", "mo"];
 
@@ -149,6 +149,8 @@ export type EstimateDraft = Omit<
   | "contactId"
   | "secondContactId"
   | "secondAcceptedAt"
+  | "ownerSignedAt"
+  | "ownerSignedName"
   | "taxRate"
   | "discountKind"
   | "discountValue"
@@ -168,6 +170,8 @@ export type EstimateDraft = Omit<
       | "contactId"
       | "secondContactId"
       | "secondAcceptedAt"
+      | "ownerSignedAt"
+      | "ownerSignedName"
       | "taxRate"
       | "discountKind"
       | "discountValue"
@@ -200,6 +204,10 @@ export function fillEstimate(estimate: EstimateDraft): Estimate {
     contactId,
     secondContactId,
     secondAcceptedAt: secondContactId ? (estimate.secondAcceptedAt ?? null) : null,
+    ownerSignedAt:
+      estimate.ownerSignedAt ??
+      (estimate.status !== "draft" && estimate.sentAt ? estimate.sentAt : null),
+    ownerSignedName: estimate.ownerSignedName ?? "",
     taxRate: estimate.taxRate ?? 0,
     discountKind: estimate.discountKind ?? "percent",
     discountValue: estimate.discountValue ?? 0,

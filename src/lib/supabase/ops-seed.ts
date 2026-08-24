@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { seedState } from "@/lib/seed";
-import { isMissingEstimateWriter, isMissingShareToken, isMissingFinancials, isMissingSecondSigner } from "@/lib/supabase/schema-errors";
+import { isMissingEstimateWriter, isMissingShareToken, isMissingFinancials, isMissingSecondSigner, isMissingOwnerSignature } from "@/lib/supabase/schema-errors";
 import type { Database } from "@/lib/supabase/database.types";
 
 type Client = SupabaseClient<Database>;
@@ -125,10 +125,18 @@ export async function insertOperations(
         state: estimate.state,
         postal_code: estimate.postalCode,
         share_token: estimate.shareToken,
+        owner_signed_at: estimate.ownerSignedAt,
+        owner_signed_name: estimate.ownerSignedName,
       },
     ];
   });
   let { error: estimateError } = await supabase.from("estimates").insert(estimateRows);
+  if (estimateError && isMissingOwnerSignature(estimateError)) {
+    const retry = await supabase.from("estimates").insert(
+      estimateRows.map(({ owner_signed_at: _ownerSignedAt, owner_signed_name: _ownerSignedName, ...row }) => row),
+    );
+    estimateError = retry.error;
+  }
   if (estimateError && isMissingSecondSigner(estimateError)) {
     const retry = await supabase.from("estimates").insert(
       estimateRows.map(({ second_contact_id: _secondContactId, second_accepted_at: _secondAcceptedAt, ...row }) => row),

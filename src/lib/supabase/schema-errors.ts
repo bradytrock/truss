@@ -5,6 +5,8 @@ export const ESTIMATE_WRITER_SQL = "supabase/migrations/20260819290000_estimate_
 export const RESIDENTIAL_ENUMS_SQL = "supabase/migrations/20260819200000_residential_homeowners.sql";
 
 export const ESTIMATE_SECOND_SIGNER_SQL = "supabase/migrations/20260819350000_estimate_second_signer.sql";
+export const ESTIMATE_OWNER_SIGNATURE_SQL =
+  "supabase/migrations/20260819360000_estimate_owner_signature.sql";
 
 export function isMissingSecondSigner(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -16,9 +18,20 @@ export function missingSecondSignerMessage() {
   return `Saved in this browser. Run ${ESTIMATE_SECOND_SIGNER_SQL} in the SQL editor to keep a second homeowner and both signatures in Postgres.`;
 }
 
+export function isMissingOwnerSignature(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return message.includes("owner_signed_at") || message.includes("owner_signed_name");
+}
+
+export function missingOwnerSignatureMessage() {
+  return `Saved in this browser. Run ${ESTIMATE_OWNER_SIGNATURE_SQL} in the SQL editor so sending a proposal keeps the project owner's signature in Postgres.`;
+}
+
 export function isMissingEstimateWriter(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
   if (isMissingSecondSigner(error)) return false;
+  if (isMissingOwnerSignature(error)) return false;
   const message = error.message ?? "";
   return (
     error.code === "PGRST204" ||
