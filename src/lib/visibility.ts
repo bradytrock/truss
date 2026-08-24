@@ -24,6 +24,26 @@ export function canViewReports(role: SeatRole) {
   );
 }
 
+/** Dollar columns on reports — same seats that can open the page. */
+export function canSeeReportMoney(role: SeatRole) {
+  return canViewReports(role);
+}
+
+/** Other people’s names and close rates. Field seats never get this even if the page opens. */
+export function canSeeTeamPerformance(role: SeatRole) {
+  const scope = accessScope(role);
+  return scope === "company" || scope === "all_jobs" || scope === "team";
+}
+
+export function staffForReports(viewer: StaffMember, staff: StaffMember[]) {
+  const scope = accessScope(viewer.role);
+  if (scope === "company" || scope === "all_jobs") return staff;
+  if (scope === "team") {
+    return staff.filter((member) => member.teamId === viewer.teamId || member.id === viewer.id);
+  }
+  return staff.filter((member) => member.id === viewer.id);
+}
+
 export function canViewAccounting(role: SeatRole) {
   return role === "company_admin" || role === "accountant";
 }
