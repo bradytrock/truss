@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useCrm } from "@/lib/crm-store";
-import { localYmd } from "@/lib/format";
+import { defaultEstimateValidUntil, localYmd } from "@/lib/format";
 import { LogPaymentDialog } from "@/components/log-financial-dialogs";
 import {
   EVENT_KIND_LABELS,
@@ -58,8 +58,12 @@ export function CreateEstimateDialog({
   );
   const [opportunityId, setOpportunityId] = useState(defaultOpportunityId ?? "");
   const [jobId, setJobId] = useState(defaultJobId ?? "");
-  const [validUntil, setValidUntil] = useState("");
+  const [validUntil, setValidUntil] = useState(defaultEstimateValidUntil);
   const [notes, setNotes] = useState("");
+
+  useEffect(() => {
+    if (open) setValidUntil(defaultEstimateValidUntil());
+  }, [open]);
 
   const contact = contacts.find((item) => item.id === contactId);
   const relatedOpps = opportunities.filter(
@@ -91,6 +95,7 @@ export function CreateEstimateDialog({
       toast.success(`${estimate.number} drafted.`);
       onOpenChange(false);
       setName("");
+      setValidUntil(defaultEstimateValidUntil());
       router.push(`/estimates/${estimate.id}`);
     } catch {
       // Store already toasted.

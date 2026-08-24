@@ -75,7 +75,7 @@ Unselected optional work should be summarized (“$X in optional work is not in 
 | contactId | string? | Homeowner / primary person |
 | status | draft \| sent \| viewed \| accepted \| declined | |
 | notes | string | **Internal only.** Do not put this on the client PDF/preview as body copy unless you label it Internal notes for office. |
-| validUntil | date? | |
+| validUntil | date | Defaults to 30 days from the created date. |
 | sentAt / acceptedAt / createdAt | ISO | |
 | taxRate | number | Percent, e.g. 8.31 |
 | discountKind | percent \| amount | |

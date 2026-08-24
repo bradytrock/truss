@@ -12,7 +12,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
+import { defaultEstimateValidUntil } from "@/lib/format";
 import { seedState } from "@/lib/seed";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
@@ -1923,7 +1923,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         contactId: input.contactId ?? null,
         status: "draft",
         notes: input.notes ?? "",
-        validUntil: input.validUntil ?? null,
+        validUntil: input.validUntil !== undefined ? input.validUntil : defaultEstimateValidUntil(),
         sentAt: null,
         acceptedAt: null,
         createdAt: new Date().toISOString(),

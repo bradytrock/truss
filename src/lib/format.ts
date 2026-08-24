@@ -47,6 +47,16 @@ export function localYmd(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+export function localYmdPlusDays(days: number, from = new Date()) {
+  const next = new Date(from);
+  next.setDate(next.getDate() + days);
+  return localYmd(next);
+}
+
+export function defaultEstimateValidUntil(from = new Date()) {
+  return localYmdPlusDays(30, from);
+}
+
 export function startOfWeek(date: Date) {
   const next = new Date(date);
   next.setHours(12, 0, 0, 0);
