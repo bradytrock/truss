@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { SB_KEY_COOKIE, SB_KEY_COOKIE_LEGACY, SB_URL_COOKIE, SB_URL_COOKIE_LEGACY, normalizeSupabaseUrl } from "@/lib/supabase/env";
+import { SB_KEY_COOKIE, SB_URL_COOKIE, normalizeSupabaseUrl } from "@/lib/supabase/env";
 import { writeFile } from "fs/promises";
 import path from "path";
 
@@ -69,7 +69,5 @@ export async function DELETE() {
   const response = NextResponse.json({ ok: true });
   response.cookies.set(SB_URL_COOKIE, "", { ...cookieOptions, maxAge: 0 });
   response.cookies.set(SB_KEY_COOKIE, "", { ...cookieOptions, maxAge: 0 });
-  response.cookies.set(SB_URL_COOKIE_LEGACY, "", { ...cookieOptions, maxAge: 0 });
-  response.cookies.set(SB_KEY_COOKIE_LEGACY, "", { ...cookieOptions, maxAge: 0 });
   return response;
 }

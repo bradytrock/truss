@@ -19,6 +19,12 @@ import {
 } from "@/lib/types";
 import { accessScope, staffForReports, type AccessScope } from "@/lib/visibility";
 
+export function yearOf(value: string | null | undefined) {
+  if (!value) return null;
+  const year = Number(value.slice(0, 4));
+  return Number.isFinite(year) ? year : null;
+}
+
 export type DatePreset = "mtd" | "30" | "90" | "ytd" | "all";
 export type ReportTab =
   | "jobs"
