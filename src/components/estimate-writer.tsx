@@ -16,6 +16,7 @@ import {
 import { ProposalDocument } from "@/components/proposal-document";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { CollectSignatureDialog } from "@/components/signature-pad";
+import { shareContactsForEstimate } from "@/lib/parties";
 import { EstimateStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -387,6 +388,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     (estimate.status === "sent" || estimate.status === "viewed" || estimate.status === "accepted") &&
     !relatedInvoice;
   const contact = estimate.contactId ? crm.getContact(estimate.contactId) : undefined;
+  const secondContact = estimate.secondContactId ? crm.getContact(estimate.secondContactId) : undefined;
   const client = crm.getClient(estimate.clientId);
   const opportunity = estimate.opportunityId ? crm.getOpportunity(estimate.opportunityId) : undefined;
   const job = estimate.jobId ? crm.getJob(estimate.jobId) : undefined;
@@ -476,6 +478,19 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     }
   }
 
+  async function handleReopen() {
+    setPending(true);
+    try {
+      await crm.reopenEstimate(estimate.id);
+      toast.success("Proposal reopened as a draft. Edit it and send again.");
+      setTab("write");
+    } catch {
+      // Store already toasted the reason.
+    } finally {
+      setPending(false);
+    }
+  }
+
   const actions = (
     <div className="flex flex-wrap gap-2">
       <Button variant="outline" disabled={pending || lines.length === 0} onClick={() => void downloadPdf()}>
@@ -511,6 +526,11 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           }}
         >
           Decline
+        </Button>
+      ) : null}
+      {estimate.status === "declined" && !relatedInvoice ? (
+        <Button disabled={pending} onClick={() => void handleReopen()}>
+          Edit and send again
         </Button>
       ) : null}
       {canConvert ? (
@@ -574,6 +594,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                   void crm.updateEstimate(estimate.id, {
                     contactId,
                     clientId: next?.clientId ?? estimate.clientId,
+                    secondContactId:
+                      contactId && contactId === estimate.secondContactId ? null : estimate.secondContactId,
                   });
                 }}
                 items={[
@@ -615,6 +637,56 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                 </Link>
               </p>
             ) : null}
+          </div>
+          <div className="sm:col-span-2">
+            <Label>Second homeowner</Label>
+            {editable ? (
+              <Select
+                value={estimate.secondContactId || "none"}
+                onValueChange={(value) => {
+                  const secondContactId = value === "none" ? null : String(value ?? "");
+                  void crm.updateEstimate(estimate.id, {
+                    secondContactId,
+                    secondAcceptedAt: secondContactId === estimate.secondContactId ? estimate.secondAcceptedAt : null,
+                  });
+                }}
+                items={[
+                  { value: "none", label: "None — one signature" },
+                  ...crm.contacts
+                    .filter((item) => item.id !== estimate.contactId)
+                    .map((item) => ({ value: item.id, label: item.name })),
+                ]}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None — one signature</SelectItem>
+                  {crm.contacts
+                    .filter((item) => item.id !== estimate.contactId)
+                    .map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="mt-1 text-sm">
+                {secondContact ? (
+                  <Link href={`/contacts/${secondContact.id}`} className="hover:underline">
+                    {secondContact.name}
+                  </Link>
+                ) : (
+                  "None"
+                )}
+              </p>
+            )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              {estimate.secondContactId
+                ? "Both homeowners must sign this proposal before it is accepted."
+                : "Add a co-owner when both signatures are required."}
+            </p>
           </div>
           <div>
             <Label>Street</Label>
@@ -917,6 +989,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       estimate={estimate}
       lines={lines}
       customer={customer}
+      market={workMarket(job, opportunity)}
       selectable={optionalOpen}
       showInternalNotes
       onToggleOptional={(line, selected) => void crm.updateEstimateLine(line.id, { selected })}
@@ -948,6 +1021,13 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
               <EstimateStatusBadge status={estimate.status} />
               <span className="text-sm text-muted-foreground">{customer}</span>
             </div>
+            {estimate.status === "declined" ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                {relatedInvoice
+                  ? "This proposal is declined and already has an invoice, so it stays locked."
+                  : "This proposal is declined and locked. Reopen it to edit lines and send again."}
+              </p>
+            ) : null}
           </div>
           {actions}
         </div>
@@ -990,8 +1070,13 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         open={shareOpen}
         onOpenChange={setShareOpen}
         title={`Share ${estimate.number}`}
-        description="Send this link so the homeowner can review the proposal, pick optional items, and sign. The signature is stored on the estimate and prints on the PDF."
+        description="Text this to the homeowner or copy the link. They can review the proposal, pick optional items, and sign from their phone — no login required. The signature is stored on the estimate and prints on the PDF."
         url={estimate.shareToken ? shareUrl("e", estimate.shareToken) : ""}
+        kind="estimate"
+        documentNumber={estimate.number}
+        documentName={estimate.name}
+        companyName={crm.company.name}
+        recipients={shareContactsForEstimate(estimate, crm)}
         onDownloadPdf={downloadPdf}
       />
       <CollectSignatureDialog

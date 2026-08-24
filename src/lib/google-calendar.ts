@@ -3,8 +3,9 @@ export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
 ].join(" ");
 
-export const GCAL_COOKIE = "truss_gcal";
-export const GCAL_OAUTH_STATE = "truss_gcal_oauth";
+export const GCAL_COOKIE = "theroofingcrm_gcal";
+export const GCAL_COOKIE_LEGACY = "truss_gcal";
+export const GCAL_OAUTH_STATE = "theroofingcrm_gcal_oauth";
 
 export function googleClientId() {
   return process.env.GOOGLE_CLIENT_ID?.trim() || process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim() || "";

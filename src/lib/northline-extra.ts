@@ -59,6 +59,7 @@ function homeowner(
 export const extraContacts: Contact[] = [
   homeowner("con_dana", "Dana Alvarez", "dana.alvarez.parkhill@gmail.com", "(303) 555-2140", "staff_elena"),
   homeowner("con_marcus", "Marcus Ellison", "marcus.ellison.wp@gmail.com", "(303) 555-2188", "staff_elena"),
+  homeowner("con_jordan", "Jordan Ellison", "jordan.ellison.wp@gmail.com", "(303) 555-2190", "staff_elena"),
   homeowner("con_owen", "Owen Hart", "owen.hart.highlands@gmail.com", "(720) 555-3301", "staff_elena"),
   homeowner("con_ivy", "Ivy Calder", "ivy.calder.boulder@gmail.com", "(303) 555-4412", "staff_luis"),
   homeowner("con_theo", "Theo Marsh", "theo.marsh.lohi@gmail.com", "(720) 555-1194", "staff_maya"),

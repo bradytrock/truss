@@ -121,7 +121,7 @@ export default function CalendarPage() {
     visiblePeople.filter((person) => selected.includes(person.id)).map((person) => person.name),
   );
 
-  const weekTruss = crm.events.filter((event) => {
+  const weekEvents = crm.events.filter((event) => {
     const day = localYmd(new Date(event.startsAt));
     if (day < localYmd(days[0]) || day > localYmd(days[6])) return false;
     if (selectedNames.size === 0) return true;
@@ -184,7 +184,7 @@ export default function CalendarPage() {
       />
 
       <p className="text-sm text-muted-foreground">
-        Week of {formatDate(localYmd(days[0]))} · {weekTruss.length} Truss · {overlayEvents.length} Google
+        Week of {formatDate(localYmd(days[0]))} · {weekEvents.length} TheRoofingCRM · {overlayEvents.length} Google
       </p>
 
       <div className="grid gap-4 xl:grid-cols-[18.5rem_minmax(0,1fr)]">
@@ -325,17 +325,17 @@ export default function CalendarPage() {
         </div>
 
         <div>
-          {weekTruss.length === 0 && overlayEvents.length === 0 ? (
+          {weekEvents.length === 0 && overlayEvents.length === 0 ? (
             <EmptyState
               title="Nothing on this week"
-              description="Turn on a linked calendar at left, or add a Truss event for a walk, inspection, or production day."
+              description="Turn on a linked calendar at left, or add an event in TheRoofingCRM for a walk, inspection, or production day."
               action={<Button onClick={() => setCreateDay(today)}>New event</Button>}
             />
           ) : (
             <div className="grid gap-2 md:grid-cols-7">
               {days.map((date) => {
                 const key = localYmd(date);
-                const trussItems = weekTruss
+                const crmItems = weekEvents
                   .filter((event) => localYmd(new Date(event.startsAt)) === key)
                   .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
                 const googleItems = overlayEvents
@@ -358,7 +358,7 @@ export default function CalendarPage() {
                       <span className="text-xs text-muted-foreground">{date.getDate()}</span>
                     </button>
                     <div className="space-y-2">
-                      {trussItems.length === 0 && googleItems.length === 0 ? (
+                      {crmItems.length === 0 && googleItems.length === 0 ? (
                         <button
                           type="button"
                           onClick={() => setCreateDay(key)}
@@ -368,7 +368,7 @@ export default function CalendarPage() {
                         </button>
                       ) : (
                         <>
-                          {trussItems.map((event) => {
+                          {crmItems.map((event) => {
                             const job = event.jobId ? crm.getJob(event.jobId) : undefined;
                             const opportunity = event.opportunityId
                               ? crm.getOpportunity(event.opportunityId)
@@ -383,7 +383,7 @@ export default function CalendarPage() {
                                   <div className="flex items-center justify-between gap-1">
                                     <EventKindBadge kind={event.kind} />
                                     <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
-                                      Truss
+                                      TheRoofingCRM
                                     </span>
                                   </div>
                                   <p className="text-sm leading-snug font-medium">{event.title}</p>

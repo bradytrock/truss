@@ -17,7 +17,7 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingSignatureColumn, missingSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingSignatureColumn, missingSignatureMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId } from "@/lib/job-record";
@@ -576,6 +576,7 @@ type CrmContextValue = CrmState & {
   sendEstimate: (id: string) => Promise<void>;
   acceptEstimate: (id: string, signature?: { name: string; image: string }) => Promise<void>;
   declineEstimate: (id: string) => Promise<void>;
+  reopenEstimate: (id: string) => Promise<void>;
   markEstimateViewed: (id: string) => Promise<void>;
   ensureEstimateShareToken: (id: string) => Promise<string>;
   ensureInvoiceShareToken: (id: string) => Promise<string>;
@@ -2604,6 +2605,92 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     apply();
   }, []);
+
+  const reopenEstimate = useCallback(
+    async (id: string) => {
+      const current = state.estimates.find((estimate) => estimate.id === id);
+      if (!current) throw new Error("Estimate not found.");
+      if (current.status !== "declined") {
+        toast.error("Only a declined proposal can be reopened.");
+        throw new Error("Estimate is not declined.");
+      }
+      if (state.invoices.some((invoice) => invoice.estimateId === id)) {
+        toast.error("This proposal already has an invoice and cannot be reopened.");
+        throw new Error("Estimate has a related invoice.");
+      }
+      const patch = {
+        status: "draft" as const,
+        sentAt: null,
+        acceptedAt: null,
+        secondAcceptedAt: null,
+        ownerSignedAt: null,
+        signatureName: "",
+        signatureImage: "",
+      };
+      const apply = () =>
+        setState((prev) => ({
+          ...prev,
+          estimates: prev.estimates.map((estimate) =>
+            estimate.id === id ? fillEstimate({ ...estimate, ...patch }) : estimate
+          ),
+        }));
+      const supabase = maybeClient();
+      if (supabase) {
+        let { error } = await supabase.from("estimates").update(estimatePatch(patch)).eq("id", id);
+        if (error && isMissingSecondSigner(error)) {
+          const retry = await supabase
+            .from("estimates")
+            .update({
+              status: "draft",
+              sent_at: null,
+              accepted_at: null,
+              owner_signed_at: null,
+              signature_name: "",
+              signature_image: "",
+            })
+            .eq("id", id);
+          error = retry.error;
+          if (!error) toast.message(missingSecondSignerMessage());
+        }
+        if (error && isMissingOwnerSignature(error)) {
+          const retry = await supabase
+            .from("estimates")
+            .update({
+              status: "draft",
+              sent_at: null,
+              accepted_at: null,
+              signature_name: "",
+              signature_image: "",
+            })
+            .eq("id", id);
+          error = retry.error;
+          if (!error) toast.message(missingOwnerSignatureMessage());
+        }
+        if (error && isMissingSignatureColumn(error)) {
+          const retry = await supabase
+            .from("estimates")
+            .update({ status: "draft", sent_at: null, accepted_at: null })
+            .eq("id", id);
+          error = retry.error;
+          if (!error) toast.message(missingSignatureMessage());
+        }
+        if (error) {
+          toast.error(error.message);
+          throw error;
+        }
+      }
+      apply();
+      if (current.opportunityId) {
+        await addActivity({
+          entityType: "opportunity",
+          entityId: current.opportunityId,
+          type: "note",
+          body: `Reopened declined proposal ${current.number} as a draft.`,
+        });
+      }
+    },
+    [addActivity, state.estimates, state.invoices]
+  );
 
   const markEstimateViewed = useCallback(async (id: string) => {
     const current = state.estimates.find((estimate) => estimate.id === id);
@@ -5003,6 +5090,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       sendEstimate,
       acceptEstimate,
       declineEstimate,
+      reopenEstimate,
       markEstimateViewed,
       ensureEstimateShareToken,
       addEstimateLineFromCatalog,
@@ -5099,6 +5187,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       sendEstimate,
       acceptEstimate,
       declineEstimate,
+      reopenEstimate,
       markEstimateViewed,
       ensureEstimateShareToken,
       addEstimateLineFromCatalog,

@@ -94,6 +94,8 @@ export type SharedCompany = {
 
 export type SharedEstimatePayload = {
   customer: string;
+  primaryCustomer?: string;
+  secondCustomer?: string | null;
   company: SharedCompany;
   market?: "residential" | "commercial";
   estimate: {
@@ -104,11 +106,15 @@ export type SharedEstimatePayload = {
     opportunityId: string | null;
     jobId: string | null;
     contactId: string | null;
+    secondContactId: string | null;
     status: "draft" | "sent" | "viewed" | "accepted" | "declined";
     notes: string;
     validUntil: string | null;
     sentAt: string | null;
     acceptedAt: string | null;
+    secondAcceptedAt: string | null;
+    ownerSignedAt: string | null;
+    ownerSignedName: string;
     createdAt: string;
     taxRate: number;
     discountKind: "percent" | "amount";
@@ -209,6 +215,8 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
   if (!asString(estimate.id) || !asString(estimate.number)) return null;
   return {
     customer: asString(raw.customer, "Homeowner"),
+    primaryCustomer: asString(raw.primaryCustomer) || undefined,
+    secondCustomer: asNullable(raw.secondCustomer),
     company: parseCompany(raw.company),
     market: asString(raw.market) === "commercial" ? "commercial" : asString(raw.market) === "residential" ? "residential" : undefined,
     estimate: {
@@ -219,11 +227,15 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
       opportunityId: asNullable(estimate.opportunityId),
       jobId: asNullable(estimate.jobId),
       contactId: asNullable(estimate.contactId),
+      secondContactId: asNullable(estimate.secondContactId),
       status: (ESTIMATE_STATUSES.has(status) ? status : "sent") as SharedEstimatePayload["estimate"]["status"],
       notes: "",
       validUntil: asNullable(estimate.validUntil),
       sentAt: asNullable(estimate.sentAt),
       acceptedAt: asNullable(estimate.acceptedAt),
+      secondAcceptedAt: asNullable(estimate.secondAcceptedAt),
+      ownerSignedAt: asNullable(estimate.ownerSignedAt),
+      ownerSignedName: asString(estimate.ownerSignedName),
       createdAt: asString(estimate.createdAt),
       taxRate: asString(raw.market) === "residential" ? 0 : asNumber(estimate.taxRate),
       discountKind: estimate.discountKind === "amount" ? "amount" : "percent",

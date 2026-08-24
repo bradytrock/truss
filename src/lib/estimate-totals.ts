@@ -165,13 +165,17 @@ export function invoiceLinesFromEstimate(
 }
 
 export const DEFAULT_ESTIMATE_TERMS =
-  "This proposal is good through the valid-until date. Work starts after you accept and pay any deposit. Changes on site will be written as a change order before we proceed.";
+  "This proposal is good through the valid-until date. Sending it signs for the contractor. Work starts after you sign and pay any deposit. Changes on site will be written as a change order before we proceed.";
 
 export const COMMON_UNITS = ["LS", "ea", "sq", "sf", "lf", "cy", "hr", "day", "mo"];
 
 export type EstimateDraft = Omit<
   Estimate,
   | "contactId"
+  | "secondContactId"
+  | "secondAcceptedAt"
+  | "ownerSignedAt"
+  | "ownerSignedName"
   | "taxRate"
   | "discountKind"
   | "discountValue"
@@ -191,6 +195,10 @@ export type EstimateDraft = Omit<
     Pick<
       Estimate,
       | "contactId"
+      | "secondContactId"
+      | "secondAcceptedAt"
+      | "ownerSignedAt"
+      | "ownerSignedName"
       | "taxRate"
       | "discountKind"
       | "discountValue"
@@ -215,9 +223,20 @@ export type EstimateLineDraft = Omit<
   Partial<Pick<EstimateLine, "title" | "groupName" | "optional" | "selected" | "taxable">>;
 
 export function fillEstimate(estimate: EstimateDraft): Estimate {
+  const contactId = estimate.contactId ?? null;
+  const secondContactId =
+    estimate.secondContactId && estimate.secondContactId !== contactId
+      ? estimate.secondContactId
+      : null;
   return {
     ...estimate,
-    contactId: estimate.contactId ?? null,
+    contactId,
+    secondContactId,
+    secondAcceptedAt: secondContactId ? (estimate.secondAcceptedAt ?? null) : null,
+    ownerSignedAt:
+      estimate.ownerSignedAt ??
+      (estimate.status !== "draft" && estimate.sentAt ? estimate.sentAt : null),
+    ownerSignedName: estimate.ownerSignedName ?? "",
     taxRate: estimate.taxRate ?? 0,
     discountKind: estimate.discountKind ?? "percent",
     discountValue: estimate.discountValue ?? 0,
@@ -249,6 +268,7 @@ export function fillEstimateLine(line: EstimateLineDraft): EstimateLine {
 export const ESTIMATE_RECORD_EXTRAS: Record<string, Partial<Estimate>> = {
   est_ellison: {
     contactId: "con_marcus",
+    secondContactId: "con_jordan",
     taxRate: 8.31,
     depositKind: "percent",
     depositValue: 30,

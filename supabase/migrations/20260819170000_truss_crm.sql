@@ -1,4 +1,4 @@
--- Truss CRM: companies, profiles, pipeline, jobs, activity.
+-- TheRoofingCRM: companies, profiles, pipeline, jobs, activity.
 -- RLS isolates every row to the signed-in user's company.
 
 create extension if not exists "pgcrypto";

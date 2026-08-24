@@ -26,7 +26,7 @@ export function ShareMissing({ kind }: { kind: "estimate" | "invoice" | "page" }
         <h1 className="font-heading text-2xl font-medium">This {kind} is not available</h1>
         <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
           The link may have expired, or the contractor reset their sample book. Ask them to send a
-          new link from Truss.
+          new link from TheRoofingCRM.
         </p>
       </div>
     </ShareFrame>

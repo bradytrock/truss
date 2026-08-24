@@ -1,13 +1,16 @@
 import type { TrainingBulletin, TrainingProgress } from "@/lib/types";
 
-export const TRAINING_STORAGE_KEY = "truss.training";
+export const TRAINING_STORAGE_KEY = "theroofingcrm.training";
+const TRAINING_STORAGE_KEY_LEGACY = "truss.training";
 
 export function readLocalTraining(seed: {
   trainingProgress: TrainingProgress[];
   trainingBulletins: TrainingBulletin[];
 }) {
   try {
-    const raw = window.localStorage.getItem(TRAINING_STORAGE_KEY);
+    const raw =
+      window.localStorage.getItem(TRAINING_STORAGE_KEY) ??
+      window.localStorage.getItem(TRAINING_STORAGE_KEY_LEGACY);
     if (!raw) return seed;
     const parsed = JSON.parse(raw) as {
       trainingProgress?: TrainingProgress[];
@@ -43,6 +46,7 @@ export function writeLocalTraining(value: {
 export function clearLocalTraining() {
   try {
     window.localStorage.removeItem(TRAINING_STORAGE_KEY);
+    window.localStorage.removeItem(TRAINING_STORAGE_KEY_LEGACY);
   } catch {
     // ignore
   }

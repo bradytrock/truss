@@ -76,7 +76,7 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { viewer } = useCrm();
+  const { effectiveStaff } = useCrm();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [create, setCreate] = useState<
     "opportunity" | "client" | "job" | "estimate" | "invoice" | "event" | "expense" | "payment" | null
@@ -124,7 +124,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 Create
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-44">
-                {viewer && isBusinessDevelopment(viewer.role) ? (
+                {effectiveStaff && isBusinessDevelopment(effectiveStaff.role) ? (
                   <>
                     <DropdownMenuItem onClick={() => setCreate("opportunity")}>
                       New lead
@@ -225,11 +225,11 @@ function Brand() {
 }
 
 function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
-  const { viewer } = useCrm();
+  const { effectiveStaff } = useCrm();
   const items = navItems({
-    showReports: Boolean(viewer && canViewReports(viewer.role)),
-    showAccounting: Boolean(viewer && canViewAccounting(viewer.role)),
-    bdOnly: Boolean(viewer && isBusinessDevelopment(viewer.role)),
+    showReports: Boolean(effectiveStaff && canViewReports(effectiveStaff.role)),
+    showAccounting: Boolean(effectiveStaff && canViewAccounting(effectiveStaff.role)),
+    bdOnly: Boolean(effectiveStaff && isBusinessDevelopment(effectiveStaff.role)),
   });
   return (
     <nav className="flex flex-col px-2 py-3">
@@ -287,7 +287,7 @@ function SearchTrigger() {
       <CommandDialog
         open={open}
         onOpenChange={setOpen}
-        title="Search Truss"
+        title="Search TheRoofingCRM"
         description="Jump to a pursuit, job, or contact"
         className="sm:max-w-lg"
       >

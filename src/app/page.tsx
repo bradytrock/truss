@@ -130,13 +130,13 @@ export default function HomePage() {
       <PageHeader
         title={`${greeting()}, ${crm.user.name.split(" ")[0] || "there"}`}
         description={
-          crm.viewer?.role === "accountant"
+          crm.effectiveStaff?.role === "accountant"
             ? "Books for every job: expenses, receipts, and what still needs to be typed into QuickBooks."
-            : crm.viewer?.role === "business_development"
+            : crm.effectiveStaff?.role === "business_development"
             ? "Your pipeline, the agents you brought in, and ROI. Assign the work — you still keep the numbers."
-            : crm.viewer?.role === "project_manager" || crm.viewer?.role === "superintendent"
+            : crm.effectiveStaff?.role === "project_manager" || crm.effectiveStaff?.role === "superintendent"
               ? "Your jobs, your contact book, and the work assigned to you."
-              : crm.viewer?.role === "team_lead" || crm.viewer?.role === "team_admin"
+              : crm.effectiveStaff?.role === "team_lead" || crm.effectiveStaff?.role === "team_admin"
                 ? "Jobs and contacts for your team. Login As a teammate to inspect their book, or open Reports for team activity."
                 : "Open pipeline, proposals out, AR, and today's field calendar — restoration and remodel from lead to job photo."
         }
@@ -199,7 +199,7 @@ export default function HomePage() {
         />
       </MetricStrip>
 
-      {crm.viewer && canViewAccounting(crm.viewer.role) ? (
+      {crm.effectiveStaff && canViewAccounting(crm.effectiveStaff.role) ? (
         <Card>
           <CardHeader className="border-b">
             <CardTitle>QuickBooks entry queue</CardTitle>
