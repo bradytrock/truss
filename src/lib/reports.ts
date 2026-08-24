@@ -244,24 +244,13 @@ export function buildPerformance(
 ): PerformanceReport {
   const range = rangeForPreset(preset, now);
   const scope = accessScope(viewer.role);
+  // Jobs and leads are already limited by scopeBook in the CRM store.
+  // Re-filter only by date here so superintendent-assigned work still counts.
   const roster = staffForReports(viewer, book.staff);
-  const rosterIds = new Set(roster.map((member) => member.id));
-  const rosterNames = new Set(roster.map((member) => member.name));
 
-  function ownsJob(job: Job) {
-    const owner = jobOwner(job, book.staff);
-    if (!owner) return rosterNames.has(job.projectManager) || rosterNames.has(job.salesRep);
-    return rosterIds.has(owner.id);
-  }
-  function ownsOpportunity(opportunity: Opportunity) {
-    const owner = opportunityOwner(opportunity, book.staff);
-    if (!owner) return rosterNames.has(opportunity.estimator);
-    return rosterIds.has(owner.id);
-  }
-
-  const jobs = book.jobs.filter((job) => ownsJob(job) && inRange(job.startDate, range.start, range.end));
-  const opportunities = book.opportunities.filter(
-    (item) => ownsOpportunity(item) && inRange(item.createdAt, range.start, range.end)
+  const jobs = book.jobs.filter((job) => inRange(job.startDate, range.start, range.end));
+  const opportunities = book.opportunities.filter((item) =>
+    inRange(item.createdAt, range.start, range.end)
   );
   const soldJobs = jobs.filter(isSold);
   const lost = opportunities.filter((item) => item.stage === "lost");
@@ -445,8 +434,8 @@ export function buildPerformance(
     .map((row) => ({ ...row, share: row.totalValue / grand }))
     .sort((a, b) => b.totalValue - a.totalValue);
 
-  const liveOpps = book.opportunities.filter(ownsOpportunity);
-  const liveJobs = book.jobs.filter(ownsJob);
+  const liveOpps = book.opportunities;
+  const liveJobs = book.jobs;
   const pipeline: PipelineRow[] = [
     ...PIPELINE_STAGES.filter((stage) => stage !== "lost").map((stage) => {
       const rows = liveOpps.filter((item) => item.stage === stage);

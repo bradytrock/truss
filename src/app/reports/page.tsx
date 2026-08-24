@@ -2,9 +2,15 @@
 
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
-import { Download } from "lucide-react";
+import { CalendarDays, ChevronDown, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -14,7 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PipelineBars, ShareBar, VerticalBars } from "@/components/reports-charts";
+import { PipelineBars, ShareBar, StackedShare, sourceSwatch, VerticalBars } from "@/components/reports-charts";
 import { EmptyState, ErrorBanner, LoadingScreen, Metric, MetricStrip, PageHeader } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency, formatCurrencyFull, formatDate } from "@/lib/format";
@@ -146,28 +152,31 @@ export default function ReportsPage() {
       <PageHeader
         eyebrow="Reports"
         title="Performance"
-        description={`${SCOPE_COPY[scope]} Showing ${rangeLabel(report.range)}.`}
+        description={SCOPE_COPY[scope]}
         actions={
-          <Button type="button" variant="outline" onClick={exportCurrent}>
-            <Download />
-            Export data
-          </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <p className="text-sm text-muted-foreground">Showing {rangeLabel(report.range)}</p>
+            <DropdownMenu>
+              <DropdownMenuTrigger render={<Button type="button" size="sm" />}>
+                <CalendarDays />
+                {DATE_PRESETS.find((item) => item.id === preset)?.label}
+                <ChevronDown />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {DATE_PRESETS.map((item) => (
+                  <DropdownMenuItem key={item.id} onClick={() => setPreset(item.id)}>
+                    {item.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button type="button" variant="outline" onClick={exportCurrent}>
+              <Download />
+              Export data
+            </Button>
+          </div>
         }
       />
-
-      <div className="flex flex-wrap items-center gap-2">
-        {DATE_PRESETS.map((item) => (
-          <Button
-            key={item.id}
-            type="button"
-            size="sm"
-            variant={preset === item.id ? "default" : "outline"}
-            onClick={() => setPreset(item.id)}
-          >
-            {item.label}
-          </Button>
-        ))}
-      </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setTab(value as ReportTab)}>
         <TabsList variant="line" className="h-auto w-full flex-wrap justify-start rounded-none bg-transparent p-0">
@@ -217,6 +226,9 @@ export default function ReportsPage() {
             <Metric label="Close rate" value={formatShare(report.kpis.closeRate)} hint="Won vs lost in range" />
           </MetricStrip>
           <Panel title="Lead performance" description="Where work came from, and how much of it sold.">
+            <div className="mb-4">
+              <StackedShare items={report.bySource.map((row) => ({ label: row.source, value: row.incoming }))} />
+            </div>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -232,9 +244,14 @@ export default function ReportsPage() {
                 {report.bySource.length === 0 ? (
                   <EmptyRow cols={6} />
                 ) : (
-                  report.bySource.map((row) => (
+                  report.bySource.map((row, index) => (
                     <TableRow key={row.source}>
-                      <TableCell className="font-medium">{row.source}</TableCell>
+                      <TableCell className="font-medium">
+                        <span className="inline-flex items-center gap-2">
+                          <span className={`size-2.5 rounded-full ${sourceSwatch(index)}`} />
+                          {row.source}
+                        </span>
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">{row.incoming}</TableCell>
                       <TableCell className="text-right tabular-nums">{row.qualified}</TableCell>
                       <TableCell className="text-right tabular-nums">{row.won}</TableCell>
@@ -446,6 +463,9 @@ export default function ReportsPage() {
             </div>
           </Panel>
           <Panel title="Lead performance" description="Sources feeding this workflow.">
+            <div className="mb-4">
+              <StackedShare items={report.bySource.map((row) => ({ label: row.source, value: row.incoming }))} />
+            </div>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -463,9 +483,14 @@ export default function ReportsPage() {
                 {report.bySource.length === 0 ? (
                   <EmptyRow cols={8} />
                 ) : (
-                  report.bySource.map((row) => (
+                  report.bySource.map((row, index) => (
                     <TableRow key={row.source}>
-                      <TableCell className="font-medium">{row.source}</TableCell>
+                      <TableCell className="font-medium">
+                        <span className="inline-flex items-center gap-2">
+                          <span className={`size-2.5 rounded-full ${sourceSwatch(index)}`} />
+                          {row.source}
+                        </span>
+                      </TableCell>
                       <TableCell className="text-right tabular-nums">{row.incoming}</TableCell>
                       <TableCell className="text-right tabular-nums">{row.qualified}</TableCell>
                       <TableCell className="text-right tabular-nums">{row.won}</TableCell>
