@@ -1,5 +1,5 @@
 import { joinCustomerNames } from "@/lib/estimate-signers";
-import type { Client, Contact, CrmState, Job, Opportunity } from "@/lib/types";
+import type { Client, Contact, CrmState, Estimate, Invoice, Job, Opportunity } from "@/lib/types";
 
 export type CustomerRecord = {
   clientId?: string | null;
@@ -36,6 +36,61 @@ export function resolveCustomerName(record: CustomerRecord, book: PartyBook): st
   }
   if (client) return client.name;
   return contact?.name ?? "Homeowner";
+}
+
+export type ShareRecipient = {
+  id: string;
+  name: string;
+  phone: string;
+};
+
+function addRecipient(list: ShareRecipient[], contact: Contact | undefined) {
+  if (!contact) return;
+  if (list.some((item) => item.id === contact.id)) return;
+  list.push({ id: contact.id, name: contact.name, phone: contact.phone.trim() });
+}
+
+export function resolveShareContacts(record: CustomerRecord, book: PartyBook): ShareRecipient[] {
+  const list: ShareRecipient[] = [];
+  let contactId = record.contactId ?? record.primaryContactId ?? null;
+  if (!contactId && record.jobId) {
+    contactId = book.jobs.find((job) => job.id === record.jobId)?.primaryContactId ?? null;
+  }
+  if (!contactId && record.opportunityId) {
+    contactId =
+      book.opportunities.find((opportunity) => opportunity.id === record.opportunityId)
+        ?.primaryContactId ?? null;
+  }
+  addRecipient(list, contactId ? book.contacts.find((item) => item.id === contactId) : undefined);
+  addRecipient(
+    list,
+    record.secondContactId
+      ? book.contacts.find((item) => item.id === record.secondContactId)
+      : undefined
+  );
+  return list;
+}
+
+export function shareContactsForEstimate(estimate: Estimate, book: PartyBook) {
+  return resolveShareContacts(estimate, book);
+}
+
+export function shareContactsForInvoice(
+  invoice: Invoice,
+  book: PartyBook & { estimates: Estimate[] }
+) {
+  const estimate = invoice.estimateId
+    ? book.estimates.find((item) => item.id === invoice.estimateId)
+    : undefined;
+  return resolveShareContacts(
+    {
+      clientId: invoice.clientId,
+      jobId: invoice.jobId,
+      contactId: estimate?.contactId,
+      secondContactId: estimate?.secondContactId,
+    },
+    book
+  );
 }
 
 export function jobsForContact(contact: Contact, jobs: Job[]) {

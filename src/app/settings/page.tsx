@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -174,7 +174,56 @@ export default function SettingsPage() {
           )}
         </div>
       </form>
+
+      <TextingCard />
     </div>
+  );
+}
+
+function TextingCard() {
+  const [status, setStatus] = useState<{ configured: boolean; fromNumber: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/share/text")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { configured: boolean; fromNumber: string } | null) => {
+        if (!cancelled && data) setStatus(data);
+      })
+      .catch(() => {
+        if (!cancelled) setStatus({ configured: false, fromNumber: "" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <Card className="max-w-2xl">
+      <CardHeader className="border-b">
+        <CardTitle>Texting</CardTitle>
+        <CardDescription>
+          Sendblue iMessage/SMS for estimate and invoice share links. Keys stay in{" "}
+          <code>.env.local</code>, not in this form.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-2 pt-4 text-sm">
+        {status === null ? (
+          <p className="text-muted-foreground">Checking Sendblue…</p>
+        ) : status.configured ? (
+          <p>
+            Connected{status.fromNumber ? ` (${status.fromNumber})` : ""}. Send proposal and Share
+            invoice can text the homeowner, or you can copy the link.
+          </p>
+        ) : (
+          <p className="text-muted-foreground">
+            Not connected. Copy the client link from any estimate or invoice. To text it, add{" "}
+            <code>SENDBLUE_API_KEY_ID</code>, <code>SENDBLUE_API_SECRET_KEY</code>, and{" "}
+            <code>SENDBLUE_FROM_NUMBER</code> to <code>.env.local</code>.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

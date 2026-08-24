@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { ProposalDocument } from "@/components/proposal-document";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
+import { shareContactsForEstimate } from "@/lib/parties";
 import { EstimateStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -946,8 +947,13 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         open={shareOpen}
         onOpenChange={setShareOpen}
         title={`Share ${estimate.number}`}
-        description="Copy this link for the homeowner. They can review the proposal, pick optional items, and download a PDF — no login required."
+        description="Text this to the homeowner or copy the link. They can review the proposal, pick optional items, and sign from their phone — no login required."
         url={estimate.shareToken ? shareUrl("e", estimate.shareToken) : ""}
+        kind="estimate"
+        documentNumber={estimate.number}
+        documentName={estimate.name}
+        companyName={crm.company.name}
+        recipients={shareContactsForEstimate(estimate, crm)}
         onDownloadPdf={downloadPdf}
       />
     </div>

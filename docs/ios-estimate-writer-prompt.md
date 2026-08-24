@@ -12,7 +12,7 @@ TheRoofingCRM already has contacts (homeowners first; no company required), pipe
 
 The web writer is a Joist-style office/field tool: you write a proposal in sections, mark some lines optional, set tax / discount / deposit / terms, preview what the homeowner sees, send it, mark it accepted, and convert included lines to an invoice.
 
-**Do not build:** card payments, satellite takeoff / roof measurement, SMS, e-sign vendors, public client magic links, or a second catalog. Deposit is informational (amount due after accept), not a charge. Convert-to-invoice copies line items; it does not collect money.
+**Do not build:** card payments, satellite takeoff / roof measurement, a second SMS vendor, e-sign vendors, or a second catalog. Public client share links are in scope: after Send, offer **Send text** (Sendblue, same as web) or **Copy link**. Deposit is informational (amount due after accept), not a charge. Convert-to-invoice copies line items; it does not collect money.
 
 The unsigned web demo hydrates from in-memory Northline seed and mutates locally. When Supabase is configured and the user is signed in, the same mutations persist. iOS should do the same: a local book that works offline-first for demo, and the same Postgres tables when the app is attached to a company.
 
@@ -160,7 +160,7 @@ Homeowner names resolve from `contactId`, else the job/lead primary contact, els
 
 ## Copy and UX
 
-Real contractor language. No lorem. No “Welcome to your app.” Cover empty, loading, and error. Phone and iPad. Letterhead comes from company settings, not the job site. TheRoofingCRM does not measure roofs from satellite imagery, collect card payments, or send SMS.
+Real contractor language. No lorem. No “Welcome to your app.” Cover empty, loading, and error. Phone and iPad. Letterhead comes from company settings, not the job site. TheRoofingCRM does not measure roofs from satellite imagery or collect card payments. Sending a proposal can text the share link through Sendblue or copy it.
 
 ## Out of scope for this slice
 

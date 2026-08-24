@@ -12,6 +12,7 @@ import { RecordProperty } from "@/components/app-shell";
 import { InvoiceDocument } from "@/components/invoice-document";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
+import { shareContactsForInvoice } from "@/lib/parties";
 import { InvoiceStatusBadge } from "@/components/status-badge";
 import { downloadInvoicePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
@@ -227,8 +228,13 @@ export default function InvoiceDetailPage() {
         open={shareOpen}
         onOpenChange={setShareOpen}
         title={`Share ${record.number}`}
-        description="Copy this link for the homeowner. They can open the invoice and download a PDF — no login required."
+        description="Text this to the homeowner or copy the link. They can open the invoice and download a PDF — no login required."
         url={record.shareToken ? shareUrl("i", record.shareToken) : ""}
+        kind="invoice"
+        documentNumber={record.number}
+        documentName={record.name}
+        companyName={crm.company.name}
+        recipients={shareContactsForInvoice(record, crm)}
         onDownloadPdf={downloadPdf}
       />
     </div>

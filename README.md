@@ -44,18 +44,20 @@ npm run dev
 
 To connect real Google Calendars, create an OAuth web client in Google Cloud (Calendar API + `.../auth/calendar.events.readonly`). Put `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env.local`, and add `http://localhost:3847/api/google/calendar/callback` as an authorized redirect URI. Without those keys, each seat can still **Link demo Google Calendar** so sharing and admin visibility can be tried locally.
 
+To text a proposal or invoice to the homeowner, add Sendblue keys to `.env.local`: `SENDBLUE_API_KEY_ID`, `SENDBLUE_API_SECRET_KEY`, and `SENDBLUE_FROM_NUMBER` (E.164). Keys stay on the server. Without them, Send still opens the dialog so you can copy the link.
+
 ## What you can do
 
-- **Settings** — company name, main phone, office email, website, license, and office address. Only a company admin sees this, under the initials menu in the top right. The same block prints on estimates and invoices.
+- **Settings** — company name, main phone, office email, website, license, and office address. Only a company admin sees this, under the initials menu in the top right. The same block prints on estimates and invoices. A **Texting** card shows whether Sendblue is connected so a proposal or invoice can be texted instead of only copying the link.
 - **Contacts** — homeowners first (no company required), plus adjusters, realtors, and one architect as referral partners
 - **Pipeline** — leads through Job Sold and lost. Every new lead (and every new estimate) opens a job for costing so expenses and P&L treat it like production work. When the homeowner signs, the card moves to Job Sold. Each card shows a job code (`BJ081926-A`) assigned when the lead is opened. **New lead** slides in from the right: assignee, homeowner name, phone, email, job-site address, and how they heard about you. If the source is Referral, search contacts this seat can see and connect the referrer.
 - **Jobs** — a status board of every cost center, including open pipeline leads in Preconstruction. Open a job for the field record: site photo, address, crew, tags, related contacts, and custom fields (claim number, deductible). Codes are assigned when the lead is opened.
-- **Estimates** — Joist-style writer: sections, optional lines, tax, discount, deposit, terms, and a client preview. Download a PDF, send a copyable client link, mark it signed (Job Sold — the job was already open for costing), convert included lines to an invoice. EST-1001–1010 against homeowners.
+- **Estimates** — Joist-style writer: sections, optional lines, tax, discount, deposit, terms, and a client preview. Download a PDF, send a client link (text it through Sendblue or copy it; the project owner signs on send), mark it signed (Job Sold — the job was already open for costing), convert included lines to an invoice. EST-1001–1010 against homeowners.
 - **Calendar & photos** — Google Calendar per seat, team sharing, site walks, shingle days, punch, and job photos
 - **Price book** — roofing squares, extraction, cabinets, and the usual trades
-- **Estimates** — write a proposal from the price book (sections, optional work, tax), download a PDF, send a client link. Signing moves the lead to Job Sold; costing already lived on that job. Convert included lines to an invoice.
+- **Estimates** — write a proposal from the price book (sections, optional work, tax), download a PDF, send a client link (text or copy). Signing moves the lead to Job Sold; costing already lived on that job. Convert included lines to an invoice.
 - **Jobs** — field record (overview, photos, estimates/invoices, custom fields), activity, and job photos (upload or URL). Open pipeline work sits in Preconstruction.
-- **Invoices** — draws and retainage with payment history, outstanding AR, PDF, and a client share link
+- **Invoices** — draws and retainage with payment history, outstanding AR, PDF, and a client share link you can text or copy
 - **Accounting** — company admin and the Accounting seat (sample: Nora Keene, Controller) get a company Profit and Loss in QuickBooks form, plus invoices, expenses, and payments that still need to be typed into QuickBooks Desktop. Mark a row after you enter it. The Desktop web connector comes later.
 - **Log expense / Log payment** — Create (+) in the top right. A photo is required every time, whether or not AI reads the receipt. Images stay on the record. Optional `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` fills vendor, amount, date, and account from the photo.
 - **Job financials** — QuickBooks-style Profit and Loss on the job (Income, Cost of Sales, Gross Profit, Expenses, Net Income). Accrual or cash. Receipt thumbnails stay under the statement.
@@ -75,6 +77,6 @@ The Northline sample book loads locally with no sign-in. Avatar menu → **Reset
 
 Reset demo data (avatar menu) wipes that company’s CRM tables and reloads the sample book. Your login stays on the roster. It does not delete the Auth user.
 
-TheRoofingCRM does not measure roofs from satellite imagery, collect card payments, or send SMS. Those are the pieces left to the tools you already use for takeoff and banking.
+TheRoofingCRM does not measure roofs from satellite imagery or collect card payments. Share links can be copied, or texted through Sendblue when those keys are in `.env.local`.
 
 The estimate writer is specified for the iOS app in [`docs/ios-estimate-writer-prompt.md`](docs/ios-estimate-writer-prompt.md) — data model, totals formula, status machine, and screens.

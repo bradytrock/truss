@@ -237,6 +237,7 @@ export function fillEstimateLine(line: EstimateLineDraft): EstimateLine {
 export const ESTIMATE_RECORD_EXTRAS: Record<string, Partial<Estimate>> = {
   est_ellison: {
     contactId: "con_marcus",
+    secondContactId: "con_jordan",
     taxRate: 8.31,
     depositKind: "percent",
     depositValue: 30,
