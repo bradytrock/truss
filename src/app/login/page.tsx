@@ -55,7 +55,7 @@ function LoginForm() {
 
   return (
     <AuthFrame
-      title="Sign in to Truss"
+      title="Sign in to TheRoofingCRM"
       description="Auth, Postgres, Realtime, and Storage run on your Supabase project. Confirm email is currently on for this project, so a new account will not get a session until that setting is off."
     >
       {configured ? (

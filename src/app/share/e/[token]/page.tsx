@@ -77,7 +77,7 @@ export default function SharedEstimatePage() {
       const data: unknown = response.ok ? await response.json() : null;
       const parsed = parseSharedEstimate(data);
       if (!parsed) {
-        toast.error("Could not sign this proposal. Ask the contractor to mark it signed in Truss.");
+        toast.error("Could not sign this proposal. Ask the contractor to mark it signed in TheRoofingCRM.");
         return;
       }
       setRemote(parsed);

@@ -1,4 +1,6 @@
-export function TrussMark({ className }: { className?: string }) {
+import { PRODUCT_NAME } from "@/lib/product";
+
+export function TheRoofingCrmMark({ className }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -27,9 +29,9 @@ export function BrandMark({
 }) {
   return (
     <span className={className ?? "inline-flex items-center gap-2 text-foreground"}>
-      <TrussMark className={markClassName ?? "size-[18px] text-primary"} />
-      <span className="font-heading text-[1.15rem] leading-none font-medium tracking-tight">
-        Truss
+      <TheRoofingCrmMark className={markClassName ?? "size-[18px] text-primary"} />
+      <span className="font-heading text-[1.05rem] leading-none font-medium tracking-tight">
+        {PRODUCT_NAME}
       </span>
     </span>
   );

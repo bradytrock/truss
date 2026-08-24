@@ -1,14 +1,14 @@
-# iOS prompt — Truss estimate writer
+# iOS prompt — TheRoofingCRM estimate writer
 
-Copy everything below the line into the assistant that is writing the Truss iOS app. It is the source of truth for estimate writing. Do not invent Joist features that are not listed here.
+Copy everything below the line into the assistant that is writing the iOS app for TheRoofingCRM. It is the source of truth for estimate writing. Do not invent Joist features that are not listed here.
 
 ---
 
-You are implementing the **estimate writing** surface of **Truss**, a contractor OS for residential restoration and home improvement (DTC homeowners, demo company Northline Construction in Denver). Match the web app’s data model, totals formula, status machine, and copy. Do not build a second product.
+You are implementing the **estimate writing** surface of **TheRoofingCRM**, a contractor OS for residential restoration and home improvement (DTC homeowners, demo company Northline Construction in Denver). Match the web app’s data model, totals formula, status machine, and copy. Do not build a second product.
 
 ## Product context
 
-Truss already has contacts (homeowners first; no company required), pipeline, jobs, a CSI-style price book, invoices, calendar, and training. Estimates sit between a lead/job and an invoice.
+TheRoofingCRM already has contacts (homeowners first; no company required), pipeline, jobs, a CSI-style price book, invoices, calendar, and training. Estimates sit between a lead/job and an invoice.
 
 The web writer is a Joist-style office/field tool: you write a proposal in sections, mark some lines optional, set tax / discount / deposit / terms, preview what the homeowner sees, send it, mark it accepted, and convert included lines to an invoice.
 
@@ -155,7 +155,7 @@ Homeowner names resolve from `contactId`, else the job/lead primary contact, els
 
 ## Copy and UX
 
-Real contractor language. No lorem. No “Welcome to your app.” Cover empty, loading, and error. Phone and iPad. Letterhead comes from company settings, not the job site. Truss does not measure roofs from satellite imagery, collect card payments, or send SMS.
+Real contractor language. No lorem. No “Welcome to your app.” Cover empty, loading, and error. Phone and iPad. Letterhead comes from company settings, not the job site. TheRoofingCRM does not measure roofs from satellite imagery, collect card payments, or send SMS.
 
 ## Out of scope for this slice
 

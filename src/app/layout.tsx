@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Newsreader } from "next/font/google";
 import { Providers } from "@/components/providers";
+import { PRODUCT_NAME } from "@/lib/product";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -22,7 +23,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Truss",
+  title: PRODUCT_NAME,
   description: "Jobs, estimates, and invoices for restoration and home improvement.",
 };
 

@@ -1,4 +1,4 @@
-# Truss
+# TheRoofingCRM
 
 A contractor operating system for restoration and home improvement: pipeline, estimates, jobs, invoices, calendar, training, and job photos. Auth, Postgres, Row Level Security, Realtime, and Storage all run on Supabase.
 
@@ -10,7 +10,7 @@ The hosted MCP at `https://mcp.supabase.com/mcp` is online. This cloud agent can
 
 To attach a project that is already running:
 
-1. Open [http://localhost:3847/login](http://localhost:3847/login) and paste the project URL plus the **publishable** (or anon) key from Settings → API. Truss checks that the project is reachable, then stores the keys for this browser and writes `.env.local`.
+1. Open [http://localhost:3847/login](http://localhost:3847/login) and paste the project URL plus the **publishable** (or anon) key from Settings → API. TheRoofingCRM checks that the project is reachable, then stores the keys for this browser and writes `.env.local`.
 2. In the SQL editor, run the migrations, in order:
    - [`supabase/migrations/20260819170000_truss_crm.sql`](supabase/migrations/20260819170000_truss_crm.sql) — companies, profiles, pipeline, jobs, RLS, signup trigger, Realtime
    - [`supabase/migrations/20260819180000_estimates_invoices_schedule.sql`](supabase/migrations/20260819180000_estimates_invoices_schedule.sql) — price book, estimates, invoices, payments, schedule, job photos, Storage bucket
@@ -57,7 +57,7 @@ To connect real Google Calendars, create an OAuth web client in Google Cloud (Ca
 - **Accounting** — company admin and the Accounting seat (sample: Nora Keene, Controller) get a company Profit and Loss in QuickBooks form, plus invoices, expenses, and payments that still need to be typed into QuickBooks Desktop. Mark a row after you enter it. The Desktop web connector comes later.
 - **Log expense / Log payment** — Create (+) in the top right. A photo is required every time, whether or not AI reads the receipt. Images stay on the record. Optional `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` fills vendor, amount, date, and account from the photo.
 - **Job financials** — QuickBooks-style Profit and Loss on the job (Income, Cost of Sales, Gross Profit, Expenses, Net Income). Accrual or cash. Receipt thumbnails stay under the statement.
-- **Calendar** — week view of Truss field events plus each person’s Google Calendar. Link is per seat. Share with your team; company admins see every calendar and whether it is linked.
+- **Calendar** — week view of TheRoofingCRM field events plus each person’s Google Calendar. Link is per seat. Share with your team; company admins see every calendar and whether it is linked.
 - **Training** — roofing certification course (companion to *Roofing Construction & Estimating, Revised* by Daniel Atcheson). Original lesson summaries, generated takeoff questions, 70% chapter/practice, 80% exam. Progress is per seat. Team leads and company admin see crew progress and can post training bulletins. Open jobs recommend chapters by project type.
 
 The Northline sample book loads locally with no sign-in. Avatar menu → **Reset demo data** restores it in memory, or (after migrations and a signed-in company) wipes that company’s CRM tables and reloads this book. Your signed-in seat is put back on the roster. It does not delete the Auth user. **Switch seat** is only for the unsigned sample; when you are signed in, use **Login As** to look at someone else’s book.
@@ -73,6 +73,6 @@ The Northline sample book loads locally with no sign-in. Avatar menu → **Reset
 
 Reset demo data (avatar menu) wipes that company’s CRM tables and reloads the sample book. Your login stays on the roster. It does not delete the Auth user.
 
-Truss does not measure roofs from satellite imagery, collect card payments, or send SMS. Those are the pieces left to the tools you already use for takeoff and banking.
+TheRoofingCRM does not measure roofs from satellite imagery, collect card payments, or send SMS. Those are the pieces left to the tools you already use for takeoff and banking.
 
 The estimate writer is specified for the iOS app in [`docs/ios-estimate-writer-prompt.md`](docs/ios-estimate-writer-prompt.md) — data model, totals formula, status machine, and screens.

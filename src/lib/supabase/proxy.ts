@@ -4,13 +4,15 @@ import {
   getSupabaseKey,
   getSupabaseUrl,
   SB_KEY_COOKIE,
+  SB_KEY_COOKIE_LEGACY,
   SB_URL_COOKIE,
+  SB_URL_COOKIE_LEGACY,
 } from "@/lib/supabase/env";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
-  const url = getSupabaseUrl() || request.cookies.get(SB_URL_COOKIE)?.value || "";
-  const key = getSupabaseKey() || request.cookies.get(SB_KEY_COOKIE)?.value || "";
+  const url = getSupabaseUrl() || request.cookies.get(SB_URL_COOKIE)?.value || request.cookies.get(SB_URL_COOKIE_LEGACY)?.value || "";
+  const key = getSupabaseKey() || request.cookies.get(SB_KEY_COOKIE)?.value || request.cookies.get(SB_KEY_COOKIE_LEGACY)?.value || "";
 
   if (!url || !key) {
     return NextResponse.next({ request });

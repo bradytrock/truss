@@ -257,7 +257,7 @@ function SearchTrigger() {
       <CommandDialog
         open={open}
         onOpenChange={setOpen}
-        title="Search Truss"
+        title="Search TheRoofingCRM"
         description="Jump to a pursuit, job, or contact"
         className="sm:max-w-lg"
       >

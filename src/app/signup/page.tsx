@@ -75,7 +75,7 @@ export default function SignupPage() {
 
   return (
     <AuthFrame
-      title="Create your GC workspace"
+      title="Create your TheRoofingCRM workspace"
       description="A company, your profile, and the Northline sample book are created in Postgres on first sign-in."
     >
       {configured ? (
@@ -147,7 +147,7 @@ export default function SignupPage() {
         <ConnectSupabaseForm onConnected={() => setConfigured(true)} />
       )}
       <p className="mt-4 text-center text-sm text-muted-foreground">
-        Already on Truss?{" "}
+        Already on TheRoofingCRM?{" "}
         <Link href="/login" className="font-medium text-primary hover:underline">
           Sign in
         </Link>

@@ -1,7 +1,11 @@
-export const SB_URL_COOKIE = "truss-sb-url";
-export const SB_KEY_COOKIE = "truss-sb-key";
-export const SB_URL_LS = "truss.supabase.url";
-export const SB_KEY_LS = "truss.supabase.key";
+export const SB_URL_COOKIE = "theroofingcrm-sb-url";
+export const SB_KEY_COOKIE = "theroofingcrm-sb-key";
+export const SB_URL_COOKIE_LEGACY = "truss-sb-url";
+export const SB_KEY_COOKIE_LEGACY = "truss-sb-key";
+export const SB_URL_LS = "theroofingcrm.supabase.url";
+export const SB_KEY_LS = "theroofingcrm.supabase.key";
+const SB_URL_LS_LEGACY = "truss.supabase.url";
+const SB_KEY_LS_LEGACY = "truss.supabase.key";
 
 function readCookie(name: string) {
   if (typeof document === "undefined") return "";
@@ -23,7 +27,9 @@ export function getSupabaseUrl() {
   return (
     process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ||
     readStorage(SB_URL_LS) ||
-    readCookie(SB_URL_COOKIE)
+    readStorage(SB_URL_LS_LEGACY) ||
+    readCookie(SB_URL_COOKIE) ||
+    readCookie(SB_URL_COOKIE_LEGACY)
   );
 }
 
@@ -32,7 +38,9 @@ export function getSupabaseKey() {
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
     readStorage(SB_KEY_LS) ||
-    readCookie(SB_KEY_COOKIE)
+    readStorage(SB_KEY_LS_LEGACY) ||
+    readCookie(SB_KEY_COOKIE) ||
+    readCookie(SB_KEY_COOKIE_LEGACY)
   );
 }
 
@@ -50,6 +58,8 @@ export function clearSupabaseBrowserConfig() {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(SB_URL_LS);
   window.localStorage.removeItem(SB_KEY_LS);
+  window.localStorage.removeItem(SB_URL_LS_LEGACY);
+  window.localStorage.removeItem(SB_KEY_LS_LEGACY);
 }
 
 export function normalizeSupabaseUrl(value: string) {

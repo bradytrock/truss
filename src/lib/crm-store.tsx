@@ -167,7 +167,7 @@ const guestUser: CurrentUser = {
   staffId: "",
   name: "Guest",
   title: "",
-  company: "Truss",
+  company: "TheRoofingCRM",
   initials: "TR",
   role: "project_manager",
   teamId: null,
@@ -179,8 +179,10 @@ const northlineUser = userFromStaff(NORTHLINE_STAFF[0], {
   company: "Northline Construction",
 });
 
-const DEMO_STAFF_KEY = "truss.demoStaffId";
-const COMPANY_SETTINGS_KEY = "truss.companySettings";
+const DEMO_STAFF_KEY = "theroofingcrm.demoStaffId";
+const DEMO_STAFF_KEY_LEGACY = "truss.demoStaffId";
+const COMPANY_SETTINGS_KEY = "theroofingcrm.companySettings";
+const COMPANY_SETTINGS_KEY_LEGACY = "truss.companySettings";
 
 function allocateCode(
   creatorName: string,
@@ -192,9 +194,17 @@ function allocateCode(
   return nextJobCode(creatorName, new Date(), existingRecordCodes([...jobs, ...opportunities]));
 }
 
+function readLocal(key: string, legacy: string) {
+  try {
+    return window.localStorage.getItem(key) ?? window.localStorage.getItem(legacy);
+  } catch {
+    return null;
+  }
+}
+
 function readLocalCompany(): CompanySettings {
   try {
-    const raw = window.localStorage.getItem(COMPANY_SETTINGS_KEY);
+    const raw = readLocal(COMPANY_SETTINGS_KEY, COMPANY_SETTINGS_KEY_LEGACY);
     if (!raw) return structuredClone(NORTHLINE_COMPANY);
     const parsed = JSON.parse(raw) as Partial<CompanySettings>;
     return {
@@ -588,7 +598,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       let restored: StaffMember | undefined;
       try {
-        const saved = window.localStorage.getItem(DEMO_STAFF_KEY);
+        const saved = readLocal(DEMO_STAFF_KEY, DEMO_STAFF_KEY_LEGACY);
         restored = seed.staff.find((item) => item.id === saved);
       } catch {
         restored = undefined;
@@ -635,7 +645,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         profileError?.message?.includes("Could not find the table");
       setHydrateError(
         missingSchema
-          ? "Signed in, but this project is missing the Truss tables. Run the files in supabase/migrations in the SQL editor (in order), then reset demo data."
+          ? "Signed in, but this project is missing TheRoofingCRM tables. Run the files in supabase/migrations in the SQL editor (in order), then reset demo data."
           : profileError?.message ??
             "No profile yet. Create an account after the migrations have been applied."
       );
@@ -652,7 +662,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       ? mapCompany(companyRow)
       : companyError
         ? NORTHLINE_COMPANY
-        : { ...NORTHLINE_COMPANY, name: "Truss" };
+        : { ...NORTHLINE_COMPANY, name: "TheRoofingCRM" };
 
     const companyId = profile.company_id;
     const preserve = {
@@ -793,7 +803,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       "training_bulletins",
     ] as const;
     let timer: number | undefined;
-    const channel = supabase.channel(`truss-company-${user.companyId}`);
+    const channel = supabase.channel(`theroofingcrm-company-${user.companyId}`);
     for (const table of tables) {
       channel.on(
         "postgres_changes",
@@ -831,7 +841,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     if (configured) return;
     const timer = window.setTimeout(() => {
       try {
-        const saved = window.localStorage.getItem(DEMO_STAFF_KEY);
+        const saved = readLocal(DEMO_STAFF_KEY, DEMO_STAFF_KEY_LEGACY);
         const member = state.staff.find((item) => item.id === saved) ?? state.staff[0];
         const local = readLocalCompany();
         setCompanySettings(local);

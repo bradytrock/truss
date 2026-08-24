@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { GCAL_COOKIE } from "@/lib/google-calendar";
+import { GCAL_COOKIE, GCAL_COOKIE_LEGACY } from "@/lib/google-calendar";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
@@ -18,13 +18,14 @@ export async function POST(request: Request) {
   }
 
   const store = await cookies();
-  const raw = store.get(GCAL_COOKIE)?.value;
-  if (raw) {
+  for (const name of [GCAL_COOKIE, GCAL_COOKIE_LEGACY]) {
+    const raw = store.get(name)?.value;
+    if (!raw) continue;
     try {
       const parsed = JSON.parse(raw) as { staffId?: string };
-      if (parsed.staffId === staffId) store.delete(GCAL_COOKIE);
+      if (parsed.staffId === staffId) store.delete(name);
     } catch {
-      store.delete(GCAL_COOKIE);
+      store.delete(name);
     }
   }
   return NextResponse.json({ ok: true });

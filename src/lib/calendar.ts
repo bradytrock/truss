@@ -84,14 +84,17 @@ export function calendarShareSummary(
   return `Shared with ${names.join(", ")}`;
 }
 
-export const CALENDAR_STORAGE_KEY = "truss.calendar";
+export const CALENDAR_STORAGE_KEY = "theroofingcrm.calendar";
+const CALENDAR_STORAGE_KEY_LEGACY = "truss.calendar";
 
 export function readLocalCalendar(seed: {
   calendarAccounts: CalendarAccount[];
   calendarShares: CalendarShare[];
 }) {
   try {
-    const raw = window.localStorage.getItem(CALENDAR_STORAGE_KEY);
+    const raw =
+      window.localStorage.getItem(CALENDAR_STORAGE_KEY) ??
+      window.localStorage.getItem(CALENDAR_STORAGE_KEY_LEGACY);
     if (!raw) return seed;
     const parsed = JSON.parse(raw) as {
       calendarAccounts?: CalendarAccount[];
@@ -129,6 +132,7 @@ export function writeLocalCalendar(value: {
 export function clearLocalCalendar() {
   try {
     window.localStorage.removeItem(CALENDAR_STORAGE_KEY);
+    window.localStorage.removeItem(CALENDAR_STORAGE_KEY_LEGACY);
   } catch {
     // ignore
   }
