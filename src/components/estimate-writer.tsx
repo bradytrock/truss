@@ -408,6 +408,19 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     }
   }
 
+  async function handleReopen() {
+    setPending(true);
+    try {
+      await crm.reopenEstimate(estimate.id);
+      toast.success("Proposal reopened as a draft. Edit it and send again.");
+      setTab("write");
+    } catch {
+      // Store already toasted the reason.
+    } finally {
+      setPending(false);
+    }
+  }
+
   const actions = (
     <div className="flex flex-wrap gap-2">
       <Button variant="outline" disabled={pending || lines.length === 0} onClick={() => void downloadPdf()}>
@@ -448,6 +461,11 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
             Decline
           </Button>
         </>
+      ) : null}
+      {estimate.status === "declined" && !relatedInvoice ? (
+        <Button disabled={pending} onClick={() => void handleReopen()}>
+          Edit and send again
+        </Button>
       ) : null}
       {canConvert ? (
         <Button disabled={pending} variant={estimate.status === "accepted" ? "default" : "outline"} onClick={() => void handleConvert()}>
@@ -905,6 +923,13 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
               <span className="text-sm text-muted-foreground">{customer}</span>
               {site ? <span className="text-sm text-muted-foreground">· {site}</span> : null}
             </div>
+            {estimate.status === "declined" ? (
+              <p className="mt-2 text-sm text-muted-foreground">
+                {relatedInvoice
+                  ? "This proposal is declined and already has an invoice, so it stays locked."
+                  : "This proposal is declined and locked. Reopen it to edit lines and send again."}
+              </p>
+            ) : null}
           </div>
           {actions}
         </div>
