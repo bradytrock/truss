@@ -89,6 +89,8 @@ export type SharedCompany = {
 
 export type SharedEstimatePayload = {
   customer: string;
+  primaryCustomer?: string;
+  secondCustomer?: string | null;
   company: SharedCompany;
   estimate: {
     id: string;
@@ -98,11 +100,13 @@ export type SharedEstimatePayload = {
     opportunityId: string | null;
     jobId: string | null;
     contactId: string | null;
+    secondContactId: string | null;
     status: "draft" | "sent" | "viewed" | "accepted" | "declined";
     notes: string;
     validUntil: string | null;
     sentAt: string | null;
     acceptedAt: string | null;
+    secondAcceptedAt: string | null;
     createdAt: string;
     taxRate: number;
     discountKind: "percent" | "amount";
@@ -200,6 +204,8 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
   if (!asString(estimate.id) || !asString(estimate.number)) return null;
   return {
     customer: asString(raw.customer, "Homeowner"),
+    primaryCustomer: asString(raw.primaryCustomer) || undefined,
+    secondCustomer: asNullable(raw.secondCustomer),
     company: parseCompany(raw.company),
     estimate: {
       id: asString(estimate.id),
@@ -209,11 +215,13 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
       opportunityId: asNullable(estimate.opportunityId),
       jobId: asNullable(estimate.jobId),
       contactId: asNullable(estimate.contactId),
+      secondContactId: asNullable(estimate.secondContactId),
       status: (ESTIMATE_STATUSES.has(status) ? status : "sent") as SharedEstimatePayload["estimate"]["status"],
       notes: "",
       validUntil: asNullable(estimate.validUntil),
       sentAt: asNullable(estimate.sentAt),
       acceptedAt: asNullable(estimate.acceptedAt),
+      secondAcceptedAt: asNullable(estimate.secondAcceptedAt),
       createdAt: asString(estimate.createdAt),
       taxRate: asNumber(estimate.taxRate),
       discountKind: estimate.discountKind === "amount" ? "amount" : "percent",

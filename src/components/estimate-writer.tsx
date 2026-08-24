@@ -348,6 +348,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     (estimate.status === "sent" || estimate.status === "viewed" || estimate.status === "accepted") &&
     !relatedInvoice;
   const contact = estimate.contactId ? crm.getContact(estimate.contactId) : undefined;
+  const secondContact = estimate.secondContactId ? crm.getContact(estimate.secondContactId) : undefined;
   const client = crm.getClient(estimate.clientId);
   const opportunity = estimate.opportunityId ? crm.getOpportunity(estimate.opportunityId) : undefined;
   const job = estimate.jobId ? crm.getJob(estimate.jobId) : undefined;
@@ -385,6 +386,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       lines,
       company: crm.company,
       customer,
+      secondCustomer: secondContact?.name ?? null,
     });
   }
 
@@ -423,8 +425,12 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         <>
           <Button
             onClick={() => {
-              void crm.acceptEstimate(estimate.id).then(() => {
-                toast.success("Signed. The lead moved to Job Sold and a job is on the board.");
+              void crm.acceptEstimate(estimate.id, "both").then(() => {
+                toast.success(
+                  estimate.secondContactId
+                    ? "Both homeowners marked signed. The lead moved to Job Sold and a job is on the board."
+                    : "Signed. The lead moved to Job Sold and a job is on the board.",
+                );
               });
             }}
           >
@@ -494,6 +500,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                   void crm.updateEstimate(estimate.id, {
                     contactId,
                     clientId: next?.clientId ?? estimate.clientId,
+                    secondContactId:
+                      contactId && contactId === estimate.secondContactId ? null : estimate.secondContactId,
                   });
                 }}
                 items={[
@@ -532,6 +540,56 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                 </Link>
               </p>
             ) : null}
+          </div>
+          <div className="sm:col-span-2">
+            <Label>Second homeowner</Label>
+            {editable ? (
+              <Select
+                value={estimate.secondContactId || "none"}
+                onValueChange={(value) => {
+                  const secondContactId = value === "none" ? null : String(value ?? "");
+                  void crm.updateEstimate(estimate.id, {
+                    secondContactId,
+                    secondAcceptedAt: secondContactId === estimate.secondContactId ? estimate.secondAcceptedAt : null,
+                  });
+                }}
+                items={[
+                  { value: "none", label: "None — one signature" },
+                  ...crm.contacts
+                    .filter((item) => item.id !== estimate.contactId)
+                    .map((item) => ({ value: item.id, label: item.name })),
+                ]}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None — one signature</SelectItem>
+                  {crm.contacts
+                    .filter((item) => item.id !== estimate.contactId)
+                    .map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="mt-1 text-sm">
+                {secondContact ? (
+                  <Link href={`/contacts/${secondContact.id}`} className="hover:underline">
+                    {secondContact.name}
+                  </Link>
+                ) : (
+                  "None"
+                )}
+              </p>
+            )}
+            <p className="mt-1 text-xs text-muted-foreground">
+              {estimate.secondContactId
+                ? "Both homeowners must sign this proposal before it is accepted."
+                : "Add a co-owner when both signatures are required."}
+            </p>
           </div>
           <div>
             <Label>Street</Label>
@@ -802,6 +860,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       estimate={estimate}
       lines={lines}
       customer={customer}
+      secondCustomer={secondContact?.name ?? null}
       selectable={optionalOpen}
       showInternalNotes
       onToggleOptional={(line, selected) => void crm.updateEstimateLine(line.id, { selected })}

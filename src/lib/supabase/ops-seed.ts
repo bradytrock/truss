@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { seedState } from "@/lib/seed";
-import { isMissingEstimateWriter, isMissingShareToken, isMissingFinancials } from "@/lib/supabase/schema-errors";
+import { isMissingEstimateWriter, isMissingShareToken, isMissingFinancials, isMissingSecondSigner } from "@/lib/supabase/schema-errors";
 import type { Database } from "@/lib/supabase/database.types";
 
 type Client = SupabaseClient<Database>;
@@ -105,11 +105,13 @@ export async function insertOperations(
         opportunity_id: mappedId(estimate.opportunityId, ids),
         job_id: mappedId(estimate.jobId, ids),
         contact_id: mappedId(estimate.contactId, ids),
+        second_contact_id: mappedId(estimate.secondContactId, ids),
         status: estimate.status,
         notes: estimate.notes,
         valid_until: estimate.validUntil,
         sent_at: estimate.sentAt,
         accepted_at: estimate.acceptedAt,
+        second_accepted_at: estimate.secondAcceptedAt,
         created_at: estimate.createdAt,
         tax_rate: estimate.taxRate,
         discount_kind: estimate.discountKind,
@@ -127,6 +129,12 @@ export async function insertOperations(
     ];
   });
   let { error: estimateError } = await supabase.from("estimates").insert(estimateRows);
+  if (estimateError && isMissingSecondSigner(estimateError)) {
+    const retry = await supabase.from("estimates").insert(
+      estimateRows.map(({ second_contact_id: _secondContactId, second_accepted_at: _secondAcceptedAt, ...row }) => row),
+    );
+    estimateError = retry.error;
+  }
   if (estimateError && isMissingShareToken(estimateError)) {
     const retry = await supabase.from("estimates").insert(
       estimateRows.map(({ share_token: _shareToken, ...row }) => row),

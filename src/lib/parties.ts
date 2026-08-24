@@ -1,8 +1,10 @@
+import { joinCustomerNames } from "@/lib/estimate-signers";
 import type { Client, Contact, CrmState, Job, Opportunity } from "@/lib/types";
 
 export type CustomerRecord = {
   clientId?: string | null;
   contactId?: string | null;
+  secondContactId?: string | null;
   primaryContactId?: string | null;
   jobId?: string | null;
   opportunityId?: string | null;
@@ -14,7 +16,6 @@ export function resolveCustomerName(record: CustomerRecord, book: PartyBook): st
   const client = record.clientId
     ? book.clients.find((item) => item.id === record.clientId)
     : undefined;
-  if (client) return client.name;
 
   let contactId = record.contactId ?? record.primaryContactId ?? null;
   if (!contactId && record.jobId) {
@@ -26,6 +27,14 @@ export function resolveCustomerName(record: CustomerRecord, book: PartyBook): st
         ?.primaryContactId ?? null;
   }
   const contact = contactId ? book.contacts.find((item) => item.id === contactId) : undefined;
+  const second = record.secondContactId
+    ? book.contacts.find((item) => item.id === record.secondContactId)
+    : undefined;
+  if (second?.name) {
+    const primary = contact?.name ?? client?.name ?? "Homeowner";
+    return joinCustomerNames(primary, second.name);
+  }
+  if (client) return client.name;
   return contact?.name ?? "Homeowner";
 }
 

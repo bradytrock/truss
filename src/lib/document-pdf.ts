@@ -1,5 +1,6 @@
 import type { CompanySettings, Estimate, EstimateLine, Invoice, InvoiceLine, Payment } from "@/lib/types";
 import { estimateTotals, groupEstimateLines, lineAmount, lineIncluded } from "@/lib/estimate-totals";
+import { estimateSignatureLines, primaryNameFromJoined } from "@/lib/estimate-signers";
 import { formatCompanyAddress, formatCompanyContact, formatDate, formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
 import { invoiceBalance, invoiceTotal, lineAmount as invoiceLineAmount, paidOnInvoice } from "@/lib/money";
@@ -73,6 +74,7 @@ export async function downloadEstimatePdf(input: {
   lines: EstimateLine[];
   company: CompanySettings;
   customer: string;
+  secondCustomer?: string | null;
 }) {
   const doc = await createDoc();
   const width = doc.internal.pageSize.getWidth();
@@ -207,6 +209,31 @@ export async function downloadEstimatePdf(input: {
     y += 14;
     y = writeParagraph(doc, input.estimate.terms, y);
   }
+
+  const signers = estimateSignatureLines(input.estimate, {
+    primary: primaryNameFromJoined(input.customer, input.secondCustomer),
+    second: input.secondCustomer,
+  });
+  y = ensureSpace(doc, y + 8, 28 + signers.length * 52);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(90, 90, 90);
+  doc.text("SIGNATURES", 54, y);
+  y += 18;
+  const colWidth = signers.length > 1 ? (right - 54 - 24) / 2 : right - 54;
+  signers.forEach((signer, index) => {
+    const x = signers.length > 1 && index === 1 ? 54 + colWidth + 24 : 54;
+    const lineY = y + 28;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(40, 40, 40);
+    doc.line(x, lineY, x + colWidth, lineY);
+    doc.text(signer.name, x, lineY + 14);
+    doc.setFontSize(9);
+    doc.setTextColor(90, 90, 90);
+    doc.text(signer.signedAt ? `Signed ${formatDate(signer.signedAt)}` : "Homeowner signature", x, lineY + 26);
+  });
+  y += 52;
 
   downloadBlob(doc.output("blob"), `${input.estimate.number}.pdf`);
 }

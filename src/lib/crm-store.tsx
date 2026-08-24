@@ -18,7 +18,8 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedOperationsIfMissing } from "@/lib/supabase/ops-seed";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage } from "@/lib/supabase/schema-errors";
+import { estimateFullySigned, nextEstimateSignature, type EstimateSigner } from "@/lib/estimate-signers";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson } from "@/lib/job-record";
 import {
@@ -117,6 +118,7 @@ import {
 } from "@/lib/job-code";
 import { formatJobSite } from "@/lib/leads";
 import { fillPayment, fileToDataUrl } from "@/lib/job-financials";
+import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { resolveCustomerName, type CustomerRecord } from "@/lib/parties";
 import { canLoginAs, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 
@@ -476,6 +478,7 @@ type CrmContextValue = CrmState & {
     opportunityId: string | null;
     jobId: string | null;
     contactId?: string | null;
+    secondContactId?: string | null;
     notes?: string;
     validUntil?: string | null;
     street?: string;
@@ -487,7 +490,7 @@ type CrmContextValue = CrmState & {
   }) => Promise<Estimate>;
   updateEstimate: (id: string, patch: Partial<Estimate>) => Promise<void>;
   sendEstimate: (id: string) => Promise<void>;
-  acceptEstimate: (id: string) => Promise<void>;
+  acceptEstimate: (id: string, signer?: EstimateSigner) => Promise<void>;
   declineEstimate: (id: string) => Promise<void>;
   markEstimateViewed: (id: string) => Promise<void>;
   ensureEstimateShareToken: (id: string) => Promise<string>;
@@ -1897,6 +1900,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       opportunityId: string | null;
       jobId: string | null;
       contactId?: string | null;
+      secondContactId?: string | null;
       notes?: string;
       validUntil?: string | null;
       street?: string;
@@ -1921,11 +1925,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         opportunityId,
         jobId: pipelineJobId,
         contactId: input.contactId ?? null,
+        secondContactId: input.secondContactId ?? null,
         status: "draft",
         notes: input.notes ?? "",
         validUntil: input.validUntil !== undefined ? input.validUntil : defaultEstimateValidUntil(),
         sentAt: null,
         acceptedAt: null,
+        secondAcceptedAt: null,
         createdAt: new Date().toISOString(),
         intro: input.intro ?? "",
         terms: input.terms ?? DEFAULT_ESTIMATE_TERMS,
@@ -1948,6 +1954,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         opportunity_id: estimate.opportunityId,
         job_id: estimate.jobId,
         contact_id: estimate.contactId,
+        second_contact_id: estimate.secondContactId,
         notes: estimate.notes,
         valid_until: estimate.validUntil,
         tax_rate: estimate.taxRate,
@@ -1964,6 +1971,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         share_token: estimate.shareToken,
       };
       let { data, error } = await supabase.from("estimates").insert(payload).select("*").single();
+      if (error && isMissingSecondSigner(error)) {
+        const { second_contact_id: _secondContactId, ...rest } = payload;
+        const retry = await supabase.from("estimates").insert(rest).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (!error && data) toast.message(missingSecondSignerMessage());
+      }
       if (error && isMissingEstimateWriter(error)) {
         const retry = await supabase
           .from("estimates")
@@ -2009,6 +2023,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     const { error } = await supabase.from("estimates").update(estimatePatch(patch)).eq("id", id);
     if (error) {
+      if (isMissingSecondSigner(error)) {
+        apply();
+        toast.message(missingSecondSignerMessage());
+        return;
+      }
       if (isMissingEstimateWriter(error)) {
         apply();
         toast.message(missingEstimateWriterMessage());
@@ -2087,29 +2106,63 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const acceptEstimate = useCallback(
-    async (id: string) => {
+    async (id: string, signer: EstimateSigner = "both") => {
       const current = state.estimates.find((estimate) => estimate.id === id);
       if (!current) return;
-      const acceptedAt = new Date().toISOString();
+      if (current.status === "accepted" && estimateFullySigned(current)) return;
+      const now = new Date().toISOString();
+      const nextSig = nextEstimateSignature(current, signer, now);
+      const fully = nextSig.status === "accepted";
       const apply = () =>
         setState((prev) => ({
           ...prev,
           estimates: prev.estimates.map((estimate) =>
-            estimate.id === id ? { ...estimate, status: "accepted" as const, acceptedAt } : estimate
+            estimate.id === id ? { ...estimate, ...nextSig } : estimate
           ),
         }));
       const supabase = maybeClient();
       if (supabase) {
-        const { error } = await supabase
-          .from("estimates")
-          .update({ status: "accepted", accepted_at: acceptedAt })
-          .eq("id", id);
+        const payload: {
+          accepted_at: string | null;
+          second_accepted_at: string | null;
+          status?: "accepted";
+        } = {
+          accepted_at: nextSig.acceptedAt,
+          second_accepted_at: nextSig.secondAcceptedAt,
+        };
+        if (fully) payload.status = "accepted";
+        let { error } = await supabase.from("estimates").update(payload).eq("id", id);
+        if (error && isMissingSecondSigner(error)) {
+          const retryPayload: { accepted_at: string | null; status?: "accepted" } = {
+            accepted_at: nextSig.acceptedAt,
+          };
+          if (fully) retryPayload.status = "accepted";
+          const retry = await supabase.from("estimates").update(retryPayload).eq("id", id);
+          error = retry.error;
+          if (!error) toast.message(missingSecondSignerMessage());
+        }
         if (error) {
           toast.error(error.message);
           return;
         }
       }
       apply();
+      if (!fully) {
+        const signerName =
+          signer === "second"
+            ? (getContact(current.secondContactId)?.name ?? "Second homeowner")
+            : (getContact(current.contactId)?.name ?? "Homeowner");
+        if (current.opportunityId) {
+          await addActivity({
+            entityType: "opportunity",
+            entityId: current.opportunityId,
+            type: "note",
+            body: `${signerName} signed proposal ${current.number}. Waiting on the other homeowner.`,
+          });
+        }
+        return;
+      }
+      if (current.status === "accepted") return;
       const opportunityId = current.opportunityId || (await ensureLeadForEstimate(current));
       if (opportunityId && opportunityId !== current.opportunityId) {
         await updateEstimate(id, { opportunityId });
@@ -2132,13 +2185,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           entityType: "opportunity",
           entityId: opportunityId,
           type: "note",
-          body: `Owner signed proposal ${current.number}. Job opened and the lead moved to Job Sold.`,
+          body: current.secondContactId
+            ? `Both homeowners signed proposal ${current.number}. Job opened and the lead moved to Job Sold.`
+            : `Owner signed proposal ${current.number}. Job opened and the lead moved to Job Sold.`,
         });
       }
     },
     [
       addActivity,
       ensureLeadForEstimate,
+      getContact,
       moveOpportunity,
       state.estimateLines,
       state.estimates,
@@ -2210,6 +2266,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         opportunityId: source.opportunityId,
         jobId: source.jobId,
         contactId: source.contactId,
+        secondContactId: source.secondContactId,
         notes: source.notes,
         validUntil: source.validUntil,
         street: source.street,

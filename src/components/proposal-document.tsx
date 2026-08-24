@@ -10,6 +10,7 @@ import {
   lineAmount,
   lineIncluded,
 } from "@/lib/estimate-totals";
+import { estimateSignatureLines, primaryNameFromJoined } from "@/lib/estimate-signers";
 import { formatDate, formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
 import type { CompanySettings, Estimate, EstimateLine } from "@/lib/types";
@@ -72,6 +73,7 @@ export function ProposalDocument({
   estimate,
   lines,
   customer,
+  secondCustomer,
   company,
   onToggleOptional,
   selectable,
@@ -81,6 +83,7 @@ export function ProposalDocument({
   estimate: Estimate;
   lines: EstimateLine[];
   customer: string;
+  secondCustomer?: string | null;
   company?: CompanySettings;
   onToggleOptional?: (line: EstimateLine, selected: boolean) => void;
   selectable?: boolean;
@@ -89,6 +92,10 @@ export function ProposalDocument({
 }) {
   const groups = groupEstimateLines(lines);
   const site = formatJobSite(estimate);
+  const signers = estimateSignatureLines(estimate, {
+    primary: primaryNameFromJoined(customer, secondCustomer),
+    second: secondCustomer,
+  });
   return (
     <div className="space-y-6 rounded-md border bg-card p-5 sm:p-7">
       <CompanyLetterhead company={company} />
@@ -172,6 +179,27 @@ export function ProposalDocument({
           </p>
         </div>
       ) : null}
+      <div>
+        <h3 className="mb-3 text-[11px] font-semibold tracking-[0.16em] uppercase">Signatures</h3>
+        <div className={signers.length > 1 ? "grid gap-6 sm:grid-cols-2" : "max-w-md"}>
+          {signers.map((signer) => (
+            <div key={signer.role} className="space-y-3">
+              <div className="h-12 border-b border-foreground/40" />
+              <div>
+                <p className="text-sm font-medium">{signer.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {signer.signedAt ? `Signed ${formatDate(signer.signedAt)}` : "Homeowner signature"}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+        {signers.length > 1 && (!estimate.acceptedAt || !estimate.secondAcceptedAt) ? (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Both homeowners must sign before this proposal is accepted.
+          </p>
+        ) : null}
+      </div>
       {showInternalNotes && estimate.notes ? (
         <div>
           <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">

@@ -379,11 +379,13 @@ export type Database = {
           opportunity_id: string | null;
           job_id: string | null;
           contact_id: string | null;
+          second_contact_id: string | null;
           status: Database["public"]["Enums"]["estimate_status"];
           notes: string;
           valid_until: string | null;
           sent_at: string | null;
           accepted_at: string | null;
+          second_accepted_at: string | null;
           created_at: string;
           tax_rate: number;
           discount_kind: string;
@@ -407,11 +409,13 @@ export type Database = {
           opportunity_id?: string | null;
           job_id?: string | null;
           contact_id?: string | null;
+          second_contact_id?: string | null;
           status?: Database["public"]["Enums"]["estimate_status"];
           notes?: string;
           valid_until?: string | null;
           sent_at?: string | null;
           accepted_at?: string | null;
+          second_accepted_at?: string | null;
           created_at?: string;
           tax_rate?: number;
           discount_kind?: string;
@@ -796,7 +800,7 @@ export type Database = {
         Returns: Json;
       };
       sign_shared_estimate: {
-        Args: { p_token: string };
+        Args: { p_token: string; p_signer?: string };
         Returns: Json;
       };
     };

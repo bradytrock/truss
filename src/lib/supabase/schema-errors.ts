@@ -4,8 +4,21 @@ export const NULLABLE_COMPANY_SQL = "supabase/migrations/20260819280000_nullable
 export const ESTIMATE_WRITER_SQL = "supabase/migrations/20260819290000_estimate_writer.sql";
 export const RESIDENTIAL_ENUMS_SQL = "supabase/migrations/20260819200000_residential_homeowners.sql";
 
+export const ESTIMATE_SECOND_SIGNER_SQL = "supabase/migrations/20260819350000_estimate_second_signer.sql";
+
+export function isMissingSecondSigner(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return message.includes("second_contact_id") || message.includes("second_accepted_at");
+}
+
+export function missingSecondSignerMessage() {
+  return `Saved in this browser. Run ${ESTIMATE_SECOND_SIGNER_SQL} in the SQL editor to keep a second homeowner and both signatures in Postgres.`;
+}
+
 export function isMissingEstimateWriter(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
+  if (isMissingSecondSigner(error)) return false;
   const message = error.message ?? "";
   return (
     error.code === "PGRST204" ||

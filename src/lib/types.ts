@@ -331,11 +331,13 @@ export interface Estimate {
   opportunityId: string | null;
   jobId: string | null;
   contactId: string | null;
+  secondContactId: string | null;
   status: EstimateStatus;
   notes: string;
   validUntil: string | null;
   sentAt: string | null;
   acceptedAt: string | null;
+  secondAcceptedAt: string | null;
   createdAt: string;
   taxRate: number;
   discountKind: "percent" | "amount";

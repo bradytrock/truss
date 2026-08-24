@@ -8,15 +8,17 @@ import { ProposalDocument } from "@/components/proposal-document";
 import { ShareFrame, ShareLoading, ShareMissing, SharePdfButton } from "@/components/share-frame";
 import { downloadEstimatePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
+import { estimateFullySigned, nextEstimateSignature, type EstimateSigner } from "@/lib/estimate-signers";
 import { linesForEstimate } from "@/lib/estimate-totals";
 import { parseSharedEstimate, type SharedEstimatePayload } from "@/lib/share";
+import type { Estimate } from "@/lib/types";
 
 export default function SharedEstimatePage() {
   const { token } = useParams<{ token: string }>();
   const crm = useCrm();
   const [remote, setRemote] = useState<SharedEstimatePayload | null>(null);
   const [remoteState, setRemoteState] = useState<"idle" | "loading" | "missing">("idle");
-  const [signing, setSigning] = useState(false);
+  const [signing, setSigning] = useState<EstimateSigner | null>(null);
 
   const fromStore = useMemo(
     () => crm.estimates.find((estimate) => estimate.shareToken === token),
@@ -57,22 +59,29 @@ export default function SharedEstimatePage() {
     };
   }, [crm.hydrated, crm.markEstimateViewed, fromStore, token]);
 
-  async function signFromStore() {
+  async function signFromStore(signer: EstimateSigner) {
     if (!fromStore) return;
-    setSigning(true);
+    setSigning(signer);
     try {
-      await crm.acceptEstimate(fromStore.id);
-      toast.success("Thank you. This proposal is signed.");
+      const next = nextEstimateSignature(fromStore, signer, new Date().toISOString());
+      await crm.acceptEstimate(fromStore.id, signer);
+      toast.success(
+        next.status === "accepted"
+          ? "Thank you. This proposal is signed."
+          : "Signed. Waiting on the other homeowner.",
+      );
     } finally {
-      setSigning(false);
+      setSigning(null);
     }
   }
 
-  async function signRemote() {
-    setSigning(true);
+  async function signRemote(signer: "primary" | "second") {
+    setSigning(signer);
     try {
       const response = await fetch(`/api/share/estimate/${encodeURIComponent(token)}`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ signer }),
       });
       const data: unknown = response.ok ? await response.json() : null;
       const parsed = parseSharedEstimate(data);
@@ -81,9 +90,15 @@ export default function SharedEstimatePage() {
         return;
       }
       setRemote(parsed);
-      toast.success("Thank you. This proposal is signed.");
+      toast.success(
+        parsed.estimate.status === "accepted"
+          ? "Thank you. This proposal is signed."
+          : parsed.estimate.secondContactId
+            ? "Signed. Waiting on the other homeowner."
+            : "Thank you. This proposal is signed.",
+      );
     } finally {
-      setSigning(false);
+      setSigning(null);
     }
   }
 
@@ -94,9 +109,15 @@ export default function SharedEstimatePage() {
   if (fromStore) {
     const lines = linesForEstimate(crm.estimateLines, fromStore.id);
     const customer = crm.customerName(fromStore);
+    const secondName = fromStore.secondContactId
+      ? crm.getContact(fromStore.secondContactId)?.name ?? "Second homeowner"
+      : null;
+    const primaryName = fromStore.contactId
+      ? crm.getContact(fromStore.contactId)?.name ?? customer
+      : customer;
     const optionalOpen =
       fromStore.status === "draft" || fromStore.status === "sent" || fromStore.status === "viewed";
-    const canSign =
+    const openForSignatures =
       fromStore.status === "draft" || fromStore.status === "sent" || fromStore.status === "viewed";
     return (
       <ShareFrame
@@ -110,27 +131,34 @@ export default function SharedEstimatePage() {
                   lines,
                   company: crm.company,
                   customer,
+                  secondCustomer: secondName,
                 }).catch(() => toast.error("Could not build the PDF."))
               }
             />
-            {canSign ? (
-              <Button disabled={signing} onClick={() => void signFromStore()}>
-                {signing ? "Signing…" : "Accept proposal"}
-              </Button>
+            {openForSignatures ? (
+              <ShareSignActions
+                estimate={fromStore}
+                primaryName={primaryName}
+                secondName={secondName}
+                signing={signing}
+                onSign={(signer) => void signFromStore(signer)}
+              />
             ) : null}
           </>
         }
       >
-        {fromStore.status === "accepted" ? (
-          <p className="rounded-md border bg-card px-4 py-3 text-sm">
-            This proposal is signed. {customer} accepted {fromStore.number}.
-          </p>
-        ) : null}
+        <SignatureBanner
+          estimate={fromStore}
+          customer={customer}
+          primaryName={primaryName}
+          secondName={secondName}
+        />
         <ProposalDocument
           company={crm.company}
           estimate={fromStore}
           lines={lines}
           customer={customer}
+          secondCustomer={secondName}
           selectable={optionalOpen}
           showStatus={false}
           onToggleOptional={(line, selected) => void crm.updateEstimateLine(line.id, { selected })}
@@ -147,6 +175,8 @@ export default function SharedEstimatePage() {
     remote.estimate.status === "draft" ||
     remote.estimate.status === "sent" ||
     remote.estimate.status === "viewed";
+  const remotePrimary = remote.primaryCustomer || remote.customer;
+  const remoteSecond = remote.secondCustomer ?? null;
 
   return (
     <ShareFrame
@@ -156,33 +186,113 @@ export default function SharedEstimatePage() {
             disabled={remote.lines.length === 0}
             onClick={() =>
               void downloadEstimatePdf({
-                estimate: remote.estimate,
+                estimate: remote.estimate as Estimate,
                 lines: remote.lines,
                 company: remote.company,
                 customer: remote.customer,
+                secondCustomer: remoteSecond,
               }).catch(() => toast.error("Could not build the PDF."))
             }
           />
           {canSignRemote ? (
-            <Button disabled={signing} onClick={() => void signRemote()}>
-              {signing ? "Signing…" : "Accept proposal"}
-            </Button>
+            <ShareSignActions
+              estimate={remote.estimate}
+              primaryName={remotePrimary}
+              secondName={remoteSecond}
+              signing={signing}
+              onSign={(signer) => void signRemote(signer === "second" ? "second" : "primary")}
+            />
           ) : null}
         </>
       }
     >
-      {remote.estimate.status === "accepted" ? (
-        <p className="rounded-md border bg-card px-4 py-3 text-sm">
-          This proposal is signed. Thank you.
-        </p>
-      ) : null}
+      <SignatureBanner
+        estimate={remote.estimate}
+        customer={remote.customer}
+        primaryName={remotePrimary}
+        secondName={remoteSecond}
+      />
       <ProposalDocument
         company={remote.company}
-        estimate={remote.estimate}
+        estimate={remote.estimate as Estimate}
         lines={remote.lines}
         customer={remote.customer}
+        secondCustomer={remoteSecond}
         showStatus={false}
       />
     </ShareFrame>
+  );
+}
+
+function SignatureBanner({
+  estimate,
+  customer,
+  primaryName,
+  secondName,
+}: {
+  estimate: Pick<Estimate, "status" | "number" | "secondContactId" | "acceptedAt" | "secondAcceptedAt">;
+  customer: string;
+  primaryName: string;
+  secondName: string | null;
+}) {
+  if (estimate.status === "accepted" || estimateFullySigned(estimate)) {
+    return (
+      <p className="rounded-md border bg-card px-4 py-3 text-sm">
+        This proposal is signed. {customer} accepted {estimate.number}.
+      </p>
+    );
+  }
+  if (!estimate.secondContactId) return null;
+  const waiting: string[] = [];
+  if (!estimate.acceptedAt) waiting.push(primaryName);
+  if (!estimate.secondAcceptedAt) waiting.push(secondName || "the other homeowner");
+  if (waiting.length === 2) return null;
+  return (
+    <p className="rounded-md border bg-card px-4 py-3 text-sm">
+      Waiting on {waiting.join(" and ")} to sign {estimate.number}.
+    </p>
+  );
+}
+
+function ShareSignActions({
+  estimate,
+  primaryName,
+  secondName,
+  signing,
+  onSign,
+}: {
+  estimate: Pick<Estimate, "secondContactId" | "acceptedAt" | "secondAcceptedAt">;
+  primaryName: string;
+  secondName: string | null;
+  signing: EstimateSigner | null;
+  onSign: (signer: EstimateSigner) => void;
+}) {
+  if (!estimate.secondContactId) {
+    return (
+      <Button disabled={Boolean(signing) || Boolean(estimate.acceptedAt)} onClick={() => onSign("primary")}>
+        {signing ? "Signing…" : "Accept proposal"}
+      </Button>
+    );
+  }
+  return (
+    <>
+      <Button
+        disabled={Boolean(signing) || Boolean(estimate.acceptedAt)}
+        onClick={() => onSign("primary")}
+      >
+        {estimate.acceptedAt ? `Signed by ${primaryName}` : signing === "primary" ? "Signing…" : `Sign as ${primaryName}`}
+      </Button>
+      <Button
+        variant={estimate.acceptedAt ? "default" : "outline"}
+        disabled={Boolean(signing) || Boolean(estimate.secondAcceptedAt)}
+        onClick={() => onSign("second")}
+      >
+        {estimate.secondAcceptedAt
+          ? `Signed by ${secondName}`
+          : signing === "second"
+            ? "Signing…"
+            : `Sign as ${secondName}`}
+      </Button>
+    </>
   );
 }

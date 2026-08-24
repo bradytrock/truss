@@ -147,6 +147,8 @@ export const COMMON_UNITS = ["LS", "ea", "sq", "sf", "lf", "cy", "hr", "day", "m
 export type EstimateDraft = Omit<
   Estimate,
   | "contactId"
+  | "secondContactId"
+  | "secondAcceptedAt"
   | "taxRate"
   | "discountKind"
   | "discountValue"
@@ -164,6 +166,8 @@ export type EstimateDraft = Omit<
     Pick<
       Estimate,
       | "contactId"
+      | "secondContactId"
+      | "secondAcceptedAt"
       | "taxRate"
       | "discountKind"
       | "discountValue"
@@ -186,9 +190,16 @@ export type EstimateLineDraft = Omit<
   Partial<Pick<EstimateLine, "title" | "groupName" | "optional" | "selected" | "taxable">>;
 
 export function fillEstimate(estimate: EstimateDraft): Estimate {
+  const contactId = estimate.contactId ?? null;
+  const secondContactId =
+    estimate.secondContactId && estimate.secondContactId !== contactId
+      ? estimate.secondContactId
+      : null;
   return {
     ...estimate,
-    contactId: estimate.contactId ?? null,
+    contactId,
+    secondContactId,
+    secondAcceptedAt: secondContactId ? (estimate.secondAcceptedAt ?? null) : null,
     taxRate: estimate.taxRate ?? 0,
     discountKind: estimate.discountKind ?? "percent",
     discountValue: estimate.discountValue ?? 0,

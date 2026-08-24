@@ -312,11 +312,13 @@ export function mapEstimate(row: EstimateRow): Estimate {
     opportunityId: row.opportunity_id,
     jobId: row.job_id,
     contactId: row.contact_id ?? null,
+    secondContactId: row.second_contact_id ?? null,
     status: row.status,
     notes: row.notes,
     validUntil: row.valid_until,
     sentAt: row.sent_at,
     acceptedAt: row.accepted_at,
+    secondAcceptedAt: row.second_accepted_at ?? null,
     createdAt: row.created_at,
     taxRate: Number(row.tax_rate ?? 0),
     discountKind: adjustmentKind(row.discount_kind),
@@ -358,11 +360,13 @@ export function estimatePatch(patch: Partial<Estimate>) {
   if (patch.opportunityId !== undefined) row.opportunity_id = patch.opportunityId;
   if (patch.jobId !== undefined) row.job_id = patch.jobId;
   if (patch.contactId !== undefined) row.contact_id = patch.contactId;
+  if (patch.secondContactId !== undefined) row.second_contact_id = patch.secondContactId;
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.notes !== undefined) row.notes = patch.notes;
   if (patch.validUntil !== undefined) row.valid_until = patch.validUntil;
   if (patch.sentAt !== undefined) row.sent_at = patch.sentAt;
   if (patch.acceptedAt !== undefined) row.accepted_at = patch.acceptedAt;
+  if (patch.secondAcceptedAt !== undefined) row.second_accepted_at = patch.secondAcceptedAt;
   if (patch.taxRate !== undefined) row.tax_rate = patch.taxRate;
   if (patch.discountKind !== undefined) row.discount_kind = patch.discountKind;
   if (patch.discountValue !== undefined) row.discount_value = patch.discountValue;

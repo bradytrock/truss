@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Newsreader } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { PRODUCT_NAME } from "@/lib/product";
@@ -27,7 +28,7 @@ export const metadata: Metadata = {
   description: "Jobs, estimates, and invoices for restoration and home improvement.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"

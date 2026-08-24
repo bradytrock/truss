@@ -56,6 +56,7 @@ export function CreateEstimateDialog({
   const [contactId, setContactId] = useState(
     defaultContactId || jobDefault?.primaryContactId || contacts[0]?.id || ""
   );
+  const [secondContactId, setSecondContactId] = useState("");
   const [opportunityId, setOpportunityId] = useState(defaultOpportunityId ?? "");
   const [jobId, setJobId] = useState(defaultJobId ?? "");
   const [validUntil, setValidUntil] = useState(defaultEstimateValidUntil);
@@ -89,12 +90,14 @@ export function CreateEstimateDialog({
         opportunityId: opportunityId || null,
         jobId: jobId || null,
         contactId,
+        secondContactId: secondContactId || null,
         validUntil: validUntil || null,
         notes,
       });
       toast.success(`${estimate.number} drafted.`);
       onOpenChange(false);
       setName("");
+      setSecondContactId("");
       setValidUntil(defaultEstimateValidUntil());
       router.push(`/estimates/${estimate.id}`);
     } catch {
@@ -124,9 +127,11 @@ export function CreateEstimateDialog({
             <Select
               value={contactId}
               onValueChange={(value) => {
-                setContactId(String(value ?? ""));
+                const next = String(value ?? "");
+                setContactId(next);
                 setOpportunityId("");
                 setJobId("");
+                if (secondContactId === next) setSecondContactId("");
               }}
               items={contacts.map((item) => ({ value: item.id, label: item.name }))}
             >
@@ -141,6 +146,35 @@ export function CreateEstimateDialog({
                 ))}
               </SelectContent>
             </Select>
+          </Field>
+          <Field label="Second homeowner (optional)">
+            <Select
+              value={secondContactId || "none"}
+              onValueChange={(value) => setSecondContactId(value === "none" ? "" : String(value ?? ""))}
+              items={[
+                { value: "none", label: "None — one signature" },
+                ...contacts
+                  .filter((item) => item.id !== contactId)
+                  .map((item) => ({ value: item.id, label: item.name })),
+              ]}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None — one signature</SelectItem>
+                {contacts
+                  .filter((item) => item.id !== contactId)
+                  .map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Use this when two homeowners both need to sign the proposal.
+            </p>
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Lead (optional)">
