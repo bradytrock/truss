@@ -55,7 +55,7 @@ export function StackedShare({ items }: { items: { label: string; value: number 
     return <p className="text-sm text-muted-foreground">No leads in this date range.</p>;
   }
   return (
-    <div className="flex h-3 w-full overflow-hidden rounded-sm bg-muted">
+    <div className="flex h-5 w-full overflow-hidden rounded-sm bg-muted">
       {items.map((item, index) => (
         <div
           key={item.label}
