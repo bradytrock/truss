@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 
 export default function AccountingPage() {
   const crm = useCrm();
-  const viewer = crm.viewer;
+  const viewer = crm.effectiveStaff;
   const [basis, setBasis] = useState<JobBooksBasis>("accrual");
   const [span, setSpan] = useState<"ytd" | "all">("ytd");
   const ytd = useMemo(() => yearToDateBounds(), []);

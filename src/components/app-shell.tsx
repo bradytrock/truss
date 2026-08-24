@@ -196,10 +196,10 @@ function Brand() {
 }
 
 function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
-  const { viewer } = useCrm();
+  const { effectiveStaff } = useCrm();
   const items = navItems(
-    Boolean(viewer && canViewReports(viewer.role)),
-    Boolean(viewer && canViewAccounting(viewer.role)),
+    Boolean(effectiveStaff && canViewReports(effectiveStaff.role)),
+    Boolean(effectiveStaff && canViewAccounting(effectiveStaff.role)),
   );
   return (
     <nav className="flex flex-col px-2 py-3">

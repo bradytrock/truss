@@ -46,7 +46,7 @@ const SCOPE_COPY = {
 
 export default function ReportsPage() {
   const crm = useCrm();
-  const viewer = crm.viewer;
+  const viewer = crm.effectiveStaff;
   const [preset, setPreset] = useState<DatePreset>("ytd");
   const [tab, setTab] = useState<ReportTab>("jobs");
   const [pipelineMode, setPipelineMode] = useState<"funnel" | "bars">("funnel");
