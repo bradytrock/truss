@@ -180,7 +180,7 @@ export function ShareLinkDialog({
       }
       if (mocked) {
         toast.message(
-          "Sendblue is not connected, so nothing was texted. Copy the link, or add SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY, and SENDBLUE_FROM_NUMBER to .env.local."
+          "Sendblue is not connected to this website. Supabase Secrets are not read here — add SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY, and SENDBLUE_FROM_NUMBER on the host (Vercel → Environment Variables) and redeploy, or deploy the send-text Edge Function if those keys live in Supabase."
         );
       } else {
         toast.success(
@@ -263,7 +263,7 @@ export function ShareLinkDialog({
             <p className="text-xs text-muted-foreground">
               {status?.configured
                 ? `Texts go out over Sendblue${status.fromNumber ? ` (${status.fromNumber})` : ""}. Copy the link if you would rather send it yourself.`
-                : "Copy the link anytime. To text it, add Sendblue keys to .env.local — until then, Send still previews the message without delivering it."}
+                : "Copy the link anytime. This website does not read Supabase Secrets. Put the three SENDBLUE_ variables on the host (Vercel) or deploy supabase/functions/send-text — until then, Send previews the message without delivering it."}
             </p>
           </div>
         </div>

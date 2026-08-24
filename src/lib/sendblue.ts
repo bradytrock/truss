@@ -1,4 +1,6 @@
 import { toE164 } from "@/lib/phone";
+import { createClient } from "@/lib/supabase/server";
+import { getSupabaseKey, getSupabaseUrl } from "@/lib/supabase/env";
 
 const SENDBLUE_SEND_URL = "https://api.sendblue.co/api/send-message";
 
@@ -18,37 +20,65 @@ export function sendblueFromNumber() {
   return toE164(process.env.SENDBLUE_FROM_NUMBER?.trim() || "");
 }
 
-export function isSendblueConfigured() {
+export function isSendblueConfiguredLocally() {
   return Boolean(sendblueApiKeyId() && sendblueApiSecret() && sendblueFromNumber());
 }
 
-export function sendblueStatus() {
-  const from = sendblueFromNumber();
-  return {
-    configured: isSendblueConfigured(),
-    fromNumber: from ? `ending ${from.slice(-4)}` : "",
-  };
+/** @deprecated Use sendblueStatus() — local env is not the only place keys can live. */
+export function isSendblueConfigured() {
+  return isSendblueConfiguredLocally();
 }
 
-export async function sendblueText(input: { to: string; content: string }) {
-  const to = toE164(input.to);
-  const content = input.content.trim();
-  if (!to) {
-    return { ok: false as const, mocked: false, error: "That phone number is not valid." };
-  }
-  if (!content) {
-    return { ok: false as const, mocked: false, error: "Write a message before sending." };
-  }
+type SendblueStatus = { configured: boolean; fromNumber: string };
 
-  if (!isSendblueConfigured()) {
+async function sendblueFunctionRequest(input: {
+  method: "GET" | "POST";
+  body?: Record<string, string>;
+}) {
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  if (!token) return null;
+
+  const url = `${getSupabaseUrl()}/functions/v1/send-text`;
+  const response = await fetch(url, {
+    method: input.method,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: getSupabaseKey(),
+      "Content-Type": "application/json",
+    },
+    body: input.method === "POST" ? JSON.stringify(input.body ?? {}) : undefined,
+  });
+  return response;
+}
+
+export async function sendblueStatus(): Promise<SendblueStatus> {
+  if (isSendblueConfiguredLocally()) {
+    const from = sendblueFromNumber();
     return {
-      ok: true as const,
-      mocked: true,
-      to,
-      handle: `mock_${Date.now()}`,
+      configured: true,
+      fromNumber: from ? `ending ${from.slice(-4)}` : "",
     };
   }
+  try {
+    const response = await sendblueFunctionRequest({ method: "GET" });
+    if (!response || !response.ok) {
+      return { configured: false, fromNumber: "" };
+    }
+    const payload = (await response.json()) as SendblueStatus;
+    return {
+      configured: Boolean(payload.configured),
+      fromNumber: typeof payload.fromNumber === "string" ? payload.fromNumber : "",
+    };
+  } catch {
+    return { configured: false, fromNumber: "" };
+  }
+}
 
+async function sendblueTextLocal(to: string, content: string) {
   const response = await fetch(SENDBLUE_SEND_URL, {
     method: "POST",
     headers: {
@@ -92,4 +122,71 @@ export async function sendblueText(input: { to: string; content: string }) {
     to,
     handle: typeof payload.message_handle === "string" ? payload.message_handle : "",
   };
+}
+
+async function sendblueTextViaFunction(to: string, content: string) {
+  const response = await sendblueFunctionRequest({
+    method: "POST",
+    body: { to, content },
+  });
+  if (!response) {
+    return {
+      ok: false as const,
+      mocked: false,
+      error: "Sign in again, then retry the text.",
+    };
+  }
+  if (response.status === 404) {
+    return {
+      ok: true as const,
+      mocked: true,
+      to,
+      handle: `mock_${Date.now()}`,
+    };
+  }
+  let payload: Record<string, unknown> = {};
+  try {
+    payload = (await response.json()) as Record<string, unknown>;
+  } catch {
+    payload = {};
+  }
+  if (!response.ok || payload.ok === false) {
+    const message =
+      (typeof payload.error === "string" && payload.error) ||
+      (typeof payload.error_message === "string" && payload.error_message) ||
+      "Sendblue could not send that text.";
+    return { ok: false as const, mocked: false, error: message };
+  }
+  return {
+    ok: true as const,
+    mocked: Boolean(payload.mocked),
+    to,
+    handle: typeof payload.handle === "string" ? payload.handle : "",
+  };
+}
+
+export async function sendblueText(input: { to: string; content: string }) {
+  const to = toE164(input.to);
+  const content = input.content.trim();
+  if (!to) {
+    return { ok: false as const, mocked: false, error: "That phone number is not valid." };
+  }
+  if (!content) {
+    return { ok: false as const, mocked: false, error: "Write a message before sending." };
+  }
+
+  if (isSendblueConfiguredLocally()) {
+    return sendblueTextLocal(to, content);
+  }
+
+  try {
+    return await sendblueTextViaFunction(to, content);
+  } catch {
+    return {
+      ok: true as const,
+      mocked: true,
+      to,
+      handle: `mock_${Date.now()}`,
+    };
+  }
 }

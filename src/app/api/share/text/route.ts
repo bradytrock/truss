@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { looksLikePhone } from "@/lib/phone";
-import { isSendblueConfigured, sendblueStatus, sendblueText } from "@/lib/sendblue";
+import { isSendblueConfiguredLocally, sendblueStatus, sendblueText } from "@/lib/sendblue";
 import { requestOrigin, shareUrlAllowed } from "@/lib/share-text";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  return NextResponse.json(sendblueStatus());
+  return NextResponse.json(await sendblueStatus());
 }
 
 export async function POST(request: Request) {
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       mocked: result.mocked,
-      configured: isSendblueConfigured(),
+      configured: isSendblueConfiguredLocally() || !result.mocked,
       to: result.to,
     });
   } catch (error) {
