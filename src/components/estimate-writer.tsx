@@ -16,7 +16,7 @@ import {
 import { ProposalDocument } from "@/components/proposal-document";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { CollectSignatureDialog } from "@/components/signature-pad";
-import { shareContactsForEstimate } from "@/lib/parties";
+import { shareContactsForEstimate, contactsOnJob } from "@/lib/parties";
 import { EstimateStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -392,6 +392,22 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   const client = crm.getClient(estimate.clientId);
   const opportunity = estimate.opportunityId ? crm.getOpportunity(estimate.opportunityId) : undefined;
   const job = estimate.jobId ? crm.getJob(estimate.jobId) : undefined;
+  const homeownerContacts = useMemo(
+    () =>
+      contactsOnJob(job, crm.contacts, [
+        estimate.contactId,
+        estimate.secondContactId,
+        opportunity?.primaryContactId,
+      ]),
+    [
+      crm.contacts,
+      estimate.contactId,
+      estimate.secondContactId,
+      job,
+      opportunity?.primaryContactId,
+    ],
+  );
+  const secondHomeownerContacts = homeownerContacts.filter((item) => item.id !== estimate.contactId);
   const customer = crm.customerName(estimate);
   const site =
     formatJobSite({
@@ -600,7 +616,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                 }}
                 items={[
                   { value: "none", label: "Choose a contact" },
-                  ...crm.contacts.map((item) => ({
+                  ...homeownerContacts.map((item) => ({
                     value: item.id,
                     label: contactOptionLabel(item, [...crm.jobs, ...crm.opportunities, ...crm.estimates]),
                   })),
@@ -611,7 +627,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Choose a contact</SelectItem>
-                  {crm.contacts.map((item) => (
+                  {homeownerContacts.map((item) => (
                     <SelectItem key={item.id} value={item.id} className="h-auto items-start py-1.5">
                       <ContactSelectOption contact={item} sites={[...crm.jobs, ...crm.opportunities, ...crm.estimates]} />
                     </SelectItem>
@@ -636,6 +652,12 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                   {client.name}
                 </Link>
               </p>
+            ) : job ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {homeownerContacts.length === 0
+                  ? "Add the homeowner as a related contact on the job, then pick them here."
+                  : "People on this job."}
+              </p>
             ) : null}
           </div>
           <div className="sm:col-span-2">
@@ -652,9 +674,10 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                 }}
                 items={[
                   { value: "none", label: "None — one signature" },
-                  ...crm.contacts
-                    .filter((item) => item.id !== estimate.contactId)
-                    .map((item) => ({ value: item.id, label: item.name })),
+                  ...secondHomeownerContacts.map((item) => ({
+                    value: item.id,
+                    label: contactOptionLabel(item, [...crm.jobs, ...crm.opportunities, ...crm.estimates]),
+                  })),
                 ]}
               >
                 <SelectTrigger className="w-full">
@@ -662,13 +685,11 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">None — one signature</SelectItem>
-                  {crm.contacts
-                    .filter((item) => item.id !== estimate.contactId)
-                    .map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name}
-                      </SelectItem>
-                    ))}
+                  {secondHomeownerContacts.map((item) => (
+                    <SelectItem key={item.id} value={item.id} className="h-auto items-start py-1.5">
+                      <ContactSelectOption contact={item} sites={[...crm.jobs, ...crm.opportunities, ...crm.estimates]} />
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             ) : (
@@ -685,7 +706,9 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
             <p className="mt-1 text-xs text-muted-foreground">
               {estimate.secondContactId
                 ? "Both homeowners must sign this proposal before it is accepted."
-                : "Add a co-owner when both signatures are required."}
+                : job
+                  ? "Add a co-owner as a related contact on the job when both signatures are required."
+                  : "Add a co-owner when both signatures are required."}
             </p>
           </div>
           <div>

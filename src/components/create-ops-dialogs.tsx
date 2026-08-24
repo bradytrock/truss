@@ -30,6 +30,7 @@ import { useCrm } from "@/lib/crm-store";
 import { localYmd } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
 import { workMarket } from "@/lib/market";
+import { contactsOnJob } from "@/lib/parties";
 import { LogPaymentDialog } from "@/components/log-financial-dialogs";
 import {
   EVENT_KIND_LABELS,
@@ -82,6 +83,8 @@ export function CreateEstimateDialog({
   const isNewHomeowner = contactId === NEW_HOMEOWNER;
   const contact = contacts.find((item) => item.id === contactId);
   const contactSites = [...jobs, ...opportunities, ...estimates];
+  const jobForEstimate = jobId ? jobs.find((item) => item.id === jobId) : undefined;
+  const homeownerContacts = contactsOnJob(jobForEstimate, contacts, [contactId, defaultContactId]);
 
   function applySite(record?: Parameters<typeof siteFieldsFromRecord>[0]) {
     const fields = siteFieldsFromRecord(record);
@@ -255,8 +258,12 @@ export function CreateEstimateDialog({
               onValueChange={(value) => {
                 const next = String(value ?? "");
                 setContactId(next);
+                if (jobId) {
+                  const currentJob = jobs.find((item) => item.id === jobId);
+                  if (next && next !== NEW_HOMEOWNER) applySite(currentJob);
+                  return;
+                }
                 setOpportunityId("");
-                setJobId("");
                 if (next && next !== NEW_HOMEOWNER) {
                   applySite(
                     jobs.find((job) => job.primaryContactId === next) ||
@@ -266,7 +273,7 @@ export function CreateEstimateDialog({
               }}
               items={[
                 { value: NEW_HOMEOWNER, label: "New homeowner…" },
-                ...contacts.map((item) => ({
+                ...homeownerContacts.map((item) => ({
                   value: item.id,
                   label: contactOptionLabel(item, contactSites),
                 })),
@@ -277,8 +284,8 @@ export function CreateEstimateDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NEW_HOMEOWNER}>New homeowner…</SelectItem>
-                {contacts.length > 0 ? <SelectSeparator /> : null}
-                {contacts.map((item) => (
+                {homeownerContacts.length > 0 ? <SelectSeparator /> : null}
+                {homeownerContacts.map((item) => (
                   <SelectItem key={item.id} value={item.id} className="h-auto items-start py-1.5">
                     <ContactSelectOption contact={item} sites={contactSites} />
                   </SelectItem>

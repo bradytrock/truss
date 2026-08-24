@@ -104,6 +104,30 @@ export function jobsForContact(contact: Contact, jobs: Job[]) {
   });
 }
 
+/** Homeowners on a job: primary plus related contacts. Trades are not included. */
+export function contactsOnJob(
+  job: Pick<Job, "primaryContactId" | "relatedContactIds"> | undefined,
+  contacts: Contact[],
+  extraIds: Array<string | null | undefined> = [],
+) {
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  function push(id: string | null | undefined) {
+    const trimmed = id?.trim() ?? "";
+    if (!trimmed || seen.has(trimmed)) return;
+    seen.add(trimmed);
+    ids.push(trimmed);
+  }
+  push(job?.primaryContactId);
+  for (const id of job?.relatedContactIds ?? []) push(id);
+  for (const id of extraIds) push(id);
+  const found = ids
+    .map((id) => contacts.find((contact) => contact.id === id))
+    .filter((contact): contact is Contact => Boolean(contact));
+  if (job) return found;
+  return contacts;
+}
+
 export function opportunitiesForContact(contact: Contact, opportunities: Opportunity[]) {
   return opportunities.filter((opportunity) => {
     if (opportunity.primaryContactId === contact.id) return true;
