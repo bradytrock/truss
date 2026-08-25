@@ -1,6 +1,7 @@
 import type { Contact, CrmState, Expense, Job, Opportunity, SeatRole, StaffMember } from "@/lib/types";
 import { yearOf } from "@/lib/reports";
 import { paymentsForJob } from "@/lib/job-financials";
+import { acceptedAmountForJob } from "@/lib/estimate-totals";
 import { opportunityWonAt } from "@/lib/won";
 
 export function isBusinessDevelopment(role: SeatRole | undefined) {
@@ -128,7 +129,9 @@ export function statsForOriginator(
     won: won.length,
     wonValue: won.reduce((sum, opportunity) => {
       const job = jobs.find((item) => item.opportunityId === opportunity.id);
-      return sum + (job?.contractValue ?? opportunity.value);
+      if (!job) return sum + opportunity.value;
+      const signed = acceptedAmountForJob(job, state.estimates, state.estimateLines, job.market);
+      return sum + (signed || job.contractValue || opportunity.value);
     }, 0),
     lost: leads.filter((opportunity) => opportunity.stage === "lost").length,
     cash: cashForJobs(jobs, state, year),

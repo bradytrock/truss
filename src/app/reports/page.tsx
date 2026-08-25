@@ -65,11 +65,12 @@ export default function ReportsPage() {
         opportunities: crm.opportunities,
         contacts: crm.contacts,
         estimates: crm.estimates,
+        estimateLines: crm.estimateLines,
       },
       viewer,
       preset
     );
-  }, [crm.contacts, crm.estimates, crm.jobs, crm.opportunities, crm.staff, preset, viewer]);
+  }, [crm.contacts, crm.estimateLines, crm.estimates, crm.jobs, crm.opportunities, crm.staff, preset, viewer]);
 
   if (!crm.hydrated) return <LoadingScreen />;
 
@@ -202,9 +203,9 @@ export default function ReportsPage() {
 
         <TabsContent value="jobs" className="mt-5 space-y-5">
           <MetricStrip className="sm:grid-cols-2 xl:grid-cols-5">
-            <Metric label="Total jobs" value={String(report.kpis.totalJobs)} hint="Jobs started in this range" />
-            <Metric label="Total value" value={compact(report.kpis.totalValue)} hint="Combined contract value" />
-            <Metric label="Average job value" value={compact(report.kpis.avgJob)} hint="Typical contract in this range" />
+            <Metric label="Total jobs" value={String(report.kpis.totalJobs)} hint="Contracts signed in this range" />
+            <Metric label="Total value" value={compact(report.kpis.totalValue)} hint="Signed contract value" />
+            <Metric label="Average job value" value={compact(report.kpis.avgJob)} hint="Typical signed contract" />
             <Metric label="Jobs lost" value={String(report.kpis.lostCount)} hint="Lost leads in this range" />
             <Metric label="Job lost average" value={compact(report.kpis.lostAvg)} hint="Avg. value of lost work" />
           </MetricStrip>
@@ -225,7 +226,7 @@ export default function ReportsPage() {
               />
             </ChartCard>
           </div>
-          <Panel title="Overall metrics by project type" description="Win rate and value for work started in this range. Won means a signed contract.">
+          <Panel title="Overall metrics by project type" description="Won is a signed contract in this range. Pending is unsigned work opened in this range.">
             <ProjectTypeTable rows={report.byProjectType} money={money} />
           </Panel>
         </TabsContent>

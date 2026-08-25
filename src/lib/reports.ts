@@ -1,7 +1,10 @@
 import { localYmd } from "@/lib/format";
+import { acceptedAmountForJob } from "@/lib/estimate-totals";
 import { isDeletedJob } from "@/lib/job-record";
 import type {
   CrmState,
+  Estimate,
+  EstimateLine,
   Job,
   LeadSource,
   Opportunity,
@@ -61,7 +64,10 @@ const QUALIFIED_STAGES: ReadonlySet<PipelineStage> = new Set([
   "awarded",
 ]);
 
-export type ReportBook = Pick<CrmState, "staff" | "jobs" | "opportunities" | "contacts" | "estimates">;
+export type ReportBook = Pick<
+  CrmState,
+  "staff" | "jobs" | "opportunities" | "contacts" | "estimates" | "estimateLines"
+>;
 
 export type SourceRow = {
   source: string;
@@ -238,6 +244,36 @@ function opportunityOwner(opportunity: Opportunity, staff: StaffMember[]) {
   );
 }
 
+function wonAmount(
+  job: Job,
+  estimates: Estimate[],
+  lines: EstimateLine[],
+  opportunities: Opportunity[],
+) {
+  const signed = acceptedAmountForJob(job, estimates, lines, job.market);
+  if (signed > 0) return signed;
+  if (job.contractValue > 0) return job.contractValue;
+  return opportunities.find((item) => item.id === job.opportunityId)?.value ?? 0;
+}
+
+function wonAmountForOpportunity(
+  opportunity: Opportunity,
+  jobs: Job[],
+  estimates: Estimate[],
+  lines: EstimateLine[],
+) {
+  const job = jobs.find((item) => item.opportunityId === opportunity.id);
+  if (job) return wonAmount(job, estimates, lines, [opportunity]);
+  const signed = acceptedAmountForJob(
+    { id: "", opportunityId: opportunity.id },
+    estimates,
+    lines,
+    opportunity.market,
+  );
+  if (signed > 0) return signed;
+  return opportunity.value;
+}
+
 export function buildPerformance(
   book: ReportBook,
   viewer: StaffMember,
@@ -252,6 +288,7 @@ export function buildPerformance(
 
   const liveJobs = book.jobs.filter((job) => !isDeletedJob(job));
   const estimates = book.estimates ?? [];
+  const estimateLines = book.estimateLines ?? [];
   const jobs = liveJobs.filter((job) => inRange(job.startDate, range.start, range.end));
   const opportunities = book.opportunities.filter((item) =>
     inRange(item.createdAt, range.start, range.end)
@@ -259,6 +296,7 @@ export function buildPerformance(
   const soldJobs = liveJobs.filter((job) =>
     inRange(jobWonAt(job, estimates, book.opportunities), range.start, range.end),
   );
+  const soldIds = new Set(soldJobs.map((job) => job.id));
   const lost = opportunities.filter((item) => item.stage === "lost");
   const qualified = opportunities.filter((item) => QUALIFIED_STAGES.has(item.stage));
   const wonOpps = opportunities.filter((item) => isOpportunityWon(item, estimates, liveJobs));
@@ -276,7 +314,7 @@ export function buildPerformance(
       return daysBetween(linked?.createdAt ?? wonAt, wonAt);
     })
     .filter((value): value is number => value !== null);
-  const completeDays = jobs
+  const completeDays = soldJobs
     .filter((job) => job.status === "complete")
     .map((job) => daysBetween(job.startDate, job.substantialCompletion))
     .filter((value): value is number => value !== null);
@@ -311,7 +349,7 @@ export function buildPerformance(
     const key = monthKey(wonAt);
     const bucket = monthMap.get(key) ?? { count: 0, value: 0 };
     bucket.count += 1;
-    bucket.value += job.contractValue;
+    bucket.value += wonAmount(job, estimates, estimateLines, book.opportunities);
     monthMap.set(key, bucket);
   }
   const monthlyWon = [...monthMap.entries()]
@@ -335,8 +373,7 @@ export function buildPerformance(
     if (QUALIFIED_STAGES.has(opportunity.stage)) row.qualified += 1;
     if (isOpportunityWon(opportunity, estimates, liveJobs)) {
       row.won += 1;
-      const job = liveJobs.find((item) => item.opportunityId === opportunity.id);
-      row.wonValue += job?.contractValue ?? opportunity.value;
+      row.wonValue += wonAmountForOpportunity(opportunity, liveJobs, estimates, estimateLines);
     }
     sourceMap.set(key, row);
   }
@@ -372,8 +409,7 @@ export function buildPerformance(
     if (opportunity.stage === "lost") row.lost += 1;
     if (isOpportunityWon(opportunity, estimates, liveJobs)) {
       row.won += 1;
-      const job = liveJobs.find((item) => item.opportunityId === opportunity.id);
-      row.wonValue += job?.contractValue ?? opportunity.value;
+      row.wonValue += wonAmountForOpportunity(opportunity, liveJobs, estimates, estimateLines);
     }
   }
   const byTeam = [...teamMap.values()]
@@ -405,16 +441,18 @@ export function buildPerformance(
     typeBuckets.set(label, current);
     return current;
   }
-  for (const job of jobs) {
+  for (const job of soldJobs) {
     const label = job.projectType ? PROJECT_TYPE_LABELS[job.projectType as ProjectType] : "Unspecified";
     const bucket = typeBucket(label);
-    if (isJobWon(job, estimates, book.opportunities)) {
-      bucket.won += 1;
-      bucket.wonValue += job.contractValue;
-    } else {
-      bucket.pending += 1;
-      bucket.pendingValue += job.contractValue;
-    }
+    bucket.won += 1;
+    bucket.wonValue += wonAmount(job, estimates, estimateLines, book.opportunities);
+  }
+  for (const job of jobs) {
+    if (soldIds.has(job.id) || isJobWon(job, estimates, book.opportunities)) continue;
+    const label = job.projectType ? PROJECT_TYPE_LABELS[job.projectType as ProjectType] : "Unspecified";
+    const bucket = typeBucket(label);
+    bucket.pending += 1;
+    bucket.pendingValue += job.contractValue;
   }
   for (const item of lost) {
     const bucket = typeBucket(PROJECT_TYPE_LABELS[item.projectType]);
@@ -485,17 +523,25 @@ export function buildPerformance(
     [...byTeam].sort((a, b) => b.closeRate - a.closeRate || b.wonValue - a.wonValue)[0] ?? null;
   const mostAssigned = [...byTeam].sort((a, b) => b.assigned - a.assigned)[0] ?? null;
   const mostQualified = [...byTeam].sort((a, b) => b.qualified - a.qualified)[0] ?? null;
-  const biggest = [...soldJobs].sort((a, b) => b.contractValue - a.contractValue)[0];
+  const biggest = [...soldJobs].sort(
+    (a, b) =>
+      wonAmount(b, estimates, estimateLines, book.opportunities) -
+      wonAmount(a, estimates, estimateLines, book.opportunities),
+  )[0];
   const decided = wonOpps.length + lost.length;
+  const soldValue = soldJobs.reduce(
+    (sum, job) => sum + wonAmount(job, estimates, estimateLines, book.opportunities),
+    0,
+  );
 
   return {
     year: now.getFullYear(),
     scope,
     range,
     kpis: {
-      totalJobs: jobs.length,
-      totalValue: jobs.reduce((sum, job) => sum + job.contractValue, 0),
-      avgJob: jobs.length ? jobs.reduce((sum, job) => sum + job.contractValue, 0) / jobs.length : 0,
+      totalJobs: soldJobs.length,
+      totalValue: soldValue,
+      avgJob: soldJobs.length ? soldValue / soldJobs.length : 0,
       lostCount: lost.length,
       lostAvg: avg(lostValues),
       lostTotal,
@@ -508,7 +554,7 @@ export function buildPerformance(
       qualifiedClose: qualified.length ? wonOpps.length / qualified.length : 0,
       closeRate: decided ? wonOpps.length / decided : 0,
       wonCount: soldJobs.length,
-      wonValue: soldJobs.reduce((sum, job) => sum + job.contractValue, 0),
+      wonValue: soldValue,
       daysToComplete: avg(completeDays),
     },
     monthlyWon,
@@ -523,7 +569,7 @@ export function buildPerformance(
       biggestJob: biggest
         ? {
             name: biggest.name,
-            value: biggest.contractValue,
+            value: wonAmount(biggest, estimates, estimateLines, book.opportunities),
             owner: jobOwner(biggest, book.staff)?.name ?? biggest.projectManager,
           }
         : null,
