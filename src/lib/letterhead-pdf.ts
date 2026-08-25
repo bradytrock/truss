@@ -1,5 +1,5 @@
 import type { CompanySettings } from "@/lib/types";
-import { formatCompanyAddress, formatCompanyContact } from "@/lib/format";
+import { formatCompanyAddress, formatCompanyAddressLines, formatCompanyContact } from "@/lib/format";
 
 export type PdfLetterheadDoc = {
   setFont: (face: string, style?: string) => void;
@@ -55,7 +55,9 @@ export async function writePdfLetterhead(
   company: CompanySettings,
   y: number,
   inset = 54,
+  options?: { showContact?: boolean },
 ) {
+  const showContact = options?.showContact ?? true;
   const width = doc.internal.pageSize.getWidth();
   const right = width - inset;
   const logo = company.logoUrl?.trim() ? await loadLogoForPdf(company.logoUrl) : null;
@@ -80,11 +82,13 @@ export async function writePdfLetterhead(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(90, 90, 90);
-  const address = formatCompanyAddress(company);
-  const contact = formatCompanyContact(company);
+  const addressLines = showContact
+    ? [formatCompanyAddress(company)].filter(Boolean)
+    : formatCompanyAddressLines(company);
+  const contact = showContact ? formatCompanyContact(company) : "";
   let next = y + 14;
-  if (address) {
-    doc.text(address, textX, next);
+  for (const line of addressLines) {
+    doc.text(line, textX, next);
     next += 12;
   }
   if (contact) {

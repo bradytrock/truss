@@ -60,7 +60,7 @@ export function InvoiceDocument({
 
   return (
     <div className="space-y-6 rounded-md border bg-card p-5 sm:p-7">
-      <CompanyLetterhead company={letterhead} />
+      <CompanyLetterhead company={letterhead} showContact={false} />
       <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">

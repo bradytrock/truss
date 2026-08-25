@@ -101,7 +101,7 @@ export async function downloadEstimatePdf(input: {
   const doc = await createDoc();
   const width = doc.internal.pageSize.getWidth();
   const right = width - 54;
-  let y = await writePdfLetterhead(doc, input.company, 54);
+  let y = await writePdfLetterhead(doc, input.company, 54, 54, { showContact: false });
   const site = formatJobSite(input.estimate);
   const totals = estimateTotals(input.estimate, input.lines);
 
@@ -305,7 +305,7 @@ export async function downloadInvoicePdf(input: {
   const doc = await createDoc();
   const width = doc.internal.pageSize.getWidth();
   const right = width - 54;
-  let y = await writePdfLetterhead(doc, input.company, 54);
+  let y = await writePdfLetterhead(doc, input.company, 54, 54, { showContact: false });
   const total = invoiceTotal(input.invoice.id, input.lines);
   const paid = paidOnInvoice(input.invoice.id, input.payments);
   const balance = invoiceBalance(input.invoice.id, input.lines, input.payments);

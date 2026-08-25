@@ -1,6 +1,6 @@
 "use client";
 
-import { formatCompanyAddress, formatCompanyContact } from "@/lib/format";
+import { formatCompanyAddress, formatCompanyAddressLines, formatCompanyContact } from "@/lib/format";
 import { useCrmOptional } from "@/lib/crm-store";
 import { NORTHLINE_COMPANY, type CompanySettings } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -8,14 +8,16 @@ import { cn } from "@/lib/utils";
 export function CompanyLetterhead({
   className,
   company,
+  showContact = true,
 }: {
   className?: string;
   company?: CompanySettings;
+  showContact?: boolean;
 }) {
   const crm = useCrmOptional();
   const resolved = company ?? crm?.company ?? NORTHLINE_COMPANY;
-  const address = formatCompanyAddress(resolved);
-  const contact = formatCompanyContact(resolved);
+  const addressLines = showContact ? [formatCompanyAddress(resolved)].filter(Boolean) : formatCompanyAddressLines(resolved);
+  const contact = showContact ? formatCompanyContact(resolved) : "";
   const logoUrl = resolved.logoUrl?.trim();
 
   return (
@@ -30,7 +32,14 @@ export function CompanyLetterhead({
       ) : null}
       <div className="min-w-0">
         <p className="font-heading text-lg font-medium">{resolved.name}</p>
-        {address ? <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{address}</p> : null}
+        {addressLines.map((line, index) => (
+          <p
+            key={`${index}-${line}`}
+            className={cn("text-xs leading-relaxed text-muted-foreground", index === 0 && "mt-1")}
+          >
+            {line}
+          </p>
+        ))}
         {contact ? <p className="text-xs leading-relaxed text-muted-foreground">{contact}</p> : null}
         {resolved.licenseNumber ? (
           <p className="mt-1 text-[11px] tracking-wide text-muted-foreground uppercase">

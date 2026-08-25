@@ -142,7 +142,7 @@ export function initials(name: string) {
     .join("");
 }
 
-export function formatCompanyAddress(company: {
+export function formatCompanyAddressLines(company: {
   street: string;
   city: string;
   state: string;
@@ -150,7 +150,16 @@ export function formatCompanyAddress(company: {
 }) {
   const cityLine = [company.city, company.state].filter(Boolean).join(", ");
   const locality = [cityLine, company.postalCode].filter(Boolean).join(" ");
-  return [company.street, locality].filter(Boolean).join(" · ");
+  return [company.street, locality].filter(Boolean);
+}
+
+export function formatCompanyAddress(company: {
+  street: string;
+  city: string;
+  state: string;
+  postalCode: string;
+}) {
+  return formatCompanyAddressLines(company).join(" · ");
 }
 
 export function formatCompanyContact(company: { phone: string; email: string; website: string }) {
