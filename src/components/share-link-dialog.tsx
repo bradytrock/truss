@@ -227,34 +227,27 @@ export function ShareLinkDialog({
         <div className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="share-link">Client link</Label>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid gap-2">
               <Input
                 id="share-link"
                 readOnly
                 value={url}
-                className="min-w-0 flex-1"
                 onFocus={(event) => event.target.select()}
               />
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" disabled={!url || pending !== null} onClick={() => void handleCopy()}>
                   <Copy />
                   Copy
                 </Button>
-                {url ? (
-                  <Button
-                    nativeButton={false}
-                    variant="outline"
-                    render={<a href={url} target="_blank" rel="noopener noreferrer" />}
-                  >
-                    <ExternalLink />
-                    Open
-                  </Button>
-                ) : (
-                  <Button type="button" variant="outline" disabled>
-                    <ExternalLink />
-                    Open
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!url}
+                  onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                >
+                  <ExternalLink />
+                  Open
+                </Button>
               </div>
             </div>
             {people.some((person) => person.url && person.url !== url) ? (
@@ -330,6 +323,15 @@ export function ShareLinkDialog({
           <Button type="button" variant="outline" disabled={!url || pending !== null} onClick={() => void handleCopy()}>
             <Copy />
             Copy link
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!url}
+            onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+          >
+            <ExternalLink />
+            Open
           </Button>
           <Button type="button" disabled={!url || pending !== null} onClick={() => void handleText()}>
             <MessageSquare />
