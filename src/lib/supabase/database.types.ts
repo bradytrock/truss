@@ -803,6 +803,34 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["job_photos"]["Insert"]>;
         Relationships: [];
       };
+      job_files: {
+        Row: {
+          id: string;
+          company_id: string;
+          job_id: string;
+          name: string;
+          mime_type: string;
+          size_bytes: number;
+          storage_path: string;
+          url: string;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          job_id: string;
+          name: string;
+          mime_type?: string;
+          size_bytes?: number;
+          storage_path: string;
+          url: string;
+          created_by?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["job_files"]["Insert"]>;
+        Relationships: [];
+      };
       photo_reports: {
         Row: {
           id: string;

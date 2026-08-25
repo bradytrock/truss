@@ -256,6 +256,7 @@ export function scopeBook(
     return false;
   });
   const photos = state.photos;
+  const jobFiles = (state.jobFiles ?? []).filter((file) => jobIds.has(file.jobId));
   const photoReports = state.photoReports.filter((report) => jobIds.has(report.jobId));
   const events = state.events.filter((event) => {
     if (event.jobId && jobIds.has(event.jobId)) return true;
@@ -293,6 +294,7 @@ export function scopeBook(
     expenses,
     events,
     photos,
+    jobFiles,
     photoReports,
     estimateLines: state.estimateLines.filter((line) => estimateIds.has(line.estimateId)),
     invoiceLines: state.invoiceLines.filter((line) => invoiceIds.has(line.invoiceId)),

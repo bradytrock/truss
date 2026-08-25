@@ -545,6 +545,18 @@ export interface JobPhoto {
   createdBy?: string;
 }
 
+export interface JobFile {
+  id: string;
+  jobId: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  url: string;
+  storagePath: string;
+  createdBy: string;
+  createdAt: string;
+}
+
 export const PHOTO_PAGE_LAYOUTS = ["one", "two", "four"] as const;
 export type PhotoPageLayout = (typeof PHOTO_PAGE_LAYOUTS)[number];
 
@@ -694,6 +706,7 @@ export interface CrmState {
   expenses: Expense[];
   events: ScheduleEvent[];
   photos: JobPhoto[];
+  jobFiles: JobFile[];
   photoReports: PhotoReport[];
   calendarAccounts: CalendarAccount[];
   calendarShares: CalendarShare[];

@@ -251,6 +251,23 @@ export function missingStaffPhoneMessage() {
   return `Saved in this browser. Run ${STAFF_PROFILE_PHONE_SQL} in the SQL editor so a teammate's direct line prints on estimates and invoices.`;
 }
 
+export const JOB_FILES_SQL = "supabase/migrations/20260825170000_job_files.sql";
+
+export function isMissingJobFiles(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("job_files") ||
+    message.includes("job-files") ||
+    ((error.code === "PGRST205" || message.includes("schema cache") || message.includes("could not find the")) &&
+      message.includes("job_file"))
+  );
+}
+
+export function missingJobFilesMessage() {
+  return `Saved in this browser. Run ${JOB_FILES_SQL} in the SQL editor so job files stay on the record.`;
+}
+
 export const JOB_SOFT_DELETE_SQL = "supabase/migrations/20260821220000_job_soft_delete.sql";
 
 export function isMissingDeletedColumn(error: { message?: string; code?: string } | null | undefined) {

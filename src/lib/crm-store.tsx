@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId } from "@/lib/job-record";
@@ -73,6 +73,7 @@ import {
   mapInvoice,
   mapJob,
   mapJobPhoto,
+  mapJobFile,
   mapPhotoReport,
   mapOpportunity,
   mapPayment,
@@ -104,6 +105,7 @@ import {
   type EstimateTemplateLine,
   type Invoice,
   type Job,
+  type JobFile,
   type Opportunity,
   type PhotoCategory,
   type PhotoReport,
@@ -180,6 +182,7 @@ const emptyState: CrmState = {
   payments: [],
   events: [],
   photos: [],
+  jobFiles: [],
   photoReports: [],
   expenses: [],
   calendarAccounts: [],
@@ -421,6 +424,7 @@ async function pruneDuplicateLeadJobs(supabase: ReturnType<typeof createClient>,
         "expenses",
         "schedule_events",
         "job_photos",
+        "job_files",
         "photo_reports",
       ] as const;
       for (const table of tables) {
@@ -741,6 +745,8 @@ type CrmContextValue = CrmState & {
     imageUrl?: string;
     file?: File;
   }) => Promise<void>;
+  addJobFiles: (jobId: string, files: File[]) => Promise<JobFile[]>;
+  deleteJobFile: (id: string) => Promise<boolean>;
   addPhotoReport: (report: PhotoReport) => Promise<PhotoReport>;
   updatePhotoReport: (id: string, patch: Partial<Omit<PhotoReport, "id" | "jobId" | "createdAt">>) => Promise<boolean>;
   deletePhotoReport: (id: string) => Promise<boolean>;
@@ -954,6 +960,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           ...photo,
           jobId: remapDroppedJobId(photo.jobId, pruned.dropped) ?? photo.jobId,
         })),
+        jobFiles: (book.state.jobFiles ?? []).map((file) => ({
+          ...file,
+          jobId: remapDroppedJobId(file.jobId, pruned.dropped) ?? file.jobId,
+        })),
         photoReports: book.state.photoReports.map((report) => ({
           ...report,
           jobId: remapDroppedJobId(report.jobId, pruned.dropped) ?? report.jobId,
@@ -1017,6 +1027,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       "payments",
       "schedule_events",
       "job_photos",
+      "job_files",
       "expenses",
       "calendar_accounts",
       "calendar_shares",
@@ -4671,6 +4682,93 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [effectiveStaff?.name, user.companyId, user.name]
   );
 
+  const addJobFiles = useCallback(
+    async (jobId: string, files: File[]) => {
+      const supabase = requireClient();
+      if (!supabase) throw new Error("Connect a Supabase project to save.");
+      if (!user.companyId || user.companyId === "local") {
+        toast.error("Connect a Supabase project to attach files.");
+        return [];
+      }
+      const author = (effectiveStaff?.name || user.name).trim();
+      const saved: JobFile[] = [];
+      for (const file of files) {
+        if (file.size > 25 * 1024 * 1024) {
+          toast.error(`${file.name} is over 25 MB.`);
+          continue;
+        }
+        const rawExt = file.name.split(".").pop()?.toLowerCase() ?? "";
+        const ext = rawExt && rawExt.length <= 8 && /^[a-z0-9]+$/.test(rawExt) ? rawExt : "bin";
+        const storagePath = `${user.companyId}/${jobId}/${crypto.randomUUID()}.${ext}`;
+        const { error: uploadError } = await supabase.storage
+          .from("job-files")
+          .upload(storagePath, file, {
+            contentType: file.type || "application/octet-stream",
+            upsert: false,
+          });
+        if (uploadError) {
+          toast.error(
+            isMissingJobFiles(uploadError) ? missingJobFilesMessage() : uploadError.message,
+          );
+          continue;
+        }
+        const url = supabase.storage.from("job-files").getPublicUrl(storagePath).data.publicUrl;
+        const payload = {
+          company_id: user.companyId,
+          job_id: jobId,
+          name: file.name.replace(/^.*[/\\]/, "").trim() || "Untitled",
+          mime_type: file.type || "",
+          size_bytes: file.size,
+          storage_path: storagePath,
+          url,
+          created_by: author,
+        };
+        const { data, error } = await supabase.from("job_files").insert(payload).select("*").single();
+        if (error || !data) {
+          void supabase.storage.from("job-files").remove([storagePath]);
+          toast.error(
+            isMissingJobFiles(error) ? missingJobFilesMessage() : error?.message ?? "Could not save the file.",
+          );
+          continue;
+        }
+        saved.push(mapJobFile(data));
+      }
+      if (saved.length > 0) {
+        setState((prev) => ({ ...prev, jobFiles: [...saved, ...(prev.jobFiles ?? [])] }));
+      }
+      return saved;
+    },
+    [effectiveStaff?.name, user.companyId, user.name],
+  );
+
+  const deleteJobFile = useCallback(
+    async (id: string) => {
+      const current = state.jobFiles.find((file) => file.id === id);
+      if (!current) return false;
+      const supabase = maybeClient();
+      if (supabase) {
+        if (current.storagePath) {
+          const { error: removeError } = await supabase.storage.from("job-files").remove([current.storagePath]);
+          if (removeError && !isMissingJobFiles(removeError)) {
+            toast.error(removeError.message);
+            return false;
+          }
+        }
+        const { error } = await supabase.from("job_files").delete().eq("id", id);
+        if (error && !isMissingJobFiles(error)) {
+          toast.error(error.message);
+          return false;
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        jobFiles: prev.jobFiles.filter((file) => file.id !== id),
+      }));
+      return true;
+    },
+    [state.jobFiles],
+  );
+
   const addPhotoReport = useCallback(
     async (report: PhotoReport) => {
       const next: PhotoReport = {
@@ -5398,6 +5496,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       submitQuiz,
       addTrainingBulletin,
       addJobPhoto,
+      addJobFiles,
+      deleteJobFile,
       addPhotoReport,
       updatePhotoReport,
       deletePhotoReport,
@@ -5498,6 +5598,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       submitQuiz,
       addTrainingBulletin,
       addJobPhoto,
+      addJobFiles,
+      deleteJobFile,
       addPhotoReport,
       updatePhotoReport,
       deletePhotoReport,

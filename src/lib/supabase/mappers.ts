@@ -19,6 +19,7 @@ import type {
   Invoice,
   InvoiceLine,
   Job,
+  JobFile,
   JobPhoto,
   Opportunity,
   Payment,
@@ -50,6 +51,7 @@ type InvoiceLineRow = Database["public"]["Tables"]["invoice_lines"]["Row"];
 type PaymentRow = Database["public"]["Tables"]["payments"]["Row"];
 type EventRow = Database["public"]["Tables"]["schedule_events"]["Row"];
 type PhotoRow = Database["public"]["Tables"]["job_photos"]["Row"];
+type JobFileRow = Database["public"]["Tables"]["job_files"]["Row"];
 type PhotoReportRow = Database["public"]["Tables"]["photo_reports"]["Row"];
 type StaffRow = Database["public"]["Tables"]["team_members"]["Row"];
 type TeamRow = Database["public"]["Tables"]["teams"]["Row"];
@@ -650,6 +652,20 @@ export function mapJobPhoto(row: PhotoRow): JobPhoto {
     imageUrl: row.image_url,
     storagePath: row.storage_path,
     createdBy: "created_by" in row ? String(row.created_by ?? "") : "",
+  };
+}
+
+export function mapJobFile(row: JobFileRow): JobFile {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    name: row.name,
+    mimeType: row.mime_type ?? "",
+    sizeBytes: Number(row.size_bytes) || 0,
+    url: row.url,
+    storagePath: row.storage_path,
+    createdBy: row.created_by ?? "",
+    createdAt: row.created_at,
   };
 }
 

@@ -32,6 +32,7 @@ import { ActivityComposer, ActivityList } from "@/components/activity";
 import { AddPhotoDialog, CreateEstimateDialog, CreateInvoiceDialog } from "@/components/create-ops-dialogs";
 import { CreatePageDialog } from "@/components/create-page-dialog";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
+import { JobFilesPanel } from "@/components/job-files";
 import { JobFinancials } from "@/components/job-financials";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -217,7 +218,8 @@ function contactKind(contact: Contact, job: Job) {
 export function JobRecord({ job, className }: { job: Job; className?: string }) {
   const crm = useCrm();
   const searchParams = useSearchParams();
-  const initialTab = searchParams.get("tab") ?? "overview";
+  const requestedTab = searchParams.get("tab") ?? "overview";
+  const initialTab = requestedTab === "pages" ? "files" : requestedTab;
   const [heroOpen, setHeroOpen] = useState(true);
   const [addressOpen, setAddressOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
@@ -517,11 +519,11 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
         </div>
       ) : null}
 
-      <Tabs defaultValue={["overview", "photos", "pages", "financials", "paper", "fields"].includes(initialTab) ? initialTab : "overview"}>
+      <Tabs defaultValue={["overview", "photos", "files", "financials", "paper", "fields"].includes(initialTab) ? initialTab : "overview"}>
         <TabsList variant="line" className="w-full justify-start overflow-x-auto rounded-none border-x px-2">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="photos">Photos</TabsTrigger>
-          <TabsTrigger value="pages">Pages</TabsTrigger>
+          <TabsTrigger value="files">Files</TabsTrigger>
           <TabsTrigger value="financials">Financials</TabsTrigger>
           <TabsTrigger value="paper">Paper</TabsTrigger>
           <TabsTrigger value="fields">Custom fields</TabsTrigger>
@@ -938,63 +940,69 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
           ) : null}
         </TabsContent>
 
-        <TabsContent value="pages" className="border-x border-b p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <p className="text-sm text-muted-foreground">
-              {reports.length === 0
-                ? "No pages on this job."
-                : `${reports.length} page${reports.length === 1 ? "" : "s"}`}
-            </p>
-            <Button size="sm" onClick={() => setPageCreateOpen(true)}>
-              <FileText data-icon="inline-start" />
-              New page
-            </Button>
-          </div>
-          {reports.length > 0 ? (
-            <ul className="space-y-1.5">
-              {reports.map((item) => {
-                const templateLabel =
-                  PAGE_TEMPLATE_OPTIONS.find((option) => option.id === item.template)?.title ?? "Page";
-                return (
-                  <li key={item.id} className="flex items-center gap-2 rounded-md border px-3 py-2">
-                    <button
-                      type="button"
-                      onClick={() => setReportId(item.id)}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <span className="block truncate text-sm font-medium">{item.title || "Untitled page"}</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {templateLabel} · {item.pages.length} sheet{item.pages.length === 1 ? "" : "s"}
-                      </span>
-                    </button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="shrink-0"
-                      onClick={() => {
-                        void (async () => {
-                          try {
-                            const token = await crm.ensurePageShareToken(item.id);
-                            copyText(shareUrl("p", token), "Client link");
-                          } catch {
-                            toast.error("Could not create a share link.");
-                          }
-                        })();
-                      }}
-                    >
-                      Share
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Pages are branded job documents you send out — photo documentation, inspections, closeouts, and
-              claim packets. Pick a template, then share a link or download a PDF.
-            </p>
-          )}
+        <TabsContent value="files" className="space-y-8 border-x border-b p-4">
+          <JobFilesPanel jobId={job.id} disabled={deleted} />
+          <section>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Pages you send out</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {reports.length === 0
+                    ? "No pages on this job."
+                    : `${reports.length} page${reports.length === 1 ? "" : "s"}`}
+                </p>
+              </div>
+              <Button size="sm" onClick={() => setPageCreateOpen(true)}>
+                <FileText data-icon="inline-start" />
+                New page
+              </Button>
+            </div>
+            {reports.length > 0 ? (
+              <ul className="space-y-1.5">
+                {reports.map((item) => {
+                  const templateLabel =
+                    PAGE_TEMPLATE_OPTIONS.find((option) => option.id === item.template)?.title ?? "Page";
+                  return (
+                    <li key={item.id} className="flex items-center gap-2 rounded-md border px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => setReportId(item.id)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <span className="block truncate text-sm font-medium">{item.title || "Untitled page"}</span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {templateLabel} · {item.pages.length} sheet{item.pages.length === 1 ? "" : "s"}
+                        </span>
+                      </button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="shrink-0"
+                        onClick={() => {
+                          void (async () => {
+                            try {
+                              const token = await crm.ensurePageShareToken(item.id);
+                              copyText(shareUrl("p", token), "Client link");
+                            } catch {
+                              toast.error("Could not create a share link.");
+                            }
+                          })();
+                        }}
+                      >
+                        Share
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Pages are branded job documents you send out — photo documentation, inspections, closeouts, and
+                claim packets. Pick a template, then share a link or download a PDF.
+              </p>
+            )}
+          </section>
         </TabsContent>
 
         <TabsContent value="financials" className="border-x border-b p-4">
