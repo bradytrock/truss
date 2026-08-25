@@ -4,25 +4,40 @@ export function VerticalBars({
   items,
   format,
 }: {
-  items: { label: string; value: number }[];
+  items: { key?: string; label: string; value: number }[];
   format: (value: number) => string;
 }) {
-  const max = Math.max(...items.map((item) => item.value), 1);
   if (items.length === 0) {
     return <p className="px-4 py-8 text-sm text-muted-foreground">Nothing in this date range.</p>;
   }
+  const max = Math.max(...items.map((item) => item.value), 0);
+  const peak = max > 0 ? max : 1;
   return (
-    <div className="flex h-48 items-end gap-1.5 px-4 pb-2 pt-4">
-      {items.map((item) => (
-        <div key={item.label} className="flex min-w-0 flex-1 flex-col items-center gap-1">
+    <div className="flex h-56 items-stretch gap-1.5 px-3 pb-3 pt-2 sm:px-4">
+      {items.map((item, index) => {
+        const height = item.value > 0 ? Math.max(8, (item.value / peak) * 100) : 0;
+        return (
           <div
-            className="w-full max-w-10 rounded-t-sm bg-primary/80"
-            style={{ height: `${Math.max(4, (item.value / max) * 100)}%` }}
-            title={format(item.value)}
-          />
-          <p className="w-full truncate text-center text-[10px] text-muted-foreground">{item.label}</p>
-        </div>
-      ))}
+            key={item.key ?? `${item.label}-${index}`}
+            className="flex min-w-0 flex-1 flex-col items-center gap-1"
+          >
+            <p className="h-4 w-full truncate text-center text-[10px] tabular-nums text-foreground">
+              {item.value ? format(item.value) : ""}
+            </p>
+            <div className="flex w-full flex-1 items-end justify-center">
+              <div
+                className={cn(
+                  "w-full max-w-12 rounded-t-sm",
+                  item.value > 0 ? "bg-primary" : "bg-transparent",
+                )}
+                style={{ height: `${height}%` }}
+                title={`${item.label}: ${format(item.value)}`}
+              />
+            </div>
+            <p className="w-full truncate text-center text-[10px] text-muted-foreground">{item.label}</p>
+          </div>
+        );
+      })}
     </div>
   );
 }

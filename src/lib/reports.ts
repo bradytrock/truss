@@ -1,26 +1,22 @@
 import { localYmd } from "@/lib/format";
 import { acceptedAmountForJob } from "@/lib/estimate-totals";
 import { isDeletedJob } from "@/lib/job-record";
+import { boardValue, workColumnFor, WORK_COLUMNS, WORK_COLUMN_LABELS } from "@/lib/work-board";
 import type {
   CrmState,
   Estimate,
   EstimateLine,
+  Expense,
   Job,
   LeadSource,
   Opportunity,
+  Payment,
   PipelineStage,
   ProjectType,
   StaffMember,
 } from "@/lib/types";
 import { isJobWon, isOpportunityWon, jobWonAt } from "@/lib/won";
-import {
-  JOB_STATUSES,
-  JOB_STATUS_LABELS,
-  LEAD_SOURCE_LABELS,
-  PIPELINE_STAGES,
-  PROJECT_TYPE_LABELS,
-  STAGE_LABELS,
-} from "@/lib/types";
+import { LEAD_SOURCE_LABELS, PROJECT_TYPE_LABELS } from "@/lib/types";
 import { accessScope, staffForReports, type AccessScope } from "@/lib/visibility";
 
 export function yearOf(value: string | null | undefined) {
@@ -66,7 +62,7 @@ const QUALIFIED_STAGES: ReadonlySet<PipelineStage> = new Set([
 
 export type ReportBook = Pick<
   CrmState,
-  "staff" | "jobs" | "opportunities" | "contacts" | "estimates" | "estimateLines"
+  "staff" | "jobs" | "opportunities" | "contacts" | "estimates" | "estimateLines" | "payments" | "expenses"
 >;
 
 export type SourceRow = {
@@ -159,6 +155,8 @@ export type PerformanceReport = {
     daysToComplete: number;
   };
   monthlyWon: { key: string; label: string; count: number; value: number }[];
+  monthlyOpened: { key: string; label: string; count: number; value: number }[];
+  monthlyCash: { key: string; label: string; count: number; value: number }[];
   bySource: SourceRow[];
   byTeam: TeamRow[];
   lostReasons: LostReasonRow[];
@@ -197,6 +195,35 @@ function inRange(iso: string | null | undefined, start: string | null, end: stri
 
 function monthKey(iso: string) {
   return iso.slice(0, 7);
+}
+
+function shiftMonthKey(key: string, delta: number) {
+  const [year, month] = key.split("-").map(Number);
+  const date = new Date(year, month - 1 + delta, 1, 12);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthKeysInRange(start: string | null, end: string, earliest?: string | null) {
+  const endKey = monthKey(end);
+  let firstKey = start ? monthKey(start) : earliest ? monthKey(earliest) : shiftMonthKey(endKey, -11);
+  if (!start && earliest) {
+    const floor = shiftMonthKey(endKey, -23);
+    if (firstKey < floor) firstKey = floor;
+  }
+  if (!firstKey || firstKey > endKey) firstKey = endKey;
+  const keys: string[] = [];
+  let cursor = firstKey;
+  while (cursor <= endKey) {
+    keys.push(cursor);
+    const next = shiftMonthKey(cursor, 1);
+    if (next === cursor) break;
+    cursor = next;
+  }
+  return keys;
+}
+
+function emptyMonth(key: string) {
+  return { key, label: monthLabel(key), opened: 0, won: 0, wonValue: 0, cash: 0, spend: 0 };
 }
 
 function monthLabel(key: string) {
@@ -244,6 +271,17 @@ function opportunityOwner(opportunity: Opportunity, staff: StaffMember[]) {
   );
 }
 
+function jobBookValue(
+  job: Job,
+  estimates: Estimate[],
+  lines: EstimateLine[],
+  opportunities: Opportunity[],
+) {
+  const opportunity = opportunities.find((item) => item.id === job.opportunityId);
+  const signed = acceptedAmountForJob(job, estimates, lines, job.market);
+  return boardValue(job, opportunity, signed);
+}
+
 function wonAmount(
   job: Job,
   estimates: Estimate[],
@@ -289,6 +327,8 @@ export function buildPerformance(
   const liveJobs = book.jobs.filter((job) => !isDeletedJob(job));
   const estimates = book.estimates ?? [];
   const estimateLines = book.estimateLines ?? [];
+  const payments = book.payments ?? [];
+  const expenses = book.expenses ?? [];
   const jobs = liveJobs.filter((job) => inRange(job.startDate, range.start, range.end));
   const opportunities = book.opportunities.filter((item) =>
     inRange(item.createdAt, range.start, range.end)
@@ -342,19 +382,58 @@ export function buildPerformance(
     }))
     .sort((a, b) => b.value - a.value);
 
-  const monthMap = new Map<string, { count: number; value: number }>();
-  for (const job of soldJobs) {
-    const wonAt = jobWonAt(job, estimates, book.opportunities);
-    if (!wonAt) continue;
-    const key = monthKey(wonAt);
-    const bucket = monthMap.get(key) ?? { count: 0, value: 0 };
-    bucket.count += 1;
-    bucket.value += wonAmount(job, estimates, estimateLines, book.opportunities);
-    monthMap.set(key, bucket);
+  const earliest =
+    [
+      ...liveJobs.map((job) => job.startDate),
+      ...book.opportunities.map((item) => item.createdAt),
+      ...payments.map((item) => item.paidAt),
+      ...expenses.map((item) => item.incurredAt),
+    ]
+      .filter(Boolean)
+      .sort()[0] ?? null;
+  const monthKeys = monthKeysInRange(range.start, range.end, earliest);
+  const monthBuckets = new Map(monthKeys.map((key) => [key, emptyMonth(key)]));
+  function intoMonth(iso: string | null | undefined) {
+    if (!iso) return undefined;
+    return monthBuckets.get(monthKey(iso));
   }
-  const monthlyWon = [...monthMap.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, bucket]) => ({ key, label: monthLabel(key), ...bucket }));
+  for (const job of liveJobs) {
+    const bucket = intoMonth(job.startDate);
+    if (bucket) bucket.opened += 1;
+  }
+  for (const job of soldJobs) {
+    const bucket = intoMonth(jobWonAt(job, estimates, book.opportunities));
+    if (!bucket) continue;
+    bucket.won += 1;
+    bucket.wonValue += wonAmount(job, estimates, estimateLines, book.opportunities);
+  }
+  for (const payment of payments) {
+    const bucket = intoMonth(payment.paidAt);
+    if (bucket) bucket.cash += payment.amount;
+  }
+  for (const expense of expenses) {
+    const bucket = intoMonth(expense.incurredAt);
+    if (bucket) bucket.spend += expense.amount;
+  }
+  const monthly = monthKeys.map((key) => monthBuckets.get(key)!);
+  const monthlyWon = monthly.map((row) => ({
+    key: row.key,
+    label: row.label,
+    count: row.won,
+    value: row.wonValue,
+  }));
+  const monthlyOpened = monthly.map((row) => ({
+    key: row.key,
+    label: row.label,
+    count: row.opened,
+    value: row.opened,
+  }));
+  const monthlyCash = monthly.map((row) => ({
+    key: row.key,
+    label: row.label,
+    count: 0,
+    value: row.cash,
+  }));
 
   const sourceMap = new Map<string, SourceRow>();
   for (const opportunity of opportunities) {
@@ -452,7 +531,7 @@ export function buildPerformance(
     const label = job.projectType ? PROJECT_TYPE_LABELS[job.projectType as ProjectType] : "Unspecified";
     const bucket = typeBucket(label);
     bucket.pending += 1;
-    bucket.pendingValue += job.contractValue;
+    bucket.pendingValue += jobBookValue(job, estimates, estimateLines, book.opportunities);
   }
   for (const item of lost) {
     const bucket = typeBucket(PROJECT_TYPE_LABELS[item.projectType]);
@@ -481,28 +560,23 @@ export function buildPerformance(
     .map((row) => ({ ...row, share: row.totalValue / grand }))
     .sort((a, b) => b.totalValue - a.totalValue);
 
-  const pipelineOpps = book.opportunities;
-  const pipelineJobs = liveJobs;
-  const pipeline: PipelineRow[] = [
-    ...PIPELINE_STAGES.filter((stage) => stage !== "lost").map((stage) => {
-      const rows = pipelineOpps.filter((item) => item.stage === stage);
-      return {
-        id: stage,
-        label: STAGE_LABELS[stage],
-        count: rows.length,
-        value: rows.reduce((sum, item) => sum + item.value, 0),
-      };
-    }),
-    ...JOB_STATUSES.map((status) => {
-      const rows = pipelineJobs.filter((job) => job.status === status);
-      return {
-        id: status,
-        label: JOB_STATUS_LABELS[status],
-        count: rows.length,
-        value: rows.reduce((sum, job) => sum + job.contractValue, 0),
-      };
-    }),
-  ];
+  const pipeline: PipelineRow[] = WORK_COLUMNS.filter((column) => column !== "deleted").map((column) => {
+    const rows = liveJobs.filter((job) => {
+      const opportunity = job.opportunityId
+        ? book.opportunities.find((item) => item.id === job.opportunityId)
+        : undefined;
+      return workColumnFor(job, opportunity) === column;
+    });
+    return {
+      id: column,
+      label: WORK_COLUMN_LABELS[column],
+      count: rows.length,
+      value: rows.reduce(
+        (sum, job) => sum + jobBookValue(job, estimates, estimateLines, book.opportunities),
+        0,
+      ),
+    };
+  });
 
   const lostJobs: LostJobRow[] = lost.map((item) => {
     const owner = opportunityOwner(item, book.staff);
@@ -558,6 +632,8 @@ export function buildPerformance(
       daysToComplete: avg(completeDays),
     },
     monthlyWon,
+    monthlyOpened,
+    monthlyCash,
     bySource,
     byTeam,
     lostReasons,

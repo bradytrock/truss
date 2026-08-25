@@ -66,11 +66,24 @@ export default function ReportsPage() {
         contacts: crm.contacts,
         estimates: crm.estimates,
         estimateLines: crm.estimateLines,
+        payments: crm.payments,
+        expenses: crm.expenses,
       },
       viewer,
       preset
     );
-  }, [crm.contacts, crm.estimateLines, crm.estimates, crm.jobs, crm.opportunities, crm.staff, preset, viewer]);
+  }, [
+    crm.contacts,
+    crm.estimateLines,
+    crm.estimates,
+    crm.expenses,
+    crm.jobs,
+    crm.opportunities,
+    crm.payments,
+    crm.staff,
+    preset,
+    viewer,
+  ]);
 
   if (!crm.hydrated) return <LoadingScreen />;
 
@@ -163,7 +176,6 @@ export default function ReportsPage() {
             : SCOPE_COPY[scope]
         }
         actions={
-          isBd ? undefined : (
           <div className="flex flex-wrap items-center justify-end gap-2">
             <p className="text-sm text-muted-foreground">Showing {rangeLabel(report.range)}</p>
             <DropdownMenu>
@@ -180,18 +192,18 @@ export default function ReportsPage() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button type="button" variant="outline" onClick={exportCurrent}>
-              <Download />
-              Export data
-            </Button>
+            {isBd ? null : (
+              <Button type="button" variant="outline" onClick={exportCurrent}>
+                <Download />
+                Export data
+              </Button>
+            )}
           </div>
-          )
         }
       />
 
       {isBd || scope === "company" ? <BdRoiPanel state={crm.book} viewer={viewer} /> : null}
 
-      {isBd ? null : (
       <Tabs value={activeTab} onValueChange={(value) => setTab(value as ReportTab)}>
         <TabsList variant="line" className="h-auto w-full flex-wrap justify-start rounded-none bg-transparent p-0">
           {tabs.map((item) => (
@@ -210,18 +222,33 @@ export default function ReportsPage() {
             <Metric label="Job lost average" value={compact(report.kpis.lostAvg)} hint="Avg. value of lost work" />
           </MetricStrip>
           <div className="grid gap-4 xl:grid-cols-3">
-            <ChartCard title="Total revenue" hint="Cumulative signed contract value">
-              <VerticalBars items={runningTotal(report.monthlyWon)} format={compact} />
-            </ChartCard>
-            <ChartCard title="Job count" hint="Contracts signed by month">
+            <ChartCard title="Jobs opened" hint="Leads and jobs created, by the month they entered the book">
               <VerticalBars
-                items={report.monthlyWon.map((row) => ({ label: row.label, value: row.count }))}
+                items={report.monthlyOpened.map((row) => ({
+                  key: row.key,
+                  label: row.label,
+                  value: row.count,
+                }))}
                 format={(value) => String(Math.round(value))}
               />
             </ChartCard>
-            <ChartCard title="Revenue by month" hint="Value of signed contracts">
+            <ChartCard title="Contracts signed" hint="Signed contract value from estimates you accepted">
               <VerticalBars
-                items={report.monthlyWon.map((row) => ({ label: row.label, value: row.value }))}
+                items={report.monthlyWon.map((row) => ({
+                  key: row.key,
+                  label: row.label,
+                  value: row.value,
+                }))}
+                format={compact}
+              />
+            </ChartCard>
+            <ChartCard title="Cash collected" hint="Payments logged, by the date on the receipt">
+              <VerticalBars
+                items={report.monthlyCash.map((row) => ({
+                  key: row.key,
+                  label: row.label,
+                  value: row.value,
+                }))}
                 format={compact}
               />
             </ChartCard>
@@ -424,11 +451,31 @@ export default function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="overview" className="mt-5 space-y-5">
-          <Panel title="Job metrics" description="Value of contracts signed in this range.">
-            <VerticalBars
-              items={report.monthlyWon.map((row) => ({ label: row.label, value: row.value }))}
-              format={compact}
-            />
+          <Panel title="Job metrics" description="Signed contracts, cash collected, and jobs opened in this range.">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div>
+                <p className="mb-2 text-xs font-medium text-muted-foreground">Signed contract value</p>
+                <VerticalBars
+                  items={report.monthlyWon.map((row) => ({
+                    key: row.key,
+                    label: row.label,
+                    value: row.value,
+                  }))}
+                  format={compact}
+                />
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-medium text-muted-foreground">Cash collected</p>
+                <VerticalBars
+                  items={report.monthlyCash.map((row) => ({
+                    key: row.key,
+                    label: row.label,
+                    value: row.value,
+                  }))}
+                  format={compact}
+                />
+              </div>
+            </div>
             <div className="grid gap-px border-t bg-border sm:grid-cols-3 xl:grid-cols-6">
               <Metric label="Value of won jobs" value={compact(report.kpis.wonValue)} hint="Signed contracts in this range" />
               <Metric label="Average job size" value={compact(report.kpis.avgJob)} />
@@ -523,7 +570,7 @@ export default function ReportsPage() {
         <TabsContent value="pipeline" className="mt-5 space-y-5">
           <Panel
             title="Pipeline quantity and value"
-            description="Live funnel for the book this seat can see — not limited to the date range."
+            description="Live Jobs board for this seat — one bar per column, using the same job value as the card."
             action={
               <div className="flex gap-1">
                 <Button type="button" size="sm" variant={pipelineMode === "funnel" ? "default" : "outline"} onClick={() => setPipelineMode("funnel")}>
@@ -544,7 +591,6 @@ export default function ReportsPage() {
           </Panel>
         </TabsContent>
       </Tabs>
-      )}
     </div>
   );
 }
@@ -685,14 +731,6 @@ function EmptyRow({ cols }: { cols: number }) {
       </TableCell>
     </TableRow>
   );
-}
-
-function runningTotal(rows: { label: string; value: number }[]) {
-  let total = 0;
-  return rows.map((row) => {
-    total += row.value;
-    return { label: row.label, value: total };
-  });
 }
 
 function clip(value: string, max: number) {
