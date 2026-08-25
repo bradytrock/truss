@@ -64,7 +64,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { contactOptionLabel } from "@/lib/contacts";
 import { ContactSelectOption } from "@/components/contact-option";
 import { useCrm } from "@/lib/crm-store";
-import { letterheadCompanyForRecord } from "@/lib/document-owner";
+import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
 import {
   COMMON_UNITS,
   estimateTotals,
@@ -440,6 +440,13 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   });
   const canEditTerms =
     canEditDocumentTerms(crm.viewer?.role ?? crm.user.role, crm.viewer) && editable;
+  const projectManager = documentProjectManager({
+    job,
+    opportunity,
+    staff: crm.staff,
+    fallbackStaffId: crm.user.staffId,
+    companyPhone: letterhead.phone,
+  });
 
   function patchSite(
     patch: Partial<Pick<Estimate, "street" | "city" | "state" | "postalCode">>,
@@ -486,6 +493,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       lines,
       company: letterhead,
       customer,
+      projectManager,
     });
   }
 

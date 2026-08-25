@@ -9,7 +9,7 @@ import { CollectSignatureDialog } from "@/components/signature-pad";
 import { ShareFrame, ShareLoading, ShareMissing, SharePdfButton } from "@/components/share-frame";
 import { downloadEstimatePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
-import { letterheadCompanyForRecord } from "@/lib/document-owner";
+import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { linesForEstimate } from "@/lib/estimate-totals";
 import { billingEstimate, workMarket } from "@/lib/market";
@@ -119,6 +119,13 @@ export default function SharedEstimatePage() {
       fallbackStaffId: crm.user.staffId,
       inBook: true,
     });
+    const projectManager = documentProjectManager({
+      job,
+      opportunity,
+      staff: crm.staff,
+      fallbackStaffId: crm.user.staffId,
+      companyPhone: letterhead.phone,
+    });
     const optionalOpen =
       fromStore.status === "draft" || fromStore.status === "sent" || fromStore.status === "viewed";
     const canSign =
@@ -138,6 +145,7 @@ export default function SharedEstimatePage() {
                   lines,
                   company: letterhead,
                   customer,
+                  projectManager,
                 }).catch(() => toast.error("Could not build the PDF."))
               }
             />
@@ -199,6 +207,7 @@ export default function SharedEstimatePage() {
                 lines: remote.lines,
                 company: remote.company,
                 customer: remote.customer,
+                projectManager: remote.projectManager,
               }).catch(() => toast.error("Could not build the PDF."))
             }
           />
@@ -224,6 +233,7 @@ export default function SharedEstimatePage() {
         customer={remote.customer}
         market={remote.market}
         showStatus={false}
+        projectManager={remote.projectManager}
       />
       <CollectSignatureDialog
         open={signOpen}

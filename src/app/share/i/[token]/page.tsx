@@ -7,7 +7,7 @@ import { InvoiceDocument } from "@/components/invoice-document";
 import { ShareFrame, ShareLoading, ShareMissing, SharePdfButton } from "@/components/share-frame";
 import { downloadInvoicePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
-import { letterheadCompanyForRecord } from "@/lib/document-owner";
+import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
 import { derivedInvoiceStatus } from "@/lib/money";
 import { parseSharedInvoice, type SharedInvoicePayload } from "@/lib/share";
 
@@ -82,6 +82,13 @@ export default function SharedInvoicePage() {
       fallbackStaffId: crm.user.staffId,
       inBook: true,
     });
+    const projectManager = documentProjectManager({
+      job,
+      opportunity,
+      staff: crm.staff,
+      fallbackStaffId: crm.user.staffId,
+      companyPhone: letterhead.phone,
+    });
     return (
       <ShareFrame
         actions={
@@ -94,6 +101,7 @@ export default function SharedInvoicePage() {
                 payments,
                 company: letterhead,
                 customer,
+                projectManager,
               }).catch(() => toast.error("Could not build the PDF."))
             }
           />
@@ -128,6 +136,7 @@ export default function SharedInvoicePage() {
               payments: remote.payments,
               company: remote.company,
               customer: remote.customer,
+              projectManager: remote.projectManager,
             }).catch(() => toast.error("Could not build the PDF."))
           }
         />
@@ -141,6 +150,7 @@ export default function SharedInvoicePage() {
         customer={remote.customer}
         status={remote.invoice.status}
         showStatus={false}
+        projectManager={remote.projectManager}
       />
     </ShareFrame>
   );

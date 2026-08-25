@@ -1,6 +1,7 @@
 import { fillJobRecord, parseCustomFields } from "@/lib/job-record";
 import { parsePageTemplate, parsePhotoReportPages } from "@/lib/photo-report";
 import type { CompanySettings, Job, JobPhoto, PhotoReport } from "@/lib/types";
+import type { ProjectManagerContact } from "@/lib/document-owner";
 
 export function newShareToken() {
   const bytes = new Uint8Array(16);
@@ -92,6 +93,8 @@ export type SharedCompany = {
   logoUrl?: string;
 };
 
+export type SharedProjectManager = ProjectManagerContact;
+
 export type SharedEstimatePayload = {
   customer: string;
   primaryCustomer?: string;
@@ -146,6 +149,7 @@ export type SharedEstimatePayload = {
     selected: boolean;
     taxable: boolean;
   }>;
+  projectManager?: ProjectManagerContact | null;
 };
 
 export type SharedInvoicePayload = {
@@ -188,6 +192,7 @@ export type SharedInvoicePayload = {
     qbStatus: "not_in_qb" | "entered";
     createdBy: string;
   }>;
+  projectManager?: ProjectManagerContact | null;
 };
 
 function parseCompany(raw: unknown): SharedCompany {
@@ -203,6 +208,18 @@ function parseCompany(raw: unknown): SharedCompany {
     postalCode: asString(data.postalCode),
     licenseNumber: asString(data.licenseNumber),
     logoUrl: asString(data.logoUrl),
+  };
+}
+
+function parseProjectManager(raw: unknown): ProjectManagerContact | null {
+  if (!isRecord(raw)) return null;
+  const name = asString(raw.name);
+  if (!name) return null;
+  return {
+    name,
+    title: asString(raw.title, "Project Manager"),
+    email: asString(raw.email),
+    phone: asString(raw.phone),
   };
 }
 
@@ -268,6 +285,7 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
       selected: asBool(line.selected, true),
       taxable: asBool(line.taxable, true),
     })),
+    projectManager: parseProjectManager(raw.projectManager),
   };
 }
 
@@ -317,6 +335,7 @@ export function parseSharedInvoice(raw: unknown): SharedInvoicePayload | null {
       qbStatus: "not_in_qb",
       createdBy: "",
     })),
+    projectManager: parseProjectManager(raw.projectManager),
   };
 }
 

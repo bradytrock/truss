@@ -17,7 +17,7 @@ import { shareContactsForInvoice } from "@/lib/parties";
 import { InvoiceStatusBadge } from "@/components/status-badge";
 import { downloadInvoicePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
-import { letterheadCompanyForRecord } from "@/lib/document-owner";
+import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
 import { formatCurrencyFull, formatDate, formatMoney } from "@/lib/format";
 import { shareUrl } from "@/lib/share";
 import type { Invoice } from "@/lib/types";
@@ -85,6 +85,13 @@ export default function InvoiceDetailPage() {
     customer,
     company: letterhead,
   });
+  const projectManager = documentProjectManager({
+    job,
+    opportunity,
+    staff: crm.staff,
+    fallbackStaffId: crm.user.staffId,
+    companyPhone: letterhead.phone,
+  });
 
   function downloadPdf() {
     if (lines.length === 0) {
@@ -97,6 +104,7 @@ export default function InvoiceDetailPage() {
       payments,
       company: letterhead,
       customer,
+      projectManager,
     });
   }
 

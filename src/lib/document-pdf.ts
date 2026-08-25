@@ -1,12 +1,13 @@
 import type { CompanySettings, Estimate, EstimateLine, Invoice, InvoiceLine, Payment } from "@/lib/types";
 import { estimateTotals, groupEstimateLines, lineAmount, lineIncluded } from "@/lib/estimate-totals";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, formatPhone } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
 import { writePdfLetterhead, loadLogoForPdf } from "@/lib/letterhead-pdf";
 import { invoiceBalance, invoiceTotal, lineAmount as invoiceLineAmount, paidOnInvoice } from "@/lib/money";
 import { downloadBlob } from "@/lib/share";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { filledEstimateTerms, filledInvoiceTerms } from "@/lib/document-terms";
+import type { ProjectManagerContact } from "@/lib/document-owner";
 
 type Doc = {
   setFont: (face: string, style?: string) => void;
@@ -50,11 +51,48 @@ function writeParagraph(doc: Doc, text: string, y: number, width = 504) {
   return y + lines.length * 13 + 8;
 }
 
+function writeProjectManager(doc: Doc, manager: ProjectManagerContact | null | undefined, y: number) {
+  const name = manager?.name.trim() ?? "";
+  if (!name) return y;
+  y += 8;
+  y = ensureSpace(doc, y, 48);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(90, 90, 90);
+  doc.text("PROJECT MANAGER", 54, y);
+  y += 14;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(40, 40, 40);
+  doc.text(`Project manager name: ${name}`, 54, y);
+  y += 13;
+  const title = manager?.title.trim() ?? "";
+  if (title) {
+    doc.setTextColor(70, 70, 70);
+    doc.text(title, 54, y);
+    y += 13;
+  }
+  const phone = formatPhone(manager?.phone);
+  if (phone && phone !== "—") {
+    doc.setTextColor(70, 70, 70);
+    doc.text(phone, 54, y);
+    y += 13;
+  }
+  const email = manager?.email.trim() ?? "";
+  if (email) {
+    doc.setTextColor(70, 70, 70);
+    doc.text(email, 54, y);
+    y += 13;
+  }
+  return y + 6;
+}
+
 export async function downloadEstimatePdf(input: {
   estimate: Estimate;
   lines: EstimateLine[];
   company: CompanySettings;
   customer: string;
+  projectManager?: ProjectManagerContact | null;
 }) {
   const doc = await createDoc();
   const width = doc.internal.pageSize.getWidth();
@@ -84,6 +122,7 @@ export async function downloadEstimatePdf(input: {
     doc.text(site, 54, y);
     y += 16;
   }
+  y = writeProjectManager(doc, input.projectManager, y);
   if (input.estimate.intro) {
     y += 6;
     y = writeParagraph(doc, input.estimate.intro, y);
@@ -251,6 +290,7 @@ export async function downloadInvoicePdf(input: {
   payments: Payment[];
   company: CompanySettings;
   customer: string;
+  projectManager?: ProjectManagerContact | null;
 }) {
   const doc = await createDoc();
   const width = doc.internal.pageSize.getWidth();
@@ -278,7 +318,9 @@ export async function downloadInvoicePdf(input: {
   doc.text(`Bill to ${input.customer}`, 54, y);
   y += 14;
   doc.text(`Issued ${formatDate(input.invoice.issuedAt)}`, 54, y);
-  y += 20;
+  y += 14;
+  y = writeProjectManager(doc, input.projectManager, y);
+  y += 8;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);

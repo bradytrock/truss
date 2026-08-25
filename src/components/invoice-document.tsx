@@ -1,9 +1,10 @@
 "use client";
 
 import { CompanyLetterhead } from "@/components/company-letterhead";
+import { ProjectManagerBlock } from "@/components/project-manager-block";
 import { InvoiceStatusBadge } from "@/components/status-badge";
 import { useCrmOptional } from "@/lib/crm-store";
-import { letterheadCompanyForRecord } from "@/lib/document-owner";
+import { documentProjectManager, letterheadCompanyForRecord, type ProjectManagerContact } from "@/lib/document-owner";
 import type { CompanySettings, Invoice, InvoiceLine, InvoiceStatus, Payment } from "@/lib/types";
 import { filledInvoiceTerms } from "@/lib/document-terms";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -17,6 +18,7 @@ export function InvoiceDocument({
   company,
   status,
   showStatus = true,
+  projectManager,
 }: {
   invoice: Invoice;
   lines: InvoiceLine[];
@@ -25,6 +27,7 @@ export function InvoiceDocument({
   company?: CompanySettings;
   status: InvoiceStatus;
   showStatus?: boolean;
+  projectManager?: ProjectManagerContact | null;
 }) {
   const sorted = [...lines].sort((a, b) => a.sortOrder - b.sortOrder);
   const total = invoiceTotal(invoice.id, lines);
@@ -45,6 +48,15 @@ export function InvoiceDocument({
     fallbackStaffId: crm?.user.staffId,
     inBook: Boolean(crm?.invoices.some((item) => item.id === invoice.id)),
   });
+  const manager =
+    projectManager ??
+    documentProjectManager({
+      job,
+      opportunity,
+      staff: crm?.staff ?? [],
+      fallbackStaffId: crm?.user.staffId,
+      companyPhone: letterhead.phone,
+    });
 
   return (
     <div className="space-y-6 rounded-md border bg-card p-5 sm:p-7">
@@ -65,6 +77,7 @@ export function InvoiceDocument({
           <p className="text-muted-foreground">Due {formatDate(invoice.dueAt)}</p>
         </div>
       </div>
+      <ProjectManagerBlock manager={manager} />
       {sorted.length === 0 ? (
         <p className="text-sm text-muted-foreground">No line items on this invoice.</p>
       ) : (

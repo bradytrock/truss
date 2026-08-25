@@ -1,11 +1,12 @@
 "use client";
 
 import { CompanyLetterhead } from "@/components/company-letterhead";
+import { ProjectManagerBlock } from "@/components/project-manager-block";
 import { EstimateStatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCrmOptional } from "@/lib/crm-store";
-import { letterheadCompanyForRecord } from "@/lib/document-owner";
+import { documentProjectManager, letterheadCompanyForRecord, type ProjectManagerContact } from "@/lib/document-owner";
 import { billingEstimate, workMarket } from "@/lib/market";
 import {
   estimateTotals,
@@ -83,6 +84,7 @@ export function ProposalDocument({
   selectable,
   showInternalNotes = false,
   showStatus = true,
+  projectManager,
 }: {
   estimate: Estimate;
   lines: EstimateLine[];
@@ -93,6 +95,7 @@ export function ProposalDocument({
   selectable?: boolean;
   showInternalNotes?: boolean;
   showStatus?: boolean;
+  projectManager?: ProjectManagerContact | null;
 }) {
   const groups = groupEstimateLines(lines);
   const site = formatJobSite(estimate);
@@ -114,6 +117,15 @@ export function ProposalDocument({
     estimate,
     market || (job || opportunity ? workMarket(job, opportunity) : undefined),
   );
+  const manager =
+    projectManager ??
+    documentProjectManager({
+      job,
+      opportunity,
+      staff: crm?.staff ?? [],
+      fallbackStaffId: crm?.user.staffId,
+      companyPhone: letterhead.phone,
+    });
   return (
     <div className="space-y-6 rounded-md border bg-card p-5 sm:p-7">
       <CompanyLetterhead company={letterhead} />
@@ -137,6 +149,7 @@ export function ProposalDocument({
           </p>
         </div>
       </div>
+      <ProjectManagerBlock manager={manager} />
       {estimate.intro ? (
         <p className="text-sm leading-relaxed whitespace-pre-wrap">{estimate.intro}</p>
       ) : null}
