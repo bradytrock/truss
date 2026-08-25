@@ -67,6 +67,7 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
     { href: "/messages", label: "Messages" },
     { href: "/photos", label: "Photos" },
     { href: "/estimates", label: "Estimates" },
+    { href: "/catalog", label: "Price book" },
     { href: "/invoices", label: "Invoices" },
     ...(options.showAccounting ? [{ href: "/accounting", label: "Accounting" }] : []),
     { href: "/calendar", label: "Calendar" },
@@ -370,6 +371,15 @@ function SearchTrigger() {
               ))}
             </CommandGroup>
             <CommandGroup heading="Estimates">
+              <CommandItem
+                value="price book catalog labor material"
+                onSelect={() => {
+                  setOpen(false);
+                  router.push("/catalog");
+                }}
+              >
+                Price book
+              </CommandItem>
               <CommandItem
                 value="estimate templates company"
                 onSelect={() => {

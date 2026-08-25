@@ -78,6 +78,8 @@ import {
   invoicePatch,
   mapActivity,
   mapClient,
+  mapCatalogItem,
+  catalogPatch,
   mapCompany,
   mapContact,
   mapEstimate,
@@ -110,6 +112,8 @@ import {
   type CalendarAccount,
   type CalendarShare,
   type Client,
+  type CatalogItem,
+  type CatalogKind,
   type CompanySettings,
   type Contact,
   type CrmState,
@@ -686,6 +690,15 @@ type CrmContextValue = CrmState & {
   updateEstimateTemplate: (id: string, patch: Partial<EstimateTemplate>) => Promise<void>;
   removeEstimateTemplate: (id: string) => Promise<void>;
   saveEstimateAsTemplate: (estimateId: string, name: string) => Promise<EstimateTemplate>;
+  addCatalogItem: (input: {
+    name: string;
+    kind: CatalogKind;
+    unit: string;
+    unitCost: number;
+    costCode?: string;
+  }) => Promise<CatalogItem>;
+  updateCatalogItem: (id: string, patch: Partial<CatalogItem>) => Promise<void>;
+  removeCatalogItem: (id: string) => Promise<void>;
   addTemplateLineFromCatalog: (templateId: string, catalogItemId: string, groupName?: string) => Promise<void>;
   addCustomTemplateLine: (templateId: string, groupName?: string) => Promise<void>;
   updateTemplateLine: (id: string, patch: Partial<EstimateTemplateLine>) => Promise<void>;
@@ -3530,6 +3543,103 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [state.estimateTemplateLines, updateTemplateLine],
   );
 
+  const addCatalogItem = useCallback(
+    async (input: {
+      name: string;
+      kind: CatalogKind;
+      unit: string;
+      unitCost: number;
+      costCode?: string;
+    }) => {
+      const name = input.name.trim();
+      if (!name) {
+        toast.error("Name the item so estimators can find it.");
+        throw new Error("Name is required.");
+      }
+      const item: CatalogItem = {
+        id: crypto.randomUUID(),
+        name,
+        kind: input.kind,
+        unit: input.unit.trim() || "ea",
+        unitCost: Math.max(0, Math.round(input.unitCost * 100) / 100),
+        costCode: input.costCode?.trim() ?? "",
+      };
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({ ...prev, catalog: [item, ...prev.catalog] }));
+        return item;
+      }
+      const { data, error } = await supabase
+        .from("catalog_items")
+        .insert({
+          id: item.id,
+          company_id: user.companyId,
+          name: item.name,
+          kind: item.kind,
+          unit: item.unit,
+          unit_cost: item.unitCost,
+          cost_code: item.costCode,
+        })
+        .select("*")
+        .single();
+      if (error) {
+        toast.error(error.message);
+        throw error;
+      }
+      const mapped = data ? mapCatalogItem(data) : item;
+      setState((prev) => ({ ...prev, catalog: [mapped, ...prev.catalog] }));
+      return mapped;
+    },
+    [user.companyId],
+  );
+
+  const updateCatalogItem = useCallback(async (id: string, patch: Partial<CatalogItem>) => {
+    const next: Partial<CatalogItem> = { ...patch };
+    if (next.name !== undefined) next.name = next.name.trim();
+    if (next.unit !== undefined) next.unit = next.unit.trim() || "ea";
+    if (next.costCode !== undefined) next.costCode = next.costCode.trim();
+    if (next.unitCost !== undefined) next.unitCost = Math.max(0, Math.round(next.unitCost * 100) / 100);
+    if (next.name === "") {
+      toast.error("Name the item so estimators can find it.");
+      return;
+    }
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        catalog: prev.catalog.map((item) => (item.id === id ? { ...item, ...next } : item)),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("catalog_items").update(catalogPatch(next)).eq("id", id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
+
+  const removeCatalogItem = useCallback(async (id: string) => {
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        catalog: prev.catalog.filter((item) => item.id !== id),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("catalog_items").delete().eq("id", id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
+
   const addEstimateLineFromCatalog = useCallback(
     async (estimateId: string, catalogItemId: string, groupName?: string) => {
       const item = state.catalog.find((entry) => entry.id === catalogItemId);
@@ -5662,6 +5772,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateEstimateTemplate,
       removeEstimateTemplate,
       saveEstimateAsTemplate,
+      addCatalogItem,
+      updateCatalogItem,
+      removeCatalogItem,
       addTemplateLineFromCatalog,
       addCustomTemplateLine,
       updateTemplateLine,
@@ -5764,6 +5877,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateEstimateTemplate,
       removeEstimateTemplate,
       saveEstimateAsTemplate,
+      addCatalogItem,
+      updateCatalogItem,
+      removeCatalogItem,
       addTemplateLineFromCatalog,
       addCustomTemplateLine,
       updateTemplateLine,

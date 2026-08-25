@@ -109,6 +109,9 @@ function EstimatesList() {
                 ))}
               </SelectContent>
             </Select>
+            <Button nativeButton={false} variant="outline" render={<Link href="/catalog" />}>
+              Price book
+            </Button>
             <Button nativeButton={false} variant="outline" render={<Link href="/estimates/templates" />}>
               Templates
             </Button>

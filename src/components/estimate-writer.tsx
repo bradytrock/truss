@@ -170,7 +170,11 @@ export function PriceBookSheet({
             <CommandInput placeholder="Search the book" />
           </div>
           <CommandList className="max-h-none flex-1 px-2">
-            <CommandEmpty>No items match that search.</CommandEmpty>
+            <CommandEmpty>
+              {catalog.length === 0
+                ? "Price book is empty. Add labor and material under Price book."
+                : "No items match that search."}
+            </CommandEmpty>
             {groups.map((group) => (
               <CommandGroup key={group.kind} heading={CATALOG_KIND_LABELS[group.kind]}>
                 {group.items.map((item) => (
@@ -197,6 +201,15 @@ export function PriceBookSheet({
             ))}
           </CommandList>
         </Command>
+        <div className="border-t px-4 py-3">
+          <Link
+            href="/catalog"
+            className="text-sm text-primary hover:underline"
+            onClick={() => onOpenChange(false)}
+          >
+            Manage the price book
+          </Link>
+        </div>
       </SheetContent>
     </Sheet>
   );

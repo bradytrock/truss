@@ -346,6 +346,16 @@ export function mapCatalogItem(row: CatalogRow): CatalogItem {
   };
 }
 
+export function catalogPatch(patch: Partial<CatalogItem>) {
+  const row: Database["public"]["Tables"]["catalog_items"]["Update"] = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.kind !== undefined) row.kind = patch.kind;
+  if (patch.unit !== undefined) row.unit = patch.unit;
+  if (patch.unitCost !== undefined) row.unit_cost = patch.unitCost;
+  if (patch.costCode !== undefined) row.cost_code = patch.costCode;
+  return row;
+}
+
 function adjustmentKind(value: string | null | undefined): "percent" | "amount" {
   return value === "amount" ? "amount" : "percent";
 }
