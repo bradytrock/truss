@@ -366,3 +366,21 @@ export function legacyClientType(value: string): ClientType {
   if (value === "realtor" || value === "trade_partner") return "architect";
   return value as ClientType;
 }
+
+export const QBWC_SQL = "supabase/migrations/20260825210000_qbwc.sql";
+
+export function isMissingQbwc(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    error.code === "PGRST202" ||
+    error.code === "PGRST205" ||
+    message.includes("qbwc_") ||
+    message.includes("could not find the function") ||
+    message.includes("could not find the table")
+  );
+}
+
+export function missingQbwcMessage() {
+  return `Run ${QBWC_SQL} in the SQL editor (or a fresh bootstrap) so the Web Connector can sign in and post invoices.`;
+}

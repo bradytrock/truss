@@ -19,6 +19,7 @@ import {
   type PhotoCategory,
   type PipelineStage,
   type ProjectType,
+  type QbSyncStatus,
 } from "@/lib/types";
 import { WORK_COLUMN_LABELS, type WorkColumn } from "@/lib/work-board";
 
@@ -143,10 +144,10 @@ export function EventKindBadge({ kind }: { kind: EventKind }) {
   );
 }
 
-export function QbStatusBadge({ status }: { status: "not_in_qb" | "entered" }) {
+export function QbStatusBadge({ status }: { status: QbSyncStatus }) {
   return (
-    <Badge variant="outline" className={status === "entered" ? done : hot}>
-      {status === "entered" ? "In QuickBooks" : "Needs QuickBooks"}
+    <Badge variant="outline" className={status === "entered" ? done : status === "error" ? danger : hot}>
+      {status === "entered" ? "In QuickBooks" : status === "error" ? "QB rejected" : "Needs QuickBooks"}
     </Badge>
   );
 }

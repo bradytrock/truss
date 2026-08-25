@@ -555,7 +555,7 @@ export function mapInvoice(row: InvoiceRow): Invoice {
     notes: row.notes,
     terms: row.terms ?? "",
     shareToken: row.share_token?.trim() || "",
-    qbStatus: row.qb_status === "entered" ? "entered" : "not_in_qb",
+    qbStatus: row.qb_status === "entered" ? "entered" : row.qb_status === "error" ? "error" : "not_in_qb",
   };
 }
 

@@ -1001,6 +1001,58 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;
         Relationships: [];
       };
+      qbwc_connectors: {
+        Row: {
+          company_id: string;
+          username: string;
+          password_hash: string;
+          owner_id: string;
+          file_id: string;
+          default_item_name: string;
+          enabled: boolean;
+          last_connected_at: string | null;
+          last_error: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          company_id: string;
+          username: string;
+          password_hash: string;
+          owner_id?: string;
+          file_id?: string;
+          default_item_name?: string;
+          enabled?: boolean;
+          last_connected_at?: string | null;
+          last_error?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["qbwc_connectors"]["Insert"]>;
+        Relationships: [];
+      };
+      qbwc_sessions: {
+        Row: {
+          ticket: string;
+          company_id: string;
+          invoice_id: string | null;
+          step: string;
+          last_error: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          ticket?: string;
+          company_id: string;
+          invoice_id?: string | null;
+          step?: string;
+          last_error?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["qbwc_sessions"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -1081,6 +1133,36 @@ export type Database = {
           p_media_url?: string;
           p_sent_at?: string | null;
         };
+        Returns: Json;
+      };
+      qbwc_upsert_connector: {
+        Args: { p_password: string; p_item_name?: string };
+        Returns: Json;
+      };
+      qbwc_authenticate: {
+        Args: { p_username: string; p_password: string };
+        Returns: Json;
+      };
+      qbwc_next_work: {
+        Args: { p_ticket: string };
+        Returns: Json;
+      };
+      qbwc_apply_response: {
+        Args: {
+          p_ticket: string;
+          p_action: string;
+          p_next_step?: string;
+          p_txn_id?: string;
+          p_error?: string;
+        };
+        Returns: Json;
+      };
+      qbwc_get_last_error: {
+        Args: { p_ticket: string };
+        Returns: string;
+      };
+      qbwc_close: {
+        Args: { p_ticket: string };
         Returns: Json;
       };
     };

@@ -204,7 +204,7 @@ export default function HomePage() {
           <CardHeader className="border-b">
             <CardTitle>QuickBooks entry queue</CardTitle>
             <CardDescription>
-              Until the Desktop web connector is live, mark rows on Accounting after you type them into QB.
+              Approved invoices with line items go through the Web Connector onto Customer:Job. Expenses and payments still mark entered after you type them.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
