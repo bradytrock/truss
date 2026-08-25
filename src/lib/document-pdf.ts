@@ -316,5 +316,16 @@ export async function downloadInvoicePdf(input: {
   doc.text("Balance due", boxLeft, y);
   doc.text(formatMoney(balance), right, y, { align: "right" });
 
+  if (input.invoice.terms) {
+    y += 24;
+    y = ensureSpace(doc, y, 24);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(90, 90, 90);
+    doc.text("TERMS", 54, y);
+    y += 14;
+    y = writeParagraph(doc, input.invoice.terms, y);
+  }
+
   downloadBlob(doc.output("blob"), `${input.invoice.number}.pdf`);
 }

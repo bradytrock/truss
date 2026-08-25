@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { ErrorBanner, LoadingScreen, PageHeader, EmptyState } from "@/components/page-chrome";
 import { PeopleSettings } from "@/components/people-settings";
 import { useCrm } from "@/lib/crm-store";
 import { LOGO_ACCEPT } from "@/lib/company-logo";
+import { DEFAULT_ESTIMATE_TERMS, DEFAULT_INVOICE_TERMS } from "@/lib/document-terms";
 import type { CompanySettings } from "@/lib/types";
 import { canManageSettings } from "@/lib/visibility";
 
@@ -67,7 +69,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Company"
         title="Settings"
-        description="Business letterhead, then the people who can sign in. Invite links join this company — they do not open a second one."
+        description="Business letterhead, default estimate and invoice terms, then the people who can sign in. Invite links join this company — they do not open a second one."
       />
 
       <form onSubmit={onSubmit} className="max-w-2xl space-y-4">
@@ -202,6 +204,42 @@ export default function SettingsPage() {
                   onChange={(value) => patch("postalCode", value)}
                 />
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Document terms</CardTitle>
+            <CardDescription>
+              Copied onto new estimates and invoices so the same language is used across the company.
+              Changing these defaults does not rewrite documents already written.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 pt-4">
+            <div className="grid gap-1.5">
+              <Label htmlFor="default-estimate-terms">Estimate terms</Label>
+              <Textarea
+                id="default-estimate-terms"
+                rows={5}
+                value={form.defaultEstimateTerms ?? DEFAULT_ESTIMATE_TERMS}
+                onChange={(event) => patch("defaultEstimateTerms", event.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Used on new proposals and blank templates. A template with its own terms still wins when you start from it.
+              </p>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="default-invoice-terms">Invoice terms</Label>
+              <Textarea
+                id="default-invoice-terms"
+                rows={5}
+                value={form.defaultInvoiceTerms ?? DEFAULT_INVOICE_TERMS}
+                onChange={(event) => patch("defaultInvoiceTerms", event.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Used on new invoices, including invoices converted from estimates. Payment terms, not proposal terms.
+              </p>
             </div>
           </CardContent>
         </Card>

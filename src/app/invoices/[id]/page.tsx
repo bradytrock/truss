@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RecordPaymentDialog } from "@/components/create-ops-dialogs";
 import { RecordProperty } from "@/components/app-shell";
 import { InvoiceDocument } from "@/components/invoice-document";
+import { CommitTextarea } from "@/components/estimate-writer";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { shareContactsForInvoice } from "@/lib/parties";
@@ -167,7 +168,7 @@ export default function InvoiceDetailPage() {
         </Card>
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="space-y-4">
           <InvoiceDocument
             invoice={record}
@@ -204,34 +205,54 @@ export default function InvoiceDetailPage() {
           </Card>
         </div>
 
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>Billing</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <RecordProperty label="Issued">{formatDate(record.issuedAt)}</RecordProperty>
-            <RecordProperty label="Due">{formatDate(record.dueAt)}</RecordProperty>
-            <RecordProperty label="Job">
-              {job ? (
-                <Link href={`/jobs/${job.id}`} className="hover:underline">
-                  {job.name}
-                </Link>
-              ) : (
-                "—"
-              )}
-            </RecordProperty>
-            <RecordProperty label="From estimate">
-              {estimate ? (
-                <Link href={`/estimates/${estimate.id}`} className="hover:underline">
-                  {estimate.number}
-                </Link>
-              ) : (
-                "—"
-              )}
-            </RecordProperty>
-            {record.notes ? <RecordProperty label="Notes">{record.notes}</RecordProperty> : null}
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle>Billing</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <RecordProperty label="Issued">{formatDate(record.issuedAt)}</RecordProperty>
+              <RecordProperty label="Due">{formatDate(record.dueAt)}</RecordProperty>
+              <RecordProperty label="Job">
+                {job ? (
+                  <Link href={`/jobs/${job.id}`} className="hover:underline">
+                    {job.name}
+                  </Link>
+                ) : (
+                  "—"
+                )}
+              </RecordProperty>
+              <RecordProperty label="From estimate">
+                {estimate ? (
+                  <Link href={`/estimates/${estimate.id}`} className="hover:underline">
+                    {estimate.number}
+                  </Link>
+                ) : (
+                  "—"
+                )}
+              </RecordProperty>
+              {record.notes ? <RecordProperty label="Notes">{record.notes}</RecordProperty> : null}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle>Terms</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <CommitTextarea
+                rows={6}
+                disabled={status === "void"}
+                value={record.terms}
+                placeholder="Payment terms printed on this invoice and the client share link."
+                onCommit={(value) => void crm.updateInvoice(record.id, { terms: value })}
+              />
+              <p className="mt-2 text-xs text-muted-foreground">
+                Copied from company defaults when this invoice was created. Editing here only changes this invoice.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <RecordPaymentDialog open={payOpen} onOpenChange={setPayOpen} invoiceId={record.id} />

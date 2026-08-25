@@ -33,9 +33,12 @@ export function fillPayment(
   };
 }
 
-export function fillInvoiceQb(invoice: Omit<Invoice, "qbStatus"> & Partial<Invoice>): Invoice {
+export function fillInvoiceQb(
+  invoice: Omit<Invoice, "qbStatus" | "terms"> & Partial<Pick<Invoice, "qbStatus" | "terms">>,
+): Invoice {
   return {
     ...invoice,
+    terms: invoice.terms ?? "",
     qbStatus: invoice.qbStatus ?? (invoice.status === "paid" ? "entered" : "not_in_qb"),
   };
 }

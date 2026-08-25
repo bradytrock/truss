@@ -188,6 +188,25 @@ export function missingLogoMessage() {
   return `Saved in this browser. Run ${COMPANY_LOGO_SQL} in the SQL editor so the logo persists and prints on documents.`;
 }
 
+export const DOCUMENT_TERMS_SQL = "supabase/migrations/20260825130000_document_terms.sql";
+
+export function isMissingCompanyDocumentTermsColumns(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return message.includes("default_estimate_terms") || message.includes("default_invoice_terms");
+}
+
+export function isMissingInvoiceTermsColumn(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  if (message.includes("default_estimate_terms") || message.includes("default_invoice_terms")) return false;
+  return message.includes("terms") && (message.includes("invoice") || message.includes("'terms'"));
+}
+
+export function missingDocumentTermsMessage() {
+  return `Saved in this browser. Run ${DOCUMENT_TERMS_SQL} in the SQL editor so company default terms and invoice terms persist.`;
+}
+
 export const ESTIMATE_SIGNATURE_SQL = "supabase/migrations/20260821200000_estimate_signature.sql";
 
 export function isMissingSignatureColumn(error: { message?: string; code?: string } | null | undefined) {

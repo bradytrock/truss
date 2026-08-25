@@ -162,6 +162,7 @@ export type SharedInvoicePayload = {
     issuedAt: string;
     dueAt: string | null;
     notes: string;
+    terms: string;
     shareToken: string;
     qbStatus: "not_in_qb" | "entered";
   };
@@ -290,6 +291,7 @@ export function parseSharedInvoice(raw: unknown): SharedInvoicePayload | null {
       issuedAt: asString(invoice.issuedAt),
       dueAt: asNullable(invoice.dueAt),
       notes: "",
+      terms: asString(invoice.terms),
       shareToken: asString(invoice.shareToken),
       qbStatus: "not_in_qb",
     },
@@ -349,6 +351,8 @@ export function companySettingsFromShared(company: SharedCompany): CompanySettin
     postalCode: company.postalCode,
     licenseNumber: company.licenseNumber,
     logoUrl: company.logoUrl,
+    defaultEstimateTerms: null,
+    defaultInvoiceTerms: null,
   };
 }
 

@@ -144,6 +144,9 @@ export interface CompanySettings {
   licenseNumber: string;
   logoUrl?: string;
   logoStoragePath?: string;
+  /** Null means the app fallback is still in use. Empty string means the admin cleared terms. */
+  defaultEstimateTerms?: string | null;
+  defaultInvoiceTerms?: string | null;
 }
 
 export const NORTHLINE_COMPANY: CompanySettings = {
@@ -156,6 +159,8 @@ export const NORTHLINE_COMPANY: CompanySettings = {
   state: "CO",
   postalCode: "80205",
   licenseNumber: "CO-GC-44821",
+  defaultEstimateTerms: null,
+  defaultInvoiceTerms: null,
 };
 
 export interface StaffMember {
@@ -435,6 +440,7 @@ export interface Invoice {
   issuedAt: string;
   dueAt: string | null;
   notes: string;
+  terms: string;
   shareToken: string;
   qbStatus: QbSyncStatus;
 }

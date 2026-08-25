@@ -14,20 +14,20 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
-import type { Json } from "@/lib/supabase/database.types";
+import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingSignatureColumn, missingSignatureMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId } from "@/lib/job-record";
 import {
-  DEFAULT_ESTIMATE_TERMS,
   amountForEstimate,
   contractValueForOpportunity,
   fillEstimate,
   fillEstimateLine,
   invoiceLinesFromEstimate,
 } from "@/lib/estimate-totals";
+import { resolveEstimateTerms, resolveInvoiceTerms } from "@/lib/document-terms";
 import {
   estimateFieldsFromTemplate,
   estimateLinesFromTemplate,
@@ -265,6 +265,43 @@ function requireClient() {
 function maybeClient() {
   if (!isSupabaseConfigured()) return null;
   return createClient();
+}
+
+type InvoiceInsert = Database["public"]["Tables"]["invoices"]["Insert"];
+
+async function insertInvoiceRow(
+  supabase: NonNullable<ReturnType<typeof maybeClient>>,
+  payload: InvoiceInsert,
+) {
+  let { data, error } = await supabase.from("invoices").insert(payload).select("*").single();
+  if (error && isMissingInvoiceTermsColumn(error)) {
+    const { terms: _terms, ...rest } = payload;
+    const retry = await supabase.from("invoices").insert(rest).select("*").single();
+    data = retry.data;
+    error = retry.error;
+    if (!error) toast.message(missingDocumentTermsMessage());
+  }
+  if (error && isMissingShareToken(error)) {
+    const retry = await supabase
+      .from("invoices")
+      .insert({
+        company_id: payload.company_id,
+        number: payload.number,
+        name: payload.name,
+        client_id: payload.client_id,
+        job_id: payload.job_id,
+        estimate_id: payload.estimate_id,
+        status: payload.status,
+        issued_at: payload.issued_at,
+        due_at: payload.due_at,
+        notes: payload.notes,
+      })
+      .select("*")
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
+  return { data, error };
 }
 
 function withCreatedByRetry<T extends { created_by?: string | null }>(
@@ -634,7 +671,9 @@ type CrmContextValue = CrmState & {
     jobId: string | null;
     dueAt: string | null;
     notes?: string;
+    terms?: string;
   }) => Promise<Invoice>;
+  updateInvoice: (id: string, patch: Partial<Invoice>) => Promise<void>;
   sendInvoice: (id: string) => Promise<void>;
   voidInvoice: (id: string) => Promise<void>;
   recordPayment: (input: {
@@ -2422,7 +2461,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         acceptedAt: null,
         createdAt: new Date().toISOString(),
         intro: input.intro || templateFields?.intro || "",
-        terms: input.terms || templateFields?.terms || DEFAULT_ESTIMATE_TERMS,
+        terms: resolveEstimateTerms({
+          explicit: input.terms,
+          templateTerms: templateFields?.terms,
+          companyDefault: companySettings.defaultEstimateTerms,
+        }),
         street: input.street ?? linked.street,
         city: input.city ?? linked.city,
         state: input.state ?? linked.state,
@@ -2532,6 +2575,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       state.jobs,
       state.opportunities,
       user.companyId,
+      companySettings.defaultEstimateTerms,
     ]
   );
 
@@ -2998,6 +3042,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         market: input?.market ?? "residential",
         createdAt: now,
         updatedAt: now,
+        terms: resolveEstimateTerms({ companyDefault: companySettings.defaultEstimateTerms }),
       });
       const supabase = maybeClient();
       if (!supabase) {
@@ -3036,7 +3081,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       setState((prev) => ({ ...prev, estimateTemplates: [mapped, ...prev.estimateTemplates] }));
       return mapped;
     },
-    [user.companyId],
+    [user.companyId, companySettings.defaultEstimateTerms],
   );
 
   const updateEstimateTemplate = useCallback(async (id: string, patch: Partial<EstimateTemplate>) => {
@@ -3578,6 +3623,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       due.setDate(due.getDate() + 30);
       const dueAt = due.toISOString().slice(0, 10);
       const notes = `Converted from ${estimate.number}. Optional lines that were not selected were left off.`;
+      const terms = resolveInvoiceTerms({ companyDefault: companySettings.defaultInvoiceTerms });
       const supabase = maybeClient();
       if (!supabase) {
         const invoice = {
@@ -3591,6 +3637,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           issuedAt,
           dueAt,
           notes,
+          terms,
           shareToken: newShareToken(),
           qbStatus: "not_in_qb" as const,
         };
@@ -3621,30 +3668,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         issued_at: issuedAt,
         due_at: dueAt,
         notes,
+        terms,
         share_token: newShareToken(),
         qb_status: "not_in_qb",
       };
-      let { data, error } = await supabase.from("invoices").insert(payload).select("*").single();
-      if (error && isMissingShareToken(error)) {
-        const retry = await supabase
-          .from("invoices")
-          .insert({
-            company_id: payload.company_id,
-            number: payload.number,
-            name: payload.name,
-            client_id: payload.client_id,
-            job_id: payload.job_id,
-            estimate_id: payload.estimate_id,
-            status: payload.status,
-            issued_at: payload.issued_at,
-            due_at: payload.due_at,
-            notes: payload.notes,
-          })
-          .select("*")
-          .single();
-        data = retry.data;
-        error = retry.error;
-      }
+      const { data, error } = await insertInvoiceRow(supabase, payload);
       if (error || !data) {
         toast.error(error?.message ?? "Could not convert the estimate.");
         throw error ?? new Error("Could not convert the estimate.");
@@ -3665,6 +3693,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         throw lineError;
       }
       const invoice = mapInvoice(data);
+      if (!Object.prototype.hasOwnProperty.call(data, "terms")) invoice.terms = terms;
       const mappedLines = billed.map((line) => ({
         id: crypto.randomUUID(),
         invoiceId: invoice.id,
@@ -3682,7 +3711,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       await load();
       return invoice;
     },
-    [load, state.estimateLines, state.estimates, state.invoices, user.companyId]
+    [load, state.estimateLines, state.estimates, state.invoices, user.companyId, companySettings.defaultInvoiceTerms]
   );
 
   const addInvoice = useCallback(
@@ -3692,6 +3721,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       jobId: string | null;
       dueAt: string | null;
       notes?: string;
+      terms?: string;
     }) => {
       const number = nextNumber("INV", state.invoices.map((invoice) => invoice.number));
       const invoice = {
@@ -3705,6 +3735,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         issuedAt: new Date().toISOString().slice(0, 10),
         dueAt: input.dueAt,
         notes: input.notes ?? "",
+        terms: resolveInvoiceTerms({
+          explicit: input.terms,
+          companyDefault: companySettings.defaultInvoiceTerms,
+        }),
         shareToken: newShareToken(),
         qbStatus: "not_in_qb" as const,
       };
@@ -3720,38 +3754,47 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         client_id: invoice.clientId || null,
         job_id: invoice.jobId,
         notes: invoice.notes,
+        terms: invoice.terms,
         due_at: invoice.dueAt,
         share_token: invoice.shareToken,
         qb_status: invoice.qbStatus,
       };
-      let { data, error } = await supabase.from("invoices").insert(payload).select("*").single();
-      if (error && isMissingShareToken(error)) {
-        const retry = await supabase
-          .from("invoices")
-          .insert({
-            company_id: payload.company_id,
-            number: payload.number,
-            name: payload.name,
-            client_id: payload.client_id,
-            job_id: payload.job_id,
-            notes: payload.notes,
-            due_at: payload.due_at,
-          })
-          .select("*")
-          .single();
-        data = retry.data;
-        error = retry.error;
-      }
+      const { data, error } = await insertInvoiceRow(supabase, payload);
       if (error || !data) {
         toast.error(error?.message ?? "Could not create the invoice.");
         throw error ?? new Error("Could not create the invoice.");
       }
       const mapped = { ...invoice, ...mapInvoice(data), id: data.id, number: data.number || number };
+      if (!Object.prototype.hasOwnProperty.call(data, "terms")) mapped.terms = invoice.terms;
       setState((prev) => ({ ...prev, invoices: [mapped, ...prev.invoices] }));
       return mapped;
     },
-    [state.invoices, user.companyId]
+    [state.invoices, user.companyId, companySettings.defaultInvoiceTerms]
   );
+
+  const updateInvoice = useCallback(async (id: string, patch: Partial<Invoice>) => {
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        invoices: prev.invoices.map((invoice) => (invoice.id === id ? { ...invoice, ...patch } : invoice)),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("invoices").update(invoicePatch(patch)).eq("id", id);
+    if (error) {
+      if (isMissingInvoiceTermsColumn(error) && patch.terms !== undefined) {
+        apply();
+        toast.message(missingDocumentTermsMessage());
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
 
   const sendInvoice = useCallback(async (id: string) => {
     const current = state.invoices.find((invoice) => invoice.id === id);
@@ -4762,6 +4805,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         licenseNumber: next.licenseNumber.trim(),
         logoUrl: next.logoUrl?.trim() ?? "",
         logoStoragePath: next.logoStoragePath?.trim() ?? "",
+        defaultEstimateTerms: next.defaultEstimateTerms ?? null,
+        defaultInvoiceTerms: next.defaultInvoiceTerms ?? null,
       };
       if (!isSupabaseConfigured() || !user.companyId || user.companyId === "local") {
         setCompanySettings(settings);
@@ -4783,6 +4828,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         license_number: settings.licenseNumber,
         logo_url: settings.logoUrl,
         logo_storage_path: settings.logoStoragePath,
+        default_estimate_terms: settings.defaultEstimateTerms,
+        default_invoice_terms: settings.defaultInvoiceTerms,
         updated_at: new Date().toISOString(),
       };
       let { data, error } = await supabase
@@ -4791,12 +4838,31 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         .eq("id", user.companyId)
         .select("*")
         .single();
+      let attempted: Record<string, unknown> = payload;
       if (error && isMissingLogoColumn(error)) {
-        const { logo_url: _logoUrl, logo_storage_path: _logoPath, ...rest } = payload;
-        const retry = await supabase.from("companies").update(rest).eq("id", user.companyId).select("*").single();
+        const { logo_url: _logoUrl, logo_storage_path: _logoPath, ...rest } = attempted;
+        attempted = rest;
+        const retry = await supabase
+          .from("companies")
+          .update(rest as typeof payload)
+          .eq("id", user.companyId)
+          .select("*")
+          .single();
         data = retry.data;
         error = retry.error;
         if (!error) toast.message(missingLogoMessage());
+      }
+      if (error && isMissingCompanyDocumentTermsColumns(error)) {
+        const { default_estimate_terms: _estimateTerms, default_invoice_terms: _invoiceTerms, ...rest } = attempted;
+        const retry = await supabase
+          .from("companies")
+          .update(rest as typeof payload)
+          .eq("id", user.companyId)
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingDocumentTermsMessage());
       }
       if (error || !data) {
         const missingColumn =
@@ -4805,12 +4871,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           error?.message?.includes("Could not find the");
         toast.error(
           missingColumn
-            ? "Run supabase/migrations/20260819210000_company_settings.sql in the SQL editor, then try again."
+            ? "Run supabase/bootstrap.sql (or 20260825130000_document_terms.sql) in the SQL editor, then try again."
             : error?.message ?? "Could not save business settings."
         );
         return null;
       }
-      const saved = { ...mapCompany(data), logoUrl: settings.logoUrl, logoStoragePath: settings.logoStoragePath };
+      const mapped = mapCompany(data);
+      const saved = {
+        ...mapped,
+        logoUrl: settings.logoUrl,
+        logoStoragePath: settings.logoStoragePath,
+        defaultEstimateTerms: mapped.defaultEstimateTerms ?? settings.defaultEstimateTerms,
+        defaultInvoiceTerms: mapped.defaultInvoiceTerms ?? settings.defaultInvoiceTerms,
+      };
       setCompanySettings(saved);
       setUser((current) => ({ ...current, company: saved.name }));
       if (!quiet) toast.success("Business settings saved.");
@@ -5265,6 +5338,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       reorderTemplateLine,
       convertEstimateToInvoice,
       addInvoice,
+      updateInvoice,
       sendInvoice,
       ensureInvoiceShareToken,
       voidInvoice,
@@ -5364,6 +5438,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       reorderTemplateLine,
       convertEstimateToInvoice,
       addInvoice,
+      updateInvoice,
       sendInvoice,
       ensureInvoiceShareToken,
       voidInvoice,

@@ -106,6 +106,8 @@ export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>):
     licenseNumber: row.license_number ?? "",
     logoUrl: row.logo_url ?? "",
     logoStoragePath: row.logo_storage_path ?? "",
+    defaultEstimateTerms: row.default_estimate_terms ?? null,
+    defaultInvoiceTerms: row.default_invoice_terms ?? null,
   };
 }
 
@@ -530,6 +532,7 @@ export function mapInvoice(row: InvoiceRow): Invoice {
     issuedAt: row.issued_at,
     dueAt: row.due_at,
     notes: row.notes,
+    terms: row.terms ?? "",
     shareToken: row.share_token?.trim() || "",
     qbStatus: row.qb_status === "entered" ? "entered" : "not_in_qb",
   };
@@ -545,6 +548,7 @@ export function invoicePatch(patch: Partial<Invoice>) {
   if (patch.issuedAt !== undefined) row.issued_at = patch.issuedAt;
   if (patch.dueAt !== undefined) row.due_at = patch.dueAt;
   if (patch.notes !== undefined) row.notes = patch.notes;
+  if (patch.terms !== undefined) row.terms = patch.terms;
   if (patch.shareToken !== undefined) row.share_token = patch.shareToken;
   if (patch.qbStatus !== undefined) row.qb_status = patch.qbStatus;
   return row;

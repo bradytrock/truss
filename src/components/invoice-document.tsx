@@ -95,6 +95,12 @@ export function InvoiceDocument({
           <dd className="tabular-nums">{formatMoney(balance)}</dd>
         </div>
       </dl>
+      {invoice.terms ? (
+        <div>
+          <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">{invoice.terms}</p>
+        </div>
+      ) : null}
     </div>
   );
 }

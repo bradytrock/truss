@@ -17,6 +17,8 @@ export type Database = {
           license_number: string;
           logo_url: string;
           logo_storage_path: string;
+          default_estimate_terms: string | null;
+          default_invoice_terms: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -33,6 +35,8 @@ export type Database = {
           license_number?: string;
           logo_url?: string;
           logo_storage_path?: string;
+          default_estimate_terms?: string | null;
+          default_invoice_terms?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -49,6 +53,8 @@ export type Database = {
           license_number?: string;
           logo_url?: string;
           logo_storage_path?: string;
+          default_estimate_terms?: string | null;
+          default_invoice_terms?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -614,6 +620,7 @@ export type Database = {
           issued_at: string;
           due_at: string | null;
           notes: string;
+          terms: string;
           created_at: string;
           share_token: string;
           qb_status: string;
@@ -630,6 +637,7 @@ export type Database = {
           issued_at?: string;
           due_at?: string | null;
           notes?: string;
+          terms?: string;
           share_token?: string;
           qb_status?: string;
         };
