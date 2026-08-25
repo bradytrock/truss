@@ -1,6 +1,7 @@
 import { fillJobRecord, parseCustomFields } from "@/lib/job-record";
+import { normalizeLinePhotoIds } from "@/lib/estimate-line-photos";
 import { parsePageTemplate, parsePhotoReportPages } from "@/lib/photo-report";
-import type { CompanySettings, Job, JobPhoto, PhotoReport } from "@/lib/types";
+import type { CompanySettings, EstimateLinePhoto, Job, JobPhoto, PhotoReport } from "@/lib/types";
 import type { ProjectManagerContact } from "@/lib/document-owner";
 
 export function newShareToken() {
@@ -199,6 +200,8 @@ export type SharedEstimatePayload = {
     optional: boolean;
     selected: boolean;
     taxable: boolean;
+    photoIds: string[];
+    photos?: EstimateLinePhoto[];
   }>;
   projectManager?: ProjectManagerContact | null;
 };
@@ -327,7 +330,20 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
       secondSignatureName: asString(estimate.secondSignatureName),
       secondSignatureImage: asString(estimate.secondSignatureImage),
     },
-    lines: linesRaw.filter(isRecord).map((line, index) => ({
+    lines: linesRaw.filter(isRecord).map((line, index) => {
+      const photos = Array.isArray(line.photos)
+        ? line.photos.filter(isRecord).flatMap((photo) => {
+            const id = asString(photo.id);
+            const imageUrl = asString(photo.imageUrl);
+            if (!id || !imageUrl) return [];
+            return [{ id, imageUrl, caption: asString(photo.caption) }];
+          })
+        : [];
+      const photoIds = normalizeLinePhotoIds([
+        ...(Array.isArray(line.photoIds) ? line.photoIds.map((id) => asString(id)) : []),
+        ...photos.map((photo) => photo.id),
+      ]);
+      return {
       id: asString(line.id, `line-${index}`),
       estimateId: asString(line.estimateId, asString(estimate.id)),
       catalogItemId: asNullable(line.catalogItemId),
@@ -341,7 +357,10 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
       optional: asBool(line.optional),
       selected: asBool(line.selected, true),
       taxable: asBool(line.taxable, true),
-    })),
+      photoIds,
+      photos,
+    };
+    }),
     projectManager: parseProjectManager(raw.projectManager),
   };
 }

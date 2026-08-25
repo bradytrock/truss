@@ -1,5 +1,6 @@
 import { seedShareToken } from "@/lib/share";
 import { billingEstimate } from "@/lib/market";
+import { normalizeLinePhotoIds } from "@/lib/estimate-line-photos";
 import type { Estimate, EstimateLine, JobMarket } from "@/lib/types";
 
 export type AdjustmentKind = "percent" | "amount";
@@ -236,9 +237,11 @@ export type EstimateDraft = Omit<
 
 export type EstimateLineDraft = Omit<
   EstimateLine,
-  "title" | "groupName" | "optional" | "selected" | "taxable"
+  "title" | "groupName" | "optional" | "selected" | "taxable" | "photoIds" | "photos"
 > &
-  Partial<Pick<EstimateLine, "title" | "groupName" | "optional" | "selected" | "taxable">>;
+  Partial<
+    Pick<EstimateLine, "title" | "groupName" | "optional" | "selected" | "taxable" | "photoIds" | "photos">
+  >;
 
 export function fillEstimate(estimate: EstimateDraft): Estimate {
   const contactId = estimate.contactId ?? null;
@@ -276,6 +279,7 @@ export function fillEstimate(estimate: EstimateDraft): Estimate {
 }
 
 export function fillEstimateLine(line: EstimateLineDraft): EstimateLine {
+  const photoIds = normalizeLinePhotoIds(line.photoIds ?? line.photos?.map((photo) => photo.id));
   return {
     ...line,
     title: line.title?.trim() || line.description,
@@ -283,6 +287,8 @@ export function fillEstimateLine(line: EstimateLineDraft): EstimateLine {
     optional: Boolean(line.optional),
     selected: line.selected ?? true,
     taxable: line.taxable ?? true,
+    photoIds,
+    photos: line.photos,
   };
 }
 

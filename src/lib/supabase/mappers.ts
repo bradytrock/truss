@@ -414,6 +414,7 @@ export function mapEstimateLine(row: EstimateLineRow): EstimateLine {
     optional: Boolean(row.optional),
     selected: row.selected ?? true,
     taxable: row.taxable ?? true,
+    photoIds: Array.isArray(row.photo_ids) ? row.photo_ids.map(String) : [],
   });
 }
 
@@ -536,6 +537,7 @@ export function estimateLinePatch(patch: Partial<EstimateLine>) {
   if (patch.optional !== undefined) row.optional = patch.optional;
   if (patch.selected !== undefined) row.selected = patch.selected;
   if (patch.taxable !== undefined) row.taxable = patch.taxable;
+  if (patch.photoIds !== undefined) row.photo_ids = patch.photoIds;
   return row;
 }
 

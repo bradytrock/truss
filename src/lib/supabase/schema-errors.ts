@@ -2,6 +2,17 @@ import type { ClientType, DeliveryMethod, ProjectType } from "@/lib/types";
 
 export const NULLABLE_COMPANY_SQL = "supabase/migrations/20260819280000_nullable_company.sql";
 export const ESTIMATE_WRITER_SQL = "supabase/migrations/20260819290000_estimate_writer.sql";
+export const ESTIMATE_LINE_PHOTOS_SQL = "supabase/migrations/20260825200000_estimate_line_photos.sql";
+
+export function isMissingEstimateLinePhotos(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  return (error.message ?? "").toLowerCase().includes("photo_ids");
+}
+
+export function missingEstimateLinePhotosMessage() {
+  return `Saved in this browser. Run ${ESTIMATE_LINE_PHOTOS_SQL} in the SQL editor so line photos stay on the proposal.`;
+}
+
 export const RESIDENTIAL_ENUMS_SQL = "supabase/migrations/20260819200000_residential_homeowners.sql";
 export const JOB_OVERVIEW_SQL = "supabase/migrations/20260819270000_job_overview.sql";
 
@@ -33,6 +44,7 @@ export function isMissingEstimateWriter(error: { message?: string; code?: string
   if (!error) return false;
   if (isMissingSecondSigner(error)) return false;
   if (isMissingOwnerSignature(error)) return false;
+  if (isMissingEstimateLinePhotos(error)) return false;
   const message = error.message ?? "";
   return (
     error.code === "PGRST204" ||

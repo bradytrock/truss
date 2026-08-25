@@ -384,6 +384,12 @@ export interface Estimate {
   secondSignatureImage: string;
 }
 
+export interface EstimateLinePhoto {
+  id: string;
+  imageUrl: string;
+  caption: string;
+}
+
 export interface EstimateLine {
   id: string;
   estimateId: string;
@@ -398,6 +404,8 @@ export interface EstimateLine {
   optional: boolean;
   selected: boolean;
   taxable: boolean;
+  photoIds: string[];
+  photos?: EstimateLinePhoto[];
 }
 
 export interface EstimateTemplate {

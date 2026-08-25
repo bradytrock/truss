@@ -1,7 +1,8 @@
-import type { CompanySettings, Estimate, EstimateLine, Invoice, InvoiceLine, Payment } from "@/lib/types";
+import type { CompanySettings, Estimate, EstimateLine, Invoice, InvoiceLine, JobPhoto, Payment } from "@/lib/types";
 import { estimateTotals, groupEstimateLines, lineAmount, lineIncluded } from "@/lib/estimate-totals";
 import { formatDate, formatMoney, formatPhone } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
+import { photosForEstimateLine } from "@/lib/estimate-line-photos";
 import { writePdfLetterhead, loadLogoForPdf } from "@/lib/letterhead-pdf";
 import { invoiceBalance, invoiceTotal, lineAmount as invoiceLineAmount, paidOnInvoice } from "@/lib/money";
 import { downloadBlob } from "@/lib/share";
@@ -97,6 +98,7 @@ export async function downloadEstimatePdf(input: {
   primaryCustomer?: string;
   secondCustomer?: string | null;
   contractorName?: string;
+  photos?: JobPhoto[];
 }) {
   const doc = await createDoc();
   const width = doc.internal.pageSize.getWidth();
@@ -167,6 +169,28 @@ export async function downloadEstimatePdf(input: {
       if (line.optional) {
         doc.text(included ? "Optional — selected" : "Optional — not in this total", 54, y);
         y += 12;
+      }
+      const linePhotos = photosForEstimateLine(line, input.photos ?? []);
+      if (linePhotos.length) {
+        const thumb = 88;
+        const gap = 8;
+        const perRow = 4;
+        for (let index = 0; index < linePhotos.length; index += perRow) {
+          y = ensureSpace(doc, y, thumb + 10);
+          const row = linePhotos.slice(index, index + perRow);
+          for (let col = 0; col < row.length; col++) {
+            const photo = row[col];
+            const ink = await loadLogoForPdf(photo.imageUrl);
+            const x = 54 + col * (thumb + gap);
+            if (ink) {
+              const scale = Math.min(thumb / ink.width, thumb / ink.height);
+              const w = ink.width * scale;
+              const h = ink.height * scale;
+              doc.addImage(ink.data, ink.format, x, y, w, h);
+            }
+          }
+          y += thumb + 8;
+        }
       }
       y += 6;
     }

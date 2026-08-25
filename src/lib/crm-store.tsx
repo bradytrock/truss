@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId } from "@/lib/job-record";
@@ -2611,9 +2611,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           optional: line.optional,
           selected: line.selected,
           taxable: line.taxable,
+          photo_ids: line.photoIds,
         }));
         const inserted = await supabase.from("estimate_lines").insert(linePayload);
-        if (inserted.error && !isMissingEstimateWriter(inserted.error)) {
+        if (inserted.error && isMissingEstimateLinePhotos(inserted.error)) {
+          toast.message(missingEstimateLinePhotosMessage());
+        } else if (inserted.error && !isMissingEstimateWriter(inserted.error)) {
           toast.error(inserted.error.message);
         }
       }
@@ -3136,8 +3139,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           optional: line.optional,
           selected: line.selected,
           taxable: line.taxable,
+          photo_ids: line.photoIds,
         }));
         let { error } = await supabase.from("estimate_lines").insert(payload);
+        if (error && isMissingEstimateLinePhotos(error)) {
+          const retry = await supabase.from("estimate_lines").insert(
+            payload.map(({ photo_ids: _photos, ...row }) => row),
+          );
+          error = retry.error;
+          if (!error) toast.message(missingEstimateLinePhotosMessage());
+        }
         if (error && isMissingEstimateWriter(error)) {
           const retry = await supabase.from("estimate_lines").insert(
             payload.map((row) => ({
@@ -3805,6 +3816,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     const { error } = await supabase.from("estimate_lines").update(estimateLinePatch(patch)).eq("id", id);
     if (error) {
+      if (isMissingEstimateLinePhotos(error)) {
+        apply();
+        toast.message(missingEstimateLinePhotosMessage());
+        return;
+      }
       if (isMissingEstimateWriter(error)) {
         apply();
         toast.message(missingEstimateWriterMessage());

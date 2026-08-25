@@ -18,7 +18,8 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
 import { isSignaturePng } from "@/lib/estimate-signature";
 import { estimateSignatureLines } from "@/lib/estimate-signers";
-import type { CompanySettings, Estimate, EstimateLine, JobMarket } from "@/lib/types";
+import { photosForEstimateLine } from "@/lib/estimate-line-photos";
+import type { CompanySettings, Estimate, EstimateLine, JobMarket, JobPhoto } from "@/lib/types";
 import { filledEstimateTerms } from "@/lib/document-terms";
 import { cn } from "@/lib/utils";
 
@@ -197,6 +198,7 @@ export function ProposalDocument({
                         {line.description && line.description !== line.title ? (
                           <p className="mt-0.5 text-sm text-muted-foreground">{line.description}</p>
                         ) : null}
+                        <ProposalLinePhotos line={line} gallery={crm?.photos ?? []} />
                         <p className="mt-1 text-xs tabular-nums text-muted-foreground">
                           {line.quantity} {line.unit} × {formatMoney(line.unitCost)}
                         </p>
@@ -303,5 +305,30 @@ export function ProposalSignature({
         })}
       </div>
     </div>
+  );
+}
+
+function ProposalLinePhotos({
+  line,
+  gallery,
+}: {
+  line: EstimateLine;
+  gallery: JobPhoto[];
+}) {
+  const photos = photosForEstimateLine(line, gallery);
+  if (!photos.length) return null;
+  return (
+    <ul className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+      {photos.map((photo) => (
+        <li key={photo.id}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={photo.imageUrl}
+            alt={photo.caption || line.title || "Line photo"}
+            className="aspect-[4/3] w-full rounded-sm border object-cover"
+          />
+        </li>
+      ))}
+    </ul>
   );
 }

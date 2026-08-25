@@ -155,6 +155,7 @@ export default function SharedEstimatePage() {
                   company: letterhead,
                   customer,
                   projectManager,
+                  photos: crm.photos,
                 }).catch(() => toast.error("Could not build the PDF."))
               }
             />

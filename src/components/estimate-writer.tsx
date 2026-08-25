@@ -13,6 +13,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
+import { EstimateLinePhotos } from "@/components/estimate-line-photos";
 import { ProposalDocument } from "@/components/proposal-document";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { CollectSignatureDialog } from "@/components/signature-pad";
@@ -79,7 +80,7 @@ import { shareUrl } from "@/lib/share";
 import { formatMoney } from "@/lib/format";
 import { billingEstimate, isResidentialMarket, workMarket } from "@/lib/market";
 import { formatJobSite } from "@/lib/leads";
-import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine } from "@/lib/types";
+import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine, type JobPhoto } from "@/lib/types";
 import { filledEstimateTerms, ESTIMATE_TERMS_HINT } from "@/lib/document-terms";
 import { canEditDocumentTerms } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
@@ -233,13 +234,19 @@ export function LineCard({
   onPatch,
   onMove,
   onRemove,
+  galleryPhotos,
+  galleryHint,
+  onPhotosChange,
 }: {
-  line: PricedLine;
+  line: PricedLine & { photoIds?: string[]; photos?: EstimateLine["photos"] };
   editable: boolean;
   showTax: boolean;
   onPatch: (patch: Partial<PricedLine>) => void;
   onMove: (direction: "up" | "down") => void;
   onRemove: () => void;
+  galleryPhotos?: JobPhoto[];
+  galleryHint?: string;
+  onPhotosChange?: (photoIds: string[]) => void;
 }) {
   const units = COMMON_UNITS.includes(line.unit) ? COMMON_UNITS : [line.unit, ...COMMON_UNITS];
   return (
@@ -369,6 +376,18 @@ export function LineCard({
         </label>
         ) : null}
       </div>
+      {onPhotosChange || (line.photoIds && line.photoIds.length > 0) || line.photos?.length ? (
+        <EstimateLinePhotos
+          line={{
+            photoIds: line.photoIds ?? [],
+            photos: line.photos,
+          }}
+          gallery={galleryPhotos ?? []}
+          emptyHint={galleryHint}
+          editable={editable && Boolean(onPhotosChange)}
+          onChange={editable ? onPhotosChange : undefined}
+        />
+      ) : null}
     </div>
   );
 }
@@ -407,6 +426,15 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   const client = crm.getClient(estimate.clientId);
   const opportunity = estimate.opportunityId ? crm.getOpportunity(estimate.opportunityId) : undefined;
   const job = estimate.jobId ? crm.getJob(estimate.jobId) : undefined;
+  const jobPhotos = useMemo(
+    () => (estimate.jobId ? crm.photos.filter((photo) => photo.jobId === estimate.jobId) : []),
+    [crm.photos, estimate.jobId],
+  );
+  const galleryHint = estimate.jobId
+    ? jobPhotos.length === 0
+      ? "This job does not have photos yet. Add them on the job record, then attach them here."
+      : undefined
+    : "Attach this proposal to a job to use that job’s photo gallery.";
   const homeownerContacts = useMemo(
     () =>
       contactsOnJob(job, crm.contacts, [
@@ -507,6 +535,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       company: letterhead,
       customer,
       projectManager,
+      photos: crm.photos,
     });
   }
 
@@ -945,6 +974,9 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                     line={line}
                     editable={editable}
                     showTax={!residential}
+                    galleryPhotos={jobPhotos}
+                    galleryHint={galleryHint}
+                    onPhotosChange={(photoIds) => void crm.updateEstimateLine(line.id, { photoIds })}
                     onPatch={(patch) => void crm.updateEstimateLine(line.id, patch)}
                     onMove={(direction) => void crm.reorderEstimateLine(line.id, direction)}
                     onRemove={() => void crm.removeEstimateLine(line.id)}

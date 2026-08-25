@@ -521,6 +521,7 @@ export type Database = {
           optional: boolean;
           selected: boolean;
           taxable: boolean;
+          photo_ids: string[];
         };
         Insert: {
           id?: string;
@@ -537,6 +538,7 @@ export type Database = {
           optional?: boolean;
           selected?: boolean;
           taxable?: boolean;
+          photo_ids?: string[];
         };
         Update: Partial<Database["public"]["Tables"]["estimate_lines"]["Insert"]>;
         Relationships: [];
