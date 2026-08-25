@@ -60,6 +60,7 @@ import {
   photoById,
 } from "@/lib/photo-report";
 import { shareUrl } from "@/lib/share";
+import { resolveShareContacts } from "@/lib/parties";
 import {
   type Job,
   type JobPhoto,
@@ -391,7 +392,22 @@ export function PhotoReportBuilder({
         title="Send this page"
         description="Copy a client link or download a PDF. Anyone with the link can view this document."
         url={draft.shareToken ? shareUrl("p", draft.shareToken) : ""}
+        kind="page"
+        documentName={draft.title}
+        companyName={crm.company.name}
+        recipients={resolveShareContacts(
+          { jobId: job.id, primaryContactId: job.primaryContactId },
+          crm,
+        )}
         onDownloadPdf={downloadPdf}
+        onTexted={(sent) =>
+          crm.logOutboundText({
+            ...sent,
+            jobId: job.id,
+            opportunityId: job.opportunityId,
+            contactId: sent.contactId || job.primaryContactId,
+          })
+        }
       />
       <Dialog open={Boolean(pendingDelete)} onOpenChange={(open) => { if (!open) setPendingDeleteId(null); }}>
         <DialogContent className="sm:max-w-md" showCloseButton={false}>

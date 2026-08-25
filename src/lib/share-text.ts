@@ -1,6 +1,6 @@
 import { firstName } from "@/lib/phone";
 
-export type ShareDocumentKind = "estimate" | "invoice";
+export type ShareDocumentKind = "estimate" | "invoice" | "page";
 
 export function defaultShareText(input: {
   kind: ShareDocumentKind;
@@ -15,6 +15,10 @@ export function defaultShareText(input: {
   if (input.kind === "invoice") {
     const label = input.name.trim() ? ` (${input.name.trim()})` : "";
     return `Hi ${who}, ${company} sent invoice ${input.number}${label}. Open it here:\n${input.url}`;
+  }
+  if (input.kind === "page") {
+    const label = input.name.trim() || "document";
+    return `Hi ${who}, ${company} sent ${label}. Open it here:\n${input.url}`;
   }
   const job = input.name.trim() ? ` — ${input.name.trim()}` : "";
   return `Hi ${who}, ${company} sent your proposal ${input.number}${job}. Review and sign here:\n${input.url}`;

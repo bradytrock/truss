@@ -1101,6 +1101,14 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         companyName={crm.company.name}
         recipients={shareContactsForEstimate(estimate, crm)}
         onDownloadPdf={downloadPdf}
+        onTexted={(sent) =>
+          crm.logOutboundText({
+            ...sent,
+            jobId: estimate.jobId,
+            opportunityId: estimate.opportunityId,
+            contactId: sent.contactId || estimate.contactId,
+          })
+        }
       />
       <CollectSignatureDialog
         open={signOpen}

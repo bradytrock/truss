@@ -292,6 +292,13 @@ export function scopeBook(
     estimateLines: state.estimateLines.filter((line) => estimateIds.has(line.estimateId)),
     invoiceLines: state.invoiceLines.filter((line) => invoiceIds.has(line.invoiceId)),
     trainingProgress: state.trainingProgress.filter((item) => staffIds.has(item.staffId)),
+    messages: state.messages.filter((message) => {
+      if (!message.jobId && !message.opportunityId && !message.contactId) return true;
+      if (message.jobId && jobIds.has(message.jobId)) return true;
+      if (message.opportunityId && opportunityIds.has(message.opportunityId)) return true;
+      if (message.contactId && contacts.some((contact) => contact.id === message.contactId)) return true;
+      return false;
+    }),
   };
 }
 

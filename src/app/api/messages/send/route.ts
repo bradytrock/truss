@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { looksLikePhone } from "@/lib/phone";
 import { isSendblueConfiguredLocally, sendblueStatus, sendblueText } from "@/lib/sendblue";
-import { requestOrigin, shareUrlAllowed } from "@/lib/share-text";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -10,6 +10,14 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Sign in to send a text." }, { status: 401 });
+  }
+
   let body: Record<string, unknown> = {};
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -19,19 +27,11 @@ export async function POST(request: Request) {
 
   const to = typeof body.to === "string" ? body.to : "";
   const content = typeof body.content === "string" ? body.content : "";
-  const url = typeof body.url === "string" ? body.url : "";
-
   if (!looksLikePhone(to)) {
     return NextResponse.json({ error: "Enter a valid mobile number." }, { status: 400 });
   }
   if (!content.trim()) {
     return NextResponse.json({ error: "Write a message before sending." }, { status: 400 });
-  }
-  if (!shareUrlAllowed(url, requestOrigin(request))) {
-    return NextResponse.json({ error: "That share link does not belong to this app." }, { status: 400 });
-  }
-  if (!content.includes(url)) {
-    return NextResponse.json({ error: "The text has to include the share link." }, { status: 400 });
   }
 
   try {
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Could not reach Sendblue." },
-      { status: 502 }
+      { status: 502 },
     );
   }
 }

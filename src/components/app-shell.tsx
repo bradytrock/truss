@@ -55,6 +55,7 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
     return [
       { href: "/", label: "Home" },
       { href: "/jobs", label: "Jobs" },
+      { href: "/messages", label: "Messages" },
       { href: "/photos", label: "Photos" },
       { href: "/contacts", label: "Agents & contacts" },
       { href: "/reports", label: "ROI" },
@@ -63,6 +64,7 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
   return [
     { href: "/", label: "Home" },
     { href: "/jobs", label: "Jobs" },
+    { href: "/messages", label: "Messages" },
     { href: "/photos", label: "Photos" },
     { href: "/estimates", label: "Estimates" },
     { href: "/invoices", label: "Invoices" },
@@ -330,6 +332,17 @@ function SearchTrigger() {
                   ) : null}
                 </CommandItem>
               ))}
+            </CommandGroup>
+            <CommandGroup heading="Messages">
+              <CommandItem
+                value="messages texts sms sendblue homeowner"
+                onSelect={() => {
+                  setOpen(false);
+                  router.push("/messages");
+                }}
+              >
+                Texts with homeowners
+              </CommandItem>
             </CommandGroup>
             <CommandGroup heading="Photos">
               <CommandItem

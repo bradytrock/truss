@@ -921,6 +921,40 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["training_bulletins"]["Insert"]>;
         Relationships: [];
       };
+      messages: {
+        Row: {
+          id: string;
+          company_id: string;
+          contact_id: string | null;
+          job_id: string | null;
+          opportunity_id: string | null;
+          direction: string;
+          phone: string;
+          body: string;
+          handle: string;
+          status: string;
+          media_url: string;
+          created_at: string;
+          created_by: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          contact_id?: string | null;
+          job_id?: string | null;
+          opportunity_id?: string | null;
+          direction?: string;
+          phone?: string;
+          body?: string;
+          handle?: string;
+          status?: string;
+          media_url?: string;
+          created_at?: string;
+          created_by?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -985,6 +1019,16 @@ export type Database = {
         Args: { p_token: string };
         Returns: string;
       };
+      ingest_inbound_text: {
+        Args: {
+          p_from: string;
+          p_body: string;
+          p_handle?: string;
+          p_media_url?: string;
+          p_sent_at?: string | null;
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       pipeline_stage:
@@ -1026,7 +1070,7 @@ export type Database = {
         | "insurance"
         | "realtor"
         | "trade_partner";
-      activity_type: "note" | "call" | "email" | "meeting" | "site_walk" | "stage_change" | "audit";
+      activity_type: "note" | "call" | "email" | "meeting" | "site_walk" | "stage_change" | "audit" | "text";
       entity_kind: "opportunity" | "job" | "client";
       seat_role:
         | "company_admin"

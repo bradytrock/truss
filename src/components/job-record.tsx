@@ -15,6 +15,7 @@ import {
   ImageIcon,
   Mail,
   MapPin,
+  MessageSquare,
   Pencil,
   Phone,
   Plus,
@@ -377,6 +378,19 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
           )}
         </p>
       </div>
+      {primary?.phone ? (
+        <div className="mb-3">
+          <Button
+            nativeButton={false}
+            variant="outline"
+            size="sm"
+            render={<Link href={`/messages?job=${job.id}&contact=${primary.id}`} />}
+          >
+            <MessageSquare data-icon="inline-start" />
+            Text homeowner
+          </Button>
+        </div>
+      ) : null}
 
       {heroOpen ? (
         <div className="relative overflow-hidden border bg-muted">
@@ -834,6 +848,12 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                         <button type="button" onClick={() => copyText(contact.phone, "Phone")} aria-label="Copy phone">
                           <Copy className="size-3.5 text-muted-foreground" />
                         </button>
+                        <Link
+                          href={`/messages?job=${job.id}&contact=${contact.id}`}
+                          className="text-xs font-medium hover:underline"
+                        >
+                          Text
+                        </Link>
                       </p>
                     ) : null}
                     {contact.email ? (
@@ -878,7 +898,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
             <div className="mt-4">
               <ActivityList
                 items={activities}
-                empty="No field notes yet. Log what the homeowner and the crew need to see."
+                empty="No field notes yet. Log a call, text, or what the crew needs to see."
               />
             </div>
           </div>

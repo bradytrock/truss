@@ -91,6 +91,7 @@ export const ACTIVITY_TYPES = [
   "site_walk",
   "stage_change",
   "audit",
+  "text",
 ] as const;
 
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
@@ -651,6 +652,21 @@ export interface TrainingBulletin {
   createdAt: string;
 }
 
+export interface TextMessage {
+  id: string;
+  contactId: string | null;
+  jobId: string | null;
+  opportunityId: string | null;
+  direction: "inbound" | "outbound";
+  phone: string;
+  body: string;
+  handle: string;
+  status: string;
+  mediaUrl: string;
+  createdAt: string;
+  createdBy: string;
+}
+
 export interface CrmState {
   staff: StaffMember[];
   teams: Team[];
@@ -676,6 +692,7 @@ export interface CrmState {
   calendarShares: CalendarShare[];
   trainingProgress: TrainingProgress[];
   trainingBulletins: TrainingBulletin[];
+  messages: TextMessage[];
 }
 
 export const STAGE_LABELS: Record<PipelineStage, string> = {
@@ -783,6 +800,7 @@ export const ACTIVITY_LABELS: Record<ActivityType, string> = {
   site_walk: "Site walk",
   stage_change: "Stage change",
   audit: "Audit",
+  text: "Text",
 };
 
 export const CATALOG_KIND_LABELS: Record<CatalogKind, string> = {

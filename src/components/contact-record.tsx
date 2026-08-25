@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Mail, Phone } from "lucide-react";
+import { Mail, MessageSquare, Phone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,6 +45,17 @@ export function ContactRecord({ contact }: { contact: Contact }) {
               <Button nativeButton={false} size="sm" variant="outline" render={<a href={`tel:${contact.phone}`} />}>
                 <Phone />
                 Call
+              </Button>
+            ) : null}
+            {contact.phone ? (
+              <Button
+                nativeButton={false}
+                size="sm"
+                variant="outline"
+                render={<Link href={`/messages?contact=${contact.id}`} />}
+              >
+                <MessageSquare />
+                Text
               </Button>
             ) : null}
           </div>

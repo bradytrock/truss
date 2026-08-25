@@ -247,6 +247,13 @@ export default function InvoiceDetailPage() {
         companyName={crm.company.name}
         recipients={shareContactsForInvoice(record, crm)}
         onDownloadPdf={downloadPdf}
+        onTexted={(sent) =>
+          crm.logOutboundText({
+            ...sent,
+            jobId: record.jobId,
+            contactId: sent.contactId,
+          })
+        }
       />
     </div>
   );

@@ -35,6 +35,7 @@ export function ShareLinkDialog({
   companyName,
   recipients = [],
   onDownloadPdf,
+  onTexted,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -47,6 +48,13 @@ export function ShareLinkDialog({
   companyName?: string;
   recipients?: ShareRecipient[];
   onDownloadPdf?: () => Promise<void> | void;
+  onTexted?: (sent: {
+    to: string;
+    content: string;
+    name: string;
+    contactId?: string;
+    handle?: string;
+  }) => void | Promise<void>;
 }) {
   const [pending, setPending] = useState<"copy" | "pdf" | "text" | null>(null);
   const [status, setStatus] = useState<SendblueStatus | null>(null);
@@ -170,13 +178,20 @@ export function ShareLinkDialog({
           body: JSON.stringify({ to: target.phone, content, url }),
         });
         const data = (await response.json().catch(() => null)) as
-          | { ok?: boolean; mocked?: boolean; error?: string }
+          | { ok?: boolean; mocked?: boolean; error?: string; handle?: string; to?: string }
           | null;
         if (!response.ok || !data?.ok) {
           toast.error(data?.error || `Could not text ${target.name}.`);
           return;
         }
         mocked = Boolean(data.mocked);
+        await onTexted?.({
+          to: data.to || target.phone,
+          content,
+          name: target.name,
+          contactId: target.id === "custom" ? undefined : target.id,
+          handle: data.handle,
+        });
       }
       if (mocked) {
         toast.message(

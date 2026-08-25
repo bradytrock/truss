@@ -27,6 +27,7 @@ export async function wipeOperations(supabase: Client, companyId: string) {
     "photo_reports",
     "schedule_events",
     "catalog_items",
+    "messages",
   ] as const;
   for (const table of tables) {
     const { error } = await supabase.from(table).delete().eq("company_id", companyId);

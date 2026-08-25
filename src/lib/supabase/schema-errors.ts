@@ -236,6 +236,23 @@ export function missingPhotoCreatedByMessage() {
   return `Saved in this browser. Run ${JOB_PHOTO_CREATED_BY_SQL} in the SQL editor so the Photos feed can show who took each shot.`;
 }
 
+export const MESSAGES_SQL = "supabase/migrations/20260825120000_messages.sql";
+
+export function isMissingMessages(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("schema cache") ||
+    message.includes("Could not find the")
+  ) && message.toLowerCase().includes("messages");
+}
+
+export function missingMessagesMessage() {
+  return `Saved in this browser. Run ${MESSAGES_SQL} in the SQL editor so texts stay on the job and in Messages.`;
+}
+
 export function missingPrimaryContactHint() {
   return `Run ${RESIDENTIAL_ENUMS_SQL} in the SQL editor so jobs can store a homeowner, then try again.`;
 }

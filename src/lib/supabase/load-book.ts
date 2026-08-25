@@ -24,6 +24,7 @@ import {
   mapTeam,
   mapTrainingBulletin,
   mapTrainingProgress,
+  mapMessage,
 } from "@/lib/supabase/mappers";
 import type { Database } from "@/lib/supabase/database.types";
 import { initialsFromName, type CrmState, type SeatRole } from "@/lib/types";
@@ -70,6 +71,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     trainingProgressRes,
     trainingBulletinsRes,
     photoReportsRes,
+    messagesRes,
   ] = await Promise.all([
     supabase.from("clients").select("*").eq("company_id", companyId).order("name"),
     supabase.from("contacts").select("*").eq("company_id", companyId).order("name"),
@@ -107,6 +109,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     supabase.from("photo_reports").select("*").eq("company_id", companyId).order("updated_at", {
       ascending: false,
     }),
+    supabase.from("messages").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
   ]);
 
   const missingTeams = Boolean(teamsRes.error);
@@ -212,6 +215,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     trainingBulletins: trainingBulletinsRes.error
       ? []
       : (trainingBulletinsRes.data ?? []).map(mapTrainingBulletin),
+    messages: messagesRes.error ? [] : (messagesRes.data ?? []).map(mapMessage),
   };
 
   return {

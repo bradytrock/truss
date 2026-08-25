@@ -31,6 +31,7 @@ import type {
   TrainingAttempt,
   TrainingBulletin,
   TrainingProgress,
+  TextMessage,
 } from "@/lib/types";
 
 type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
@@ -57,6 +58,7 @@ type CalendarAccountRow = Database["public"]["Tables"]["calendar_accounts"]["Row
 type CalendarShareRow = Database["public"]["Tables"]["calendar_shares"]["Row"];
 type TrainingProgressRow = Database["public"]["Tables"]["training_progress"]["Row"];
 type TrainingBulletinRow = Database["public"]["Tables"]["training_bulletins"]["Row"];
+type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
 
 function stringRecord(value: Json | undefined): Record<string, string> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -695,5 +697,22 @@ export function mapTrainingBulletin(row: TrainingBulletinRow): TrainingBulletin 
     body: row.body,
     author: row.author,
     createdAt: row.created_at,
+  };
+}
+
+export function mapMessage(row: MessageRow): TextMessage {
+  return {
+    id: row.id,
+    contactId: row.contact_id,
+    jobId: row.job_id,
+    opportunityId: row.opportunity_id,
+    direction: row.direction === "inbound" ? "inbound" : "outbound",
+    phone: row.phone,
+    body: row.body,
+    handle: row.handle,
+    status: row.status,
+    mediaUrl: row.media_url,
+    createdAt: row.created_at,
+    createdBy: row.created_by,
   };
 }

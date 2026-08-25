@@ -9,7 +9,7 @@ import { formatRelative } from "@/lib/format";
 import { ACTIVITY_LABELS, type Activity, type ActivityType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const types = ["note", "call", "email", "meeting", "site_walk"] as const;
+const types = ["note", "call", "email", "text", "meeting", "site_walk"] as const;
 
 export function ActivityComposer({
   entityType,
@@ -83,7 +83,9 @@ export function ActivityList({
           <span
             className={cn(
               "relative z-10 mt-1.5 size-1.5 shrink-0 rounded-full",
-              activity.type === "audit"
+              activity.type === "text"
+                ? "bg-sky-600"
+                : activity.type === "audit"
                 ? "bg-destructive/70"
                 : activity.type === "stage_change"
                   ? "bg-primary"
@@ -97,7 +99,9 @@ export function ActivityList({
                 {ACTIVITY_LABELS[activity.type]} · {formatRelative(activity.createdAt)}
               </span>
             </div>
-            <p className="mt-1 text-sm leading-relaxed text-foreground/90">{activity.body}</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
+              {activity.body}
+            </p>
           </div>
         </li>
       ))}

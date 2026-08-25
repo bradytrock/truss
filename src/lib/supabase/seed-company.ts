@@ -38,6 +38,7 @@ export async function seedCompanyBook(
     "calendar_accounts",
     "training_progress",
     "training_bulletins",
+    "messages",
   ] as const;
   for (const table of optionalDeletes) {
     const { error } = await supabase.from(table).delete().eq("company_id", companyId);

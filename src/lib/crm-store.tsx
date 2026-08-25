@@ -17,7 +17,7 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingSignatureColumn, missingSignatureMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingSignatureColumn, missingSignatureMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId } from "@/lib/job-record";
@@ -82,6 +82,7 @@ import {
   mapStaff,
   mapTask,
   mapTrainingBulletin,
+  mapMessage,
   opportunityPatch,
 } from "@/lib/supabase/mappers";
 import {
@@ -118,6 +119,7 @@ import {
   type ExpenseMethod,
   type QbSyncStatus,
   type Payment,
+  type TextMessage,
 } from "@/lib/types";
 import {
   accountForStaff,
@@ -149,6 +151,13 @@ import {
 import { formatJobSite } from "@/lib/leads";
 import { localYmd } from "@/lib/format";
 import { fillPayment, fileToDataUrl } from "@/lib/job-financials";
+import {
+  contactForPhone,
+  jobForContact,
+  opportunityForContact,
+  outboundActivityBody,
+} from "@/lib/job-messages";
+import { toE164 } from "@/lib/phone";
 import { resolveCustomerName, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage, missingPageShareMessage, isMissingPageShare, parsePageTemplate } from "@/lib/photo-report";
 import { canDeleteJobs, canLoginAs, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
@@ -178,6 +187,7 @@ const emptyState: CrmState = {
   calendarShares: [],
   trainingProgress: [],
   trainingBulletins: [],
+  messages: [],
 };
 
 function userFromStaff(
@@ -558,6 +568,23 @@ type CrmContextValue = CrmState & {
     entityId: string;
     type: ActivityType;
     body: string;
+  }) => Promise<void>;
+  sendTextMessage: (input: {
+    to: string;
+    content: string;
+    jobId?: string | null;
+    contactId?: string | null;
+    opportunityId?: string | null;
+    name?: string;
+  }) => Promise<boolean>;
+  logOutboundText: (input: {
+    to: string;
+    content: string;
+    jobId?: string | null;
+    contactId?: string | null;
+    opportunityId?: string | null;
+    name?: string;
+    handle?: string;
   }) => Promise<void>;
   toggleTask: (id: string) => Promise<void>;
   addTask: (input: {
@@ -956,6 +983,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       "training_bulletins",
       "account_invites",
       "photo_reports",
+      "messages",
     ] as const;
     let timer: number | undefined;
     const channel = supabase.channel(`truss-company-${user.companyId}`);
@@ -1158,14 +1186,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         })
         .select("*")
         .single();
-      if (error && input.type === "audit" && isInvalidEnumValue(error)) {
+      if (error && (input.type === "audit" || input.type === "text") && isInvalidEnumValue(error)) {
         const retry = await supabase
           .from("activities")
           .insert({
             company_id: user.companyId,
             entity_type: input.entityType,
             entity_id: input.entityId,
-            type: "stage_change",
+            type: input.type === "text" ? "call" : "stage_change",
             body: input.body,
             author: user.name,
           })
@@ -1184,6 +1212,128 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }));
     },
     [user.companyId, user.name]
+  );
+
+  const logOutboundText = useCallback(
+    async (input: {
+      to: string;
+      content: string;
+      jobId?: string | null;
+      contactId?: string | null;
+      opportunityId?: string | null;
+      name?: string;
+      handle?: string;
+    }) => {
+      const phone = toE164(input.to) || input.to.trim();
+      const content = input.content.trim();
+      if (!phone || !content) return;
+      const contact =
+        (input.contactId ? state.contacts.find((item) => item.id === input.contactId) : undefined) ??
+        contactForPhone(state.contacts, phone);
+      const job =
+        (input.jobId ? state.jobs.find((item) => item.id === input.jobId) : undefined) ??
+        (contact ? jobForContact(state.jobs, state.opportunities, contact.id) : undefined);
+      const opportunityId =
+        input.opportunityId ||
+        job?.opportunityId ||
+        (contact ? opportunityForContact(state.opportunities, contact.id)?.id : null) ||
+        null;
+      const who = input.name?.trim() || contact?.name || "homeowner";
+      const message: TextMessage = {
+        id: crypto.randomUUID(),
+        contactId: contact?.id ?? null,
+        jobId: job?.id ?? null,
+        opportunityId,
+        direction: "outbound",
+        phone,
+        body: content,
+        handle: input.handle?.trim() ?? "",
+        status: "sent",
+        mediaUrl: "",
+        createdAt: new Date().toISOString(),
+        createdBy: user.name,
+      };
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({ ...prev, messages: [message, ...prev.messages] }));
+      } else {
+        const { data, error } = await supabase
+          .from("messages")
+          .insert({
+            id: message.id,
+            company_id: user.companyId,
+            contact_id: message.contactId,
+            job_id: message.jobId,
+            opportunity_id: message.opportunityId,
+            direction: message.direction,
+            phone: message.phone,
+            body: message.body,
+            handle: message.handle,
+            status: message.status,
+            media_url: message.mediaUrl,
+            created_by: message.createdBy,
+          })
+          .select("*")
+          .single();
+        if (error) {
+          if (isMissingMessages(error)) toast.message(missingMessagesMessage());
+          else toast.error(error.message);
+          setState((prev) => ({ ...prev, messages: [message, ...prev.messages] }));
+        } else if (data) {
+          setState((prev) => ({ ...prev, messages: [mapMessage(data), ...prev.messages] }));
+        }
+      }
+      const activityBody = outboundActivityBody(who, phone, content);
+      if (job) {
+        await addActivity({ entityType: "job", entityId: job.id, type: "text", body: activityBody });
+      } else if (opportunityId) {
+        await addActivity({
+          entityType: "opportunity",
+          entityId: opportunityId,
+          type: "text",
+          body: activityBody,
+        });
+      }
+    },
+    [addActivity, state.contacts, state.jobs, state.opportunities, user.companyId, user.name],
+  );
+
+  const sendTextMessage = useCallback(
+    async (input: {
+      to: string;
+      content: string;
+      jobId?: string | null;
+      contactId?: string | null;
+      opportunityId?: string | null;
+      name?: string;
+    }) => {
+      const response = await fetch("/api/messages/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: input.to, content: input.content }),
+      });
+      const data = (await response.json().catch(() => null)) as
+        | { ok?: boolean; mocked?: boolean; error?: string; handle?: string; to?: string }
+        | null;
+      if (!response.ok || !data?.ok) {
+        toast.error(data?.error || "Could not send that text.");
+        return false;
+      }
+      await logOutboundText({
+        ...input,
+        to: data.to || input.to,
+        handle: data.handle,
+      });
+      if (data.mocked) {
+        toast.message(
+          "Sendblue is not connected on this host. The text is logged on the job. Add SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY, and SENDBLUE_FROM_NUMBER on Vercel, or deploy supabase/functions/send-text.",
+        );
+      } else {
+        toast.success("Text sent.");
+      }
+      return true;
+    },
+    [logOutboundText],
   );
 
   const moveOpportunity = useCallback(
@@ -5109,6 +5259,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateContact,
       addJob,
       addActivity,
+      sendTextMessage,
+      logOutboundText,
       toggleTask,
       addTask,
       addEstimate,
@@ -5206,6 +5358,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateContact,
       addJob,
       addActivity,
+      sendTextMessage,
+      logOutboundText,
       toggleTask,
       addTask,
       addEstimate,
