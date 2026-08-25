@@ -164,8 +164,20 @@ export function invoiceLinesFromEstimate(
   return out;
 }
 
-export const DEFAULT_ESTIMATE_TERMS =
-  "This proposal is good through the valid-until date. Sending it signs for the contractor. Work starts after you sign and pay any deposit. Changes on site will be written as a change order before we proceed.";
+export const DEFAULT_ESTIMATE_TERMS = `1. Contract price
+The contract price for the work in this proposal is {{contract_price}}. A deposit of {{deposit}} is due when you sign. The remaining balance of {{remaining}} is due as invoiced.
+
+2. Scope of work
+This proposal covers the included items listed above for {{job_site}}. Optional items are not in the contract price unless you select them before you sign.
+
+3. Schedule
+This proposal is good through {{valid_until}}. Sending it signs for the contractor. Work starts after you sign and pay any deposit.
+
+4. Changes
+Changes on site will be written as a change order with a price before we proceed.
+
+5. Contractor
+{{company}} is the contractor named on this proposal ({{estimate_number}}), prepared for {{customer}}.`;
 
 export const COMMON_UNITS = ["LS", "ea", "sq", "sf", "lf", "cy", "hr", "day", "mo"];
 

@@ -5,6 +5,7 @@ import { InvoiceStatusBadge } from "@/components/status-badge";
 import { useCrmOptional } from "@/lib/crm-store";
 import { letterheadCompanyForRecord } from "@/lib/document-owner";
 import type { CompanySettings, Invoice, InvoiceLine, InvoiceStatus, Payment } from "@/lib/types";
+import { filledInvoiceTerms } from "@/lib/document-terms";
 import { formatDate, formatMoney } from "@/lib/format";
 import { invoiceBalance, invoiceTotal, lineAmount, paidOnInvoice } from "@/lib/money";
 
@@ -98,7 +99,16 @@ export function InvoiceDocument({
       {invoice.terms ? (
         <div>
           <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">{invoice.terms}</p>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">
+            {filledInvoiceTerms({
+              template: invoice.terms,
+              invoice,
+              lines,
+              payments,
+              customer,
+              company: letterhead,
+            })}
+          </p>
         </div>
       ) : null}
     </div>

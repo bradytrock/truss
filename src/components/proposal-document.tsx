@@ -17,6 +17,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
 import type { CompanySettings, Estimate, EstimateLine, JobMarket } from "@/lib/types";
+import { filledEstimateTerms } from "@/lib/document-terms";
 import { cn } from "@/lib/utils";
 
 export function EstimateTotals({
@@ -196,7 +197,13 @@ export function ProposalDocument({
         <div>
           <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>
           <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">
-            {estimate.terms}
+            {filledEstimateTerms({
+              template: estimate.terms,
+              estimate: billed,
+              lines,
+              customer,
+              company: letterhead,
+            })}
           </p>
         </div>
       ) : null}

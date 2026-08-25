@@ -21,6 +21,8 @@ import { letterheadCompanyForRecord } from "@/lib/document-owner";
 import { formatCurrencyFull, formatDate, formatMoney } from "@/lib/format";
 import { shareUrl } from "@/lib/share";
 import type { Invoice } from "@/lib/types";
+import { filledInvoiceTerms, INVOICE_TERMS_HINT } from "@/lib/document-terms";
+import { canEditDocumentTerms } from "@/lib/visibility";
 import {
   derivedInvoiceStatus,
   invoiceBalance,
@@ -72,6 +74,16 @@ export default function InvoiceDetailPage() {
     staff: crm.staff,
     fallbackStaffId: crm.user.staffId,
     inBook: true,
+  });
+  const canEditTerms =
+    canEditDocumentTerms(crm.viewer?.role ?? crm.user.role, crm.viewer) && status !== "void";
+  const termsText = filledInvoiceTerms({
+    template: record.terms,
+    invoice: record,
+    lines,
+    payments,
+    customer,
+    company: letterhead,
   });
 
   function downloadPdf() {
@@ -240,16 +252,26 @@ export default function InvoiceDetailPage() {
               <CardTitle>Terms</CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
-              <CommitTextarea
-                rows={6}
-                disabled={status === "void"}
-                value={record.terms}
-                placeholder="Payment terms printed on this invoice and the client share link."
-                onCommit={(value) => void crm.updateInvoice(record.id, { terms: value })}
-              />
-              <p className="mt-2 text-xs text-muted-foreground">
-                Copied from company defaults when this invoice was created. Editing here only changes this invoice.
-              </p>
+              {canEditTerms ? (
+                <>
+                  <CommitTextarea
+                    rows={8}
+                    value={record.terms}
+                    placeholder="Payment terms printed on this invoice and the client share link."
+                    onCommit={(value) => void crm.updateInvoice(record.id, { terms: value })}
+                  />
+                  <p className="mt-2 text-xs text-muted-foreground">{INVOICE_TERMS_HINT}</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                    {termsText || "No terms on this invoice."}
+                  </p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Only a company admin can change terms. Totals, dates, and names fill from this invoice.
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>

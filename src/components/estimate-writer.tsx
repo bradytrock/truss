@@ -80,6 +80,8 @@ import { formatMoney } from "@/lib/format";
 import { billingEstimate, isResidentialMarket, workMarket } from "@/lib/market";
 import { formatJobSite } from "@/lib/leads";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine } from "@/lib/types";
+import { filledEstimateTerms, ESTIMATE_TERMS_HINT } from "@/lib/document-terms";
+import { canEditDocumentTerms } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
 
 export function CommitInput({
@@ -429,6 +431,15 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     fallbackStaffId: crm.user.staffId,
     inBook: true,
   });
+  const termsText = filledEstimateTerms({
+    template: estimate.terms,
+    estimate: billed,
+    lines,
+    customer,
+    company: letterhead,
+  });
+  const canEditTerms =
+    canEditDocumentTerms(crm.viewer?.role ?? crm.user.role, crm.viewer) && editable;
 
   function patchSite(
     patch: Partial<Pick<Estimate, "street" | "city" | "state" | "postalCode">>,
@@ -980,12 +991,25 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           <CardTitle>Terms</CardTitle>
         </CardHeader>
         <CardContent>
-          <CommitTextarea
-            rows={4}
-            disabled={!editable}
-            value={estimate.terms}
-            onCommit={(value) => void crm.updateEstimate(estimate.id, { terms: value })}
-          />
+          {canEditTerms ? (
+            <>
+              <CommitTextarea
+                rows={8}
+                value={estimate.terms}
+                onCommit={(value) => void crm.updateEstimate(estimate.id, { terms: value })}
+              />
+              <p className="mt-2 text-xs text-muted-foreground">{ESTIMATE_TERMS_HINT}</p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                {termsText || "No terms on this proposal."}
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Only a company admin can change terms. Contract price, deposit, dates, and the rest fill from this proposal as you write it.
+              </p>
+            </>
+          )}
         </CardContent>
       </Card>
 

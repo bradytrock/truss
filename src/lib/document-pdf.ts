@@ -6,6 +6,7 @@ import { writePdfLetterhead, loadLogoForPdf } from "@/lib/letterhead-pdf";
 import { invoiceBalance, invoiceTotal, lineAmount as invoiceLineAmount, paidOnInvoice } from "@/lib/money";
 import { downloadBlob } from "@/lib/share";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
+import { filledEstimateTerms, filledInvoiceTerms } from "@/lib/document-terms";
 
 type Doc = {
   setFont: (face: string, style?: string) => void;
@@ -186,7 +187,17 @@ export async function downloadEstimatePdf(input: {
     doc.setTextColor(90, 90, 90);
     doc.text("TERMS", 54, y);
     y += 14;
-    y = writeParagraph(doc, input.estimate.terms, y);
+    y = writeParagraph(
+      doc,
+      filledEstimateTerms({
+        template: input.estimate.terms,
+        estimate: input.estimate,
+        lines: input.lines,
+        customer: input.customer,
+        company: input.company,
+      }),
+      y,
+    );
   }
 
   y += 10;
@@ -324,7 +335,18 @@ export async function downloadInvoicePdf(input: {
     doc.setTextColor(90, 90, 90);
     doc.text("TERMS", 54, y);
     y += 14;
-    y = writeParagraph(doc, input.invoice.terms, y);
+    y = writeParagraph(
+      doc,
+      filledInvoiceTerms({
+        template: input.invoice.terms,
+        invoice: input.invoice,
+        lines: input.lines,
+        payments: input.payments,
+        customer: input.customer,
+        company: input.company,
+      }),
+      y,
+    );
   }
 
   downloadBlob(doc.output("blob"), `${input.invoice.number}.pdf`);

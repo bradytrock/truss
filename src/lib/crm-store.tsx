@@ -159,7 +159,7 @@ import {
 import { toE164 } from "@/lib/phone";
 import { resolveCustomerName, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage, missingPageShareMessage, isMissingPageShare, parsePageTemplate } from "@/lib/photo-report";
-import { canDeleteJobs, canLoginAs, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
+import { canDeleteJobs, canEditDocumentTerms, canLoginAs, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 
 const emptyState: CrmState = {
   staff: [],
@@ -265,6 +265,19 @@ function requireClient() {
 function maybeClient() {
   if (!isSupabaseConfigured()) return null;
   return createClient();
+}
+
+function withoutUnauthorizedTerms<T extends object>(
+  patch: T,
+  viewer: StaffMember | undefined,
+  role: SeatRole,
+): T | null {
+  if (!("terms" in patch) || (patch as { terms?: unknown }).terms === undefined) return patch;
+  if (canEditDocumentTerms(viewer?.role ?? role, viewer)) return patch;
+  toast.error("Only a company admin can change terms.");
+  const next = { ...patch };
+  delete (next as { terms?: unknown }).terms;
+  return Object.keys(next).length > 0 ? next : null;
 }
 
 type InvoiceInsert = Database["public"]["Tables"]["invoices"]["Insert"];
@@ -2580,6 +2593,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const updateEstimate = useCallback(async (id: string, patch: Partial<Estimate>) => {
+    const allowed = withoutUnauthorizedTerms(patch, viewer, user.role);
+    if (!allowed) return;
+    patch = allowed;
     const apply = () =>
       setState((prev) => ({
         ...prev,
@@ -2608,7 +2624,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return;
     }
     apply();
-  }, []);
+  }, [user.role, viewer]);
 
   const sendEstimate = useCallback(
     async (id: string) => {
@@ -3085,6 +3101,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const updateEstimateTemplate = useCallback(async (id: string, patch: Partial<EstimateTemplate>) => {
+    const allowed = withoutUnauthorizedTerms(patch, viewer, user.role);
+    if (!allowed) return;
+    patch = allowed;
     const updatedAt = new Date().toISOString();
     const next = { ...patch, updatedAt };
     const apply = () =>
@@ -3110,7 +3129,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return;
     }
     apply();
-  }, []);
+  }, [user.role, viewer]);
 
   const removeEstimateTemplate = useCallback(async (id: string) => {
     const apply = () =>
@@ -3773,6 +3792,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const updateInvoice = useCallback(async (id: string, patch: Partial<Invoice>) => {
+    const allowed = withoutUnauthorizedTerms(patch, viewer, user.role);
+    if (!allowed) return;
+    patch = allowed;
     const apply = () =>
       setState((prev) => ({
         ...prev,
@@ -3794,7 +3816,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return;
     }
     apply();
-  }, []);
+  }, [user.role, viewer]);
 
   const sendInvoice = useCallback(async (id: string) => {
     const current = state.invoices.find((invoice) => invoice.id === id);

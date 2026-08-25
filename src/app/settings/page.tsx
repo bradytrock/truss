@@ -11,7 +11,7 @@ import { ErrorBanner, LoadingScreen, PageHeader, EmptyState } from "@/components
 import { PeopleSettings } from "@/components/people-settings";
 import { useCrm } from "@/lib/crm-store";
 import { LOGO_ACCEPT } from "@/lib/company-logo";
-import { DEFAULT_ESTIMATE_TERMS, DEFAULT_INVOICE_TERMS } from "@/lib/document-terms";
+import { DEFAULT_ESTIMATE_TERMS, DEFAULT_INVOICE_TERMS, ESTIMATE_TERMS_HINT, INVOICE_TERMS_HINT } from "@/lib/document-terms";
 import type { CompanySettings } from "@/lib/types";
 import { canManageSettings } from "@/lib/visibility";
 
@@ -212,8 +212,7 @@ export default function SettingsPage() {
           <CardHeader className="border-b">
             <CardTitle>Document terms</CardTitle>
             <CardDescription>
-              Copied onto new estimates and invoices so the same language is used across the company.
-              Changing these defaults does not rewrite documents already written.
+              Company admins write the language once. New estimates and invoices copy it, and placeholders fill with contract price, deposit, dates, and the rest as the document is written. Changing these defaults does not rewrite documents already written.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-4 pt-4">
@@ -221,24 +220,24 @@ export default function SettingsPage() {
               <Label htmlFor="default-estimate-terms">Estimate terms</Label>
               <Textarea
                 id="default-estimate-terms"
-                rows={5}
+                rows={10}
                 value={form.defaultEstimateTerms ?? DEFAULT_ESTIMATE_TERMS}
                 onChange={(event) => patch("defaultEstimateTerms", event.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Used on new proposals and blank templates. A template with its own terms still wins when you start from it.
+                Used on new proposals and blank templates. A template with its own terms still wins when you start from it. {ESTIMATE_TERMS_HINT}
               </p>
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="default-invoice-terms">Invoice terms</Label>
               <Textarea
                 id="default-invoice-terms"
-                rows={5}
+                rows={8}
                 value={form.defaultInvoiceTerms ?? DEFAULT_INVOICE_TERMS}
                 onChange={(event) => patch("defaultInvoiceTerms", event.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Used on new invoices, including invoices converted from estimates. Payment terms, not proposal terms.
+                Used on new invoices, including invoices converted from estimates. Payment terms, not proposal terms. {INVOICE_TERMS_HINT}
               </p>
             </div>
           </CardContent>
