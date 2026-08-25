@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { parseEstimateSignature } from "@/lib/estimate-signature";
+import { normalizeShareToken } from "@/lib/share";
+import { shareNotFoundJson } from "@/lib/share-server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import {
   isMissingSignatureColumn,
@@ -13,33 +15,33 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function GET(_request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
-  const trimmed = token?.trim() ?? "";
+  const trimmed = normalizeShareToken(token);
   if (trimmed.length < 6) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return shareNotFoundJson(trimmed);
   }
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return shareNotFoundJson(trimmed);
   }
   try {
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("shared_estimate", { p_token: trimmed });
     if (error || data == null) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return shareNotFoundJson(trimmed);
     }
     return NextResponse.json(data);
   } catch {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return shareNotFoundJson(trimmed);
   }
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
-  const trimmed = token?.trim() ?? "";
+  const trimmed = normalizeShareToken(token);
   if (trimmed.length < 6) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return shareNotFoundJson(trimmed);
   }
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return shareNotFoundJson(trimmed);
   }
   const body = (await request.json().catch(() => null)) as
     | { lineId?: string; selected?: boolean }
@@ -62,22 +64,22 @@ export async function PATCH(request: Request, context: { params: Promise<{ token
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     if (data == null) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return shareNotFoundJson(trimmed);
     }
     return NextResponse.json(data);
   } catch {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return shareNotFoundJson(trimmed);
   }
 }
 
 export async function POST(request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
-  const trimmed = token?.trim() ?? "";
+  const trimmed = normalizeShareToken(token);
   if (trimmed.length < 6) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return shareNotFoundJson(trimmed);
   }
   if (!isSupabaseConfigured()) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return shareNotFoundJson(trimmed);
   }
   const body = (await request.json().catch(() => null)) as
     | { signerName?: string; name?: string; signature?: string; image?: string }
@@ -109,10 +111,10 @@ export async function POST(request: Request, context: { params: Promise<{ token:
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
     if (data == null) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return shareNotFoundJson(trimmed);
     }
     return NextResponse.json(data);
   } catch {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return shareNotFoundJson(trimmed);
   }
 }

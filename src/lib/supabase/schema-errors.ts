@@ -235,6 +235,7 @@ export function ambiguousSignJobIdMessage() {
 }
 
 export const ESTIMATE_SIGNER_LINKS_SQL = "supabase/migrations/20260825180000_estimate_signer_links.sql";
+export const SHARE_LINK_SENDER_SQL = "supabase/migrations/20260825190000_share_link_sender.sql";
 
 export function isMissingSignerLinks(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;

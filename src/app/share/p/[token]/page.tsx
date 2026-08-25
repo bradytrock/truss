@@ -1,14 +1,15 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { toast } from "sonner";
 import { PhotoReportPagePreview } from "@/components/photo-report-preview";
 import { ShareFrame, ShareLoading, ShareMissing, SharePdfButton } from "@/components/share-frame";
 import { useCrm } from "@/lib/crm-store";
 import { letterheadCompanyForRecord } from "@/lib/document-owner";
 import { downloadPhotoReportPdf } from "@/lib/photo-report-pdf";
-import { companySettingsFromShared, parseSharedPage, type SharedPagePayload } from "@/lib/share";
+import { companySettingsFromShared, normalizeShareToken, parseSharedPage, type SharedPagePayload } from "@/lib/share";
+import { useRemoteShare } from "@/lib/use-remote-share";
 import type { Contact, StaffMember } from "@/lib/types";
 
 function contactsFromShared(payload: SharedPagePayload): Contact[] {
@@ -42,52 +43,20 @@ function staffFromShared(payload: SharedPagePayload): StaffMember[] {
 }
 
 export default function SharedPageDocument() {
-  const { token } = useParams<{ token: string }>();
+  const params = useParams<{ token: string }>();
+  const token = normalizeShareToken(params.token);
   const crm = useCrm();
-  const [remote, setRemote] = useState<SharedPagePayload | null>(null);
-  const [remoteState, setRemoteState] = useState<"idle" | "loading" | "missing">("idle");
 
   const fromStore = useMemo(
     () => crm.photoReports.find((report) => report.shareToken === token),
     [crm.photoReports, token],
   );
-
-  useEffect(() => {
-    if (!crm.hydrated) return;
-    if (fromStore) {
-      setRemote(null);
-      setRemoteState("idle");
-      return;
-    }
-    let cancelled = false;
-    setRemoteState("loading");
-    void fetch(`/api/share/page/${encodeURIComponent(token)}`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: unknown) => {
-        if (cancelled) return;
-        const parsed = parseSharedPage(data);
-        if (!parsed) {
-          setRemote(null);
-          setRemoteState("missing");
-          return;
-        }
-        setRemote(parsed);
-        setRemoteState("idle");
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setRemote(null);
-          setRemoteState("missing");
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [crm.hydrated, fromStore, token]);
-
-  if (!crm.hydrated || (remoteState === "loading" && !fromStore && !remote)) {
-    return <ShareLoading />;
-  }
+  const { remote, remoteState, sender } = useRemoteShare({
+    token,
+    hasLocal: Boolean(fromStore),
+    path: "/api/share/page/",
+    parse: parseSharedPage,
+  });
 
   if (fromStore) {
     const job = crm.jobs.find((item) => item.id === fromStore.jobId);
@@ -142,8 +111,12 @@ export default function SharedPageDocument() {
     );
   }
 
+  if (remoteState !== "missing" && !remote) {
+    return <ShareLoading />;
+  }
+
   if (!remote || remoteState === "missing") {
-    return <ShareMissing kind="page" />;
+    return <ShareMissing kind="page" sender={sender} />;
   }
 
   const company = companySettingsFromShared(remote.company);

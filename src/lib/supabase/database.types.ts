@@ -1043,6 +1043,10 @@ export type Database = {
         Args: { p_token: string };
         Returns: Json;
       };
+      shared_link_sender: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
       sign_shared_estimate: {
         Args: { p_token: string; p_signer_name: string; p_signature: string };
         Returns: Json;

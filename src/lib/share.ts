@@ -9,6 +9,55 @@ export function newShareToken() {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+/** Strip SMS/iMessage wrapping so a pasted or tapped share URL still matches. */
+export function normalizeShareToken(raw: string | string[] | undefined | null) {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value) return "";
+  let decoded = value;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    decoded = value;
+  }
+  return decoded
+    .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, "")
+    .replace(/[<>"'“”‘’]/g, "")
+    .trim()
+    .replace(/^[(\[]+/, "")
+    .replace(/[.,;:!?)\]]+$/g, "")
+    .trim();
+}
+
+export type ShareSender = {
+  company: {
+    name: string;
+    phone: string;
+    email: string;
+    website: string;
+  };
+  projectManager: ProjectManagerContact | null;
+};
+
+export function parseShareSender(raw: unknown): ShareSender | null {
+  if (!isRecord(raw)) return null;
+  const companyRaw = isRecord(raw.company) ? raw.company : raw;
+  const name = asString(companyRaw.name).trim();
+  const phone = asString(companyRaw.phone).trim();
+  const email = asString(companyRaw.email).trim();
+  const website = asString(companyRaw.website).trim();
+  const projectManager = parseProjectManager(raw.projectManager);
+  if (!name && !phone && !email && !website && !projectManager) return null;
+  return {
+    company: {
+      name: name || "Your contractor",
+      phone,
+      email,
+      website,
+    },
+    projectManager,
+  };
+}
+
 export function seedShareToken(kind: "e" | "i", number: string) {
   const digits = number.replace(/\D/g, "");
   return digits ? `nl-${kind}-${digits}` : newShareToken();
@@ -229,10 +278,11 @@ const ESTIMATE_STATUSES = new Set(["draft", "sent", "viewed", "accepted", "decli
 const INVOICE_STATUSES = new Set(["draft", "sent", "partial", "paid", "overdue", "void"]);
 
 export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null {
-  if (!isRecord(raw) || !isRecord(raw.estimate) || !Array.isArray(raw.lines)) return null;
+  if (!isRecord(raw) || !isRecord(raw.estimate)) return null;
   const estimate = raw.estimate;
   const status = asString(estimate.status, "sent");
   if (!asString(estimate.id) || !asString(estimate.number)) return null;
+  const linesRaw = Array.isArray(raw.lines) ? raw.lines : [];
   const viewerRaw = asString(raw.viewerSigner).toLowerCase();
   return {
     customer: asString(raw.customer, "Homeowner"),
@@ -277,7 +327,7 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
       secondSignatureName: asString(estimate.secondSignatureName),
       secondSignatureImage: asString(estimate.secondSignatureImage),
     },
-    lines: raw.lines.filter(isRecord).map((line, index) => ({
+    lines: linesRaw.filter(isRecord).map((line, index) => ({
       id: asString(line.id, `line-${index}`),
       estimateId: asString(line.estimateId, asString(estimate.id)),
       catalogItemId: asNullable(line.catalogItemId),
@@ -297,10 +347,11 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
 }
 
 export function parseSharedInvoice(raw: unknown): SharedInvoicePayload | null {
-  if (!isRecord(raw) || !isRecord(raw.invoice) || !Array.isArray(raw.lines)) return null;
+  if (!isRecord(raw) || !isRecord(raw.invoice)) return null;
   const invoice = raw.invoice;
   const status = asString(invoice.status, "sent");
   if (!asString(invoice.id) || !asString(invoice.number)) return null;
+  const linesRaw = Array.isArray(raw.lines) ? raw.lines : [];
   const payments = Array.isArray(raw.payments) ? raw.payments.filter(isRecord) : [];
   return {
     customer: asString(raw.customer, "Homeowner"),
@@ -320,7 +371,7 @@ export function parseSharedInvoice(raw: unknown): SharedInvoicePayload | null {
       shareToken: asString(invoice.shareToken),
       qbStatus: "not_in_qb",
     },
-    lines: raw.lines.filter(isRecord).map((line, index) => ({
+    lines: linesRaw.filter(isRecord).map((line, index) => ({
       id: asString(line.id, `line-${index}`),
       invoiceId: asString(line.invoiceId, asString(invoice.id)),
       description: asString(line.description),

@@ -17,13 +17,9 @@ import {
   type HomeownerSigner,
 } from "@/lib/estimate-signers";
 import { billingEstimate, workMarket } from "@/lib/market";
-import { parseSharedEstimate, type SharedEstimatePayload } from "@/lib/share";
+import { normalizeShareToken, parseSharedEstimate } from "@/lib/share";
+import { useRemoteShare } from "@/lib/use-remote-share";
 import type { EstimateLine } from "@/lib/types";
-
-function paramToken(value: string | string[] | undefined) {
-  const raw = Array.isArray(value) ? value[0] : value;
-  return raw?.trim() ?? "";
-}
 
 function payloadError(data: unknown, fallback: string) {
   if (data && typeof data === "object" && "error" in data && typeof data.error === "string") {
@@ -34,10 +30,8 @@ function payloadError(data: unknown, fallback: string) {
 
 export default function SharedEstimatePage() {
   const params = useParams<{ token: string }>();
-  const token = paramToken(params.token);
+  const token = normalizeShareToken(params.token);
   const crm = useCrm();
-  const [remote, setRemote] = useState<SharedEstimatePayload | null>(null);
-  const [remoteState, setRemoteState] = useState<"idle" | "loading" | "missing">("idle");
   const [signing, setSigning] = useState(false);
   const [signOpen, setSignOpen] = useState(false);
 
@@ -53,40 +47,16 @@ export default function SharedEstimatePage() {
   const storeSigner: HomeownerSigner = fromStore
     ? signerRoleForToken(fromStore, token) ?? "primary"
     : "primary";
+  const { remote, remoteState, sender, setRemote } = useRemoteShare({
+    token,
+    hasLocal: Boolean(fromStore),
+    path: "/api/share/estimate/",
+    parse: parseSharedEstimate,
+  });
 
   useEffect(() => {
-    if (!crm.hydrated) return;
-    if (fromStore) {
-      if (fromStore.status === "sent") void crm.markEstimateViewed(fromStore.id);
-      setRemote(null);
-      setRemoteState("idle");
-      return;
-    }
-    let cancelled = false;
-    setRemoteState("loading");
-    void fetch(`/api/share/estimate/${encodeURIComponent(token)}`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: unknown) => {
-        if (cancelled) return;
-        const parsed = parseSharedEstimate(data);
-        if (!parsed) {
-          setRemote(null);
-          setRemoteState("missing");
-          return;
-        }
-        setRemote(parsed);
-        setRemoteState("idle");
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setRemote(null);
-          setRemoteState("missing");
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [crm.hydrated, crm.markEstimateViewed, fromStore, token]);
+    if (fromStore?.status === "sent") void crm.markEstimateViewed(fromStore.id);
+  }, [crm.markEstimateViewed, fromStore]);
 
   async function signFromStore(input: { name: string; image: string }) {
     if (!fromStore) return;
@@ -140,10 +110,6 @@ export default function SharedEstimatePage() {
       return;
     }
     setRemote(parsed);
-  }
-
-  if (!crm.hydrated || (remoteState === "loading" && !fromStore && !remote)) {
-    return <ShareLoading />;
   }
 
   if (fromStore) {
@@ -234,8 +200,12 @@ export default function SharedEstimatePage() {
     );
   }
 
+  if (remoteState !== "missing" && !remote) {
+    return <ShareLoading />;
+  }
+
   if (!remote || remoteState === "missing") {
-    return <ShareMissing kind="estimate" />;
+    return <ShareMissing kind="estimate" sender={sender} />;
   }
 
   const estimate = fillEstimate(remote.estimate);
