@@ -10,13 +10,31 @@ import { ShareFrame, ShareLoading, ShareMissing, SharePdfButton } from "@/compon
 import { downloadEstimatePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
-import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { fillEstimate, linesForEstimate } from "@/lib/estimate-totals";
+import {
+  homeownerHasSigned,
+  signerRoleForToken,
+  type HomeownerSigner,
+} from "@/lib/estimate-signers";
 import { billingEstimate, workMarket } from "@/lib/market";
 import { parseSharedEstimate, type SharedEstimatePayload } from "@/lib/share";
+import type { EstimateLine } from "@/lib/types";
+
+function paramToken(value: string | string[] | undefined) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  return raw?.trim() ?? "";
+}
+
+function payloadError(data: unknown, fallback: string) {
+  if (data && typeof data === "object" && "error" in data && typeof data.error === "string") {
+    return data.error;
+  }
+  return fallback;
+}
 
 export default function SharedEstimatePage() {
-  const { token } = useParams<{ token: string }>();
+  const params = useParams<{ token: string }>();
+  const token = paramToken(params.token);
   const crm = useCrm();
   const [remote, setRemote] = useState<SharedEstimatePayload | null>(null);
   const [remoteState, setRemoteState] = useState<"idle" | "loading" | "missing">("idle");
@@ -24,9 +42,17 @@ export default function SharedEstimatePage() {
   const [signOpen, setSignOpen] = useState(false);
 
   const fromStore = useMemo(
-    () => crm.estimates.find((estimate) => estimate.shareToken === token),
-    [crm.estimates, token]
+    () =>
+      crm.estimates.find(
+        (estimate) =>
+          estimate.shareToken === token ||
+          (Boolean(estimate.secondShareToken) && estimate.secondShareToken === token),
+      ),
+    [crm.estimates, token],
   );
+  const storeSigner: HomeownerSigner = fromStore
+    ? signerRoleForToken(fromStore, token) ?? "primary"
+    : "primary";
 
   useEffect(() => {
     if (!crm.hydrated) return;
@@ -66,7 +92,7 @@ export default function SharedEstimatePage() {
     if (!fromStore) return;
     setSigning(true);
     try {
-      await crm.acceptEstimate(fromStore.id, input);
+      await crm.acceptEstimate(fromStore.id, input, storeSigner);
       setSignOpen(false);
       toast.success("Thank you. This proposal is signed.");
     } finally {
@@ -85,11 +111,12 @@ export default function SharedEstimatePage() {
       const data: unknown = response.ok ? await response.json() : await response.json().catch(() => null);
       const parsed = parseSharedEstimate(data);
       if (!parsed) {
-        const message =
-          data && typeof data === "object" && "error" in data && typeof data.error === "string"
-            ? data.error
-            : "Could not sign this proposal. Ask the contractor to collect a signature in Truss.";
-        toast.error(message);
+        toast.error(
+          payloadError(
+            data,
+            "Could not sign this proposal. Ask the contractor to collect a signature in Truss.",
+          ),
+        );
         return;
       }
       setRemote(parsed);
@@ -98,6 +125,21 @@ export default function SharedEstimatePage() {
     } finally {
       setSigning(false);
     }
+  }
+
+  async function toggleRemoteOptional(line: EstimateLine, selected: boolean) {
+    const response = await fetch(`/api/share/estimate/${encodeURIComponent(token)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lineId: line.id, selected }),
+    });
+    const data: unknown = response.ok ? await response.json() : await response.json().catch(() => null);
+    const parsed = parseSharedEstimate(data);
+    if (!parsed) {
+      toast.error(payloadError(data, "Could not update that optional item."));
+      return;
+    }
+    setRemote(parsed);
   }
 
   if (!crm.hydrated || (remoteState === "loading" && !fromStore && !remote)) {
@@ -128,11 +170,12 @@ export default function SharedEstimatePage() {
     });
     const optionalOpen =
       fromStore.status === "draft" || fromStore.status === "sent" || fromStore.status === "viewed";
-    const canSign =
-      fromStore.status === "draft" ||
-      fromStore.status === "sent" ||
-      fromStore.status === "viewed" ||
-      (fromStore.status === "accepted" && !hasEstimateSignature(fromStore));
+    const viewerSigned = homeownerHasSigned(fromStore, storeSigner);
+    const canSign = fromStore.status !== "declined" && !viewerSigned;
+    const primaryName = crm.getContact(fromStore.contactId)?.name || customer;
+    const secondName = fromStore.secondContactId
+      ? crm.getContact(fromStore.secondContactId)?.name
+      : null;
     return (
       <ShareFrame
         actions={
@@ -157,11 +200,11 @@ export default function SharedEstimatePage() {
           </>
         }
       >
-        {fromStore.status === "accepted" ? (
+        {viewerSigned ? (
           <p className="rounded-md border bg-card px-4 py-3 text-sm">
-            {hasEstimateSignature(fromStore)
+            {fromStore.status === "accepted"
               ? `This proposal is signed. ${fromStore.signatureName || customer} accepted ${fromStore.number}.`
-              : `This proposal is accepted. Collect a signature so it prints on the PDF.`}
+              : "Your signature is on this proposal. Waiting on the other homeowner."}
           </p>
         ) : null}
         <ProposalDocument
@@ -171,12 +214,18 @@ export default function SharedEstimatePage() {
           customer={customer}
           selectable={optionalOpen}
           showStatus={false}
+          primaryCustomer={primaryName}
+          secondCustomer={secondName}
           onToggleOptional={(line, selected) => void crm.updateEstimateLine(line.id, { selected })}
         />
         <CollectSignatureDialog
           open={signOpen}
           onOpenChange={setSignOpen}
-          defaultName={fromStore.signatureName || (customer === "—" ? "" : customer)}
+          defaultName={
+            storeSigner === "second"
+              ? secondName || ""
+              : fromStore.signatureName || (primaryName === "—" ? "" : primaryName)
+          }
           estimateNumber={fromStore.number}
           pending={signing}
           onSubmit={signFromStore}
@@ -190,11 +239,15 @@ export default function SharedEstimatePage() {
   }
 
   const estimate = fillEstimate(remote.estimate);
-  const canSignRemote =
-    estimate.status === "draft" ||
-    estimate.status === "sent" ||
-    estimate.status === "viewed" ||
-    (estimate.status === "accepted" && !hasEstimateSignature(estimate));
+  const viewer = remote.viewerSigner ?? "primary";
+  const viewerSigned = homeownerHasSigned(estimate, viewer);
+  const optionalOpen =
+    estimate.status === "draft" || estimate.status === "sent" || estimate.status === "viewed";
+  const canSignRemote = estimate.status !== "declined" && !viewerSigned;
+  const signerName =
+    viewer === "second"
+      ? remote.secondCustomer || estimate.secondSignatureName
+      : remote.primaryCustomer || remote.estimate.signatureName || remote.customer;
 
   return (
     <ShareFrame
@@ -220,11 +273,11 @@ export default function SharedEstimatePage() {
         </>
       }
     >
-      {estimate.status === "accepted" ? (
+      {viewerSigned ? (
         <p className="rounded-md border bg-card px-4 py-3 text-sm">
-          {hasEstimateSignature(estimate)
+          {estimate.status === "accepted"
             ? "This proposal is signed. Thank you."
-            : "This proposal is accepted. Sign below so your signature prints on the PDF."}
+            : "Your signature is on this proposal. Waiting on the other homeowner."}
         </p>
       ) : null}
       <ProposalDocument
@@ -234,12 +287,16 @@ export default function SharedEstimatePage() {
         customer={remote.customer}
         market={remote.market}
         showStatus={false}
+        selectable={optionalOpen}
         projectManager={remote.projectManager}
+        primaryCustomer={remote.primaryCustomer}
+        secondCustomer={remote.secondCustomer}
+        onToggleOptional={(line, selected) => void toggleRemoteOptional(line, selected)}
       />
       <CollectSignatureDialog
         open={signOpen}
         onOpenChange={setSignOpen}
-        defaultName={remote.estimate.signatureName || remote.customer}
+        defaultName={signerName || remote.customer}
         estimateNumber={remote.estimate.number}
         pending={signing}
         onSubmit={signRemote}

@@ -1047,6 +1047,10 @@ export type Database = {
         Args: { p_token: string; p_signer_name: string; p_signature: string };
         Returns: Json;
       };
+      select_shared_estimate_line: {
+        Args: { p_token: string; p_line_id: string; p_selected: boolean };
+        Returns: Json;
+      };
       invite_preview: {
         Args: { p_token: string };
         Returns: {

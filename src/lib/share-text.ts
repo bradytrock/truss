@@ -42,7 +42,7 @@ export function shareUrlAllowed(url: string, origin: string) {
       }
     }
     if (!allowed.has(parsed.origin)) return false;
-    return /^\/share\/[ei]\/[A-Za-z0-9_-]+\/?$/.test(parsed.pathname);
+    return /^\/share\/[eip]\/[A-Za-z0-9_-]+\/?$/.test(parsed.pathname);
   } catch {
     return false;
   }

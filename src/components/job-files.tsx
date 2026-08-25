@@ -69,6 +69,7 @@ export function JobFilesPanel({
           ref={inputRef}
           type="file"
           multiple
+          accept="image/*,application/pdf,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
           className="sr-only"
           tabIndex={-1}
           onChange={(event) => void attach(event.target.files)}

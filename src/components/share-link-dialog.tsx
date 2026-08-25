@@ -125,13 +125,14 @@ export function ShareLinkDialog({
         id: person.id,
         name: person.name,
         phone: (phones[person.id] ?? person.phone).trim(),
+        url: person.url || url,
       }));
     const extra = customPhone.trim();
     if (extra && !list.some((item) => item.phone === extra)) {
-      list.push({ id: "custom", name: primary?.name || "Homeowner", phone: extra });
+      list.push({ id: "custom", name: primary?.name || "Homeowner", phone: extra, url });
     }
     return list;
-  }, [customPhone, people, phones, primary?.name, selected]);
+  }, [customPhone, people, phones, primary?.name, selected, url]);
 
   async function handleCopy() {
     setPending("copy");
@@ -150,7 +151,7 @@ export function ShareLinkDialog({
       toast.error("Add a mobile number to text, or copy the link.");
       return;
     }
-    if (!message.includes(url)) {
+    if (!message.includes(url) && !targets.some((target) => message.includes(target.url))) {
       toast.error("Keep the share link in the message.");
       return;
     }
@@ -158,24 +159,29 @@ export function ShareLinkDialog({
     try {
       let mocked = false;
       for (const target of ready) {
+        const theirUrl = target.url || url;
         const body = defaultShareText({
           kind,
           company: companyName || "the office",
           customer: target.name,
           number: documentNumber || "",
           name: documentName || "",
-          url,
+          url: theirUrl,
         });
         const content =
           ready.length === 1
-            ? message.trim()
+            ? message.replaceAll(url, theirUrl).trim()
             : message.trim() === composedMessage.trim()
               ? body
-              : message.trim();
+              : message.replaceAll(url, theirUrl).trim();
+        if (!content.includes(theirUrl)) {
+          toast.error("Keep the share link in the message.");
+          return;
+        }
         const response = await fetch("/api/share/text", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to: target.phone, content, url }),
+          body: JSON.stringify({ to: target.phone, content, url: theirUrl }),
         });
         const data = (await response.json().catch(() => null)) as
           | { ok?: boolean; mocked?: boolean; error?: string; handle?: string; to?: string }
@@ -233,8 +239,12 @@ export function ShareLinkDialog({
                 Copy
               </Button>
             </div>
+            {people.some((person) => person.url && person.url !== url) ? (
+              <p className="text-xs text-muted-foreground">
+                Each homeowner is texted their own signing link. Copy is the primary homeowner’s.
+              </p>
+            ) : null}
           </div>
-
           <div className="grid gap-2">
             <Label>Text to the homeowner</Label>
             {people.length ? (

@@ -43,7 +43,7 @@ Company estimate templates need [`20260821190000_estimate_templates.sql`](https:
 
 Client signatures on estimates need [`20260821200000_estimate_signature.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821200000_estimate_signature.sql) (or a fresh bootstrap) so the drawing stays on the proposal and PDF. Until that runs, you can still collect a signature in this browser.
 
-Signing a client estimate link needs [`20260825150000_fix_sign_shared_estimate_job_id.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825150000_fix_sign_shared_estimate_job_id.sql) (or a fresh bootstrap) if you see **column reference "job_id" is ambiguous**. Until that runs, collect the signature in Truss.
+Signing a client estimate link needs [`20260825150000_fix_sign_shared_estimate_job_id.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825150000_fix_sign_shared_estimate_job_id.sql) (or a fresh bootstrap) if you see **column reference "job_id" is ambiguous**. Unique per-homeowner signing links need [`20260825180000_estimate_signer_links.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825180000_estimate_signer_links.sql). Until those run, collect the signature in Truss.
 
 A teammate's profile phone on estimates and invoices needs [`20260825160000_staff_profile_phone.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825160000_staff_profile_phone.sql) (or a fresh bootstrap). Until that runs, you can still save a phone in this browser; the office line still prints on share links.
 

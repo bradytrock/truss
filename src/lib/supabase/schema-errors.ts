@@ -57,14 +57,9 @@ export const ORIGINATOR_SQL = "supabase/migrations/20260820120000_opportunity_or
 
 export function isMissingShareToken(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
-  const message = error.message ?? "";
-  return (
-    error.code === "PGRST204" ||
-    error.code === "PGRST205" ||
-    message.includes("schema cache") ||
-    message.includes("Could not find the") ||
-    message.includes("share_token")
-  );
+  const message = (error.message ?? "").toLowerCase();
+  if (message.includes("second_share_token")) return false;
+  return message.includes("share_token");
 }
 
 export function isMissingFinancials(error: { message?: string; code?: string } | null | undefined) {
@@ -247,7 +242,8 @@ export function isMissingSignerLinks(error: { message?: string; code?: string } 
   return (
     message.includes("second_share_token") ||
     message.includes("second_signature_name") ||
-    message.includes("second_signature_image")
+    message.includes("second_signature_image") ||
+    message.includes("select_shared_estimate_line")
   );
 }
 
