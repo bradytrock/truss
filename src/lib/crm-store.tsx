@@ -17,7 +17,7 @@ import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
 import { seedCompanyBook } from "@/lib/supabase/seed-company";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingSignatureColumn, missingSignatureMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingSignatureColumn, missingSignatureMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId } from "@/lib/job-record";
@@ -256,6 +256,18 @@ function requireClient() {
 function maybeClient() {
   if (!isSupabaseConfigured()) return null;
   return createClient();
+}
+
+function withCreatedByRetry<T extends { created_by?: string | null }>(
+  payload: T,
+  user: Pick<CurrentUser, "id" | "staffId">,
+  error: { message?: string; code?: string } | null | undefined,
+): T | null {
+  if (!error || !isUuidSyntaxError(error)) return null;
+  const uuid = actorUuid(user);
+  if (uuid) return { ...payload, created_by: uuid };
+  const { created_by: _createdBy, ...rest } = payload;
+  return rest as T;
 }
 
 function siteFromLinked(
@@ -3777,6 +3789,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         created_by: payment.createdBy,
       };
       let { data, error } = await supabase.from("payments").insert(payload).select("*").single();
+      const uuidRetry = withCreatedByRetry(payload, user, error);
+      if (uuidRetry) {
+        const retryUuid = await supabase.from("payments").insert(uuidRetry).select("*").single();
+        data = retryUuid.data;
+        error = retryUuid.error;
+      }
       if (error && isMissingFinancials(error)) {
         if (!payment.invoiceId) {
           toast.error(missingFinancialsMessage());
@@ -3803,7 +3821,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error(error?.message ?? "Could not record the payment.");
         return;
       }
-      const saved = mapPayment(data);
+      const saved = { ...mapPayment(data), createdBy: user.name };
       const nextPayments = [saved, ...state.payments];
       let nextStatus = invoice?.status;
       if (invoice) {
@@ -3838,8 +3856,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           body: `Payment of ${input.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })} recorded${invoice ? ` on ${invoice.number}` : ""}.`,
         });
       }
+      toast.success("Payment recorded with the receipt.");
     },
-    [addActivity, state.invoiceLines, state.invoices, state.payments, user.companyId, user.name]
+    [addActivity, state.invoiceLines, state.invoices, state.payments, user.companyId, user.id, user.name, user.staffId]
   );
 
   const addExpense = useCallback(
@@ -3916,37 +3935,44 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.success(`${expense.number} saved with the receipt.`);
         return expense;
       }
-      const { data, error } = await supabase
+      const expensePayload = {
+        id: expense.id,
+        company_id: user.companyId,
+        number: expense.number,
+        job_id: expense.jobId,
+        vendor: expense.vendor,
+        account: expense.account,
+        amount: expense.amount,
+        incurred_at: expense.incurredAt,
+        method: expense.method,
+        memo: expense.memo,
+        receipt_url: expense.receiptUrl,
+        receipt_storage_path: expense.receiptStoragePath,
+        qb_status: expense.qbStatus,
+        extracted_by_ai: expense.extractedByAi,
+        created_by: expense.createdBy,
+      };
+      let { data: savedRow, error: saveError } = await supabase
         .from("expenses")
-        .insert({
-          id: expense.id,
-          company_id: user.companyId,
-          number: expense.number,
-          job_id: expense.jobId,
-          vendor: expense.vendor,
-          account: expense.account,
-          amount: expense.amount,
-          incurred_at: expense.incurredAt,
-          method: expense.method,
-          memo: expense.memo,
-          receipt_url: expense.receiptUrl,
-          receipt_storage_path: expense.receiptStoragePath,
-          qb_status: expense.qbStatus,
-          extracted_by_ai: expense.extractedByAi,
-          created_by: expense.createdBy,
-        })
+        .insert(expensePayload)
         .select("*")
         .single();
-      if (error || !data) {
-        if (error && isMissingFinancials(error)) {
+      const uuidRetry = withCreatedByRetry(expensePayload, user, saveError);
+      if (uuidRetry) {
+        const retry = await supabase.from("expenses").insert(uuidRetry).select("*").single();
+        savedRow = retry.data;
+        saveError = retry.error;
+      }
+      if (saveError || !savedRow) {
+        if (saveError && isMissingFinancials(saveError)) {
           toast.message(missingFinancialsMessage());
           setState((prev) => ({ ...prev, expenses: [expense, ...prev.expenses] }));
           return expense;
         }
-        toast.error(error?.message ?? "Could not save the expense.");
+        toast.error(saveError?.message ?? "Could not save the expense.");
         return null;
       }
-      const saved = mapExpense(data);
+      const saved = { ...mapExpense(savedRow), createdBy: user.name };
       setState((prev) => ({ ...prev, expenses: [saved, ...prev.expenses] }));
       if (saved.jobId) {
         await addActivity({
@@ -3959,7 +3985,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       toast.success(`${saved.number} saved with the receipt.`);
       return saved;
     },
-    [addActivity, state.expenses, user.companyId, user.name],
+    [addActivity, state.expenses, user.companyId, user.id, user.name, user.staffId],
   );
 
   const setQbStatus = useCallback(

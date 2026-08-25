@@ -67,7 +67,7 @@ export function BdRoiPanel({
           <Metric
             label={`Your jobs sold ${report.year}`}
             value={formatCurrency(mine.wonValue)}
-            hint={`${mine.won} awarded · ${mine.lost} lost`}
+            hint={`${mine.won} signed · ${mine.lost} lost`}
           />
           <Metric
             label="Cash on your jobs"

@@ -121,6 +121,23 @@ export function isInvalidEnumValue(error: { message?: string; code?: string } | 
   return error.code === "22P02" || message.includes("invalid input value for enum");
 }
 
+export function isUuidSyntaxError(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  return (error.message ?? "").toLowerCase().includes("invalid input syntax for type uuid");
+}
+
+export function looksLikeUuid(value: string | null | undefined) {
+  if (!value) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+/** Live payments/expenses.created_by is uuid in some projects; prefer the auth user, then the seat. */
+export function actorUuid(user: { id: string; staffId: string }) {
+  if (looksLikeUuid(user.id)) return user.id;
+  if (looksLikeUuid(user.staffId)) return user.staffId;
+  return null;
+}
+
 export function missingResidentialEnumsMessage() {
   return `Run ${RESIDENTIAL_ENUMS_SQL} in the SQL editor so fixed-price, insurance claims, and residential work types store correctly.`;
 }

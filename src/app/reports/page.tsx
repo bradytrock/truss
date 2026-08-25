@@ -64,11 +64,12 @@ export default function ReportsPage() {
         jobs: crm.jobs,
         opportunities: crm.opportunities,
         contacts: crm.contacts,
+        estimates: crm.estimates,
       },
       viewer,
       preset
     );
-  }, [crm.contacts, crm.jobs, crm.opportunities, crm.staff, preset, viewer]);
+  }, [crm.contacts, crm.estimates, crm.jobs, crm.opportunities, crm.staff, preset, viewer]);
 
   if (!crm.hydrated) return <LoadingScreen />;
 
@@ -208,23 +209,23 @@ export default function ReportsPage() {
             <Metric label="Job lost average" value={compact(report.kpis.lostAvg)} hint="Avg. value of lost work" />
           </MetricStrip>
           <div className="grid gap-4 xl:grid-cols-3">
-            <ChartCard title="Total revenue" hint="Cumulative value sold">
+            <ChartCard title="Total revenue" hint="Cumulative signed contract value">
               <VerticalBars items={runningTotal(report.monthlyWon)} format={compact} />
             </ChartCard>
-            <ChartCard title="Job count" hint="Jobs sold by month">
+            <ChartCard title="Job count" hint="Contracts signed by month">
               <VerticalBars
                 items={report.monthlyWon.map((row) => ({ label: row.label, value: row.count }))}
                 format={(value) => String(Math.round(value))}
               />
             </ChartCard>
-            <ChartCard title="Revenue by month" hint="Value sold">
+            <ChartCard title="Revenue by month" hint="Value of signed contracts">
               <VerticalBars
                 items={report.monthlyWon.map((row) => ({ label: row.label, value: row.value }))}
                 format={compact}
               />
             </ChartCard>
           </div>
-          <Panel title="Overall metrics by project type" description="Win rate and value for work started in this range.">
+          <Panel title="Overall metrics by project type" description="Win rate and value for work started in this range. Won means a signed contract.">
             <ProjectTypeTable rows={report.byProjectType} money={money} />
           </Panel>
         </TabsContent>
@@ -232,9 +233,9 @@ export default function ReportsPage() {
         <TabsContent value="leads" className="mt-5 space-y-5">
           <MetricStrip className="sm:grid-cols-2 xl:grid-cols-5">
             <Metric label="Incoming jobs" value={String(report.kpis.incoming)} hint="Leads opened in this range" />
-            <Metric label="Avg. days to sold" value={report.kpis.daysToSold.toFixed(1)} hint="Lead created to job start" />
+            <Metric label="Avg. days to sold" value={report.kpis.daysToSold.toFixed(1)} hint="Lead created to signed contract" />
             <Metric label="New lead to qualified" value={formatShare(report.kpis.newToQualified)} hint="Moved past Lead" />
-            <Metric label="Qualified close rate" value={formatShare(report.kpis.qualifiedClose)} hint="Qualified leads sold" />
+            <Metric label="Qualified close rate" value={formatShare(report.kpis.qualifiedClose)} hint="Qualified leads with a signed contract" />
             <Metric label="Close rate" value={formatShare(report.kpis.closeRate)} hint="Won vs lost in range" />
           </MetricStrip>
           <Panel title="Lead performance" description="Where work came from, and how much of it sold.">
@@ -422,15 +423,15 @@ export default function ReportsPage() {
         </TabsContent>
 
         <TabsContent value="overview" className="mt-5 space-y-5">
-          <Panel title="Job metrics" description="Value of work sold in this range.">
+          <Panel title="Job metrics" description="Value of contracts signed in this range.">
             <VerticalBars
               items={report.monthlyWon.map((row) => ({ label: row.label, value: row.value }))}
               format={compact}
             />
             <div className="grid gap-px border-t bg-border sm:grid-cols-3 xl:grid-cols-6">
-              <Metric label="Value of won jobs" value={compact(report.kpis.wonValue)} />
+              <Metric label="Value of won jobs" value={compact(report.kpis.wonValue)} hint="Signed contracts in this range" />
               <Metric label="Average job size" value={compact(report.kpis.avgJob)} />
-              <Metric label="Jobs won" value={String(report.kpis.wonCount)} />
+              <Metric label="Jobs won" value={String(report.kpis.wonCount)} hint="Won when the contract is signed" />
               <Metric label="Value of lost jobs" value={compact(report.kpis.lostTotal)} />
               <Metric label="Jobs lost" value={String(report.kpis.lostCount)} />
               <Metric label="Days to complete" value={report.kpis.daysToComplete.toFixed(1)} hint="Start to substantial completion" />
@@ -468,7 +469,7 @@ export default function ReportsPage() {
           <Panel title="Workflow at a glance">
             <div className="grid gap-px bg-border sm:grid-cols-2 xl:grid-cols-5">
               <Metric label="New leads" value={String(report.kpis.incoming)} />
-              <Metric label="Days to sold" value={report.kpis.daysToSold.toFixed(1)} hint="Created to job start" />
+              <Metric label="Days to sold" value={report.kpis.daysToSold.toFixed(1)} hint="Created to signed contract" />
               <Metric label="New lead to qualified" value={formatShare(report.kpis.newToQualified)} />
               <Metric label="Qualified close rate" value={formatShare(report.kpis.qualifiedClose)} />
               <Metric label="Close rate" value={formatShare(report.kpis.closeRate)} />

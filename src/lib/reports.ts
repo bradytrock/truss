@@ -1,14 +1,15 @@
 import { localYmd } from "@/lib/format";
+import { isDeletedJob } from "@/lib/job-record";
 import type {
   CrmState,
   Job,
-  JobStatus,
   LeadSource,
   Opportunity,
   PipelineStage,
   ProjectType,
   StaffMember,
 } from "@/lib/types";
+import { isJobWon, isOpportunityWon, jobWonAt } from "@/lib/won";
 import {
   JOB_STATUSES,
   JOB_STATUS_LABELS,
@@ -53,7 +54,6 @@ export const REPORT_TABS: { id: ReportTab; label: string; teamOnly?: boolean }[]
   { id: "pipeline", label: "Pipeline" },
 ];
 
-const SOLD_STATUSES: ReadonlySet<JobStatus> = new Set(["in_progress", "punch", "complete"]);
 const QUALIFIED_STAGES: ReadonlySet<PipelineStage> = new Set([
   "estimating",
   "bid_submitted",
@@ -61,7 +61,7 @@ const QUALIFIED_STAGES: ReadonlySet<PipelineStage> = new Set([
   "awarded",
 ]);
 
-export type ReportBook = Pick<CrmState, "staff" | "jobs" | "opportunities" | "contacts">;
+export type ReportBook = Pick<CrmState, "staff" | "jobs" | "opportunities" | "contacts" | "estimates">;
 
 export type SourceRow = {
   source: string;
@@ -238,10 +238,6 @@ function opportunityOwner(opportunity: Opportunity, staff: StaffMember[]) {
   );
 }
 
-function isSold(job: Job) {
-  return SOLD_STATUSES.has(job.status);
-}
-
 export function buildPerformance(
   book: ReportBook,
   viewer: StaffMember,
@@ -254,14 +250,18 @@ export function buildPerformance(
   // Re-filter only by date here so superintendent-assigned work still counts.
   const roster = staffForReports(viewer, book.staff);
 
-  const jobs = book.jobs.filter((job) => inRange(job.startDate, range.start, range.end));
+  const liveJobs = book.jobs.filter((job) => !isDeletedJob(job));
+  const estimates = book.estimates ?? [];
+  const jobs = liveJobs.filter((job) => inRange(job.startDate, range.start, range.end));
   const opportunities = book.opportunities.filter((item) =>
     inRange(item.createdAt, range.start, range.end)
   );
-  const soldJobs = jobs.filter(isSold);
+  const soldJobs = liveJobs.filter((job) =>
+    inRange(jobWonAt(job, estimates, book.opportunities), range.start, range.end),
+  );
   const lost = opportunities.filter((item) => item.stage === "lost");
   const qualified = opportunities.filter((item) => QUALIFIED_STAGES.has(item.stage));
-  const wonOpps = opportunities.filter((item) => item.stage === "awarded");
+  const wonOpps = opportunities.filter((item) => isOpportunityWon(item, estimates, liveJobs));
 
   const lostValues = lost.map((item) => item.value);
   const lossDays = lost
@@ -272,7 +272,8 @@ export function buildPerformance(
       const linked = job.opportunityId
         ? book.opportunities.find((item) => item.id === job.opportunityId)
         : undefined;
-      return daysBetween(linked?.createdAt ?? job.startDate, job.startDate);
+      const wonAt = jobWonAt(job, estimates, book.opportunities);
+      return daysBetween(linked?.createdAt ?? wonAt, wonAt);
     })
     .filter((value): value is number => value !== null);
   const completeDays = jobs
@@ -305,7 +306,9 @@ export function buildPerformance(
 
   const monthMap = new Map<string, { count: number; value: number }>();
   for (const job of soldJobs) {
-    const key = monthKey(job.startDate);
+    const wonAt = jobWonAt(job, estimates, book.opportunities);
+    if (!wonAt) continue;
+    const key = monthKey(wonAt);
     const bucket = monthMap.get(key) ?? { count: 0, value: 0 };
     bucket.count += 1;
     bucket.value += job.contractValue;
@@ -330,9 +333,9 @@ export function buildPerformance(
     };
     row.incoming += 1;
     if (QUALIFIED_STAGES.has(opportunity.stage)) row.qualified += 1;
-    if (opportunity.stage === "awarded") {
+    if (isOpportunityWon(opportunity, estimates, liveJobs)) {
       row.won += 1;
-      const job = book.jobs.find((item) => item.opportunityId === opportunity.id);
+      const job = liveJobs.find((item) => item.opportunityId === opportunity.id);
       row.wonValue += job?.contractValue ?? opportunity.value;
     }
     sourceMap.set(key, row);
@@ -367,9 +370,9 @@ export function buildPerformance(
     row.assigned += 1;
     if (QUALIFIED_STAGES.has(opportunity.stage)) row.qualified += 1;
     if (opportunity.stage === "lost") row.lost += 1;
-    if (opportunity.stage === "awarded") {
+    if (isOpportunityWon(opportunity, estimates, liveJobs)) {
       row.won += 1;
-      const job = book.jobs.find((item) => item.opportunityId === opportunity.id);
+      const job = liveJobs.find((item) => item.opportunityId === opportunity.id);
       row.wonValue += job?.contractValue ?? opportunity.value;
     }
   }
@@ -405,7 +408,7 @@ export function buildPerformance(
   for (const job of jobs) {
     const label = job.projectType ? PROJECT_TYPE_LABELS[job.projectType as ProjectType] : "Unspecified";
     const bucket = typeBucket(label);
-    if (isSold(job)) {
+    if (isJobWon(job, estimates, book.opportunities)) {
       bucket.won += 1;
       bucket.wonValue += job.contractValue;
     } else {
@@ -440,11 +443,11 @@ export function buildPerformance(
     .map((row) => ({ ...row, share: row.totalValue / grand }))
     .sort((a, b) => b.totalValue - a.totalValue);
 
-  const liveOpps = book.opportunities;
-  const liveJobs = book.jobs;
+  const pipelineOpps = book.opportunities;
+  const pipelineJobs = liveJobs;
   const pipeline: PipelineRow[] = [
     ...PIPELINE_STAGES.filter((stage) => stage !== "lost").map((stage) => {
-      const rows = liveOpps.filter((item) => item.stage === stage);
+      const rows = pipelineOpps.filter((item) => item.stage === stage);
       return {
         id: stage,
         label: STAGE_LABELS[stage],
@@ -453,7 +456,7 @@ export function buildPerformance(
       };
     }),
     ...JOB_STATUSES.map((status) => {
-      const rows = liveJobs.filter((job) => job.status === status);
+      const rows = pipelineJobs.filter((job) => job.status === status);
       return {
         id: status,
         label: JOB_STATUS_LABELS[status],

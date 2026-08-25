@@ -1,6 +1,7 @@
 import type { Contact, CrmState, Expense, Job, Opportunity, SeatRole, StaffMember } from "@/lib/types";
 import { yearOf } from "@/lib/reports";
 import { paymentsForJob } from "@/lib/job-financials";
+import { opportunityWonAt } from "@/lib/won";
 
 export function isBusinessDevelopment(role: SeatRole | undefined) {
   return role === "business_development";
@@ -74,8 +75,13 @@ export type BdRoiReport = {
   bdShare: number;
 };
 
-function isOpenLead(opportunity: Opportunity) {
-  return opportunity.stage !== "awarded" && opportunity.stage !== "lost";
+function isOpenLead(
+  opportunity: Opportunity,
+  estimates: CrmState["estimates"],
+  jobs: Job[],
+) {
+  if (opportunity.stage === "lost") return false;
+  return !opportunityWonAt(opportunity, estimates, jobs);
 }
 
 function cashForJobs(jobs: Job[], state: CrmState, year: number) {
@@ -108,8 +114,11 @@ export function statsForOriginator(
   year: number,
 ): BdPersonStats {
   const leads = state.opportunities.filter((opportunity) => originatorStaffId(opportunity) === staff.id);
-  const open = leads.filter(isOpenLead);
-  const won = leads.filter((opportunity) => opportunity.stage === "awarded");
+  const open = leads.filter((opportunity) => isOpenLead(opportunity, state.estimates, state.jobs));
+  const won = leads.filter((opportunity) => {
+    const wonAt = opportunityWonAt(opportunity, state.estimates, state.jobs);
+    return Boolean(wonAt && yearOf(wonAt) === year);
+  });
   const jobs = jobsForOriginator(state, staff.id);
   return {
     staff,
@@ -117,7 +126,10 @@ export function statsForOriginator(
     openLeads: open.length,
     openValue: open.reduce((sum, opportunity) => sum + opportunity.value, 0),
     won: won.length,
-    wonValue: won.reduce((sum, opportunity) => sum + opportunity.value, 0),
+    wonValue: won.reduce((sum, opportunity) => {
+      const job = jobs.find((item) => item.opportunityId === opportunity.id);
+      return sum + (job?.contractValue ?? opportunity.value);
+    }, 0),
     lost: leads.filter((opportunity) => opportunity.stage === "lost").length,
     cash: cashForJobs(jobs, state, year),
     spend: bdSpend(state.expenses, staff.name, year),
