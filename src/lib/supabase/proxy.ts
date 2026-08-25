@@ -17,11 +17,21 @@ function redirectToLogin(request: NextRequest) {
   return NextResponse.redirect(login);
 }
 
+function isSharePath(path: string) {
+  return path.startsWith("/share") || path.startsWith("/api/share");
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
   const url = getSupabaseUrl() || request.cookies.get(SB_URL_COOKIE)?.value || "";
   const key = getSupabaseKey() || request.cookies.get(SB_KEY_COOKIE)?.value || "";
   const path = request.nextUrl.pathname;
+
+  // Homeowner links must not wait on (or inherit) a CRM session refresh.
+  // Stale phone cookies were turning valid tokens into a missing-page 404.
+  if (isSharePath(path)) {
+    return NextResponse.next({ request });
+  }
 
   if (!url || !key) {
     if (isPublicAppPath(path)) return NextResponse.next({ request });

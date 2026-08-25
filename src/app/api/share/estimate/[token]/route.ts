@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
 import { parseEstimateSignature } from "@/lib/estimate-signature";
 import { normalizeShareToken } from "@/lib/share";
-import { shareNotFoundJson } from "@/lib/share-server";
+import { shareJson, shareNotFoundJson } from "@/lib/share-server";
+import { createAnonClient } from "@/lib/supabase/anon";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import {
   isMissingSignatureColumn,
@@ -11,7 +11,9 @@ import {
   isMissingSignerLinks,
   missingSignerLinksMessage,
 } from "@/lib/supabase/schema-errors";
-import { createClient } from "@/lib/supabase/server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(_request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
@@ -23,13 +25,18 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
     return shareNotFoundJson(trimmed);
   }
   try {
-    const supabase = await createClient();
+    const supabase = createAnonClient();
     const { data, error } = await supabase.rpc("shared_estimate", { p_token: trimmed });
-    if (error || data == null) {
+    if (error) {
+      console.error("[share] shared_estimate", error.code, error.message);
       return shareNotFoundJson(trimmed);
     }
-    return NextResponse.json(data);
-  } catch {
+    if (data == null) {
+      return shareNotFoundJson(trimmed);
+    }
+    return shareJson(data);
+  } catch (error) {
+    console.error("[share] shared_estimate threw", error);
     return shareNotFoundJson(trimmed);
   }
 }
@@ -48,10 +55,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ token
     | null;
   const lineId = typeof body?.lineId === "string" ? body.lineId.trim() : "";
   if (!lineId) {
-    return NextResponse.json({ error: "Pick an optional line to include." }, { status: 400 });
+    return shareJson({ error: "Pick an optional line to include." }, 400);
   }
   try {
-    const supabase = await createClient();
+    const supabase = createAnonClient();
     const { data, error } = await supabase.rpc("select_shared_estimate_line", {
       p_token: trimmed,
       p_line_id: lineId,
@@ -59,14 +66,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ token
     });
     if (error) {
       if (isMissingSignerLinks(error) || /select_shared_estimate_line/i.test(error.message ?? "")) {
-        return NextResponse.json({ error: missingSignerLinksMessage() }, { status: 400 });
+        return shareJson({ error: missingSignerLinksMessage() }, 400);
       }
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return shareJson({ error: error.message }, 400);
     }
     if (data == null) {
       return shareNotFoundJson(trimmed);
     }
-    return NextResponse.json(data);
+    return shareJson(data);
   } catch {
     return shareNotFoundJson(trimmed);
   }
@@ -89,10 +96,10 @@ export async function POST(request: Request, context: { params: Promise<{ token:
     image: body?.signature ?? body?.image,
   });
   if (!parsed.ok) {
-    return NextResponse.json({ error: parsed.error }, { status: 400 });
+    return shareJson({ error: parsed.error }, 400);
   }
   try {
-    const supabase = await createClient();
+    const supabase = createAnonClient();
     const { data, error } = await supabase.rpc("sign_shared_estimate", {
       p_token: trimmed,
       p_signer_name: parsed.signature.name,
@@ -100,20 +107,20 @@ export async function POST(request: Request, context: { params: Promise<{ token:
     });
     if (error) {
       if (isMissingSignatureColumn(error)) {
-        return NextResponse.json({ error: missingSignatureMessage() }, { status: 400 });
+        return shareJson({ error: missingSignatureMessage() }, 400);
       }
       if (isAmbiguousSignJobId(error)) {
-        return NextResponse.json({ error: ambiguousSignJobIdMessage() }, { status: 400 });
+        return shareJson({ error: ambiguousSignJobIdMessage() }, 400);
       }
       if (isMissingSignerLinks(error)) {
-        return NextResponse.json({ error: missingSignerLinksMessage() }, { status: 400 });
+        return shareJson({ error: missingSignerLinksMessage() }, 400);
       }
-      return NextResponse.json({ error: error.message }, { status: 400 });
+      return shareJson({ error: error.message }, 400);
     }
     if (data == null) {
       return shareNotFoundJson(trimmed);
     }
-    return NextResponse.json(data);
+    return shareJson(data);
   } catch {
     return shareNotFoundJson(trimmed);
   }

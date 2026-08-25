@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Copy, Download, MessageSquare } from "lucide-react";
+import { Copy, Download, ExternalLink, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -227,17 +227,35 @@ export function ShareLinkDialog({
         <div className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="share-link">Client link</Label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Input
                 id="share-link"
                 readOnly
                 value={url}
+                className="min-w-0 flex-1"
                 onFocus={(event) => event.target.select()}
               />
-              <Button type="button" variant="outline" disabled={!url || pending !== null} onClick={() => void handleCopy()}>
-                <Copy />
-                Copy
-              </Button>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" disabled={!url || pending !== null} onClick={() => void handleCopy()}>
+                  <Copy />
+                  Copy
+                </Button>
+                {url ? (
+                  <Button
+                    nativeButton={false}
+                    variant="outline"
+                    render={<a href={url} target="_blank" rel="noopener noreferrer" />}
+                  >
+                    <ExternalLink />
+                    Open
+                  </Button>
+                ) : (
+                  <Button type="button" variant="outline" disabled>
+                    <ExternalLink />
+                    Open
+                  </Button>
+                )}
+              </div>
             </div>
             {people.some((person) => person.url && person.url !== url) ? (
               <p className="text-xs text-muted-foreground">

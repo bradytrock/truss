@@ -131,46 +131,85 @@ function EstimatesList() {
           action={<Button onClick={() => setCreate(true)}>New estimate</Button>}
         />
       ) : (
-        <div className="overflow-hidden rounded-md border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Estimate</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Valid until</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((estimate) => {
-                const total = amountForEstimate(
-                  estimate,
-                  crm.estimateLines,
-                  marketForEstimate(estimate, crm.jobs, crm.opportunities),
-                );
-                return (
-                  <TableRow key={estimate.id}>
-                    <TableCell>
-                      <Link href={`/estimates/${estimate.id}`} className="font-medium hover:underline">
-                        {estimate.number}
-                      </Link>
-                      <p className="text-xs text-muted-foreground">{estimate.name}</p>
-                    </TableCell>
-                    <TableCell>{crm.customerName(estimate)}</TableCell>
-                    <TableCell>
+        <>
+          <ul className="space-y-2 sm:hidden">
+            {rows.map((estimate) => {
+              const total = amountForEstimate(
+                estimate,
+                crm.estimateLines,
+                marketForEstimate(estimate, crm.jobs, crm.opportunities),
+              );
+              return (
+                <li key={estimate.id}>
+                  <Link
+                    href={`/estimates/${estimate.id}`}
+                    className="block rounded-md border bg-card p-3 active:bg-muted/60"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-medium">{estimate.number}</p>
+                        <p className="mt-0.5 truncate text-sm">{estimate.name}</p>
+                        <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                          {crm.customerName(estimate)}
+                        </p>
+                      </div>
+                      <p className="shrink-0 tabular-nums text-sm">{formatMoney(total)}</p>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-2">
                       <EstimateStatusBadge status={estimate.status} />
-                    </TableCell>
-                    <TableCell>{formatDate(estimate.validUntil)}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatMoney(total)}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+                      <p className="text-xs text-muted-foreground">
+                        Valid {formatDate(estimate.validUntil)}
+                      </p>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-hidden rounded-md border bg-card sm:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Estimate</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Valid until</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((estimate) => {
+                  const total = amountForEstimate(
+                    estimate,
+                    crm.estimateLines,
+                    marketForEstimate(estimate, crm.jobs, crm.opportunities),
+                  );
+                  return (
+                    <TableRow key={estimate.id} className="relative">
+                      <TableCell>
+                        <Link
+                          href={`/estimates/${estimate.id}`}
+                          className="font-medium hover:underline after:absolute after:inset-0"
+                        >
+                          {estimate.number}
+                        </Link>
+                        <p className="text-xs text-muted-foreground">{estimate.name}</p>
+                      </TableCell>
+                      <TableCell>{crm.customerName(estimate)}</TableCell>
+                      <TableCell>
+                        <EstimateStatusBadge status={estimate.status} />
+                      </TableCell>
+                      <TableCell>{formatDate(estimate.validUntil)}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatMoney(total)}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
 
       <p className="text-xs text-muted-foreground">

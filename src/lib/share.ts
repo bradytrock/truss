@@ -15,10 +15,14 @@ export function normalizeShareToken(raw: string | string[] | undefined | null) {
   const value = Array.isArray(raw) ? raw[0] : raw;
   if (!value) return "";
   let decoded = value;
-  try {
-    decoded = decodeURIComponent(value);
-  } catch {
-    decoded = value;
+  for (let i = 0; i < 2; i++) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    } catch {
+      break;
+    }
   }
   return decoded
     .replace(/[\u200B-\u200D\uFEFF\u00A0]/g, "")

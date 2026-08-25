@@ -113,39 +113,71 @@ export default function InvoicesPage() {
           action={<Button onClick={() => setCreate(true)}>New invoice</Button>}
         />
       ) : (
-        <div className="overflow-hidden rounded-md border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Invoice</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Due</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">Balance</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map(({ invoice, status: rowStatus, total, balance }) => (
-                <TableRow key={invoice.id}>
-                  <TableCell>
-                    <Link href={`/invoices/${invoice.id}`} className="font-medium hover:underline">
-                      {invoice.number}
-                    </Link>
-                    <p className="text-xs text-muted-foreground">{invoice.name}</p>
-                  </TableCell>
-                  <TableCell>{crm.customerName(invoice)}</TableCell>
-                  <TableCell>
+        <>
+          <ul className="space-y-2 sm:hidden">
+            {rows.map(({ invoice, status: rowStatus, total, balance }) => (
+              <li key={invoice.id}>
+                <Link
+                  href={`/invoices/${invoice.id}`}
+                  className="block rounded-md border bg-card p-3 active:bg-muted/60"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium">{invoice.number}</p>
+                      <p className="mt-0.5 truncate text-sm">{invoice.name}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {crm.customerName(invoice)}
+                      </p>
+                    </div>
+                    <p className="shrink-0 tabular-nums text-sm">{formatCurrencyFull(balance)}</p>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
                     <InvoiceStatusBadge status={rowStatus} />
-                  </TableCell>
-                  <TableCell>{formatDate(invoice.dueAt)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatCurrencyFull(total)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatCurrencyFull(balance)}</TableCell>
+                    <p className="text-xs text-muted-foreground">
+                      {formatCurrencyFull(total)} total · due {formatDate(invoice.dueAt)}
+                    </p>
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-hidden rounded-md border bg-card sm:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Invoice</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Due</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="text-right">Balance</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+              </TableHeader>
+              <TableBody>
+                {rows.map(({ invoice, status: rowStatus, total, balance }) => (
+                  <TableRow key={invoice.id} className="relative">
+                    <TableCell>
+                      <Link
+                        href={`/invoices/${invoice.id}`}
+                        className="font-medium hover:underline after:absolute after:inset-0"
+                      >
+                        {invoice.number}
+                      </Link>
+                      <p className="text-xs text-muted-foreground">{invoice.name}</p>
+                    </TableCell>
+                    <TableCell>{crm.customerName(invoice)}</TableCell>
+                    <TableCell>
+                      <InvoiceStatusBadge status={rowStatus} />
+                    </TableCell>
+                    <TableCell>{formatDate(invoice.dueAt)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrencyFull(total)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{formatCurrencyFull(balance)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
 
       <CreateInvoiceDialog open={create} onOpenChange={setCreate} />

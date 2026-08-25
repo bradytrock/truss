@@ -5,6 +5,18 @@ const TRUSS_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Fs_dTxYT2nBFYVjLLG6vpg_n5
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1", "localhost"],
+  async headers() {
+    return [
+      {
+        source: "/share/:path*",
+        headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],
+      },
+      {
+        source: "/api/share/:path*",
+        headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],
+      },
+    ];
+  },
   env: {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || TRUSS_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:

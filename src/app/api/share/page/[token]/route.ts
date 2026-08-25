@@ -1,8 +1,10 @@
-import { NextResponse } from "next/server";
 import { normalizeShareToken } from "@/lib/share";
-import { shareNotFoundJson } from "@/lib/share-server";
+import { shareJson, shareNotFoundJson } from "@/lib/share-server";
+import { createAnonClient } from "@/lib/supabase/anon";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { createClient } from "@/lib/supabase/server";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET(_request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
@@ -14,13 +16,18 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
     return shareNotFoundJson(trimmed);
   }
   try {
-    const supabase = await createClient();
+    const supabase = createAnonClient();
     const { data, error } = await supabase.rpc("shared_page", { p_token: trimmed });
-    if (error || data == null) {
+    if (error) {
+      console.error("[share] shared_page", error.code, error.message);
       return shareNotFoundJson(trimmed);
     }
-    return NextResponse.json(data);
-  } catch {
+    if (data == null) {
+      return shareNotFoundJson(trimmed);
+    }
+    return shareJson(data);
+  } catch (error) {
+    console.error("[share] shared_page threw", error);
     return shareNotFoundJson(trimmed);
   }
 }

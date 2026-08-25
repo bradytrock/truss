@@ -7,6 +7,11 @@ import {
   type ShareSender,
 } from "@/lib/share";
 
+const SHARE_FETCH: RequestInit = {
+  cache: "no-store",
+  credentials: "omit",
+};
+
 export async function readShareResponse<T>(
   response: Response,
   parse: (data: unknown) => T | null,
@@ -24,15 +29,24 @@ export function useRemoteShare<T>({
   hasLocal,
   path,
   parse,
+  initial,
+  initialSender,
 }: {
   token: string;
   hasLocal: boolean;
   path: string;
   parse: (data: unknown) => T | null;
+  initial?: T | null;
+  initialSender?: ShareSender | null;
 }) {
-  const [remote, setRemote] = useState<T | null>(null);
-  const [sender, setSender] = useState<ShareSender | null>(null);
-  const [remoteState, setRemoteState] = useState<"loading" | "ready" | "missing">("loading");
+  const served = initial !== undefined;
+  const [remote, setRemote] = useState<T | null>(() => initial ?? null);
+  const [sender, setSender] = useState<ShareSender | null>(() => initialSender ?? null);
+  const [remoteState, setRemoteState] = useState<"loading" | "ready" | "missing">(() => {
+    if (initial) return "ready";
+    if (served) return "missing";
+    return "loading";
+  });
 
   useEffect(() => {
     const trimmed = normalizeShareToken(token);
@@ -40,6 +54,18 @@ export function useRemoteShare<T>({
       setRemote(null);
       setSender(null);
       setRemoteState("ready");
+      return;
+    }
+    if (served) {
+      if (initial) {
+        setRemote(initial);
+        setSender(null);
+        setRemoteState("ready");
+        return;
+      }
+      setRemote(null);
+      setSender(initialSender ?? null);
+      setRemoteState("missing");
       return;
     }
     if (!trimmed) {
@@ -50,7 +76,7 @@ export function useRemoteShare<T>({
     }
     let cancelled = false;
     setRemoteState("loading");
-    void fetch(`${path}${encodeURIComponent(trimmed)}`)
+    void fetch(`${path}${encodeURIComponent(trimmed)}`, SHARE_FETCH)
       .then((response) => readShareResponse(response, parse))
       .then((result) => {
         if (cancelled) return;
@@ -74,7 +100,9 @@ export function useRemoteShare<T>({
     return () => {
       cancelled = true;
     };
-  }, [hasLocal, parse, path, token]);
+  }, [hasLocal, initial, initialSender, parse, path, served, token]);
 
   return { remote, remoteState, sender, setRemote };
 }
+
+export { SHARE_FETCH };
