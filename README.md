@@ -43,6 +43,8 @@ Company estimate templates need [`20260821190000_estimate_templates.sql`](https:
 
 Client signatures on estimates need [`20260821200000_estimate_signature.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821200000_estimate_signature.sql) (or a fresh bootstrap) so the drawing stays on the proposal and PDF. Until that runs, you can still collect a signature in this browser.
 
+Signing a client estimate link needs [`20260825150000_fix_sign_shared_estimate_job_id.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825150000_fix_sign_shared_estimate_job_id.sql) (or a fresh bootstrap) if you see **column reference "job_id" is ambiguous**. Until that runs, collect the signature in Truss.
+
 One costing job per lead needs [`20260821210000_one_job_per_lead.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821210000_one_job_per_lead.sql) (or a fresh bootstrap). That collapses duplicate board cards that share a lead and keeps Postgres from inserting a second job for the same opportunity. Until that runs, the Jobs board still shows one card per lead in this browser.
 
 Company admins deleting a job needs [`20260821220000_job_soft_delete.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821220000_job_soft_delete.sql) (or a fresh bootstrap) so the reason and Deleted column persist. Until that runs, delete and restore still work in this browser.

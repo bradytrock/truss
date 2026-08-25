@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId } from "@/lib/job-record";
@@ -2732,7 +2732,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           if (!retry.error) toast.message(missingSignatureMessage());
         }
         if (error) {
-          toast.error(error.message);
+          toast.error(isAmbiguousSignJobId(error) ? ambiguousSignJobIdMessage() : error.message);
           return;
         }
       }

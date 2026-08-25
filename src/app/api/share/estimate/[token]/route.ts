@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { parseEstimateSignature } from "@/lib/estimate-signature";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { isMissingSignatureColumn, missingSignatureMessage } from "@/lib/supabase/schema-errors";
+import { isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage } from "@/lib/supabase/schema-errors";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(_request: Request, context: { params: Promise<{ token: string }> }) {
@@ -54,6 +54,9 @@ export async function POST(request: Request, context: { params: Promise<{ token:
     if (error) {
       if (isMissingSignatureColumn(error)) {
         return NextResponse.json({ error: missingSignatureMessage() }, { status: 400 });
+      }
+      if (isAmbiguousSignJobId(error)) {
+        return NextResponse.json({ error: ambiguousSignJobIdMessage() }, { status: 400 });
       }
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

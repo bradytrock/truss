@@ -227,6 +227,18 @@ export function missingSignatureMessage() {
   return `Saved in this browser. Run ${ESTIMATE_SIGNATURE_SQL} in the SQL editor so the client signature stays on the estimate and PDF.`;
 }
 
+export const SIGN_ESTIMATE_JOB_ID_SQL = "supabase/migrations/20260825150000_fix_sign_shared_estimate_job_id.sql";
+
+export function isAmbiguousSignJobId(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return message.includes("job_id") && message.includes("ambiguous");
+}
+
+export function ambiguousSignJobIdMessage() {
+  return `Run ${SIGN_ESTIMATE_JOB_ID_SQL} in the SQL editor so signing a proposal can attach the job.`;
+}
+
 export const JOB_SOFT_DELETE_SQL = "supabase/migrations/20260821220000_job_soft_delete.sql";
 
 export function isMissingDeletedColumn(error: { message?: string; code?: string } | null | undefined) {
