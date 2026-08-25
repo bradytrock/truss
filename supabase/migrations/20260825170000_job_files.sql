@@ -24,6 +24,8 @@ create policy "company isolation" on public.job_files
   using (company_id = public.current_company_id())
   with check (company_id = public.current_company_id());
 
+grant select, insert, update, delete on table public.job_files to authenticated;
+
 do $$
 begin
   execute 'alter publication supabase_realtime add table public.job_files';
@@ -39,7 +41,11 @@ values (
   26214400,
   null
 )
-on conflict (id) do nothing;
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "public read job files" on storage.objects;
 create policy "public read job files"

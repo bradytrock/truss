@@ -5,7 +5,8 @@ import { formatJobSite } from "@/lib/leads";
 import { writePdfLetterhead, loadLogoForPdf } from "@/lib/letterhead-pdf";
 import { invoiceBalance, invoiceTotal, lineAmount as invoiceLineAmount, paidOnInvoice } from "@/lib/money";
 import { downloadBlob } from "@/lib/share";
-import { hasEstimateSignature } from "@/lib/estimate-signature";
+import { isSignaturePng } from "@/lib/estimate-signature";
+import { estimateSignatureLines } from "@/lib/estimate-signers";
 import { filledEstimateTerms, filledInvoiceTerms } from "@/lib/document-terms";
 import type { ProjectManagerContact } from "@/lib/document-owner";
 
@@ -93,6 +94,9 @@ export async function downloadEstimatePdf(input: {
   company: CompanySettings;
   customer: string;
   projectManager?: ProjectManagerContact | null;
+  primaryCustomer?: string;
+  secondCustomer?: string | null;
+  contractorName?: string;
 }) {
   const doc = await createDoc();
   const width = doc.internal.pageSize.getWidth();
@@ -246,39 +250,45 @@ export async function downloadEstimatePdf(input: {
   doc.setTextColor(90, 90, 90);
   doc.text("AUTHORIZATION", 54, y);
   y += 16;
-  if (hasEstimateSignature(input.estimate)) {
-    const ink = await loadLogoForPdf(input.estimate.signatureImage);
-    const sigWidth = 220;
-    const sigHeight = ink ? Math.min(56, (ink.height / ink.width) * sigWidth) : 48;
-    y = ensureSpace(doc, y, sigHeight + 36);
-    if (ink) {
-      doc.addImage(ink.data, ink.format, 54, y, sigWidth, sigHeight);
+  const authLines = estimateSignatureLines(input.estimate, {
+    contractor: input.contractorName || input.projectManager?.name || input.company.name,
+    primary: input.primaryCustomer || input.customer,
+    second: input.secondCustomer,
+  });
+  for (const line of authLines) {
+    y = ensureSpace(doc, y, 90);
+    const signed = Boolean(line.signedAt);
+    if (isSignaturePng(line.image)) {
+      const ink = await loadLogoForPdf(line.image);
+      const sigWidth = 220;
+      const sigHeight = ink ? Math.min(56, (ink.height / ink.width) * sigWidth) : 48;
+      y = ensureSpace(doc, y, sigHeight + 36);
+      if (ink) {
+        doc.addImage(ink.data, ink.format, 54, y, sigWidth, sigHeight);
+      }
+      y += sigHeight + 8;
+    } else if (signed && line.party === "contractor") {
+      y += 28;
+      doc.setFont("times", "italic");
+      doc.setFontSize(18);
+      doc.setTextColor(28, 28, 28);
+      doc.text(line.name, 54, y);
+      y += 12;
+    } else {
+      y += 36;
     }
-    y += sigHeight + 8;
     doc.setTextColor(200, 200, 200);
     doc.line(54, y, 280, y);
-    doc.line(300, y, right, y);
     y += 14;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(70, 70, 70);
-    doc.text(input.estimate.signatureName || "Homeowner", 54, y);
-    doc.text(formatDate(input.estimate.acceptedAt), 300, y);
+    doc.text(line.name, 54, y);
     y += 12;
     doc.setTextColor(120, 120, 120);
-    doc.text("Homeowner signature", 54, y);
-    doc.text("Date signed", 300, y);
-  } else {
-    y += 36;
-    doc.setTextColor(200, 200, 200);
-    doc.line(54, y, 280, y);
-    doc.line(300, y, right, y);
-    y += 14;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(120, 120, 120);
-    doc.text("Homeowner signature", 54, y);
-    doc.text("Date", 300, y);
+    const label = line.party === "contractor" ? "Contractor" : "Homeowner signature";
+    doc.text(signed ? `${label} · ${formatDate(line.signedAt)}` : label, 54, y);
+    y += 18;
   }
 
   downloadBlob(doc.output("blob"), `${input.estimate.number}.pdf`);

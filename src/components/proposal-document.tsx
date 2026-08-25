@@ -16,7 +16,8 @@ import {
 } from "@/lib/estimate-totals";
 import { formatDate, formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
-import { hasEstimateSignature } from "@/lib/estimate-signature";
+import { isSignaturePng } from "@/lib/estimate-signature";
+import { estimateSignatureLines } from "@/lib/estimate-signers";
 import type { CompanySettings, Estimate, EstimateLine, JobMarket } from "@/lib/types";
 import { filledEstimateTerms } from "@/lib/document-terms";
 import { cn } from "@/lib/utils";
@@ -85,6 +86,9 @@ export function ProposalDocument({
   showInternalNotes = false,
   showStatus = true,
   projectManager,
+  primaryCustomer,
+  secondCustomer,
+  contractorName,
 }: {
   estimate: Estimate;
   lines: EstimateLine[];
@@ -96,6 +100,9 @@ export function ProposalDocument({
   showInternalNotes?: boolean;
   showStatus?: boolean;
   projectManager?: ProjectManagerContact | null;
+  primaryCustomer?: string;
+  secondCustomer?: string | null;
+  contractorName?: string;
 }) {
   const groups = groupEstimateLines(lines);
   const site = formatJobSite(estimate);
@@ -220,7 +227,19 @@ export function ProposalDocument({
           </p>
         </div>
       ) : null}
-      <ProposalSignature estimate={estimate} />
+      <ProposalSignature
+        estimate={estimate}
+        contractorName={contractorName || manager?.name || letterhead.name}
+        primaryName={
+          primaryCustomer ||
+          crm?.getContact(estimate.contactId)?.name ||
+          customer
+        }
+        secondName={
+          secondCustomer ??
+          (estimate.secondContactId ? crm?.getContact(estimate.secondContactId)?.name : null)
+        }
+      />
       {showInternalNotes && estimate.notes ? (
         <div>
           <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">
@@ -235,40 +254,54 @@ export function ProposalDocument({
   );
 }
 
-export function ProposalSignature({ estimate }: { estimate: Estimate }) {
-  const signed = hasEstimateSignature(estimate);
+export function ProposalSignature({
+  estimate,
+  contractorName,
+  primaryName,
+  secondName,
+}: {
+  estimate: Estimate;
+  contractorName?: string;
+  primaryName?: string;
+  secondName?: string | null;
+}) {
+  const lines = estimateSignatureLines(estimate, {
+    contractor: contractorName,
+    primary: primaryName || "Homeowner",
+    second: secondName,
+  });
   return (
     <div>
       <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Authorization</h3>
-      {signed ? (
-        <div className="mt-3 grid gap-4 sm:grid-cols-2">
-          <div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={estimate.signatureImage}
-              alt={`Signature of ${estimate.signatureName || "homeowner"}`}
-              className="h-16 w-full max-w-xs object-contain object-left"
-            />
-            <p className="mt-2 border-t pt-2 text-sm">{estimate.signatureName || "Homeowner"}</p>
-            <p className="text-xs text-muted-foreground">Homeowner signature</p>
-          </div>
-          <div className="self-end">
-            <p className="border-t pt-2 text-sm">{formatDate(estimate.acceptedAt)}</p>
-            <p className="text-xs text-muted-foreground">Date signed</p>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-3 grid gap-4 sm:grid-cols-2">
-          <div>
-            <div className="h-16 border-b" />
-            <p className="mt-2 text-xs text-muted-foreground">Homeowner signature</p>
-          </div>
-          <div>
-            <div className="h-16 border-b" />
-            <p className="mt-2 text-xs text-muted-foreground">Date</p>
-          </div>
-        </div>
-      )}
+      <div className="mt-3 grid gap-6 sm:grid-cols-2">
+        {lines.map((line) => {
+          const signed = Boolean(line.signedAt);
+          const drawn = isSignaturePng(line.image);
+          return (
+            <div key={line.role}>
+              {drawn ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={line.image}
+                  alt={`Signature of ${line.name}`}
+                  className="h-16 w-full max-w-xs object-contain object-left"
+                />
+              ) : signed && line.party === "contractor" ? (
+                <p className="flex h-16 items-end font-serif text-2xl italic leading-none">
+                  {line.name}
+                </p>
+              ) : (
+                <div className="h-16 border-b" />
+              )}
+              <p className="mt-2 border-t pt-2 text-sm">{line.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {line.party === "contractor" ? "Contractor" : "Homeowner signature"}
+                {signed ? ` · ${formatDate(line.signedAt)}` : ""}
+              </p>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

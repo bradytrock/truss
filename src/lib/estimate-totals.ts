@@ -200,8 +200,11 @@ export type EstimateDraft = Omit<
   | "state"
   | "postalCode"
   | "shareToken"
+  | "secondShareToken"
   | "signatureName"
   | "signatureImage"
+  | "secondSignatureName"
+  | "secondSignatureImage"
 > &
   Partial<
     Pick<
@@ -223,8 +226,11 @@ export type EstimateDraft = Omit<
       | "state"
       | "postalCode"
       | "shareToken"
+      | "secondShareToken"
       | "signatureName"
       | "signatureImage"
+      | "secondSignatureName"
+      | "secondSignatureImage"
     >
   >;
 
@@ -261,8 +267,11 @@ export function fillEstimate(estimate: EstimateDraft): Estimate {
     state: estimate.state ?? "",
     postalCode: estimate.postalCode ?? "",
     shareToken: estimate.shareToken?.trim() || seedShareToken("e", estimate.number),
+    secondShareToken: secondContactId ? (estimate.secondShareToken?.trim() ?? "") : "",
     signatureName: estimate.signatureName ?? "",
     signatureImage: estimate.signatureImage ?? "",
+    secondSignatureName: secondContactId ? (estimate.secondSignatureName ?? "") : "",
+    secondSignatureImage: secondContactId ? (estimate.secondSignatureImage ?? "") : "",
   };
 }
 

@@ -29,6 +29,7 @@ import {
 } from "@/lib/supabase/mappers";
 import type { Database } from "@/lib/supabase/database.types";
 import { initialsFromName, type CrmState, type SeatRole } from "@/lib/types";
+import { jobFilesFromJobs, mergeJobFiles } from "@/lib/job-files";
 
 type Client = SupabaseClient<Database>;
 
@@ -168,6 +169,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
   });
 
   const teams = missingTeams ? [] : (teamsRes.data ?? []).map(mapTeam);
+  const jobs = (jobsRes.data ?? []).map(mapJob);
 
   const state: CrmState = {
     staff: staffWithInvites,
@@ -190,7 +192,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       }
     }),
     opportunities: (oppsRes.data ?? []).map(mapOpportunity),
-    jobs: (jobsRes.data ?? []).map(mapJob),
+    jobs,
     activities: (activitiesRes.data ?? []).map(mapActivity),
     tasks: (tasksRes.data ?? []).map(mapTask),
     catalog: (catalogRes.data ?? []).map(mapCatalogItem),
@@ -206,7 +208,10 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     expenses: expensesRes.error ? [] : (expensesRes.data ?? []).map(mapExpense),
     events: (eventsRes.data ?? []).map(mapScheduleEvent),
     photos: (photosRes.data ?? []).map(mapJobPhoto),
-    jobFiles: jobFilesRes.error ? [] : (jobFilesRes.data ?? []).map(mapJobFile),
+    jobFiles: mergeJobFiles(
+      jobFilesRes.error ? [] : (jobFilesRes.data ?? []).map(mapJobFile),
+      jobFilesFromJobs(jobs),
+    ),
     photoReports: photoReportsRes.error ? [] : (photoReportsRes.data ?? []).map(mapPhotoReport),
     calendarAccounts: calendarAccountsRes.error
       ? []

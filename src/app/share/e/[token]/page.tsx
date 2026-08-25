@@ -11,7 +11,7 @@ import { downloadEstimatePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
-import { linesForEstimate } from "@/lib/estimate-totals";
+import { fillEstimate, linesForEstimate } from "@/lib/estimate-totals";
 import { billingEstimate, workMarket } from "@/lib/market";
 import { parseSharedEstimate, type SharedEstimatePayload } from "@/lib/share";
 
@@ -189,11 +189,12 @@ export default function SharedEstimatePage() {
     return <ShareMissing kind="estimate" />;
   }
 
+  const estimate = fillEstimate(remote.estimate);
   const canSignRemote =
-    remote.estimate.status === "draft" ||
-    remote.estimate.status === "sent" ||
-    remote.estimate.status === "viewed" ||
-    (remote.estimate.status === "accepted" && !hasEstimateSignature(remote.estimate));
+    estimate.status === "draft" ||
+    estimate.status === "sent" ||
+    estimate.status === "viewed" ||
+    (estimate.status === "accepted" && !hasEstimateSignature(estimate));
 
   return (
     <ShareFrame
@@ -203,7 +204,7 @@ export default function SharedEstimatePage() {
             disabled={remote.lines.length === 0}
             onClick={() =>
               void downloadEstimatePdf({
-                estimate: billingEstimate(remote.estimate, remote.market),
+                estimate: billingEstimate(estimate, remote.market),
                 lines: remote.lines,
                 company: remote.company,
                 customer: remote.customer,
@@ -219,16 +220,16 @@ export default function SharedEstimatePage() {
         </>
       }
     >
-      {remote.estimate.status === "accepted" ? (
+      {estimate.status === "accepted" ? (
         <p className="rounded-md border bg-card px-4 py-3 text-sm">
-          {hasEstimateSignature(remote.estimate)
+          {hasEstimateSignature(estimate)
             ? "This proposal is signed. Thank you."
             : "This proposal is accepted. Sign below so your signature prints on the PDF."}
         </p>
       ) : null}
       <ProposalDocument
         company={remote.company}
-        estimate={remote.estimate}
+        estimate={estimate}
         lines={remote.lines}
         customer={remote.customer}
         market={remote.market}

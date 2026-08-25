@@ -97,6 +97,7 @@ export type SharedEstimatePayload = {
   customer: string;
   primaryCustomer?: string;
   secondCustomer?: string | null;
+  viewerSigner?: "primary" | "second";
   company: SharedCompany;
   market?: "residential" | "commercial";
   estimate: {
@@ -129,8 +130,11 @@ export type SharedEstimatePayload = {
     state: string;
     postalCode: string;
     shareToken: string;
+    secondShareToken: string;
     signatureName: string;
     signatureImage: string;
+    secondSignatureName: string;
+    secondSignatureImage: string;
   };
   lines: Array<{
     id: string;
@@ -229,10 +233,12 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
   const estimate = raw.estimate;
   const status = asString(estimate.status, "sent");
   if (!asString(estimate.id) || !asString(estimate.number)) return null;
+  const viewerRaw = asString(raw.viewerSigner).toLowerCase();
   return {
     customer: asString(raw.customer, "Homeowner"),
     primaryCustomer: asString(raw.primaryCustomer) || undefined,
     secondCustomer: asNullable(raw.secondCustomer),
+    viewerSigner: viewerRaw === "second" ? "second" : "primary",
     company: parseCompany(raw.company),
     market: asString(raw.market) === "commercial" ? "commercial" : asString(raw.market) === "residential" ? "residential" : undefined,
     estimate: {
@@ -265,8 +271,11 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
       state: asString(estimate.state),
       postalCode: asString(estimate.postalCode),
       shareToken: asString(estimate.shareToken),
+      secondShareToken: asString(estimate.secondShareToken),
       signatureName: asString(estimate.signatureName),
       signatureImage: asString(estimate.signatureImage),
+      secondSignatureName: asString(estimate.secondSignatureName),
+      secondSignatureImage: asString(estimate.secondSignatureImage),
     },
     lines: raw.lines.filter(isRecord).map((line, index) => ({
       id: asString(line.id, `line-${index}`),

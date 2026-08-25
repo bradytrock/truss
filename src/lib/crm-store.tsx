@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId } from "@/lib/job-record";
@@ -28,6 +28,13 @@ import {
   invoiceLinesFromEstimate,
 } from "@/lib/estimate-totals";
 import { resolveEstimateTerms, resolveInvoiceTerms } from "@/lib/document-terms";
+import {
+  estimateNeedsSecondSignature,
+  mintEstimateSignerTokens,
+  nextEstimateSignature,
+  resolveProjectOwner,
+  type HomeownerSigner,
+} from "@/lib/estimate-signers";
 import {
   estimateFieldsFromTemplate,
   estimateLinesFromTemplate,
@@ -51,6 +58,14 @@ import {
 import { isPublicAppPath } from "@/lib/auth-paths";
 import { defaultTaxRateForMarket, isResidentialMarket, marketForEstimate, parseMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { COMPANY_ASSETS_BUCKET, logoExtension, validateLogoFile } from "@/lib/company-logo";
+import {
+  isImageFile,
+  isMissingStorageBucket,
+  isPdfFile,
+  readFileDataUrl,
+  withJobFileField,
+  withoutJobFileId,
+} from "@/lib/job-files";
 import { patchForWorkColumn, workColumnFor, type WorkColumn } from "@/lib/work-board";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -656,7 +671,11 @@ type CrmContextValue = CrmState & {
   }) => Promise<Estimate>;
   updateEstimate: (id: string, patch: Partial<Estimate>) => Promise<void>;
   sendEstimate: (id: string) => Promise<void>;
-  acceptEstimate: (id: string, signature?: { name: string; image: string }) => Promise<void>;
+  acceptEstimate: (
+    id: string,
+    signature?: { name: string; image: string },
+    signer?: HomeownerSigner,
+  ) => Promise<void>;
   declineEstimate: (id: string) => Promise<void>;
   reopenEstimate: (id: string) => Promise<void>;
   markEstimateViewed: (id: string) => Promise<void>;
@@ -2622,6 +2641,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     const { error } = await supabase.from("estimates").update(estimatePatch(patch)).eq("id", id);
     if (error) {
+      if (isMissingSignerLinks(error)) {
+        apply();
+        toast.message(missingSignerLinksMessage());
+        return;
+      }
       if (isMissingSignatureColumn(error) && (patch.signatureName !== undefined || patch.signatureImage !== undefined)) {
         apply();
         toast.message(missingSignatureMessage());
@@ -2643,24 +2667,72 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const current = state.estimates.find((estimate) => estimate.id === id);
       if (!current) return;
       const sentAt = new Date().toISOString();
-      const shareToken = current.shareToken || newShareToken();
+      const tokens = mintEstimateSignerTokens(current);
+      const owner = resolveProjectOwner({
+        estimate: current,
+        jobs: state.jobs,
+        opportunities: state.opportunities,
+        staff: state.staff,
+        user,
+        companyName: companySettings.name,
+      });
+      const ownerSignedAt = current.ownerSignedAt || sentAt;
+      const ownerSignedName = current.ownerSignedName.trim() || owner.name;
       const apply = () =>
         setState((prev) => ({
           ...prev,
           estimates: prev.estimates.map((estimate) =>
             estimate.id === id
-              ? { ...estimate, status: "sent" as const, sentAt, shareToken }
+              ? {
+                  ...estimate,
+                  status: "sent" as const,
+                  sentAt,
+                  shareToken: tokens.shareToken,
+                  secondShareToken: tokens.secondShareToken,
+                  ownerSignedAt,
+                  ownerSignedName,
+                }
               : estimate
           ),
         }));
       const supabase = maybeClient();
       if (supabase) {
-        const payload: { status: "sent"; sent_at: string; share_token?: string } = {
+        const payload: {
+          status: "sent";
+          sent_at: string;
+          share_token?: string;
+          second_share_token?: string;
+          owner_signed_at?: string;
+          owner_signed_name?: string;
+        } = {
           status: "sent",
           sent_at: sentAt,
-          share_token: shareToken,
+          share_token: tokens.shareToken,
+          second_share_token: tokens.secondShareToken,
+          owner_signed_at: ownerSignedAt,
+          owner_signed_name: ownerSignedName,
         };
         let { error } = await supabase.from("estimates").update(payload).eq("id", id);
+        if (error && isMissingSignerLinks(error)) {
+          const retry = await supabase.from("estimates").update({
+            status: "sent",
+            sent_at: sentAt,
+            share_token: tokens.shareToken,
+            owner_signed_at: ownerSignedAt,
+            owner_signed_name: ownerSignedName,
+          }).eq("id", id);
+          error = retry.error;
+          if (!error) toast.message(missingSignerLinksMessage());
+        }
+        if (error && isMissingOwnerSignature(error)) {
+          const retry = await supabase.from("estimates").update({
+            status: "sent",
+            sent_at: sentAt,
+            share_token: tokens.shareToken,
+          }).eq("id", id);
+          error = retry.error;
+          if (!error) toast.message(missingOwnerSignatureMessage());
+        }
         if (error && isMissingShareToken(error)) {
           const retry = await supabase
             .from("estimates")
@@ -2696,49 +2768,66 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     },
     [
       addActivity,
+      companySettings.name,
       ensureLeadForEstimate,
       moveOpportunity,
       state.estimates,
+      state.jobs,
       state.opportunities,
+      state.staff,
       updateEstimate,
+      user,
     ]
   );
 
   const acceptEstimate = useCallback(
-    async (id: string, signature?: { name: string; image: string }) => {
+    async (
+      id: string,
+      signature?: { name: string; image: string },
+      signer: HomeownerSigner = "primary",
+    ) => {
       const current = state.estimates.find((estimate) => estimate.id === id);
       if (!current) return;
-      const acceptedAt = current.acceptedAt || new Date().toISOString();
-      const signatureName = signature?.name.trim() || current.signatureName;
-      const signatureImage = signature?.image || current.signatureImage;
+      const role: HomeownerSigner =
+        signer === "second" && estimateNeedsSecondSignature(current) ? "second" : "primary";
+      const now = new Date().toISOString();
+      const next = nextEstimateSignature(current, role, now);
+      const signatureName = signature?.name.trim() || (role === "second" ? current.secondSignatureName : current.signatureName);
+      const signatureImage = signature?.image || (role === "second" ? current.secondSignatureImage : current.signatureImage);
+      const patch =
+        role === "second"
+          ? {
+              ...next,
+              secondSignatureName: signatureName,
+              secondSignatureImage: signatureImage,
+            }
+          : {
+              ...next,
+              signatureName,
+              signatureImage,
+            };
       const apply = () =>
         setState((prev) => ({
           ...prev,
           estimates: prev.estimates.map((estimate) =>
-            estimate.id === id
-              ? {
-                  ...estimate,
-                  status: "accepted" as const,
-                  acceptedAt,
-                  signatureName,
-                  signatureImage,
-                }
-              : estimate,
+            estimate.id === id ? fillEstimate({ ...estimate, ...patch }) : estimate,
           ),
         }));
       const supabase = maybeClient();
       if (supabase) {
-        const payload = {
-          status: "accepted" as const,
-          accepted_at: acceptedAt,
-          signature_name: signatureName,
-          signature_image: signatureImage,
-        };
-        let { error } = await supabase.from("estimates").update(payload).eq("id", id);
+        let { error } = await supabase.from("estimates").update(estimatePatch(patch)).eq("id", id);
+        if (error && isMissingSignerLinks(error) && role === "second") {
+          apply();
+          toast.message(missingSignerLinksMessage());
+          return;
+        }
         if (error && isMissingSignatureColumn(error)) {
           const retry = await supabase
             .from("estimates")
-            .update({ status: "accepted", accepted_at: acceptedAt })
+            .update({
+              status: patch.status,
+              accepted_at: patch.acceptedAt,
+            })
             .eq("id", id);
           error = retry.error;
           if (!retry.error) toast.message(missingSignatureMessage());
@@ -2749,11 +2838,22 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
       apply();
-      if (current.status === "accepted") return;
       const opportunityId = current.opportunityId || (await ensureLeadForEstimate(current));
       if (opportunityId && opportunityId !== current.opportunityId) {
         await updateEstimate(id, { opportunityId });
       }
+      if (opportunityId && next.status !== "accepted") {
+        await addActivity({
+          entityType: "opportunity",
+          entityId: opportunityId,
+          type: "note",
+          body: signatureName
+            ? `${signatureName} signed proposal ${current.number}. Waiting on the other homeowner.`
+            : `A homeowner signed proposal ${current.number}. Waiting on the other homeowner.`,
+        });
+        return;
+      }
+      if (current.status === "accepted" || next.status !== "accepted") return;
       const total = amountForEstimate(
         current,
         state.estimateLines,
@@ -2788,8 +2888,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           entityId: opportunityId,
           type: "note",
           body: signatureName
-            ? `Owner signed proposal ${current.number} (${signatureName}). Job value updated from the signed estimate.`
-            : `Owner signed proposal ${current.number}. Job value updated from the signed estimate.`,
+            ? `${signatureName} signed proposal ${current.number}. Job value updated from the signed estimate.`
+            : `Proposal ${current.number} is signed. Job value updated from the signed estimate.`,
         });
       }
     },
@@ -2846,8 +2946,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         acceptedAt: null,
         secondAcceptedAt: null,
         ownerSignedAt: null,
+        ownerSignedName: "",
         signatureName: "",
         signatureImage: "",
+        secondSignatureName: "",
+        secondSignatureImage: "",
       };
       const apply = () =>
         setState((prev) => ({
@@ -2938,10 +3041,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     async (id: string) => {
       const current = state.estimates.find((estimate) => estimate.id === id);
       if (!current) throw new Error("Estimate not found.");
-      if (current.shareToken) return current.shareToken;
-      const shareToken = newShareToken();
-      await updateEstimate(id, { shareToken });
-      return shareToken;
+      const tokens = mintEstimateSignerTokens(current);
+      if (
+        tokens.shareToken === current.shareToken &&
+        tokens.secondShareToken === current.secondShareToken
+      ) {
+        return tokens.shareToken;
+      }
+      await updateEstimate(id, tokens);
+      return tokens.shareToken;
     },
     [state.estimates, updateEstimate]
   );
@@ -4690,8 +4798,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error("Connect a Supabase project to attach files.");
         return [];
       }
+      const client = supabase;
       const author = (effectiveStaff?.name || user.name).trim();
       const saved: JobFile[] = [];
+      const job = state.jobs.find((item) => item.id === jobId);
+      let fields = job?.customFields ?? [];
+
       for (const file of files) {
         if (file.size > 25 * 1024 * 1024) {
           toast.error(`${file.name} is over 25 MB.`);
@@ -4699,46 +4811,117 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
         const rawExt = file.name.split(".").pop()?.toLowerCase() ?? "";
         const ext = rawExt && rawExt.length <= 8 && /^[a-z0-9]+$/.test(rawExt) ? rawExt : "bin";
-        const storagePath = `${user.companyId}/${jobId}/${crypto.randomUUID()}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from("job-files")
-          .upload(storagePath, file, {
-            contentType: file.type || "application/octet-stream",
+        const fileId = crypto.randomUUID();
+        const storagePath = `${user.companyId}/${jobId}/${fileId}.${ext}`;
+        const contentType = file.type || "application/octet-stream";
+
+        async function tryUpload(bucket: string, path: string) {
+          const { error } = await client.storage.from(bucket).upload(path, file, {
+            contentType,
             upsert: false,
           });
-        if (uploadError) {
-          toast.error(
-            isMissingJobFiles(uploadError) ? missingJobFilesMessage() : uploadError.message,
-          );
+          if (error) return { ok: false as const, error };
+          return {
+            ok: true as const,
+            bucket,
+            storagePath: path,
+            url: client.storage.from(bucket).getPublicUrl(path).data.publicUrl,
+          };
+        }
+
+        let uploaded: { bucket: string; storagePath: string; url: string } | null = null;
+        let lastError: { message?: string; code?: string } | null = null;
+
+        const primary = await tryUpload("job-files", storagePath);
+        if (primary.ok) {
+          uploaded = primary;
+        } else {
+          lastError = primary.error;
+          if (isMissingStorageBucket(primary.error)) {
+            await client.storage.createBucket("job-files", {
+              public: true,
+              fileSizeLimit: 25 * 1024 * 1024,
+            });
+            const retry = await tryUpload("job-files", storagePath);
+            if (retry.ok) uploaded = retry;
+            else lastError = retry.error;
+          }
+        }
+
+        const fallbackPath = `${user.companyId}/job-files/${jobId}/${fileId}.${ext}`;
+        if (!uploaded && file.size <= 10 * 1024 * 1024) {
+          if (isPdfFile(file) || isImageFile(file)) {
+            const receipts = await tryUpload("receipts", fallbackPath);
+            if (receipts.ok) uploaded = receipts;
+            else lastError = receipts.error;
+          }
+          if (!uploaded && isImageFile(file)) {
+            const photos = await tryUpload("job-photos", storagePath);
+            if (photos.ok) uploaded = photos;
+            else lastError = photos.error;
+          }
+          if (!uploaded) {
+            const anyReceipts = await tryUpload("receipts", fallbackPath);
+            if (anyReceipts.ok) uploaded = anyReceipts;
+            else lastError = anyReceipts.error;
+          }
+        }
+
+        if (!uploaded && file.size <= 1_000_000) {
+          try {
+            uploaded = { bucket: "inline", storagePath: "", url: await readFileDataUrl(file) };
+          } catch {
+            /* keep lastError */
+          }
+        }
+
+        if (!uploaded) {
+          toast.error(lastError?.message ?? `Could not attach ${file.name}.`);
           continue;
         }
-        const url = supabase.storage.from("job-files").getPublicUrl(storagePath).data.publicUrl;
-        const payload = {
-          company_id: user.companyId,
-          job_id: jobId,
+
+        const record: JobFile = {
+          id: fileId,
+          jobId,
           name: file.name.replace(/^.*[/\\]/, "").trim() || "Untitled",
-          mime_type: file.type || "",
-          size_bytes: file.size,
-          storage_path: storagePath,
-          url,
-          created_by: author,
+          mimeType: file.type || "",
+          sizeBytes: file.size,
+          url: uploaded.url,
+          storagePath: uploaded.storagePath,
+          createdBy: author,
+          createdAt: new Date().toISOString(),
+          bucket: uploaded.bucket,
+        };
+
+        const payload = {
+          id: record.id,
+          company_id: user.companyId,
+          job_id: record.jobId,
+          name: record.name,
+          mime_type: record.mimeType,
+          size_bytes: record.sizeBytes,
+          storage_path: record.storagePath,
+          url: record.url,
+          created_by: record.createdBy,
         };
         const { data, error } = await supabase.from("job_files").insert(payload).select("*").single();
-        if (error || !data) {
-          void supabase.storage.from("job-files").remove([storagePath]);
-          toast.error(
-            isMissingJobFiles(error) ? missingJobFilesMessage() : error?.message ?? "Could not save the file.",
-          );
+        if (data && !error) {
+          saved.push({ ...mapJobFile(data), bucket: uploaded.bucket });
           continue;
         }
-        saved.push(mapJobFile(data));
+
+        fields = withJobFileField(fields, record);
+        if (job) {
+          await updateJob(jobId, { customFields: fields });
+        }
+        saved.push(record);
       }
       if (saved.length > 0) {
         setState((prev) => ({ ...prev, jobFiles: [...saved, ...(prev.jobFiles ?? [])] }));
       }
       return saved;
     },
-    [effectiveStaff?.name, user.companyId, user.name],
+    [effectiveStaff?.name, state.jobs, updateJob, user.companyId, user.name],
   );
 
   const deleteJobFile = useCallback(
@@ -4747,11 +4930,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (!current) return false;
       const supabase = maybeClient();
       if (supabase) {
-        if (current.storagePath) {
-          const { error: removeError } = await supabase.storage.from("job-files").remove([current.storagePath]);
-          if (removeError && !isMissingJobFiles(removeError)) {
-            toast.error(removeError.message);
-            return false;
+        if (current.storagePath && current.bucket !== "inline") {
+          const buckets = current.bucket
+            ? [current.bucket]
+            : ["job-files", "receipts", "job-photos"];
+          for (const bucket of buckets) {
+            const { error: removeError } = await supabase.storage.from(bucket).remove([current.storagePath]);
+            if (!removeError || isMissingStorageBucket(removeError) || isMissingJobFiles(removeError)) {
+              break;
+            }
           }
         }
         const { error } = await supabase.from("job_files").delete().eq("id", id);
@@ -4760,13 +4947,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           return false;
         }
       }
+      const job = state.jobs.find((item) => item.id === current.jobId);
+      if (job?.customFields.some((field) => field.id === id)) {
+        await updateJob(job.id, { customFields: withoutJobFileId(job.customFields, id) });
+      }
       setState((prev) => ({
         ...prev,
         jobFiles: prev.jobFiles.filter((file) => file.id !== id),
       }));
       return true;
     },
-    [state.jobFiles],
+    [state.jobFiles, state.jobs, updateJob],
   );
 
   const addPhotoReport = useCallback(

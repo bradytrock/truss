@@ -377,8 +377,11 @@ export interface Estimate {
   state: string;
   postalCode: string;
   shareToken: string;
+  secondShareToken: string;
   signatureName: string;
   signatureImage: string;
+  secondSignatureName: string;
+  secondSignatureImage: string;
 }
 
 export interface EstimateLine {
@@ -555,6 +558,7 @@ export interface JobFile {
   storagePath: string;
   createdBy: string;
   createdAt: string;
+  bucket?: string;
 }
 
 export const PHOTO_PAGE_LAYOUTS = ["one", "two", "four"] as const;

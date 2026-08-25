@@ -381,8 +381,11 @@ export function mapEstimate(row: EstimateRow): Estimate {
     state: row.state ?? "",
     postalCode: row.postal_code ?? "",
     shareToken: row.share_token ?? "",
+    secondShareToken: "second_share_token" in row ? String(row.second_share_token ?? "") : "",
     signatureName: row.signature_name ?? "",
     signatureImage: row.signature_image ?? "",
+    secondSignatureName: "second_signature_name" in row ? String(row.second_signature_name ?? "") : "",
+    secondSignatureImage: "second_signature_image" in row ? String(row.second_signature_image ?? "") : "",
   });
 }
 
@@ -502,8 +505,11 @@ export function estimatePatch(patch: Partial<Estimate>) {
   if (patch.state !== undefined) row.state = patch.state;
   if (patch.postalCode !== undefined) row.postal_code = patch.postalCode;
   if (patch.shareToken !== undefined) row.share_token = patch.shareToken;
+  if (patch.secondShareToken !== undefined) row.second_share_token = patch.secondShareToken;
   if (patch.signatureName !== undefined) row.signature_name = patch.signatureName;
   if (patch.signatureImage !== undefined) row.signature_image = patch.signatureImage;
+  if (patch.secondSignatureName !== undefined) row.second_signature_name = patch.secondSignatureName;
+  if (patch.secondSignatureImage !== undefined) row.second_signature_image = patch.secondSignatureImage;
   return row;
 }
 

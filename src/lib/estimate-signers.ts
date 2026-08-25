@@ -1,6 +1,9 @@
+import { isSignaturePng } from "@/lib/estimate-signature";
+import { newShareToken } from "@/lib/share";
 import type { CurrentUser, Estimate, Job, Opportunity, StaffMember } from "@/lib/types";
 
 export type EstimateSigner = "primary" | "second" | "both";
+export type HomeownerSigner = "primary" | "second";
 
 export function joinCustomerNames(primary: string, second?: string | null) {
   const a = primary.trim() || "Homeowner";
@@ -22,12 +25,37 @@ export function estimateNeedsSecondSignature(estimate: Pick<Estimate, "secondCon
   return Boolean(estimate.secondContactId);
 }
 
-export function estimateFullySigned(
-  estimate: Pick<Estimate, "secondContactId" | "acceptedAt" | "secondAcceptedAt">,
+export function homeownerHasSigned(
+  estimate: Pick<Estimate, "acceptedAt" | "secondAcceptedAt"> &
+    Partial<Pick<Estimate, "signatureImage" | "secondSignatureImage">>,
+  role: HomeownerSigner,
 ) {
-  if (!estimate.acceptedAt) return false;
+  if (role === "second") {
+    return Boolean(estimate.secondAcceptedAt) || isSignaturePng(estimate.secondSignatureImage);
+  }
+  return Boolean(estimate.acceptedAt) || isSignaturePng(estimate.signatureImage);
+}
+
+export function estimateFullySigned(
+  estimate: Pick<Estimate, "secondContactId" | "acceptedAt" | "secondAcceptedAt"> &
+    Partial<Pick<Estimate, "signatureImage" | "secondSignatureImage">>,
+) {
+  if (!homeownerHasSigned(estimate, "primary")) return false;
   if (!estimate.secondContactId) return true;
-  return Boolean(estimate.secondAcceptedAt);
+  return homeownerHasSigned(estimate, "second");
+}
+
+export function homeownersAwaitingSignature(
+  estimate: Pick<
+    Estimate,
+    | "secondContactId"
+    | "acceptedAt"
+    | "secondAcceptedAt"
+    | "signatureImage"
+    | "secondSignatureImage"
+  >,
+) {
+  return !estimateFullySigned(estimate);
 }
 
 export function nextEstimateSignature(
@@ -45,7 +73,9 @@ export function nextEstimateSignature(
     secondAcceptedAt = secondAcceptedAt ?? now;
   }
   if (!needsSecond) secondAcceptedAt = null;
-  const fully = Boolean(acceptedAt) && (!needsSecond || Boolean(secondAcceptedAt));
+  const fully =
+    (Boolean(acceptedAt) || isSignaturePng(estimate.signatureImage)) &&
+    (!needsSecond || Boolean(secondAcceptedAt) || isSignaturePng(estimate.secondSignatureImage));
   return {
     acceptedAt,
     secondAcceptedAt,
@@ -87,6 +117,37 @@ export function resolveProjectOwner(input: {
   };
 }
 
+export function signerRoleForToken(
+  estimate: Pick<Estimate, "shareToken" | "secondShareToken" | "secondContactId">,
+  token: string | null | undefined,
+): HomeownerSigner | null {
+  const value = token?.trim() ?? "";
+  if (!value) return null;
+  if (
+    estimate.secondContactId &&
+    estimate.secondShareToken &&
+    estimate.secondShareToken === value &&
+    estimate.shareToken !== value
+  ) {
+    return "second";
+  }
+  if (estimate.shareToken === value) return "primary";
+  if (estimate.secondShareToken === value) return "second";
+  return null;
+}
+
+export function mintEstimateSignerTokens(
+  estimate: Pick<Estimate, "shareToken" | "secondShareToken" | "secondContactId">,
+) {
+  const shareToken = estimate.shareToken || newShareToken();
+  let secondShareToken = estimate.secondContactId ? estimate.secondShareToken || "" : "";
+  if (estimate.secondContactId && (!secondShareToken || secondShareToken === shareToken)) {
+    secondShareToken = newShareToken();
+  }
+  if (!estimate.secondContactId) secondShareToken = "";
+  return { shareToken, secondShareToken };
+}
+
 export function estimateSignatureLines(
   estimate: Pick<
     Estimate,
@@ -97,6 +158,10 @@ export function estimateSignatureLines(
     | "ownerSignedName"
     | "sentAt"
     | "status"
+    | "signatureName"
+    | "signatureImage"
+    | "secondSignatureName"
+    | "secondSignatureImage"
   >,
   names: { contractor?: string | null; primary: string; second?: string | null },
 ) {
@@ -105,26 +170,30 @@ export function estimateSignatureLines(
     party: "contractor" | "homeowner";
     name: string;
     signedAt: string | null;
+    image: string;
   }> = [
     {
       role: "contractor",
       party: "contractor",
       name: estimate.ownerSignedName.trim() || names.contractor?.trim() || "Contractor",
       signedAt: contractorSignedAt(estimate),
+      image: "",
     },
     {
       role: "primary",
       party: "homeowner",
-      name: names.primary.trim() || "Homeowner",
-      signedAt: estimate.acceptedAt,
+      name: estimate.signatureName.trim() || names.primary.trim() || "Homeowner",
+      signedAt: homeownerHasSigned(estimate, "primary") ? estimate.acceptedAt || estimate.sentAt : null,
+      image: estimate.signatureImage,
     },
   ];
   if (estimate.secondContactId) {
     lines.push({
       role: "second",
       party: "homeowner",
-      name: names.second?.trim() || "Second homeowner",
-      signedAt: estimate.secondAcceptedAt,
+      name: estimate.secondSignatureName.trim() || names.second?.trim() || "Second homeowner",
+      signedAt: homeownerHasSigned(estimate, "second") ? estimate.secondAcceptedAt : null,
+      image: estimate.secondSignatureImage,
     });
   }
   return lines;

@@ -69,6 +69,7 @@ import {
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate } from "@/lib/format";
 import { assignedCrewPatch, isDeletedJob, jobAddress, mapsUrl, uniqueIds, uniqueNames } from "@/lib/job-record";
+import { visibleJobCustomFields } from "@/lib/job-files";
 import { createPhotoReport, PAGE_TEMPLATE_OPTIONS } from "@/lib/photo-report";
 import { shareUrl } from "@/lib/share";
 import { leadSourceChoices, leadSourceLabel } from "@/lib/leads";
@@ -1097,13 +1098,13 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
         </TabsContent>
 
         <TabsContent value="fields" className="border-x border-b p-4">
-          {job.customFields.length === 0 ? (
+          {visibleJobCustomFields(job.customFields).length === 0 ? (
             <p className="mb-4 text-sm text-muted-foreground">
               Claim numbers, deductibles, HOA notes — fields that do not belong on every job.
             </p>
           ) : (
             <ul className="mb-4 divide-y border">
-              {job.customFields.map((field) => (
+              {visibleJobCustomFields(job.customFields).map((field) => (
                 <li key={field.id} className="flex items-start gap-3 px-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     <p className="text-xs text-muted-foreground">{field.label}</p>

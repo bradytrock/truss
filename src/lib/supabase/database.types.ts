@@ -459,8 +459,11 @@ export type Database = {
           state: string;
           postal_code: string;
           share_token: string;
+          second_share_token: string;
           signature_name: string;
           signature_image: string;
+          second_signature_name: string;
+          second_signature_image: string;
         };
         Insert: {
           id?: string;
@@ -493,8 +496,11 @@ export type Database = {
           state?: string;
           postal_code?: string;
           share_token?: string;
+          second_share_token?: string;
           signature_name?: string;
           signature_image?: string;
+          second_signature_name?: string;
+          second_signature_image?: string;
         };
         Update: Partial<Database["public"]["Tables"]["estimates"]["Insert"]>;
         Relationships: [];

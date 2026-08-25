@@ -57,7 +57,7 @@ Who took a job photo needs [`20260821230000_job_photo_created_by.sql`](https://r
 
 Pages (job documents you send out) need [`20260821240000_page_share_tokens.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821240000_page_share_tokens.sql) (or a fresh bootstrap) so a client share link stays on the Page. Until that runs, you can still build Pages and download a PDF in this browser.
 
-Job file attachments need [`20260825170000_job_files.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825170000_job_files.sql) (or a fresh bootstrap) so PDFs and other documents stay on the job. Until that runs, the Files tab still opens; attaching a file will tell you to run the SQL.
+Job file attachments need [`20260825170000_job_files.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825170000_job_files.sql) (or a fresh bootstrap) so PDFs and other documents live in the `job-files` bucket. If that table already exists but uploads still fail, run [`20260825181000_job_files_grants.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825181000_job_files_grants.sql). Until the bucket is there, Attach still saves the file on the job using existing storage.
 
 Two-way texts need [`20260825120000_messages.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825120000_messages.sql) (or a fresh bootstrap) so Messages persist and inbound replies log on the job. Until that runs, you can still send from this browser; the thread stays local until you run the SQL.
 

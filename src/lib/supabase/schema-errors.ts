@@ -239,6 +239,22 @@ export function ambiguousSignJobIdMessage() {
   return `Run ${SIGN_ESTIMATE_JOB_ID_SQL} in the SQL editor so signing a proposal can attach the job.`;
 }
 
+export const ESTIMATE_SIGNER_LINKS_SQL = "supabase/migrations/20260825180000_estimate_signer_links.sql";
+
+export function isMissingSignerLinks(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("second_share_token") ||
+    message.includes("second_signature_name") ||
+    message.includes("second_signature_image")
+  );
+}
+
+export function missingSignerLinksMessage() {
+  return `Saved in this browser. Run ${ESTIMATE_SIGNER_LINKS_SQL} in the SQL editor so each homeowner gets a unique signing link.`;
+}
+
 export const STAFF_PROFILE_PHONE_SQL = "supabase/migrations/20260825160000_staff_profile_phone.sql";
 
 export function isMissingStaffPhoneColumn(error: { message?: string; code?: string } | null | undefined) {
@@ -256,16 +272,16 @@ export const JOB_FILES_SQL = "supabase/migrations/20260825170000_job_files.sql";
 export function isMissingJobFiles(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
   const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentionsTable = message.includes("job_files") || message.includes("job_file");
   return (
-    message.includes("job_files") ||
-    message.includes("job-files") ||
-    ((error.code === "PGRST205" || message.includes("schema cache") || message.includes("could not find the")) &&
-      message.includes("job_file"))
+    (code === "pgrst205" && mentionsTable) ||
+    ((message.includes("schema cache") || message.includes("could not find the")) && mentionsTable)
   );
 }
 
 export function missingJobFilesMessage() {
-  return `Saved in this browser. Run ${JOB_FILES_SQL} in the SQL editor so job files stay on the record.`;
+  return `Could not save that file to the job. Run ${JOB_FILES_SQL} in the SQL editor if this keeps happening.`;
 }
 
 export const JOB_SOFT_DELETE_SQL = "supabase/migrations/20260821220000_job_soft_delete.sql";

@@ -1,4 +1,5 @@
 import { joinCustomerNames } from "@/lib/estimate-signers";
+import { shareUrl } from "@/lib/share";
 import type { Client, Contact, CrmState, Estimate, Invoice, Job, Opportunity } from "@/lib/types";
 
 export type CustomerRecord = {
@@ -42,12 +43,13 @@ export type ShareRecipient = {
   id: string;
   name: string;
   phone: string;
+  url?: string;
 };
 
-function addRecipient(list: ShareRecipient[], contact: Contact | undefined) {
+function addRecipient(list: ShareRecipient[], contact: Contact | undefined, url?: string) {
   if (!contact) return;
   if (list.some((item) => item.id === contact.id)) return;
-  list.push({ id: contact.id, name: contact.name, phone: contact.phone.trim() });
+  list.push({ id: contact.id, name: contact.name, phone: contact.phone.trim(), url });
 }
 
 export function resolveShareContacts(record: CustomerRecord, book: PartyBook): ShareRecipient[] {
@@ -72,7 +74,17 @@ export function resolveShareContacts(record: CustomerRecord, book: PartyBook): S
 }
 
 export function shareContactsForEstimate(estimate: Estimate, book: PartyBook) {
-  return resolveShareContacts(estimate, book);
+  const list = resolveShareContacts(estimate, book);
+  return list.map((person, index) => {
+    if (index === 0 && estimate.shareToken) {
+      return { ...person, url: shareUrl("e", estimate.shareToken) };
+    }
+    if (index === 1) {
+      const token = estimate.secondShareToken || estimate.shareToken;
+      return token ? { ...person, url: shareUrl("e", token) } : person;
+    }
+    return person;
+  });
 }
 
 export function shareContactsForInvoice(
