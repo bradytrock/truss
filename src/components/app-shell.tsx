@@ -504,6 +504,7 @@ function UserMenu() {
           </>
         ) : null}
         <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => router.push("/profile")}>Profile</DropdownMenuItem>
         {viewer && canManageSettings(viewer.role, viewer) ? (
           <DropdownMenuItem onClick={() => router.push("/settings")}>Settings</DropdownMenuItem>
         ) : null}

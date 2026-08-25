@@ -16,7 +16,7 @@ export function ProjectManagerBlock({
   return (
     <div>
       <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Project manager</h3>
-      <p className="text-sm font-medium">Project Manager Name: {name}</p>
+      <p className="text-sm font-medium">{name}</p>
       {title ? <p className="mt-0.5 text-sm text-muted-foreground">{title}</p> : null}
       {phoneLine ? <p className="text-sm text-muted-foreground">{phoneLine}</p> : null}
       {email ? (

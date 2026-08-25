@@ -33,6 +33,7 @@ function staffFromShared(payload: SharedPagePayload): StaffMember[] {
     teamId: null,
     initials: member.name.slice(0, 2).toUpperCase(),
     email: "",
+    phone: "",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,

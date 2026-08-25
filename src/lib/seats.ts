@@ -32,6 +32,7 @@ export function staffMemberFromProfile(input: {
     teamId: null,
     initials: input.initials || initialsFromName(input.name),
     email: "",
+    phone: "",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,

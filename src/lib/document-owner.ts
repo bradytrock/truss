@@ -1,7 +1,7 @@
 import { namesMatch } from "@/lib/seats";
 import { NORTHLINE_COMPANY, type CompanySettings } from "@/lib/types";
 
-type StaffContact = { id: string; name: string; title?: string; email: string };
+type StaffContact = { id: string; name: string; title?: string; email: string; phone?: string };
 
 export type ProjectManagerContact = {
   name: string;
@@ -63,7 +63,7 @@ export function documentProjectManager(input: {
     name: named,
     title: owner?.title?.trim() || "Project Manager",
     email: owner?.email.trim() ?? "",
-    phone: input.companyPhone?.trim() ?? "",
+    phone: owner?.phone?.trim() || input.companyPhone?.trim() || "",
   };
 }
 

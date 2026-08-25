@@ -239,6 +239,18 @@ export function ambiguousSignJobIdMessage() {
   return `Run ${SIGN_ESTIMATE_JOB_ID_SQL} in the SQL editor so signing a proposal can attach the job.`;
 }
 
+export const STAFF_PROFILE_PHONE_SQL = "supabase/migrations/20260825160000_staff_profile_phone.sql";
+
+export function isMissingStaffPhoneColumn(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return message.includes("phone") && (message.includes("team_members") || error.code === "PGRST204");
+}
+
+export function missingStaffPhoneMessage() {
+  return `Saved in this browser. Run ${STAFF_PROFILE_PHONE_SQL} in the SQL editor so a teammate's direct line prints on estimates and invoices.`;
+}
+
 export const JOB_SOFT_DELETE_SQL = "supabase/migrations/20260821220000_job_soft_delete.sql";
 
 export function isMissingDeletedColumn(error: { message?: string; code?: string } | null | undefined) {

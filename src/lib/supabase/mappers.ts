@@ -120,6 +120,7 @@ export function mapStaff(row: StaffRow): StaffMember {
     teamId: row.team_id,
     initials: row.initials || row.name.slice(0, 2).toUpperCase(),
     email: row.email ?? "",
+    phone: row.phone ?? "",
     locked: Boolean(row.locked),
     restricted: Boolean(row.restricted),
     inviteExpiresAt: row.invite_expires_at ?? null,

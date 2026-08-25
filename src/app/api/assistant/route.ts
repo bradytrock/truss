@@ -33,6 +33,7 @@ function viewerFromContext(context: AssistantContext): StaffMember | undefined {
     teamId: null,
     initials: "",
     email: "",
+    phone: "",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,

@@ -143,6 +143,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
         teamId: row.team_id ?? null,
         initials: initialsFromName(row.name),
         email: "",
+        phone: "",
         locked: false,
         restricted: false,
         inviteExpiresAt: null,

@@ -120,6 +120,7 @@ export type Database = {
           team_id: string | null;
           initials: string;
           email: string;
+          phone: string;
           locked: boolean;
           restricted: boolean;
           invite_expires_at: string | null;
@@ -134,6 +135,7 @@ export type Database = {
           team_id?: string | null;
           initials?: string;
           email?: string;
+          phone?: string;
           locked?: boolean;
           restricted?: boolean;
           invite_expires_at?: string | null;

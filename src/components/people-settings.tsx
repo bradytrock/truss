@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Copy, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -47,7 +47,7 @@ import {
   inviteSignupUrl,
   staffStatusLabel,
 } from "@/lib/accounts";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatPhone } from "@/lib/format";
 import { copyText } from "@/lib/share";
 import type { SeatRole, StaffMember } from "@/lib/types";
 import { SEAT_ROLE_LABELS, SEAT_ROLES } from "@/lib/types";
@@ -88,10 +88,11 @@ export function PeopleSettings({
     email: string;
     role: SeatRole;
     title?: string;
+    phone?: string;
   }) => Promise<{ member: StaffMember; inviteUrl: string | null } | null>;
   onUpdate: (
     id: string,
-    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "locked" | "restricted">>,
+    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "locked" | "restricted">>,
   ) => Promise<boolean>;
   onRefreshInvite: (id: string) => Promise<string | null>;
   onRemove: (id: string) => Promise<boolean>;
@@ -100,6 +101,7 @@ export function PeopleSettings({
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [inviteName, setInviteName] = useState("");
   const [removeTarget, setRemoveTarget] = useState<StaffMember | null>(null);
+  const [profileTarget, setProfileTarget] = useState<StaffMember | null>(null);
   const people = useMemo(
     () =>
       [...staff].sort((left, right) => {
@@ -152,6 +154,7 @@ export function PeopleSettings({
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
+                      <TableHead>Phone</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Account</TableHead>
@@ -174,6 +177,9 @@ export function PeopleSettings({
                         <TableCell className="text-muted-foreground">
                           {member.email || "No email"}
                         </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {member.phone ? formatPhone(member.phone) : "—"}
+                        </TableCell>
                         <TableCell>
                           <RoleSelect
                             member={member}
@@ -187,6 +193,7 @@ export function PeopleSettings({
                           <SeatMenu
                             member={member}
                             isSelf={member.id === viewerId}
+                            onEditProfile={() => setProfileTarget(member)}
                             onUpdate={onUpdate}
                             onRefreshInvite={async () => {
                               const url = await onRefreshInvite(member.id);
@@ -222,6 +229,9 @@ export function PeopleSettings({
                         </p>
                         <p className="text-xs text-muted-foreground">{member.title}</p>
                         <p className="mt-1 text-sm text-muted-foreground">{member.email || "No email"}</p>
+                        {member.phone ? (
+                          <p className="text-sm text-muted-foreground">{formatPhone(member.phone)}</p>
+                        ) : null}
                       </div>
                       <StatusBadge member={member} />
                     </div>
@@ -233,6 +243,7 @@ export function PeopleSettings({
                     <SeatMenu
                       member={member}
                       isSelf={member.id === viewerId}
+                      onEditProfile={() => setProfileTarget(member)}
                       onUpdate={onUpdate}
                       onRefreshInvite={async () => {
                         const url = await onRefreshInvite(member.id);
@@ -328,6 +339,17 @@ export function PeopleSettings({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <EditProfileDialog
+        member={profileTarget}
+        onOpenChange={(open) => !open && setProfileTarget(null)}
+        onSave={async (patch) => {
+          if (!profileTarget) return false;
+          const ok = await onUpdate(profileTarget.id, patch);
+          if (ok) setProfileTarget(null);
+          return ok;
+        }}
+      />
     </>
   );
 }
@@ -382,6 +404,7 @@ function RoleSelect({
 function SeatMenu({
   member,
   isSelf,
+  onEditProfile,
   onUpdate,
   onRefreshInvite,
   onCopyInvite,
@@ -390,6 +413,7 @@ function SeatMenu({
 }: {
   member: StaffMember;
   isSelf: boolean;
+  onEditProfile: () => void;
   onUpdate: (
     id: string,
     patch: Partial<Pick<StaffMember, "locked" | "restricted">>,
@@ -416,6 +440,8 @@ function SeatMenu({
         {full ? null : <span className="sr-only">Account actions</span>}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={onEditProfile}>Edit profile</DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem disabled={!canInvite} onClick={() => void onCopyInvite()}>
           Copy invite link
         </DropdownMenuItem>
@@ -456,10 +482,12 @@ function AddTeammateDialog({
     email: string;
     role: SeatRole;
     title?: string;
+    phone?: string;
   }) => Promise<boolean>;
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [role, setRole] = useState<SeatRole>("project_manager");
   const [title, setTitle] = useState(defaultTitleForRole("project_manager"));
   const [pending, setPending] = useState(false);
@@ -467,6 +495,7 @@ function AddTeammateDialog({
   function reset() {
     setName("");
     setEmail("");
+    setPhone("");
     setRole("project_manager");
     setTitle(defaultTitleForRole("project_manager"));
   }
@@ -475,7 +504,7 @@ function AddTeammateDialog({
     event.preventDefault();
     setPending(true);
     try {
-      const ok = await onInvite({ name, email, role, title });
+      const ok = await onInvite({ name, email, role, title, phone });
       if (ok) reset();
     } finally {
       setPending(false);
@@ -518,6 +547,16 @@ function AddTeammateDialog({
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="alex@company.com"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="seat-phone">Phone</Label>
+              <Input
+                id="seat-phone"
+                type="tel"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="(303) 555-0142"
               />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -563,6 +602,109 @@ function AddTeammateDialog({
             </Button>
             <Button type="submit" nativeButton disabled={pending}>
               {pending ? "Saving…" : email.trim() ? "Add and copy invite" : "Add to roster"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditProfileDialog({
+  member,
+  onOpenChange,
+  onSave,
+}: {
+  member: StaffMember | null;
+  onOpenChange: (open: boolean) => void;
+  onSave: (
+    patch: Partial<Pick<StaffMember, "name" | "title" | "email" | "phone">>,
+  ) => Promise<boolean>;
+}) {
+  const [name, setName] = useState("");
+  const [title, setTitle] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [pending, setPending] = useState(false);
+
+  useEffect(() => {
+    if (!member) return;
+    setName(member.name);
+    setTitle(member.title);
+    setEmail(member.email);
+    setPhone(member.phone);
+  }, [member]);
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!member) return;
+    setPending(true);
+    try {
+      await onSave({
+        name: name.trim(),
+        title: title.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+      });
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Dialog open={Boolean(member)} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <form onSubmit={onSubmit} className="grid gap-4">
+          <DialogHeader>
+            <DialogTitle>Profile for {member?.name}</DialogTitle>
+            <DialogDescription>
+              Name, title, and phone print on estimates and invoices for jobs they own.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="profile-edit-name">Name</Label>
+              <Input
+                id="profile-edit-name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                required
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="profile-edit-title">Title</Label>
+              <Input
+                id="profile-edit-title"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="profile-edit-phone">Phone</Label>
+              <Input
+                id="profile-edit-phone"
+                type="tel"
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+                placeholder="(303) 555-0142"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="profile-edit-email">Email</Label>
+              <Input
+                id="profile-edit-email"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" nativeButton disabled={pending || !name.trim()}>
+              {pending ? "Saving…" : "Save profile"}
             </Button>
           </DialogFooter>
         </form>

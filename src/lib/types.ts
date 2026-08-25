@@ -171,6 +171,7 @@ export interface StaffMember {
   teamId: string | null;
   initials: string;
   email: string;
+  phone: string;
   locked: boolean;
   restricted: boolean;
   inviteExpiresAt: string | null;
@@ -890,6 +891,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     teamId: null,
     initials: "JH",
     email: "",
+    phone: "",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,
@@ -903,6 +905,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     teamId: null,
     initials: "PS",
     email: "",
+    phone: "",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,
@@ -916,6 +919,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     teamId: null,
     initials: "CD",
     email: "",
+    phone: "",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,
@@ -929,6 +933,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     teamId: "team_field",
     initials: "LO",
     email: "",
+    phone: "",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,
@@ -942,6 +947,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     teamId: "team_pursuits",
     initials: "MC",
     email: "",
+    phone: "",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,
@@ -955,6 +961,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     teamId: "team_field",
     initials: "EV",
     email: "",
+    phone: "",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,
@@ -968,6 +975,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     teamId: "team_field",
     initials: "TB",
     email: "",
+    phone: "",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,
@@ -981,6 +989,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     teamId: null,
     initials: "NK",
     email: "",
+    phone: "",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,

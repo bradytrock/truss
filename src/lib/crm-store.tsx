@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId } from "@/lib/job-record";
@@ -566,10 +566,11 @@ type CrmContextValue = CrmState & {
     email: string;
     role: SeatRole;
     title?: string;
+    phone?: string;
   }) => Promise<{ member: StaffMember; inviteUrl: string | null } | null>;
   updateStaffAccount: (
     id: string,
-    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "locked" | "restricted">>,
+    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "locked" | "restricted">>,
   ) => Promise<boolean>;
   refreshStaffInvite: (id: string) => Promise<string | null>;
   removeStaff: (id: string) => Promise<boolean>;
@@ -4987,7 +4988,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const supabase = createClient();
       const inviteToken = extras?.inviteToken ?? member.inviteToken;
       const inviteExpiresAt = extras?.inviteExpiresAt ?? member.inviteExpiresAt;
-      const { error } = await supabase.from("team_members").upsert({
+      const payload = {
         id: member.id,
         company_id: user.companyId,
         name: member.name,
@@ -4996,10 +4997,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         team_id: member.teamId,
         initials: member.initials || initialsFromName(member.name),
         email: member.email,
+        phone: member.phone,
         locked: member.locked,
         restricted: member.restricted,
         invite_expires_at: inviteExpiresAt,
-      });
+      };
+      let { error } = await supabase.from("team_members").upsert(payload);
+      if (error && isMissingStaffPhoneColumn(error)) {
+        const { phone: _phone, ...withoutPhone } = payload;
+        const retry = await supabase.from("team_members").upsert(withoutPhone);
+        error = retry.error;
+        if (!retry.error) toast.message(missingStaffPhoneMessage());
+      }
       if (error) {
         toast.error("Could not save teammate", {
           description: isDuplicateStaffEmail(error)
@@ -5049,7 +5058,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const inviteStaff = useCallback(
-    async (input: { name: string; email: string; role: SeatRole; title?: string }) => {
+    async (input: { name: string; email: string; role: SeatRole; title?: string; phone?: string }) => {
       if (!canEditCompany) {
         toast.error("Only a company admin can add people.");
         return null;
@@ -5074,6 +5083,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         teamId: null,
         initials: initialsFromName(name),
         email,
+        phone: input.phone?.trim() ?? "",
         locked: false,
         restricted: false,
         inviteToken: token,
@@ -5092,10 +5102,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const updateStaffAccount = useCallback(
     async (
       id: string,
-      patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "locked" | "restricted">>,
+      patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "locked" | "restricted">>,
     ) => {
-      if (!canEditCompany) {
-        toast.error("Only a company admin can change accounts.");
+      const profileKeys = new Set(["name", "title", "phone"]);
+      const onlyOwnProfile = Object.keys(patch).every((key) => profileKeys.has(key));
+      const editingSelf = id === viewer?.id;
+      if (!canEditCompany && !(editingSelf && onlyOwnProfile)) {
+        toast.error(
+          editingSelf
+            ? "Only a company admin can change login, role, or email."
+            : "Only a company admin can change other accounts.",
+        );
         return false;
       }
       const current = state.staff.find((member) => member.id === id);
@@ -5106,6 +5123,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         name: patch.name !== undefined ? patch.name.trim() : current.name,
         title: patch.title !== undefined ? patch.title.trim() : current.title,
         email: patch.email !== undefined ? normalizeSeatEmail(patch.email) : current.email,
+        phone: patch.phone !== undefined ? patch.phone.trim() : current.phone,
+        initials:
+          patch.name !== undefined ? initialsFromName(patch.name.trim() || current.name) : current.initials,
       };
       if (!next.name) {
         toast.error("Name is required.");
