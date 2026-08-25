@@ -35,7 +35,7 @@ begin
     select * into pm
     from public.team_members
     where company_id = p_company_id
-      and name = coalesce(nullif(job.project_manager, ''), nullif(job.sales_rep, ''), nullif(opp.estimator, ''))
+      and lower(name) = lower(coalesce(nullif(job.project_manager, ''), nullif(job.sales_rep, ''), nullif(opp.estimator, '')))
     limit 1;
   end if;
 

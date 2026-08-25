@@ -64,7 +64,7 @@ function writeProjectManager(doc: Doc, manager: ProjectManagerContact | null | u
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(40, 40, 40);
-  doc.text(`Project manager name: ${name}`, 54, y);
+  doc.text(`Project Manager Name: ${name}`, 54, y);
   y += 13;
   const title = manager?.title.trim() ?? "";
   if (title) {

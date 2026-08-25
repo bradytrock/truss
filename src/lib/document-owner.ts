@@ -1,3 +1,4 @@
+import { namesMatch } from "@/lib/seats";
 import { NORTHLINE_COMPANY, type CompanySettings } from "@/lib/types";
 
 type StaffContact = { id: string; name: string; title?: string; email: string };
@@ -15,8 +16,7 @@ export function documentOwnerStaff(input: {
   staff: StaffContact[];
   fallbackStaffId?: string;
 }) {
-  const staffId =
-    input.job?.ownerStaffId || input.opportunity?.ownerStaffId || input.fallbackStaffId || "";
+  const staffId = input.job?.ownerStaffId || input.opportunity?.ownerStaffId || "";
   const byId = staffId ? input.staff.find((member) => member.id === staffId) : undefined;
   if (byId) return byId;
   const name =
@@ -24,8 +24,13 @@ export function documentOwnerStaff(input: {
     input.job?.salesRep?.trim() ||
     input.opportunity?.estimator?.trim() ||
     "";
-  if (!name) return undefined;
-  return input.staff.find((member) => member.name === name);
+  if (name) {
+    const byName = input.staff.find((member) => namesMatch(member.name, name));
+    if (byName) return byName;
+  }
+  const fallbackId = input.fallbackStaffId || "";
+  if (!fallbackId) return undefined;
+  return input.staff.find((member) => member.id === fallbackId);
 }
 
 export function documentOwnerEmail(input: {

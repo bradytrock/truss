@@ -93,8 +93,6 @@ export type SharedCompany = {
   logoUrl?: string;
 };
 
-export type SharedProjectManager = ProjectManagerContact;
-
 export type SharedEstimatePayload = {
   customer: string;
   primaryCustomer?: string;
