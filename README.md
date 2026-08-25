@@ -77,7 +77,7 @@ To connect real Google Calendars, create an OAuth web client in Google Cloud (Ca
 - **Calendar** — week view of Truss field events plus each person’s Google Calendar. Link is per seat. Share with your team; company admins see every calendar and whether it is linked.
 - **Training** — roofing certification course (companion to *Roofing Construction & Estimating, Revised* by Daniel Atcheson). Original lesson summaries, generated takeoff questions, 70% chapter/practice, 80% exam. Progress is per seat. Team leads and company admin see crew progress and can post training bulletins. Open jobs recommend chapters by project type.
 
-Signup creates your seat only — no sample roster. Existing companies drop Northline demo seats (Jordan Hale, Priya Shah, and the rest) on load and reassign their jobs and contacts to you. Avatar menu → **Reset company data** wipes CRM tables and leaves your login as the only seat. **Login As** is only for real teammates you add. Add more people from Settings → People (`/signup?invite=…` joins the company that sent the link).
+Signup creates your seat only — no sample roster. Existing companies drop Northline demo seats (Jordan Hale, Priya Shah, and the rest) on load and reassign their jobs and contacts to you. **Login As** is only for real teammates you add. Add more people from Settings → People (`/signup?invite=…` joins the company that sent the link).
 
 ## What lives in Supabase
 
@@ -87,8 +87,6 @@ Signup creates your seat only — no sample roster. Existing companies drop Nort
 - **Realtime** — the board and records refresh when anyone in the company writes
 - **Storage** — `job-photos` bucket (`{companyId}/{jobId}/{uuid}`), `receipts` bucket (`{companyId}/expenses|payments/{uuid}`), and `company-assets` bucket (`{companyId}/logo/{uuid}`) for the letterhead logo
 - **Google Calendar** — refresh tokens stay in `calendar_tokens` (RPC only). Metadata and shares are company-visible; company admins can read every linked calendar.
-
-**Reset company data** (avatar menu) wipes that company’s CRM tables and leaves your signed-in seat. It does not delete the Auth user.
 
 Truss does not measure roofs from satellite imagery or collect card payments. Texts go out over Sendblue when those keys are set.
 

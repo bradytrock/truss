@@ -15,7 +15,6 @@ import { useRouter } from "next/navigation";
 import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Json } from "@/lib/supabase/database.types";
-import { seedCompanyBook } from "@/lib/supabase/seed-company";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
 import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingSignatureColumn, missingSignatureMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
@@ -428,17 +427,6 @@ function isMissingStaffLink(error: { message?: string; code?: string } | null) {
   );
 }
 
-function preserveFromUser(user: CurrentUser) {
-  if (!user.id || isUnsignedDemo(user) || !user.name.trim()) return null;
-  return {
-    userId: user.id,
-    name: user.name,
-    title: user.title,
-    role: user.role,
-    initials: user.initials,
-  };
-}
-
 async function linkProfileStaff(
   supabase: ReturnType<typeof createClient>,
   profileId: string,
@@ -704,7 +692,7 @@ type CrmContextValue = CrmState & {
   updatePhotoReport: (id: string, patch: Partial<Omit<PhotoReport, "id" | "jobId" | "createdAt">>) => Promise<boolean>;
   deletePhotoReport: (id: string) => Promise<boolean>;
   ensurePageShareToken: (id: string) => Promise<string>;
-  resetDemo: () => Promise<void>;
+  reload: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -5185,20 +5173,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [canEditCompany, persistStaffFields, state.staff, user.companyId, user.staffId, viewer?.id],
   );
 
-  const resetDemo = useCallback(async () => {
-    if (!isSupabaseConfigured() || !user.companyId || isUnsignedDemo(user)) {
-      toast.error("Sign in to clear company data.");
-      return;
-    }
-    const supabase = createClient();
-    try {
-      await seedCompanyBook(supabase, user.companyId, { preserve: preserveFromUser(user) });
-      await load();
-      toast.success("Company data cleared. Your seat is the only account left.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not clear company data.");
-    }
-  }, [load, user]);
+  const reload = useCallback(async () => {
+    await load();
+  }, [load]);
 
   const signOut = useCallback(async () => {
     if (isSupabaseConfigured()) {
@@ -5309,7 +5286,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updatePhotoReport,
       deletePhotoReport,
       ensurePageShareToken,
-      resetDemo,
+      reload,
       signOut,
     }),
     [
@@ -5408,7 +5385,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updatePhotoReport,
       deletePhotoReport,
       ensurePageShareToken,
-      resetDemo,
+      reload,
       signOut,
     ]
   );

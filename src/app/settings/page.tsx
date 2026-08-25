@@ -62,7 +62,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       {crm.hydrateError ? (
-        <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.resetDemo()} />
+        <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
       ) : null}
       <PageHeader
         eyebrow="Company"

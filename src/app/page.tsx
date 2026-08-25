@@ -125,7 +125,7 @@ export default function HomePage() {
   return (
     <div className="space-y-6">
       {crm.hydrateError ? (
-        <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.resetDemo()} />
+        <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
       ) : null}
       <PageHeader
         title={`${greeting()}, ${crm.user.name.split(" ")[0] || "there"}`}

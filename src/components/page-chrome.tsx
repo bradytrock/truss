@@ -113,7 +113,7 @@ export function ErrorBanner({
       <p>{message}</p>
       {onRetry ? (
         <Button size="sm" variant="outline" onClick={onRetry}>
-          Reset
+          Try again
         </Button>
       ) : null}
     </div>

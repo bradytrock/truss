@@ -452,7 +452,7 @@ function ScopeBanners() {
 
 function UserMenu() {
   const router = useRouter();
-  const { resetDemo, signOut, user, loginAs, loginAsOptions, viewer, impersonatedStaff, stopLoginAs } =
+  const { signOut, user, loginAs, loginAsOptions, viewer, impersonatedStaff, stopLoginAs } =
     useCrm();
 
   return (
@@ -507,13 +507,6 @@ function UserMenu() {
         {viewer && canManageSettings(viewer.role, viewer) ? (
           <DropdownMenuItem onClick={() => router.push("/settings")}>Settings</DropdownMenuItem>
         ) : null}
-        <DropdownMenuItem
-          onClick={() => {
-            void resetDemo();
-          }}
-        >
-          Reset company data
-        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => void signOut()}>Sign out</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

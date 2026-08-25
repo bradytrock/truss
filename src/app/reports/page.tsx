@@ -151,7 +151,7 @@ export default function ReportsPage() {
   return (
     <div className="space-y-5">
       {crm.hydrateError ? (
-        <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.resetDemo()} />
+        <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
       ) : null}
 
       <PageHeader

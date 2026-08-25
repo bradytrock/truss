@@ -45,7 +45,7 @@ export default function LessonPage() {
   return (
     <div className="space-y-5">
       {crm.hydrateError ? (
-        <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.resetDemo()} />
+        <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
       ) : null}
       <LessonNav chapterId={chapter.id} lessonIndex={index}>
         <span className="text-muted-foreground">/</span>

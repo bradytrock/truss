@@ -118,7 +118,7 @@ export default function QuizPage() {
       mode={mode}
       meta={meta}
       hydrateError={crm.hydrateError}
-      onResetDemo={() => void crm.resetDemo()}
+      onRetry={() => void crm.reload()}
       onRetake={() => setRound((value) => value + 1)}
     />
   );
@@ -128,13 +128,13 @@ function QuizRunner({
   mode,
   meta,
   hydrateError,
-  onResetDemo,
+  onRetry,
   onRetake,
 }: {
   mode: string;
   meta: Meta;
   hydrateError: string | null;
-  onResetDemo: () => void;
+  onRetry: () => void;
   onRetake: () => void;
 }) {
   const crm = useCrm();
@@ -228,7 +228,7 @@ function QuizRunner({
 
   return (
     <div className="space-y-5">
-      {hydrateError ? <ErrorBanner message={hydrateError} onRetry={onResetDemo} /> : null}
+      {hydrateError ? <ErrorBanner message={hydrateError} onRetry={onRetry} /> : null}
       <PageHeader
         eyebrow="Field school"
         title={meta.title}
