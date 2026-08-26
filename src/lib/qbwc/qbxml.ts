@@ -24,14 +24,6 @@ export function customerAliasName(name: string) {
   return qbName(qbName(name, QB_NAME_MAX - suffix.length) + suffix);
 }
 
-function entityRefInner(listId: string | undefined, fullName: string) {
-  const id = listId?.trim() ?? "";
-  if (id && /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]+$/.test(id)) {
-    return `          <ListID>${xmlEscape(id)}</ListID>\r\n`;
-  }
-  return `          <FullName>${xmlEscape(fullName)}</FullName>\r\n`;
-}
-
 export function customerJobFullName(customerName: string, jobCode: string) {
   return `${qbName(customerName)}:${qbName(jobCode || "Job")}`;
 }
@@ -92,8 +84,10 @@ export function customerAddXml(input: {
       `      <CustomerAdd>\r\n` +
       `        <Name>${xmlEscape(qbName(input.name))}</Name>\r\n` +
       `        <IsActive>true</IsActive>\r\n` +
-      (input.parentListId?.trim() || input.parentFullName
-        ? `        <ParentRef>\r\n${entityRefInner(input.parentListId, input.parentFullName ?? "")}        </ParentRef>\r\n`
+      // Always FullName, never ListID. ListID in ParentRef/CustomerRef is what
+      // started failing after we began remembering IDs from the vendor-alias path.
+      (input.parentFullName
+        ? `        <ParentRef>\r\n          <FullName>${xmlEscape(input.parentFullName)}</FullName>\r\n        </ParentRef>\r\n`
         : "") +
       (input.companyName?.trim()
         ? `        <CompanyName>${xmlEscape(qbName(input.companyName))}</CompanyName>\r\n`
@@ -182,7 +176,6 @@ export function expenseLineXml(input: {
 }) {
   const memo = qbAscii(input.memo ?? "", 4095);
   const job = input.customerJobFullName?.trim() ?? "";
-  const listId = input.customerListId?.trim() ?? "";
   return (
     `        <ExpenseLineAdd>\r\n` +
     `          <AccountRef>\r\n` +
@@ -190,8 +183,8 @@ export function expenseLineXml(input: {
     `          </AccountRef>\r\n` +
     `          <Amount>${xmlEscape(qbMoney(input.amount))}</Amount>\r\n` +
     (memo ? `          <Memo>${xmlEscape(memo)}</Memo>\r\n` : "") +
-    (listId || job
-      ? `          <CustomerRef>\r\n${entityRefInner(listId, job)}          </CustomerRef>\r\n` +
+    (job
+      ? `          <CustomerRef>\r\n            <FullName>${xmlEscape(job)}</FullName>\r\n          </CustomerRef>\r\n` +
         `          <BillableStatus>NotBillable</BillableStatus>\r\n`
       : "") +
     `        </ExpenseLineAdd>\r\n`
@@ -281,7 +274,7 @@ export function receivePaymentAddXml(input: {
   return wrapQbxml(
     `    <ReceivePaymentAddRq requestID="${xmlEscape(input.requestId)}">\r\n` +
       `      <ReceivePaymentAdd>\r\n` +
-      `        <CustomerRef>\r\n${entityRefInner(input.customerListId, input.customerName)}        </CustomerRef>\r\n` +
+      `        <CustomerRef>\r\n          <FullName>${xmlEscape(input.customerName)}</FullName>\r\n        </CustomerRef>\r\n` +
       `        <TxnDate>${xmlEscape(qbDate(input.txnDate))}</TxnDate>\r\n` +
       (ref ? `        <RefNumber>${xmlEscape(ref)}</RefNumber>\r\n` : "") +
       `        <TotalAmount>${xmlEscape(qbMoney(input.amount))}</TotalAmount>\r\n` +
@@ -289,13 +282,13 @@ export function receivePaymentAddXml(input: {
       (deposit
         ? `        <DepositToAccountRef>\r\n          <FullName>${xmlEscape(qbName(deposit, 31))}</FullName>\r\n        </DepositToAccountRef>\r\n`
         : "") +
-      `        <IsAutoApply>${txnId ? "false" : "true"}</IsAutoApply>\r\n` +
+      // IsAutoApply and AppliedToTxnAdd are an OR group. Sending both is a parse error.
       (txnId
         ? `        <AppliedToTxnAdd>\r\n` +
           `          <TxnID>${xmlEscape(txnId)}</TxnID>\r\n` +
           `          <PaymentAmount>${xmlEscape(qbMoney(input.amount))}</PaymentAmount>\r\n` +
           `        </AppliedToTxnAdd>\r\n`
-        : "") +
+        : `        <IsAutoApply>true</IsAutoApply>\r\n`) +
       `      </ReceivePaymentAdd>\r\n` +
       `    </ReceivePaymentAddRq>\r\n`,
   );
@@ -313,7 +306,7 @@ export function invoiceAddXml(input: QbInvoiceAddInput) {
   return wrapQbxml(
     `    <InvoiceAddRq requestID="${xmlEscape(input.requestId)}">\r\n` +
       `      <InvoiceAdd>\r\n` +
-      `        <CustomerRef>\r\n${entityRefInner(input.customerListId, input.customerJobFullName)}        </CustomerRef>\r\n` +
+      `        <CustomerRef>\r\n          <FullName>${xmlEscape(input.customerJobFullName)}</FullName>\r\n        </CustomerRef>\r\n` +
       `        <TxnDate>${xmlEscape(qbDate(input.txnDate))}</TxnDate>\r\n` +
       `        <RefNumber>${xmlEscape(qbAscii(input.refNumber, QB_REF_MAX))}</RefNumber>\r\n` +
       addressXml(input, "BillAddress") +
