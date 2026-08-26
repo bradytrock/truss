@@ -1050,6 +1050,9 @@ export type Database = {
           payment_id: string | null;
           step: string;
           last_error: string;
+          resolved_customer: string;
+          resolved_customer_list_id: string;
+          resolved_job_list_id: string;
           created_at: string;
           updated_at: string;
         };
@@ -1061,6 +1064,9 @@ export type Database = {
           payment_id?: string | null;
           step?: string;
           last_error?: string;
+          resolved_customer?: string;
+          resolved_customer_list_id?: string;
+          resolved_job_list_id?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -1168,6 +1174,9 @@ export type Database = {
           p_next_step?: string;
           p_txn_id?: string;
           p_error?: string;
+          p_customer_name?: string;
+          p_customer_list_id?: string;
+          p_job_list_id?: string;
         };
         Returns: Json;
       };

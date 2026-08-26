@@ -18,6 +18,18 @@ export function qbName(value: string, max = QB_NAME_MAX) {
   return qbAscii(value, max) || "Customer";
 }
 
+/** When the homeowner name is already a vendor, jobs hang under this customer instead. */
+export function customerAliasName(name: string) {
+  const suffix = " Cust";
+  return qbName(qbName(name, QB_NAME_MAX - suffix.length) + suffix);
+}
+
+function entityRefInner(listId: string | undefined, fullName: string) {
+  const id = listId?.trim() ?? "";
+  if (id) return `          <ListID>${xmlEscape(id)}</ListID>\r\n`;
+  return `          <FullName>${xmlEscape(fullName)}</FullName>\r\n`;
+}
+
 export function customerJobFullName(customerName: string, jobCode: string) {
   return `${qbName(customerName)}:${qbName(jobCode || "Job")}`;
 }
@@ -62,6 +74,7 @@ export function customerAddXml(input: {
   requestId: string;
   name: string;
   parentFullName?: string;
+  parentListId?: string;
   companyName?: string;
   phone?: string;
   street?: string;
@@ -76,8 +89,8 @@ export function customerAddXml(input: {
       `      <CustomerAdd>\r\n` +
       `        <Name>${xmlEscape(qbName(input.name))}</Name>\r\n` +
       `        <IsActive>true</IsActive>\r\n` +
-      (input.parentFullName
-        ? `        <ParentRef>\r\n          <FullName>${xmlEscape(input.parentFullName)}</FullName>\r\n        </ParentRef>\r\n`
+      (input.parentListId?.trim() || input.parentFullName
+        ? `        <ParentRef>\r\n${entityRefInner(input.parentListId, input.parentFullName ?? "")}        </ParentRef>\r\n`
         : "") +
       (input.companyName?.trim()
         ? `        <CompanyName>${xmlEscape(qbName(input.companyName))}</CompanyName>\r\n`
@@ -125,6 +138,7 @@ export type QbInvoiceLine = {
 export type QbInvoiceAddInput = {
   requestId: string;
   customerJobFullName: string;
+  customerListId?: string;
   refNumber: string;
   txnDate: string;
   dueDate?: string | null;
@@ -162,9 +176,11 @@ export function expenseLineXml(input: {
   amount: number;
   memo?: string;
   customerJobFullName?: string;
+  customerListId?: string;
 }) {
   const memo = qbAscii(input.memo ?? "", 4095);
   const job = input.customerJobFullName?.trim() ?? "";
+  const listId = input.customerListId?.trim() ?? "";
   return (
     `        <ExpenseLineAdd>\r\n` +
     `          <AccountRef>\r\n` +
@@ -172,8 +188,8 @@ export function expenseLineXml(input: {
     `          </AccountRef>\r\n` +
     `          <Amount>${xmlEscape(qbMoney(input.amount))}</Amount>\r\n` +
     (memo ? `          <Memo>${xmlEscape(memo)}</Memo>\r\n` : "") +
-    (job
-      ? `          <CustomerRef>\r\n            <FullName>${xmlEscape(job)}</FullName>\r\n          </CustomerRef>\r\n` +
+    (listId || job
+      ? `          <CustomerRef>\r\n${entityRefInner(listId, job)}          </CustomerRef>\r\n` +
         `          <BillableStatus>NotBillable</BillableStatus>\r\n`
       : "") +
     `        </ExpenseLineAdd>\r\n`
@@ -190,6 +206,7 @@ export function checkAddXml(input: {
   accountName: string;
   amount: number;
   customerJobFullName?: string;
+  customerListId?: string;
 }) {
   const memo = qbAscii(input.memo ?? "", 4095);
   const ref = qbAscii(input.refNumber ?? "", QB_REF_MAX);
@@ -222,6 +239,7 @@ export function creditCardChargeAddXml(input: {
   accountName: string;
   amount: number;
   customerJobFullName?: string;
+  customerListId?: string;
 }) {
   const memo = qbAscii(input.memo ?? "", 4095);
   const ref = qbAscii(input.refNumber ?? "", QB_REF_MAX);
@@ -246,6 +264,7 @@ export function creditCardChargeAddXml(input: {
 export function receivePaymentAddXml(input: {
   requestId: string;
   customerName: string;
+  customerListId?: string;
   txnDate: string;
   refNumber?: string;
   amount: number;
@@ -260,9 +279,7 @@ export function receivePaymentAddXml(input: {
   return wrapQbxml(
     `    <ReceivePaymentAddRq requestID="${xmlEscape(input.requestId)}">\r\n` +
       `      <ReceivePaymentAdd>\r\n` +
-      `        <CustomerRef>\r\n` +
-      `          <FullName>${xmlEscape(input.customerName)}</FullName>\r\n` +
-      `        </CustomerRef>\r\n` +
+      `        <CustomerRef>\r\n${entityRefInner(input.customerListId, input.customerName)}        </CustomerRef>\r\n` +
       `        <TxnDate>${xmlEscape(qbDate(input.txnDate))}</TxnDate>\r\n` +
       (ref ? `        <RefNumber>${xmlEscape(ref)}</RefNumber>\r\n` : "") +
       `        <TotalAmount>${xmlEscape(qbMoney(input.amount))}</TotalAmount>\r\n` +
@@ -294,9 +311,7 @@ export function invoiceAddXml(input: QbInvoiceAddInput) {
   return wrapQbxml(
     `    <InvoiceAddRq requestID="${xmlEscape(input.requestId)}">\r\n` +
       `      <InvoiceAdd>\r\n` +
-      `        <CustomerRef>\r\n` +
-      `          <FullName>${xmlEscape(input.customerJobFullName)}</FullName>\r\n` +
-      `        </CustomerRef>\r\n` +
+      `        <CustomerRef>\r\n${entityRefInner(input.customerListId, input.customerJobFullName)}        </CustomerRef>\r\n` +
       `        <TxnDate>${xmlEscape(qbDate(input.txnDate))}</TxnDate>\r\n` +
       `        <RefNumber>${xmlEscape(qbAscii(input.refNumber, QB_REF_MAX))}</RefNumber>\r\n` +
       addressXml(input, "BillAddress") +
@@ -355,6 +370,7 @@ export type QbParsedResponse = {
   statusMessage: string;
   txnId: string;
   listId: string;
+  fullName: string;
 };
 
 /** CustomerQuery/ItemQuery status 500: the FullName is not in the company file. */
@@ -364,6 +380,7 @@ export function isQbNotFoundMessage(message: string) {
 
 export function readQbResponse(xml: string, fallbackMessage = ""): QbParsedResponse {
   const trimmed = xml.trim();
+  const ret = /<CustomerRet\b[\s\S]*?<\/CustomerRet>/i.exec(trimmed)?.[0] ?? "";
   if (!trimmed && isQbNotFoundMessage(fallbackMessage)) {
     return {
       kind: "missing",
@@ -371,6 +388,7 @@ export function readQbResponse(xml: string, fallbackMessage = ""): QbParsedRespo
       statusMessage: fallbackMessage,
       txnId: "",
       listId: "",
+      fullName: "",
     };
   }
   const statusCode = xmlAttr(trimmed, "statusCode") || firstStatusCode(trimmed);
@@ -378,28 +396,30 @@ export function readQbResponse(xml: string, fallbackMessage = ""): QbParsedRespo
     xmlAttr(trimmed, "statusMessage") || firstStatusMessage(trimmed) || fallbackMessage,
   );
   const txnId = innerTag(trimmed, "TxnID");
-  const listId = innerTag(trimmed, "ListID");
+  const listId = innerTag(ret, "ListID") || innerTag(trimmed, "ListID");
+  const fullName = innerTag(ret, "FullName") || innerTag(ret, "Name");
+  const parsed = { statusCode, statusMessage, txnId, listId, fullName };
   const code = Number(statusCode);
   if (code === 0 && (txnId || listId || /Ret>/i.test(trimmed))) {
-    return { kind: txnId || listId ? "ok" : "found", statusCode, statusMessage, txnId, listId };
+    return { kind: txnId || listId ? "ok" : "found", ...parsed };
   }
   if (code === 0) {
     const hasRet =
       /<(Customer|Vendor|ItemService|Invoice|Check|CreditCardCharge|ReceivePayment)Ret[\s>]/i.test(
         trimmed,
       );
-    return { kind: hasRet ? "found" : "missing", statusCode, statusMessage, txnId, listId };
+    return { kind: hasRet ? "found" : "missing", ...parsed };
   }
   // 3100: that exact name is already on a names list (customer, vendor, employee, or other).
   // 3140 is an invalid reference (wrong list type) — not "already exists".
   if (code === 3100 || /already in use|already exists/i.test(statusMessage)) {
-    return { kind: "exists", statusCode, statusMessage, txnId, listId };
+    return { kind: "exists", ...parsed };
   }
   // Query FullName/ListID is not in this company file — caller should Add, not stop.
   if (code === 1 || code === 500 || code === 3120 || isQbNotFoundMessage(statusMessage)) {
-    return { kind: "missing", statusCode, statusMessage, txnId, listId };
+    return { kind: "missing", ...parsed };
   }
-  return { kind: "error", statusCode, statusMessage, txnId, listId };
+  return { kind: "error", ...parsed };
 }
 
 function firstStatusCode(xml: string) {

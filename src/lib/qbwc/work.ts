@@ -20,6 +20,7 @@ export const DEFAULT_QB_CC = "Credit Card";
 export type QbwcStep =
   | "customer_query"
   | "customer_add"
+  | "customer_alias_add"
   | "job_query"
   | "job_add"
   | "item_query"
@@ -48,6 +49,8 @@ export type QbInvoiceWork = {
   phone: string;
   itemName: string;
   lines: QbInvoiceLine[];
+  customerListId?: string;
+  jobListId?: string;
 };
 
 export type QbExpenseWork = {
@@ -70,6 +73,8 @@ export type QbExpenseWork = {
   postalCode: string;
   phone: string;
   hasJob: boolean;
+  customerListId?: string;
+  jobListId?: string;
 };
 
 export type QbPaymentWork = {
@@ -86,6 +91,8 @@ export type QbPaymentWork = {
   invoiceTxnId: string;
   depositAccount: string;
   hasJob: boolean;
+  customerListId?: string;
+  jobListId?: string;
 };
 
 export type QbwcWork = QbInvoiceWork | QbExpenseWork | QbPaymentWork;
@@ -247,6 +254,13 @@ export function paymentCustomerRef(work: QbPaymentWork) {
   return work.hasJob ? jobFullName(work) : customerFullName(work);
 }
 
+function resolvedIds(row: Record<string, unknown>) {
+  return {
+    ...(asString(row.customerListId) ? { customerListId: asString(row.customerListId) } : {}),
+    ...(asString(row.jobListId) ? { jobListId: asString(row.jobListId) } : {}),
+  };
+}
+
 export function parseWorkPayload(raw: unknown): QbwcWork | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Record<string, unknown>;
@@ -275,6 +289,7 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
       postalCode: asString(row.postalCode),
       phone: asString(row.phone),
       hasJob: row.hasJob === true || Boolean(asString(row.jobCode)),
+      ...resolvedIds(row),
     };
   }
   if (kind === "payment") {
@@ -294,6 +309,7 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
       invoiceTxnId: asString(row.invoiceTxnId),
       depositAccount: asString(row.depositAccount, DEFAULT_QB_BANK),
       hasJob: row.hasJob === true || Boolean(asString(row.jobCode)),
+      ...resolvedIds(row),
     };
   }
   const invoiceId = asString(row.invoiceId);
@@ -325,6 +341,7 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
         unit: asString(line.unit, "ea"),
         unitCost: asNumber(line.unitCost),
       })),
+    ...resolvedIds(row),
   };
 }
 

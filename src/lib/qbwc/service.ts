@@ -51,16 +51,39 @@ export async function qbwcNextWork(ticket: string): Promise<
 export async function qbwcApply(
   ticket: string,
   action: "next" | "complete" | "fail",
-  extra: { nextStep?: string; txnId?: string; error?: string } = {},
+  extra: {
+    nextStep?: string;
+    txnId?: string;
+    error?: string;
+    customerName?: string;
+    customerListId?: string;
+    jobListId?: string;
+  } = {},
 ) {
   const supabase = createAnonClient();
-  const { data, error } = await supabase.rpc("qbwc_apply_response", {
+  const payload = {
     p_ticket: ticket,
     p_action: action,
     p_next_step: extra.nextStep ?? "",
     p_txn_id: extra.txnId ?? "",
     p_error: extra.error ?? "",
-  });
+    p_customer_name: extra.customerName ?? "",
+    p_customer_list_id: extra.customerListId ?? "",
+    p_job_list_id: extra.jobListId ?? "",
+  };
+  let { data, error } = await supabase.rpc("qbwc_apply_response", payload);
+  if (
+    error &&
+    /p_customer_name|p_customer_list_id|p_job_list_id|could not find the function/i.test(error.message)
+  ) {
+    ({ data, error } = await supabase.rpc("qbwc_apply_response", {
+      p_ticket: ticket,
+      p_action: action,
+      p_next_step: extra.nextStep ?? "",
+      p_txn_id: extra.txnId ?? "",
+      p_error: extra.error ?? "",
+    }));
+  }
   if (error) {
     console.error("[qbwc] apply", error.code, error.message);
     return { ok: false as const };

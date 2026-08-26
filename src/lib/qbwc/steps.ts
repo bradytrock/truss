@@ -2,6 +2,7 @@ import {
   checkAddXml,
   creditCardChargeAddXml,
   customerAddXml,
+  customerAliasName,
   customerQueryXml,
   invoiceAddXml,
   itemQueryXml,
@@ -34,11 +35,13 @@ export function requestForStep(step: QbwcStep, work: QbwcWork) {
       return customerAddXml({
         requestId,
         name: customerFullName(work),
-        phone: work.kind === "payment" ? "" : work.phone,
-        street: work.kind === "payment" ? "" : work.street,
-        city: work.kind === "payment" ? "" : work.city,
-        state: work.kind === "payment" ? "" : work.state,
-        postalCode: work.kind === "payment" ? "" : work.postalCode,
+        ...customerAddress(work),
+      });
+    case "customer_alias_add":
+      return customerAddXml({
+        requestId,
+        name: customerAliasName(customerFullName(work)),
+        ...customerAddress(work),
       });
     case "job_query":
       return customerQueryXml(jobFullName(work), requestId);
@@ -47,11 +50,9 @@ export function requestForStep(step: QbwcStep, work: QbwcWork) {
         requestId,
         name: work.jobCode || work.jobName || "Job",
         parentFullName: customerFullName(work),
+        parentListId: work.customerListId,
         companyName: work.jobName,
-        street: work.kind === "payment" ? "" : work.street,
-        city: work.kind === "payment" ? "" : work.city,
-        state: work.kind === "payment" ? "" : work.state,
-        postalCode: work.kind === "payment" ? "" : work.postalCode,
+        ...customerAddress(work),
       });
     case "item_query":
       return itemQueryXml(work.kind === "invoice" ? work.itemName : "Contract work", requestId);
@@ -62,6 +63,7 @@ export function requestForStep(step: QbwcStep, work: QbwcWork) {
       return invoiceAddXml({
         requestId,
         customerJobFullName: jobFullName(work),
+        customerListId: work.jobListId,
         refNumber: work.number,
         txnDate: work.issuedAt,
         dueDate: work.dueAt,
@@ -84,6 +86,7 @@ export function requestForStep(step: QbwcStep, work: QbwcWork) {
       return receivePaymentAddXml({
         requestId,
         customerName: paymentCustomerRef(work),
+        customerListId: work.hasJob ? work.jobListId : work.customerListId,
         txnDate: work.txnDate,
         refNumber: work.reference,
         amount: work.amount,
@@ -105,6 +108,7 @@ function expenseRequest(requestId: string, work: QbwcWork) {
     accountName: work.accountName,
     amount: work.amount,
     customerJobFullName: work.hasJob ? jobFullName(work) : "",
+    customerListId: work.hasJob ? work.jobListId : undefined,
   };
   if (work.payWith === "credit_card") {
     return creditCardChargeAddXml({ ...line, ccAccount: work.payAccount });
@@ -112,8 +116,27 @@ function expenseRequest(requestId: string, work: QbwcWork) {
   return checkAddXml({ ...line, bankAccount: work.payAccount });
 }
 
+function customerAddress(work: QbwcWork) {
+  if (work.kind === "payment") {
+    return { phone: "", street: "", city: "", state: "", postalCode: "" };
+  }
+  return {
+    phone: work.phone,
+    street: work.street,
+    city: work.city,
+    state: work.state,
+    postalCode: work.postalCode,
+  };
+}
+
 export type StepAdvance =
-  | { action: "next"; step: QbwcStep }
+  | {
+      action: "next";
+      step: QbwcStep;
+      customerName?: string;
+      customerListId?: string;
+      jobListId?: string;
+    }
   | { action: "complete"; txnId: string }
   | { action: "fail"; error: string };
 
@@ -135,19 +158,40 @@ export function advanceFromResponse(
     case "vendor_add":
       return missing ? { action: "fail", error: failed } : { action: "next", step: afterVendor(work) };
     case "customer_query":
-      return { action: "next", step: missing ? "customer_add" : afterCustomer(work) };
+      if (missing) return { action: "next", step: "customer_add" };
+      return {
+        action: "next",
+        step: afterCustomer(work),
+        customerName: result.fullName || undefined,
+        customerListId: result.listId || undefined,
+      };
     case "customer_add":
       if (missing) return { action: "fail", error: failed };
-      // CustomerQuery already missed this FullName, so 3100 means the name lives on
-      // Vendor / Employee / Other Names — not a customer a job can hang under.
       if (result.kind === "exists") {
+        return { action: "next", step: "customer_alias_add" };
+      }
+      return {
+        action: "next",
+        step: afterCustomer(work),
+        customerName: result.fullName || (work ? customerFullName(work) : undefined),
+        customerListId: result.listId || undefined,
+      };
+    case "customer_alias_add":
+      if (missing || result.kind === "exists") {
         return { action: "fail", error: parentMustBeCustomerMessage(work, failed) };
       }
-      return { action: "next", step: afterCustomer(work) };
+      return {
+        action: "next",
+        step: afterCustomer(work),
+        customerName: result.fullName || (work ? customerAliasName(customerFullName(work)) : undefined),
+        customerListId: result.listId || undefined,
+      };
     case "job_query":
-      return { action: "next", step: missing ? "job_add" : afterJob(work) };
+      if (missing) return { action: "next", step: "job_add" };
+      return { action: "next", step: afterJob(work), jobListId: result.listId || undefined };
     case "job_add":
-      return missing ? { action: "fail", error: failed } : { action: "next", step: afterJob(work) };
+      if (missing) return { action: "fail", error: failed };
+      return { action: "next", step: afterJob(work), jobListId: result.listId || undefined };
     case "item_query":
       return { action: "next", step: missing ? "item_add" : "invoice_add" };
     case "item_add":
@@ -192,7 +236,7 @@ function parentMustBeCustomerMessage(work?: QbwcWork | null, fallback = "") {
 
 function explainQbError(step: QbwcStep, failed: string, work?: QbwcWork | null) {
   if (
-    (step === "job_add" || step === "customer_add") &&
+    (step === "job_add" || step === "customer_alias_add") &&
     /not a customer name|parent you have selected|already in use|already exists/i.test(failed)
   ) {
     return parentMustBeCustomerMessage(work, failed);
@@ -213,6 +257,7 @@ export const INVOICE_PREVIEW_STEPS: QbwcStep[] = [
 export const STEP_LABELS: Record<QbwcStep, string> = {
   customer_query: "Find the customer in QuickBooks",
   customer_add: "Create the customer",
+  customer_alias_add: "Create a customer (this name is already a vendor)",
   job_query: "Find the job under that customer",
   job_add: "Create the job (Customer:Job)",
   item_query: "Find the income item",

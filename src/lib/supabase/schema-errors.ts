@@ -371,6 +371,7 @@ export const QBWC_SQL = "supabase/migrations/20260825210000_qbwc.sql";
 export const QBWC_PGCRYPTO_SQL = "supabase/migrations/20260825220000_qbwc_pgcrypto.sql";
 export const QBWC_QUEUE_SQL = "supabase/migrations/20260825230000_qbwc_queue.sql";
 export const QBWC_EXPENSES_SQL = "supabase/migrations/20260825240000_qbwc_expenses_payments.sql";
+export const QBWC_CUSTOMER_ALIAS_SQL = "supabase/migrations/20260825250000_qbwc_customer_alias.sql";
 
 export function isMissingQbwcPgcrypto(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -400,5 +401,5 @@ export function isMissingQbwc(error: { message?: string; code?: string } | null 
 }
 
 export function missingQbwcMessage() {
-  return `Run ${QBWC_SQL} in the SQL editor (or a fresh bootstrap) so the Web Connector can sign in and post invoices. Expenses and payments also need ${QBWC_EXPENSES_SQL}.`;
+  return `Run ${QBWC_SQL} in the SQL editor (or a fresh bootstrap) so the Web Connector can sign in and post invoices. Expenses and payments also need ${QBWC_EXPENSES_SQL}. If a job parent is already a vendor, run ${QBWC_CUSTOMER_ALIAS_SQL} so the connector can create a customer and hang the job under it.`;
 }

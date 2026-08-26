@@ -99,7 +99,12 @@ async function dispatch(call: ReturnType<typeof parseQbwcSoap>) {
         const more = await qbwcNextWork(call.ticket);
         return soapIntResponse("receiveResponseXML", !more.ok || more.done ? 100 : 50);
       }
-      await qbwcApply(call.ticket, "next", { nextStep: advance.step });
+      await qbwcApply(call.ticket, "next", {
+        nextStep: advance.step,
+        customerName: advance.customerName,
+        customerListId: advance.customerListId,
+        jobListId: advance.jobListId,
+      });
       return soapIntResponse("receiveResponseXML", 25);
     }
     case "connectionError":
