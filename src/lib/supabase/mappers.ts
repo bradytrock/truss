@@ -25,6 +25,7 @@ import type {
   Payment,
   PhotoReport,
   Expense,
+  QbVendor,
   ScheduleEvent,
   StaffMember,
   Task,
@@ -662,6 +663,16 @@ export function mapExpense(row: Database["public"]["Tables"]["expenses"]["Row"])
     extractedByAi: Boolean(row.extracted_by_ai),
     createdAt: row.created_at,
     createdBy: row.created_by,
+  };
+}
+
+export function mapQbVendor(row: Database["public"]["Tables"]["qb_vendors"]["Row"]): QbVendor {
+  return {
+    id: row.id,
+    listId: row.list_id,
+    name: row.name,
+    isActive: row.is_active,
+    syncedAt: row.synced_at,
   };
 }
 

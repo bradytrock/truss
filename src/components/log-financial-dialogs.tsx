@@ -27,6 +27,8 @@ import { localYmd } from "@/lib/format";
 import { compressReceipt } from "@/lib/job-financials";
 import { costCenterLabel } from "@/lib/job-record";
 import { invoiceBalance } from "@/lib/money";
+import { matchVendorName, vendorChoices } from "@/lib/qb-vendors";
+import { VendorPicker } from "@/components/vendor-picker";
 import {
   EXPENSE_ACCOUNT_LABELS,
   EXPENSE_ACCOUNTS,
@@ -128,6 +130,8 @@ export function LogExpenseDialog({
   const [extractedByAi, setExtractedByAi] = useState(false);
   const [pending, setPending] = useState(false);
   const [reading, setReading] = useState(false);
+  const vendors = vendorChoices(crm.qbVendors ?? [], crm.expenses);
+  const vendorNames = [...vendors.fromQb.map((item) => item.name), ...vendors.extras];
 
   useEffect(() => {
     if (!open) return;
@@ -152,7 +156,9 @@ export function LogExpenseDialog({
     try {
       const result = await extractReceipt(preview, "expense");
       if (result.ok) {
-        if (typeof result.vendor === "string") setVendor(result.vendor);
+        if (typeof result.vendor === "string") {
+          setVendor(matchVendorName(result.vendor, vendorNames) || result.vendor);
+        }
         if (typeof result.amount === "number" && result.amount) setAmount(String(result.amount));
         if (typeof result.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(result.date)) {
           setIncurredAt(result.date);
@@ -223,14 +229,23 @@ export function LogExpenseDialog({
             {reading ? "Reading…" : "Read receipt with AI"}
           </Button>
           <div className="grid gap-1.5">
-            <Label htmlFor="exp-vendor">Vendor</Label>
-            <Input
-              id="exp-vendor"
+            <Label>Vendor</Label>
+            <p className="text-xs text-muted-foreground">
+              Pick the payee as it appears in QuickBooks so the connector does not create a second
+              vendor. Type a new name only when it is not in the company file yet.
+            </p>
+            <VendorPicker
               value={vendor}
-              onChange={(event) => setVendor(event.target.value)}
-              placeholder="ABC Supply"
-              required
+              onChange={setVendor}
+              names={vendors.fromQb.map((item) => item.name)}
+              extraNames={vendors.extras}
+              emptyHint={
+                vendors.fromQb.length === 0
+                  ? "No vendors pulled yet. Run the Web Connector (or Pull vendors in Settings), or type the payee."
+                  : "No matching vendor. Type the name QuickBooks should use."
+              }
             />
+            <input type="text" value={vendor} onChange={() => undefined} required className="sr-only" tabIndex={-1} />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">

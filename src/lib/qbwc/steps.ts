@@ -10,6 +10,7 @@ import {
   readQbResponse,
   receivePaymentAddXml,
   vendorAddXml,
+  vendorListQueryXml,
   vendorQueryXml,
 } from "@/lib/qbwc/qbxml";
 import {
@@ -26,22 +27,27 @@ import {
 function recordId(work: QbwcWork) {
   if (work.kind === "expense") return work.expenseId;
   if (work.kind === "payment") return work.paymentId;
+  if (work.kind === "vendor_sync") return "vendors";
   return work.invoiceId;
 }
 
 export function requestForStep(rawStep: string, work: QbwcWork) {
   const { step, useAlias } = splitQbwcStep(rawStep);
   const requestId = `${recordId(work)}-${step}`;
-  const customer = billedCustomerName(work, useAlias);
-  const job = jobFullName(work, useAlias);
-  const alias = customerAliasName(customerFullName(work));
+  if (step === "vendor_list_query") {
+    return vendorListQueryXml(requestId, work.kind === "vendor_sync" ? work.iteratorId : "");
+  }
+  const named = work.kind === "vendor_sync" ? null : work;
+  const customer = named ? billedCustomerName(named, useAlias) : "Customer";
+  const job = named ? jobFullName(named, useAlias) : "Customer:Job";
+  const alias = named ? customerAliasName(customerFullName(named)) : "Customer Cust";
   switch (step) {
     case "customer_query":
-      return customerQueryXml(customerFullName(work), requestId);
+      return customerQueryXml(named ? customerFullName(named) : "Customer", requestId);
     case "customer_add":
       return customerAddXml({
         requestId,
-        name: customerFullName(work),
+        name: named ? customerFullName(named) : "Customer",
         ...customerAddress(work),
       });
     case "customer_alias_query":
@@ -57,15 +63,15 @@ export function requestForStep(rawStep: string, work: QbwcWork) {
     case "job_add":
       return customerAddXml({
         requestId,
-        name: work.jobCode || work.jobName || "Job",
+        name: named ? named.jobCode || named.jobName || "Job" : "Job",
         parentFullName: customer,
-        companyName: work.jobName,
+        companyName: named?.jobName,
         ...customerAddress(work),
       });
     case "item_query":
-      return itemQueryXml(work.kind === "invoice" ? work.itemName : "Contract work", requestId);
+      return itemQueryXml(named && named.kind === "invoice" ? named.itemName : "Contract work", requestId);
     case "item_add":
-      return itemServiceAddXml(work.kind === "invoice" ? work.itemName : "Contract work", requestId);
+      return itemServiceAddXml(named && named.kind === "invoice" ? named.itemName : "Contract work", requestId);
     case "invoice_add":
       if (work.kind !== "invoice") return customerQueryXml("Homeowner", requestId);
       return invoiceAddXml({
@@ -125,7 +131,7 @@ function expenseRequest(requestId: string, work: QbwcWork, useAlias: boolean) {
 }
 
 function customerAddress(work: QbwcWork) {
-  if (work.kind === "payment") {
+  if (work.kind === "payment" || work.kind === "vendor_sync") {
     return { phone: "", street: "", city: "", state: "", postalCode: "" };
   }
   return {
@@ -167,12 +173,15 @@ export function advanceFromResponse(
     return { action: "fail", error: qbMessage };
   }
   const missing = result.kind === "missing";
-  const aliasName = work ? customerAliasName(customerFullName(work)) : undefined;
+  const named = work && work.kind !== "vendor_sync" ? work : null;
+  const aliasName = named ? customerAliasName(customerFullName(named)) : undefined;
   switch (step) {
     case "vendor_query":
       return { action: "next", step: missing ? "vendor_add" : afterVendor(work) };
     case "vendor_add":
       return missing ? { action: "fail", error: qbMessage } : { action: "next", step: afterVendor(work) };
+    case "vendor_list_query":
+      return { action: "next", step: "vendor_list_query" };
     case "customer_query":
       if (missing) return { action: "next", step: "customer_add" };
       return {
@@ -189,7 +198,7 @@ export function advanceFromResponse(
       return {
         action: "next",
         step: afterCustomer(work, false),
-        customerName: result.fullName || (work ? customerFullName(work) : undefined),
+        customerName: result.fullName || (named ? customerFullName(named) : undefined),
         customerListId: result.listId || undefined,
       };
     case "customer_alias_query":
@@ -279,7 +288,8 @@ function isParentNotCustomer(message: string) {
 }
 
 function aliasParentFailedMessage(work?: QbwcWork | null, fallback = "") {
-  const alias = work ? customerAliasName(customerFullName(work)) : "";
+  const named = work && work.kind !== "vendor_sync" ? work : null;
+  const alias = named ? customerAliasName(customerFullName(named)) : "";
   const job = jobCodeOf(work);
   if (!alias) return fallback;
   return (
@@ -318,6 +328,7 @@ export const STEP_LABELS: Record<QbwcStep, string> = {
   invoice_add: "Add the invoice on that job",
   vendor_query: "Find the vendor in QuickBooks",
   vendor_add: "Create the vendor",
+  vendor_list_query: "Pull vendors from QuickBooks",
   expense_add: "Add the check or credit card charge",
   payment_add: "Receive the payment against the invoice",
 };

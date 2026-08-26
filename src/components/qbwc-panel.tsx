@@ -25,6 +25,7 @@ import type { Invoice } from "@/lib/types";
 type ConnectorInfo = {
   configured: boolean;
   sql?: string;
+  vendorSql?: string;
   username?: string;
   ownerId?: string;
   fileId?: string;
@@ -34,6 +35,9 @@ type ConnectorInfo = {
   lastConnectedAt?: string | null;
   lastError?: string;
   appUrl?: string;
+  vendorCount?: number;
+  vendorsSyncedAt?: string | null;
+  vendorSyncRequested?: boolean;
 };
 
 function randomPassword() {
@@ -131,6 +135,26 @@ export function QbwcPanel() {
     if (saved) toast.success("Saved the QuickBooks item and account names.");
   }
 
+  async function handlePullVendors() {
+    setPending(true);
+    try {
+      const response = await fetch("/api/qbwc/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestVendorSync: true }),
+      });
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        toast.error(data.error || "Could not queue a vendor pull.");
+        return;
+      }
+      setInfo((current) => (current ? { ...current, vendorSyncRequested: true } : current));
+      toast.success("Next Web Connector update will pull vendors from QuickBooks into the expense dropdown.");
+    } finally {
+      setPending(false);
+    }
+  }
+
   function downloadQwc() {
     if (!info?.username || !info.ownerId || !info.fileId) {
       toast.error("Create a connector password first.");
@@ -165,6 +189,12 @@ export function QbwcPanel() {
       <CardContent className="grid gap-4 pt-4">
         {info?.sql ? (
           <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">{info.sql}</p>
+        ) : null}
+        {info?.vendorSql ? (
+          <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+            Expense payees need a vendor list from QuickBooks. Paste {info.vendorSql} in the SQL
+            editor, then pull vendors (or run Update Selected in the Web Connector).
+          </p>
         ) : null}
         {info?.lastError ? (
           <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
@@ -237,6 +267,14 @@ export function QbwcPanel() {
             type="button"
             variant="outline"
             disabled={!info?.configured || pending}
+            onClick={() => void handlePullVendors()}
+          >
+            Pull vendors from QuickBooks
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!info?.configured || pending}
             onClick={downloadQwc}
           >
             <Download />
@@ -271,6 +309,18 @@ export function QbwcPanel() {
                 Selected.
               </p>
             )}
+            <div className="flex flex-wrap gap-x-3">
+              <dt className="text-muted-foreground">Vendors in Truss</dt>
+              <dd>
+                {typeof info.vendorCount === "number" ? info.vendorCount : 0}
+                {info.vendorsSyncedAt ? ` · pulled ${formatDate(info.vendorsSyncedAt)}` : " · not pulled yet"}
+                {info.vendorSyncRequested ? " · queued for next update" : ""}
+              </dd>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Expense payees come from this list. The connector pulls active vendors automatically on the
+              first update and about once a day after that.
+            </p>
           </dl>
         ) : null}
         <InvoicePreviewList itemName={itemName} onPreview={setPreview} />

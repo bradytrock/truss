@@ -516,6 +516,14 @@ export interface Expense {
   createdBy: string;
 }
 
+export interface QbVendor {
+  id: string;
+  listId: string;
+  name: string;
+  isActive: boolean;
+  syncedAt: string;
+}
+
 export interface ScheduleEvent {
   id: string;
   title: string;
@@ -716,6 +724,7 @@ export interface CrmState {
   invoiceLines: InvoiceLine[];
   payments: Payment[];
   expenses: Expense[];
+  qbVendors: QbVendor[];
   events: ScheduleEvent[];
   photos: JobPhoto[];
   jobFiles: JobFile[];

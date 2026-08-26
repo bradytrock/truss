@@ -159,6 +159,46 @@ export function vendorQueryXml(fullName: string, requestId: string) {
   );
 }
 
+export function vendorListQueryXml(requestId: string, iteratorId = "") {
+  const cont = iteratorId.trim();
+  const attrs = cont
+    ? ` requestID="${xmlEscape(requestId)}" iterator="Continue" iteratorID="${xmlEscape(cont)}"`
+    : ` requestID="${xmlEscape(requestId)}" iterator="Start"`;
+  return wrapQbxml(
+    `    <VendorQueryRq${attrs}>\r\n` +
+      `      <MaxReturned>50</MaxReturned>\r\n` +
+      `    </VendorQueryRq>\r\n`,
+  );
+}
+
+export type QbVendorRow = {
+  listId: string;
+  name: string;
+  isActive: boolean;
+};
+
+export function readVendorListResponse(xml: string) {
+  const vendors: QbVendorRow[] = [];
+  const re = /<VendorRet\b[\s\S]*?<\/VendorRet>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(xml))) {
+    const block = match[0];
+    const listId = innerTag(block, "ListID");
+    const name = innerTag(block, "Name") || innerTag(block, "FullName");
+    if (!name) continue;
+    vendors.push({
+      listId,
+      name,
+      isActive: innerTag(block, "IsActive").toLowerCase() !== "false",
+    });
+  }
+  const remaining = Number(xmlAttr(xml, "iteratorRemainingCount") || "0");
+  const iteratorId = xmlAttr(xml, "iteratorID");
+  const statusCode = xmlAttr(xml, "statusCode") || firstStatusCode(xml);
+  const done = remaining <= 0 || !iteratorId || statusCode === "1";
+  return { vendors, iteratorId, remaining, done, statusCode };
+}
+
 export function vendorAddXml(name: string, requestId: string) {
   return wrapQbxml(
     `    <VendorAddRq requestID="${xmlEscape(requestId)}">\r\n` +

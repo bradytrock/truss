@@ -757,6 +757,26 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["expenses"]["Insert"]>;
         Relationships: [];
       };
+      qb_vendors: {
+        Row: {
+          id: string;
+          company_id: string;
+          list_id: string;
+          name: string;
+          is_active: boolean;
+          synced_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          list_id?: string;
+          name: string;
+          is_active?: boolean;
+          synced_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["qb_vendors"]["Insert"]>;
+        Relationships: [];
+      };
       schedule_events: {
         Row: {
           id: string;
@@ -1020,6 +1040,8 @@ export type Database = {
           enabled: boolean;
           last_connected_at: string | null;
           last_error: string;
+          vendor_sync_requested: boolean;
+          vendors_synced_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1035,6 +1057,8 @@ export type Database = {
           enabled?: boolean;
           last_connected_at?: string | null;
           last_error?: string;
+          vendor_sync_requested?: boolean;
+          vendors_synced_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1053,6 +1077,9 @@ export type Database = {
           resolved_customer: string;
           resolved_customer_list_id: string;
           resolved_job_list_id: string;
+          vendor_sync: boolean;
+          vendor_iterator_id: string;
+          vendor_sync_started_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -1067,6 +1094,9 @@ export type Database = {
           resolved_customer?: string;
           resolved_customer_list_id?: string;
           resolved_job_list_id?: string;
+          vendor_sync?: boolean;
+          vendor_iterator_id?: string;
+          vendor_sync_started_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1076,6 +1106,20 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      qbwc_request_vendor_sync: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      qbwc_save_vendors: {
+        Args: {
+          p_ticket: string;
+          p_vendors?: Json;
+          p_iterator_id?: string;
+          p_done?: boolean;
+          p_abort?: boolean;
+        };
+        Returns: Json;
+      };
       save_google_calendar_tokens: {
         Args: {
           p_staff_id: string;

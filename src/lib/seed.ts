@@ -55,6 +55,15 @@ export const seedState: CrmState = {
   jobFiles: [],
   photoReports: [],
   expenses: demoOps.expenses,
+  qbVendors: [...new Set(demoOps.expenses.map((item) => item.vendor.trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b))
+    .map((name, index) => ({
+      id: `seed-vendor-${index}`,
+      listId: `seed-${index}`,
+      name,
+      isActive: true,
+      syncedAt: new Date().toISOString(),
+    })),
   calendarAccounts: structuredClone(seedCalendarAccounts),
   calendarShares: structuredClone(seedCalendarShares),
   trainingProgress: structuredClone(seedTrainingProgress),

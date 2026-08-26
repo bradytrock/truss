@@ -88,6 +88,29 @@ export async function qbwcApply(
   return { ok: row?.ok === true };
 }
 
+export async function qbwcSaveVendors(
+  ticket: string,
+  vendors: { listId: string; name: string; isActive: boolean }[],
+  iteratorId: string,
+  done: boolean,
+  abort = false,
+) {
+  const supabase = createAnonClient();
+  const { data, error } = await supabase.rpc("qbwc_save_vendors", {
+    p_ticket: ticket,
+    p_vendors: vendors,
+    p_iterator_id: iteratorId,
+    p_done: done,
+    p_abort: abort,
+  });
+  if (error) {
+    console.error("[qbwc] save_vendors", error.code, error.message);
+    return { ok: false as const };
+  }
+  const row = asRecord(data);
+  return { ok: row?.ok === true, done: row?.done === true, aborted: row?.aborted === true };
+}
+
 export async function qbwcLastError(ticket: string) {
   const supabase = createAnonClient();
   const { data, error } = await supabase.rpc("qbwc_get_last_error", { p_ticket: ticket });

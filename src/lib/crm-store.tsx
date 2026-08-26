@@ -204,6 +204,7 @@ const emptyState: CrmState = {
   jobFiles: [],
   photoReports: [],
   expenses: [],
+  qbVendors: [],
   calendarAccounts: [],
   calendarShares: [],
   trainingProgress: [],

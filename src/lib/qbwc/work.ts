@@ -29,6 +29,7 @@ export type QbwcStep =
   | "invoice_add"
   | "vendor_query"
   | "vendor_add"
+  | "vendor_list_query"
   | "expense_add"
   | "payment_add";
 
@@ -49,7 +50,8 @@ export function taggedQbwcStep(step: QbwcStep, useAlias: boolean) {
     step === "customer_alias_query" ||
     step === "customer_alias_add" ||
     step === "vendor_query" ||
-    step === "vendor_add"
+    step === "vendor_add" ||
+    step === "vendor_list_query"
   ) {
     return step;
   }
@@ -120,7 +122,12 @@ export type QbPaymentWork = {
   jobListId?: string;
 };
 
-export type QbwcWork = QbInvoiceWork | QbExpenseWork | QbPaymentWork;
+export type QbVendorSyncWork = {
+  kind: "vendor_sync";
+  iteratorId: string;
+};
+
+export type QbwcWork = QbInvoiceWork | QbExpenseWork | QbPaymentWork | QbVendorSyncWork;
 
 export function invoicePushBlocked(input: {
   invoice: Invoice;
@@ -295,6 +302,9 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Record<string, unknown>;
   const kind = asString(row.kind) || (row.expenseId ? "expense" : row.paymentId ? "payment" : "invoice");
+  if (kind === "vendor_sync") {
+    return { kind: "vendor_sync", iteratorId: asString(row.iteratorId) };
+  }
   if (kind === "expense") {
     const expenseId = asString(row.expenseId);
     const vendor = asString(row.vendor);

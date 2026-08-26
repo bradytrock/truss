@@ -8,6 +8,7 @@ import {
   isMissingQbwcPgcrypto,
   missingQbwcMessage,
   missingQbwcPgcryptoMessage,
+  QBWC_VENDORS_SQL,
 } from "@/lib/supabase/schema-errors";
 
 export const runtime = "nodejs";
@@ -29,7 +30,7 @@ export async function GET(request: Request) {
   const { data, error } = await supabase
     .from("qbwc_connectors")
     .select(
-      "username, owner_id, file_id, default_item_name, bank_account_name, cc_account_name, enabled, last_connected_at, last_error",
+      "username, owner_id, file_id, default_item_name, bank_account_name, cc_account_name, enabled, last_connected_at, last_error, vendor_sync_requested, vendors_synced_at",
     )
     .maybeSingle();
   if (error) {
@@ -44,7 +45,30 @@ export async function GET(request: Request) {
         }
         return NextResponse.json({ error: fallback.error.message }, { status: 400 });
       }
-      return connectorJson(request, fallback.data, DEFAULT_QB_BANK, DEFAULT_QB_CC);
+      return connectorJson(request, fallback.data, DEFAULT_QB_BANK, DEFAULT_QB_CC, supabase);
+    }
+    if (/vendor_sync_requested|vendors_synced_at/i.test(error.message ?? "")) {
+      const fallback = await supabase
+        .from("qbwc_connectors")
+        .select(
+          "username, owner_id, file_id, default_item_name, bank_account_name, cc_account_name, enabled, last_connected_at, last_error",
+        )
+        .maybeSingle();
+      if (fallback.error) {
+        if (isMissingQbwc(fallback.error)) {
+          return NextResponse.json({ configured: false, sql: missingQbwcMessage() }, { status: 200 });
+        }
+        return NextResponse.json({ error: fallback.error.message }, { status: 400 });
+      }
+      const json = await connectorJson(
+        request,
+        fallback.data,
+        fallback.data?.bank_account_name || DEFAULT_QB_BANK,
+        fallback.data?.cc_account_name || DEFAULT_QB_CC,
+        supabase,
+      );
+      const body = await json.json();
+      return NextResponse.json({ ...body, vendorSql: QBWC_VENDORS_SQL });
     }
     if (isMissingQbwc(error)) {
       return NextResponse.json({ configured: false, sql: missingQbwcMessage() }, { status: 200 });
@@ -65,10 +89,11 @@ export async function GET(request: Request) {
     data,
     data.bank_account_name || DEFAULT_QB_BANK,
     data.cc_account_name || DEFAULT_QB_CC,
+    supabase,
   );
 }
 
-function connectorJson(
+async function connectorJson(
   request: Request,
   data: {
     username: string;
@@ -78,9 +103,12 @@ function connectorJson(
     enabled: boolean;
     last_connected_at: string | null;
     last_error: string;
+    vendor_sync_requested?: boolean;
+    vendors_synced_at?: string | null;
   } | null,
   bankAccount: string,
   ccAccount: string,
+  supabase: Awaited<ReturnType<typeof createClient>>,
 ) {
   if (!data) {
     return NextResponse.json({
@@ -91,6 +119,7 @@ function connectorJson(
       ccAccount,
     });
   }
+  const vendors = await supabase.from("qb_vendors").select("id", { count: "exact", head: true }).eq("is_active", true);
   return NextResponse.json({
     configured: true,
     username: data.username,
@@ -102,6 +131,9 @@ function connectorJson(
     enabled: data.enabled,
     lastConnectedAt: data.last_connected_at,
     lastError: data.last_error,
+    vendorCount: vendors.error ? 0 : (vendors.count ?? 0),
+    vendorsSyncedAt: data.vendors_synced_at ?? null,
+    vendorSyncRequested: data.vendor_sync_requested === true,
     appUrl: `${requestOrigin(request)}/api/qbwc`,
   });
 }
@@ -115,8 +147,32 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Sign in to set up the Web Connector." }, { status: 401 });
   }
   const body = (await request.json().catch(() => null)) as
-    | { password?: string; itemName?: string; appUrl?: string; bankAccount?: string; ccAccount?: string }
+    | {
+        password?: string;
+        itemName?: string;
+        appUrl?: string;
+        bankAccount?: string;
+        ccAccount?: string;
+        requestVendorSync?: boolean;
+      }
     | null;
+  if (body?.requestVendorSync) {
+    const { data, error } = await supabase.rpc("qbwc_request_vendor_sync");
+    if (error) {
+      if (isMissingQbwc(error)) {
+        return NextResponse.json({ error: missingQbwcMessage() }, { status: 400 });
+      }
+      return NextResponse.json(
+        { error: `Run ${QBWC_VENDORS_SQL} in the SQL editor so vendors can be stored.` },
+        { status: 400 },
+      );
+    }
+    const row = asRecord(data);
+    if (row?.ok !== true) {
+      return NextResponse.json({ error: "Create a connector password first." }, { status: 400 });
+    }
+    return NextResponse.json({ ok: true, vendorSyncRequested: true });
+  }
   const password = typeof body?.password === "string" ? body.password : "";
   const itemName = typeof body?.itemName === "string" ? body.itemName : DEFAULT_QB_ITEM;
   const bankAccount =

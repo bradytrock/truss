@@ -13,8 +13,9 @@ import {
   qbwcClose,
   qbwcLastError,
   qbwcNextWork,
+  qbwcSaveVendors,
 } from "@/lib/qbwc/service";
-import { isQbNotFoundMessage } from "@/lib/qbwc/qbxml";
+import { isQbNotFoundMessage, readVendorListResponse } from "@/lib/qbwc/qbxml";
 import { advanceFromResponse, requestForStep, stepLabel } from "@/lib/qbwc/steps";
 
 export const runtime = "nodejs";
@@ -74,6 +75,9 @@ async function dispatch(call: ReturnType<typeof parseQbwcSoap>) {
       if (!current.ok || current.done) {
         return soapIntResponse("receiveResponseXML", 100);
       }
+      if (current.work.kind === "vendor_sync") {
+        return handleVendorSync(call.ticket, call.response, call.hresult, call.message);
+      }
       const hasXml = Boolean(call.response.trim());
       const hresultFailed =
         Boolean(call.hresult.trim()) && call.hresult !== "0x0" && call.hresult !== "0";
@@ -121,4 +125,30 @@ async function dispatch(call: ReturnType<typeof parseQbwcSoap>) {
     default:
       return soapStringResponse("getLastError", "This Web Connector call is not supported.");
   }
+}
+
+async function handleVendorSync(ticket: string, response: string, hresult: string, message: string) {
+  const hasXml = Boolean(response.trim());
+  const hresultFailed = Boolean(hresult.trim()) && hresult !== "0x0" && hresult !== "0";
+  if (!hasXml && hresultFailed) {
+    console.info("[qbwc] vendor sync skipped", message || hresult);
+    await qbwcSaveVendors(ticket, [], "", true, true);
+    const more = await qbwcNextWork(ticket);
+    return soapIntResponse("receiveResponseXML", !more.ok || more.done ? 100 : 50);
+  }
+  const parsed = readVendorListResponse(response);
+  const code = Number(parsed.statusCode);
+  if (parsed.statusCode && code !== 0 && code !== 1) {
+    console.info("[qbwc] vendor sync xml error", parsed.statusCode);
+    await qbwcSaveVendors(ticket, [], "", true, true);
+    const more = await qbwcNextWork(ticket);
+    return soapIntResponse("receiveResponseXML", !more.ok || more.done ? 100 : 50);
+  }
+  const saved = await qbwcSaveVendors(ticket, parsed.vendors, parsed.iteratorId, parsed.done);
+  console.info("[qbwc] vendor sync", parsed.vendors.length, parsed.done ? "done" : "more", saved.ok);
+  if (!parsed.done) {
+    return soapIntResponse("receiveResponseXML", 25);
+  }
+  const more = await qbwcNextWork(ticket);
+  return soapIntResponse("receiveResponseXML", !more.ok || more.done ? 100 : 50);
 }
