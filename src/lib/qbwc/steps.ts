@@ -14,7 +14,7 @@ import {
 } from "@/lib/qbwc/work";
 
 export function requestForStep(step: QbwcStep, work: QbInvoiceWork) {
-  const requestId = `${work.invoiceId}:${step}`;
+  const requestId = `${work.invoiceId}-${step}`;
   switch (step) {
     case "customer_query":
       return customerQueryXml(customerFullName(work), requestId);

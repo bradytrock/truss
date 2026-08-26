@@ -5,13 +5,17 @@ export const QB_NAME_MAX = 41;
 /** RefNumber on InvoiceAdd is short in older company files. */
 export const QB_REF_MAX = 11;
 
-export function qbName(value: string, max = QB_NAME_MAX) {
-  const cleaned = value
+export function qbAscii(value: string, max: number) {
+  return value
     .replace(/[:\t\n\r]/g, " ")
     .replace(/[^\x20-\x7E]/g, " ")
     .replace(/\s+/g, " ")
-    .trim();
-  return (cleaned || "Customer").slice(0, max);
+    .trim()
+    .slice(0, max);
+}
+
+export function qbName(value: string, max = QB_NAME_MAX) {
+  return qbAscii(value, max) || "Customer";
 }
 
 export function customerJobFullName(customerName: string, jobCode: string) {
@@ -64,25 +68,21 @@ export function customerAddXml(input: {
   state?: string;
   postalCode?: string;
 }) {
-  const address = addressXml(input);
-  const parent = input.parentFullName
-    ? `      <ParentRef>\r\n        <FullName>${xmlEscape(input.parentFullName)}</FullName>\r\n      </ParentRef>\r\n`
-    : "";
-  const phone = input.phone?.trim()
-    ? `      <Phone>${xmlEscape(input.phone.trim().slice(0, 21))}</Phone>\r\n`
-    : "";
-  const company = input.companyName?.trim()
-    ? `      <CompanyName>${xmlEscape(qbName(input.companyName, 41))}</CompanyName>\r\n`
-    : "";
+  // OSR order: Name, IsActive, ParentRef, CompanyName, BillAddress, Phone.
+  const phone = qbAscii(input.phone ?? "", 21);
   return wrapQbxml(
     `    <CustomerAddRq requestID="${xmlEscape(input.requestId)}">\r\n` +
       `      <CustomerAdd>\r\n` +
-      `      <Name>${xmlEscape(qbName(input.name))}</Name>\r\n` +
-      parent +
-      `      <IsActive>true</IsActive>\r\n` +
-      company +
-      phone +
-      address +
+      `        <Name>${xmlEscape(qbName(input.name))}</Name>\r\n` +
+      `        <IsActive>true</IsActive>\r\n` +
+      (input.parentFullName
+        ? `        <ParentRef>\r\n          <FullName>${xmlEscape(qbName(input.parentFullName))}</FullName>\r\n        </ParentRef>\r\n`
+        : "") +
+      (input.companyName?.trim()
+        ? `        <CompanyName>${xmlEscape(qbName(input.companyName))}</CompanyName>\r\n`
+        : "") +
+      addressXml(input, "BillAddress") +
+      (phone ? `        <Phone>${xmlEscape(phone)}</Phone>\r\n` : "") +
       `      </CustomerAdd>\r\n` +
       `    </CustomerAddRq>\r\n`,
   );
@@ -137,15 +137,12 @@ export type QbInvoiceAddInput = {
 };
 
 export function invoiceAddXml(input: QbInvoiceAddInput) {
-  const address = addressXml(input, "BillAddress");
-  const ship = addressXml(input, "ShipAddress");
-  const due = input.dueDate
-    ? `        <DueDate>${xmlEscape(qbDate(input.dueDate))}</DueDate>\r\n`
-    : "";
-  const memo = input.memo?.trim()
-    ? `        <Memo>${xmlEscape(input.memo.trim().slice(0, 4095))}</Memo>\r\n`
-    : "";
-  const lines = (input.lines.length ? input.lines : [{ description: input.memo || "Contract work", quantity: 1, unit: "ls", unitCost: 0 }])
+  // OSR order: CustomerRef, TxnDate, RefNumber, BillAddress, ShipAddress,
+  // DueDate, Memo, IsToBePrinted, IsToBeEmailed, InvoiceLineAdd.
+  const memo = qbAscii(input.memo ?? "", 4095);
+  const lines = (input.lines.length
+    ? input.lines
+    : [{ description: input.memo || "Contract work", quantity: 1, unit: "ls", unitCost: 0 }])
     .map((line) => invoiceLineXml(line, input.itemName))
     .join("");
   return wrapQbxml(
@@ -155,13 +152,13 @@ export function invoiceAddXml(input: QbInvoiceAddInput) {
       `          <FullName>${xmlEscape(input.customerJobFullName)}</FullName>\r\n` +
       `        </CustomerRef>\r\n` +
       `        <TxnDate>${xmlEscape(qbDate(input.txnDate))}</TxnDate>\r\n` +
-      `        <RefNumber>${xmlEscape(input.refNumber.slice(0, QB_REF_MAX))}</RefNumber>\r\n` +
-      address +
-      ship +
+      `        <RefNumber>${xmlEscape(qbAscii(input.refNumber, QB_REF_MAX))}</RefNumber>\r\n` +
+      addressXml(input, "BillAddress") +
+      addressXml(input, "ShipAddress") +
+      (input.dueDate ? `        <DueDate>${xmlEscape(qbDate(input.dueDate))}</DueDate>\r\n` : "") +
+      (memo ? `        <Memo>${xmlEscape(memo)}</Memo>\r\n` : "") +
       `        <IsToBePrinted>false</IsToBePrinted>\r\n` +
       `        <IsToBeEmailed>false</IsToBeEmailed>\r\n` +
-      due +
-      memo +
       lines +
       `      </InvoiceAdd>\r\n` +
       `    </InvoiceAddRq>\r\n`,
@@ -169,11 +166,10 @@ export function invoiceAddXml(input: QbInvoiceAddInput) {
 }
 
 function invoiceLineXml(line: QbInvoiceLine, itemName: string) {
-  const desc = [line.description, line.unit && line.unit !== "ea" && line.unit !== "ls" ? `(${line.unit})` : ""]
+  const raw = [line.description, line.unit && line.unit !== "ea" && line.unit !== "ls" ? `(${line.unit})` : ""]
     .filter(Boolean)
-    .join(" ")
-    .trim()
-    .slice(0, 4095) || itemName;
+    .join(" ");
+  const desc = qbAscii(raw, 4095) || qbName(itemName);
   return (
     `        <InvoiceLineAdd>\r\n` +
     `          <ItemRef>\r\n` +
@@ -190,17 +186,17 @@ function addressXml(
   input: { street?: string; city?: string; state?: string; postalCode?: string },
   tag: "BillAddress" | "ShipAddress" = "BillAddress",
 ) {
-  const street = input.street?.trim() ?? "";
-  const city = input.city?.trim() ?? "";
-  const state = input.state?.trim() ?? "";
-  const zip = input.postalCode?.trim() ?? "";
+  const street = qbAscii(input.street ?? "", 41);
+  const city = qbAscii(input.city ?? "", 31);
+  const state = qbAscii(input.state ?? "", 21);
+  const zip = qbAscii(input.postalCode ?? "", 13);
   if (!street && !city) return "";
   return (
     `        <${tag}>\r\n` +
-    (street ? `          <Addr1>${xmlEscape(street.slice(0, 41))}</Addr1>\r\n` : "") +
-    (city ? `          <City>${xmlEscape(city.slice(0, 31))}</City>\r\n` : "") +
-    (state ? `          <State>${xmlEscape(state.slice(0, 21))}</State>\r\n` : "") +
-    (zip ? `          <PostalCode>${xmlEscape(zip.slice(0, 13))}</PostalCode>\r\n` : "") +
+    (street ? `          <Addr1>${xmlEscape(street)}</Addr1>\r\n` : "") +
+    (city ? `          <City>${xmlEscape(city)}</City>\r\n` : "") +
+    (state ? `          <State>${xmlEscape(state)}</State>\r\n` : "") +
+    (zip ? `          <PostalCode>${xmlEscape(zip)}</PostalCode>\r\n` : "") +
     `        </${tag}>\r\n`
   );
 }
