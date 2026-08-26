@@ -1,10 +1,6 @@
 import { createAnonClient } from "@/lib/supabase/anon";
 import { isMissingQbwc } from "@/lib/supabase/schema-errors";
-import {
-  parseWorkPayload,
-  type QbwcStep,
-  type QbwcWork,
-} from "@/lib/qbwc/work";
+import { parseWorkPayload, type QbwcWork } from "@/lib/qbwc/work";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -29,7 +25,7 @@ export async function qbwcAuthenticate(username: string, password: string) {
 
 export async function qbwcNextWork(ticket: string): Promise<
   | { ok: true; done: true }
-  | { ok: true; done: false; step: QbwcStep; work: QbwcWork }
+  | { ok: true; done: false; step: string; work: QbwcWork }
   | { ok: false; reason: string }
 > {
   const supabase = createAnonClient();
@@ -43,7 +39,7 @@ export async function qbwcNextWork(ticket: string): Promise<
   if (!row || row.ok === false) return { ok: false, reason: String(row?.reason ?? "ticket") };
   if (row.done === true) return { ok: true, done: true };
   const work = parseWorkPayload(row.work);
-  const step = String(row.step ?? "customer_query") as QbwcStep;
+  const step = String(row.step ?? "customer_query");
   if (!work) return { ok: false, reason: "payload" };
   return { ok: true, done: false, step, work };
 }

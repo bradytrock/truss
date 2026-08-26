@@ -15,7 +15,7 @@ import {
   qbwcNextWork,
 } from "@/lib/qbwc/service";
 import { isQbNotFoundMessage } from "@/lib/qbwc/qbxml";
-import { advanceFromResponse, requestForStep, STEP_LABELS } from "@/lib/qbwc/steps";
+import { advanceFromResponse, requestForStep, stepLabel } from "@/lib/qbwc/steps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,7 +80,7 @@ async function dispatch(call: ReturnType<typeof parseQbwcSoap>) {
       // Query FullName misses come back as status 500 (and sometimes hresult) — that is
       // "create this customer/job/item", not a session-ending COM failure.
       if (!hasXml && hresultFailed && !isQbNotFoundMessage(call.message)) {
-        const label = STEP_LABELS[current.step] ?? current.step;
+        const label = stepLabel(current.step);
         await qbwcApply(call.ticket, "fail", {
           error: `${label}: ${call.message || call.hresult}`,
         });

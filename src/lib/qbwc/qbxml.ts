@@ -19,9 +19,12 @@ export function qbName(value: string, max = QB_NAME_MAX) {
 }
 
 /** When the homeowner name is already a vendor, jobs hang under this customer instead. */
+export const CUSTOMER_ALIAS_SUFFIX = " Cust";
+
 export function customerAliasName(name: string) {
-  const suffix = " Cust";
-  return qbName(qbName(name, QB_NAME_MAX - suffix.length) + suffix);
+  const base = qbName(name);
+  if (base.endsWith(CUSTOMER_ALIAS_SUFFIX)) return base;
+  return qbName(qbName(name, QB_NAME_MAX - CUSTOMER_ALIAS_SUFFIX.length) + CUSTOMER_ALIAS_SUFFIX);
 }
 
 export function customerJobFullName(customerName: string, jobCode: string) {

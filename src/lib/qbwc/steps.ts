@@ -13,9 +13,12 @@ import {
   vendorQueryXml,
 } from "@/lib/qbwc/qbxml";
 import {
+  billedCustomerName,
   customerFullName,
   jobFullName,
   paymentCustomerRef,
+  splitQbwcStep,
+  taggedQbwcStep,
   type QbwcStep,
   type QbwcWork,
 } from "@/lib/qbwc/work";
@@ -26,8 +29,12 @@ function recordId(work: QbwcWork) {
   return work.invoiceId;
 }
 
-export function requestForStep(step: QbwcStep, work: QbwcWork) {
+export function requestForStep(rawStep: string, work: QbwcWork) {
+  const { step, useAlias } = splitQbwcStep(rawStep);
   const requestId = `${recordId(work)}-${step}`;
+  const customer = billedCustomerName(work, useAlias);
+  const job = jobFullName(work, useAlias);
+  const alias = customerAliasName(customerFullName(work));
   switch (step) {
     case "customer_query":
       return customerQueryXml(customerFullName(work), requestId);
@@ -37,20 +44,21 @@ export function requestForStep(step: QbwcStep, work: QbwcWork) {
         name: customerFullName(work),
         ...customerAddress(work),
       });
+    case "customer_alias_query":
+      return customerQueryXml(alias, requestId);
     case "customer_alias_add":
       return customerAddXml({
         requestId,
-        name: customerAliasName(customerFullName(work)),
+        name: alias,
         ...customerAddress(work),
       });
     case "job_query":
-      return customerQueryXml(jobFullName(work), requestId);
+      return customerQueryXml(job, requestId);
     case "job_add":
       return customerAddXml({
         requestId,
         name: work.jobCode || work.jobName || "Job",
-        parentFullName: customerFullName(work),
-        parentListId: work.customerListId,
+        parentFullName: customer,
         companyName: work.jobName,
         ...customerAddress(work),
       });
@@ -62,7 +70,7 @@ export function requestForStep(step: QbwcStep, work: QbwcWork) {
       if (work.kind !== "invoice") return customerQueryXml("Homeowner", requestId);
       return invoiceAddXml({
         requestId,
-        customerJobFullName: jobFullName(work),
+        customerJobFullName: job,
         customerListId: work.jobListId,
         refNumber: work.number,
         txnDate: work.issuedAt,
@@ -80,12 +88,12 @@ export function requestForStep(step: QbwcStep, work: QbwcWork) {
     case "vendor_add":
       return vendorAddXml(work.kind === "expense" ? work.vendor : "Vendor", requestId);
     case "expense_add":
-      return expenseRequest(requestId, work);
+      return expenseRequest(requestId, work, useAlias);
     case "payment_add":
       if (work.kind !== "payment") return customerQueryXml("Homeowner", requestId);
       return receivePaymentAddXml({
         requestId,
-        customerName: paymentCustomerRef(work),
+        customerName: paymentCustomerRef(work, useAlias),
         customerListId: work.hasJob ? work.jobListId : work.customerListId,
         txnDate: work.txnDate,
         refNumber: work.reference,
@@ -97,7 +105,7 @@ export function requestForStep(step: QbwcStep, work: QbwcWork) {
   }
 }
 
-function expenseRequest(requestId: string, work: QbwcWork) {
+function expenseRequest(requestId: string, work: QbwcWork, useAlias: boolean) {
   if (work.kind !== "expense") return vendorQueryXml("Vendor", requestId);
   const line = {
     requestId,
@@ -107,7 +115,7 @@ function expenseRequest(requestId: string, work: QbwcWork) {
     memo: work.memo || work.number,
     accountName: work.accountName,
     amount: work.amount,
-    customerJobFullName: work.hasJob ? jobFullName(work) : "",
+    customerJobFullName: work.hasJob ? jobFullName(work, useAlias) : "",
     customerListId: work.hasJob ? work.jobListId : undefined,
   };
   if (work.payWith === "credit_card") {
@@ -132,7 +140,7 @@ function customerAddress(work: QbwcWork) {
 export type StepAdvance =
   | {
       action: "next";
-      step: QbwcStep;
+      step: string;
       customerName?: string;
       customerListId?: string;
       jobListId?: string;
@@ -141,108 +149,152 @@ export type StepAdvance =
   | { action: "fail"; error: string };
 
 export function advanceFromResponse(
-  step: QbwcStep,
+  rawStep: string,
   responseXml: string,
   fallbackMessage = "",
   work?: QbwcWork | null,
 ): StepAdvance {
+  const { step, useAlias } = splitQbwcStep(rawStep);
   const result = readQbResponse(responseXml, fallbackMessage);
-  const failed = explainQbError(step, result.statusMessage || `QuickBooks status ${result.statusCode}`, work);
+  const qbMessage = result.statusMessage || `QuickBooks status ${result.statusCode}`;
   if (result.kind === "error") {
-    return { action: "fail", error: failed };
+    if (step === "job_add" && isParentNotCustomer(qbMessage)) {
+      if (useAlias) {
+        return { action: "fail", error: aliasParentFailedMessage(work, qbMessage) };
+      }
+      return { action: "next", step: "customer_alias_query" };
+    }
+    return { action: "fail", error: qbMessage };
   }
   const missing = result.kind === "missing";
+  const aliasName = work ? customerAliasName(customerFullName(work)) : undefined;
   switch (step) {
     case "vendor_query":
       return { action: "next", step: missing ? "vendor_add" : afterVendor(work) };
     case "vendor_add":
-      return missing ? { action: "fail", error: failed } : { action: "next", step: afterVendor(work) };
+      return missing ? { action: "fail", error: qbMessage } : { action: "next", step: afterVendor(work) };
     case "customer_query":
       if (missing) return { action: "next", step: "customer_add" };
       return {
         action: "next",
-        step: afterCustomer(work),
+        step: afterCustomer(work, false),
         customerName: result.fullName || undefined,
         customerListId: result.listId || undefined,
       };
     case "customer_add":
-      if (missing) return { action: "fail", error: failed };
+      if (missing) return { action: "fail", error: qbMessage };
       if (result.kind === "exists") {
-        return { action: "next", step: "customer_alias_add" };
+        return { action: "next", step: "customer_alias_query" };
       }
       return {
         action: "next",
-        step: afterCustomer(work),
+        step: afterCustomer(work, false),
         customerName: result.fullName || (work ? customerFullName(work) : undefined),
         customerListId: result.listId || undefined,
       };
+    case "customer_alias_query":
+      if (missing) return { action: "next", step: "customer_alias_add" };
+      return {
+        action: "next",
+        step: afterCustomer(work, true),
+        customerName: result.fullName || aliasName,
+        customerListId: result.listId || undefined,
+      };
     case "customer_alias_add":
-      if (missing || result.kind === "exists") {
-        return { action: "fail", error: parentMustBeCustomerMessage(work, failed) };
+      if (missing) return { action: "fail", error: qbMessage };
+      // 3100 "already in use" usually means a previous run already created Name Cust.
+      if (result.kind === "exists") {
+        return {
+          action: "next",
+          step: afterCustomer(work, true),
+          customerName: aliasName,
+        };
       }
       return {
         action: "next",
-        step: afterCustomer(work),
-        customerName: result.fullName || (work ? customerAliasName(customerFullName(work)) : undefined),
+        step: afterCustomer(work, true),
+        customerName: result.fullName || aliasName,
         customerListId: result.listId || undefined,
       };
     case "job_query":
-      if (missing) return { action: "next", step: "job_add" };
-      return { action: "next", step: afterJob(work), jobListId: result.listId || undefined };
+      if (missing) return { action: "next", step: taggedQbwcStep("job_add", useAlias) };
+      return {
+        action: "next",
+        step: afterJob(work, useAlias),
+        jobListId: result.listId || undefined,
+      };
     case "job_add":
-      if (missing) return { action: "fail", error: failed };
-      return { action: "next", step: afterJob(work), jobListId: result.listId || undefined };
+      if (missing) return { action: "fail", error: qbMessage };
+      if (result.kind === "exists" && isParentNotCustomer(qbMessage)) {
+        if (useAlias) return { action: "fail", error: aliasParentFailedMessage(work, qbMessage) };
+        return { action: "next", step: "customer_alias_query" };
+      }
+      return {
+        action: "next",
+        step: afterJob(work, useAlias),
+        jobListId: result.listId || undefined,
+      };
     case "item_query":
-      return { action: "next", step: missing ? "item_add" : "invoice_add" };
+      return {
+        action: "next",
+        step: taggedQbwcStep(missing ? "item_add" : "invoice_add", useAlias),
+      };
     case "item_add":
-      return missing ? { action: "fail", error: failed } : { action: "next", step: "invoice_add" };
+      return missing
+        ? { action: "fail", error: qbMessage }
+        : { action: "next", step: taggedQbwcStep("invoice_add", useAlias) };
     case "invoice_add":
     case "expense_add":
     case "payment_add":
-      return missing ? { action: "fail", error: failed } : { action: "complete", txnId: result.txnId };
+      return missing ? { action: "fail", error: qbMessage } : { action: "complete", txnId: result.txnId };
   }
 }
 
-function afterVendor(work?: QbwcWork | null): QbwcStep {
+function afterVendor(work?: QbwcWork | null) {
   return work?.kind === "expense" && work.hasJob ? "customer_query" : "expense_add";
 }
 
-function afterCustomer(work?: QbwcWork | null): QbwcStep {
-  if (work?.kind === "payment") return work.hasJob ? "job_query" : "payment_add";
-  if (work?.kind === "expense") return work.hasJob ? "job_query" : "expense_add";
-  return "job_query";
+function afterCustomer(work: QbwcWork | null | undefined, useAlias: boolean) {
+  if (work?.kind === "payment") {
+    return taggedQbwcStep(work.hasJob ? "job_query" : "payment_add", useAlias);
+  }
+  if (work?.kind === "expense") {
+    return taggedQbwcStep(work.hasJob ? "job_query" : "expense_add", useAlias);
+  }
+  return taggedQbwcStep("job_query", useAlias);
 }
 
-function afterJob(work?: QbwcWork | null): QbwcStep {
-  if (work?.kind === "expense") return "expense_add";
-  if (work?.kind === "payment") return "payment_add";
-  return "item_query";
+function afterJob(work: QbwcWork | null | undefined, useAlias: boolean) {
+  if (work?.kind === "expense") return taggedQbwcStep("expense_add", useAlias);
+  if (work?.kind === "payment") return taggedQbwcStep("payment_add", useAlias);
+  return taggedQbwcStep("item_query", useAlias);
 }
 
 function jobCodeOf(work?: QbwcWork | null) {
   return work && "jobCode" in work ? work.jobCode || work.jobName || "" : "";
 }
 
-function parentMustBeCustomerMessage(work?: QbwcWork | null, fallback = "") {
-  const parent = work ? customerFullName(work) : "";
+function isParentNotCustomer(message: string) {
+  return /not a customer name|parent you have selected/i.test(message);
+}
+
+function aliasParentFailedMessage(work?: QbwcWork | null, fallback = "") {
+  const alias = work ? customerAliasName(customerFullName(work)) : "";
   const job = jobCodeOf(work);
-  if (!parent) return fallback;
+  if (!alias) return fallback;
   return (
-    `QuickBooks already has "${parent}" as a vendor, employee, or other name — not a customer` +
-    (job ? `, so job ${job} cannot hang under it` : "") +
-    `. In QuickBooks, that name has to be an active Customer (or rename the vendor so the names differ), then retry.`
+    `QuickBooks would not hang${job ? ` job ${job}` : " that job"} under customer "${alias}". ` +
+    `${fallback || "The parent is not a customer."}`
   );
 }
 
-function explainQbError(step: QbwcStep, failed: string, work?: QbwcWork | null) {
-  if (
-    (step === "job_add" || step === "customer_alias_add") &&
-    /not a customer name|parent you have selected|already in use|already exists/i.test(failed)
-  ) {
-    return parentMustBeCustomerMessage(work, failed);
-  }
-  return failed;
+export function stepLabel(rawStep: string) {
+  const { step, useAlias } = splitQbwcStep(rawStep);
+  const label = STEP_LABELS[step] ?? step;
+  return useAlias ? `${label} (as ${CUSTOMER_ALIAS_HINT})` : label;
 }
+
+const CUSTOMER_ALIAS_HINT = "… Cust";
 
 export const INVOICE_PREVIEW_STEPS: QbwcStep[] = [
   "customer_query",
@@ -257,6 +309,7 @@ export const INVOICE_PREVIEW_STEPS: QbwcStep[] = [
 export const STEP_LABELS: Record<QbwcStep, string> = {
   customer_query: "Find the customer in QuickBooks",
   customer_add: "Create the customer",
+  customer_alias_query: "Find a customer for this name (it is already a vendor)",
   customer_alias_add: "Create a customer (this name is already a vendor)",
   job_query: "Find the job under that customer",
   job_add: "Create the job (Customer:Job)",

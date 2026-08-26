@@ -11,7 +11,7 @@ import type {
   Payment,
 } from "@/lib/types";
 import { EXPENSE_ACCOUNT_LABELS } from "@/lib/types";
-import { customerJobFullName, qbName, type QbInvoiceLine } from "@/lib/qbwc/qbxml";
+import { customerAliasName, customerJobFullName, qbName, type QbInvoiceLine } from "@/lib/qbwc/qbxml";
 
 export const DEFAULT_QB_ITEM = "Contract work";
 export const DEFAULT_QB_BANK = "Checking";
@@ -20,6 +20,7 @@ export const DEFAULT_QB_CC = "Credit Card";
 export type QbwcStep =
   | "customer_query"
   | "customer_add"
+  | "customer_alias_query"
   | "customer_alias_add"
   | "job_query"
   | "job_add"
@@ -30,6 +31,30 @@ export type QbwcStep =
   | "vendor_add"
   | "expense_add"
   | "payment_add";
+
+/** Session step may carry `+alias` so later requests hang the job under `Name Cust` without extra SQL. */
+export const QBWC_ALIAS_FLAG = "+alias";
+
+export function splitQbwcStep(raw: string): { step: QbwcStep; useAlias: boolean } {
+  const useAlias = raw.endsWith(QBWC_ALIAS_FLAG);
+  const step = (useAlias ? raw.slice(0, -QBWC_ALIAS_FLAG.length) : raw) as QbwcStep;
+  return { step, useAlias };
+}
+
+export function taggedQbwcStep(step: QbwcStep, useAlias: boolean) {
+  if (!useAlias) return step;
+  if (
+    step === "customer_query" ||
+    step === "customer_add" ||
+    step === "customer_alias_query" ||
+    step === "customer_alias_add" ||
+    step === "vendor_query" ||
+    step === "vendor_add"
+  ) {
+    return step;
+  }
+  return `${step}${QBWC_ALIAS_FLAG}`;
+}
 
 export type QbInvoiceWork = {
   kind: "invoice";
@@ -245,13 +270,18 @@ export function customerFullName(work: { customerName: string }) {
   return qbName(work.customerName);
 }
 
-export function jobFullName(work: { customerName: string; jobCode: string; jobName?: string }) {
-  return customerJobFullName(work.customerName, work.jobCode || work.jobName || "Job");
+export function billedCustomerName(work: { customerName: string }, useAlias: boolean) {
+  const name = customerFullName(work);
+  return useAlias ? customerAliasName(name) : name;
+}
+
+export function jobFullName(work: { customerName: string; jobCode: string; jobName?: string }, useAlias = false) {
+  return customerJobFullName(billedCustomerName(work, useAlias), work.jobCode || work.jobName || "Job");
 }
 
 /** ReceivePayment CustomerRef must match the invoice customer — Customer:Job when the invoice hangs on a job. */
-export function paymentCustomerRef(work: QbPaymentWork) {
-  return work.hasJob ? jobFullName(work) : customerFullName(work);
+export function paymentCustomerRef(work: QbPaymentWork, useAlias = false) {
+  return work.hasJob ? jobFullName(work, useAlias) : billedCustomerName(work, useAlias);
 }
 
 function resolvedIds(row: Record<string, unknown>) {
