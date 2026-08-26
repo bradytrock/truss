@@ -373,6 +373,22 @@ export const QBWC_QUEUE_SQL = "supabase/migrations/20260825230000_qbwc_queue.sql
 export const QBWC_EXPENSES_SQL = "supabase/migrations/20260825240000_qbwc_expenses_payments.sql";
 export const QBWC_CUSTOMER_ALIAS_SQL = "supabase/migrations/20260825250000_qbwc_customer_alias.sql";
 export const QBWC_VENDORS_SQL = "supabase/migrations/20260825260000_qb_vendors.sql";
+export const QB_REVIEW_SQL = "supabase/migrations/20260825270000_qb_review.sql";
+
+export function isMissingQbReview(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentions = message.includes("qb_review_comments") || message.includes("qb_review");
+  return (
+    (code === "pgrst205" && mentions) ||
+    ((message.includes("schema cache") || message.includes("could not find the")) && mentions)
+  );
+}
+
+export function missingQbReviewMessage() {
+  return `Saved in this browser. Run ${QB_REVIEW_SQL} in the SQL editor so review comments stay on the invoice, expense, or payment.`;
+}
 
 export function isMissingQbwcPgcrypto(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;

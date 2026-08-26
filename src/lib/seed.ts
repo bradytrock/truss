@@ -64,6 +64,7 @@ export const seedState: CrmState = {
       isActive: true,
       syncedAt: new Date().toISOString(),
     })),
+  qbReviewComments: [],
   calendarAccounts: structuredClone(seedCalendarAccounts),
   calendarShares: structuredClone(seedCalendarShares),
   trainingProgress: structuredClone(seedTrainingProgress),

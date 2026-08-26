@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId } from "@/lib/job-record";
@@ -95,6 +95,10 @@ import {
   mapOpportunity,
   mapPayment,
   mapExpense,
+  expensePatch,
+  paymentPatch,
+  invoiceLinePatch,
+  mapQbReviewComment,
   mapScheduleEvent,
   mapStaff,
   mapTask,
@@ -137,8 +141,12 @@ import {
   type Expense,
   type ExpenseAccount,
   type ExpenseMethod,
-  type QbSyncStatus,
+  type InvoiceLine,
   type Payment,
+  type QbReviewComment,
+  type QbReviewIntent,
+  type QbReviewKind,
+  type QbSyncStatus,
   type TextMessage,
 } from "@/lib/types";
 import {
@@ -205,6 +213,7 @@ const emptyState: CrmState = {
   photoReports: [],
   expenses: [],
   qbVendors: [],
+  qbReviewComments: [],
   calendarAccounts: [],
   calendarShares: [],
   trainingProgress: [],
@@ -749,11 +758,20 @@ type CrmContextValue = CrmState & {
     file?: File;
     extractedByAi?: boolean;
   }) => Promise<Expense | null>;
+  updateExpense: (id: string, patch: Partial<Expense>) => Promise<boolean>;
+  updatePayment: (id: string, patch: Partial<Payment>) => Promise<boolean>;
+  updateInvoiceLine: (id: string, patch: Partial<InvoiceLine>) => Promise<boolean>;
   setQbStatus: (
     kind: "invoice" | "payment" | "expense",
     id: string,
     status: QbSyncStatus,
   ) => Promise<boolean>;
+  addQbReviewComment: (input: {
+    kind: QbReviewKind;
+    recordId: string;
+    body: string;
+    intent?: QbReviewIntent;
+  }) => Promise<QbReviewComment | null>;
   addScheduleEvent: (input: Omit<ScheduleEvent, "id">) => Promise<ScheduleEvent>;
   linkDemoCalendar: () => Promise<void>;
   markCalendarLinked: (staffId: string, googleEmail: string, source: "google" | "demo") => Promise<void>;
@@ -4524,6 +4542,141 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const updateExpense = useCallback(async (id: string, patch: Partial<Expense>) => {
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        expenses: prev.expenses.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return true;
+    }
+    const { error } = await supabase.from("expenses").update(expensePatch(patch)).eq("id", id);
+    if (error && isMissingFinancials(error)) {
+      toast.message(missingFinancialsMessage());
+      apply();
+      return true;
+    }
+    if (error) {
+      toast.error(error.message);
+      return false;
+    }
+    apply();
+    return true;
+  }, []);
+
+  const updatePayment = useCallback(async (id: string, patch: Partial<Payment>) => {
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        payments: prev.payments.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return true;
+    }
+    const { error } = await supabase.from("payments").update(paymentPatch(patch)).eq("id", id);
+    if (error && isMissingFinancials(error)) {
+      toast.message(missingFinancialsMessage());
+      apply();
+      return true;
+    }
+    if (error) {
+      toast.error(error.message);
+      return false;
+    }
+    apply();
+    return true;
+  }, []);
+
+  const updateInvoiceLine = useCallback(async (id: string, patch: Partial<InvoiceLine>) => {
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        invoiceLines: prev.invoiceLines.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return true;
+    }
+    const { error } = await supabase.from("invoice_lines").update(invoiceLinePatch(patch)).eq("id", id);
+    if (error) {
+      toast.error(error.message);
+      return false;
+    }
+    apply();
+    return true;
+  }, []);
+
+  const addQbReviewComment = useCallback(
+    async (input: {
+      kind: QbReviewKind;
+      recordId: string;
+      body: string;
+      intent?: QbReviewIntent;
+    }) => {
+      const body = input.body.trim();
+      if (!body) {
+        toast.error("Write a note first.");
+        return null;
+      }
+      const comment: QbReviewComment = {
+        id: crypto.randomUUID(),
+        kind: input.kind,
+        recordId: input.recordId,
+        body,
+        intent: input.intent ?? "comment",
+        authorStaffId: user.staffId,
+        authorName: user.name,
+        createdAt: new Date().toISOString(),
+      };
+      const apply = () =>
+        setState((prev) => ({
+          ...prev,
+          qbReviewComments: [...(prev.qbReviewComments ?? []), comment],
+        }));
+      const supabase = maybeClient();
+      if (!supabase) {
+        apply();
+        return comment;
+      }
+      const { data, error } = await supabase
+        .from("qb_review_comments")
+        .insert({
+          id: comment.id,
+          company_id: user.companyId,
+          kind: comment.kind,
+          record_id: comment.recordId,
+          body: comment.body,
+          intent: comment.intent,
+          author_staff_id: comment.authorStaffId,
+          author_name: comment.authorName,
+        })
+        .select("*")
+        .single();
+      if (error) {
+        if (isMissingQbReview(error)) {
+          toast.message(missingQbReviewMessage());
+          apply();
+          return comment;
+        }
+        toast.error(error.message);
+        return null;
+      }
+      const saved = mapQbReviewComment(data);
+      setState((prev) => ({
+        ...prev,
+        qbReviewComments: [...(prev.qbReviewComments ?? []), saved],
+      }));
+      return saved;
+    },
+    [user.companyId, user.name, user.staffId],
+  );
+
   const persistCalendar = useCallback(
     (accounts: CalendarAccount[], shares: CalendarShare[]) => {
       if (!isSupabaseConfigured()) {
@@ -5806,7 +5959,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       voidInvoice,
       recordPayment,
       addExpense,
+      updateExpense,
+      updatePayment,
+      updateInvoiceLine,
       setQbStatus,
+      addQbReviewComment,
       addScheduleEvent,
       linkDemoCalendar,
       markCalendarLinked,
@@ -5911,7 +6068,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       voidInvoice,
       recordPayment,
       addExpense,
+      updateExpense,
+      updatePayment,
+      updateInvoiceLine,
       setQbStatus,
+      addQbReviewComment,
       addScheduleEvent,
       linkDemoCalendar,
       markCalendarLinked,

@@ -110,9 +110,12 @@ export default function AccountingPage() {
       <PageHeader
         eyebrow="Books"
         title="Accounting"
-        description="Profit and loss in QuickBooks form, plus the queue of invoices, expenses, and payments. The Web Connector lives under Settings → QuickBooks."
+        description="Profit and loss in QuickBooks form, plus the queue. Approve opens the document next to the fields that post to QuickBooks."
         actions={
           <div className="flex flex-wrap gap-2">
+            <Button nativeButton={false} render={<Link href="/accounting/approve" />}>
+              Approve
+            </Button>
             <Button nativeButton={false} variant="outline" render={<Link href="/settings/quickbooks" />}>
               Web Connector
             </Button>
@@ -431,16 +434,23 @@ function QbQueueActions({
   return (
     <div className="flex flex-wrap justify-end gap-2">
       <QbStatusBadge status={status} />
+      <Button
+        nativeButton={false}
+        size="sm"
+        render={<Link href={`/accounting/approve/${kind}/${id}`} />}
+      >
+        Review
+      </Button>
       {status === "error" ? (
         <Button size="sm" variant="outline" disabled={pending !== null} onClick={() => void retry()}>
           Retry
         </Button>
-      ) : status === "queued" ? null : (
-        <Button size="sm" disabled={pending !== null} onClick={() => void pushToQuickBooks()}>
-          Push to QuickBooks
+      ) : status === "queued" || status === "returned" ? null : (
+        <Button size="sm" variant="outline" disabled={pending !== null} onClick={() => void pushToQuickBooks()}>
+          Queue
         </Button>
       )}
-      {status === "error" ? null : (
+      {status === "error" || status === "returned" ? null : (
         <Button size="sm" variant="outline" disabled={pending !== null} onClick={() => void markEntered()}>
           Mark entered
         </Button>

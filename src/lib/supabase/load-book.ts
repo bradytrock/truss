@@ -20,6 +20,7 @@ import {
   mapPayment,
   mapExpense,
   mapQbVendor,
+  mapQbReviewComment,
   mapScheduleEvent,
   mapStaff,
   mapTask,
@@ -70,6 +71,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     photosRes,
     expensesRes,
     qbVendorsRes,
+    qbReviewCommentsRes,
     calendarAccountsRes,
     calendarSharesRes,
     trainingProgressRes,
@@ -106,6 +108,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     supabase.from("job_photos").select("*").eq("company_id", companyId).order("taken_at", { ascending: false }),
     supabase.from("expenses").select("*").eq("company_id", companyId).order("incurred_at", { ascending: false }),
     supabase.from("qb_vendors").select("*").eq("company_id", companyId).order("name"),
+    supabase.from("qb_review_comments").select("*").eq("company_id", companyId).order("created_at"),
     supabase.from("calendar_accounts").select("*").eq("company_id", companyId),
     supabase.from("calendar_shares").select("*").eq("company_id", companyId),
     supabase.from("training_progress").select("*").eq("company_id", companyId),
@@ -210,6 +213,9 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     payments: (paymentsRes.data ?? []).map(mapPayment),
     expenses: expensesRes.error ? [] : (expensesRes.data ?? []).map(mapExpense),
     qbVendors: qbVendorsRes.error ? [] : (qbVendorsRes.data ?? []).map(mapQbVendor),
+    qbReviewComments: qbReviewCommentsRes.error
+      ? []
+      : (qbReviewCommentsRes.data ?? []).map(mapQbReviewComment),
     events: (eventsRes.data ?? []).map(mapScheduleEvent),
     photos: (photosRes.data ?? []).map(mapJobPhoto),
     jobFiles: mergeJobFiles(

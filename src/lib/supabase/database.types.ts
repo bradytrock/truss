@@ -777,6 +777,32 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["qb_vendors"]["Insert"]>;
         Relationships: [];
       };
+      qb_review_comments: {
+        Row: {
+          id: string;
+          company_id: string;
+          kind: string;
+          record_id: string;
+          body: string;
+          intent: string;
+          author_staff_id: string;
+          author_name: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          kind: string;
+          record_id: string;
+          body: string;
+          intent?: string;
+          author_staff_id?: string;
+          author_name?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["qb_review_comments"]["Insert"]>;
+        Relationships: [];
+      };
       schedule_events: {
         Row: {
           id: string;

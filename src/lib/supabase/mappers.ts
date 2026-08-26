@@ -4,6 +4,7 @@ import { parsePageTemplate, parsePhotoReportPages } from "@/lib/photo-report";
 import { customFieldsJson, fillJobRecord, parseCustomFields } from "@/lib/job-record";
 import { parseMarket } from "@/lib/market";
 import type { Database, Json } from "@/lib/supabase/database.types";
+import { parseQbStatus } from "@/lib/types";
 import type {
   Activity,
   CalendarAccount,
@@ -25,6 +26,9 @@ import type {
   Payment,
   PhotoReport,
   Expense,
+  QbReviewComment,
+  QbReviewIntent,
+  QbReviewKind,
   QbVendor,
   ScheduleEvent,
   StaffMember,
@@ -556,14 +560,7 @@ export function mapInvoice(row: InvoiceRow): Invoice {
     notes: row.notes,
     terms: row.terms ?? "",
     shareToken: row.share_token?.trim() || "",
-    qbStatus:
-      row.qb_status === "entered"
-        ? "entered"
-        : row.qb_status === "error"
-          ? "error"
-          : row.qb_status === "queued"
-            ? "queued"
-            : "not_in_qb",
+    qbStatus: parseQbStatus(row.qb_status),
   };
 }
 
@@ -595,6 +592,16 @@ export function mapInvoiceLine(row: InvoiceLineRow): InvoiceLine {
   };
 }
 
+export function invoiceLinePatch(patch: Partial<InvoiceLine>) {
+  const row: Database["public"]["Tables"]["invoice_lines"]["Update"] = {};
+  if (patch.description !== undefined) row.description = patch.description;
+  if (patch.quantity !== undefined) row.quantity = patch.quantity;
+  if (patch.unit !== undefined) row.unit = patch.unit;
+  if (patch.unitCost !== undefined) row.unit_cost = patch.unitCost;
+  if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder;
+  return row;
+}
+
 export function mapPayment(row: PaymentRow): Payment {
   return {
     id: row.id,
@@ -606,14 +613,7 @@ export function mapPayment(row: PaymentRow): Payment {
     reference: row.reference,
     receiptUrl: row.receipt_url ?? "",
     receiptStoragePath: row.receipt_storage_path ?? null,
-    qbStatus:
-      row.qb_status === "entered"
-        ? "entered"
-        : row.qb_status === "error"
-          ? "error"
-          : row.qb_status === "queued"
-            ? "queued"
-            : "not_in_qb",
+    qbStatus: parseQbStatus(row.qb_status),
     createdBy: row.created_by ?? "",
   };
 }
@@ -652,14 +652,7 @@ export function mapExpense(row: Database["public"]["Tables"]["expenses"]["Row"])
     memo: row.memo,
     receiptUrl: row.receipt_url,
     receiptStoragePath: row.receipt_storage_path,
-    qbStatus:
-      row.qb_status === "entered"
-        ? "entered"
-        : row.qb_status === "error"
-          ? "error"
-          : row.qb_status === "queued"
-            ? "queued"
-            : "not_in_qb",
+    qbStatus: parseQbStatus(row.qb_status),
     extractedByAi: Boolean(row.extracted_by_ai),
     createdAt: row.created_at,
     createdBy: row.created_by,
@@ -673,6 +666,55 @@ export function mapQbVendor(row: Database["public"]["Tables"]["qb_vendors"]["Row
     name: row.name,
     isActive: row.is_active,
     syncedAt: row.synced_at,
+  };
+}
+
+export function expensePatch(patch: Partial<Expense>) {
+  const row: Database["public"]["Tables"]["expenses"]["Update"] = {};
+  if (patch.jobId !== undefined) row.job_id = patch.jobId;
+  if (patch.vendor !== undefined) row.vendor = patch.vendor;
+  if (patch.account !== undefined) row.account = patch.account;
+  if (patch.amount !== undefined) row.amount = patch.amount;
+  if (patch.incurredAt !== undefined) row.incurred_at = patch.incurredAt;
+  if (patch.method !== undefined) row.method = patch.method;
+  if (patch.memo !== undefined) row.memo = patch.memo;
+  if (patch.qbStatus !== undefined) row.qb_status = patch.qbStatus;
+  return row;
+}
+
+export function paymentPatch(patch: Partial<Payment>) {
+  const row: Database["public"]["Tables"]["payments"]["Update"] = {};
+  if (patch.invoiceId !== undefined) row.invoice_id = patch.invoiceId;
+  if (patch.jobId !== undefined) row.job_id = patch.jobId;
+  if (patch.amount !== undefined) row.amount = patch.amount;
+  if (patch.method !== undefined) row.method = patch.method;
+  if (patch.paidAt !== undefined) row.paid_at = patch.paidAt;
+  if (patch.reference !== undefined) row.reference = patch.reference;
+  if (patch.qbStatus !== undefined) row.qb_status = patch.qbStatus;
+  return row;
+}
+
+function parseReviewKind(value: string): QbReviewKind {
+  return value === "expense" || value === "payment" ? value : "invoice";
+}
+
+function parseReviewIntent(value: string): QbReviewIntent {
+  if (value === "return" || value === "approve" || value === "resubmit") return value;
+  return "comment";
+}
+
+export function mapQbReviewComment(
+  row: Database["public"]["Tables"]["qb_review_comments"]["Row"],
+): QbReviewComment {
+  return {
+    id: row.id,
+    kind: parseReviewKind(row.kind),
+    recordId: row.record_id,
+    body: row.body,
+    intent: parseReviewIntent(row.intent),
+    authorStaffId: row.author_staff_id,
+    authorName: row.author_name,
+    createdAt: row.created_at,
   };
 }
 

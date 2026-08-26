@@ -69,7 +69,12 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
     { href: "/estimates", label: "Estimates" },
     { href: "/catalog", label: "Price book" },
     { href: "/invoices", label: "Invoices" },
-    ...(options.showAccounting ? [{ href: "/accounting", label: "Accounting" }] : []),
+    ...(options.showAccounting
+      ? [
+          { href: "/accounting/approve", label: "Approve" },
+          { href: "/accounting", label: "Accounting" },
+        ]
+      : []),
     { href: "/calendar", label: "Calendar" },
     { href: "/training", label: "Training" },
     { href: "/contacts", label: "Contacts" },
@@ -237,7 +242,13 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
   return (
     <nav className="flex flex-col px-2 py-3">
       {items.map((item) => {
-        const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+        const active =
+          item.href === "/"
+            ? pathname === "/"
+            : item.href === "/accounting"
+              ? pathname === "/accounting" ||
+                (pathname.startsWith("/accounting/") && !pathname.startsWith("/accounting/approve"))
+              : pathname.startsWith(item.href);
         return (
           <Link
             key={item.href}

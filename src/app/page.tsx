@@ -202,9 +202,10 @@ export default function HomePage() {
       {crm.effectiveStaff && canViewAccounting(crm.effectiveStaff.role) ? (
         <Card>
           <CardHeader className="border-b">
-            <CardTitle>QuickBooks entry queue</CardTitle>
+            <CardTitle>Approve for QuickBooks</CardTitle>
             <CardDescription>
-              Approved invoices with line items go through the Web Connector onto Customer:Job. Expenses and payments still mark entered after you type them.
+              Open the invoice, receipt, or deposit next to the fields that post. Approve queues the
+              Web Connector, or return it to the PM with a note.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
@@ -213,8 +214,8 @@ export default function HomePage() {
               {stats.qb.invoiceCount} invoices, {stats.qb.expenseCount} expenses, {stats.qb.paymentCount}{" "}
               payments
             </p>
-            <Button nativeButton={false} render={<Link href="/accounting" />}>
-              Open accounting
+            <Button nativeButton={false} render={<Link href="/accounting/approve" />}>
+              Open Approve
             </Button>
           </CardContent>
         </Card>
