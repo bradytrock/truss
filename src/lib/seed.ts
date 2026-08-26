@@ -4,6 +4,7 @@ import { backfillRecordCodes } from "@/lib/job-code";
 import { fillJobRecord, JOB_RECORD_EXTRAS, jobsFromOpenLeads } from "@/lib/job-record";
 import { NORTHLINE_STAFF, NORTHLINE_TEAMS, type CrmState } from "@/lib/types";
 import { demoOps } from "@/lib/demo-ops";
+import { extraMessages } from "@/lib/demo-messages";
 import {
   extraActivities,
   extraClients,
@@ -69,5 +70,5 @@ export const seedState: CrmState = {
   calendarShares: structuredClone(seedCalendarShares),
   trainingProgress: structuredClone(seedTrainingProgress),
   trainingBulletins: structuredClone(seedTrainingBulletins),
-  messages: [],
+  messages: extraMessages,
 };

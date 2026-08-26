@@ -197,6 +197,31 @@ export function formatRelative(iso: string) {
   return formatDate(iso);
 }
 
+export function formatInboxTime(iso: string) {
+  const date = parseDate(iso);
+  const today = localYmd(new Date());
+  const day = localYmd(date);
+  if (day === today) return formatTime(iso);
+  const startToday = parseDate(`${today}T12:00:00`);
+  const startThen = parseDate(`${day}T12:00:00`);
+  const days = Math.round((startToday.getTime() - startThen.getTime()) / 86_400_000);
+  if (days === 1) return "Yesterday";
+  if (days > 1 && days < 7) {
+    return date.toLocaleDateString("en-US", { weekday: "short" });
+  }
+  return formatDateShort(iso);
+}
+
+export function formatMessageStamp(iso: string) {
+  const date = parseDate(iso);
+  if (localYmd(date) === localYmd(new Date())) return formatTime(iso);
+  return `${formatDateShort(iso)}, ${formatTime(iso)}`;
+}
+
+export function sameLocalDay(left: string, right: string) {
+  return localYmd(parseDate(left)) === localYmd(parseDate(right));
+}
+
 export function daysUntil(iso: string | null | undefined) {
   if (!iso) return null;
   const date = parseDate(iso);

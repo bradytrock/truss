@@ -1,4 +1,4 @@
-import { digitsOnly, toE164 } from "@/lib/phone";
+import { digitsOnly, looksLikePhone, toE164 } from "@/lib/phone";
 import { isDeletedJob } from "@/lib/job-record";
 import type { Contact, Job, Opportunity, TextMessage } from "@/lib/types";
 
@@ -121,6 +121,41 @@ export function messageThreads(
       };
     })
     .sort((a, b) => b.lastAt.localeCompare(a.lastAt));
+}
+
+export function contactsForTexting(contacts: Contact[]) {
+  return [...contacts]
+    .filter((contact) => looksLikePhone(contact.phone))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function filterMessageThreads(threads: MessageThread[], query: string) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return threads;
+  const digits = needle.replace(/\D/g, "");
+  return threads.filter((thread) => {
+    if (thread.title.toLowerCase().includes(needle)) return true;
+    if (thread.preview.toLowerCase().includes(needle)) return true;
+    if (thread.job?.name.toLowerCase().includes(needle)) return true;
+    if (thread.job?.code?.toLowerCase().includes(needle)) return true;
+    if (digits.length >= 3 && phoneKey(thread.phone).includes(digits)) return true;
+    return false;
+  });
+}
+
+export function messagesHref(opts?: {
+  thread?: string | null;
+  job?: string | null;
+  contact?: string | null;
+  compose?: boolean;
+}) {
+  const params = new URLSearchParams();
+  if (opts?.compose) params.set("compose", "1");
+  if (opts?.thread) params.set("thread", opts.thread);
+  if (opts?.job) params.set("job", opts.job);
+  if (opts?.contact) params.set("contact", opts.contact);
+  const qs = params.toString();
+  return qs ? `/messages?${qs}` : "/messages";
 }
 
 export function outboundActivityBody(name: string, phone: string, content: string) {

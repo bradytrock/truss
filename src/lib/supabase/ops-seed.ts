@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { seedState } from "@/lib/seed";
-import { isMissingEstimateWriter, isMissingShareToken, isMissingFinancials, isMissingSignatureColumn } from "@/lib/supabase/schema-errors";
+import { isMissingEstimateWriter, isMissingShareToken, isMissingFinancials, isMissingSignatureColumn, isMissingMessages } from "@/lib/supabase/schema-errors";
 import type { Database } from "@/lib/supabase/database.types";
 
 type Client = SupabaseClient<Database>;
@@ -395,6 +395,34 @@ export async function insertOperations(
   if (expenseRows.length) {
     const { error: expenseError } = await supabase.from("expenses").insert(expenseRows);
     if (expenseError && !isMissingFinancials(expenseError)) throw expenseError;
+  }
+
+  const messageRows = seed.messages.flatMap((message) => {
+    const contactId = mappedId(message.contactId, ids);
+    const jobId = mappedId(message.jobId, ids);
+    const opportunityId = mappedId(message.opportunityId, ids);
+    if (message.contactId && !contactId) return [];
+    return [
+      {
+        id: remap(message.id, ids),
+        company_id: companyId,
+        contact_id: contactId,
+        job_id: jobId,
+        opportunity_id: opportunityId,
+        direction: message.direction,
+        phone: message.phone,
+        body: message.body,
+        handle: message.handle,
+        status: message.status,
+        media_url: message.mediaUrl,
+        created_at: message.createdAt,
+        created_by: message.createdBy,
+      },
+    ];
+  });
+  if (messageRows.length) {
+    const { error: messageError } = await supabase.from("messages").insert(messageRows);
+    if (messageError && !isMissingMessages(messageError)) throw messageError;
   }
 }
 
