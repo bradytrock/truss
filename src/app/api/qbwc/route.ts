@@ -14,6 +14,7 @@ import {
   qbwcLastError,
   qbwcNextWork,
 } from "@/lib/qbwc/service";
+import { isQbNotFoundMessage } from "@/lib/qbwc/qbxml";
 import { advanceFromResponse, requestForStep } from "@/lib/qbwc/steps";
 
 export const runtime = "nodejs";
@@ -69,15 +70,26 @@ async function dispatch(call: ReturnType<typeof parseQbwcSoap>) {
       return soapStringResponse("sendRequestXML", requestForStep(next.step, next.work));
     }
     case "receiveResponseXML": {
-      if (call.hresult && call.hresult !== "0x0" && call.hresult !== "") {
-        await qbwcApply(call.ticket, "fail", { error: call.message || call.hresult });
-        return soapIntResponse("receiveResponseXML", -1);
-      }
       const current = await qbwcNextWork(call.ticket);
       if (!current.ok || current.done) {
         return soapIntResponse("receiveResponseXML", 100);
       }
-      const advance = advanceFromResponse(current.step, call.response);
+      const hasXml = Boolean(call.response.trim());
+      const hresultFailed =
+        Boolean(call.hresult.trim()) && call.hresult !== "0x0" && call.hresult !== "0";
+      // Query FullName misses come back as status 500 (and sometimes hresult) — that is
+      // "create this customer/job/item", not a session-ending COM failure.
+      if (!hasXml && hresultFailed && !isQbNotFoundMessage(call.message)) {
+        await qbwcApply(call.ticket, "fail", { error: call.message || call.hresult });
+        return soapIntResponse("receiveResponseXML", -1);
+      }
+      const advance = advanceFromResponse(current.step, call.response, call.message);
+      console.info(
+        "[qbwc] receive",
+        current.step,
+        advance.action,
+        advance.action === "next" ? advance.step : advance.action === "complete" ? advance.txnId : advance.error,
+      );
       if (advance.action === "fail") {
         await qbwcApply(call.ticket, "fail", { error: advance.error });
         return soapIntResponse("receiveResponseXML", -1);

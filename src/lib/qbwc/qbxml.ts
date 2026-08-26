@@ -38,7 +38,7 @@ export function wrapQbxml(body: string) {
     `<?xml version="1.0" encoding="utf-8"?>\r\n` +
     `<?qbxml version="13.0"?>\r\n` +
     `<QBXML>\r\n` +
-    `  <QBXMLMsgsRq onError="stopOnError">\r\n` +
+    `  <QBXMLMsgsRq onError="continueOnError">\r\n` +
     `${body}` +
     `  </QBXMLMsgsRq>\r\n` +
     `</QBXML>`
@@ -207,28 +207,51 @@ function addressXml(
 
 export type QbResponseKind = "found" | "missing" | "ok" | "exists" | "error";
 
-export function readQbResponse(xml: string): {
+export type QbParsedResponse = {
   kind: QbResponseKind;
   statusCode: string;
   statusMessage: string;
   txnId: string;
   listId: string;
-} {
-  const statusCode = xmlAttr(xml, "statusCode") || firstStatusCode(xml);
-  const statusMessage = decodeEntities(xmlAttr(xml, "statusMessage") || firstStatusMessage(xml));
-  const txnId = innerTag(xml, "TxnID");
-  const listId = innerTag(xml, "ListID");
+};
+
+/** CustomerQuery/ItemQuery status 500: the FullName is not in the company file. */
+export function isQbNotFoundMessage(message: string) {
+  return /could not be found|not found in QuickBooks|no matching object/i.test(message);
+}
+
+export function readQbResponse(xml: string, fallbackMessage = ""): QbParsedResponse {
+  const trimmed = xml.trim();
+  if (!trimmed && isQbNotFoundMessage(fallbackMessage)) {
+    return {
+      kind: "missing",
+      statusCode: "500",
+      statusMessage: fallbackMessage,
+      txnId: "",
+      listId: "",
+    };
+  }
+  const statusCode = xmlAttr(trimmed, "statusCode") || firstStatusCode(trimmed);
+  const statusMessage = decodeEntities(
+    xmlAttr(trimmed, "statusMessage") || firstStatusMessage(trimmed) || fallbackMessage,
+  );
+  const txnId = innerTag(trimmed, "TxnID");
+  const listId = innerTag(trimmed, "ListID");
   const code = Number(statusCode);
-  if (code === 0 && (txnId || listId || /Ret>/i.test(xml))) {
+  if (code === 0 && (txnId || listId || /Ret>/i.test(trimmed))) {
     return { kind: txnId || listId ? "ok" : "found", statusCode, statusMessage, txnId, listId };
   }
   if (code === 0) {
-    const hasRet = /<(Customer|ItemService|Invoice)Ret[\s>]/i.test(xml);
+    const hasRet = /<(Customer|ItemService|Invoice)Ret[\s>]/i.test(trimmed);
     return { kind: hasRet ? "found" : "missing", statusCode, statusMessage, txnId, listId };
   }
   // Duplicate name / already exists — treat as success so we can move on.
   if (code === 3100 || code === 3140 || /already in use|already exists/i.test(statusMessage)) {
     return { kind: "exists", statusCode, statusMessage, txnId, listId };
+  }
+  // Query FullName/ListID is not in this company file — caller should Add, not stop.
+  if (code === 1 || code === 500 || code === 3120 || isQbNotFoundMessage(statusMessage)) {
+    return { kind: "missing", statusCode, statusMessage, txnId, listId };
   }
   return { kind: "error", statusCode, statusMessage, txnId, listId };
 }

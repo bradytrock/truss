@@ -68,26 +68,34 @@ export type StepAdvance =
   | { action: "complete"; txnId: string }
   | { action: "fail"; error: string };
 
-export function advanceFromResponse(step: QbwcStep, responseXml: string): StepAdvance {
-  const result = readQbResponse(responseXml);
+export function advanceFromResponse(
+  step: QbwcStep,
+  responseXml: string,
+  fallbackMessage = "",
+): StepAdvance {
+  const result = readQbResponse(responseXml, fallbackMessage);
+  const failed = result.statusMessage || `QuickBooks status ${result.statusCode}`;
   if (result.kind === "error") {
-    return { action: "fail", error: result.statusMessage || `QuickBooks status ${result.statusCode}` };
+    return { action: "fail", error: failed };
   }
+  const missing = result.kind === "missing";
   switch (step) {
     case "customer_query":
-      return { action: "next", step: result.kind === "missing" ? "customer_add" : "job_query" };
+      return { action: "next", step: missing ? "customer_add" : "job_query" };
     case "customer_add":
-      return { action: "next", step: "job_query" };
+      return missing ? { action: "fail", error: failed } : { action: "next", step: "job_query" };
     case "job_query":
-      return { action: "next", step: result.kind === "missing" ? "job_add" : "item_query" };
+      return { action: "next", step: missing ? "job_add" : "item_query" };
     case "job_add":
-      return { action: "next", step: "item_query" };
+      return missing ? { action: "fail", error: failed } : { action: "next", step: "item_query" };
     case "item_query":
-      return { action: "next", step: result.kind === "missing" ? "item_add" : "invoice_add" };
+      return { action: "next", step: missing ? "item_add" : "invoice_add" };
     case "item_add":
-      return { action: "next", step: "invoice_add" };
+      return missing ? { action: "fail", error: failed } : { action: "next", step: "invoice_add" };
     case "invoice_add":
-      return { action: "complete", txnId: result.txnId };
+      return missing
+        ? { action: "fail", error: failed }
+        : { action: "complete", txnId: result.txnId };
   }
 }
 
