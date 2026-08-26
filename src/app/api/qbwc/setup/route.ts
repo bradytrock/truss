@@ -3,7 +3,12 @@ import { requestOrigin } from "@/lib/share-text";
 import { qbwcFile } from "@/lib/qbwc/soap";
 import { DEFAULT_QB_ITEM } from "@/lib/qbwc/work";
 import { createClient } from "@/lib/supabase/server";
-import { isMissingQbwc, missingQbwcMessage } from "@/lib/supabase/schema-errors";
+import {
+  isMissingQbwc,
+  isMissingQbwcPgcrypto,
+  missingQbwcMessage,
+  missingQbwcPgcryptoMessage,
+} from "@/lib/supabase/schema-errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,6 +74,9 @@ export async function POST(request: Request) {
     p_item_name: itemName,
   });
   if (error) {
+    if (isMissingQbwcPgcrypto(error)) {
+      return NextResponse.json({ error: missingQbwcPgcryptoMessage() }, { status: 400 });
+    }
     if (isMissingQbwc(error)) {
       return NextResponse.json({ error: missingQbwcMessage() }, { status: 400 });
     }

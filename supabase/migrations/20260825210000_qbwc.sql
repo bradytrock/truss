@@ -1,5 +1,8 @@
 -- QuickBooks Web Connector: push approved (non-draft) invoices with line items
 -- onto Customer:Job in QuickBooks Desktop so accounting does not retype them.
+-- pgcrypto (crypt/gen_salt) lives in the extensions schema on hosted Supabase.
+
+create extension if not exists pgcrypto;
 
 create table if not exists public.qbwc_connectors (
   company_id uuid primary key references public.companies (id) on delete cascade,
@@ -49,7 +52,7 @@ create or replace function public.qbwc_upsert_connector(p_password text, p_item_
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_company uuid;
@@ -70,14 +73,17 @@ begin
     values (
       v_company,
       'truss_' || substr(replace(v_company::text, '-', ''), 1, 12),
-      crypt(p_password, gen_salt('bf')),
+      crypt(p_password, gen_salt('bf'::text)),
       v_item
     )
     returning * into v_row;
   else
     update public.qbwc_connectors
     set
-      password_hash = case when coalesce(p_password, '') = '' then password_hash else crypt(p_password, gen_salt('bf')) end,
+      password_hash = case
+        when coalesce(p_password, '') = '' then password_hash
+        else crypt(p_password, gen_salt('bf'::text))
+      end,
       default_item_name = v_item,
       enabled = true,
       updated_at = now()
@@ -100,7 +106,7 @@ create or replace function public.qbwc_authenticate(p_username text, p_password 
 returns jsonb
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_row public.qbwc_connectors%rowtype;

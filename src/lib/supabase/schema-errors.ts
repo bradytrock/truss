@@ -368,9 +368,25 @@ export function legacyClientType(value: string): ClientType {
 }
 
 export const QBWC_SQL = "supabase/migrations/20260825210000_qbwc.sql";
+export const QBWC_PGCRYPTO_SQL = "supabase/migrations/20260825220000_qbwc_pgcrypto.sql";
+
+export function isMissingQbwcPgcrypto(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("gen_salt") ||
+    message.includes("function crypt(") ||
+    (error.code === "42883" && (message.includes("crypt") || message.includes("gen_salt")))
+  );
+}
+
+export function missingQbwcPgcryptoMessage() {
+  return `pgcrypto is not on the password function search path. Paste ${QBWC_PGCRYPTO_SQL} in the SQL editor, then create the connector password again.`;
+}
 
 export function isMissingQbwc(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
+  if (isMissingQbwcPgcrypto(error)) return false;
   const message = (error.message ?? "").toLowerCase();
   return (
     error.code === "PGRST202" ||
