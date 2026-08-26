@@ -26,7 +26,7 @@ export async function GET() {
     ok: true,
     app: PRODUCT_NAME,
     soap: "/api/qbwc",
-    hint: "Point QuickBooks Web Connector at this URL. Accounting → Web Connector downloads the .qwc file.",
+    hint: "Point QuickBooks Web Connector at this URL. Settings → QuickBooks downloads the .qwc file.",
   });
 }
 

@@ -22,7 +22,6 @@ import { qbQueue, type JobBooksBasis } from "@/lib/job-financials";
 import { buildProfitAndLoss, formatPnlPeriod, yearToDateBounds } from "@/lib/profit-and-loss";
 import { EXPENSE_ACCOUNT_LABELS } from "@/lib/types";
 import { canViewAccounting } from "@/lib/visibility";
-import { QbwcPanel } from "@/components/qbwc-panel";
 import { cn } from "@/lib/utils";
 
 export default function AccountingPage() {
@@ -108,9 +107,12 @@ export default function AccountingPage() {
       <PageHeader
         eyebrow="Books"
         title="Accounting"
-        description="Profit and loss in QuickBooks form. Approved invoices with line items go to Desktop through the Web Connector, on the right Customer:Job. Mark expenses and payments after they land in QB."
+        description="Profit and loss in QuickBooks form, plus the queue of invoices, expenses, and payments. The Web Connector lives under Settings → QuickBooks."
         actions={
           <div className="flex flex-wrap gap-2">
+            <Button nativeButton={false} variant="outline" render={<Link href="/settings/quickbooks" />}>
+              Web Connector
+            </Button>
             <div className="flex border">
               <button
                 type="button"
@@ -161,8 +163,6 @@ export default function AccountingPage() {
 
       <ProfitAndLossReport statement={statement} />
 
-      <QbwcPanel />
-
       <MetricStrip className="sm:grid-cols-3">
         <Metric
           label="Invoices to enter"
@@ -183,7 +183,7 @@ export default function AccountingPage() {
 
       <QueueCard
         title="Invoices"
-        description="The Web Connector creates these in QuickBooks on the job. Mark entered if you typed one by hand, or retry if QB rejected it."
+        description="The Web Connector (Settings → QuickBooks) creates these in QuickBooks on the job. Mark entered if you typed one by hand, or retry if QB rejected it."
         empty="Nothing waiting. Sent invoices show up here until they are in QB."
       >
         {queue.invoices.length === 0 ? null : (

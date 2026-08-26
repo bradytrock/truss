@@ -69,7 +69,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Company"
         title="Settings"
-        description="Business letterhead, default estimate and invoice terms, then the people who can sign in. Invite links join this company — they do not open a second one."
+        description="Business letterhead, default estimate and invoice terms, QuickBooks Desktop, then the people who can sign in. Invite links join this company — they do not open a second one."
       />
 
       <form onSubmit={onSubmit} className="max-w-2xl space-y-4">
@@ -261,6 +261,21 @@ export default function SettingsPage() {
           )}
         </div>
       </form>
+
+      <Card className="max-w-2xl">
+        <CardHeader className="border-b">
+          <CardTitle>QuickBooks Desktop</CardTitle>
+          <CardDescription>
+            Web Connector posts approved invoices onto Customer:Job so accounting does not retype line
+            items.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <Button nativeButton={false} render={<Link href="/settings/quickbooks" />}>
+            Open QuickBooks connector
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="max-w-4xl">
         <PeopleSettings
