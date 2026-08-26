@@ -26,7 +26,9 @@ export function customerAliasName(name: string) {
 
 function entityRefInner(listId: string | undefined, fullName: string) {
   const id = listId?.trim() ?? "";
-  if (id) return `          <ListID>${xmlEscape(id)}</ListID>\r\n`;
+  if (id && /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]+$/.test(id)) {
+    return `          <ListID>${xmlEscape(id)}</ListID>\r\n`;
+  }
   return `          <FullName>${xmlEscape(fullName)}</FullName>\r\n`;
 }
 
@@ -62,10 +64,11 @@ export function wrapQbxml(body: string) {
 }
 
 export function customerQueryXml(fullName: string, requestId: string) {
+  // FullName is in ORCustomerListQuery; ActiveStatus is in CustomerListFilter.
+  // Those groups cannot be combined or QuickBooks rejects the XML as unparseable.
   return wrapQbxml(
     `    <CustomerQueryRq requestID="${xmlEscape(requestId)}">\r\n` +
       `      <FullName>${xmlEscape(fullName)}</FullName>\r\n` +
-      `      <ActiveStatus>All</ActiveStatus>\r\n` +
       `    </CustomerQueryRq>\r\n`,
   );
 }
@@ -155,7 +158,6 @@ export function vendorQueryXml(fullName: string, requestId: string) {
   return wrapQbxml(
     `    <VendorQueryRq requestID="${xmlEscape(requestId)}">\r\n` +
       `      <FullName>${xmlEscape(qbName(fullName))}</FullName>\r\n` +
-      `      <ActiveStatus>All</ActiveStatus>\r\n` +
       `    </VendorQueryRq>\r\n`,
   );
 }
