@@ -124,7 +124,7 @@ export function advanceFromResponse(
   work?: QbwcWork | null,
 ): StepAdvance {
   const result = readQbResponse(responseXml, fallbackMessage);
-  const failed = result.statusMessage || `QuickBooks status ${result.statusCode}`;
+  const failed = explainQbError(step, result.statusMessage || `QuickBooks status ${result.statusCode}`, work);
   if (result.kind === "error") {
     return { action: "fail", error: failed };
   }
@@ -137,7 +137,13 @@ export function advanceFromResponse(
     case "customer_query":
       return { action: "next", step: missing ? "customer_add" : afterCustomer(work) };
     case "customer_add":
-      return missing ? { action: "fail", error: failed } : { action: "next", step: afterCustomer(work) };
+      if (missing) return { action: "fail", error: failed };
+      // CustomerQuery already missed this FullName, so 3100 means the name lives on
+      // Vendor / Employee / Other Names — not a customer a job can hang under.
+      if (result.kind === "exists") {
+        return { action: "fail", error: parentMustBeCustomerMessage(work, failed) };
+      }
+      return { action: "next", step: afterCustomer(work) };
     case "job_query":
       return { action: "next", step: missing ? "job_add" : afterJob(work) };
     case "job_add":
@@ -167,6 +173,31 @@ function afterJob(work?: QbwcWork | null): QbwcStep {
   if (work?.kind === "expense") return "expense_add";
   if (work?.kind === "payment") return "payment_add";
   return "item_query";
+}
+
+function jobCodeOf(work?: QbwcWork | null) {
+  return work && "jobCode" in work ? work.jobCode || work.jobName || "" : "";
+}
+
+function parentMustBeCustomerMessage(work?: QbwcWork | null, fallback = "") {
+  const parent = work ? customerFullName(work) : "";
+  const job = jobCodeOf(work);
+  if (!parent) return fallback;
+  return (
+    `QuickBooks already has "${parent}" as a vendor, employee, or other name — not a customer` +
+    (job ? `, so job ${job} cannot hang under it` : "") +
+    `. In QuickBooks, that name has to be an active Customer (or rename the vendor so the names differ), then retry.`
+  );
+}
+
+function explainQbError(step: QbwcStep, failed: string, work?: QbwcWork | null) {
+  if (
+    (step === "job_add" || step === "customer_add") &&
+    /not a customer name|parent you have selected|already in use|already exists/i.test(failed)
+  ) {
+    return parentMustBeCustomerMessage(work, failed);
+  }
+  return failed;
 }
 
 export const INVOICE_PREVIEW_STEPS: QbwcStep[] = [

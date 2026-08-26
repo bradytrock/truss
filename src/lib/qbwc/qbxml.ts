@@ -53,6 +53,7 @@ export function customerQueryXml(fullName: string, requestId: string) {
   return wrapQbxml(
     `    <CustomerQueryRq requestID="${xmlEscape(requestId)}">\r\n` +
       `      <FullName>${xmlEscape(fullName)}</FullName>\r\n` +
+      `      <ActiveStatus>All</ActiveStatus>\r\n` +
       `    </CustomerQueryRq>\r\n`,
   );
 }
@@ -76,7 +77,7 @@ export function customerAddXml(input: {
       `        <Name>${xmlEscape(qbName(input.name))}</Name>\r\n` +
       `        <IsActive>true</IsActive>\r\n` +
       (input.parentFullName
-        ? `        <ParentRef>\r\n          <FullName>${xmlEscape(qbName(input.parentFullName))}</FullName>\r\n        </ParentRef>\r\n`
+        ? `        <ParentRef>\r\n          <FullName>${xmlEscape(input.parentFullName)}</FullName>\r\n        </ParentRef>\r\n`
         : "") +
       (input.companyName?.trim()
         ? `        <CompanyName>${xmlEscape(qbName(input.companyName))}</CompanyName>\r\n`
@@ -140,6 +141,7 @@ export function vendorQueryXml(fullName: string, requestId: string) {
   return wrapQbxml(
     `    <VendorQueryRq requestID="${xmlEscape(requestId)}">\r\n` +
       `      <FullName>${xmlEscape(qbName(fullName))}</FullName>\r\n` +
+      `      <ActiveStatus>All</ActiveStatus>\r\n` +
       `    </VendorQueryRq>\r\n`,
   );
 }
@@ -388,8 +390,9 @@ export function readQbResponse(xml: string, fallbackMessage = ""): QbParsedRespo
       );
     return { kind: hasRet ? "found" : "missing", statusCode, statusMessage, txnId, listId };
   }
-  // Duplicate name / already exists — treat as success so we can move on.
-  if (code === 3100 || code === 3140 || /already in use|already exists/i.test(statusMessage)) {
+  // 3100: that exact name is already on a names list (customer, vendor, employee, or other).
+  // 3140 is an invalid reference (wrong list type) — not "already exists".
+  if (code === 3100 || /already in use|already exists/i.test(statusMessage)) {
     return { kind: "exists", statusCode, statusMessage, txnId, listId };
   }
   // Query FullName/ListID is not in this company file — caller should Add, not stop.
