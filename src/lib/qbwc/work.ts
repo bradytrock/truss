@@ -1,8 +1,21 @@
 import { resolveCustomerName } from "@/lib/parties";
-import type { Client, Contact, Invoice, InvoiceLine, Job, Opportunity } from "@/lib/types";
+import type {
+  Client,
+  Contact,
+  Expense,
+  ExpenseAccount,
+  Invoice,
+  InvoiceLine,
+  Job,
+  Opportunity,
+  Payment,
+} from "@/lib/types";
+import { EXPENSE_ACCOUNT_LABELS } from "@/lib/types";
 import { customerJobFullName, qbName, type QbInvoiceLine } from "@/lib/qbwc/qbxml";
 
 export const DEFAULT_QB_ITEM = "Contract work";
+export const DEFAULT_QB_BANK = "Checking";
+export const DEFAULT_QB_CC = "Credit Card";
 
 export type QbwcStep =
   | "customer_query"
@@ -11,9 +24,14 @@ export type QbwcStep =
   | "job_add"
   | "item_query"
   | "item_add"
-  | "invoice_add";
+  | "invoice_add"
+  | "vendor_query"
+  | "vendor_add"
+  | "expense_add"
+  | "payment_add";
 
 export type QbInvoiceWork = {
+  kind: "invoice";
   invoiceId: string;
   number: string;
   name: string;
@@ -31,6 +49,46 @@ export type QbInvoiceWork = {
   itemName: string;
   lines: QbInvoiceLine[];
 };
+
+export type QbExpenseWork = {
+  kind: "expense";
+  expenseId: string;
+  number: string;
+  vendor: string;
+  accountName: string;
+  amount: number;
+  payWith: "credit_card" | "check";
+  txnDate: string;
+  memo: string;
+  payAccount: string;
+  customerName: string;
+  jobCode: string;
+  jobName: string;
+  street: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  phone: string;
+  hasJob: boolean;
+};
+
+export type QbPaymentWork = {
+  kind: "payment";
+  paymentId: string;
+  amount: number;
+  txnDate: string;
+  reference: string;
+  memo: string;
+  customerName: string;
+  jobCode: string;
+  jobName: string;
+  invoiceNumber: string;
+  invoiceTxnId: string;
+  depositAccount: string;
+  hasJob: boolean;
+};
+
+export type QbwcWork = QbInvoiceWork | QbExpenseWork | QbPaymentWork;
 
 export function invoicePushBlocked(input: {
   invoice: Invoice;
@@ -73,6 +131,7 @@ export function workFromInvoice(input: {
       unitCost: line.unitCost,
     }));
   return {
+    kind: "invoice",
     invoiceId: input.invoice.id,
     number: input.invoice.number,
     name: input.invoice.name,
@@ -110,6 +169,7 @@ export function workFromBook(input: {
     return {
       blocked: blocked || "Assign this invoice to a job so QuickBooks can hang it on Customer:Job.",
       work: {
+        kind: "invoice",
         invoiceId: input.invoice.id,
         number: input.invoice.number,
         name: input.invoice.name,
@@ -151,22 +211,97 @@ export function workFromBook(input: {
   };
 }
 
-export function customerFullName(work: QbInvoiceWork) {
+export function expensePushBlocked(expense: Expense) {
+  if (!expense.vendor.trim()) return "Add a vendor so QuickBooks has a payee.";
+  if (!(expense.amount > 0)) return "That expense has no amount.";
+  return null;
+}
+
+export function paymentPushBlocked(input: { payment: Payment; invoice?: Invoice; job?: Job }) {
+  if (!(input.payment.amount > 0)) return "That payment has no amount.";
+  if (input.payment.invoiceId) {
+    if (!input.invoice) return "That payment is missing its invoice.";
+    if (input.invoice.qbStatus !== "entered") {
+      return `Push ${input.invoice.number} to QuickBooks first, then push this payment.`;
+    }
+    return null;
+  }
+  if (!input.job) return "Assign this payment to an invoice or a job so QuickBooks knows the customer.";
+  return null;
+}
+
+export function qbExpenseAccountName(account: ExpenseAccount) {
+  return EXPENSE_ACCOUNT_LABELS[account];
+}
+
+export function customerFullName(work: { customerName: string }) {
   return qbName(work.customerName);
 }
 
-export function jobFullName(work: QbInvoiceWork) {
-  return customerJobFullName(work.customerName, work.jobCode);
+export function jobFullName(work: { customerName: string; jobCode: string; jobName?: string }) {
+  return customerJobFullName(work.customerName, work.jobCode || work.jobName || "Job");
 }
 
-export function parseWorkPayload(raw: unknown): QbInvoiceWork | null {
+/** ReceivePayment CustomerRef must match the invoice customer — Customer:Job when the invoice hangs on a job. */
+export function paymentCustomerRef(work: QbPaymentWork) {
+  return work.hasJob ? jobFullName(work) : customerFullName(work);
+}
+
+export function parseWorkPayload(raw: unknown): QbwcWork | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Record<string, unknown>;
+  const kind = asString(row.kind) || (row.expenseId ? "expense" : row.paymentId ? "payment" : "invoice");
+  if (kind === "expense") {
+    const expenseId = asString(row.expenseId);
+    const vendor = asString(row.vendor);
+    if (!expenseId || !vendor) return null;
+    return {
+      kind: "expense",
+      expenseId,
+      number: asString(row.number, expenseId),
+      vendor,
+      accountName: asString(row.accountName, "Other"),
+      amount: asNumber(row.amount),
+      payWith: asString(row.payWith) === "credit_card" ? "credit_card" : "check",
+      txnDate: asString(row.txnDate),
+      memo: asString(row.memo),
+      payAccount: asString(row.payAccount, DEFAULT_QB_BANK),
+      customerName: asString(row.customerName),
+      jobCode: asString(row.jobCode),
+      jobName: asString(row.jobName),
+      street: asString(row.street),
+      city: asString(row.city),
+      state: asString(row.state),
+      postalCode: asString(row.postalCode),
+      phone: asString(row.phone),
+      hasJob: row.hasJob === true || Boolean(asString(row.jobCode)),
+    };
+  }
+  if (kind === "payment") {
+    const paymentId = asString(row.paymentId);
+    if (!paymentId) return null;
+    return {
+      kind: "payment",
+      paymentId,
+      amount: asNumber(row.amount),
+      txnDate: asString(row.txnDate),
+      reference: asString(row.reference),
+      memo: asString(row.memo),
+      customerName: asString(row.customerName, "Homeowner"),
+      jobCode: asString(row.jobCode),
+      jobName: asString(row.jobName),
+      invoiceNumber: asString(row.invoiceNumber),
+      invoiceTxnId: asString(row.invoiceTxnId),
+      depositAccount: asString(row.depositAccount, DEFAULT_QB_BANK),
+      hasJob: row.hasJob === true || Boolean(asString(row.jobCode)),
+    };
+  }
   const invoiceId = asString(row.invoiceId);
   const number = asString(row.number);
   if (!invoiceId || !number) return null;
   const linesRaw = Array.isArray(row.lines) ? row.lines : [];
   return {
+    kind: "invoice",
     invoiceId,
     number,
     name: asString(row.name, number),

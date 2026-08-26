@@ -634,6 +634,7 @@ export type Database = {
           created_at: string;
           share_token: string;
           qb_status: string;
+          qb_txn_id: string;
         };
         Insert: {
           id?: string;
@@ -650,6 +651,7 @@ export type Database = {
           terms?: string;
           share_token?: string;
           qb_status?: string;
+          qb_txn_id?: string;
         };
         Update: Partial<Database["public"]["Tables"]["invoices"]["Insert"]>;
         Relationships: [];
@@ -691,6 +693,7 @@ export type Database = {
           receipt_url: string;
           receipt_storage_path: string | null;
           qb_status: string;
+          qb_txn_id: string;
           created_by: string;
           created_at: string;
         };
@@ -706,6 +709,7 @@ export type Database = {
           receipt_url?: string;
           receipt_storage_path?: string | null;
           qb_status?: string;
+          qb_txn_id?: string;
           created_by?: string;
         };
         Update: Partial<Database["public"]["Tables"]["payments"]["Insert"]>;
@@ -726,6 +730,7 @@ export type Database = {
           receipt_url: string;
           receipt_storage_path: string | null;
           qb_status: string;
+          qb_txn_id: string;
           extracted_by_ai: boolean;
           created_at: string;
           created_by: string;
@@ -744,6 +749,7 @@ export type Database = {
           receipt_url: string;
           receipt_storage_path?: string | null;
           qb_status?: string;
+          qb_txn_id?: string;
           extracted_by_ai?: boolean;
           created_at?: string;
           created_by?: string;
@@ -1009,6 +1015,8 @@ export type Database = {
           owner_id: string;
           file_id: string;
           default_item_name: string;
+          bank_account_name: string;
+          cc_account_name: string;
           enabled: boolean;
           last_connected_at: string | null;
           last_error: string;
@@ -1022,6 +1030,8 @@ export type Database = {
           owner_id?: string;
           file_id?: string;
           default_item_name?: string;
+          bank_account_name?: string;
+          cc_account_name?: string;
           enabled?: boolean;
           last_connected_at?: string | null;
           last_error?: string;
@@ -1036,6 +1046,8 @@ export type Database = {
           ticket: string;
           company_id: string;
           invoice_id: string | null;
+          expense_id: string | null;
+          payment_id: string | null;
           step: string;
           last_error: string;
           created_at: string;
@@ -1045,6 +1057,8 @@ export type Database = {
           ticket?: string;
           company_id: string;
           invoice_id?: string | null;
+          expense_id?: string | null;
+          payment_id?: string | null;
           step?: string;
           last_error?: string;
           created_at?: string;

@@ -370,6 +370,7 @@ export function legacyClientType(value: string): ClientType {
 export const QBWC_SQL = "supabase/migrations/20260825210000_qbwc.sql";
 export const QBWC_PGCRYPTO_SQL = "supabase/migrations/20260825220000_qbwc_pgcrypto.sql";
 export const QBWC_QUEUE_SQL = "supabase/migrations/20260825230000_qbwc_queue.sql";
+export const QBWC_EXPENSES_SQL = "supabase/migrations/20260825240000_qbwc_expenses_payments.sql";
 
 export function isMissingQbwcPgcrypto(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -399,5 +400,5 @@ export function isMissingQbwc(error: { message?: string; code?: string } | null 
 }
 
 export function missingQbwcMessage() {
-  return `Run ${QBWC_SQL} in the SQL editor (or a fresh bootstrap) so the Web Connector can sign in and post invoices.`;
+  return `Run ${QBWC_SQL} in the SQL editor (or a fresh bootstrap) so the Web Connector can sign in and post invoices. Expenses and payments also need ${QBWC_EXPENSES_SQL}.`;
 }

@@ -2,8 +2,8 @@ import { createAnonClient } from "@/lib/supabase/anon";
 import { isMissingQbwc } from "@/lib/supabase/schema-errors";
 import {
   parseWorkPayload,
-  type QbInvoiceWork,
   type QbwcStep,
+  type QbwcWork,
 } from "@/lib/qbwc/work";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -29,7 +29,7 @@ export async function qbwcAuthenticate(username: string, password: string) {
 
 export async function qbwcNextWork(ticket: string): Promise<
   | { ok: true; done: true }
-  | { ok: true; done: false; step: QbwcStep; work: QbInvoiceWork }
+  | { ok: true; done: false; step: QbwcStep; work: QbwcWork }
   | { ok: false; reason: string }
 > {
   const supabase = createAnonClient();

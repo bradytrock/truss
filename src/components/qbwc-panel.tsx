@@ -16,9 +16,9 @@ import {
 } from "@/components/ui/dialog";
 import { useCrm } from "@/lib/crm-store";
 import { formatDate } from "@/lib/format";
-import { DEFAULT_QB_ITEM, workFromBook, type QbwcStep } from "@/lib/qbwc/work";
+import { DEFAULT_QB_BANK, DEFAULT_QB_CC, DEFAULT_QB_ITEM, workFromBook } from "@/lib/qbwc/work";
 import { qbwcFile } from "@/lib/qbwc/soap";
-import { requestForStep, STEP_LABELS } from "@/lib/qbwc/steps";
+import { requestForStep, STEP_LABELS, INVOICE_PREVIEW_STEPS } from "@/lib/qbwc/steps";
 import { missingQbwcMessage } from "@/lib/supabase/schema-errors";
 import type { Invoice } from "@/lib/types";
 
@@ -29,6 +29,8 @@ type ConnectorInfo = {
   ownerId?: string;
   fileId?: string;
   itemName?: string;
+  bankAccount?: string;
+  ccAccount?: string;
   lastConnectedAt?: string | null;
   lastError?: string;
   appUrl?: string;
@@ -47,6 +49,8 @@ export function QbwcPanel() {
   const crm = useCrm();
   const [info, setInfo] = useState<ConnectorInfo | null>(null);
   const [itemName, setItemName] = useState(DEFAULT_QB_ITEM);
+  const [bankAccount, setBankAccount] = useState(DEFAULT_QB_BANK);
+  const [ccAccount, setCcAccount] = useState(DEFAULT_QB_CC);
   const [appUrl, setAppUrl] = useState("");
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
@@ -60,6 +64,8 @@ export function QbwcPanel() {
         if (cancelled) return;
         setInfo(data);
         if (data.itemName) setItemName(data.itemName);
+        if (data.bankAccount) setBankAccount(data.bankAccount);
+        if (data.ccAccount) setCcAccount(data.ccAccount);
         if (data.appUrl) setAppUrl(data.appUrl);
       })
       .catch(() => {
@@ -76,7 +82,7 @@ export function QbwcPanel() {
       const response = await fetch("/api/qbwc/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: nextPassword, itemName, appUrl }),
+        body: JSON.stringify({ password: nextPassword, itemName, bankAccount, ccAccount, appUrl }),
       });
       const data = (await response.json()) as {
         error?: string;
@@ -84,6 +90,8 @@ export function QbwcPanel() {
         ownerId?: string;
         fileId?: string;
         itemName?: string;
+        bankAccount?: string;
+        ccAccount?: string;
         appUrl?: string;
         qwc?: string;
       };
@@ -97,6 +105,8 @@ export function QbwcPanel() {
         ownerId: data.ownerId,
         fileId: data.fileId,
         itemName: data.itemName,
+        bankAccount: data.bankAccount ?? bankAccount,
+        ccAccount: data.ccAccount ?? ccAccount,
         appUrl: data.appUrl,
         lastConnectedAt: current?.lastConnectedAt ?? null,
         lastError: current?.lastError ?? "",
@@ -118,7 +128,7 @@ export function QbwcPanel() {
 
   async function handleSaveItem() {
     const saved = await save("");
-    if (saved) toast.success("Saved the QuickBooks item name.");
+    if (saved) toast.success("Saved the QuickBooks item and account names.");
   }
 
   function downloadQwc() {
@@ -147,9 +157,9 @@ export function QbwcPanel() {
       <CardHeader className="border-b">
         <CardTitle>QuickBooks Web Connector</CardTitle>
         <CardDescription>
-          Approved invoices with line items post into QuickBooks Desktop on the matching Customer:Job
-          after you push them from Accounting. That is the same parsed estimate data — quantities and
-          rates — so nobody retypes the invoice.
+          Approved invoices, expenses, and payments post into QuickBooks Desktop after you push them
+          from Accounting. Invoices land on Customer:Job. Expenses post as a check or credit card
+          charge to the vendor. Payments receive against the invoice that is already in QuickBooks.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 pt-4">
@@ -188,13 +198,40 @@ export function QbwcPanel() {
               machine can reach. Localhost only works if QB is on this same computer.
             </p>
           </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="qb-bank">Bank account in QuickBooks</Label>
+            <Input
+              id="qb-bank"
+              value={bankAccount}
+              onChange={(event) => setBankAccount(event.target.value)}
+              placeholder={DEFAULT_QB_BANK}
+            />
+            <p className="text-xs text-muted-foreground">
+              Checks, ACH, debit, and cash expenses, plus deposits, use this account. The name must match
+              QB exactly.
+            </p>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="qb-cc">Credit card account in QuickBooks</Label>
+            <Input
+              id="qb-cc"
+              value={ccAccount}
+              onChange={(event) => setCcAccount(event.target.value)}
+              placeholder={DEFAULT_QB_CC}
+            />
+            <p className="text-xs text-muted-foreground">
+              Credit card expenses post as a charge on this account. Create it in QB if it is not there.
+              Expense accounts in QuickBooks should match Truss labels such as Job materials and
+              Subcontractors.
+            </p>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={() => void handleCreate()} disabled={pending}>
             {info?.configured ? "Rotate password" : "Create connector password"}
           </Button>
           <Button type="button" variant="outline" onClick={() => void handleSaveItem()} disabled={pending}>
-            Save item name
+            Save QuickBooks names
           </Button>
           <Button
             type="button"
@@ -272,19 +309,24 @@ function InvoicePreviewList({
 
   const queued = rows.filter((row) => !row.blocked && row.invoice.qbStatus === "queued");
   const waiting = rows.filter((row) => !row.blocked && row.invoice.qbStatus === "not_in_qb");
-  if (queued.length === 0) {
+  const queuedExpenses = crm.expenses.filter((item) => item.qbStatus === "queued").length;
+  const queuedPayments = crm.payments.filter((item) => item.qbStatus === "queued").length;
+  if (queued.length === 0 && queuedExpenses === 0 && queuedPayments === 0) {
     return (
       <p className="text-sm text-muted-foreground">
         {waiting.length > 0
           ? `${waiting.length} invoice${waiting.length === 1 ? "" : "s"} can go to QuickBooks. Push ${waiting.length === 1 ? "it" : "them"} from Accounting to put ${waiting.length === 1 ? "it" : "them"} in this queue.`
-          : "No invoices are ready. Send an invoice that has line items and a job, then push it from Accounting."}
+          : "Nothing is queued. Push an invoice, expense, or payment from Accounting, then run the Web Connector."}
       </p>
     );
   }
   return (
     <div className="grid gap-2">
       <p className="text-sm font-medium">
-        {queued.length} invoice{queued.length === 1 ? "" : "s"} in the Web Connector queue
+        {queued.length} invoice{queued.length === 1 ? "" : "s"}
+        {queuedExpenses ? ` · ${queuedExpenses} expense${queuedExpenses === 1 ? "" : "s"}` : ""}
+        {queuedPayments ? ` · ${queuedPayments} payment${queuedPayments === 1 ? "" : "s"}` : ""}{" "}
+        in the Web Connector queue
       </p>
       <ul className="grid gap-2">
         {queued.slice(0, 8).map(({ invoice, work }) => (
@@ -333,7 +375,7 @@ function QbPreviewDialog({
 
   const steps = useMemo(() => {
     if (!preview || preview.blocked) return [];
-    return (Object.keys(STEP_LABELS) as QbwcStep[]).map((step) => ({
+    return INVOICE_PREVIEW_STEPS.map((step) => ({
       step,
       label: STEP_LABELS[step],
       xml: requestForStep(step, preview.work),

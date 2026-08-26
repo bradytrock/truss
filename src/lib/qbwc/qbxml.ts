@@ -136,6 +136,150 @@ export type QbInvoiceAddInput = {
   lines: QbInvoiceLine[];
 };
 
+export function vendorQueryXml(fullName: string, requestId: string) {
+  return wrapQbxml(
+    `    <VendorQueryRq requestID="${xmlEscape(requestId)}">\r\n` +
+      `      <FullName>${xmlEscape(qbName(fullName))}</FullName>\r\n` +
+      `    </VendorQueryRq>\r\n`,
+  );
+}
+
+export function vendorAddXml(name: string, requestId: string) {
+  return wrapQbxml(
+    `    <VendorAddRq requestID="${xmlEscape(requestId)}">\r\n` +
+      `      <VendorAdd>\r\n` +
+      `        <Name>${xmlEscape(qbName(name))}</Name>\r\n` +
+      `        <IsActive>true</IsActive>\r\n` +
+      `      </VendorAdd>\r\n` +
+      `    </VendorAddRq>\r\n`,
+  );
+}
+
+export function expenseLineXml(input: {
+  accountName: string;
+  amount: number;
+  memo?: string;
+  customerJobFullName?: string;
+}) {
+  const memo = qbAscii(input.memo ?? "", 4095);
+  const job = input.customerJobFullName?.trim() ?? "";
+  return (
+    `        <ExpenseLineAdd>\r\n` +
+    `          <AccountRef>\r\n` +
+    `            <FullName>${xmlEscape(qbName(input.accountName, 31))}</FullName>\r\n` +
+    `          </AccountRef>\r\n` +
+    `          <Amount>${xmlEscape(qbMoney(input.amount))}</Amount>\r\n` +
+    (memo ? `          <Memo>${xmlEscape(memo)}</Memo>\r\n` : "") +
+    (job
+      ? `          <CustomerRef>\r\n            <FullName>${xmlEscape(job)}</FullName>\r\n          </CustomerRef>\r\n` +
+        `          <BillableStatus>NotBillable</BillableStatus>\r\n`
+      : "") +
+    `        </ExpenseLineAdd>\r\n`
+  );
+}
+
+export function checkAddXml(input: {
+  requestId: string;
+  bankAccount: string;
+  vendor: string;
+  refNumber?: string;
+  txnDate: string;
+  memo?: string;
+  accountName: string;
+  amount: number;
+  customerJobFullName?: string;
+}) {
+  const memo = qbAscii(input.memo ?? "", 4095);
+  const ref = qbAscii(input.refNumber ?? "", QB_REF_MAX);
+  return wrapQbxml(
+    `    <CheckAddRq requestID="${xmlEscape(input.requestId)}">\r\n` +
+      `      <CheckAdd>\r\n` +
+      `        <AccountRef>\r\n` +
+      `          <FullName>${xmlEscape(qbName(input.bankAccount, 31))}</FullName>\r\n` +
+      `        </AccountRef>\r\n` +
+      `        <PayeeEntityRef>\r\n` +
+      `          <FullName>${xmlEscape(qbName(input.vendor))}</FullName>\r\n` +
+      `        </PayeeEntityRef>\r\n` +
+      (ref ? `        <RefNumber>${xmlEscape(ref)}</RefNumber>\r\n` : "") +
+      `        <TxnDate>${xmlEscape(qbDate(input.txnDate))}</TxnDate>\r\n` +
+      (memo ? `        <Memo>${xmlEscape(memo)}</Memo>\r\n` : "") +
+      `        <IsToBePrinted>false</IsToBePrinted>\r\n` +
+      expenseLineXml(input) +
+      `      </CheckAdd>\r\n` +
+      `    </CheckAddRq>\r\n`,
+  );
+}
+
+export function creditCardChargeAddXml(input: {
+  requestId: string;
+  ccAccount: string;
+  vendor: string;
+  refNumber?: string;
+  txnDate: string;
+  memo?: string;
+  accountName: string;
+  amount: number;
+  customerJobFullName?: string;
+}) {
+  const memo = qbAscii(input.memo ?? "", 4095);
+  const ref = qbAscii(input.refNumber ?? "", QB_REF_MAX);
+  return wrapQbxml(
+    `    <CreditCardChargeAddRq requestID="${xmlEscape(input.requestId)}">\r\n` +
+      `      <CreditCardChargeAdd>\r\n` +
+      `        <AccountRef>\r\n` +
+      `          <FullName>${xmlEscape(qbName(input.ccAccount, 31))}</FullName>\r\n` +
+      `        </AccountRef>\r\n` +
+      `        <PayeeEntityRef>\r\n` +
+      `          <FullName>${xmlEscape(qbName(input.vendor))}</FullName>\r\n` +
+      `        </PayeeEntityRef>\r\n` +
+      `        <TxnDate>${xmlEscape(qbDate(input.txnDate))}</TxnDate>\r\n` +
+      (ref ? `        <RefNumber>${xmlEscape(ref)}</RefNumber>\r\n` : "") +
+      (memo ? `        <Memo>${xmlEscape(memo)}</Memo>\r\n` : "") +
+      expenseLineXml(input) +
+      `      </CreditCardChargeAdd>\r\n` +
+      `    </CreditCardChargeAddRq>\r\n`,
+  );
+}
+
+export function receivePaymentAddXml(input: {
+  requestId: string;
+  customerName: string;
+  txnDate: string;
+  refNumber?: string;
+  amount: number;
+  memo?: string;
+  depositAccount?: string;
+  invoiceTxnId?: string;
+}) {
+  const memo = qbAscii(input.memo ?? "", 4095);
+  const ref = qbAscii(input.refNumber ?? "", QB_REF_MAX);
+  const deposit = qbAscii(input.depositAccount ?? "", 31);
+  const txnId = input.invoiceTxnId?.trim() ?? "";
+  return wrapQbxml(
+    `    <ReceivePaymentAddRq requestID="${xmlEscape(input.requestId)}">\r\n` +
+      `      <ReceivePaymentAdd>\r\n` +
+      `        <CustomerRef>\r\n` +
+      `          <FullName>${xmlEscape(input.customerName)}</FullName>\r\n` +
+      `        </CustomerRef>\r\n` +
+      `        <TxnDate>${xmlEscape(qbDate(input.txnDate))}</TxnDate>\r\n` +
+      (ref ? `        <RefNumber>${xmlEscape(ref)}</RefNumber>\r\n` : "") +
+      `        <TotalAmount>${xmlEscape(qbMoney(input.amount))}</TotalAmount>\r\n` +
+      (memo ? `        <Memo>${xmlEscape(memo)}</Memo>\r\n` : "") +
+      (deposit
+        ? `        <DepositToAccountRef>\r\n          <FullName>${xmlEscape(qbName(deposit, 31))}</FullName>\r\n        </DepositToAccountRef>\r\n`
+        : "") +
+      `        <IsAutoApply>${txnId ? "false" : "true"}</IsAutoApply>\r\n` +
+      (txnId
+        ? `        <AppliedToTxnAdd>\r\n` +
+          `          <TxnID>${xmlEscape(txnId)}</TxnID>\r\n` +
+          `          <PaymentAmount>${xmlEscape(qbMoney(input.amount))}</PaymentAmount>\r\n` +
+          `        </AppliedToTxnAdd>\r\n`
+        : "") +
+      `      </ReceivePaymentAdd>\r\n` +
+      `    </ReceivePaymentAddRq>\r\n`,
+  );
+}
+
 export function invoiceAddXml(input: QbInvoiceAddInput) {
   // OSR order: CustomerRef, TxnDate, RefNumber, BillAddress, ShipAddress,
   // DueDate, Memo, IsToBePrinted, IsToBeEmailed, InvoiceLineAdd.
@@ -238,7 +382,10 @@ export function readQbResponse(xml: string, fallbackMessage = ""): QbParsedRespo
     return { kind: txnId || listId ? "ok" : "found", statusCode, statusMessage, txnId, listId };
   }
   if (code === 0) {
-    const hasRet = /<(Customer|ItemService|Invoice)Ret[\s>]/i.test(trimmed);
+    const hasRet =
+      /<(Customer|Vendor|ItemService|Invoice|Check|CreditCardCharge|ReceivePayment)Ret[\s>]/i.test(
+        trimmed,
+      );
     return { kind: hasRet ? "found" : "missing", statusCode, statusMessage, txnId, listId };
   }
   // Duplicate name / already exists — treat as success so we can move on.

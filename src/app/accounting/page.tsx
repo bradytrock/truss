@@ -23,8 +23,8 @@ import { qbQueue, type JobBooksBasis } from "@/lib/job-financials";
 import { buildProfitAndLoss, formatPnlPeriod, yearToDateBounds } from "@/lib/profit-and-loss";
 import { EXPENSE_ACCOUNT_LABELS } from "@/lib/types";
 import { canViewAccounting } from "@/lib/visibility";
-import { invoicePushBlocked } from "@/lib/qbwc/work";
-import type { Invoice } from "@/lib/types";
+import { expensePushBlocked, invoicePushBlocked, paymentPushBlocked } from "@/lib/qbwc/work";
+import type { QbSyncStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export default function AccountingPage() {
@@ -223,7 +223,13 @@ export default function AccountingPage() {
                       {formatMoney(invoiceTotal(invoice.id, crm.invoiceLines))}
                     </TableCell>
                     <TableCell className="text-right">
-                      <InvoiceQbActions invoice={invoice} />
+                      <QbQueueActions
+                        kind="invoice"
+                        id={invoice.id}
+                        label={invoice.number}
+                        status={invoice.qbStatus}
+                        blocked={invoicePushBlocked({ invoice, job, lines: crm.invoiceLines.filter((line) => line.invoiceId === invoice.id) })}
+                      />
                     </TableCell>
                   </TableRow>
                 );
@@ -235,7 +241,7 @@ export default function AccountingPage() {
 
       <QueueCard
         title="Expenses"
-        description="Bills, credit cards, and checks. Open the receipt, enter it in QB, mark it here."
+        description="Push a receipt to post a check or credit card charge in QuickBooks. Mark entered if you typed one by hand."
         empty="No expenses waiting on QuickBooks."
       >
         {queue.expenses.length === 0 ? null : (
@@ -283,13 +289,13 @@ export default function AccountingPage() {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(expense.amount)}</TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void crm.setQbStatus("expense", expense.id, "entered")}
-                      >
-                        Mark entered
-                      </Button>
+                      <QbQueueActions
+                        kind="expense"
+                        id={expense.id}
+                        label={expense.number}
+                        status={expense.qbStatus}
+                        blocked={expensePushBlocked(expense)}
+                      />
                     </TableCell>
                   </TableRow>
                 );
@@ -301,7 +307,7 @@ export default function AccountingPage() {
 
       <QueueCard
         title="Payments"
-        description="Receive payments in QuickBooks against the same invoice, then clear the queue."
+        description="Push a deposit to receive it in QuickBooks against the same invoice. Push the invoice first. Mark entered if you typed one by hand."
         empty="No deposits waiting on QuickBooks."
       >
         {queue.payments.length === 0 ? null : (
@@ -350,16 +356,17 @@ export default function AccountingPage() {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(payment.amount)}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <QbStatusBadge status={payment.qbStatus} />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => void crm.setQbStatus("payment", payment.id, "entered")}
-                        >
-                          Mark entered
-                        </Button>
-                      </div>
+                      <QbQueueActions
+                        kind="payment"
+                        id={payment.id}
+                        label={invoice?.number ?? "Payment"}
+                        status={payment.qbStatus}
+                        blocked={paymentPushBlocked({
+                          payment,
+                          invoice,
+                          job: payment.jobId ? crm.getJob(payment.jobId) : undefined,
+                        })}
+                      />
                     </TableCell>
                   </TableRow>
                 );
@@ -372,12 +379,21 @@ export default function AccountingPage() {
   );
 }
 
-function InvoiceQbActions({ invoice }: { invoice: Invoice }) {
+function QbQueueActions({
+  kind,
+  id,
+  label,
+  status,
+  blocked,
+}: {
+  kind: "invoice" | "expense" | "payment";
+  id: string;
+  label: string;
+  status: QbSyncStatus;
+  blocked: string | null;
+}) {
   const crm = useCrm();
   const [pending, setPending] = useState<"push" | "entered" | null>(null);
-  const job = invoice.jobId ? crm.getJob(invoice.jobId) : undefined;
-  const lines = crm.invoiceLines.filter((line) => line.invoiceId === invoice.id);
-  const blocked = invoicePushBlocked({ invoice, job, lines });
 
   async function pushToQuickBooks() {
     if (blocked) {
@@ -386,8 +402,8 @@ function InvoiceQbActions({ invoice }: { invoice: Invoice }) {
     }
     setPending("push");
     try {
-      const ok = await crm.setQbStatus("invoice", invoice.id, "queued");
-      if (ok) toast.success(`${invoice.number} is in the Web Connector queue.`);
+      const ok = await crm.setQbStatus(kind, id, "queued");
+      if (ok) toast.success(`${label} is in the Web Connector queue.`);
     } finally {
       setPending(null);
     }
@@ -396,7 +412,7 @@ function InvoiceQbActions({ invoice }: { invoice: Invoice }) {
   async function markEntered() {
     setPending("entered");
     try {
-      await crm.setQbStatus("invoice", invoice.id, "entered");
+      await crm.setQbStatus(kind, id, "entered");
     } finally {
       setPending(null);
     }
@@ -405,8 +421,8 @@ function InvoiceQbActions({ invoice }: { invoice: Invoice }) {
   async function retry() {
     setPending("push");
     try {
-      const ok = await crm.setQbStatus("invoice", invoice.id, "queued");
-      if (ok) toast.success(`${invoice.number} is back in the Web Connector queue.`);
+      const ok = await crm.setQbStatus(kind, id, "queued");
+      if (ok) toast.success(`${label} is back in the Web Connector queue.`);
     } finally {
       setPending(null);
     }
@@ -414,23 +430,18 @@ function InvoiceQbActions({ invoice }: { invoice: Invoice }) {
 
   return (
     <div className="flex flex-wrap justify-end gap-2">
-      <QbStatusBadge status={invoice.qbStatus} />
-      {invoice.qbStatus === "error" ? (
+      <QbStatusBadge status={status} />
+      {status === "error" ? (
         <Button size="sm" variant="outline" disabled={pending !== null} onClick={() => void retry()}>
           Retry
         </Button>
-      ) : invoice.qbStatus === "queued" ? null : (
+      ) : status === "queued" ? null : (
         <Button size="sm" disabled={pending !== null} onClick={() => void pushToQuickBooks()}>
           Push to QuickBooks
         </Button>
       )}
-      {invoice.qbStatus === "error" ? null : (
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={pending !== null}
-          onClick={() => void markEntered()}
-        >
+      {status === "error" ? null : (
+        <Button size="sm" variant="outline" disabled={pending !== null} onClick={() => void markEntered()}>
           Mark entered
         </Button>
       )}

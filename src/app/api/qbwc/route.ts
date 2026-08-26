@@ -83,7 +83,7 @@ async function dispatch(call: ReturnType<typeof parseQbwcSoap>) {
         await qbwcApply(call.ticket, "fail", { error: call.message || call.hresult });
         return soapIntResponse("receiveResponseXML", -1);
       }
-      const advance = advanceFromResponse(current.step, call.response, call.message);
+      const advance = advanceFromResponse(current.step, call.response, call.message, current.work);
       console.info(
         "[qbwc] receive",
         current.step,

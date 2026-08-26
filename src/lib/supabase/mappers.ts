@@ -605,7 +605,14 @@ export function mapPayment(row: PaymentRow): Payment {
     reference: row.reference,
     receiptUrl: row.receipt_url ?? "",
     receiptStoragePath: row.receipt_storage_path ?? null,
-    qbStatus: row.qb_status === "entered" ? "entered" : "not_in_qb",
+    qbStatus:
+      row.qb_status === "entered"
+        ? "entered"
+        : row.qb_status === "error"
+          ? "error"
+          : row.qb_status === "queued"
+            ? "queued"
+            : "not_in_qb",
     createdBy: row.created_by ?? "",
   };
 }
@@ -644,7 +651,14 @@ export function mapExpense(row: Database["public"]["Tables"]["expenses"]["Row"])
     memo: row.memo,
     receiptUrl: row.receipt_url,
     receiptStoragePath: row.receipt_storage_path,
-    qbStatus: row.qb_status === "entered" ? "entered" : "not_in_qb",
+    qbStatus:
+      row.qb_status === "entered"
+        ? "entered"
+        : row.qb_status === "error"
+          ? "error"
+          : row.qb_status === "queued"
+            ? "queued"
+            : "not_in_qb",
     extractedByAi: Boolean(row.extracted_by_ai),
     createdAt: row.created_at,
     createdBy: row.created_by,
