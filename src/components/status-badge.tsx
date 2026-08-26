@@ -145,9 +145,18 @@ export function EventKindBadge({ kind }: { kind: EventKind }) {
 }
 
 export function QbStatusBadge({ status }: { status: QbSyncStatus }) {
+  const tone = status === "entered" ? done : status === "error" ? danger : status === "queued" ? quiet : hot;
+  const label =
+    status === "entered"
+      ? "In QuickBooks"
+      : status === "error"
+        ? "QB rejected"
+        : status === "queued"
+          ? "Queued for QuickBooks"
+          : "Needs QuickBooks";
   return (
-    <Badge variant="outline" className={status === "entered" ? done : status === "error" ? danger : hot}>
-      {status === "entered" ? "In QuickBooks" : status === "error" ? "QB rejected" : "Needs QuickBooks"}
+    <Badge variant="outline" className={tone}>
+      {label}
     </Badge>
   );
 }

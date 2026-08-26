@@ -32,20 +32,28 @@ export type QbInvoiceWork = {
   lines: QbInvoiceLine[];
 };
 
-export function invoiceReadyReason(input: {
+export function invoicePushBlocked(input: {
   invoice: Invoice;
   job?: Job;
   lines: InvoiceLine[];
 }): string | null {
   if (input.invoice.status === "draft") return "Still a draft — send it before QuickBooks.";
   if (input.invoice.status === "void") return "Voided invoices stay out of QuickBooks.";
+  if (!input.job) return "Assign this invoice to a job so QuickBooks can hang it on Customer:Job.";
+  if (input.lines.length === 0) return "Add line items first. The connector will not guess amounts.";
+  return null;
+}
+
+export function invoiceReadyReason(input: {
+  invoice: Invoice;
+  job?: Job;
+  lines: InvoiceLine[];
+}): string | null {
   if (input.invoice.qbStatus === "entered") return "Already entered in QuickBooks.";
   if (input.invoice.qbStatus === "error") {
     return "QuickBooks rejected this last time. Retry after you fix the customer, job, or item name.";
   }
-  if (!input.job) return "Assign this invoice to a job so QuickBooks can hang it on Customer:Job.";
-  if (input.lines.length === 0) return "Add line items first. The connector will not guess amounts.";
-  return null;
+  return invoicePushBlocked(input);
 }
 
 export function workFromInvoice(input: {

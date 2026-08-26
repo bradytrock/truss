@@ -147,7 +147,7 @@ begin
   select inv.id into v_id
   from public.invoices inv
   where inv.company_id = p_company
-    and inv.qb_status = 'not_in_qb'
+    and inv.qb_status = 'queued'
     and inv.status not in ('draft', 'void')
     and inv.job_id is not null
     and exists (

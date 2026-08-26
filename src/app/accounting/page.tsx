@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -22,6 +23,8 @@ import { qbQueue, type JobBooksBasis } from "@/lib/job-financials";
 import { buildProfitAndLoss, formatPnlPeriod, yearToDateBounds } from "@/lib/profit-and-loss";
 import { EXPENSE_ACCOUNT_LABELS } from "@/lib/types";
 import { canViewAccounting } from "@/lib/visibility";
+import { invoicePushBlocked } from "@/lib/qbwc/work";
+import type { Invoice } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export default function AccountingPage() {
@@ -183,7 +186,7 @@ export default function AccountingPage() {
 
       <QueueCard
         title="Invoices"
-        description="The Web Connector (Settings → QuickBooks) creates these in QuickBooks on the job. Mark entered if you typed one by hand, or retry if QB rejected it."
+        description="Push an invoice to put it in the Web Connector queue. Mark entered if you typed one by hand, or retry if QB rejected it."
         empty="Nothing waiting. Sent invoices show up here until they are in QB."
       >
         {queue.invoices.length === 0 ? null : (
@@ -220,26 +223,7 @@ export default function AccountingPage() {
                       {formatMoney(invoiceTotal(invoice.id, crm.invoiceLines))}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <QbStatusBadge status={invoice.qbStatus} />
-                        {invoice.qbStatus === "error" ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => void crm.setQbStatus("invoice", invoice.id, "not_in_qb")}
-                          >
-                            Retry
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => void crm.setQbStatus("invoice", invoice.id, "entered")}
-                          >
-                            Mark entered
-                          </Button>
-                        )}
-                      </div>
+                      <InvoiceQbActions invoice={invoice} />
                     </TableCell>
                   </TableRow>
                 );
@@ -384,6 +368,72 @@ export default function AccountingPage() {
           </Table>
         )}
       </QueueCard>
+    </div>
+  );
+}
+
+function InvoiceQbActions({ invoice }: { invoice: Invoice }) {
+  const crm = useCrm();
+  const [pending, setPending] = useState<"push" | "entered" | null>(null);
+  const job = invoice.jobId ? crm.getJob(invoice.jobId) : undefined;
+  const lines = crm.invoiceLines.filter((line) => line.invoiceId === invoice.id);
+  const blocked = invoicePushBlocked({ invoice, job, lines });
+
+  async function pushToQuickBooks() {
+    if (blocked) {
+      toast.error(blocked);
+      return;
+    }
+    setPending("push");
+    try {
+      const ok = await crm.setQbStatus("invoice", invoice.id, "queued");
+      if (ok) toast.success(`${invoice.number} is in the Web Connector queue.`);
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function markEntered() {
+    setPending("entered");
+    try {
+      await crm.setQbStatus("invoice", invoice.id, "entered");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function retry() {
+    setPending("push");
+    try {
+      const ok = await crm.setQbStatus("invoice", invoice.id, "queued");
+      if (ok) toast.success(`${invoice.number} is back in the Web Connector queue.`);
+    } finally {
+      setPending(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-wrap justify-end gap-2">
+      <QbStatusBadge status={invoice.qbStatus} />
+      {invoice.qbStatus === "error" ? (
+        <Button size="sm" variant="outline" disabled={pending !== null} onClick={() => void retry()}>
+          Retry
+        </Button>
+      ) : invoice.qbStatus === "queued" ? null : (
+        <Button size="sm" disabled={pending !== null} onClick={() => void pushToQuickBooks()}>
+          Push to QuickBooks
+        </Button>
+      )}
+      {invoice.qbStatus === "error" ? null : (
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={pending !== null}
+          onClick={() => void markEntered()}
+        >
+          Mark entered
+        </Button>
+      )}
     </div>
   );
 }

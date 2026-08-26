@@ -369,6 +369,7 @@ export function legacyClientType(value: string): ClientType {
 
 export const QBWC_SQL = "supabase/migrations/20260825210000_qbwc.sql";
 export const QBWC_PGCRYPTO_SQL = "supabase/migrations/20260825220000_qbwc_pgcrypto.sql";
+export const QBWC_QUEUE_SQL = "supabase/migrations/20260825230000_qbwc_queue.sql";
 
 export function isMissingQbwcPgcrypto(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;

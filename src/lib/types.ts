@@ -335,7 +335,7 @@ export type EventKind = (typeof EVENT_KINDS)[number];
 export const PHOTO_CATEGORIES = ["before", "progress", "after", "issue"] as const;
 export type PhotoCategory = (typeof PHOTO_CATEGORIES)[number];
 
-export const QB_SYNC_STATUSES = ["not_in_qb", "entered", "error"] as const;
+export const QB_SYNC_STATUSES = ["not_in_qb", "queued", "entered", "error"] as const;
 export type QbSyncStatus = (typeof QB_SYNC_STATUSES)[number];
 
 export interface CatalogItem {
@@ -878,6 +878,7 @@ export const PHOTO_CATEGORY_LABELS: Record<PhotoCategory, string> = {
 
 export const QB_SYNC_STATUS_LABELS: Record<QbSyncStatus, string> = {
   not_in_qb: "Not in QuickBooks",
+  queued: "Queued for QuickBooks",
   entered: "Entered in QuickBooks",
   error: "QuickBooks rejected",
 };

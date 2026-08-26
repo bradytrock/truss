@@ -752,7 +752,7 @@ type CrmContextValue = CrmState & {
     kind: "invoice" | "payment" | "expense",
     id: string,
     status: QbSyncStatus,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   addScheduleEvent: (input: Omit<ScheduleEvent, "id">) => Promise<ScheduleEvent>;
   linkDemoCalendar: () => Promise<void>;
   markCalendarLinked: (staffId: string, googleEmail: string, source: "google" | "demo") => Promise<void>;
@@ -4446,7 +4446,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             ...prev,
             invoices: prev.invoices.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
           }));
-          return;
+          return true;
         }
         const { error } = await supabase.from("invoices").update({ qb_status: status }).eq("id", id);
         if (error && isMissingFinancials(error)) {
@@ -4455,17 +4455,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             ...prev,
             invoices: prev.invoices.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
           }));
-          return;
+          return true;
         }
         if (error) {
           toast.error(error.message);
-          return;
+          return false;
         }
         setState((prev) => ({
           ...prev,
           invoices: prev.invoices.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
         }));
-        return;
+        return true;
       }
       if (kind === "payment") {
         if (!supabase) {
@@ -4473,7 +4473,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             ...prev,
             payments: prev.payments.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
           }));
-          return;
+          return true;
         }
         const { error } = await supabase.from("payments").update({ qb_status: status }).eq("id", id);
         if (error && isMissingFinancials(error)) {
@@ -4482,24 +4482,24 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             ...prev,
             payments: prev.payments.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
           }));
-          return;
+          return true;
         }
         if (error) {
           toast.error(error.message);
-          return;
+          return false;
         }
         setState((prev) => ({
           ...prev,
           payments: prev.payments.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
         }));
-        return;
+        return true;
       }
       if (!supabase) {
         setState((prev) => ({
           ...prev,
           expenses: prev.expenses.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
         }));
-        return;
+        return true;
       }
       const { error } = await supabase.from("expenses").update({ qb_status: status }).eq("id", id);
       if (error && isMissingFinancials(error)) {
@@ -4508,16 +4508,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           ...prev,
           expenses: prev.expenses.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
         }));
-        return;
+        return true;
       }
       if (error) {
         toast.error(error.message);
-        return;
+        return false;
       }
       setState((prev) => ({
         ...prev,
         expenses: prev.expenses.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
       }));
+      return true;
     },
     [],
   );

@@ -147,8 +147,9 @@ export function QbwcPanel() {
       <CardHeader className="border-b">
         <CardTitle>QuickBooks Web Connector</CardTitle>
         <CardDescription>
-          Approved invoices with line items post into QuickBooks Desktop on the matching Customer:Job.
-          That is the same parsed estimate data — quantities and rates — so nobody retypes the invoice.
+          Approved invoices with line items post into QuickBooks Desktop on the matching Customer:Job
+          after you push them from Accounting. That is the same parsed estimate data — quantities and
+          rates — so nobody retypes the invoice.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 pt-4">
@@ -269,20 +270,24 @@ function InvoicePreviewList({
       });
   }, [crm, itemName]);
 
-  const ready = rows.filter((row) => !row.blocked && row.invoice.qbStatus !== "entered");
-  if (ready.length === 0) {
+  const queued = rows.filter((row) => !row.blocked && row.invoice.qbStatus === "queued");
+  const waiting = rows.filter((row) => !row.blocked && row.invoice.qbStatus === "not_in_qb");
+  if (queued.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        No invoices are ready. Send an invoice that has line items and a job — that is what the
-        connector will post.
+        {waiting.length > 0
+          ? `${waiting.length} invoice${waiting.length === 1 ? "" : "s"} can go to QuickBooks. Push ${waiting.length === 1 ? "it" : "them"} from Accounting to put ${waiting.length === 1 ? "it" : "them"} in this queue.`
+          : "No invoices are ready. Send an invoice that has line items and a job, then push it from Accounting."}
       </p>
     );
   }
   return (
     <div className="grid gap-2">
-      <p className="text-sm font-medium">{ready.length} invoice{ready.length === 1 ? "" : "s"} ready for QuickBooks</p>
+      <p className="text-sm font-medium">
+        {queued.length} invoice{queued.length === 1 ? "" : "s"} in the Web Connector queue
+      </p>
       <ul className="grid gap-2">
-        {ready.slice(0, 8).map(({ invoice, work }) => (
+        {queued.slice(0, 8).map(({ invoice, work }) => (
           <li key={invoice.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2">
             <div className="min-w-0">
               <p className="font-medium">{invoice.number}</p>
