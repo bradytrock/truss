@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,18 +30,21 @@ import { VendorPicker } from "@/components/vendor-picker";
 import { QbStatusBadge } from "@/components/status-badge";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
-import { formatDate, formatMoney, formatRelative } from "@/lib/format";
+import { formatDate, formatIsoWeekParam, formatMoney, formatRelative, resolveIsoWeekRange, shiftIsoWeek } from "@/lib/format";
 import { costCenterLabel } from "@/lib/job-record";
 import { invoiceTotal, lineAmount } from "@/lib/money";
 import { matchVendorName, vendorChoices } from "@/lib/qb-vendors";
 import {
+  approveHref,
   commentsForRecord,
+  findReviewItem,
   isReceiptPdf,
   isWaitingOnPm,
   itemTitle,
-  nextReviewItem,
+  nextApproveItem,
   qbApproveInbox,
   reviewHref,
+  reviewItemStatus,
   type QbReviewItem,
 } from "@/lib/qb-review";
 import {
@@ -68,8 +72,25 @@ export function QbApproveDesk({
   kind?: string;
   id?: string;
 }) {
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <QbApproveDeskInner kind={kind} id={id} />
+    </Suspense>
+  );
+}
+
+function QbApproveDeskInner({
+  kind,
+  id,
+}: {
+  kind?: string;
+  id?: string;
+}) {
   const crm = useCrm();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const weekQuery = searchParams.get("week");
+  const week = useMemo(() => resolveIsoWeekRange(weekQuery), [weekQuery]);
   const accountant = Boolean(crm.effectiveStaff && canViewAccounting(crm.effectiveStaff.role));
   const inbox = useMemo(
     () =>
@@ -78,16 +99,28 @@ export function QbApproveDesk({
         invoiceLines: crm.invoiceLines,
         expenses: crm.expenses,
         payments: crm.payments,
+        week: { start: week.start, end: week.end },
       }),
-    [crm.expenses, crm.invoiceLines, crm.invoices, crm.payments],
+    [crm.expenses, crm.invoiceLines, crm.invoices, crm.payments, week.end, week.start],
   );
   const selectedKind = kind === "expense" || kind === "payment" || kind === "invoice" ? kind : undefined;
+
+  useEffect(() => {
+    if (weekQuery) return;
+    router.replace(
+      selectedKind && id ? reviewHref(selectedKind, id, week.param) : approveHref(week.param),
+    );
+  }, [id, router, selectedKind, week.param, weekQuery]);
+
   const selected = useMemo(() => {
     if (selectedKind && id) {
-      return inbox.items.find((item) => item.kind === selectedKind && item.id === id) ?? null;
+      return (
+        inbox.items.find((item) => item.kind === selectedKind && item.id === id) ??
+        findReviewItem(crm, selectedKind, id)
+      );
     }
-    return inbox.ready[0] ?? inbox.returned[0] ?? inbox.queued[0] ?? null;
-  }, [id, inbox, selectedKind]);
+    return inbox.weekItems[0] ?? inbox.ready[0] ?? inbox.returned[0] ?? inbox.queued[0] ?? null;
+  }, [crm, id, inbox, selectedKind]);
 
   if (!crm.hydrated) return <LoadingScreen />;
 
@@ -105,31 +138,42 @@ export function QbApproveDesk({
     );
   }
 
+  function openItem(item: QbReviewItem) {
+    router.push(reviewHref(item.kind, item.id, week.param));
+  }
+
+  function goToWeek(year: number, weekNumber: number) {
+    router.push(approveHref(formatIsoWeekParam(year, weekNumber)));
+  }
+
   return (
     <div className="-m-5 flex h-[calc(100dvh-3rem)] min-h-0 flex-col bg-muted/30 sm:-m-7">
       <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[16.5rem_minmax(0,1fr)_24rem]">
         <QueuePane
           inbox={inbox}
           selected={selected}
-          onOpen={(item) => router.push(reviewHref(item.kind, item.id))}
+          week={week}
+          onOpen={openItem}
+          onWeekChange={goToWeek}
         />
         {selected ? (
           <ReviewPane
             item={selected}
             accountant={accountant}
+            inbox={inbox}
             onMoved={(next) => {
               if (next && (next.kind !== selected.kind || next.id !== selected.id)) {
-                router.push(reviewHref(next.kind, next.id));
+                router.push(reviewHref(next.kind, next.id, week.param));
               } else {
-                router.push("/accounting/approve");
+                router.push(approveHref(week.param));
               }
             }}
           />
         ) : (
           <div className="col-span-2 flex items-center justify-center p-8">
             <EmptyState
-              title="Nothing to approve"
-              description="Sent invoices, receipted expenses, and deposits show up here until they are in QuickBooks."
+              title="Nothing in this week"
+              description={`No invoices were issued ${week.label}. Step to another week, or pick an expense or payment still waiting on QuickBooks.`}
               action={
                 <Link href="/accounting" className="text-sm font-medium text-primary hover:underline">
                   Open the books
@@ -146,23 +190,74 @@ export function QbApproveDesk({
 function QueuePane({
   inbox,
   selected,
+  week,
   onOpen,
+  onWeekChange,
 }: {
   inbox: ReturnType<typeof qbApproveInbox>;
   selected: QbReviewItem | null;
+  week: ReturnType<typeof resolveIsoWeekRange>;
   onOpen: (item: QbReviewItem) => void;
+  onWeekChange: (year: number, week: number) => void;
 }) {
+  const current = resolveIsoWeekRange();
+  const isCurrent = week.param === current.param;
+  const previous = shiftIsoWeek(week.year, week.week, -1);
+  const next = shiftIsoWeek(week.year, week.week, 1);
+
   return (
-    <aside className="flex max-h-40 shrink-0 flex-col border-b bg-background lg:max-h-none lg:border-r lg:border-b-0">
+    <aside className="flex max-h-[min(22rem,46vh)] shrink-0 flex-col border-b bg-background lg:max-h-none lg:border-r lg:border-b-0">
       <div className="border-b px-3 py-3">
         <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Approve</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          {inbox.readyCount} ready
+        <p className="mt-1 font-heading text-base font-medium">{week.title}</p>
+        <p className="text-xs text-muted-foreground">{week.rangeLabel}</p>
+        <div className="mt-2 flex items-center gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-xs"
+            aria-label="Previous week"
+            onClick={() => onWeekChange(previous.year, previous.week)}
+          >
+            <ChevronLeft />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            disabled={isCurrent}
+            onClick={() => onWeekChange(current.year, current.week)}
+          >
+            This week
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-xs"
+            aria-label="Next week"
+            onClick={() => onWeekChange(next.year, next.week)}
+          >
+            <ChevronRight />
+          </Button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {inbox.weekInvoiceCount
+            ? `${inbox.weekInvoiceCount} invoice${inbox.weekInvoiceCount === 1 ? "" : "s"} · ${formatMoney(inbox.invoiceTotalDue)}`
+            : "No invoices this week"}
+          {inbox.readyCount ? ` · ${inbox.readyCount} ready` : ""}
           {inbox.returnedCount ? ` · ${inbox.returnedCount} with the PM` : ""}
           {inbox.queuedCount ? ` · ${inbox.queuedCount} in the connector` : ""}
         </p>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
+        <QueueGroup
+          title={isCurrent ? "This week’s invoices" : `Week ${week.week} invoices`}
+          empty="No invoices were issued this week."
+          items={inbox.weekItems}
+          selected={selected}
+          onOpen={onOpen}
+          showStatus
+        />
         <QueueGroup title="Ready" items={inbox.ready} selected={selected} onOpen={onOpen} />
         <QueueGroup title="Returned to PM" items={inbox.returned} selected={selected} onOpen={onOpen} />
         <QueueGroup title="In the connector" items={inbox.queued} selected={selected} onOpen={onOpen} />
@@ -176,14 +271,28 @@ function QueueGroup({
   items,
   selected,
   onOpen,
+  empty,
+  showStatus,
 }: {
   title: string;
   items: QbReviewItem[];
   selected: QbReviewItem | null;
   onOpen: (item: QbReviewItem) => void;
+  empty?: string;
+  showStatus?: boolean;
 }) {
   const crm = useCrm();
-  if (items.length === 0) return null;
+  if (items.length === 0) {
+    if (!empty) return null;
+    return (
+      <div className="border-b py-2">
+        <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+          {title}
+        </p>
+        <p className="px-3 pb-2 text-xs text-muted-foreground">{empty}</p>
+      </div>
+    );
+  }
   return (
     <div className="border-b py-2">
       <p className="px-3 pb-1 text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
@@ -208,8 +317,15 @@ function QueueGroup({
                     {itemAmount(item, crm)}
                   </span>
                 </span>
-                <span className="text-[11px] text-muted-foreground">
-                  {item.kind === "invoice" ? "Invoice" : item.kind === "expense" ? "Expense" : "Payment"}
+                <span className="flex w-full items-center justify-between gap-2">
+                  <span className="truncate text-[11px] text-muted-foreground">
+                    {item.kind === "invoice"
+                      ? `Invoice · ${formatDate(item.invoice.issuedAt)}`
+                      : item.kind === "expense"
+                        ? "Expense"
+                        : "Payment"}
+                  </span>
+                  {showStatus ? <QbStatusBadge status={reviewItemStatus(item)} /> : null}
                 </span>
               </button>
             </li>
@@ -229,24 +345,15 @@ function itemAmount(item: QbReviewItem, crm: ReturnType<typeof useCrm>) {
 function ReviewPane({
   item,
   accountant,
+  inbox,
   onMoved,
 }: {
   item: QbReviewItem;
   accountant: boolean;
+  inbox: ReturnType<typeof qbApproveInbox>;
   onMoved: (next: QbReviewItem | null) => void;
 }) {
-  const crm = useCrm();
   const [tab, setTab] = useState("document");
-  const inbox = useMemo(
-    () =>
-      qbApproveInbox({
-        invoices: crm.invoices,
-        invoiceLines: crm.invoiceLines,
-        expenses: crm.expenses,
-        payments: crm.payments,
-      }),
-    [crm.expenses, crm.invoiceLines, crm.invoices, crm.payments],
-  );
 
   return (
     <>
@@ -371,7 +478,7 @@ function DataAndThread({
       await logJob(`${itemTitle(item)} approved for QuickBooks.`);
       toast.success("In the Web Connector queue.");
       setNote("");
-      onMoved(nextReviewItem(inbox.ready, item.kind, item.id));
+      onMoved(nextApproveItem(inbox, item.kind, item.id));
     } finally {
       setPending(null);
     }
@@ -392,7 +499,7 @@ function DataAndThread({
       toast.success("Sent back to the project manager.");
       setReturnOpen(false);
       setReturnNote("");
-      onMoved(nextReviewItem(inbox.ready, item.kind, item.id));
+      onMoved(nextApproveItem(inbox, item.kind, item.id));
     } finally {
       setPending(null);
     }

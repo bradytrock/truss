@@ -75,6 +75,86 @@ export function startOfWeek(date: Date) {
   return next;
 }
 
+export function endOfWeek(date: Date) {
+  const end = startOfWeek(date);
+  end.setDate(end.getDate() + 6);
+  return end;
+}
+
+/** ISO week: week 1 is the first week of the year (the week that contains 4 January). Monday–Sunday. */
+export function isoWeekParts(date: Date) {
+  const monday = startOfWeek(date);
+  const thursday = new Date(monday);
+  thursday.setDate(monday.getDate() + 3);
+  const year = thursday.getFullYear();
+  const week1Monday = startOfWeek(new Date(year, 0, 4));
+  const week = Math.round((monday.getTime() - week1Monday.getTime()) / (7 * 86_400_000)) + 1;
+  return { year, week };
+}
+
+export function startOfIsoWeek(year: number, week: number) {
+  const monday = startOfWeek(new Date(year, 0, 4));
+  monday.setDate(monday.getDate() + (week - 1) * 7);
+  return monday;
+}
+
+export function shiftIsoWeek(year: number, week: number, delta: number) {
+  const start = startOfIsoWeek(year, week);
+  start.setDate(start.getDate() + delta * 7);
+  return isoWeekParts(start);
+}
+
+export function formatIsoWeekParam(year: number, week: number) {
+  return `${year}-W${String(week).padStart(2, "0")}`;
+}
+
+export function parseIsoWeekParam(value: string | null | undefined) {
+  if (!value) return null;
+  const match = /^(\d{4})-W?(\d{1,2})$/i.exec(value.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const week = Number(match[2]);
+  if (!Number.isFinite(year) || week < 1 || week > 53) return null;
+  return { year, week };
+}
+
+export function isoWeekRange(year: number, week: number) {
+  const start = startOfIsoWeek(year, week);
+  const end = endOfWeek(start);
+  const startLabel = start.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const endLabel = end.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return {
+    year,
+    week,
+    start,
+    end,
+    param: formatIsoWeekParam(year, week),
+    title: `Week ${week}`,
+    rangeLabel: `${startLabel} – ${endLabel}`,
+    label: `Week ${week} · ${startLabel} – ${endLabel}`,
+  };
+}
+
+export function currentIsoWeekRange(from = new Date()) {
+  const { year, week } = isoWeekParts(from);
+  return isoWeekRange(year, week);
+}
+
+export function resolveIsoWeekRange(param?: string | null, from = new Date()) {
+  const parsed = parseIsoWeekParam(param);
+  if (parsed) return isoWeekRange(parsed.year, parsed.week);
+  return currentIsoWeekRange(from);
+}
+
+export function localDayInRange(iso: string, start: Date, end: Date) {
+  const day = localYmd(parseDate(iso));
+  return day >= localYmd(start) && day <= localYmd(end);
+}
+
 function parseDate(iso: string) {
   if (iso.includes("T")) return new Date(iso);
   return new Date(`${iso}T12:00:00`);

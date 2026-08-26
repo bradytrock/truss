@@ -309,6 +309,18 @@ export const extraInvoices: Omit<Invoice, "shareToken" | "qbStatus" | "terms">[]
     dueAt: "2026-09-02",
     notes: "10% deposit against the accepted GMP. Permit not yet issued.",
   },
+  {
+    id: "inv_alvarez_2",
+    number: "INV-2011",
+    name: "Alvarez roof — shingles",
+    clientId: null,
+    jobId: "job_alvarez_roof",
+    estimateId: "est_alvarez",
+    status: "sent",
+    issuedAt: "2026-08-25",
+    dueAt: "2026-09-08",
+    notes: "Shingles and ridge. Final after punch.",
+  },
 ];
 
 export const extraInvoiceLines: InvoiceLine[] = [
@@ -323,6 +335,7 @@ export const extraInvoiceLines: InvoiceLine[] = [
   { id: "il_r9", invoiceId: "inv_nash", description: "Deck rebuild — final", quantity: 1, unit: "LS", unitCost: 24600, sortOrder: 0 },
   { id: "il_r10", invoiceId: "inv_copper", description: "Retainage 5%", quantity: 1, unit: "LS", unitCost: 9300, sortOrder: 0 },
   { id: "il_r11", invoiceId: "inv_redmond_dep", description: "Deposit 10%", quantity: 1, unit: "LS", unitCost: 14800, sortOrder: 0 },
+  { id: "il_r12", invoiceId: "inv_alvarez_2", description: "Shingles and ridge", quantity: 1, unit: "LS", unitCost: 16800, sortOrder: 0 },
 ];
 
 export const extraPayments: Array<{
