@@ -7,6 +7,7 @@ import { useCrmOptional } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord, type ProjectManagerContact } from "@/lib/document-owner";
 import type { CompanySettings, Invoice, InvoiceLine, InvoiceStatus, Payment } from "@/lib/types";
 import { invoiceTermsValues } from "@/lib/document-terms";
+import { DocumentNotesBlock } from "@/components/document-notes";
 import { DocumentTermsFields } from "@/components/document-terms-fields";
 import { formatDate, formatMoney } from "@/lib/format";
 import { invoiceBalance, invoiceTotal, lineAmount, paidOnInvoice } from "@/lib/money";
@@ -112,6 +113,7 @@ export function InvoiceDocument({
           <dd className="tabular-nums">{formatMoney(balance)}</dd>
         </div>
       </dl>
+      <DocumentNotesBlock notes={invoice.notes} />
       {invoice.terms ? (
         <div>
           <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>

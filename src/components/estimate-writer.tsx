@@ -1081,16 +1081,19 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
 
       <Card>
         <CardHeader className="border-b">
-          <CardTitle>Internal notes</CardTitle>
+          <CardTitle>Notes</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-2">
           <CommitTextarea
             rows={3}
             value={estimate.notes}
             disabled={estimate.status === "declined"}
-            placeholder="Hold points, insurance notes, things the homeowner should not see."
+            placeholder="Allowance details, exclusions, or anything else that belongs after the total."
             onCommit={(value) => void crm.updateEstimate(estimate.id, { notes: value })}
           />
+          <p className="text-xs text-muted-foreground">
+            Prints after the total on the proposal, the client link, and the PDF. Long notes continue onto a second page.
+          </p>
         </CardContent>
       </Card>
     </div>
@@ -1104,7 +1107,6 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       customer={customer}
       market={workMarket(job, opportunity)}
       selectable={optionalOpen}
-      showInternalNotes
       onToggleOptional={(line, selected) => void crm.updateEstimateLine(line.id, { selected })}
       onTermsChange={
         editable ? (terms) => void crm.updateEstimate(estimate.id, { terms }) : undefined
@@ -1228,7 +1230,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           <DialogHeader>
             <DialogTitle>Save as company template</DialogTitle>
             <DialogDescription>
-              Sections, prices, cover note, terms, and internal notes are copied. The next estimate can start from this instead of a blank page.
+              Sections, prices, cover note, terms, and notes are copied. The next estimate can start from this instead of a blank page.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-1.5">

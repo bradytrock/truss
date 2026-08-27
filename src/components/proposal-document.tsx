@@ -21,6 +21,7 @@ import { estimateSignatureLines } from "@/lib/estimate-signers";
 import { photosForEstimateLine } from "@/lib/estimate-line-photos";
 import type { CompanySettings, Estimate, EstimateLine, JobMarket, JobPhoto } from "@/lib/types";
 import { estimateTermsValues } from "@/lib/document-terms";
+import { DocumentNotesBlock } from "@/components/document-notes";
 import { DocumentTermsFields } from "@/components/document-terms-fields";
 import { cn } from "@/lib/utils";
 
@@ -85,7 +86,6 @@ export function ProposalDocument({
   market,
   onToggleOptional,
   selectable,
-  showInternalNotes = false,
   showStatus = true,
   projectManager,
   primaryCustomer,
@@ -100,7 +100,6 @@ export function ProposalDocument({
   market?: JobMarket | "" | null;
   onToggleOptional?: (line: EstimateLine, selected: boolean) => void;
   selectable?: boolean;
-  showInternalNotes?: boolean;
   showStatus?: boolean;
   projectManager?: ProjectManagerContact | null;
   primaryCustomer?: string;
@@ -218,6 +217,7 @@ export function ProposalDocument({
         </div>
       )}
       <EstimateTotals estimate={billed} lines={lines} className="ml-auto max-w-xs" />
+      <DocumentNotesBlock notes={estimate.notes} />
       {estimate.terms ? (
         <div>
           <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>
@@ -249,16 +249,6 @@ export function ProposalDocument({
           (estimate.secondContactId ? crm?.getContact(estimate.secondContactId)?.name : null)
         }
       />
-      {showInternalNotes && estimate.notes ? (
-        <div>
-          <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">
-            Internal notes
-          </h3>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">
-            {estimate.notes}
-          </p>
-        </div>
-      ) : null}
     </div>
   );
 }

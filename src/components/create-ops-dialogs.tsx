@@ -135,6 +135,7 @@ export function CreateInvoiceDialog({
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
               rows={2}
+              placeholder="Prints after the total on the invoice and PDF."
             />
           </Field>
           <DialogFooter>

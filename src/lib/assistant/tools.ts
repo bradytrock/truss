@@ -197,7 +197,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
       {
         job: str("Job id or code"),
         name: str("Estimate title. Default the job name."),
-        notes: str("Internal notes"),
+        notes: str("Notes that print after the total on the proposal"),
       },
       ["job"],
     ),
@@ -247,7 +247,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
       {
         job: str("Job id or code"),
         name: str("Invoice title"),
-        notes: str("Notes on the invoice"),
+        notes: str("Notes that print after the total on the invoice"),
       },
       ["job"],
     ),

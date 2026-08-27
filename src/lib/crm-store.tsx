@@ -3919,7 +3919,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const due = new Date();
       due.setDate(due.getDate() + 30);
       const dueAt = due.toISOString().slice(0, 10);
-      const notes = `Converted from ${estimate.number}. Optional lines that were not selected were left off.`;
+      const notes = estimate.notes.trim();
       const terms = resolveInvoiceTerms({ companyDefault: companySettings.defaultInvoiceTerms });
       const supabase = maybeClient();
       if (!supabase) {

@@ -45,12 +45,28 @@ function ensureSpace(doc: Doc, y: number, needed: number) {
 
 function writeParagraph(doc: Doc, text: string, y: number, width = 504) {
   const lines = doc.splitTextToSize(text, width);
-  y = ensureSpace(doc, y, lines.length * 13 + 8);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(40, 40, 40);
-  doc.text(lines, 54, y);
-  return y + lines.length * 13 + 8;
+  for (const line of lines) {
+    y = ensureSpace(doc, y, 16);
+    doc.text(line, 54, y);
+    y += 13;
+  }
+  return y + 8;
+}
+
+function writeNotes(doc: Doc, notes: string | null | undefined, y: number) {
+  const text = notes?.trim() ?? "";
+  if (!text) return y;
+  y += 12;
+  y = ensureSpace(doc, y, 28);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(90, 90, 90);
+  doc.text("NOTES", 54, y);
+  y += 14;
+  return writeParagraph(doc, text, y);
 }
 
 function writeProjectManager(doc: Doc, manager: ProjectManagerContact | null | undefined, y: number) {
@@ -246,6 +262,7 @@ export async function downloadEstimatePdf(input: {
       y,
     );
   }
+  y = writeNotes(doc, input.estimate.notes, y);
   if (input.estimate.terms) {
     y += 8;
     y = ensureSpace(doc, y, 24);
@@ -402,6 +419,7 @@ export async function downloadInvoicePdf(input: {
   doc.setTextColor(28, 28, 28);
   doc.text("Balance due", boxLeft, y);
   doc.text(formatMoney(balance), right, y, { align: "right" });
+  y = writeNotes(doc, input.invoice.notes, y);
 
   if (input.invoice.terms) {
     y += 24;

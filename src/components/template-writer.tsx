@@ -297,15 +297,18 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
 
       <Card>
         <CardHeader className="border-b">
-          <CardTitle>Internal notes</CardTitle>
+          <CardTitle>Notes</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-2">
           <CommitTextarea
             rows={3}
             value={template.notes}
-            placeholder="Hold points copied onto every estimate from this template. The homeowner does not see this."
+            placeholder="Copied onto every estimate from this template. Prints after the total."
             onCommit={(value) => void crm.updateEstimateTemplate(template.id, { notes: value })}
           />
+          <p className="text-xs text-muted-foreground">
+            These notes print after the total on each proposal written from this template.
+          </p>
         </CardContent>
       </Card>
 

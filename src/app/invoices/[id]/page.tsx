@@ -8,6 +8,7 @@ import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RecordPaymentDialog } from "@/components/create-ops-dialogs";
+import { CommitTextarea } from "@/components/estimate-writer";
 import { RecordProperty } from "@/components/app-shell";
 import { InvoiceDocument } from "@/components/invoice-document";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
@@ -191,6 +192,24 @@ export default function InvoiceDetailPage() {
 
           <Card>
             <CardHeader className="border-b">
+              <CardTitle>Notes</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <CommitTextarea
+                rows={3}
+                value={record.notes}
+                disabled={record.status === "void"}
+                placeholder="Allowance details, exclusions, or anything else that belongs after the total."
+                onCommit={(value) => void crm.updateInvoice(record.id, { notes: value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Prints after the total on the invoice, the client link, and the PDF. Long notes continue onto a second page.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="border-b">
               <CardTitle>Payments</CardTitle>
             </CardHeader>
             <CardContent>
@@ -241,7 +260,6 @@ export default function InvoiceDetailPage() {
                   "—"
                 )}
               </RecordProperty>
-              {record.notes ? <RecordProperty label="Notes">{record.notes}</RecordProperty> : null}
             </CardContent>
           </Card>
         </div>
