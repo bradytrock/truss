@@ -1,171 +1,145 @@
 "use client";
 
-import { useEffect, useState, type ComponentProps } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
+import { useEffect, useMemo, useState } from "react";
 import {
-  formatTermsSection,
-  hasPaymentTermsSections,
-  joinTermsSections,
-  parseTermsSections,
+  parseMoneyInput,
+  setAmountToken,
+  splitTermsInline,
   TERMS_PAYMENT_HINT,
-  type TermsSection,
+  withPaymentDefaults,
+  type TermsInlinePart,
 } from "@/lib/document-terms";
 import { cn } from "@/lib/utils";
 
-function CommitTextarea({
-  value,
-  onCommit,
-  ...props
-}: Omit<ComponentProps<typeof Textarea>, "value" | "onChange" | "onBlur"> & {
-  value: string;
-  onCommit: (value: string) => void;
-}) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => {
-    setDraft(value);
-  }, [value]);
-  return (
-    <Textarea
-      {...props}
-      value={draft}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={() => {
-        if (draft !== value) onCommit(draft);
-      }}
-    />
-  );
-}
-
 export function DocumentTermsFields({
   value,
-  fill,
+  values,
   disabled,
   onCommit,
   emptyLabel,
   hint,
 }: {
   value: string;
-  fill: (template: string) => string;
+  values: Record<string, string>;
   disabled?: boolean;
   onCommit: (value: string) => void;
   emptyLabel: string;
   hint?: string;
 }) {
-  const sections = parseTermsSections(value);
-  const canEditPayment = Boolean(!disabled && hasPaymentTermsSections(value));
+  const resolved = useMemo(() => withPaymentDefaults(values), [values]);
+  const parts = useMemo(() => splitTermsInline(value), [value]);
 
   if (!value.trim()) {
     return <p className="text-sm text-muted-foreground">{emptyLabel}</p>;
   }
 
-  function commitSection(index: number, body: string) {
-    const next = sections.map((section, i) => (i === index ? { ...section, body } : section));
-    onCommit(joinTermsSections(next));
+  function commitField(key: string, amount: number | null) {
+    if (disabled) return;
+    onCommit(setAmountToken(value, key, amount));
   }
 
   return (
-    <div className="space-y-5">
-      {sections.map((section, index) => (
-        <TermsSectionBlock
-          key={`${section.key}:${index}`}
-          section={section}
-          filled={fill(section.payment ? section.body : formatTermsSection(section))}
-          editable={canEditPayment && section.payment}
-          onCommit={(body) => commitSection(index, body)}
-        />
-      ))}
+    <div className="space-y-3">
+      <p className="text-sm leading-7 whitespace-pre-wrap">
+        {parts.map((part, index) => (
+          <InlinePart
+            key={`${part.kind}:${index}`}
+            part={part}
+            values={resolved}
+            disabled={disabled}
+            onCommit={commitField}
+          />
+        ))}
+      </p>
       <p className="text-xs text-muted-foreground">
         {hint ??
-          (canEditPayment
-            ? "Only payment sections can change on this document. Company terms stay as written in Settings."
-            : "Company terms are locked on this document. A company admin can mark a payment section in Settings.")}
+          "Payment amounts sit on the lines and fill from the figures above. Other contract language stays locked from Settings."}
       </p>
     </div>
   );
 }
 
-function TermsSectionBlock({
-  section,
-  filled,
-  editable,
+function InlinePart({
+  part,
+  values,
+  disabled,
   onCommit,
 }: {
-  section: TermsSection;
-  filled: string;
-  editable: boolean;
-  onCommit: (body: string) => void;
+  part: TermsInlinePart;
+  values: Record<string, string>;
+  disabled?: boolean;
+  onCommit: (key: string, amount: number | null) => void;
 }) {
-  const rows = Math.min(12, Math.max(4, section.body.split("\n").length + 1));
-  const title = section.heading || (section.payment ? "Payment" : "Company terms");
+  if (part.kind === "text") return <>{part.text}</>;
+  const display = part.override
+    ? formatInputMoney(part.override)
+    : stripMoneyPrefix(values[part.key] ?? "");
+  if (!part.editable || disabled) {
+    return (
+      <span className="inline-block min-w-[5.5rem] border-b border-foreground/70 px-0.5 text-center tabular-nums">
+        {display ? `$${display}` : "$________"}
+      </span>
+    );
+  }
+  return <MoneyBlank value={display} onCommit={(next) => onCommit(part.key, next)} />;
+}
+
+function stripMoneyPrefix(value: string) {
+  return value.replace(/^\$/, "").trim();
+}
+
+function formatInputMoney(raw: string) {
+  const amount = parseMoneyInput(raw);
+  if (amount == null) return stripMoneyPrefix(raw);
+  return amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function MoneyBlank({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (amount: number | null) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+  const width = Math.max(8, Math.min(14, (draft || "0.00").length + 1));
   return (
-    <div className="space-y-1.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm font-medium">{title}</p>
-        {section.payment ? (
-          <Badge variant="secondary">Payment</Badge>
-        ) : (
-          <Badge variant="outline">Locked</Badge>
+    <span className="inline-flex translate-y-px items-baseline">
+      <span className="text-foreground">$</span>
+      <input
+        inputMode="decimal"
+        aria-label="Payment amount"
+        className={cn(
+          "mx-0.5 h-5 border-0 border-b border-foreground bg-transparent p-0 text-center text-sm tabular-nums shadow-none outline-none",
+          "focus-visible:border-primary focus-visible:ring-0",
         )}
-      </div>
-      {editable ? (
-        <>
-          <CommitTextarea rows={rows} value={section.body} onCommit={onCommit} />
-          <p className="text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground">{filled}</p>
-        </>
-      ) : (
-        <p
-          className={cn(
-            "text-sm leading-relaxed whitespace-pre-wrap",
-            section.payment ? "text-foreground" : "text-muted-foreground",
-          )}
-        >
-          {filled}
-        </p>
-      )}
-    </div>
+        style={{ width: `${width}ch` }}
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => {
+          const amount = parseMoneyInput(draft);
+          const formatted = amount == null ? "" : formatInputMoney(String(amount));
+          if (formatted !== value) onCommit(amount);
+          else setDraft(value);
+        }}
+      />
+    </span>
   );
 }
 
 export function TermsLockPreview({ value }: { value: string }) {
-  const sections = parseTermsSections(value);
-  if (sections.length === 0) {
-    return <p className="text-xs text-muted-foreground">{TERMS_PAYMENT_HINT}</p>;
-  }
-  const payment = sections.filter((section) => section.payment);
-  const locked = sections.filter((section) => !section.payment);
+  const blanks = splitTermsInline(value).filter((part) => part.kind === "field" && part.editable);
   return (
-    <div className="grid gap-3 text-xs">
-      <div>
-        <p className="font-medium text-foreground">Editable on each estimate and invoice</p>
-        {payment.length === 0 ? (
-          <p className="mt-1 text-muted-foreground">
-            No payment section detected. Name a heading Payment, Contract price, Deposit, or Amount due, or wrap the
-            block in [[payment]] … [[/payment]].
-          </p>
-        ) : (
-          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
-            {payment.map((section, index) => (
-              <li key={`pay-${section.key}-${index}`}>
-                {section.heading || "Payment"}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      {locked.length > 0 ? (
-        <div>
-          <p className="font-medium text-foreground">Locked company terms</p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-4 text-muted-foreground">
-            {locked.map((section, index) => (
-              <li key={`lock-${section.key}-${index}`}>
-                {section.heading || "Company terms"}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      <p className="text-muted-foreground">{TERMS_PAYMENT_HINT}</p>
+    <div className="grid gap-2 text-xs text-muted-foreground">
+      <p>
+        {blanks.length > 0
+          ? `${blanks.length} payment line${blanks.length === 1 ? "" : "s"} on this contract fill from deposit and remaining, and can be typed on the line.`
+          : "Add $____ on a payment line to make an amount fill-in on each estimate."}
+      </p>
+      <p>{TERMS_PAYMENT_HINT}</p>
     </div>
   );
 }

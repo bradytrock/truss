@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCrm } from "@/lib/crm-store";
 import { DocumentTermsFields } from "@/components/document-terms-fields";
-import { ESTIMATE_TERMS_HINT, stripTermsMarkers } from "@/lib/document-terms";
+import { ESTIMATE_TERMS_HINT } from "@/lib/document-terms";
 import { amountForTemplate, linesForTemplate } from "@/lib/estimate-templates";
 import { groupEstimateLines } from "@/lib/estimate-totals";
 import { formatMoney } from "@/lib/format";
@@ -287,9 +287,9 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
         <CardContent className="pt-4">
           <DocumentTermsFields
             value={template.terms}
-            fill={(block) => stripTermsMarkers(block)}
+            values={{}}
             emptyLabel="No terms on this template."
-            hint={`${ESTIMATE_TERMS_HINT} Only payment sections can change on a template. Company terms stay locked from Settings.`}
+            hint={`${ESTIMATE_TERMS_HINT} Dollar blanks stay on the line. Amounts fill from the estimate when a proposal is written.`}
             onCommit={(value) => void crm.updateEstimateTemplate(template.id, { terms: value })}
           />
         </CardContent>

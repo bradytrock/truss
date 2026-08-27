@@ -21,7 +21,7 @@ import { formatCurrencyFull, formatDate, formatMoney } from "@/lib/format";
 import { shareUrl } from "@/lib/share";
 import type { Invoice } from "@/lib/types";
 import { DocumentTermsFields } from "@/components/document-terms-fields";
-import { filledInvoiceTerms, INVOICE_TERMS_HINT } from "@/lib/document-terms";
+import { invoiceTermsValues, INVOICE_TERMS_HINT } from "@/lib/document-terms";
 import {
   derivedInvoiceStatus,
   invoiceBalance,
@@ -251,19 +251,16 @@ export default function InvoiceDetailPage() {
             <CardContent className="pt-4">
               <DocumentTermsFields
                 value={record.terms}
-                fill={(template) =>
-                  filledInvoiceTerms({
-                    template,
-                    invoice: record,
-                    lines,
-                    payments,
-                    customer,
-                    company: letterhead,
-                  })
-                }
+                values={invoiceTermsValues({
+                  invoice: record,
+                  lines,
+                  payments,
+                  customer,
+                  company: letterhead,
+                })}
                 disabled={status === "void"}
                 emptyLabel="No terms on this invoice."
-                hint={`${INVOICE_TERMS_HINT} Only payment sections can change here. Contractor language stays locked from Settings.`}
+                hint={`${INVOICE_TERMS_HINT} Amounts sit on the $____ lines. Contractor language stays locked from Settings.`}
                 onCommit={(value) => void crm.updateInvoice(record.id, { terms: value })}
               />
             </CardContent>

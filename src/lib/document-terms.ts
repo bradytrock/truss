@@ -23,15 +23,17 @@ Payment is due on {{due_date}}. Any deposit on this invoice is due before remain
 {{company}} issued {{invoice_number}} to {{customer}} on {{issued}}.`;
 
 export const ESTIMATE_TERMS_HINT =
-  "Placeholders such as {{contract_price}}, {{deposit}}, {{remaining}}, {{valid_until}}, {{job_site}}, {{customer}}, {{company}}, and {{estimate_number}} fill from this proposal when it is written.";
+  "Placeholders such as {{contract_price}}, {{deposit}}, {{remaining}}, {{valid_until}}, {{job_site}}, {{customer}}, {{company}}, and {{estimate_number}} fill from this proposal when it is written. Dollar blanks ($____) on payment lines fill from deposit and remaining, and can be typed on the line.";
 
 export const INVOICE_TERMS_HINT =
-  "Placeholders such as {{total}}, {{paid}}, {{balance}}, {{due_date}}, {{issued}}, {{customer}}, {{company}}, and {{invoice_number}} fill from this invoice when it is written.";
+  "Placeholders such as {{total}}, {{paid}}, {{balance}}, {{due_date}}, {{issued}}, {{customer}}, {{company}}, and {{invoice_number}} fill from this invoice when it is written. Dollar blanks ($____) fill from the invoice and can be typed on the line.";
 
 export const TERMS_PAYMENT_HINT =
-  "On estimates, invoices, and templates, only payment sections can be edited — contract price, deposit, amount due, and payment schedule. Scope, schedule, changes, and contractor language stay locked from this company default. Number those payment headings, or wrap a block in [[payment]] … [[/payment]].";
+  "Payment amounts sit on the $____ lines in the contract — they pull deposit and remaining from the proposal, and can be typed on the line like a signed form. Scope, schedule, changes, and contractor language stay locked. Number a Payment or Contract price heading, or wrap a block in [[payment]] … [[/payment]].";
 
-const PLACEHOLDER = /\{\{\s*([a-z0-9_]+)\s*\}\}/gi;
+const PLACEHOLDER = /\{\{\s*([a-z0-9_]+)(?::([0-9.,]+))?\s*\}\}/gi;
+const PAY_BLANK = /\$[ \u00a0]*_{2,}/g;
+const EDITABLE_AMOUNT_KEY = /^(deposit|remaining|balance|pay_\d+|payment_\d+)$/;
 const PAYMENT_MARK_START = "[[payment]]";
 const PAYMENT_MARK_END = "[[/payment]]";
 const PAYMENT_BLOCK = /\[\[\s*payment\s*\]\]([\s\S]*?)\[\[\s*\/\s*payment\s*\]\]/gi;
@@ -182,13 +184,17 @@ function sectionMatchKey(section: TermsSection) {
   return (section.heading.replace(/^\d+\.\s*/, "").trim() || section.key).toLowerCase();
 }
 
+function termsSkeleton(text: string) {
+  return normalizePaymentBlanks(text).replace(/\{\{\s*([a-z0-9_]+)(?::[0-9.,]+)?\s*\}\}/gi, "{{$1}}");
+}
+
 export function lockedTermsChanged(existing: string, proposed: string) {
   const current = parseTermsSections(existing)
     .filter((section) => !section.payment)
-    .map((section) => formatTermsSection(section).trim());
+    .map((section) => termsSkeleton(formatTermsSection(section)).trim());
   const next = parseTermsSections(proposed)
     .filter((section) => !section.payment)
-    .map((section) => formatTermsSection(section).trim());
+    .map((section) => termsSkeleton(formatTermsSection(section)).trim());
   return current.join("\n\n") !== next.join("\n\n");
 }
 
@@ -208,11 +214,102 @@ export function mergePaymentTerms(existing: string, proposed: string) {
     if (!incoming) return section;
     return { ...section, body: incoming.body };
   });
-  return joinTermsSections(merged);
+  return applyPayTokenValues(normalizePaymentBlanks(joinTermsSections(merged)), normalizePaymentBlanks(proposed));
 }
 
 export function hasPaymentTermsSections(template: string) {
-  return parseTermsSections(template).some((section) => section.payment);
+  if (parseTermsSections(template).some((section) => section.payment)) return true;
+  if (/\{\{\s*pay_\d+/i.test(template)) return true;
+  return /\$[ \u00a0]*_{2,}/.test(template);
+}
+
+export function isEditableAmountKey(key: string) {
+  return EDITABLE_AMOUNT_KEY.test(key);
+}
+
+export function isDepositBoundKey(key: string) {
+  return key === "deposit" || key === "pay_1" || key === "payment_1";
+}
+
+export function lastPayIndex(template: string) {
+  let max = 0;
+  for (const match of template.matchAll(/\{\{\s*pay_(\d+)/gi)) {
+    max = Math.max(max, Number(match[1]) || 0);
+  }
+  return max;
+}
+
+export function normalizePaymentBlanks(template: string) {
+  let index = lastPayIndex(template);
+  return (template ?? "").replace(PAY_BLANK, () => `{{pay_${++index}}}`);
+}
+
+function formatAmountOverride(raw: string) {
+  const amount = parseMoneyInput(raw);
+  return amount == null ? raw : formatMoney(amount);
+}
+
+export function parseMoneyInput(raw: string) {
+  const trimmed = raw.trim().replace(/[$,]/g, "");
+  if (!trimmed) return null;
+  const amount = Number(trimmed);
+  return Number.isFinite(amount) ? amount : null;
+}
+
+export function withPaymentDefaults(values: Record<string, string>) {
+  const next = { ...values };
+  if (!next.pay_1?.trim()) next.pay_1 = values.deposit ?? "";
+  if (!next.payment_1?.trim()) next.payment_1 = next.pay_1;
+  if (!next.pay_2?.trim()) next.pay_2 = values.remaining || values.balance || "";
+  if (!next.payment_2?.trim()) next.payment_2 = next.pay_2;
+  return next;
+}
+
+function applyPayTokenValues(base: string, proposed: string) {
+  const values = new Map<string, string>();
+  for (const match of proposed.matchAll(/\{\{\s*([a-z0-9_]+)(?::([0-9.,]+))?\s*\}\}/gi)) {
+    const key = match[1]?.toLowerCase() ?? "";
+    if (isEditableAmountKey(key)) values.set(key, match[0]);
+  }
+  if (values.size === 0) return base;
+  return base.replace(/\{\{\s*([a-z0-9_]+)(?::([0-9.,]+))?\s*\}\}/gi, (full, key: string) => {
+    if (!isEditableAmountKey(key)) return full;
+    return values.get(key.toLowerCase()) ?? full;
+  });
+}
+
+export function setAmountToken(template: string, key: string, amount: number | null) {
+  const normalized = normalizePaymentBlanks(template);
+  const token = amount == null ? `{{${key}}}` : `{{${key}:${amount}}}`;
+  const pattern = new RegExp(`\\{\\{\\s*${key}(?::[0-9.,]+)?\\s*\\}\\}`, "i");
+  if (!pattern.test(normalized)) return normalized;
+  return normalized.replace(pattern, token);
+}
+
+export type TermsInlinePart =
+  | { kind: "text"; text: string }
+  | { kind: "field"; key: string; override?: string; editable: boolean };
+
+export function splitTermsInline(template: string): TermsInlinePart[] {
+  const src = normalizePaymentBlanks(stripTermsMarkers(template ?? ""));
+  if (!src) return [];
+  const parts: TermsInlinePart[] = [];
+  let last = 0;
+  PLACEHOLDER.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = PLACEHOLDER.exec(src))) {
+    if (match.index > last) parts.push({ kind: "text", text: src.slice(last, match.index) });
+    const key = match[1]?.toLowerCase() ?? "";
+    parts.push({
+      kind: "field",
+      key,
+      override: match[2] || undefined,
+      editable: isEditableAmountKey(key),
+    });
+    last = match.index + match[0].length;
+  }
+  if (last < src.length) parts.push({ kind: "text", text: src.slice(last) });
+  return parts;
 }
 
 function firstCopiedTerms(...candidates: Array<string | null | undefined>) {
@@ -239,11 +336,17 @@ export function resolveInvoiceTerms(input: {
 
 export function fillTermsPlaceholders(template: string, values: Record<string, string>) {
   if (!template) return "";
-  return stripTermsMarkers(template).replace(PLACEHOLDER, (_, raw: string) => {
-    const key = String(raw).toLowerCase();
-    const value = values[key]?.trim();
-    return value || "—";
-  });
+  const resolved = withPaymentDefaults(values);
+  return normalizePaymentBlanks(stripTermsMarkers(template)).replace(
+    PLACEHOLDER,
+    (_, raw: string, override?: string) => {
+      if (override?.trim()) return formatAmountOverride(override);
+      const key = String(raw).toLowerCase();
+      const value = resolved[key]?.trim();
+      if (value) return value;
+      return isEditableAmountKey(key) ? "$________" : "—";
+    },
+  );
 }
 
 function textOr(value: string | null | undefined, fallback: string) {
@@ -297,6 +400,10 @@ export function estimateTermsValues(input: {
     deposit,
     remaining: formatMoney(remaining),
     balance: formatMoney(remaining),
+    pay_1: deposit,
+    payment_1: deposit,
+    pay_2: formatMoney(remaining),
+    payment_2: formatMoney(remaining),
     valid_until: validUntil,
     valid_until_date: validUntil,
     customer,
@@ -346,8 +453,13 @@ export function invoiceTermsValues(input: {
     total: amount,
     price: amount,
     paid: formatMoney(paid),
+    deposit: amount,
     balance: formatMoney(balance),
     remaining: formatMoney(balance),
+    pay_1: amount,
+    payment_1: amount,
+    pay_2: formatMoney(balance),
+    payment_2: formatMoney(balance),
     due_date: due,
     due,
     issued,
