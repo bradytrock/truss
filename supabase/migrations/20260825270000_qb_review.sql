@@ -12,6 +12,7 @@ create table if not exists public.qb_review_comments (
     check (intent in ('comment', 'return', 'approve', 'resubmit')),
   author_staff_id text not null default '',
   author_name text not null default '',
+  mentioned_staff_ids text[] not null default '{}',
   created_at timestamptz not null default now()
 );
 

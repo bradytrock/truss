@@ -110,7 +110,7 @@ export default function AccountingPage() {
       <PageHeader
         eyebrow="Books"
         title="Accounting"
-        description="Profit and loss in QuickBooks form, plus the queue. Approve opens the document next to the fields that post to QuickBooks."
+        description="Profit and loss in QuickBooks form, plus the queue. Approve is a desk on this page — not its own menu item. Tag the PM from a file; they reply on the job."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button nativeButton={false} render={<Link href="/accounting/approve" />}>

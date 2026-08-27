@@ -1,12 +1,19 @@
 "use client";
 
 import { useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { JobDocumentReview } from "@/components/job-document-review";
 import { JobRecord } from "@/components/job-record";
+import { parseJobDocParam } from "@/lib/qb-review";
 import type { Job } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 export function JobRecordWindow({ job, onClose }: { job: Job; onClose: () => void }) {
+  const searchParams = useSearchParams();
+  const fileOpen = Boolean(parseJobDocParam(searchParams.get("doc")));
+
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape" && !event.defaultPrevented) onClose();
@@ -32,16 +39,25 @@ export function JobRecordWindow({ job, onClose }: { job: Job; onClose: () => voi
         role="dialog"
         aria-modal="true"
         aria-labelledby="job-window-title"
-        className="absolute inset-x-3 top-3 bottom-3 mx-auto flex max-w-xl flex-col overflow-hidden rounded-md border bg-popover shadow-lg sm:inset-y-5"
+        className={cn(
+          "absolute inset-x-3 top-3 bottom-3 mx-auto flex flex-col overflow-hidden rounded-md border bg-popover shadow-lg sm:inset-y-5",
+          fileOpen ? "max-w-6xl" : "max-w-xl",
+        )}
       >
-        <div className="flex shrink-0 items-center justify-end border-b px-2 py-1.5">
-          <Button type="button" variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close">
-            <XIcon />
-          </Button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
-          <JobRecord key={job.id} job={job} className="max-w-none" />
-        </div>
+        {fileOpen ? (
+          <JobDocumentReview job={job} />
+        ) : (
+          <>
+            <div className="flex shrink-0 items-center justify-end border-b px-2 py-1.5">
+              <Button type="button" variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close">
+                <XIcon />
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+              <JobRecord key={job.id} job={job} className="max-w-none" />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -26,6 +26,7 @@ import { dedupeJobsByOpportunity, isDeletedJob } from "@/lib/job-record";
 import { cn } from "@/lib/utils";
 import { COURSE, overallProgress, staffProgress } from "@/lib/training/engine";
 import { qbQueue } from "@/lib/job-financials";
+import { itemTitle, jobDocumentHref, pmReviewNotices } from "@/lib/qb-review";
 import { canViewAccounting } from "@/lib/visibility";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { BdRoiPanel } from "@/components/bd-roi";
@@ -120,6 +121,28 @@ export default function HomePage() {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 6);
 
+  const reviewNotices = useMemo(() => {
+    const staff = crm.effectiveStaff;
+    if (!staff) return [];
+    return pmReviewNotices({
+      staff,
+      roster: crm.staff,
+      jobs: crm.jobs,
+      invoices: crm.invoices,
+      expenses: crm.expenses,
+      payments: crm.payments,
+      comments: crm.qbReviewComments ?? [],
+    });
+  }, [
+    crm.effectiveStaff,
+    crm.expenses,
+    crm.invoices,
+    crm.jobs,
+    crm.payments,
+    crm.qbReviewComments,
+    crm.staff,
+  ]);
+
   if (!crm.hydrated) return <LoadingScreen />;
 
   return (
@@ -204,8 +227,8 @@ export default function HomePage() {
           <CardHeader className="border-b">
             <CardTitle>Approve for QuickBooks</CardTitle>
             <CardDescription>
-              Open the invoice, receipt, or deposit next to the fields that post. Approve queues the
-              Web Connector, or return it to the PM with a note.
+              Open from Accounting. Approve queues the Web Connector, or tag the project manager so they
+              can fix the file on the job and send it back.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
@@ -217,6 +240,36 @@ export default function HomePage() {
             <Button nativeButton={false} render={<Link href="/accounting/approve" />}>
               Open Approve
             </Button>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {reviewNotices.length > 0 ? (
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Accounting needs you</CardTitle>
+            <CardDescription>
+              Open the file on the job, make the change, leave a comment, and send it back. Replies
+              happen on that file — not on Approve.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <ul className="divide-y">
+              {reviewNotices.map((notice) => (
+                <li key={`${notice.item.kind}-${notice.item.id}`} className="py-3 first:pt-1">
+                  <Link
+                    href={jobDocumentHref(notice.jobId, notice.item.kind, notice.item.id)}
+                    className="text-sm font-medium hover:underline"
+                  >
+                    {itemTitle(notice.item)}
+                  </Link>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {notice.reason === "tagged" ? "You were tagged. " : "Sent back for a change. "}
+                    {notice.preview}
+                  </p>
+                </li>
+              ))}
+            </ul>
           </CardContent>
         </Card>
       ) : null}

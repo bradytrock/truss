@@ -714,6 +714,9 @@ export function mapQbReviewComment(
     intent: parseReviewIntent(row.intent),
     authorStaffId: row.author_staff_id,
     authorName: row.author_name,
+    mentionedStaffIds: Array.isArray(row.mentioned_staff_ids)
+      ? row.mentioned_staff_ids.filter((id): id is string => typeof id === "string" && id.length > 0)
+      : [],
     createdAt: row.created_at,
   };
 }

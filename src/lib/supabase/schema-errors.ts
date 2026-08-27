@@ -374,6 +374,7 @@ export const QBWC_EXPENSES_SQL = "supabase/migrations/20260825240000_qbwc_expens
 export const QBWC_CUSTOMER_ALIAS_SQL = "supabase/migrations/20260825250000_qbwc_customer_alias.sql";
 export const QBWC_VENDORS_SQL = "supabase/migrations/20260825260000_qb_vendors.sql";
 export const QB_REVIEW_SQL = "supabase/migrations/20260825270000_qb_review.sql";
+export const QB_REVIEW_MENTIONS_SQL = "supabase/migrations/20260827010000_qb_review_mentions.sql";
 
 export function isMissingQbReview(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -388,6 +389,16 @@ export function isMissingQbReview(error: { message?: string; code?: string } | n
 
 export function missingQbReviewMessage() {
   return `Saved in this browser. Run ${QB_REVIEW_SQL} in the SQL editor so review comments stay on the invoice, expense, or payment.`;
+}
+
+export function isMissingQbReviewMentions(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return message.includes("mentioned_staff_ids");
+}
+
+export function missingQbReviewMentionsMessage() {
+  return `Tagged in this browser. Run ${QB_REVIEW_MENTIONS_SQL} in the SQL editor so @mentions on review comments persist.`;
 }
 
 export function isMissingQbwcPgcrypto(error: { message?: string; code?: string } | null | undefined) {

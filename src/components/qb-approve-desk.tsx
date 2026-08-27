@@ -6,9 +6,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -17,51 +14,31 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { InvoiceDocument } from "@/components/invoice-document";
-import { VendorPicker } from "@/components/vendor-picker";
 import { QbStatusBadge } from "@/components/status-badge";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
+import { MentionComposer, ReviewCommentThread } from "@/components/qb-review-comments";
+import { blockReason, DocumentPreview, ReviewRecordFields } from "@/components/qb-review-fields";
 import { useCrm } from "@/lib/crm-store";
-import { formatDate, formatIsoWeekParam, formatMoney, formatRelative, resolveIsoWeekRange, shiftIsoWeek } from "@/lib/format";
-import { costCenterLabel } from "@/lib/job-record";
-import { invoiceTotal, lineAmount } from "@/lib/money";
-import { matchVendorName, vendorChoices } from "@/lib/qb-vendors";
+import { documentOwnerStaff } from "@/lib/document-owner";
+import { formatDate, formatIsoWeekParam, formatMoney, resolveIsoWeekRange, shiftIsoWeek } from "@/lib/format";
+import { invoiceTotal } from "@/lib/money";
 import {
   approveHref,
-  commentsForRecord,
   findReviewItem,
-  isReceiptPdf,
   isWaitingOnPm,
+  itemKindLabel,
   itemTitle,
+  jobDocumentHref,
   nextApproveItem,
+  parseMentionedStaff,
   qbApproveInbox,
   reviewHref,
+  reviewItemJobId,
   reviewItemStatus,
   type QbReviewItem,
 } from "@/lib/qb-review";
-import {
-  expensePushBlocked,
-  invoicePushBlocked,
-  paymentPushBlocked,
-  workFromBook,
-} from "@/lib/qbwc/work";
-import {
-  EXPENSE_ACCOUNT_LABELS,
-  EXPENSE_ACCOUNTS,
-  EXPENSE_METHOD_LABELS,
-  EXPENSE_METHODS,
-  type ExpenseAccount,
-  type ExpenseMethod,
-  type QbReviewKind,
-} from "@/lib/types";
+import type { QbReviewKind } from "@/lib/types";
 import { canViewAccounting } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
 
@@ -122,16 +99,23 @@ function QbApproveDeskInner({
     return inbox.weekItems[0] ?? inbox.ready[0] ?? inbox.returned[0] ?? inbox.queued[0] ?? null;
   }, [crm, id, inbox, selectedKind]);
 
+  useEffect(() => {
+    if (!crm.hydrated || accountant || !selected) return;
+    const jobId = reviewItemJobId(selected);
+    if (jobId) router.replace(jobDocumentHref(jobId, selected.kind, selected.id));
+  }, [accountant, crm.hydrated, router, selected]);
+
   if (!crm.hydrated) return <LoadingScreen />;
 
-  if (!accountant && !(selectedKind && id)) {
+  if (!accountant) {
+    if (selected && reviewItemJobId(selected)) return <LoadingScreen />;
     return (
       <EmptyState
         title="Approve is for accounting"
-        description="Company admin and the Accounting seat review invoices, expenses, and payments here. If accounting returned something, open it from the job."
+        description="Company admin and the Accounting seat review invoices, expenses, and payments here. If accounting tagged you, open the file on the job."
         action={
-          <Link href="/" className="text-sm font-medium text-primary hover:underline">
-            Back to home
+          <Link href="/jobs" className="text-sm font-medium text-primary hover:underline">
+            Open jobs
           </Link>
         }
       />
@@ -159,7 +143,6 @@ function QbApproveDeskInner({
         {selected ? (
           <ReviewPane
             item={selected}
-            accountant={accountant}
             inbox={inbox}
             onMoved={(next) => {
               if (next && (next.kind !== selected.kind || next.id !== selected.id)) {
@@ -344,12 +327,10 @@ function itemAmount(item: QbReviewItem, crm: ReturnType<typeof useCrm>) {
 
 function ReviewPane({
   item,
-  accountant,
   inbox,
   onMoved,
 }: {
   item: QbReviewItem;
-  accountant: boolean;
   inbox: ReturnType<typeof qbApproveInbox>;
   onMoved: (next: QbReviewItem | null) => void;
 }) {
@@ -368,7 +349,7 @@ function ReviewPane({
               <DocumentPreview item={item} />
             </TabsContent>
             <TabsContent value="data">
-              <DataAndThread item={item} accountant={accountant} inbox={inbox} onMoved={onMoved} />
+              <DataAndThread item={item} inbox={inbox} onMoved={onMoved} />
             </TabsContent>
           </Tabs>
         </div>
@@ -377,61 +358,18 @@ function ReviewPane({
         </div>
       </section>
       <aside className="hidden min-h-0 flex-col overflow-y-auto border-l bg-background lg:flex">
-        <DataAndThread item={item} accountant={accountant} inbox={inbox} onMoved={onMoved} />
+        <DataAndThread item={item} inbox={inbox} onMoved={onMoved} />
       </aside>
     </>
   );
 }
 
-function DocumentPreview({ item }: { item: QbReviewItem }) {
-  const crm = useCrm();
-  if (item.kind === "invoice") {
-    const invoice = item.invoice;
-    const lines = crm.invoiceLines.filter((line) => line.invoiceId === invoice.id);
-    const payments = crm.payments.filter((payment) => payment.invoiceId === invoice.id);
-    return (
-      <div className="mx-auto max-w-3xl">
-        <InvoiceDocument
-          invoice={invoice}
-          lines={lines}
-          payments={payments}
-          customer={crm.customerName(invoice)}
-          company={crm.company}
-          status={invoice.status}
-        />
-      </div>
-    );
-  }
-  const url = item.kind === "expense" ? item.expense.receiptUrl : item.payment.receiptUrl;
-  const title = item.kind === "expense" ? `Receipt · ${item.expense.vendor}` : "Payment image";
-  if (!url) {
-    return (
-      <div className="flex min-h-80 items-center justify-center border border-dashed bg-background text-sm text-muted-foreground">
-        No PDF or photo on this record.
-      </div>
-    );
-  }
-  if (isReceiptPdf(url)) {
-    return (
-      <iframe title={title} src={url} className="min-h-[70vh] w-full border bg-background" />
-    );
-  }
-  return (
-    <a href={url} target="_blank" rel="noreferrer" className="block">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={url} alt={title} className="mx-auto max-h-[80vh] w-full border bg-background object-contain" />
-    </a>
-  );
-}
-
 function DataAndThread({
   item,
-  accountant,
   inbox,
   onMoved,
 }: {
   item: QbReviewItem;
-  accountant: boolean;
   inbox: ReturnType<typeof qbApproveInbox>;
   onMoved: (next: QbReviewItem | null) => void;
 }) {
@@ -439,25 +377,31 @@ function DataAndThread({
   const [returnOpen, setReturnOpen] = useState(false);
   const [returnNote, setReturnNote] = useState("");
   const [note, setNote] = useState("");
-  const [pending, setPending] = useState<"approve" | "return" | "resubmit" | "comment" | null>(null);
-  const comments = commentsForRecord(crm.qbReviewComments ?? [], item.kind, item.id);
-  const status =
-    item.kind === "invoice"
-      ? item.invoice.qbStatus
-      : item.kind === "expense"
-        ? item.expense.qbStatus
-        : item.payment.qbStatus;
-  const jobId =
-    item.kind === "invoice"
-      ? item.invoice.jobId
-      : item.kind === "expense"
-        ? item.expense.jobId
-        : item.payment.jobId;
+  const [pending, setPending] = useState<"approve" | "return" | "comment" | null>(null);
+  const status = reviewItemStatus(item);
+  const jobId = reviewItemJobId(item);
+  const job = jobId ? crm.getJob(jobId) : undefined;
   const blocked = blockReason(item, crm);
   const locked = status === "entered";
+  const owner = documentOwnerStaff({
+    job,
+    staff: crm.staff,
+    fallbackStaffId: crm.user.staffId,
+  });
 
-  async function leaveNote(intent: "comment" | "return" | "approve" | "resubmit", body: string) {
-    return crm.addQbReviewComment({ kind: item.kind, recordId: item.id, body, intent });
+  function mentionedIds(body: string) {
+    return parseMentionedStaff(body, crm.staff).map((member) => member.id);
+  }
+
+  async function leaveNote(intent: "comment" | "return" | "approve", body: string, extraIds: string[] = []) {
+    const ids = [...new Set([...mentionedIds(body), ...extraIds])];
+    return crm.addQbReviewComment({
+      kind: item.kind,
+      recordId: item.id,
+      body,
+      intent,
+      mentionedStaffIds: ids,
+    });
   }
 
   async function logJob(body: string) {
@@ -484,6 +428,12 @@ function DataAndThread({
     }
   }
 
+  function openReturn() {
+    const prefix = owner?.name ? `@${owner.name} ` : "";
+    setReturnNote(prefix);
+    setReturnOpen(true);
+  }
+
   async function sendBack() {
     const body = returnNote.trim();
     if (!body) {
@@ -494,26 +444,13 @@ function DataAndThread({
     try {
       const ok = await crm.setQbStatus(item.kind, item.id, "returned");
       if (!ok) return;
-      await leaveNote("return", body);
+      const extra = owner && !mentionedIds(body).includes(owner.id) ? [owner.id] : [];
+      await leaveNote("return", body, extra);
       await logJob(`Returned ${itemTitle(item)}: ${body}`);
-      toast.success("Sent back to the project manager.");
+      toast.success(owner ? `Sent back to ${owner.name}.` : "Sent back to the project manager.");
       setReturnOpen(false);
       setReturnNote("");
       onMoved(nextApproveItem(inbox, item.kind, item.id));
-    } finally {
-      setPending(null);
-    }
-  }
-
-  async function resubmit() {
-    setPending("resubmit");
-    try {
-      const ok = await crm.setQbStatus(item.kind, item.id, "not_in_qb");
-      if (!ok) return;
-      await leaveNote("resubmit", note.trim() || "Updated. Ready for accounting again.");
-      await logJob(`${itemTitle(item)} sent back to accounting.`);
-      toast.success("Accounting will see this in Approve again.");
-      setNote("");
     } finally {
       setPending(null);
     }
@@ -524,7 +461,10 @@ function DataAndThread({
     setPending("comment");
     try {
       const saved = await leaveNote("comment", note);
-      if (saved) setNote("");
+      if (saved) {
+        if (jobId) await logJob(`${itemTitle(item)}: ${note.trim()}`);
+        setNote("");
+      }
     } finally {
       setPending(null);
     }
@@ -536,86 +476,59 @@ function DataAndThread({
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-              {item.kind === "invoice" ? "Invoice" : item.kind === "expense" ? "Expense" : "Payment"}
+              {itemKindLabel(item.kind)}
             </p>
             <h2 className="font-heading text-lg font-medium">{itemTitle(item)}</h2>
           </div>
           <QbStatusBadge status={status} />
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          Edit what QuickBooks will get. Comments stay on this document like a Dropbox review.
+          Edit what QuickBooks will get. Tag the project manager with @ — they reply on the file in the
+          job.
         </p>
+        {job ? (
+          <Link
+            href={jobDocumentHref(job.id, item.kind, item.id)}
+            className="mt-2 inline-block text-xs font-medium text-primary hover:underline"
+          >
+            Open on the job
+          </Link>
+        ) : null}
       </div>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
-        {item.kind === "invoice" ? (
-          <InvoiceFields invoiceId={item.invoice.id} locked={locked} />
-        ) : item.kind === "expense" ? (
-          <ExpenseFields expenseId={item.expense.id} locked={locked} />
-        ) : (
-          <PaymentFields paymentId={item.payment.id} locked={locked} />
+        <ReviewRecordFields item={item} locked={locked} />
+        <ReviewCommentThread
+          kind={item.kind}
+          recordId={item.id}
+          empty="No notes yet. Tag the PM with @ to send a notification, or return the file with what to change."
+        />
+        {locked ? null : (
+          <MentionComposer
+            value={note}
+            onChange={setNote}
+            placeholder={
+              owner
+                ? `Leave a comment. Type @ to tag ${owner.name.split(" ")[0]}.`
+                : "Leave a comment. Type @ to tag someone."
+            }
+          />
         )}
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Comments</p>
-          {comments.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No notes yet. Ask the PM for a missing receipt, or leave a reminder for yourself.
-            </p>
-          ) : (
-            <ul className="space-y-3">
-              {comments.map((comment) => (
-                <li key={comment.id} className="rounded-md border px-3 py-2">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="text-sm font-medium">{comment.authorName}</p>
-                    <p className="text-[11px] text-muted-foreground">{formatRelative(comment.createdAt)}</p>
-                  </div>
-                  <p className="mt-1 text-[11px] tracking-wide text-muted-foreground uppercase">
-                    {comment.intent === "return"
-                      ? "Returned"
-                      : comment.intent === "approve"
-                        ? "Approved"
-                        : comment.intent === "resubmit"
-                          ? "Resubmitted"
-                          : "Comment"}
-                  </p>
-                  <p className="mt-1 text-sm leading-relaxed whitespace-pre-wrap">{comment.body}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-          {locked ? null : (
-            <Textarea
-              value={note}
-              onChange={(event) => setNote(event.target.value)}
-              placeholder="Leave a comment on this document"
-              rows={3}
-            />
-          )}
-        </div>
       </div>
       {locked ? (
         <p className="border-t px-4 py-3 text-sm text-muted-foreground">Already in QuickBooks.</p>
       ) : (
         <div className="flex flex-wrap gap-2 border-t px-4 py-3">
-          {accountant ? (
-            <Button type="button" disabled={pending !== null} onClick={() => void approve()}>
-              Approve for QuickBooks
-            </Button>
-          ) : null}
-          {accountant ? (
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pending !== null || status === "queued"}
-              onClick={() => setReturnOpen(true)}
-            >
-              Return to PM
-            </Button>
-          ) : null}
-          {!accountant && isWaitingOnPm(status) ? (
-            <Button type="button" disabled={pending !== null} onClick={() => void resubmit()}>
-              Send back to accounting
-            </Button>
-          ) : null}
+          <Button type="button" disabled={pending !== null} onClick={() => void approve()}>
+            Approve for QuickBooks
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={pending !== null || status === "queued"}
+            onClick={openReturn}
+          >
+            Return to PM
+          </Button>
           <Button
             type="button"
             variant="outline"
@@ -631,15 +544,16 @@ function DataAndThread({
           <DialogHeader>
             <DialogTitle>Return to the project manager</DialogTitle>
             <DialogDescription>
-              They will see this note on the job and on this document. Fix the vendor, receipt, or
-              amount there, then send it back.
+              They get a notification if you tag them. The reply happens on this file inside the job —
+              they fix it, comment, and send it back here.
             </DialogDescription>
           </DialogHeader>
-          <Textarea
+          <MentionComposer
             value={returnNote}
-            onChange={(event) => setReturnNote(event.target.value)}
-            placeholder="What needs to change?"
+            onChange={setReturnNote}
+            placeholder="What needs to change? Type @ to tag the PM."
             rows={4}
+            autoFocus
           />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setReturnOpen(false)}>
@@ -653,427 +567,6 @@ function DataAndThread({
       </Dialog>
     </div>
   );
-}
-
-function blockReason(item: QbReviewItem, crm: ReturnType<typeof useCrm>) {
-  if (item.kind === "invoice") {
-    const job = item.invoice.jobId ? crm.getJob(item.invoice.jobId) : undefined;
-    return invoicePushBlocked({
-      invoice: item.invoice,
-      job,
-      lines: crm.invoiceLines.filter((line) => line.invoiceId === item.invoice.id),
-    });
-  }
-  if (item.kind === "expense") return expensePushBlocked(item.expense);
-  const invoice = item.payment.invoiceId
-    ? crm.invoices.find((row) => row.id === item.payment.invoiceId)
-    : undefined;
-  return paymentPushBlocked({
-    payment: item.payment,
-    invoice,
-    job: item.payment.jobId ? crm.getJob(item.payment.jobId) : undefined,
-  });
-}
-
-function InvoiceFields({ invoiceId, locked }: { invoiceId: string; locked: boolean }) {
-  const crm = useCrm();
-  const invoice = crm.invoices.find((item) => item.id === invoiceId);
-  const lines = crm.invoiceLines
-    .filter((line) => line.invoiceId === invoiceId)
-    .sort((a, b) => a.sortOrder - b.sortOrder);
-  if (!invoice) return null;
-  const job = invoice.jobId ? crm.getJob(invoice.jobId) : undefined;
-  const { work } = workFromBook({
-    invoice,
-    job,
-    lines,
-    contacts: crm.contacts,
-    clients: crm.clients,
-    opportunities: crm.opportunities,
-  });
-  const jobs = jobChoices(crm);
-
-  return (
-    <div className="space-y-3">
-      <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs leading-relaxed">
-        QuickBooks will add this on{" "}
-        <span className="font-mono">
-          {work.customerName}:{work.jobCode || "Job"}
-        </span>{" "}
-        with item {work.itemName}. Change the job or lines if that is wrong.
-      </p>
-      <Field label="Invoice name">
-        <Input
-          defaultValue={invoice.name}
-          disabled={locked}
-          onBlur={(event) => {
-            const name = event.target.value.trim();
-            if (name && name !== invoice.name) void crm.updateInvoice(invoice.id, { name });
-          }}
-        />
-      </Field>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Issued">
-          <Input
-            type="date"
-            defaultValue={invoice.issuedAt.slice(0, 10)}
-            disabled={locked}
-            onBlur={(event) => {
-              if (event.target.value && event.target.value !== invoice.issuedAt.slice(0, 10)) {
-                void crm.updateInvoice(invoice.id, { issuedAt: event.target.value });
-              }
-            }}
-          />
-        </Field>
-        <Field label="Due">
-          <Input
-            type="date"
-            defaultValue={invoice.dueAt?.slice(0, 10) ?? ""}
-            disabled={locked}
-            onBlur={(event) => {
-              void crm.updateInvoice(invoice.id, { dueAt: event.target.value || null });
-            }}
-          />
-        </Field>
-      </div>
-      <Field label="Job">
-        <Select
-          value={invoice.jobId || "none"}
-          onValueChange={(value) => void crm.updateInvoice(invoice.id, { jobId: value === "none" ? null : String(value) })}
-          disabled={locked}
-          items={[{ value: "none", label: "No job" }, ...jobs]}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">No job</SelectItem>
-            {jobs.map((row) => (
-              <SelectItem key={row.value} value={row.value}>
-                {row.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
-      <div className="space-y-2">
-        <p className="text-xs font-medium">Lines QuickBooks will post</p>
-        {lines.map((line) => (
-          <div key={line.id} className="grid gap-2 rounded-md border p-2 sm:grid-cols-[1fr_4.5rem_5.5rem]">
-            <Input
-              defaultValue={line.description}
-              disabled={locked}
-              onBlur={(event) => {
-                const description = event.target.value.trim();
-                if (description !== line.description) void crm.updateInvoiceLine(line.id, { description });
-              }}
-            />
-            <Input
-              type="number"
-              step="0.01"
-              defaultValue={String(line.quantity)}
-              disabled={locked}
-              onBlur={(event) => {
-                const quantity = Number(event.target.value);
-                if (Number.isFinite(quantity) && quantity !== line.quantity) {
-                  void crm.updateInvoiceLine(line.id, { quantity });
-                }
-              }}
-            />
-            <Input
-              type="number"
-              step="0.01"
-              defaultValue={String(line.unitCost)}
-              disabled={locked}
-              onBlur={(event) => {
-                const unitCost = Number(event.target.value);
-                if (Number.isFinite(unitCost) && unitCost !== line.unitCost) {
-                  void crm.updateInvoiceLine(line.id, { unitCost });
-                }
-              }}
-            />
-            <p className="text-xs text-muted-foreground sm:col-span-3">
-              {line.quantity} {line.unit} · {formatMoney(lineAmount(line))}
-            </p>
-          </div>
-        ))}
-      </div>
-      <Field label="Memo">
-        <Textarea
-          defaultValue={invoice.notes}
-          disabled={locked}
-          rows={2}
-          onBlur={(event) => {
-            if (event.target.value !== invoice.notes) void crm.updateInvoice(invoice.id, { notes: event.target.value });
-          }}
-        />
-      </Field>
-    </div>
-  );
-}
-
-function ExpenseFields({ expenseId, locked }: { expenseId: string; locked: boolean }) {
-  const crm = useCrm();
-  const expense = crm.expenses.find((item) => item.id === expenseId);
-  if (!expense) return null;
-  const vendors = vendorChoices(crm.qbVendors ?? [], crm.expenses);
-  const jobs = jobChoices(crm);
-  const job = expense.jobId ? crm.getJob(expense.jobId) : undefined;
-
-  return (
-    <div className="space-y-3">
-      <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs leading-relaxed">
-        QuickBooks will post a {expense.method === "credit_card" ? "credit card charge" : "check"} to{" "}
-        <span className="font-medium">{expense.vendor || "the vendor"}</span> on{" "}
-        {EXPENSE_ACCOUNT_LABELS[expense.account]}
-        {job ? ` for ${job.code}` : " as overhead"}.
-      </p>
-      <Field label="Vendor (payee in QuickBooks)">
-        <VendorPicker
-          value={expense.vendor}
-          names={vendors.fromQb.map((item) => item.name)}
-          extraNames={vendors.extras}
-          onChange={(vendor) => {
-            const next = matchVendorName(vendor, [
-              ...vendors.fromQb.map((item) => item.name),
-              ...vendors.extras,
-            ]);
-            if (!locked) void crm.updateExpense(expense.id, { vendor: next || vendor });
-          }}
-        />
-      </Field>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Amount">
-          <Input
-            type="number"
-            step="0.01"
-            defaultValue={String(expense.amount)}
-            disabled={locked}
-            onBlur={(event) => {
-              const amount = Number(event.target.value);
-              if (Number.isFinite(amount) && amount !== expense.amount) {
-                void crm.updateExpense(expense.id, { amount });
-              }
-            }}
-          />
-        </Field>
-        <Field label="Date">
-          <Input
-            type="date"
-            defaultValue={expense.incurredAt.slice(0, 10)}
-            disabled={locked}
-            onBlur={(event) => {
-              if (event.target.value) void crm.updateExpense(expense.id, { incurredAt: event.target.value });
-            }}
-          />
-        </Field>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Expense account">
-          <Select
-            value={expense.account}
-            disabled={locked}
-            onValueChange={(value) => void crm.updateExpense(expense.id, { account: value as ExpenseAccount })}
-            items={EXPENSE_ACCOUNTS.map((item) => ({ value: item, label: EXPENSE_ACCOUNT_LABELS[item] }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {EXPENSE_ACCOUNTS.map((item) => (
-                <SelectItem key={item} value={item}>
-                  {EXPENSE_ACCOUNT_LABELS[item]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label="Paid with">
-          <Select
-            value={expense.method}
-            disabled={locked}
-            onValueChange={(value) => void crm.updateExpense(expense.id, { method: value as ExpenseMethod })}
-            items={EXPENSE_METHODS.map((item) => ({ value: item, label: EXPENSE_METHOD_LABELS[item] }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {EXPENSE_METHODS.map((item) => (
-                <SelectItem key={item} value={item}>
-                  {EXPENSE_METHOD_LABELS[item]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-      </div>
-      <Field label="Job">
-        <Select
-          value={expense.jobId || "none"}
-          disabled={locked}
-          onValueChange={(value) =>
-            void crm.updateExpense(expense.id, { jobId: value === "none" ? null : String(value) })
-          }
-          items={[{ value: "none", label: "Overhead — not a job" }, ...jobs]}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Overhead — not a job</SelectItem>
-            {jobs.map((row) => (
-              <SelectItem key={row.value} value={row.value}>
-                {row.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
-      <Field label="Memo">
-        <Textarea
-          defaultValue={expense.memo}
-          disabled={locked}
-          rows={2}
-          onBlur={(event) => {
-            if (event.target.value !== expense.memo) void crm.updateExpense(expense.id, { memo: event.target.value });
-          }}
-        />
-      </Field>
-      <p className="text-xs text-muted-foreground">{expense.number} · logged {formatDate(expense.createdAt)}</p>
-    </div>
-  );
-}
-
-function PaymentFields({ paymentId, locked }: { paymentId: string; locked: boolean }) {
-  const crm = useCrm();
-  const payment = crm.payments.find((item) => item.id === paymentId);
-  if (!payment) return null;
-  const jobs = jobChoices(crm);
-  const invoices = crm.invoices
-    .filter((invoice) => invoice.status !== "void")
-    .map((invoice) => ({ value: invoice.id, label: `${invoice.number} · ${invoice.name}` }));
-
-  return (
-    <div className="space-y-3">
-      <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs leading-relaxed">
-        QuickBooks will receive this payment against the invoice you pick. Push that invoice first.
-      </p>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Amount">
-          <Input
-            type="number"
-            step="0.01"
-            defaultValue={String(payment.amount)}
-            disabled={locked}
-            onBlur={(event) => {
-              const amount = Number(event.target.value);
-              if (Number.isFinite(amount) && amount !== payment.amount) {
-                void crm.updatePayment(payment.id, { amount });
-              }
-            }}
-          />
-        </Field>
-        <Field label="Date">
-          <Input
-            type="date"
-            defaultValue={payment.paidAt.slice(0, 10)}
-            disabled={locked}
-            onBlur={(event) => {
-              if (event.target.value) void crm.updatePayment(payment.id, { paidAt: event.target.value });
-            }}
-          />
-        </Field>
-      </div>
-      <Field label="Method">
-        <Input
-          defaultValue={payment.method}
-          disabled={locked}
-          onBlur={(event) => {
-            if (event.target.value.trim() && event.target.value !== payment.method) {
-              void crm.updatePayment(payment.id, { method: event.target.value.trim() });
-            }
-          }}
-        />
-      </Field>
-      <Field label="Reference / check #">
-        <Input
-          defaultValue={payment.reference}
-          disabled={locked}
-          onBlur={(event) => {
-            if (event.target.value !== payment.reference) {
-              void crm.updatePayment(payment.id, { reference: event.target.value });
-            }
-          }}
-        />
-      </Field>
-      <Field label="Apply to invoice">
-        <Select
-          value={payment.invoiceId || "none"}
-          disabled={locked}
-          onValueChange={(value) =>
-            void crm.updatePayment(payment.id, { invoiceId: value === "none" ? null : String(value) })
-          }
-          items={[{ value: "none", label: "Unapplied" }, ...invoices]}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Unapplied</SelectItem>
-            {invoices.map((row) => (
-              <SelectItem key={row.value} value={row.value}>
-                {row.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
-      <Field label="Job">
-        <Select
-          value={payment.jobId || "none"}
-          disabled={locked}
-          onValueChange={(value) =>
-            void crm.updatePayment(payment.id, { jobId: value === "none" ? null : String(value) })
-          }
-          items={[{ value: "none", label: "No job" }, ...jobs]}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">No job</SelectItem>
-            {jobs.map((row) => (
-              <SelectItem key={row.value} value={row.value}>
-                {row.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </Field>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid gap-1.5">
-      <Label>{label}</Label>
-      {children}
-    </div>
-  );
-}
-
-function jobChoices(crm: ReturnType<typeof useCrm>) {
-  return [...crm.jobs]
-    .filter((job) => !job.deletedAt)
-    .sort((a, b) =>
-      costCenterLabel(a, crm.opportunities).localeCompare(costCenterLabel(b, crm.opportunities)),
-    )
-    .map((job) => ({
-      value: job.id,
-      label: costCenterLabel(job, crm.opportunities),
-    }));
 }
 
 export function parseReviewKindParam(value: string | undefined): QbReviewKind | null {

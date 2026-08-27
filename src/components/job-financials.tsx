@@ -16,7 +16,7 @@ import { ProfitAndLossReport } from "@/components/profit-and-loss";
 import { EXPENSE_ACCOUNT_LABELS, type Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { LogExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
-import { latestReturnNote, reviewHref } from "@/lib/qb-review";
+import { jobDocumentHref, latestReturnNote } from "@/lib/qb-review";
 
 export function JobFinancials({ job }: { job: Job }) {
   const crm = useCrm();
@@ -136,21 +136,18 @@ export function JobFinancials({ job }: { job: Job }) {
                   {expense.memo ? <p className="text-sm leading-snug">{expense.memo}</p> : null}
                   <div className="flex flex-wrap items-center gap-2">
                     <QbStatusBadge status={expense.qbStatus} />
-                    {expense.qbStatus === "returned" && returned ? (
-                      <Link
-                        href={reviewHref("expense", expense.id)}
-                        className="text-xs font-medium text-primary hover:underline"
-                      >
-                        Accounting asked: {returned.body}
-                      </Link>
-                    ) : expense.qbStatus !== "entered" ? (
-                      <Link
-                        href={reviewHref("expense", expense.id)}
-                        className="text-xs text-muted-foreground hover:underline"
-                      >
-                        Open review
-                      </Link>
-                    ) : null}
+                    <Link
+                      href={jobDocumentHref(job.id, "expense", expense.id)}
+                      className={
+                        expense.qbStatus === "returned"
+                          ? "text-xs font-medium text-primary hover:underline"
+                          : "text-xs text-muted-foreground hover:underline"
+                      }
+                    >
+                      {expense.qbStatus === "returned" && returned
+                        ? `Accounting asked: ${returned.body}`
+                        : "Open file"}
+                    </Link>
                   </div>
                 </div>
               </li>
@@ -207,19 +204,19 @@ export function JobFinancials({ job }: { job: Job }) {
                     <QbStatusBadge status={payment.qbStatus} />
                     {payment.qbStatus === "returned" ? (
                       <Link
-                        href={reviewHref("payment", payment.id)}
+                        href={jobDocumentHref(job.id, "payment", payment.id)}
                         className="text-xs font-medium text-primary hover:underline"
                       >
                         Accounting asked for a change
                       </Link>
-                    ) : payment.qbStatus !== "entered" ? (
+                    ) : (
                       <Link
-                        href={reviewHref("payment", payment.id)}
+                        href={jobDocumentHref(job.id, "payment", payment.id)}
                         className="text-xs text-muted-foreground hover:underline"
                       >
-                        Open review
+                        Open file
                       </Link>
-                    ) : null}
+                    )}
                     </div>
                   </div>
                 </li>

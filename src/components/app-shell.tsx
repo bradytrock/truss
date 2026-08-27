@@ -69,12 +69,7 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
     { href: "/estimates", label: "Estimates" },
     { href: "/catalog", label: "Price book" },
     { href: "/invoices", label: "Invoices" },
-    ...(options.showAccounting
-      ? [
-          { href: "/accounting/approve", label: "Approve" },
-          { href: "/accounting", label: "Accounting" },
-        ]
-      : []),
+    ...(options.showAccounting ? [{ href: "/accounting", label: "Accounting" }] : []),
     { href: "/calendar", label: "Calendar" },
     { href: "/training", label: "Training" },
     { href: "/contacts", label: "Contacts" },
@@ -246,8 +241,7 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
           item.href === "/"
             ? pathname === "/"
             : item.href === "/accounting"
-              ? pathname === "/accounting" ||
-                (pathname.startsWith("/accounting/") && !pathname.startsWith("/accounting/approve"))
+              ? pathname === "/accounting" || pathname.startsWith("/accounting/")
               : pathname.startsWith(item.href);
         return (
           <Link

@@ -364,6 +364,7 @@ export interface QbReviewComment {
   intent: QbReviewIntent;
   authorStaffId: string;
   authorName: string;
+  mentionedStaffIds: string[];
   createdAt: string;
 }
 

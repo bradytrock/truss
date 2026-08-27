@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, customFieldsJson, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId } from "@/lib/job-record";
@@ -771,6 +771,7 @@ type CrmContextValue = CrmState & {
     recordId: string;
     body: string;
     intent?: QbReviewIntent;
+    mentionedStaffIds?: string[];
   }) => Promise<QbReviewComment | null>;
   addScheduleEvent: (input: Omit<ScheduleEvent, "id">) => Promise<ScheduleEvent>;
   linkDemoCalendar: () => Promise<void>;
@@ -4618,12 +4619,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       recordId: string;
       body: string;
       intent?: QbReviewIntent;
+      mentionedStaffIds?: string[];
     }) => {
       const body = input.body.trim();
       if (!body) {
         toast.error("Write a note first.");
         return null;
       }
+      const mentionedStaffIds = [...new Set((input.mentionedStaffIds ?? []).filter(Boolean))];
       const comment: QbReviewComment = {
         id: crypto.randomUUID(),
         kind: input.kind,
@@ -4632,49 +4635,79 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         intent: input.intent ?? "comment",
         authorStaffId: user.staffId,
         authorName: user.name,
+        mentionedStaffIds,
         createdAt: new Date().toISOString(),
       };
-      const apply = () =>
+      const apply = (saved: QbReviewComment) =>
         setState((prev) => ({
           ...prev,
-          qbReviewComments: [...(prev.qbReviewComments ?? []), comment],
+          qbReviewComments: [...(prev.qbReviewComments ?? []), saved],
         }));
+      const tagged = state.staff.filter((member) => mentionedStaffIds.includes(member.id));
+      const notify = (saved: QbReviewComment) => {
+        if (tagged.length === 0) return saved;
+        toast.success(
+          tagged.length === 1
+            ? `${tagged[0].name} will see this on Home and on the file.`
+            : `Tagged ${tagged.map((member) => member.name.split(" ")[0]).join(", ")}.`,
+        );
+        return saved;
+      };
       const supabase = maybeClient();
       if (!supabase) {
-        apply();
-        return comment;
+        apply(comment);
+        return notify(comment);
       }
-      const { data, error } = await supabase
-        .from("qb_review_comments")
-        .insert({
-          id: comment.id,
-          company_id: user.companyId,
-          kind: comment.kind,
-          record_id: comment.recordId,
-          body: comment.body,
-          intent: comment.intent,
-          author_staff_id: comment.authorStaffId,
-          author_name: comment.authorName,
-        })
-        .select("*")
-        .single();
+      const payload = {
+        id: comment.id,
+        company_id: user.companyId,
+        kind: comment.kind,
+        record_id: comment.recordId,
+        body: comment.body,
+        intent: comment.intent,
+        author_staff_id: comment.authorStaffId,
+        author_name: comment.authorName,
+        mentioned_staff_ids: comment.mentionedStaffIds,
+      };
+      let { data, error } = await supabase.from("qb_review_comments").insert(payload).select("*").single();
+      if (error && isMissingQbReviewMentions(error)) {
+        toast.message(missingQbReviewMentionsMessage());
+        const retry = await supabase
+          .from("qb_review_comments")
+          .insert({
+            id: comment.id,
+            company_id: user.companyId,
+            kind: comment.kind,
+            record_id: comment.recordId,
+            body: comment.body,
+            intent: comment.intent,
+            author_staff_id: comment.authorStaffId,
+            author_name: comment.authorName,
+          })
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+      }
       if (error) {
         if (isMissingQbReview(error)) {
           toast.message(missingQbReviewMessage());
-          apply();
-          return comment;
+          apply(comment);
+          return notify(comment);
         }
         toast.error(error.message);
         return null;
       }
+      if (!data) {
+        apply(comment);
+        return notify(comment);
+      }
       const saved = mapQbReviewComment(data);
-      setState((prev) => ({
-        ...prev,
-        qbReviewComments: [...(prev.qbReviewComments ?? []), saved],
-      }));
-      return saved;
+      const kept = { ...saved, mentionedStaffIds: saved.mentionedStaffIds.length ? saved.mentionedStaffIds : mentionedStaffIds };
+      apply(kept);
+      return notify(kept);
     },
-    [user.companyId, user.name, user.staffId],
+    [state.staff, user.companyId, user.name, user.staffId],
   );
 
   const persistCalendar = useCallback(

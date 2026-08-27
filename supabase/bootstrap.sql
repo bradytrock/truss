@@ -6873,11 +6873,18 @@ create table if not exists public.qb_review_comments (
     check (intent in ('comment', 'return', 'approve', 'resubmit')),
   author_staff_id text not null default '',
   author_name text not null default '',
+  mentioned_staff_ids text[] not null default '{}',
   created_at timestamptz not null default now()
 );
 
+alter table public.qb_review_comments
+  add column if not exists mentioned_staff_ids text[] not null default '{}';
+
 create index if not exists qb_review_comments_record_idx
   on public.qb_review_comments (company_id, kind, record_id, created_at);
+
+create index if not exists qb_review_comments_mentions_idx
+  on public.qb_review_comments using gin (mentioned_staff_ids);
 
 alter table public.qb_review_comments enable row level security;
 

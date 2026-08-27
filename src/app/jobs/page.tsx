@@ -37,6 +37,7 @@ function JobsBoardPage() {
     (id: string) => {
       const params = new URLSearchParams(searchParams.toString());
       params.set("job", id);
+      params.delete("doc");
       router.replace(`/jobs?${params.toString()}`, { scroll: false });
     },
     [router, searchParams],
@@ -46,8 +47,16 @@ function JobsBoardPage() {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("job");
     params.delete("tab");
+    params.delete("doc");
     const qs = params.toString();
     router.replace(qs ? `/jobs?${qs}` : "/jobs", { scroll: false });
+  }, [router, searchParams]);
+
+  const closeDoc = useCallback(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("doc");
+    if (!params.get("tab")) params.set("tab", "files");
+    router.replace(`/jobs?${params.toString()}`, { scroll: false });
   }, [router, searchParams]);
 
   useEffect(() => {
@@ -103,7 +112,13 @@ function JobsBoardPage() {
         {active.length} open · {formatCurrency(bookValue)} on the board
       </p>
       <JobsBoard query={query} onSelectJob={selectJob} />
-      {openJob ? <JobRecordWindow key={openJob.id} job={openJob} onClose={closeJob} /> : null}
+      {openJob ? (
+        <JobRecordWindow
+          key={openJob.id}
+          job={openJob}
+          onClose={searchParams.get("doc") ? closeDoc : closeJob}
+        />
+      ) : null}
       <CreateOpportunityDialog open={create} onOpenChange={setCreate} />
     </div>
   );

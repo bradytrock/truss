@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 import {
   Briefcase,
@@ -61,15 +61,20 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { RecordCode } from "@/components/page-chrome";
-import {
-  EstimateStatusBadge,
-  InvoiceStatusBadge,
-  PhotoCategoryBadge,
-} from "@/components/status-badge";
+import { EstimateStatusBadge, InvoiceStatusBadge, PhotoCategoryBadge, QbStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate } from "@/lib/format";
 import { assignedCrewPatch, isDeletedJob, jobAddress, mapsUrl, uniqueIds, uniqueNames } from "@/lib/job-record";
 import { visibleJobCustomFields } from "@/lib/job-files";
+import {
+  isWaitingOnPm,
+  itemKindLabel,
+  itemTitle,
+  jobDocumentHref,
+  jobFinancialDocs,
+  latestReturnNote,
+  reviewItemStatus,
+} from "@/lib/qb-review";
 import { createPhotoReport, PAGE_TEMPLATE_OPTIONS } from "@/lib/photo-report";
 import { shareUrl } from "@/lib/share";
 import { leadSourceChoices, leadSourceLabel } from "@/lib/leads";
@@ -218,6 +223,7 @@ function contactKind(contact: Contact, job: Job) {
 
 export function JobRecord({ job, className }: { job: Job; className?: string }) {
   const crm = useCrm();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get("tab") ?? "overview";
   const initialTab = requestedTab === "pages" ? "files" : requestedTab;
@@ -252,6 +258,12 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
   const address = jobAddress(job);
   const estimates = crm.estimates.filter((estimate) => estimate.jobId === job.id);
   const invoices = crm.invoices.filter((invoice) => invoice.jobId === job.id);
+  const financialDocs = jobFinancialDocs(job.id, {
+    invoices: crm.invoices,
+    expenses: crm.expenses,
+    payments: crm.payments,
+  });
+  const returnedDocs = financialDocs.filter((item) => isWaitingOnPm(reviewItemStatus(item)));
   const activities = crm.activities.filter(
     (activity) =>
       (activity.entityType === "job" && activity.entityId === job.id) ||
@@ -517,6 +529,34 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
             {job.deletedAt ? ` ${formatDate(job.deletedAt)}` : ""}.
             {job.deletedReason ? ` Reason: ${job.deletedReason}` : ""}
           </p>
+        </div>
+      ) : null}
+
+      {returnedDocs.length > 0 ? (
+        <div className="border border-b-0 bg-primary/8 px-4 py-3">
+          <p className="text-sm font-medium">
+            Accounting sent {returnedDocs.length} file{returnedDocs.length === 1 ? "" : "s"} back.
+          </p>
+          <ul className="mt-1 space-y-1">
+            {returnedDocs.map((item) => {
+              const note = latestReturnNote(crm.qbReviewComments ?? [], item.kind, item.id);
+              return (
+                <li key={`${item.kind}-${item.id}`}>
+                  <Link
+                    href={jobDocumentHref(job.id, item.kind, item.id)}
+                    className="text-sm text-primary hover:underline"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      router.replace(jobDocumentHref(job.id, item.kind, item.id), { scroll: false });
+                    }}
+                  >
+                    {itemTitle(item)}
+                    {note ? ` — ${note.body}` : ""}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </div>
       ) : null}
 
@@ -942,6 +982,45 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
         </TabsContent>
 
         <TabsContent value="files" className="space-y-8 border-x border-b p-4">
+          <section>
+            <div className="mb-3">
+              <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Invoices, receipts, and payments</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Open a file to see comments from accounting. Reply here — not on Approve.
+              </p>
+            </div>
+            {financialDocs.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No invoices, expenses, or payments on this job yet.
+              </p>
+            ) : (
+              <ul className="space-y-1.5">
+                {financialDocs.map((item) => {
+                  const status = reviewItemStatus(item);
+                  return (
+                    <li key={`${item.kind}-${item.id}`}>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          router.replace(jobDocumentHref(job.id, item.kind, item.id), { scroll: false })
+                        }
+                        className="flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left hover:bg-muted/50"
+                      >
+                        <FileText className="size-4 shrink-0 text-muted-foreground" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">{itemTitle(item)}</span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground">
+                            {itemKindLabel(item.kind)}
+                          </span>
+                        </span>
+                        <QbStatusBadge status={status} />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
           <JobFilesPanel jobId={job.id} disabled={deleted} />
           <section>
             <div className="mb-3 flex items-center justify-between gap-2">
@@ -1079,9 +1158,15 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
               <ul className="space-y-2">
                 {invoices.map((invoice) => (
                   <li key={invoice.id}>
-                    <Link href={`/invoices/${invoice.id}`} className="text-sm font-medium hover:underline">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.replace(jobDocumentHref(job.id, "invoice", invoice.id), { scroll: false })
+                      }
+                      className="text-sm font-medium hover:underline"
+                    >
                       {invoice.number}
-                    </Link>
+                    </button>
                     <div className="mt-1 flex items-center justify-between gap-2">
                       <InvoiceStatusBadge
                         status={derivedInvoiceStatus(invoice, crm.invoiceLines, crm.payments)}
@@ -1090,6 +1175,12 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                         {formatCurrencyFull(invoiceBalance(invoice.id, crm.invoiceLines, crm.payments))} due
                       </span>
                     </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      <Link href={`/invoices/${invoice.id}`} className="hover:underline">
+                        Customer invoice
+                      </Link>
+                      {invoice.qbStatus === "returned" ? " · Accounting asked for a change" : ""}
+                    </p>
                   </li>
                 ))}
               </ul>

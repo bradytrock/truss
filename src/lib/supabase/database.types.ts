@@ -787,6 +787,7 @@ export type Database = {
           intent: string;
           author_staff_id: string;
           author_name: string;
+          mentioned_staff_ids: string[];
           created_at: string;
         };
         Insert: {
@@ -798,6 +799,7 @@ export type Database = {
           intent?: string;
           author_staff_id?: string;
           author_name?: string;
+          mentioned_staff_ids?: string[];
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["qb_review_comments"]["Insert"]>;
