@@ -27,7 +27,7 @@ import {
   fillEstimateLine,
   invoiceLinesFromEstimate,
 } from "@/lib/estimate-totals";
-import { resolveEstimateTerms, resolveInvoiceTerms } from "@/lib/document-terms";
+import { mergePaymentTerms, lockedTermsChanged, resolveEstimateTerms, resolveInvoiceTerms } from "@/lib/document-terms";
 import {
   estimateNeedsSecondSignature,
   mintEstimateSignerTokens,
@@ -189,7 +189,7 @@ import {
 import { toE164 } from "@/lib/phone";
 import { resolveCustomerName, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage, missingPageShareMessage, isMissingPageShare, parsePageTemplate } from "@/lib/photo-report";
-import { canDeleteJobs, canEditDocumentTerms, canLoginAs, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
+import { canDeleteJobs, canLoginAs, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 
 const emptyState: CrmState = {
   staff: [],
@@ -300,17 +300,26 @@ function maybeClient() {
   return createClient();
 }
 
-function withoutUnauthorizedTerms<T extends object>(
+function applyPaymentOnlyTerms<T extends object>(
   patch: T,
-  viewer: StaffMember | undefined,
-  role: SeatRole,
+  existingTerms: string | undefined,
 ): T | null {
   if (!("terms" in patch) || (patch as { terms?: unknown }).terms === undefined) return patch;
-  if (canEditDocumentTerms(viewer?.role ?? role, viewer)) return patch;
-  toast.error("Only a company admin can change terms.");
-  const next = { ...patch };
-  delete (next as { terms?: unknown }).terms;
-  return Object.keys(next).length > 0 ? next : null;
+  const proposed = String((patch as { terms?: unknown }).terms ?? "");
+  const existing = existingTerms ?? "";
+  const merged = mergePaymentTerms(existing, proposed);
+  if (merged === existing) {
+    if (proposed !== existing && lockedTermsChanged(existing, proposed)) {
+      toast.error("Company terms stay locked. Only the payment sections on this document can change.");
+    }
+    const next = { ...patch };
+    delete (next as { terms?: unknown }).terms;
+    return Object.keys(next).length > 0 ? next : null;
+  }
+  if (proposed !== merged && lockedTermsChanged(existing, proposed)) {
+    toast.error("Company terms stay locked. Only the payment sections on this document can change.");
+  }
+  return { ...patch, terms: merged };
 }
 
 type InvoiceInsert = Database["public"]["Tables"]["invoices"]["Insert"];
@@ -2661,7 +2670,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const updateEstimate = useCallback(async (id: string, patch: Partial<Estimate>) => {
-    const allowed = withoutUnauthorizedTerms(patch, viewer, user.role);
+    const current = state.estimates.find((estimate) => estimate.id === id);
+    const allowed = applyPaymentOnlyTerms(patch, current?.terms);
     if (!allowed) return;
     patch = allowed;
     const apply = () =>
@@ -2697,7 +2707,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return;
     }
     apply();
-  }, [user.role, viewer]);
+  }, [state.estimates]);
 
   const sendEstimate = useCallback(
     async (id: string) => {
@@ -3266,7 +3276,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const updateEstimateTemplate = useCallback(async (id: string, patch: Partial<EstimateTemplate>) => {
-    const allowed = withoutUnauthorizedTerms(patch, viewer, user.role);
+    const current = state.estimateTemplates.find((template) => template.id === id);
+    const allowed = applyPaymentOnlyTerms(patch, current?.terms);
     if (!allowed) return;
     patch = allowed;
     const updatedAt = new Date().toISOString();
@@ -3294,7 +3305,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return;
     }
     apply();
-  }, [user.role, viewer]);
+  }, [state.estimateTemplates]);
 
   const removeEstimateTemplate = useCallback(async (id: string) => {
     const apply = () =>
@@ -4059,7 +4070,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const updateInvoice = useCallback(async (id: string, patch: Partial<Invoice>) => {
-    const allowed = withoutUnauthorizedTerms(patch, viewer, user.role);
+    const current = state.invoices.find((invoice) => invoice.id === id);
+    const allowed = applyPaymentOnlyTerms(patch, current?.terms);
     if (!allowed) return;
     patch = allowed;
     const apply = () =>
@@ -4083,7 +4095,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return;
     }
     apply();
-  }, [user.role, viewer]);
+  }, [state.invoices]);
 
   const sendInvoice = useCallback(async (id: string) => {
     const current = state.invoices.find((invoice) => invoice.id === id);

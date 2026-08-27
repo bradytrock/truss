@@ -28,7 +28,192 @@ export const ESTIMATE_TERMS_HINT =
 export const INVOICE_TERMS_HINT =
   "Placeholders such as {{total}}, {{paid}}, {{balance}}, {{due_date}}, {{issued}}, {{customer}}, {{company}}, and {{invoice_number}} fill from this invoice when it is written.";
 
+export const TERMS_PAYMENT_HINT =
+  "On estimates, invoices, and templates, only payment sections can be edited — contract price, deposit, amount due, and payment schedule. Scope, schedule, changes, and contractor language stay locked from this company default. Number those payment headings, or wrap a block in [[payment]] … [[/payment]].";
+
 const PLACEHOLDER = /\{\{\s*([a-z0-9_]+)\s*\}\}/gi;
+const PAYMENT_MARK_START = "[[payment]]";
+const PAYMENT_MARK_END = "[[/payment]]";
+const PAYMENT_BLOCK = /\[\[\s*payment\s*\]\]([\s\S]*?)\[\[\s*\/\s*payment\s*\]\]/gi;
+const NUMBERED_HEADING = /^(\d+)\.\s+(\S.*)$/;
+const CAPS_HEADING = /^([A-Z][A-Z0-9][A-Z0-9 /&'.-]{6,})$/;
+const PAYMENT_TITLE =
+  /\b(payments?|payment terms|pay schedule|deposits?|down payment|contract price|amount due|balance due|billing|invoices?|invoicing|draws?|financing|retainage|progress payments?|consideration)\b/i;
+const LOCK_LANGUAGE =
+  /\b(scope of work|change order|warranty|liability|indemnif|insurance|permits?|contractor named)\b/i;
+
+export type TermsSection = {
+  key: string;
+  heading: string;
+  body: string;
+  payment: boolean;
+  marked: boolean;
+};
+
+export function stripTermsMarkers(template: string) {
+  if (!template) return "";
+  return template
+    .replace(/^\s*\[\[\s*\/?\s*payment\s*\]\]\s*$/gim, "")
+    .replace(/\[\[\s*\/?\s*payment\s*\]\]/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function isHeadingLine(line: string) {
+  const trimmed = line.trim();
+  return NUMBERED_HEADING.test(trimmed) || CAPS_HEADING.test(trimmed);
+}
+
+export function isPaymentHeading(heading: string) {
+  return PAYMENT_TITLE.test(heading.trim());
+}
+
+function paragraphLooksLikePayment(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed || LOCK_LANGUAGE.test(trimmed)) return false;
+  const first = trimmed.split("\n")[0] ?? "";
+  if (isPaymentHeading(first) || isPaymentHeading(trimmed.slice(0, 120))) return true;
+  return false;
+}
+
+function splitNumbered(text: string, keyPrefix = ""): TermsSection[] {
+  const src = text.replace(/\r\n/g, "\n").trim();
+  if (!src) return [];
+  const lines = src.split("\n");
+  const headingAt: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (isHeadingLine(lines[i] ?? "")) headingAt.push(i);
+  }
+  if (headingAt.length === 0) {
+    const paras = src.split(/\n{2,}/).map((para) => para.trim()).filter(Boolean);
+    if (paras.length <= 1) {
+      return [
+        {
+          key: `${keyPrefix}all`,
+          heading: "",
+          body: src,
+          payment: paragraphLooksLikePayment(src),
+          marked: false,
+        },
+      ];
+    }
+    return paras.map((para, index) => ({
+      key: `${keyPrefix}p:${index}`,
+      heading: "",
+      body: para,
+      payment: paragraphLooksLikePayment(para),
+      marked: false,
+    }));
+  }
+  const ranges: Array<{ start: number; end: number }> = [];
+  if (headingAt[0] > 0 && lines.slice(0, headingAt[0]).join("\n").trim()) {
+    ranges.push({ start: 0, end: headingAt[0] });
+  }
+  for (let i = 0; i < headingAt.length; i++) {
+    ranges.push({ start: headingAt[i] ?? 0, end: headingAt[i + 1] ?? lines.length });
+  }
+  return ranges.map((range, index) => {
+    const slice = lines.slice(range.start, range.end);
+    const first = slice[0]?.trim() ?? "";
+    const heading = isHeadingLine(first) ? first : "";
+    const body = (heading ? slice.slice(1).join("\n") : slice.join("\n")).replace(/^\n+/, "").replace(/\n+$/, "");
+    return {
+      key: `${keyPrefix}${heading || `s:${index}`}`,
+      heading,
+      body,
+      payment: isPaymentHeading(heading || body.slice(0, 120)),
+      marked: false,
+    };
+  });
+}
+
+export function parseTermsSections(template: string): TermsSection[] {
+  const src = (template ?? "").replace(/\r\n/g, "\n");
+  if (!src.trim()) return [];
+  const out: TermsSection[] = [];
+  let last = 0;
+  let block = 0;
+  PAYMENT_BLOCK.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = PAYMENT_BLOCK.exec(src))) {
+    const before = src.slice(last, match.index);
+    if (before.trim()) out.push(...splitNumbered(before.trim(), `pre:${block}:`));
+    const inner = (match[1] ?? "").trim();
+    const innerSections = splitNumbered(inner, `pay:${block}:`);
+    if (innerSections.length === 0) {
+      out.push({
+        key: `pay:${block}`,
+        heading: "",
+        body: inner,
+        payment: true,
+        marked: true,
+      });
+    } else {
+      for (const section of innerSections) {
+        out.push({ ...section, payment: true, marked: true });
+      }
+    }
+    last = match.index + match[0].length;
+    block += 1;
+  }
+  const after = src.slice(last);
+  if (after.trim()) out.push(...splitNumbered(after.trim(), out.length ? "post:" : ""));
+  return out.length > 0 ? out : splitNumbered(src);
+}
+
+export function formatTermsSection(section: Pick<TermsSection, "heading" | "body">) {
+  if (!section.heading.trim()) return section.body;
+  if (!section.body.trim()) return section.heading;
+  return `${section.heading}\n${section.body}`;
+}
+
+export function joinTermsSections(sections: TermsSection[]) {
+  return sections
+    .map((section) => {
+      const core = formatTermsSection(section).replace(/\n+$/, "");
+      if (!section.marked) return core;
+      return `${PAYMENT_MARK_START}\n${core}\n${PAYMENT_MARK_END}`;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function sectionMatchKey(section: TermsSection) {
+  return (section.heading.replace(/^\d+\.\s*/, "").trim() || section.key).toLowerCase();
+}
+
+export function lockedTermsChanged(existing: string, proposed: string) {
+  const current = parseTermsSections(existing)
+    .filter((section) => !section.payment)
+    .map((section) => formatTermsSection(section).trim());
+  const next = parseTermsSections(proposed)
+    .filter((section) => !section.payment)
+    .map((section) => formatTermsSection(section).trim());
+  return current.join("\n\n") !== next.join("\n\n");
+}
+
+/** Keep locked company language; apply payment-section bodies from the proposed draft. */
+export function mergePaymentTerms(existing: string, proposed: string) {
+  const current = parseTermsSections(existing);
+  if (current.length === 0) return proposed;
+  const next = parseTermsSections(proposed);
+  const byKey = new Map(
+    next.filter((section) => section.payment).map((section) => [sectionMatchKey(section), section]),
+  );
+  const byIndex = next.filter((section) => section.payment);
+  let paymentIndex = 0;
+  const merged = current.map((section) => {
+    if (!section.payment) return section;
+    const incoming = byKey.get(sectionMatchKey(section)) ?? byIndex[paymentIndex++];
+    if (!incoming) return section;
+    return { ...section, body: incoming.body };
+  });
+  return joinTermsSections(merged);
+}
+
+export function hasPaymentTermsSections(template: string) {
+  return parseTermsSections(template).some((section) => section.payment);
+}
 
 function firstCopiedTerms(...candidates: Array<string | null | undefined>) {
   for (const value of candidates) {
@@ -54,7 +239,7 @@ export function resolveInvoiceTerms(input: {
 
 export function fillTermsPlaceholders(template: string, values: Record<string, string>) {
   if (!template) return "";
-  return template.replace(PLACEHOLDER, (_, raw: string) => {
+  return stripTermsMarkers(template).replace(PLACEHOLDER, (_, raw: string) => {
     const key = String(raw).toLowerCase();
     const value = values[key]?.trim();
     return value || "—";

@@ -10,7 +10,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RecordPaymentDialog } from "@/components/create-ops-dialogs";
 import { RecordProperty } from "@/components/app-shell";
 import { InvoiceDocument } from "@/components/invoice-document";
-import { CommitTextarea } from "@/components/estimate-writer";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { shareContactsForInvoice } from "@/lib/parties";
@@ -21,8 +20,8 @@ import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/docume
 import { formatCurrencyFull, formatDate, formatMoney } from "@/lib/format";
 import { shareUrl } from "@/lib/share";
 import type { Invoice } from "@/lib/types";
+import { DocumentTermsFields } from "@/components/document-terms-fields";
 import { filledInvoiceTerms, INVOICE_TERMS_HINT } from "@/lib/document-terms";
-import { canEditDocumentTerms } from "@/lib/visibility";
 import {
   derivedInvoiceStatus,
   invoiceBalance,
@@ -74,16 +73,6 @@ export default function InvoiceDetailPage() {
     staff: crm.staff,
     fallbackStaffId: crm.user.staffId,
     inBook: true,
-  });
-  const canEditTerms =
-    canEditDocumentTerms(crm.viewer?.role ?? crm.user.role, crm.viewer) && status !== "void";
-  const termsText = filledInvoiceTerms({
-    template: record.terms,
-    invoice: record,
-    lines,
-    payments,
-    customer,
-    company: letterhead,
   });
   const projectManager = documentProjectManager({
     job,
@@ -260,26 +249,23 @@ export default function InvoiceDetailPage() {
               <CardTitle>Terms</CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
-              {canEditTerms ? (
-                <>
-                  <CommitTextarea
-                    rows={8}
-                    value={record.terms}
-                    placeholder="Payment terms printed on this invoice and the client share link."
-                    onCommit={(value) => void crm.updateInvoice(record.id, { terms: value })}
-                  />
-                  <p className="mt-2 text-xs text-muted-foreground">{INVOICE_TERMS_HINT}</p>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                    {termsText || "No terms on this invoice."}
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Only a company admin can change terms. Totals, dates, and names fill from this invoice.
-                  </p>
-                </>
-              )}
+              <DocumentTermsFields
+                value={record.terms}
+                fill={(template) =>
+                  filledInvoiceTerms({
+                    template,
+                    invoice: record,
+                    lines,
+                    payments,
+                    customer,
+                    company: letterhead,
+                  })
+                }
+                disabled={status === "void"}
+                emptyLabel="No terms on this invoice."
+                hint={`${INVOICE_TERMS_HINT} Only payment sections can change here. Contractor language stays locked from Settings.`}
+                onCommit={(value) => void crm.updateInvoice(record.id, { terms: value })}
+              />
             </CardContent>
           </Card>
         </div>

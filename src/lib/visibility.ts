@@ -56,7 +56,7 @@ export function canManageSettings(role: SeatRole, member?: StaffMember) {
   return role === "company_admin";
 }
 
-/** Default estimate/invoice terms, and the terms on a document or template. */
+/** Company default estimate/invoice terms in Settings. Payment sections on a document are separate. */
 export function canEditDocumentTerms(role: SeatRole, member?: StaffMember) {
   return canManageSettings(role, member);
 }

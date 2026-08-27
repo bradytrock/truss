@@ -18,13 +18,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCrm } from "@/lib/crm-store";
-import { ESTIMATE_TERMS_HINT } from "@/lib/document-terms";
+import { DocumentTermsFields } from "@/components/document-terms-fields";
+import { ESTIMATE_TERMS_HINT, stripTermsMarkers } from "@/lib/document-terms";
 import { amountForTemplate, linesForTemplate } from "@/lib/estimate-templates";
 import { groupEstimateLines } from "@/lib/estimate-totals";
 import { formatMoney } from "@/lib/format";
 import { defaultTaxRateForMarket, isResidentialMarket } from "@/lib/market";
 import type { EstimateTemplate } from "@/lib/types";
-import { canEditDocumentTerms } from "@/lib/visibility";
 
 export function TemplateWriter({ template }: { template: EstimateTemplate }) {
   const router = useRouter();
@@ -43,8 +43,6 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
   ];
   const residential = isResidentialMarket(template.market);
   const total = amountForTemplate(template, lines);
-  const canEditTerms = canEditDocumentTerms(crm.viewer?.role ?? crm.user.role, crm.viewer);
-
   useEffect(() => {
     setEmptySections([]);
     setSectionName("");
@@ -286,26 +284,14 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
         <CardHeader className="border-b">
           <CardTitle>Terms</CardTitle>
         </CardHeader>
-        <CardContent>
-          {canEditTerms ? (
-            <>
-              <CommitTextarea
-                rows={8}
-                value={template.terms}
-                onCommit={(value) => void crm.updateEstimateTemplate(template.id, { terms: value })}
-              />
-              <p className="mt-2 text-xs text-muted-foreground">{ESTIMATE_TERMS_HINT}</p>
-            </>
-          ) : (
-            <>
-              <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                {template.terms || "No terms on this template."}
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                Only a company admin can change terms. Placeholders fill from the estimate when a proposal is written.
-              </p>
-            </>
-          )}
+        <CardContent className="pt-4">
+          <DocumentTermsFields
+            value={template.terms}
+            fill={(block) => stripTermsMarkers(block)}
+            emptyLabel="No terms on this template."
+            hint={`${ESTIMATE_TERMS_HINT} Only payment sections can change on a template. Company terms stay locked from Settings.`}
+            onCommit={(value) => void crm.updateEstimateTemplate(template.id, { terms: value })}
+          />
         </CardContent>
       </Card>
 
