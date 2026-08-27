@@ -178,7 +178,7 @@ import {
   payloadWithoutCode,
 } from "@/lib/job-code";
 import { formatJobSite } from "@/lib/leads";
-import { localYmd } from "@/lib/format";
+import { defaultEstimateValidUntil, localYmd } from "@/lib/format";
 import { fillPayment, fileToDataUrl } from "@/lib/job-financials";
 import {
   contactForPhone,
@@ -2534,7 +2534,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         contactId: input.contactId || null,
         status: "draft",
         notes: input.notes || templateFields?.notes || "",
-        validUntil: input.validUntil ?? null,
+        validUntil: input.validUntil || defaultEstimateValidUntil(),
         sentAt: null,
         acceptedAt: null,
         createdAt: new Date().toISOString(),

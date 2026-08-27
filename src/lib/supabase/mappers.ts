@@ -503,7 +503,7 @@ export function estimatePatch(patch: Partial<Estimate>) {
   if (patch.secondContactId !== undefined) row.second_contact_id = patch.secondContactId;
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.notes !== undefined) row.notes = patch.notes;
-  if (patch.validUntil !== undefined) row.valid_until = patch.validUntil;
+  if (patch.validUntil !== undefined) row.valid_until = patch.validUntil || null;
   if (patch.sentAt !== undefined) row.sent_at = patch.sentAt;
   if (patch.acceptedAt !== undefined) row.accepted_at = patch.acceptedAt;
   if (patch.secondAcceptedAt !== undefined) row.second_accepted_at = patch.secondAcceptedAt;

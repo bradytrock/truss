@@ -78,7 +78,7 @@ import {
 import { downloadEstimatePdf } from "@/lib/document-pdf";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { shareUrl } from "@/lib/share";
-import { formatMoney } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 import { billingEstimate, defaultTaxRateForMarket, isResidentialMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { formatJobSite } from "@/lib/leads";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine, type JobPhoto } from "@/lib/types";
@@ -91,6 +91,7 @@ export function CommitInput({
   onCommit,
   className,
   parse,
+  type,
   ...props
 }: Omit<ComponentProps<typeof Input>, "value" | "onChange" | "onBlur"> & {
   value: string | number;
@@ -101,17 +102,23 @@ export function CommitInput({
   useEffect(() => {
     setDraft(String(value));
   }, [value]);
+  function commit(raw: string) {
+    const next = parse ? parse(raw) : raw;
+    if (next !== String(value)) onCommit(next);
+    else setDraft(String(value));
+  }
   return (
     <Input
       {...props}
+      type={type}
       className={className}
       value={draft}
-      onChange={(event) => setDraft(event.target.value)}
-      onBlur={() => {
-        const next = parse ? parse(draft) : draft;
-        if (next !== String(value)) onCommit(next);
-        else setDraft(String(value));
+      onChange={(event) => {
+        const next = event.target.value;
+        setDraft(next);
+        if (type === "date") commit(next);
       }}
+      onBlur={() => commit(draft)}
     />
   );
 }
@@ -806,6 +813,23 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
               onCommit={(value) => patchSite({ postalCode: value })}
             />
           </div>
+          <div>
+            <Label>Valid until</Label>
+            {editable ? (
+              <>
+                <CommitInput
+                  type="date"
+                  value={estimate.validUntil ?? ""}
+                  onCommit={(value) => void crm.updateEstimate(estimate.id, { validUntil: value || null })}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Prints on the proposal. New estimates default to 30 days.
+                </p>
+              </>
+            ) : (
+              <p className="mt-1 text-sm">{formatDate(estimate.validUntil)}</p>
+            )}
+          </div>
           {editable ? (
             <div className="sm:col-span-2">
               <MarketField
@@ -1144,6 +1168,9 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <EstimateStatusBadge status={estimate.status} />
               <span className="text-sm text-muted-foreground">{customer}</span>
+              <span className="text-sm text-muted-foreground">
+                Valid until {formatDate(estimate.validUntil)}
+              </span>
             </div>
             {estimate.status === "declined" ? (
               <p className="mt-2 text-sm text-muted-foreground">

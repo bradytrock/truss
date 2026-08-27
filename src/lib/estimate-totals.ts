@@ -269,6 +269,7 @@ export function fillEstimate(estimate: EstimateDraft): Estimate {
     city: estimate.city ?? "",
     state: estimate.state ?? "",
     postalCode: estimate.postalCode ?? "",
+    validUntil: estimate.validUntil ? String(estimate.validUntil).slice(0, 10) : null,
     shareToken: estimate.shareToken?.trim() || seedShareToken("e", estimate.number),
     secondShareToken: secondContactId ? (estimate.secondShareToken?.trim() ?? "") : "",
     signatureName: estimate.signatureName ?? "",
