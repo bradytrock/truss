@@ -8,7 +8,12 @@ import { invoiceBalance, invoiceTotal, lineAmount as invoiceLineAmount, paidOnIn
 import { downloadBlob } from "@/lib/share";
 import { isSignaturePng } from "@/lib/estimate-signature";
 import { estimateSignatureLines } from "@/lib/estimate-signers";
-import { filledEstimateTerms, filledInvoiceTerms } from "@/lib/document-terms";
+import {
+  filledEstimateTerms,
+  filledInvoiceTerms,
+  resolveEstimateTerms,
+  resolveInvoiceTerms,
+} from "@/lib/document-terms";
 import type { ProjectManagerContact } from "@/lib/document-owner";
 
 type Doc = {
@@ -36,37 +41,77 @@ async function createDoc() {
   return new jsPDF({ unit: "pt", format: "letter" }) as unknown as Doc;
 }
 
+function pageBottom(doc: Doc) {
+  return doc.internal.pageSize.getHeight() - 48;
+}
+
 function ensureSpace(doc: Doc, y: number, needed: number) {
-  const height = doc.internal.pageSize.getHeight();
-  if (y + needed < height - 48) return y;
+  if (y + needed < pageBottom(doc)) return y;
   doc.addPage();
   return 54;
 }
 
-function writeParagraph(doc: Doc, text: string, y: number, width = 504) {
-  const lines = doc.splitTextToSize(text, width);
+function wrapText(doc: Doc, text: string, width: number) {
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  const paragraphs = String(text ?? "").replace(/\r\n/g, "\n").split("\n");
+  const lines: string[] = [];
+  for (const paragraph of paragraphs) {
+    if (!paragraph.trim()) {
+      lines.push("");
+      continue;
+    }
+    const wrapped = doc.splitTextToSize(paragraph, width);
+    const pieces = (Array.isArray(wrapped) ? wrapped : [wrapped]).flatMap((piece) =>
+      String(piece).split("\n"),
+    );
+    lines.push(...pieces);
+  }
+  return lines;
+}
+
+function writeParagraph(doc: Doc, text: string, y: number, width = 504, continued?: string) {
+  const lines = wrapText(doc, text, width);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(40, 40, 40);
   for (const line of lines) {
-    y = ensureSpace(doc, y, 16);
-    doc.text(line, 54, y);
-    y += 13;
+    const gap = line ? 16 : 12;
+    if (y + gap >= pageBottom(doc)) {
+      doc.addPage();
+      y = 54;
+      if (continued) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(90, 90, 90);
+        doc.text(`${continued} (continued)`, 54, y);
+        y += 16;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(10);
+        doc.setTextColor(40, 40, 40);
+      }
+    }
+    if (line) doc.text(line, 54, y);
+    y += line ? 13 : 8;
   }
   return y + 8;
 }
 
-function writeNotes(doc: Doc, notes: string | null | undefined, y: number) {
-  const text = notes?.trim() ?? "";
-  if (!text) return y;
+function writeLabeledBlock(doc: Doc, title: string, text: string | null | undefined, y: number) {
+  const body = text?.trim() ?? "";
+  if (!body) return y;
   y += 12;
-  y = ensureSpace(doc, y, 28);
+  y = ensureSpace(doc, y, 36);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(90, 90, 90);
-  doc.text("NOTES", 54, y);
+  doc.text(title, 54, y);
   y += 14;
-  return writeParagraph(doc, text, y);
+  return writeParagraph(doc, body, y, 504, title);
+}
+
+function writeNotes(doc: Doc, notes: string | null | undefined, y: number) {
+  return writeLabeledBlock(doc, "NOTES", notes, y);
 }
 
 function writeProjectManager(doc: Doc, manager: ProjectManagerContact | null | undefined, y: number) {
@@ -263,26 +308,22 @@ export async function downloadEstimatePdf(input: {
     );
   }
   y = writeNotes(doc, input.estimate.notes, y);
-  if (input.estimate.terms) {
-    y += 8;
-    y = ensureSpace(doc, y, 24);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(90, 90, 90);
-    doc.text("TERMS", 54, y);
-    y += 14;
-    y = writeParagraph(
-      doc,
-      filledEstimateTerms({
-        template: input.estimate.terms,
-        estimate: input.estimate,
-        lines: input.lines,
-        customer: input.customer,
-        company: input.company,
-      }),
-      y,
-    );
-  }
+  const estimateTerms = resolveEstimateTerms({
+    explicit: input.estimate.terms,
+    companyDefault: input.company.defaultEstimateTerms,
+  });
+  y = writeLabeledBlock(
+    doc,
+    "TERMS",
+    filledEstimateTerms({
+      template: estimateTerms,
+      estimate: input.estimate,
+      lines: input.lines,
+      customer: input.customer,
+      company: input.company,
+    }),
+    y,
+  );
 
   y += 10;
   y = ensureSpace(doc, y, 96);
@@ -420,28 +461,23 @@ export async function downloadInvoicePdf(input: {
   doc.text("Balance due", boxLeft, y);
   doc.text(formatMoney(balance), right, y, { align: "right" });
   y = writeNotes(doc, input.invoice.notes, y);
-
-  if (input.invoice.terms) {
-    y += 24;
-    y = ensureSpace(doc, y, 24);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(90, 90, 90);
-    doc.text("TERMS", 54, y);
-    y += 14;
-    y = writeParagraph(
-      doc,
-      filledInvoiceTerms({
-        template: input.invoice.terms,
-        invoice: input.invoice,
-        lines: input.lines,
-        payments: input.payments,
-        customer: input.customer,
-        company: input.company,
-      }),
-      y,
-    );
-  }
+  const invoiceTerms = resolveInvoiceTerms({
+    explicit: input.invoice.terms,
+    companyDefault: input.company.defaultInvoiceTerms,
+  });
+  y = writeLabeledBlock(
+    doc,
+    "PAYMENT TERMS",
+    filledInvoiceTerms({
+      template: invoiceTerms,
+      invoice: input.invoice,
+      lines: input.lines,
+      payments: input.payments,
+      customer: input.customer,
+      company: input.company,
+    }),
+    y,
+  );
 
   downloadBlob(doc.output("blob"), `${input.invoice.number}.pdf`);
 }

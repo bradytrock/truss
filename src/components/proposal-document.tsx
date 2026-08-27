@@ -20,7 +20,7 @@ import { isSignaturePng } from "@/lib/estimate-signature";
 import { estimateSignatureLines } from "@/lib/estimate-signers";
 import { photosForEstimateLine } from "@/lib/estimate-line-photos";
 import type { CompanySettings, Estimate, EstimateLine, JobMarket, JobPhoto } from "@/lib/types";
-import { estimateTermsValues } from "@/lib/document-terms";
+import { estimateTermsValues, resolveEstimateTerms } from "@/lib/document-terms";
 import { DocumentNotesBlock } from "@/components/document-notes";
 import { DocumentTermsFields } from "@/components/document-terms-fields";
 import { cn } from "@/lib/utils";
@@ -136,6 +136,10 @@ export function ProposalDocument({
       fallbackStaffId: crm?.user.staffId,
       companyPhone: letterhead.phone,
     });
+  const terms = resolveEstimateTerms({
+    explicit: estimate.terms,
+    companyDefault: letterhead.defaultEstimateTerms,
+  });
   return (
     <div className="space-y-6 rounded-md border bg-card p-5 sm:p-7">
       <CompanyLetterhead company={letterhead} showContact={false} />
@@ -218,24 +222,22 @@ export function ProposalDocument({
       )}
       <EstimateTotals estimate={billed} lines={lines} className="ml-auto max-w-xs" />
       <DocumentNotesBlock notes={estimate.notes} />
-      {estimate.terms ? (
-        <div>
-          <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>
-          <DocumentTermsFields
-            value={estimate.terms}
-            values={estimateTermsValues({
-              estimate: billed,
-              lines,
-              customer,
-              company: letterhead,
-            })}
-            disabled={!onTermsChange}
-            emptyLabel="No terms on this proposal."
-            hint=""
-            onCommit={onTermsChange ?? (() => {})}
-          />
-        </div>
-      ) : null}
+      <div>
+        <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>
+        <DocumentTermsFields
+          value={terms}
+          values={estimateTermsValues({
+            estimate: billed,
+            lines,
+            customer,
+            company: letterhead,
+          })}
+          disabled={!onTermsChange}
+          emptyLabel="No terms on this proposal."
+          hint=""
+          onCommit={onTermsChange ?? (() => {})}
+        />
+      </div>
       <ProposalSignature
         estimate={estimate}
         contractorName={contractorName || manager?.name || letterhead.name}

@@ -329,7 +329,7 @@ export function splitTermsInline(template: string): TermsInlinePart[] {
 
 function firstCopiedTerms(...candidates: Array<string | null | undefined>) {
   for (const value of candidates) {
-    if (value !== undefined && value !== null) return value;
+    if (typeof value === "string" && value.trim()) return value;
   }
   return undefined;
 }

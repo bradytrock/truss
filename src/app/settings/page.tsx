@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +16,7 @@ import { DEFAULT_ESTIMATE_TERMS, DEFAULT_INVOICE_TERMS, ESTIMATE_TERMS_HINT, INV
 import { TermsLockPreview } from "@/components/document-terms-fields";
 import type { CompanySettings } from "@/lib/types";
 import { canManageSettings } from "@/lib/visibility";
+import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
   const crm = useCrm();
@@ -70,7 +72,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Company"
         title="Settings"
-        description="Business letterhead, default estimate and invoice terms, QuickBooks Desktop, then the people who can sign in. Invite links join this company — they do not open a second one."
+        description="Business letterhead, default estimate terms, invoice payment terms, QuickBooks Desktop, then the people who can sign in. Invite links join this company — they do not open a second one."
       />
 
       <form onSubmit={onSubmit} className="max-w-2xl space-y-4">
@@ -216,12 +218,18 @@ export default function SettingsPage() {
               Company admins write the contract language once. New estimates and invoices copy it. Payment sections stay editable on each document; scope, schedule, changes, and contractor language stay locked. Changing these defaults does not rewrite documents already written.
             </CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 pt-4">
-            <div className="grid gap-1.5">
+          <CardContent className="pt-0">
+            <CollapsibleTerms
+              title="Estimate terms"
+              preview={form.defaultEstimateTerms ?? DEFAULT_ESTIMATE_TERMS}
+              summary="Copied onto new proposals and blank templates."
+            >
               <Label htmlFor="default-estimate-terms">Estimate terms</Label>
               <Textarea
                 id="default-estimate-terms"
-                rows={10}
+                rows={8}
+                className="field-sizing-fixed mt-1.5 max-h-64 min-h-40 resize-y overflow-y-auto"
+                style={{ fieldSizing: "fixed" }}
                 value={form.defaultEstimateTerms ?? DEFAULT_ESTIMATE_TERMS}
                 onChange={(event) => patch("defaultEstimateTerms", event.target.value)}
               />
@@ -229,12 +237,18 @@ export default function SettingsPage() {
                 Used on new proposals and blank templates. A template with its own terms still wins when you start from it. {ESTIMATE_TERMS_HINT}
               </p>
               <TermsLockPreview value={form.defaultEstimateTerms ?? DEFAULT_ESTIMATE_TERMS} />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="default-invoice-terms">Invoice terms</Label>
+            </CollapsibleTerms>
+            <CollapsibleTerms
+              title="Payment terms"
+              preview={form.defaultInvoiceTerms ?? DEFAULT_INVOICE_TERMS}
+              summary="Copied onto new invoices, including invoices converted from estimates."
+            >
+              <Label htmlFor="default-invoice-terms">Payment terms</Label>
               <Textarea
                 id="default-invoice-terms"
                 rows={8}
+                className="field-sizing-fixed mt-1.5 max-h-64 min-h-40 resize-y overflow-y-auto"
+                style={{ fieldSizing: "fixed" }}
                 value={form.defaultInvoiceTerms ?? DEFAULT_INVOICE_TERMS}
                 onChange={(event) => patch("defaultInvoiceTerms", event.target.value)}
               />
@@ -242,7 +256,7 @@ export default function SettingsPage() {
                 Used on new invoices, including invoices converted from estimates. Payment terms, not proposal terms. {INVOICE_TERMS_HINT}
               </p>
               <TermsLockPreview value={form.defaultInvoiceTerms ?? DEFAULT_INVOICE_TERMS} />
-            </div>
+            </CollapsibleTerms>
           </CardContent>
         </Card>
 
@@ -289,6 +303,42 @@ export default function SettingsPage() {
           onRemove={crm.removeStaff}
         />
       </div>
+    </div>
+  );
+}
+
+function CollapsibleTerms({
+  title,
+  preview,
+  summary,
+  children,
+}: {
+  title: string;
+  preview: string;
+  summary: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const snippet = preview.replace(/\s+/g, " ").trim().slice(0, 160);
+  return (
+    <div className="border-t first:border-t-0">
+      <button
+        type="button"
+        className="flex w-full items-start justify-between gap-3 py-3 text-left"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span className="min-w-0">
+          <span className="block text-sm font-medium">{title}</span>
+          <span className={cn("mt-1 block text-xs text-muted-foreground", !open && "line-clamp-2")}>
+            {open ? summary : snippet || summary}
+          </span>
+        </span>
+        <ChevronDown
+          className={cn("mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")}
+        />
+      </button>
+      {open ? <div className="grid gap-2 pb-4">{children}</div> : null}
     </div>
   );
 }

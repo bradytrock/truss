@@ -6,7 +6,7 @@ import { InvoiceStatusBadge } from "@/components/status-badge";
 import { useCrmOptional } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord, type ProjectManagerContact } from "@/lib/document-owner";
 import type { CompanySettings, Invoice, InvoiceLine, InvoiceStatus, Payment } from "@/lib/types";
-import { invoiceTermsValues } from "@/lib/document-terms";
+import { invoiceTermsValues, resolveInvoiceTerms } from "@/lib/document-terms";
 import { DocumentNotesBlock } from "@/components/document-notes";
 import { DocumentTermsFields } from "@/components/document-terms-fields";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -61,6 +61,10 @@ export function InvoiceDocument({
       fallbackStaffId: crm?.user.staffId,
       companyPhone: letterhead.phone,
     });
+  const terms = resolveInvoiceTerms({
+    explicit: invoice.terms,
+    companyDefault: letterhead.defaultInvoiceTerms,
+  });
 
   return (
     <div className="space-y-6 rounded-md border bg-card p-5 sm:p-7">
@@ -114,25 +118,23 @@ export function InvoiceDocument({
         </div>
       </dl>
       <DocumentNotesBlock notes={invoice.notes} />
-      {invoice.terms ? (
-        <div>
-          <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>
-          <DocumentTermsFields
-            value={invoice.terms}
-            values={invoiceTermsValues({
-              invoice,
-              lines,
-              payments,
-              customer,
-              company: letterhead,
-            })}
-            disabled={!onTermsChange}
-            emptyLabel="No terms on this invoice."
-            hint=""
-            onCommit={onTermsChange ?? (() => {})}
-          />
-        </div>
-      ) : null}
+      <div>
+        <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Payment terms</h3>
+        <DocumentTermsFields
+          value={terms}
+          values={invoiceTermsValues({
+            invoice,
+            lines,
+            payments,
+            customer,
+            company: letterhead,
+          })}
+          disabled={!onTermsChange}
+          emptyLabel="No payment terms on this invoice."
+          hint=""
+          onCommit={onTermsChange ?? (() => {})}
+        />
+      </div>
     </div>
   );
 }

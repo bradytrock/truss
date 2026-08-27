@@ -144,7 +144,7 @@ export interface CompanySettings {
   licenseNumber: string;
   logoUrl?: string;
   logoStoragePath?: string;
-  /** Null means the app fallback is still in use. Empty string means the admin cleared terms. */
+  /** Null or blank means the app fallback is still in use. */
   defaultEstimateTerms?: string | null;
   defaultInvoiceTerms?: string | null;
 }
