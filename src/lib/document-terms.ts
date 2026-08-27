@@ -32,12 +32,11 @@ export const TERMS_PAYMENT_HINT =
   "Payment 1 fills from the deposit. Payment 3 is whatever is left after Payment 1 and Payment 2. Type on a line to set a different amount. Scope, schedule, changes, and contractor language stay locked. Number a Payment or Contract price heading, or wrap a block in [[payment]] … [[/payment]].";
 
 const PLACEHOLDER = /\{\{\s*([a-z0-9_]+)(?::([0-9.,]+))?\s*\}\}/gi;
-const BLANK_RUN = "[_＿—–‐\\-═.\\u2017\\uFF3F\\u00a0 ]";
+const BLANK_RUN = "[_＿—–‐\\-═.\\u2017\\uFF3F\\u00a0\\u2500 ]";
 const PAY_BLANK = new RegExp(`\\$[ \\u00a0]*(?:${BLANK_RUN}{2,})`, "g");
-const PAYMENT_LINE_FILLED =
-  /Payment\s*(\d+)\s*:\s*\$\s*([\d,]+(?:\.\d{1,2})?)\s*(?=(due|equal|upon)\b)/gi;
-const PAYMENT_LINE_BLANK =
-  /Payment\s*(\d+)\s*:\s*\$[^a-zA-Z0-9\n{]*?(?=(due|equal|upon)\b)/gi;
+const PAYMENT_LINE_AMOUNT =
+  /Payment\s+(\d+)\s*:\s*(?:\{\{\s*pay_\d+(?::[0-9.,]+)?\s*\}\}|\$\s*[\d,]+(?:\.\d{1,2})?|\$?[ \u00a0]*(?:[_＿—–‐\-═.\u2017\uFF3F\u2500]{2,}))?/gi;
+const PAYMENT_HEADING = /Payment\s*(\d+)\s*:/gi;
 const EDITABLE_AMOUNT_KEY = /^(deposit|remaining|balance|pay_\d+|payment_\d+)$/;
 const PAYMENT_MARK_START = "[[payment]]";
 const PAYMENT_MARK_END = "[[/payment]]";
@@ -75,9 +74,15 @@ export function isPaymentHeading(heading: string) {
   return PAYMENT_TITLE.test(heading.trim());
 }
 
+function hasPaymentLine(text: string) {
+  return /Payment\s*\d+\s*:/i.test(text) || /\{\{\s*pay_\d+/i.test(text);
+}
+
 function paragraphLooksLikePayment(text: string) {
   const trimmed = text.trim();
-  if (!trimmed || LOCK_LANGUAGE.test(trimmed)) return false;
+  if (!trimmed) return false;
+  if (hasPaymentLine(trimmed)) return true;
+  if (LOCK_LANGUAGE.test(trimmed)) return false;
   const first = trimmed.split("\n")[0] ?? "";
   if (isPaymentHeading(first) || isPaymentHeading(trimmed.slice(0, 120))) return true;
   return false;
@@ -128,7 +133,10 @@ function splitNumbered(text: string, keyPrefix = ""): TermsSection[] {
       key: `${keyPrefix}${heading || `s:${index}`}`,
       heading,
       body,
-      payment: isPaymentHeading(heading || body.slice(0, 120)),
+      payment:
+        hasPaymentLine(heading) ||
+        hasPaymentLine(body) ||
+        isPaymentHeading(heading || body.slice(0, 120)),
       marked: false,
     };
   });
@@ -242,21 +250,35 @@ export function lastPayIndex(template: string) {
   for (const match of template.matchAll(/\{\{\s*pay_(\d+)/gi)) {
     max = Math.max(max, Number(match[1]) || 0);
   }
+  PAYMENT_HEADING.lastIndex = 0;
+  for (const match of template.matchAll(PAYMENT_HEADING)) {
+    max = Math.max(max, Number(match[1]) || 0);
+  }
   return max;
 }
 
-export function normalizePaymentBlanks(template: string) {
-  let src = template ?? "";
-  PAYMENT_LINE_FILLED.lastIndex = 0;
-  PAYMENT_LINE_BLANK.lastIndex = 0;
-  PAY_BLANK.lastIndex = 0;
-  src = src.replace(PAYMENT_LINE_FILLED, (_full, n: string, money: string) => {
-    const amount = String(money).replace(/,/g, "");
-    return `Payment ${n}: {{pay_${Number(n)}:${amount}}} `;
+/** Turn every `Payment N:` amount or underline into `{{pay_N}}` so the line is a field. */
+export function ensurePaymentLineTokens(template: string) {
+  PAYMENT_LINE_AMOUNT.lastIndex = 0;
+  return (template ?? "").replace(PAYMENT_LINE_AMOUNT, (full, n: string) => {
+    const num = Number(n);
+    const existing = full.match(/\{\{\s*pay_\d+(?::([0-9.,]+))?\s*\}\}/i);
+    let token = `{{pay_${num}}}`;
+    if (existing) token = `{{pay_${num}${existing[1] ? `:${existing[1]}` : ""}}}`;
+    else {
+      const money = full.match(/\$\s*([\d,]+(?:\.\d{1,2})?)/);
+      if (money?.[1]) token = `{{pay_${num}:${money[1].replace(/,/g, "")}}}`;
+    }
+    return `Payment ${num}: ${token}${/\s$/.test(full) ? " " : ""}`;
   });
-  src = src.replace(PAYMENT_LINE_BLANK, (_full, n: string) => `Payment ${n}: {{pay_${Number(n)}}} `);
-  let index = lastPayIndex(src);
-  return src.replace(PAY_BLANK, () => `{{pay_${++index}}}`);
+}
+
+export function normalizePaymentBlanks(template: string) {
+  let src = ensurePaymentLineTokens(template ?? "");
+  PAY_BLANK.lastIndex = 0;
+  const index = lastPayIndex(src);
+  let next = index;
+  return src.replace(PAY_BLANK, () => `{{pay_${++next}}}`);
 }
 
 function formatAmountOverride(raw: string) {
@@ -326,24 +348,32 @@ export function withPaymentDefaults(values: Record<string, string>, template = "
 }
 
 function applyPayTokenValues(base: string, proposed: string) {
-  const values = new Map<string, string>();
+  let next = normalizePaymentBlanks(base);
   for (const match of proposed.matchAll(/\{\{\s*([a-z0-9_]+)(?::([0-9.,]+))?\s*\}\}/gi)) {
     const key = match[1]?.toLowerCase() ?? "";
-    if (isEditableAmountKey(key)) values.set(key, match[0]);
+    if (!isEditableAmountKey(key)) continue;
+    const raw = match[2];
+    if (raw == null || raw === "") {
+      next = setAmountToken(next, key, null);
+      continue;
+    }
+    const amount = parseMoneyInput(raw);
+    if (amount == null) continue;
+    next = setAmountToken(next, key, amount);
   }
-  if (values.size === 0) return base;
-  return base.replace(/\{\{\s*([a-z0-9_]+)(?::([0-9.,]+))?\s*\}\}/gi, (full, key: string) => {
-    if (!isEditableAmountKey(key)) return full;
-    return values.get(key.toLowerCase()) ?? full;
-  });
+  return next;
 }
 
 export function setAmountToken(template: string, key: string, amount: number | null) {
-  const normalized = normalizePaymentBlanks(template);
+  const next = normalizePaymentBlanks(template);
   const token = amount == null ? `{{${key}}}` : `{{${key}:${amount}}}`;
   const pattern = new RegExp(`\\{\\{\\s*${key}(?::[0-9.,]+)?\\s*\\}\\}`, "i");
-  if (!pattern.test(normalized)) return normalized;
-  return normalized.replace(pattern, token);
+  if (pattern.test(next)) return next.replace(pattern, token);
+  const payN = /^pay_(\d+)$/i.exec(key);
+  if (!payN) return next;
+  const heading = new RegExp(`Payment\\s*${payN[1]}\\s*:\\s*`, "i");
+  if (!heading.test(next)) return next;
+  return next.replace(heading, `Payment ${Number(payN[1])}: ${token} `);
 }
 
 export type TermsInlinePart =

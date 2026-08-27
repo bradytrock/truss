@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   parseMoneyInput,
   setAmountToken,
@@ -104,8 +104,9 @@ function MoneyBlank({
   onCommit: (amount: number | null) => void;
 }) {
   const [draft, setDraft] = useState(value);
+  const focusedRef = useRef(false);
   useEffect(() => {
-    setDraft(value);
+    if (!focusedRef.current) setDraft(value);
   }, [value]);
   const width = Math.max(8, Math.min(14, (draft || "0.00").length + 1));
   return (
@@ -121,7 +122,11 @@ function MoneyBlank({
         style={{ width: `${width}ch` }}
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
+        onFocus={() => {
+          focusedRef.current = true;
+        }}
         onBlur={() => {
+          focusedRef.current = false;
           const amount = parseMoneyInput(draft);
           const formatted = amount == null ? "" : formatInputMoney(String(amount));
           if (formatted !== value) onCommit(amount);
