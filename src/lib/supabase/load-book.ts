@@ -32,6 +32,7 @@ import {
 import type { Database } from "@/lib/supabase/database.types";
 import { initialsFromName, type CrmState, type SeatRole } from "@/lib/types";
 import { jobFilesFromJobs, mergeJobFiles } from "@/lib/job-files";
+import { jobsFilledFromLeads } from "@/lib/job-record";
 
 type Client = SupabaseClient<Database>;
 
@@ -175,7 +176,8 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
   });
 
   const teams = missingTeams ? [] : (teamsRes.data ?? []).map(mapTeam);
-  const jobs = (jobsRes.data ?? []).map(mapJob);
+  const opportunities = (oppsRes.data ?? []).map(mapOpportunity);
+  const jobs = jobsFilledFromLeads((jobsRes.data ?? []).map(mapJob), opportunities);
 
   const state: CrmState = {
     staff: staffWithInvites,
@@ -197,7 +199,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
         };
       }
     }),
-    opportunities: (oppsRes.data ?? []).map(mapOpportunity),
+    opportunities,
     jobs,
     activities: (activitiesRes.data ?? []).map(mapActivity),
     tasks: (tasksRes.data ?? []).map(mapTask),

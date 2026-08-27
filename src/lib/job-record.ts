@@ -167,15 +167,18 @@ export function fillJobRecord(job: JobDraft, opportunity?: Opportunity | null): 
   const assigned = uniqueNames(
     job.assigned?.length
       ? job.assigned
-      : [job.projectManager, job.superintendent].filter((name) => !isNorthlineDemoName(name)),
+      : [job.projectManager, job.superintendent, job.salesRep, opportunity?.estimator].filter(
+          (name): name is string => typeof name === "string" && Boolean(name) && !isNorthlineDemoName(name),
+        ),
   );
-  const related = uniqueIds(job.relatedContactIds ?? []).filter(
-    (id) => id && id !== job.primaryContactId
-  );
+  const related = uniqueIds([
+    ...(job.relatedContactIds ?? []),
+    opportunity?.referralContactId ?? "",
+  ]).filter((id) => id && id !== job.primaryContactId);
   return {
     ...job,
     code: job.code ?? "",
-    description: job.description?.trim() ?? "",
+    description: job.description?.trim() || opportunity?.notes?.trim() || "",
     tags: uniqueNames(job.tags?.length ? job.tags : inferredTags(opportunity)),
     street: job.street?.trim() || opportunity?.street?.trim() || parsed.street,
     city: job.city?.trim() || opportunity?.city?.trim() || parsed.city,
@@ -248,6 +251,103 @@ export function jobsFromOpenLeads(
   return opportunities
     .filter((opportunity) => opportunity.stage !== "lost" && !linked.has(opportunity.id))
     .map((opportunity) => fillJobRecord(jobDraftFromOpportunity(opportunity), opportunity));
+}
+
+export function jobInsertPayload(job: Job, companyId: string, extras?: { id?: string; code?: string }) {
+  return {
+    ...(extras?.id ? { id: extras.id } : {}),
+    company_id: companyId,
+    opportunity_id: job.opportunityId,
+    name: job.name,
+    client_id: job.clientId || null,
+    primary_contact_id: job.primaryContactId || null,
+    status: job.status,
+    contract_value: job.contractValue,
+    start_date: job.startDate,
+    substantial_completion: job.substantialCompletion,
+    superintendent: job.superintendent,
+    project_manager: job.projectManager,
+    location: job.location,
+    owner_staff_id: job.ownerStaffId || null,
+    code: extras?.code ?? job.code,
+    description: job.description,
+    tags: job.tags,
+    street: job.street,
+    city: job.city,
+    state: job.state,
+    postal_code: job.postalCode,
+    sales_rep: job.salesRep,
+    assigned: job.assigned,
+    subcontractor_ids: job.subcontractorIds,
+    related_contact_ids: job.relatedContactIds,
+    custom_fields: customFieldsJson(job.customFields),
+    project_type: job.projectType || null,
+    lead_source: job.leadSource ?? "",
+    market: job.market,
+  };
+}
+
+export function jobsFilledFromLeads(jobs: Job[], opportunities: Opportunity[]): Job[] {
+  const byId = new Map(opportunities.map((item) => [item.id, item]));
+  return jobs.map((job) =>
+    fillJobRecord(job, job.opportunityId ? (byId.get(job.opportunityId) ?? null) : null),
+  );
+}
+
+export function jobPatchFromLead(patch: Partial<Opportunity>, job?: Job | null): Partial<Job> {
+  const next: Partial<Job> = {};
+  if (patch.market !== undefined) next.market = parseMarket(patch.market, patch.projectType ?? job?.projectType);
+  if (patch.projectType !== undefined) next.projectType = patch.projectType;
+  if (patch.leadSource !== undefined) next.leadSource = patch.leadSource ?? "";
+  if (patch.estimator !== undefined) {
+    next.salesRep = patch.estimator;
+    const currentPm = job?.projectManager?.trim() ?? "";
+    const currentRep = job?.salesRep?.trim() ?? "";
+    if (!currentPm || currentPm.toLowerCase() === currentRep.toLowerCase()) {
+      next.projectManager = patch.estimator;
+    }
+    if (job) {
+      next.assigned = uniqueNames([
+        patch.estimator,
+        ...job.assigned.filter((name) => {
+          const lower = name.trim().toLowerCase();
+          return lower !== currentPm.toLowerCase() && lower !== currentRep.toLowerCase();
+        }),
+      ]);
+    }
+  }
+  if (patch.notes !== undefined) next.description = patch.notes;
+  if (patch.street !== undefined) next.street = patch.street;
+  if (patch.city !== undefined) next.city = patch.city;
+  if (patch.state !== undefined) next.state = patch.state;
+  if (patch.postalCode !== undefined) next.postalCode = patch.postalCode;
+  if (patch.location !== undefined) next.location = patch.location;
+  if (patch.name !== undefined) next.name = patch.name;
+  if (patch.value !== undefined) next.contractValue = patch.value;
+  if (patch.ownerStaffId !== undefined) next.ownerStaffId = patch.ownerStaffId;
+  if (patch.referralContactId !== undefined) {
+    next.relatedContactIds = uniqueIds([...(job?.relatedContactIds ?? []), patch.referralContactId ?? ""]);
+  }
+  return next;
+}
+
+export function leadOverviewBackfill(job: Job, opportunity: Opportunity): Partial<Job> | null {
+  const filled = fillJobRecord(job, opportunity);
+  const next: Partial<Job> = {};
+  if (!job.leadSource && filled.leadSource) next.leadSource = filled.leadSource;
+  if (!job.projectType && filled.projectType) next.projectType = filled.projectType;
+  if (filled.market && filled.market !== job.market) next.market = filled.market;
+  if (!job.salesRep && filled.salesRep) next.salesRep = filled.salesRep;
+  if (!job.street && filled.street) next.street = filled.street;
+  if (!job.city && filled.city) next.city = filled.city;
+  if (!job.state && filled.state) next.state = filled.state;
+  if (!job.postalCode && filled.postalCode) next.postalCode = filled.postalCode;
+  if (!job.description && filled.description) next.description = filled.description;
+  if ((!job.assigned || job.assigned.length === 0) && filled.assigned.length) next.assigned = filled.assigned;
+  if (filled.relatedContactIds.some((id) => !job.relatedContactIds.includes(id))) {
+    next.relatedContactIds = filled.relatedContactIds;
+  }
+  return Object.keys(next).length ? next : null;
 }
 
 function isSyntheticLeadJob(job: Pick<Job, "id">) {
