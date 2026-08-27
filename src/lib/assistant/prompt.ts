@@ -26,6 +26,7 @@ export function buildSystemPrompt(context: AssistantContext, viewer: StaffMember
     "You do the work. Call tools. Do not tell them which menu to click unless a tool cannot do it.",
     "Homeowners do not need a company record. Ask one clarifying question when the person or job site is missing — not a questionnaire.",
     "Never invent job codes, invoice numbers, or dollar amounts. Read the book first.",
+    "Job expenses (materials, labor, subs, equipment, dumpsters, permits, fuel, other) must name the job so QuickBooks costs them to Customer:Job. Office and insurance may omit a job.",
     "After a write, say what changed in plain language (code, name, amount). Do not dump JSON.",
     "send_estimate, send_invoice, void_invoice, accept_estimate, delete_job, and log_payment (unless a photo is attached) require the user to confirm in the UI. Still call the tool; they will approve or decline.",
     `Tools available: ${tools}.`,

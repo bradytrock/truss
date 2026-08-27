@@ -41,7 +41,7 @@ export default function QuickBooksSettingsPage() {
       <PageHeader
         eyebrow="Settings"
         title="QuickBooks"
-        description="The Web Connector posts approved invoices that already have line items onto the matching Customer:Job in QuickBooks Desktop, using the same quantities and rates from Truss."
+        description="The Web Connector posts approved invoices onto Customer:Job, and job expenses as a check or credit card charge on that same Customer:Job, using the vendor, account, and amount from Truss."
         actions={
           <div className="flex flex-wrap gap-2">
             {showSettings ? (

@@ -244,7 +244,7 @@ export default function AccountingPage() {
 
       <QueueCard
         title="Expenses"
-        description="Push a receipt to post a check or credit card charge in QuickBooks. Mark entered if you typed one by hand."
+        description="Push a receipt to post a check or credit card charge in QuickBooks on Customer:Job. Office and insurance can stay on the company. Mark entered if you typed one by hand."
         empty="No expenses waiting on QuickBooks."
       >
         {queue.expenses.length === 0 ? null : (
@@ -297,7 +297,7 @@ export default function AccountingPage() {
                         id={expense.id}
                         label={expense.number}
                         status={expense.qbStatus}
-                        blocked={expensePushBlocked(expense)}
+                        blocked={expensePushBlocked({ expense, job })}
                       />
                     </TableCell>
                   </TableRow>

@@ -106,6 +106,7 @@ import {
   mapMessage,
   opportunityPatch,
 } from "@/lib/supabase/mappers";
+import { expenseRequiresJob } from "@/lib/qbwc/work";
 import {
   NORTHLINE_COMPANY,
   STAGE_LABELS,
@@ -4351,6 +4352,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error("Enter the vendor.");
         return null;
       }
+      if (expenseRequiresJob(input.account) && !input.jobId) {
+        toast.error("Assign this expense to a job so QuickBooks costs it to Customer:Job, not company overhead.");
+        return null;
+      }
       let receiptUrl = input.receiptUrl?.trim() ?? "";
       let receiptStoragePath: string | null = null;
       const supabase = maybeClient();
@@ -4544,6 +4549,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const updateExpense = useCallback(async (id: string, patch: Partial<Expense>) => {
+    const current = state.expenses.find((item) => item.id === id);
+    if (current) {
+      const next = { ...current, ...patch };
+      if (expenseRequiresJob(next.account) && !next.jobId) {
+        toast.error("Assign this expense to a job so QuickBooks costs it to Customer:Job, not company overhead.");
+        return false;
+      }
+    }
     const apply = () =>
       setState((prev) => ({
         ...prev,
@@ -4566,7 +4579,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     apply();
     return true;
-  }, []);
+  }, [state.expenses]);
 
   const updatePayment = useCallback(async (id: string, patch: Partial<Payment>) => {
     const apply = () =>

@@ -266,8 +266,7 @@ export default function SettingsPage() {
         <CardHeader className="border-b">
           <CardTitle>QuickBooks Desktop</CardTitle>
           <CardDescription>
-            Web Connector posts approved invoices onto Customer:Job so accounting does not retype line
-            items.
+            Web Connector posts approved invoices and job expenses onto Customer:Job so accounting does not retype them.
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-4">

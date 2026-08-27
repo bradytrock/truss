@@ -37,6 +37,7 @@ import {
   type ExpenseAccount,
   type ExpenseMethod,
 } from "@/lib/types";
+import { expenseRequiresJob } from "@/lib/qbwc/work";
 
 function jobChoices(crm: ReturnType<typeof useCrm>) {
   return [...crm.jobs]
@@ -199,10 +200,15 @@ export function LogExpenseDialog({
       toast.error("Photograph the receipt.");
       return;
     }
+    const assignedJobId = defaultJobId || jobId;
+    if (expenseRequiresJob(account) && !assignedJobId) {
+      toast.error("Pick the job. QuickBooks costs this to Customer:Job, not company overhead.");
+      return;
+    }
     setPending(true);
     try {
       const saved = await crm.addExpense({
-        jobId: jobId || null,
+        jobId: assignedJobId || null,
         vendor,
         account,
         amount: value,
@@ -226,7 +232,8 @@ export function LogExpenseDialog({
           <DialogTitle>Log expense</DialogTitle>
           <DialogDescription>
             Same idea as a QuickBooks check or credit-card expense: vendor, account, job, and the
-            receipt. The photo is required even if you type the numbers.
+            receipt. Job costs post onto Customer:Job. Office and insurance can stay on the company.
+            The photo is required even if you type the numbers.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="grid gap-3">
@@ -350,21 +357,29 @@ export function LogExpenseDialog({
           <div className="grid gap-1.5">
             <Label>Job</Label>
             <p className="text-xs text-muted-foreground">
-              Pipeline leads are jobs. Use Overhead only for office costs.
+              {defaultJobId
+                ? "Logged on this job. QuickBooks will cost it to Customer:Job, not company overhead."
+                : expenseRequiresJob(account)
+                  ? "Required. QuickBooks costs materials, labor, and other job accounts to Customer:Job."
+                  : "Office and insurance can stay on the company. Assign a job if this cost belongs on one."}
             </p>
             <Select
-              value={jobId || "none"}
+              value={jobId || (defaultJobId || expenseRequiresJob(account) ? "" : "none")}
               onValueChange={(value) => setJobId(value === "none" ? "" : String(value))}
-              items={[
-                { value: "none", label: "Overhead — not a job" },
-                ...jobChoices(crm),
-              ]}
+              disabled={Boolean(defaultJobId)}
+              items={
+                defaultJobId || expenseRequiresJob(account)
+                  ? jobChoices(crm)
+                  : [{ value: "none", label: "Overhead — not a job" }, ...jobChoices(crm)]
+              }
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select a job" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Overhead — not a job</SelectItem>
+                {defaultJobId || expenseRequiresJob(account) ? null : (
+                  <SelectItem value="none">Overhead — not a job</SelectItem>
+                )}
                 {jobChoices(crm).map((job) => (
                   <SelectItem key={job.value} value={job.value}>
                     {job.label}

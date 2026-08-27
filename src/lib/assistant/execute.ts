@@ -25,6 +25,7 @@ import {
 } from "@/lib/types";
 import { canDeleteJobs } from "@/lib/visibility";
 import { isBusinessDevelopment } from "@/lib/bd";
+import { expenseRequiresJob } from "@/lib/qbwc/work";
 
 type Crm = ReturnType<typeof useCrm>;
 
@@ -586,10 +587,14 @@ async function runTool(
       }
       if (!vendor || !amount) return fail("Vendor and amount are required (or attach a receipt photo).");
       if (!file) return fail("Attach a receipt photo in the chat, then ask again.");
+      const accountValue: ExpenseAccount = EXPENSE_ACCOUNTS.includes(account) ? account : "other";
+      if (expenseRequiresJob(accountValue) && !job) {
+        return fail("Name the job. Job costs post onto Customer:Job in QuickBooks, not company overhead.");
+      }
       const expense = await crm.addExpense({
         jobId: job?.id ?? null,
         vendor,
-        account: EXPENSE_ACCOUNTS.includes(account) ? account : "other",
+        account: accountValue,
         amount,
         incurredAt: date,
         method,

@@ -20,6 +20,7 @@ import { isReceiptPdf, type QbReviewItem } from "@/lib/qb-review";
 import { matchVendorName, vendorChoices } from "@/lib/qb-vendors";
 import {
   expensePushBlocked,
+  expenseRequiresJob,
   invoicePushBlocked,
   paymentPushBlocked,
   workFromBook,
@@ -87,7 +88,12 @@ export function blockReason(item: QbReviewItem, crm: ReturnType<typeof useCrm>) 
       lines: crm.invoiceLines.filter((line) => line.invoiceId === item.invoice.id),
     });
   }
-  if (item.kind === "expense") return expensePushBlocked(item.expense);
+  if (item.kind === "expense") {
+    return expensePushBlocked({
+      expense: item.expense,
+      job: item.expense.jobId ? crm.getJob(item.expense.jobId) : undefined,
+    });
+  }
   const invoice = item.payment.invoiceId
     ? crm.invoices.find((row) => row.id === item.payment.invoiceId)
     : undefined;
@@ -242,6 +248,16 @@ function ExpenseFields({ expenseId, locked }: { expenseId: string; locked: boole
   const vendors = vendorChoices(crm.qbVendors ?? [], crm.expenses);
   const jobs = jobChoices(crm);
   const job = expense.jobId ? crm.getJob(expense.jobId) : undefined;
+  const customer = job
+    ? crm.customerName({
+        jobId: job.id,
+        clientId: job.clientId,
+        primaryContactId: job.primaryContactId,
+        opportunityId: job.opportunityId,
+      })
+    : "";
+  const jobFullName = job ? `${customer}:${job.code || job.name || "Job"}` : "";
+  const needsJob = expenseRequiresJob(expense.account);
 
   return (
     <div className="space-y-3">
@@ -249,7 +265,18 @@ function ExpenseFields({ expenseId, locked }: { expenseId: string; locked: boole
         QuickBooks will post a {expense.method === "credit_card" ? "credit card charge" : "check"} to{" "}
         <span className="font-medium">{expense.vendor || "the vendor"}</span> on{" "}
         {EXPENSE_ACCOUNT_LABELS[expense.account]}
-        {job ? ` for ${job.code}` : " as overhead"}.
+        {jobFullName ? (
+          <>
+            {" "}
+            for{" "}
+            <span className="font-mono">{jobFullName}</span>
+            . That Customer:Job assignment is what costs it to the job instead of company overhead.
+          </>
+        ) : needsJob ? (
+          ". Assign a job or this hits the company overhead account, not the job."
+        ) : (
+          " as company overhead."
+        )}
       </p>
       <Field label="Vendor (payee in QuickBooks)">
         <VendorPicker
@@ -333,18 +360,18 @@ function ExpenseFields({ expenseId, locked }: { expenseId: string; locked: boole
       </div>
       <Field label="Job">
         <Select
-          value={expense.jobId || "none"}
+          value={expense.jobId || (needsJob ? "" : "none")}
           disabled={locked}
           onValueChange={(value) =>
             void crm.updateExpense(expense.id, { jobId: value === "none" ? null : String(value) })
           }
-          items={[{ value: "none", label: "Overhead — not a job" }, ...jobs]}
+          items={needsJob ? jobs : [{ value: "none", label: "Overhead — not a job" }, ...jobs]}
         >
           <SelectTrigger className="w-full">
-            <SelectValue />
+            <SelectValue placeholder="Select a job" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">Overhead — not a job</SelectItem>
+            {needsJob ? null : <SelectItem value="none">Overhead — not a job</SelectItem>}
             {jobs.map((row) => (
               <SelectItem key={row.value} value={row.value}>
                 {row.label}

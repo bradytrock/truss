@@ -122,7 +122,7 @@ function expenseRequest(requestId: string, work: QbwcWork, useAlias: boolean) {
     accountName: work.accountName,
     amount: work.amount,
     customerJobFullName: work.hasJob ? jobFullName(work, useAlias) : "",
-    customerListId: work.hasJob ? work.jobListId : undefined,
+    customerListId: undefined,
   };
   if (work.payWith === "credit_card") {
     return creditCardChargeAddXml({ ...line, ccAccount: work.payAccount });

@@ -250,9 +250,25 @@ export function workFromBook(input: {
   };
 }
 
-export function expensePushBlocked(expense: Expense) {
+/** Office and insurance may stay on the company. Everything else is a job cost. */
+export const COMPANY_OVERHEAD_ACCOUNTS: ExpenseAccount[] = ["office", "insurance"];
+
+export function expenseRequiresJob(account: ExpenseAccount) {
+  return !COMPANY_OVERHEAD_ACCOUNTS.includes(account);
+}
+
+export function expensePushBlocked(input: { expense: Expense; job?: Job | null }) {
+  const expense = input.expense;
   if (!expense.vendor.trim()) return "Add a vendor so QuickBooks has a payee.";
   if (!(expense.amount > 0)) return "That expense has no amount.";
+  const needsJob = expenseRequiresJob(expense.account) || Boolean(expense.jobId);
+  if (!needsJob) return null;
+  if (!expense.jobId) {
+    return "Assign this expense to a job so QuickBooks costs it to Customer:Job, not company overhead.";
+  }
+  if (!input.job) {
+    return "That job is missing. Pick a live job so QuickBooks can hang this on Customer:Job.";
+  }
   return null;
 }
 
@@ -321,14 +337,14 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
       memo: asString(row.memo),
       payAccount: asString(row.payAccount, DEFAULT_QB_BANK),
       customerName: asString(row.customerName),
-      jobCode: asString(row.jobCode),
-      jobName: asString(row.jobName),
+      jobCode: asText(row.jobCode),
+      jobName: asText(row.jobName),
       street: asString(row.street),
       city: asString(row.city),
       state: asString(row.state),
       postalCode: asString(row.postalCode),
       phone: asString(row.phone),
-      hasJob: row.hasJob === true || Boolean(asString(row.jobCode)),
+      hasJob: expenseHasJob(row),
       ...resolvedIds(row),
     };
   }
@@ -348,7 +364,7 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
       invoiceNumber: asString(row.invoiceNumber),
       invoiceTxnId: asString(row.invoiceTxnId),
       depositAccount: asString(row.depositAccount, DEFAULT_QB_BANK),
-      hasJob: row.hasJob === true || Boolean(asString(row.jobCode)),
+      hasJob: asBool(row.hasJob) || Boolean(asText(row.jobCode)),
       ...resolvedIds(row),
     };
   }
@@ -387,6 +403,20 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
 
 function asString(value: unknown, fallback = "") {
   return typeof value === "string" ? value : fallback;
+}
+
+function asText(value: unknown, fallback = "") {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return fallback;
+}
+
+function asBool(value: unknown) {
+  return value === true || value === "true" || value === "t" || value === 1 || value === "1";
+}
+
+function expenseHasJob(row: Record<string, unknown>) {
+  return asBool(row.hasJob) || Boolean(asText(row.jobId)) || Boolean(asText(row.jobCode));
 }
 
 function asNumber(value: unknown, fallback = 0) {

@@ -127,7 +127,7 @@ export function qbwcFile(input: {
     `  <AppName>${xmlEscape(PRODUCT_NAME)}</AppName>\n` +
     `  <AppID></AppID>\n` +
     `  <AppURL>${xmlEscape(input.appUrl)}</AppURL>\n` +
-    `  <AppDescription>Pushes approved invoices from ${xmlEscape(PRODUCT_NAME)} into QuickBooks Desktop on the right Customer:Job.</AppDescription>\n` +
+    `  <AppDescription>Pushes approved invoices and job expenses from ${xmlEscape(PRODUCT_NAME)} into QuickBooks Desktop on the right Customer:Job.</AppDescription>\n` +
     `  <AppSupport>${xmlEscape(support)}</AppSupport>\n` +
     `  <UserName>${xmlEscape(input.userName)}</UserName>\n` +
     `  <OwnerID>${owner}</OwnerID>\n` +

@@ -219,6 +219,8 @@ export function expenseLineXml(input: {
 }) {
   const memo = qbAscii(input.memo ?? "", 4095);
   const job = input.customerJobFullName?.trim() ?? "";
+  // CustomerRef FullName (Customer:Job) is what assigns the line for job costing.
+  // Without it QuickBooks posts the amount to the expense account as company overhead.
   return (
     `        <ExpenseLineAdd>\r\n` +
     `          <AccountRef>\r\n` +

@@ -182,8 +182,9 @@ export function QbwcPanel() {
         <CardTitle>QuickBooks Web Connector</CardTitle>
         <CardDescription>
           Approved invoices, expenses, and payments post into QuickBooks Desktop after you push them
-          from Accounting. Invoices land on Customer:Job. Expenses post as a check or credit card
-          charge to the vendor. Payments receive against the invoice that is already in QuickBooks.
+          from Accounting. Invoices land on Customer:Job. Job expenses post as a check or credit card
+          charge on that same Customer:Job. Office and insurance can stay on the company. Payments
+          receive against the invoice that is already in QuickBooks.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 pt-4">

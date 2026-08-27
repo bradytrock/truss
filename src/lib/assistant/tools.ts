@@ -262,12 +262,12 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   {
     name: "log_expense",
     description:
-      "Log a job cost. If the user attached a photo, it will be read and stored on the expense. Amount is dollars.",
+      "Log a job cost onto a job so QuickBooks assigns it to Customer:Job, not company overhead. Office and insurance may omit the job. If the user attached a photo, it will be read and stored on the expense. Amount is dollars.",
     status: "Logging the expense…",
     gate: "any",
     parameters: object(
       {
-        job: str("Job id or code, if this cost belongs on a job"),
+        job: str("Job id or code. Required for job costs (materials, labor, subs, and similar)."),
         vendor: str("Vendor name"),
         amount: num("Amount in dollars"),
         account: {
