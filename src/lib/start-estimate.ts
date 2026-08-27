@@ -15,6 +15,11 @@ export type StartEstimateInput = {
   templateId?: string | null;
 };
 
+function asUuid(value: string | null | undefined) {
+  const id = value?.trim() ?? "";
+  return id && id !== "none" ? id : null;
+}
+
 export function useStartEstimate() {
   const crm = useCrm();
   const router = useRouter();
@@ -27,11 +32,11 @@ export function useStartEstimate() {
       inflight.current = true;
       setPending(true);
       try {
-        const job = input.jobId ? crm.jobs.find((item) => item.id === input.jobId) : undefined;
-        const opportunity = input.opportunityId
+        const job = asUuid(input.jobId) ? crm.jobs.find((item) => item.id === input.jobId) : undefined;
+        const opportunity = asUuid(input.opportunityId)
           ? crm.opportunities.find((item) => item.id === input.opportunityId)
           : undefined;
-        const template = input.templateId
+        const template = asUuid(input.templateId)
           ? crm.estimateTemplates.find((item) => item.id === input.templateId)
           : undefined;
         const site = siteFieldsFromRecord(job ?? opportunity);
@@ -39,16 +44,17 @@ export function useStartEstimate() {
           formatJobSite(site) || job?.name || opportunity?.name || template?.name || "Untitled proposal";
         const estimate = await crm.addEstimate({
           name,
-          clientId: input.clientId ?? job?.clientId ?? opportunity?.clientId ?? null,
-          opportunityId: input.opportunityId ?? job?.opportunityId ?? null,
-          jobId: input.jobId ?? null,
-          contactId: input.contactId ?? job?.primaryContactId ?? opportunity?.primaryContactId ?? null,
+          clientId: asUuid(input.clientId) ?? asUuid(job?.clientId) ?? asUuid(opportunity?.clientId),
+          opportunityId: asUuid(input.opportunityId) ?? asUuid(job?.opportunityId),
+          jobId: asUuid(input.jobId),
+          contactId:
+            asUuid(input.contactId) ?? asUuid(job?.primaryContactId) ?? asUuid(opportunity?.primaryContactId),
           street: site.street,
           city: site.city,
           state: site.state,
           postalCode: site.postalCode,
           market: template?.market ?? workMarket(job, opportunity),
-          templateId: input.templateId ?? null,
+          templateId: asUuid(input.templateId),
           notes: template?.notes ?? "",
         });
         router.push(`/estimates/${estimate.id}`);
