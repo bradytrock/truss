@@ -82,6 +82,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { billingEstimate, defaultTaxRateForMarket, isResidentialMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { formatJobSite } from "@/lib/leads";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine, type JobPhoto } from "@/lib/types";
+import { canManageSettings } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
 
 export function CommitInput({
@@ -154,7 +155,7 @@ export function PriceBookSheet({
   onOpenChange: (open: boolean) => void;
   onPick: (catalogItemId: string) => void;
 }) {
-  const { catalog } = useCrm();
+  const { catalog, viewer } = useCrm();
   const groups = useMemo(() => {
     const kinds = Array.from(new Set(catalog.map((item) => item.kind))) as CatalogKind[];
     return kinds.map((kind) => ({
@@ -179,7 +180,7 @@ export function PriceBookSheet({
           <CommandList className="max-h-none flex-1 px-2">
             <CommandEmpty>
               {catalog.length === 0
-                ? "Price book is empty. Add labor and material under Price book."
+                ? "Price book is empty. A company admin can load it under Settings → Price book."
                 : "No items match that search."}
             </CommandEmpty>
             {groups.map((group) => (
@@ -209,13 +210,17 @@ export function PriceBookSheet({
           </CommandList>
         </Command>
         <div className="border-t px-4 py-3">
-          <Link
-            href="/catalog"
-            className="text-sm text-primary hover:underline"
-            onClick={() => onOpenChange(false)}
-          >
-            Manage the price book
-          </Link>
+          {viewer && canManageSettings(viewer.role, viewer) ? (
+            <Link
+              href="/settings/price-book"
+              className="text-sm text-primary hover:underline"
+              onClick={() => onOpenChange(false)}
+            >
+              Manage the price book
+            </Link>
+          ) : (
+            <p className="text-xs text-muted-foreground">A company admin manages the catalog in Settings.</p>
+          )}
         </div>
       </SheetContent>
     </Sheet>

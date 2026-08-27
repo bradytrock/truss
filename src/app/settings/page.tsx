@@ -72,7 +72,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Company"
         title="Settings"
-        description="Business letterhead, default estimate terms, invoice payment terms, QuickBooks Desktop, then the people who can sign in. Invite links join this company — they do not open a second one."
+        description="Business letterhead, default estimate terms, invoice payment terms, the price book, QuickBooks Desktop, then the people who can sign in. Invite links join this company — they do not open a second one."
       />
 
       <form onSubmit={onSubmit} className="max-w-2xl space-y-4">
@@ -278,6 +278,21 @@ export default function SettingsPage() {
           )}
         </div>
       </form>
+
+      <Card className="max-w-2xl">
+        <CardHeader className="border-b">
+          <CardTitle>Price book</CardTitle>
+          <CardDescription>
+            Labor, material, equipment, allowances, and subcontract packages estimators drop onto a proposal. Upload a
+            CSV to load the catalog at once.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+          <Button nativeButton={false} render={<Link href="/settings/price-book" />}>
+            Open price book
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card className="max-w-2xl">
         <CardHeader className="border-b">

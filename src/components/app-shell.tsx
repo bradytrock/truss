@@ -67,7 +67,6 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
     { href: "/messages", label: "Messages" },
     { href: "/photos", label: "Photos" },
     { href: "/estimates", label: "Estimates" },
-    { href: "/catalog", label: "Price book" },
     { href: "/invoices", label: "Invoices" },
     ...(options.showAccounting ? [{ href: "/accounting", label: "Accounting" }] : []),
     { href: "/calendar", label: "Calendar" },
@@ -263,7 +262,7 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
 function SearchTrigger() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const { opportunities, jobs, contacts, estimates, invoices } = useCrm();
+  const { opportunities, jobs, contacts, estimates, invoices, viewer } = useCrm();
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -373,15 +372,17 @@ function SearchTrigger() {
               ))}
             </CommandGroup>
             <CommandGroup heading="Estimates">
-              <CommandItem
-                value="price book catalog labor material"
-                onSelect={() => {
-                  setOpen(false);
-                  router.push("/catalog");
-                }}
-              >
-                Price book
-              </CommandItem>
+              {viewer && canManageSettings(viewer.role, viewer) ? (
+                <CommandItem
+                  value="price book catalog labor material settings"
+                  onSelect={() => {
+                    setOpen(false);
+                    router.push("/settings/price-book");
+                  }}
+                >
+                  Price book
+                </CommandItem>
+              ) : null}
               <CommandItem
                 value="estimate templates company"
                 onSelect={() => {

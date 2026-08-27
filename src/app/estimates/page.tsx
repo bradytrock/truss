@@ -28,6 +28,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { amountForEstimate } from "@/lib/estimate-totals";
 import { marketForEstimate } from "@/lib/market";
 import { useStartEstimate } from "@/lib/start-estimate";
+import { canManageSettings } from "@/lib/visibility";
 import {
   ESTIMATE_STATUS_LABELS,
   ESTIMATE_STATUSES,
@@ -113,9 +114,11 @@ function EstimatesList() {
                 ))}
               </SelectContent>
             </Select>
-            <Button nativeButton={false} variant="outline" render={<Link href="/catalog" />}>
-              Price book
-            </Button>
+            {crm.viewer && canManageSettings(crm.viewer.role, crm.viewer) ? (
+              <Button nativeButton={false} variant="outline" render={<Link href="/settings/price-book" />}>
+                Price book
+              </Button>
+            ) : null}
             <Button nativeButton={false} variant="outline" render={<Link href="/estimates/templates" />}>
               Templates
             </Button>
@@ -218,9 +221,13 @@ function EstimatesList() {
 
       <p className="text-xs text-muted-foreground">
         Line items come from the{" "}
-        <Link href="/catalog" className="text-primary hover:underline">
-          price book
-        </Link>
+        {crm.viewer && canManageSettings(crm.viewer.role, crm.viewer) ? (
+          <Link href="/settings/price-book" className="text-primary hover:underline">
+            price book
+          </Link>
+        ) : (
+          "price book"
+        )}
         . Totals include tax and skip optional lines that are not selected.
       </p>
     </div>

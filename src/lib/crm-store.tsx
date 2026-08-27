@@ -28,6 +28,7 @@ import {
   invoiceLinesFromEstimate,
 } from "@/lib/estimate-totals";
 import { mergePaymentTerms, lockedTermsChanged, resolveEstimateTerms, resolveInvoiceTerms } from "@/lib/document-terms";
+import { matchCatalogItem, type CatalogImportDraft } from "@/lib/catalog-csv";
 import {
   estimateNeedsSecondSignature,
   mintEstimateSignerTokens,
@@ -726,6 +727,7 @@ type CrmContextValue = CrmState & {
   }) => Promise<CatalogItem>;
   updateCatalogItem: (id: string, patch: Partial<CatalogItem>) => Promise<void>;
   removeCatalogItem: (id: string) => Promise<void>;
+  importCatalogItems: (rows: CatalogImportDraft[]) => Promise<{ added: number; updated: number }>;
   addTemplateLineFromCatalog: (templateId: string, catalogItemId: string, groupName?: string) => Promise<void>;
   addCustomTemplateLine: (templateId: string, groupName?: string) => Promise<void>;
   updateTemplateLine: (id: string, patch: Partial<EstimateTemplateLine>) => Promise<void>;
@@ -3641,6 +3643,104 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     apply();
   }, []);
 
+  const importCatalogItems = useCallback(
+    async (rows: CatalogImportDraft[]) => {
+      const working = [...state.catalog];
+      const toInsert: CatalogItem[] = [];
+      const toUpdate: Array<{ id: string; patch: CatalogImportDraft }> = [];
+      for (const row of rows) {
+        const next = {
+          name: row.name.trim(),
+          kind: row.kind,
+          unit: row.unit.trim() || "ea",
+          unitCost: Math.max(0, Math.round(row.unitCost * 100) / 100),
+          costCode: row.costCode.trim(),
+        };
+        if (!next.name) continue;
+        const existing = matchCatalogItem(working, next);
+        if (existing) {
+          const same =
+            existing.name === next.name &&
+            existing.kind === next.kind &&
+            existing.unit === next.unit &&
+            existing.unitCost === next.unitCost &&
+            existing.costCode === next.costCode;
+          if (!same) {
+            toUpdate.push({ id: existing.id, patch: next });
+            Object.assign(existing, next);
+          }
+          continue;
+        }
+        const item: CatalogItem = { id: crypto.randomUUID(), ...next };
+        toInsert.push(item);
+        working.unshift(item);
+      }
+
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => {
+          const byId = new Map(prev.catalog.map((item) => [item.id, item]));
+          for (const change of toUpdate) {
+            const current = byId.get(change.id);
+            if (current) byId.set(change.id, { ...current, ...change.patch });
+          }
+          return { ...prev, catalog: [...toInsert, ...byId.values()] };
+        });
+        return { added: toInsert.length, updated: toUpdate.length };
+      }
+
+      const chunkSize = 80;
+      const inserted: CatalogItem[] = [];
+      for (let i = 0; i < toInsert.length; i += chunkSize) {
+        const chunk = toInsert.slice(i, i + chunkSize);
+        const { data, error } = await supabase
+          .from("catalog_items")
+          .insert(
+            chunk.map((item) => ({
+              id: item.id,
+              company_id: user.companyId,
+              name: item.name,
+              kind: item.kind,
+              unit: item.unit,
+              unit_cost: item.unitCost,
+              cost_code: item.costCode,
+            })),
+          )
+          .select("*");
+        if (error) {
+          toast.error(error.message);
+          throw error;
+        }
+        inserted.push(...(data ?? []).map(mapCatalogItem));
+      }
+
+      for (const change of toUpdate) {
+        const { error } = await supabase
+          .from("catalog_items")
+          .update(catalogPatch(change.patch))
+          .eq("id", change.id);
+        if (error) {
+          toast.error(error.message);
+          throw error;
+        }
+      }
+
+      setState((prev) => {
+        const byId = new Map(prev.catalog.map((item) => [item.id, item]));
+        for (const change of toUpdate) {
+          const current = byId.get(change.id);
+          if (current) byId.set(change.id, { ...current, ...change.patch });
+        }
+        for (const item of inserted.length > 0 ? inserted : toInsert) {
+          byId.set(item.id, item);
+        }
+        return { ...prev, catalog: [...byId.values()] };
+      });
+      return { added: inserted.length || toInsert.length, updated: toUpdate.length };
+    },
+    [state.catalog, user.companyId],
+  );
+
   const addEstimateLineFromCatalog = useCallback(
     async (estimateId: string, catalogItemId: string, groupName?: string) => {
       const item = state.catalog.find((entry) => entry.id === catalogItemId);
@@ -5962,6 +6062,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addCatalogItem,
       updateCatalogItem,
       removeCatalogItem,
+      importCatalogItems,
       addTemplateLineFromCatalog,
       addCustomTemplateLine,
       updateTemplateLine,
@@ -6071,6 +6172,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addCatalogItem,
       updateCatalogItem,
       removeCatalogItem,
+      importCatalogItems,
       addTemplateLineFromCatalog,
       addCustomTemplateLine,
       updateTemplateLine,
