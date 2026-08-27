@@ -24,7 +24,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useCrm } from "@/lib/crm-store";
 import { localYmd } from "@/lib/format";
-import { compressReceipt } from "@/lib/job-financials";
+import { compressReceipt, isReceiptPhoto } from "@/lib/job-financials";
 import { costCenterLabel } from "@/lib/job-record";
 import { invoiceBalance } from "@/lib/money";
 import { matchVendorName, vendorChoices } from "@/lib/qb-vendors";
@@ -56,7 +56,14 @@ async function extractReceipt(imageDataUrl: string, kind: "expense" | "payment")
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ image: imageDataUrl, kind }),
   });
-  return (await response.json()) as Record<string, unknown>;
+  const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+  return body ?? { error: "Could not read the receipt." };
+}
+
+function extractError(result: Record<string, unknown>) {
+  if (typeof result.error === "string" && result.error) return result.error;
+  if (typeof result.message === "string" && result.message) return result.message;
+  return "Fill the fields from the photo.";
 }
 
 function ReceiptFields({
@@ -68,12 +75,16 @@ function ReceiptFields({
 }) {
   async function handle(file: File | undefined) {
     if (!file) return;
-    if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
+    if (!isReceiptPhoto(file) && file.type !== "application/pdf") {
       toast.error("Use a photo of the receipt.");
       return;
     }
-    const next = await compressReceipt(file);
-    onFile(next.file, next.dataUrl);
+    try {
+      const next = await compressReceipt(file);
+      onFile(next.file, next.dataUrl);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not open that photo.");
+    }
   }
 
   return (
@@ -130,6 +141,7 @@ export function LogExpenseDialog({
   const [extractedByAi, setExtractedByAi] = useState(false);
   const [pending, setPending] = useState(false);
   const [reading, setReading] = useState(false);
+  const [aiReady, setAiReady] = useState<boolean | null>(null);
   const vendors = vendorChoices(crm.qbVendors ?? [], crm.expenses);
   const vendorNames = [...vendors.fromQb.map((item) => item.name), ...vendors.extras];
 
@@ -145,16 +157,18 @@ export function LogExpenseDialog({
     setJobId(defaultJobId ?? "");
     setMemo("");
     setExtractedByAi(false);
+    void fetch("/api/receipts/extract", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((body: { openai?: boolean; anthropic?: boolean }) => {
+        setAiReady(Boolean(body.openai || body.anthropic));
+      })
+      .catch(() => setAiReady(null));
   }, [open, defaultJobId]);
 
-  async function readReceipt() {
-    if (!preview) {
-      toast.error("Take the photo first.");
-      return;
-    }
+  async function applyExpenseExtract(dataUrl: string) {
     setReading(true);
     try {
-      const result = await extractReceipt(preview, "expense");
+      const result = await extractReceipt(dataUrl, "expense");
       if (result.ok) {
         if (typeof result.vendor === "string") {
           setVendor(matchVendorName(result.vendor, vendorNames) || result.vendor);
@@ -169,7 +183,7 @@ export function LogExpenseDialog({
         setExtractedByAi(true);
         toast.success("Read the receipt. Check the fields before you save.");
       } else {
-        toast.message(typeof result.message === "string" ? result.message : "Fill the fields from the photo.");
+        toast.message(extractError(result));
       }
     } catch {
       toast.error("Could not read the receipt.");
@@ -222,12 +236,28 @@ export function LogExpenseDialog({
               setFile(nextFile);
               setPreview(dataUrl);
               setExtractedByAi(false);
+              if (!isReceiptPhoto(nextFile)) {
+                toast.message("AI reads a photo of the receipt, not a PDF. You can still type the fields and save.");
+                return;
+              }
+              void applyExpenseExtract(dataUrl);
             }}
           />
-          <Button type="button" variant="outline" disabled={!preview || reading} onClick={() => void readReceipt()}>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!preview || reading || Boolean(file && !isReceiptPhoto(file))}
+            onClick={() => void applyExpenseExtract(preview)}
+          >
             {reading ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
             {reading ? "Reading…" : "Read receipt with AI"}
           </Button>
+          {aiReady === false ? (
+            <p className="text-xs text-muted-foreground">
+              This host has no OPENAI_API_KEY, so AI cannot fill the fields. The photo still saves on the
+              expense.
+            </p>
+          ) : null}
           <div className="grid gap-1.5">
             <Label>Vendor</Label>
             <p className="text-xs text-muted-foreground">
@@ -389,6 +419,7 @@ export function LogPaymentDialog({
   const [reference, setReference] = useState("");
   const [pending, setPending] = useState(false);
   const [reading, setReading] = useState(false);
+  const [aiReady, setAiReady] = useState<boolean | null>(null);
 
   const invoices = crm.invoices.filter((invoice) => {
     if (invoice.status === "void" || invoice.status === "draft") return false;
@@ -406,6 +437,12 @@ export function LogPaymentDialog({
     setMethod("check");
     setPaidAt(localYmd(new Date()));
     setReference("");
+    void fetch("/api/receipts/extract", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((body: { openai?: boolean; anthropic?: boolean }) => {
+        setAiReady(Boolean(body.openai || body.anthropic));
+      })
+      .catch(() => setAiReady(null));
   }, [open, defaultJobId, defaultInvoiceId]);
 
   useEffect(() => {
@@ -416,14 +453,10 @@ export function LogPaymentDialog({
     if (invoice.jobId) setJobId(invoice.jobId);
   }, [invoiceId, crm.invoices, crm.invoiceLines, crm.payments]);
 
-  async function readReceipt() {
-    if (!preview) {
-      toast.error("Take the photo first.");
-      return;
-    }
+  async function applyPaymentExtract(dataUrl: string) {
     setReading(true);
     try {
-      const result = await extractReceipt(preview, "payment");
+      const result = await extractReceipt(dataUrl, "payment");
       if (result.ok) {
         if (typeof result.amount === "number" && result.amount) setAmount(String(result.amount));
         if (typeof result.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(result.date)) {
@@ -433,7 +466,7 @@ export function LogPaymentDialog({
         if (typeof result.reference === "string") setReference(result.reference);
         toast.success("Read the slip. Check the fields before you save.");
       } else {
-        toast.message(typeof result.message === "string" ? result.message : "Fill the fields from the photo.");
+        toast.message(extractError(result));
       }
     } catch {
       toast.error("Could not read the photo.");
@@ -487,12 +520,28 @@ export function LogPaymentDialog({
             onFile={(nextFile, dataUrl) => {
               setFile(nextFile);
               setPreview(dataUrl);
+              if (!isReceiptPhoto(nextFile)) {
+                toast.message("AI reads a photo of the check, not a PDF. You can still type the fields and save.");
+                return;
+              }
+              void applyPaymentExtract(dataUrl);
             }}
           />
-          <Button type="button" variant="outline" disabled={!preview || reading} onClick={() => void readReceipt()}>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!preview || reading || Boolean(file && !isReceiptPhoto(file))}
+            onClick={() => void applyPaymentExtract(preview)}
+          >
             {reading ? <LoaderCircle className="animate-spin" /> : <Camera />}
             {reading ? "Reading…" : "Read check / remit with AI"}
           </Button>
+          {aiReady === false ? (
+            <p className="text-xs text-muted-foreground">
+              This host has no OPENAI_API_KEY, so AI cannot fill the fields. The photo still saves on the
+              payment.
+            </p>
+          ) : null}
           <div className="grid gap-1.5">
             <Label>Job</Label>
             <p className="text-xs text-muted-foreground">

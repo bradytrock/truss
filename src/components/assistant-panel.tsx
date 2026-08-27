@@ -124,8 +124,12 @@ export function AssistantPanel() {
       toast.error("Attach a photo (receipt, check, or job picture).");
       return;
     }
-    const compressed = await compressReceipt(file);
-    setAttachment({ dataUrl: compressed.dataUrl, name: compressed.file.name });
+    try {
+      const compressed = await compressReceipt(file);
+      setAttachment({ dataUrl: compressed.dataUrl, name: compressed.file.name });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not open that photo.");
+    }
   }
 
   async function runLoop(history: AssistantMessage[], startHop = 0) {

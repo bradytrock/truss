@@ -5,6 +5,9 @@ const TRUSS_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Fs_dTxYT2nBFYVjLLG6vpg_n5
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1", "localhost"],
+  experimental: {
+    proxyClientMaxBodySize: "15mb",
+  },
   async headers() {
     return [
       {

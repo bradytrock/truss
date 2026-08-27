@@ -168,6 +168,8 @@ export function isExpenseMethod(value: string): value is ExpenseMethod {
   );
 }
 
+const RECEIPT_JPEG_MAX_CHARS = 700_000;
+
 export async function fileToDataUrl(file: Blob) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -177,26 +179,62 @@ export async function fileToDataUrl(file: Blob) {
   });
 }
 
-export async function compressReceipt(file: File, maxEdge = 1600): Promise<{ dataUrl: string; file: File }> {
+export function isReceiptPhoto(file: File) {
+  return file.type.startsWith("image/");
+}
+
+export async function compressReceipt(file: File, maxEdge = 1280): Promise<{ dataUrl: string; file: File }> {
   const dataUrl = await fileToDataUrl(file);
-  if (!file.type.startsWith("image/") || typeof document === "undefined") {
+  if (!isReceiptPhoto(file) || typeof document === "undefined") {
     return { dataUrl, file };
   }
   try {
-    const img = await loadImage(dataUrl);
-    const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
-    if (scale >= 1) return { dataUrl, file };
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.round(img.naturalWidth * scale);
-    canvas.height = Math.round(img.naturalHeight * scale);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return { dataUrl, file };
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    const next = canvas.toDataURL("image/jpeg", 0.82);
-    const blob = await (await fetch(next)).blob();
-    return { dataUrl: next, file: new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }) };
+    const source = await loadReceiptBitmap(file, dataUrl);
+    let edge = maxEdge;
+    let quality = 0.78;
+    let last = dataUrl;
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const scale = Math.min(1, edge / Math.max(source.width, source.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(source.width * scale));
+      canvas.height = Math.max(1, Math.round(source.height * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) break;
+      ctx.drawImage(source.image, 0, 0, canvas.width, canvas.height);
+      last = canvas.toDataURL("image/jpeg", quality);
+      if (last.length <= RECEIPT_JPEG_MAX_CHARS) break;
+      edge = Math.round(edge * 0.72);
+      quality = Math.max(0.45, quality - 0.1);
+    }
+    const blob = await (await fetch(last)).blob();
+    return {
+      dataUrl: last,
+      file: new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }),
+    };
   } catch {
-    return { dataUrl, file };
+    throw new Error("Could not open that photo. Use a JPEG or PNG of the receipt.");
+  }
+}
+
+async function loadReceiptBitmap(file: File, dataUrl: string) {
+  try {
+    const img = await loadImage(dataUrl);
+    return { image: img, width: img.naturalWidth, height: img.naturalHeight };
+  } catch {
+    if (typeof createImageBitmap !== "function") throw new Error("image");
+    const bitmap = await createImageBitmap(file);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      bitmap.close();
+      throw new Error("image");
+    }
+    ctx.drawImage(bitmap, 0, 0);
+    bitmap.close();
+    const img = await loadImage(canvas.toDataURL("image/jpeg", 0.92));
+    return { image: img, width: img.naturalWidth, height: img.naturalHeight };
   }
 }
 

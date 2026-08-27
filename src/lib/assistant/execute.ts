@@ -105,16 +105,20 @@ function isPhotoCategory(value: string): value is PhotoCategory {
 }
 
 async function extractReceipt(kind: "expense" | "payment", file: File) {
-  const compressed = await compressReceipt(file);
-  const response = await fetch("/api/receipts/extract", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ image: compressed.dataUrl, kind }),
-  });
-  const body = (await response.json().catch(() => null)) as
-    | { ok?: boolean; vendor?: string; amount?: number; date?: string; memo?: string; account?: string; method?: string; reference?: string }
-    | null;
-  return { file: compressed.file, extracted: body?.ok ? body : null };
+  try {
+    const compressed = await compressReceipt(file);
+    const response = await fetch("/api/receipts/extract", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image: compressed.dataUrl, kind }),
+    });
+    const body = (await response.json().catch(() => null)) as
+      | { ok?: boolean; vendor?: string; amount?: number; date?: string; memo?: string; account?: string; method?: string; reference?: string }
+      | null;
+    return { file: compressed.file, extracted: body?.ok ? body : null };
+  } catch {
+    return { file, extracted: null };
+  }
 }
 
 export type ExecuteExtras = {
