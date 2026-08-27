@@ -21,7 +21,7 @@ import { EstimateStatusBadge, MarketBadge, StageBadge, TypeBadge } from "@/compo
 import { useCrm } from "@/lib/crm-store";
 import { daysUntil, formatCurrencyFull, formatDate } from "@/lib/format";
 import { amountForEstimate } from "@/lib/estimate-totals";
-import { CreateEstimateDialog } from "@/components/create-ops-dialogs";
+import { StartEstimateButton } from "@/components/start-estimate-button";
 import { formatJobSite, leadSourceLabel } from "@/lib/leads";
 import { parseMarket } from "@/lib/market";
 import { LeadAssigneeSelect } from "@/components/lead-assignee";
@@ -42,7 +42,6 @@ export default function OpportunityDetailPage() {
   const crm = useCrm();
   const opportunity = crm.getOpportunity(id);
   const [nextStep, setNextStep] = useState<string | null>(null);
-  const [estimateOpen, setEstimateOpen] = useState(false);
 
   if (!crm.hydrated) return <LoadingScreen />;
   if (!opportunity) {
@@ -210,9 +209,16 @@ export default function OpportunityDetailPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between border-b">
               <CardTitle>Estimates</CardTitle>
-              <Button size="sm" variant="outline" onClick={() => setEstimateOpen(true)}>
+              <StartEstimateButton
+                size="sm"
+                variant="outline"
+                opportunityId={opportunity.id}
+                jobId={job?.id}
+                contactId={opportunity.primaryContactId}
+                clientId={opportunity.clientId}
+              >
                 New estimate
-              </Button>
+              </StartEstimateButton>
             </CardHeader>
             <CardContent>
               {estimates.length === 0 ? (
@@ -430,15 +436,6 @@ export default function OpportunityDetailPage() {
           </Card>
         </div>
       </div>
-
-      <CreateEstimateDialog
-        open={estimateOpen}
-        onOpenChange={setEstimateOpen}
-        defaultClientId={opportunity.clientId}
-        defaultOpportunityId={opportunity.id}
-        defaultJobId={job?.id}
-        defaultContactId={opportunity.primaryContactId}
-      />
     </div>
   );
 }

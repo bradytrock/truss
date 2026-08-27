@@ -37,7 +37,6 @@ import {
   CreateOpportunityDialog,
 } from "@/components/create-records";
 import {
-  CreateEstimateDialog,
   CreateEventDialog,
   CreateInvoiceDialog,
 } from "@/components/create-ops-dialogs";
@@ -49,6 +48,7 @@ import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand";
 import { AssistantPanel } from "@/components/assistant-panel";
+import { useStartEstimate } from "@/lib/start-estimate";
 
 function navItems(options: { showReports: boolean; showAccounting: boolean; bdOnly: boolean }) {
   if (options.bdOnly) {
@@ -80,9 +80,10 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { effectiveStaff } = useCrm();
+  const { start: startEstimate } = useStartEstimate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [create, setCreate] = useState<
-    "opportunity" | "client" | "job" | "estimate" | "invoice" | "event" | "expense" | "payment" | null
+    "opportunity" | "client" | "job" | "invoice" | "event" | "expense" | "payment" | null
   >(null);
 
   return (
@@ -152,7 +153,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <DropdownMenuItem onClick={() => setCreate("opportunity")}>
                   New lead
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setCreate("estimate")}>
+                <DropdownMenuItem onClick={() => void startEstimate()}>
                   New estimate
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setCreate("invoice")}>
@@ -189,10 +190,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       <CreateJobDialog
         open={create === "job"}
         onOpenChange={(open) => setCreate(open ? "job" : null)}
-      />
-      <CreateEstimateDialog
-        open={create === "estimate"}
-        onOpenChange={(open) => setCreate(open ? "estimate" : null)}
       />
       <CreateInvoiceDialog
         open={create === "invoice"}

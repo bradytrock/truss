@@ -64,6 +64,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { contactOptionLabel } from "@/lib/contacts";
 import { ContactSelectOption } from "@/components/contact-option";
+import { MarketField } from "@/components/market-field";
 import { useCrm } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
 import {
@@ -78,7 +79,7 @@ import { downloadEstimatePdf } from "@/lib/document-pdf";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { shareUrl } from "@/lib/share";
 import { formatMoney } from "@/lib/format";
-import { billingEstimate, isResidentialMarket, workMarket } from "@/lib/market";
+import { billingEstimate, defaultTaxRateForMarket, isResidentialMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { formatJobSite } from "@/lib/leads";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine, type JobPhoto } from "@/lib/types";
 import { filledEstimateTerms, ESTIMATE_TERMS_HINT } from "@/lib/document-terms";
@@ -805,6 +806,29 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
               onCommit={(value) => patchSite({ postalCode: value })}
             />
           </div>
+          {editable ? (
+            <div className="sm:col-span-2">
+              <MarketField
+                id="estimate-market"
+                value={market}
+                onChange={(next) => {
+                  if (opportunity) {
+                    void crm.updateOpportunity(opportunity.id, {
+                      market: next,
+                      projectType: projectTypeForMarket(next),
+                    });
+                  }
+                  if (job) {
+                    void crm.updateJob(job.id, {
+                      market: next,
+                      projectType: projectTypeForMarket(next),
+                    });
+                  }
+                  void crm.updateEstimate(estimate.id, { taxRate: defaultTaxRateForMarket(next) });
+                }}
+              />
+            </div>
+          ) : null}
           <div>
             <Label>Lead</Label>
             <p className="mt-1 text-sm">

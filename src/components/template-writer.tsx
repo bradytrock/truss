@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -13,6 +12,7 @@ import {
   PriceBookSheet,
 } from "@/components/estimate-writer";
 import { MarketField } from "@/components/market-field";
+import { StartEstimateButton } from "@/components/start-estimate-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -76,9 +76,7 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
           />
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button nativeButton={false} render={<Link href={`/estimates?from=${template.id}`} />}>
-            New estimate
-          </Button>
+          <StartEstimateButton templateId={template.id}>New estimate</StartEstimateButton>
           <Button
             variant="outline"
             onClick={() => {

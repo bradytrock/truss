@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,13 +20,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CreateEstimateDialog } from "@/components/create-ops-dialogs";
+import { StartEstimateButton } from "@/components/start-estimate-button";
 import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { EstimateStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatDate, formatMoney } from "@/lib/format";
 import { amountForEstimate } from "@/lib/estimate-totals";
 import { marketForEstimate } from "@/lib/market";
+import { useStartEstimate } from "@/lib/start-estimate";
 import {
   ESTIMATE_STATUS_LABELS,
   ESTIMATE_STATUSES,
@@ -47,11 +48,14 @@ function EstimatesList() {
   const fromTemplate = searchParams.get("from") ?? "";
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<EstimateStatus | "all">("all");
-  const [create, setCreate] = useState(false);
+  const { start } = useStartEstimate();
+  const startedFrom = useRef("");
 
   useEffect(() => {
-    if (fromTemplate) setCreate(true);
-  }, [fromTemplate]);
+    if (!fromTemplate || !crm.hydrated || startedFrom.current === fromTemplate) return;
+    startedFrom.current = fromTemplate;
+    void start({ templateId: fromTemplate });
+  }, [crm.hydrated, fromTemplate, start]);
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -115,7 +119,7 @@ function EstimatesList() {
             <Button nativeButton={false} variant="outline" render={<Link href="/estimates/templates" />}>
               Templates
             </Button>
-            <Button onClick={() => setCreate(true)}>New estimate</Button>
+            <StartEstimateButton>New estimate</StartEstimateButton>
           </div>
         }
       />
@@ -128,7 +132,7 @@ function EstimatesList() {
               ? "Clear the search or status filter."
               : "Draft a proposal from a company template or the price book, then send it to the owner."
           }
-          action={<Button onClick={() => setCreate(true)}>New estimate</Button>}
+          action={<StartEstimateButton>New estimate</StartEstimateButton>}
         />
       ) : (
         <>
@@ -219,12 +223,6 @@ function EstimatesList() {
         </Link>
         . Totals include tax and skip optional lines that are not selected.
       </p>
-
-      <CreateEstimateDialog
-        open={create}
-        onOpenChange={setCreate}
-        defaultTemplateId={fromTemplate || undefined}
-      />
     </div>
   );
 }

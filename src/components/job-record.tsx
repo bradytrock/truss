@@ -29,7 +29,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ActivityComposer, ActivityList } from "@/components/activity";
-import { AddPhotoDialog, CreateEstimateDialog, CreateInvoiceDialog } from "@/components/create-ops-dialogs";
+import { AddPhotoDialog, CreateInvoiceDialog } from "@/components/create-ops-dialogs";
+import { StartEstimateButton } from "@/components/start-estimate-button";
 import { CreatePageDialog } from "@/components/create-page-dialog";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
 import { JobFilesPanel } from "@/components/job-files";
@@ -230,7 +231,6 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
   const [heroOpen, setHeroOpen] = useState(true);
   const [addressOpen, setAddressOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
-  const [estimateOpen, setEstimateOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [reportId, setReportId] = useState<string | null>(null);
   const [pageCreateOpen, setPageCreateOpen] = useState(false);
@@ -1108,9 +1108,16 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
           <div>
             <div className="mb-2 flex items-center justify-between">
               <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Estimates</p>
-              <Button size="sm" variant="ghost" onClick={() => setEstimateOpen(true)}>
+              <StartEstimateButton
+                size="sm"
+                variant="ghost"
+                jobId={job.id}
+                opportunityId={job.opportunityId}
+                contactId={job.primaryContactId}
+                clientId={job.clientId}
+              >
                 New
-              </Button>
+              </StartEstimateButton>
             </div>
             {estimates.length === 0 ? (
               <p className="text-sm text-muted-foreground">No estimates tied to this job.</p>
@@ -1285,14 +1292,6 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
         onOpenChange={setPageCreateOpen}
         pending={pageCreating}
         onCreate={(template) => void startPage(template)}
-      />
-      <CreateEstimateDialog
-        open={estimateOpen}
-        onOpenChange={setEstimateOpen}
-        defaultClientId={job.clientId}
-        defaultJobId={job.id}
-        defaultOpportunityId={job.opportunityId ?? undefined}
-        defaultContactId={job.primaryContactId}
       />
       <CreateInvoiceDialog
         open={invoiceOpen}
