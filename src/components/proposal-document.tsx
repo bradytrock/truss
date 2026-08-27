@@ -222,7 +222,7 @@ export function ProposalDocument({
       )}
       <EstimateTotals estimate={billed} lines={lines} className="ml-auto max-w-xs" />
       <DocumentNotesBlock notes={estimate.notes} />
-      <div>
+      <div className="break-inside-auto">
         <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>
         <DocumentTermsFields
           value={terms}

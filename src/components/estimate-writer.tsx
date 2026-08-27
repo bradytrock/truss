@@ -1184,7 +1184,9 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
 
       <div className="hidden gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)] xl:items-start">
         {writer}
-        <div className="xl:sticky xl:top-4">{preview}</div>
+        <div className="xl:sticky xl:top-4 xl:max-h-[calc(100dvh-1.5rem)] xl:overflow-y-auto">
+          {preview}
+        </div>
       </div>
 
       <PriceBookSheet

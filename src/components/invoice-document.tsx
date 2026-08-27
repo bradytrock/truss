@@ -118,7 +118,7 @@ export function InvoiceDocument({
         </div>
       </dl>
       <DocumentNotesBlock notes={invoice.notes} />
-      <div>
+      <div className="break-inside-auto">
         <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Payment terms</h3>
         <DocumentTermsFields
           value={terms}

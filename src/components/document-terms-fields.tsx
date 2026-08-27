@@ -73,10 +73,14 @@ function InlinePart({
   onCommit: (key: string, amount: number | null) => void;
 }) {
   if (part.kind === "text") return <>{part.text}</>;
+  if (!part.editable) {
+    const filled = (values[part.key] ?? "").trim();
+    return <>{filled || "—"}</>;
+  }
   const display = part.override
     ? formatInputMoney(part.override)
     : stripMoneyPrefix(values[part.key] ?? "");
-  if (!part.editable || disabled) {
+  if (disabled) {
     return (
       <span className="inline-block min-w-[5.5rem] border-b border-foreground/70 px-0.5 text-center tabular-nums">
         {display ? `$${display}` : "$________"}

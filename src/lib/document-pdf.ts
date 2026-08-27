@@ -51,9 +51,11 @@ function ensureSpace(doc: Doc, y: number, needed: number) {
   return 54;
 }
 
-function wrapText(doc: Doc, text: string, width: number) {
+const TERMS_BODY_SIZE = 7.5;
+
+function wrapText(doc: Doc, text: string, width: number, fontSize = 10) {
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
+  doc.setFontSize(fontSize);
   const paragraphs = String(text ?? "").replace(/\r\n/g, "\n").split("\n");
   const lines: string[] = [];
   for (const paragraph of paragraphs) {
@@ -70,13 +72,22 @@ function wrapText(doc: Doc, text: string, width: number) {
   return lines;
 }
 
-function writeParagraph(doc: Doc, text: string, y: number, width = 504, continued?: string) {
-  const lines = wrapText(doc, text, width);
+function writeParagraph(
+  doc: Doc,
+  text: string,
+  y: number,
+  width = 504,
+  continued?: string,
+  fontSize = 10,
+) {
+  const lines = wrapText(doc, text, width, fontSize);
+  const lineHeight = fontSize <= 8 ? 9.5 : 13;
+  const blankHeight = fontSize <= 8 ? 6 : 8;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
+  doc.setFontSize(fontSize);
   doc.setTextColor(40, 40, 40);
   for (const line of lines) {
-    const gap = line ? 16 : 12;
+    const gap = line ? lineHeight + 2 : 12;
     if (y + gap >= pageBottom(doc)) {
       doc.addPage();
       y = 54;
@@ -85,19 +96,25 @@ function writeParagraph(doc: Doc, text: string, y: number, width = 504, continue
         doc.setFontSize(9);
         doc.setTextColor(90, 90, 90);
         doc.text(`${continued} (continued)`, 54, y);
-        y += 16;
+        y += 14;
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
+        doc.setFontSize(fontSize);
         doc.setTextColor(40, 40, 40);
       }
     }
     if (line) doc.text(line, 54, y);
-    y += line ? 13 : 8;
+    y += line ? lineHeight : blankHeight;
   }
-  return y + 8;
+  return y + (fontSize <= 8 ? 6 : 8);
 }
 
-function writeLabeledBlock(doc: Doc, title: string, text: string | null | undefined, y: number) {
+function writeLabeledBlock(
+  doc: Doc,
+  title: string,
+  text: string | null | undefined,
+  y: number,
+  bodySize = 10,
+) {
   const body = text?.trim() ?? "";
   if (!body) return y;
   y += 12;
@@ -106,8 +123,8 @@ function writeLabeledBlock(doc: Doc, title: string, text: string | null | undefi
   doc.setFontSize(9);
   doc.setTextColor(90, 90, 90);
   doc.text(title, 54, y);
-  y += 14;
-  return writeParagraph(doc, body, y, 504, title);
+  y += bodySize <= 8 ? 12 : 14;
+  return writeParagraph(doc, body, y, 504, title, bodySize);
 }
 
 function writeNotes(doc: Doc, notes: string | null | undefined, y: number) {
@@ -323,6 +340,7 @@ export async function downloadEstimatePdf(input: {
       company: input.company,
     }),
     y,
+    TERMS_BODY_SIZE,
   );
 
   y += 10;
@@ -477,6 +495,7 @@ export async function downloadInvoicePdf(input: {
       company: input.company,
     }),
     y,
+    TERMS_BODY_SIZE,
   );
 
   downloadBlob(doc.output("blob"), `${input.invoice.number}.pdf`);
