@@ -20,8 +20,6 @@ import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/docume
 import { formatCurrencyFull, formatDate, formatMoney } from "@/lib/format";
 import { shareUrl } from "@/lib/share";
 import type { Invoice } from "@/lib/types";
-import { DocumentTermsFields } from "@/components/document-terms-fields";
-import { invoiceTermsValues, INVOICE_TERMS_HINT } from "@/lib/document-terms";
 import {
   derivedInvoiceStatus,
   invoiceBalance,
@@ -186,6 +184,9 @@ export default function InvoiceDetailPage() {
             customer={customer}
             company={crm.company}
             status={status}
+            onTermsChange={
+              status === "void" ? undefined : (terms) => void crm.updateInvoice(record.id, { terms })
+            }
           />
 
           <Card>
@@ -241,28 +242,6 @@ export default function InvoiceDetailPage() {
                 )}
               </RecordProperty>
               {record.notes ? <RecordProperty label="Notes">{record.notes}</RecordProperty> : null}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="border-b">
-              <CardTitle>Terms</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <DocumentTermsFields
-                value={record.terms}
-                values={invoiceTermsValues({
-                  invoice: record,
-                  lines,
-                  payments,
-                  customer,
-                  company: letterhead,
-                })}
-                disabled={status === "void"}
-                emptyLabel="No terms on this invoice."
-                hint={`${INVOICE_TERMS_HINT} Amounts sit on the $____ lines. Contractor language stays locked from Settings.`}
-                onCommit={(value) => void crm.updateInvoice(record.id, { terms: value })}
-              />
             </CardContent>
           </Card>
         </div>

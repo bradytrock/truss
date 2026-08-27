@@ -51,10 +51,12 @@ export function DocumentTermsFields({
           />
         ))}
       </p>
-      <p className="text-xs text-muted-foreground">
-        {hint ??
-          "Payment amounts sit on the lines and fill from the figures above. Other contract language stays locked from Settings."}
-      </p>
+      {hint === "" ? null : (
+        <p className="text-xs text-muted-foreground">
+          {hint ??
+            "Payment amounts sit on the lines and fill from the figures above. Other contract language stays locked from Settings."}
+        </p>
+      )}
     </div>
   );
 }

@@ -82,8 +82,6 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { billingEstimate, defaultTaxRateForMarket, isResidentialMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { formatJobSite } from "@/lib/leads";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine, type JobPhoto } from "@/lib/types";
-import { DocumentTermsFields } from "@/components/document-terms-fields";
-import { estimateTermsValues } from "@/lib/document-terms";
 import { cn } from "@/lib/utils";
 
 export function CommitInput({
@@ -1075,27 +1073,9 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
               void crm.updateEstimate(estimate.id, { depositKind, depositValue })
             }
           />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle>Terms</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-4">
-          <DocumentTermsFields
-            value={estimate.terms}
-            values={estimateTermsValues({
-              estimate: billed,
-              lines,
-              customer,
-              company: letterhead,
-            })}
-            disabled={!editable}
-            emptyLabel="No terms on this proposal."
-            hint="Payment amounts sit on the $____ lines and fill from deposit and remaining above. Type on a line to change that amount. Other contract language stays locked from Settings."
-            onCommit={(value) => void crm.updateEstimate(estimate.id, { terms: value })}
-          />
+          <p className="text-xs text-muted-foreground sm:col-span-2">
+            Payment 1–3 on the contract fill from deposit and remaining. Type on those lines to set a different amount.
+          </p>
         </CardContent>
       </Card>
 
@@ -1126,6 +1106,9 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       selectable={optionalOpen}
       showInternalNotes
       onToggleOptional={(line, selected) => void crm.updateEstimateLine(line.id, { selected })}
+      onTermsChange={
+        editable ? (terms) => void crm.updateEstimate(estimate.id, { terms }) : undefined
+      }
     />
   );
 

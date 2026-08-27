@@ -20,7 +20,8 @@ import { isSignaturePng } from "@/lib/estimate-signature";
 import { estimateSignatureLines } from "@/lib/estimate-signers";
 import { photosForEstimateLine } from "@/lib/estimate-line-photos";
 import type { CompanySettings, Estimate, EstimateLine, JobMarket, JobPhoto } from "@/lib/types";
-import { filledEstimateTerms } from "@/lib/document-terms";
+import { estimateTermsValues } from "@/lib/document-terms";
+import { DocumentTermsFields } from "@/components/document-terms-fields";
 import { cn } from "@/lib/utils";
 
 export function EstimateTotals({
@@ -90,6 +91,7 @@ export function ProposalDocument({
   primaryCustomer,
   secondCustomer,
   contractorName,
+  onTermsChange,
 }: {
   estimate: Estimate;
   lines: EstimateLine[];
@@ -104,6 +106,7 @@ export function ProposalDocument({
   primaryCustomer?: string;
   secondCustomer?: string | null;
   contractorName?: string;
+  onTermsChange?: (terms: string) => void;
 }) {
   const groups = groupEstimateLines(lines);
   const site = formatJobSite(estimate);
@@ -218,15 +221,19 @@ export function ProposalDocument({
       {estimate.terms ? (
         <div>
           <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">
-            {filledEstimateTerms({
-              template: estimate.terms,
+          <DocumentTermsFields
+            value={estimate.terms}
+            values={estimateTermsValues({
               estimate: billed,
               lines,
               customer,
               company: letterhead,
             })}
-          </p>
+            disabled={!onTermsChange}
+            emptyLabel="No terms on this proposal."
+            hint=""
+            onCommit={onTermsChange ?? (() => {})}
+          />
         </div>
       ) : null}
       <ProposalSignature

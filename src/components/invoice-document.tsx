@@ -6,7 +6,8 @@ import { InvoiceStatusBadge } from "@/components/status-badge";
 import { useCrmOptional } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord, type ProjectManagerContact } from "@/lib/document-owner";
 import type { CompanySettings, Invoice, InvoiceLine, InvoiceStatus, Payment } from "@/lib/types";
-import { filledInvoiceTerms } from "@/lib/document-terms";
+import { invoiceTermsValues } from "@/lib/document-terms";
+import { DocumentTermsFields } from "@/components/document-terms-fields";
 import { formatDate, formatMoney } from "@/lib/format";
 import { invoiceBalance, invoiceTotal, lineAmount, paidOnInvoice } from "@/lib/money";
 
@@ -19,6 +20,7 @@ export function InvoiceDocument({
   status,
   showStatus = true,
   projectManager,
+  onTermsChange,
 }: {
   invoice: Invoice;
   lines: InvoiceLine[];
@@ -28,6 +30,7 @@ export function InvoiceDocument({
   status: InvoiceStatus;
   showStatus?: boolean;
   projectManager?: ProjectManagerContact | null;
+  onTermsChange?: (terms: string) => void;
 }) {
   const sorted = [...lines].sort((a, b) => a.sortOrder - b.sortOrder);
   const total = invoiceTotal(invoice.id, lines);
@@ -112,16 +115,20 @@ export function InvoiceDocument({
       {invoice.terms ? (
         <div>
           <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground">
-            {filledInvoiceTerms({
-              template: invoice.terms,
+          <DocumentTermsFields
+            value={invoice.terms}
+            values={invoiceTermsValues({
               invoice,
               lines,
               payments,
               customer,
               company: letterhead,
             })}
-          </p>
+            disabled={!onTermsChange}
+            emptyLabel="No terms on this invoice."
+            hint=""
+            onCommit={onTermsChange ?? (() => {})}
+          />
         </div>
       ) : null}
     </div>

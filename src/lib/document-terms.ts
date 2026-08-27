@@ -32,7 +32,12 @@ export const TERMS_PAYMENT_HINT =
   "Payment amounts sit on the $____ lines in the contract — they pull deposit and remaining from the proposal, and can be typed on the line like a signed form. Scope, schedule, changes, and contractor language stay locked. Number a Payment or Contract price heading, or wrap a block in [[payment]] … [[/payment]].";
 
 const PLACEHOLDER = /\{\{\s*([a-z0-9_]+)(?::([0-9.,]+))?\s*\}\}/gi;
-const PAY_BLANK = /\$[ \u00a0]*_{2,}/g;
+const BLANK_RUN = "[_＿—–‐\\-═.\\u2017\\uFF3F\\u00a0 ]";
+const PAY_BLANK = new RegExp(`\\$[ \\u00a0]*(?:${BLANK_RUN}{2,})`, "g");
+const PAYMENT_LINE_FILLED =
+  /Payment\s*(\d+)\s*:\s*\$\s*([\d,]+(?:\.\d{1,2})?)\s*(?=(due|equal|upon)\b)/gi;
+const PAYMENT_LINE_BLANK =
+  /Payment\s*(\d+)\s*:\s*\$[^a-zA-Z0-9\n{]*?(?=(due|equal|upon)\b)/gi;
 const EDITABLE_AMOUNT_KEY = /^(deposit|remaining|balance|pay_\d+|payment_\d+)$/;
 const PAYMENT_MARK_START = "[[payment]]";
 const PAYMENT_MARK_END = "[[/payment]]";
@@ -220,7 +225,8 @@ export function mergePaymentTerms(existing: string, proposed: string) {
 export function hasPaymentTermsSections(template: string) {
   if (parseTermsSections(template).some((section) => section.payment)) return true;
   if (/\{\{\s*pay_\d+/i.test(template)) return true;
-  return /\$[ \u00a0]*_{2,}/.test(template);
+  if (/Payment\s*\d+\s*:\s*\$/i.test(template)) return true;
+  return /\$[ \u00a0]*(?:[_＿—–‐\-═.\u2017\uFF3F]{2,})/.test(template);
 }
 
 export function isEditableAmountKey(key: string) {
@@ -240,8 +246,17 @@ export function lastPayIndex(template: string) {
 }
 
 export function normalizePaymentBlanks(template: string) {
-  let index = lastPayIndex(template);
-  return (template ?? "").replace(PAY_BLANK, () => `{{pay_${++index}}}`);
+  let src = template ?? "";
+  PAYMENT_LINE_FILLED.lastIndex = 0;
+  PAYMENT_LINE_BLANK.lastIndex = 0;
+  PAY_BLANK.lastIndex = 0;
+  src = src.replace(PAYMENT_LINE_FILLED, (_full, n: string, money: string) => {
+    const amount = String(money).replace(/,/g, "");
+    return `Payment ${n}: {{pay_${Number(n)}:${amount}}} `;
+  });
+  src = src.replace(PAYMENT_LINE_BLANK, (_full, n: string) => `Payment ${n}: {{pay_${Number(n)}}} `);
+  let index = lastPayIndex(src);
+  return src.replace(PAY_BLANK, () => `{{pay_${++index}}}`);
 }
 
 function formatAmountOverride(raw: string) {
