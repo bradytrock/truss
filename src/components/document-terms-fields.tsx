@@ -26,7 +26,7 @@ export function DocumentTermsFields({
   emptyLabel: string;
   hint?: string;
 }) {
-  const resolved = useMemo(() => withPaymentDefaults(values), [values]);
+  const resolved = useMemo(() => withPaymentDefaults(values, value), [values, value]);
   const parts = useMemo(() => splitTermsInline(value), [value]);
 
   if (!value.trim()) {
@@ -138,7 +138,7 @@ export function TermsLockPreview({ value }: { value: string }) {
     <div className="grid gap-2 text-xs text-muted-foreground">
       <p>
         {blanks.length > 0
-          ? `${blanks.length} payment line${blanks.length === 1 ? "" : "s"} on this contract fill from deposit and remaining, and can be typed on the line.`
+          ? `${blanks.length} payment line${blanks.length === 1 ? "" : "s"} on this contract. Payment 1 fills from deposit; Payment 3 is the amount not in Payment 1 and 2.`
           : "Add $____ on a payment line to make an amount fill-in on each estimate."}
       </p>
       <p>{TERMS_PAYMENT_HINT}</p>
