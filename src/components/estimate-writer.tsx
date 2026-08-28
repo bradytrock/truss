@@ -80,6 +80,11 @@ import { downloadEstimatePdf } from "@/lib/document-pdf";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { shareUrl } from "@/lib/share";
 import { formatDate, formatMoney } from "@/lib/format";
+import {
+  catalogProposalUnitPrice,
+  effectiveCatalogMargin,
+  formatMarginPercent,
+} from "@/lib/catalog-margin";
 import { billingEstimate, defaultTaxRateForMarket, isResidentialMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { formatJobSite } from "@/lib/leads";
 import { jobPaperHref } from "@/lib/job-record";
@@ -157,7 +162,7 @@ export function PriceBookSheet({
   onOpenChange: (open: boolean) => void;
   onPick: (catalogItemId: string) => void;
 }) {
-  const { catalog, viewer } = useCrm();
+  const { catalog, company, viewer } = useCrm();
   const groups = useMemo(() => {
     const kinds = Array.from(new Set(catalog.map((item) => item.kind))) as CatalogKind[];
     return kinds.map((kind) => ({
@@ -172,7 +177,8 @@ export function PriceBookSheet({
         <SheetHeader>
           <SheetTitle>Price book</SheetTitle>
           <SheetDescription>
-            Drop a catalog item onto this proposal. Quantity and price stay editable after you add it.
+            Drop a catalog item onto this proposal. The price is unit cost plus the item’s margin, at least the
+            company minimum. Quantity and price stay editable after you add it.
           </SheetDescription>
         </SheetHeader>
         <Command className="min-h-0 flex-1 border-0 bg-transparent p-0">
@@ -200,10 +206,20 @@ export function PriceBookSheet({
                       <p>{item.name}</p>
                       <p className="text-xs text-muted-foreground">
                         {item.costCode} · {item.unit}
+                        {effectiveCatalogMargin(item.marginPercent, company.minimumMarginPercent) > 0
+                          ? ` · ${formatMoney(item.unitCost)} cost`
+                          : ""}
                       </p>
                     </div>
                     <span className="tabular-nums text-muted-foreground">
-                      {formatMoney(item.unitCost)}
+                      {formatMoney(catalogProposalUnitPrice(item, company))}
+                      {effectiveCatalogMargin(item.marginPercent, company.minimumMarginPercent) > 0 ? (
+                        <span className="ml-1 text-xs">
+                          {formatMarginPercent(
+                            effectiveCatalogMargin(item.marginPercent, company.minimumMarginPercent),
+                          )}
+                        </span>
+                      ) : null}
                     </span>
                   </CommandItem>
                 ))}

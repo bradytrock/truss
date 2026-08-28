@@ -4,12 +4,14 @@ import {
   type CatalogItem,
   type CatalogKind,
 } from "@/lib/types";
+import { clampMarginPercent } from "@/lib/catalog-margin";
 
 export type CatalogImportDraft = {
   name: string;
   kind: CatalogKind;
   unit: string;
   unitCost: number;
+  marginPercent: number;
   costCode: string;
 };
 
@@ -23,13 +25,14 @@ export type CatalogImportPreview = {
   issues: CatalogImportIssue[];
 };
 
-export const CATALOG_CSV_HEADERS = ["name", "kind", "unit", "unit_cost", "cost_code"] as const;
+export const CATALOG_CSV_HEADERS = ["name", "kind", "unit", "unit_cost", "cost_code", "margin_percent"] as const;
 
 const NAME_HEADERS = new Set(["name", "item", "item name", "description", "title"]);
 const KIND_HEADERS = new Set(["kind", "type", "category", "class"]);
 const UNIT_HEADERS = new Set(["unit", "uom", "u m"]);
 const COST_HEADERS = new Set(["unit cost", "cost", "price", "unit price", "rate", "amount"]);
 const CODE_HEADERS = new Set(["cost code", "code", "sku", "item code"]);
+const MARGIN_HEADERS = new Set(["margin", "margin percent", "margin_percent", "markup", "markup percent", "markup %"]);
 
 const KIND_ALIASES: Record<string, CatalogKind> = {
   labor: "labor",
@@ -54,9 +57,9 @@ const KIND_ALIASES: Record<string, CatalogKind> = {
 };
 
 export const CATALOG_CSV_TEMPLATE = `${CATALOG_CSV_HEADERS.join(",")}
-Architectural shingles,material,sq,425.00,07 31 13
-Tear-off,labor,sq,85.00,07 31 13.L
-Dumpster,equipment,ea,450.00,
+Architectural shingles,material,sq,425.00,07 31 13,25
+Tear-off,labor,sq,85.00,07 31 13.L,20
+Dumpster,equipment,ea,450.00,,15
 `;
 
 function normalizeHeader(value: string) {
@@ -80,6 +83,14 @@ function parseCost(raw: string) {
   const amount = Number(trimmed);
   if (!Number.isFinite(amount) || amount < 0) return null;
   return Math.round(amount * 100) / 100;
+}
+
+function parseMargin(raw: string) {
+  const trimmed = raw.trim().replace(/%/g, "");
+  if (!trimmed) return 0;
+  const amount = Number(trimmed);
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  return clampMarginPercent(amount);
 }
 
 function detectDelimiter(firstLine: string) {
@@ -166,15 +177,16 @@ export function parseCatalogCsv(text: string): CatalogImportPreview {
     unit: columnIndex(first, UNIT_HEADERS),
     unitCost: columnIndex(first, COST_HEADERS),
     costCode: columnIndex(first, CODE_HEADERS),
+    marginPercent: columnIndex(first, MARGIN_HEADERS),
   };
   const hasHeader = named.name >= 0;
   const body = hasHeader ? table.slice(1) : table;
   const cols = hasHeader
     ? named
-    : { name: 0, kind: 1, unit: 2, unitCost: 3, costCode: 4 };
+    : { name: 0, kind: 1, unit: 2, unitCost: 3, costCode: 4, marginPercent: 5 };
 
   if (cols.name < 0) {
-    throw new Error("Add a name column. Use headers name, kind, unit, unit_cost, cost_code.");
+    throw new Error("Add a name column. Use headers name, kind, unit, unit_cost, cost_code, margin_percent.");
   }
 
   const rows: CatalogImportDraft[] = [];
@@ -200,11 +212,18 @@ export function parseCatalogCsv(text: string): CatalogImportPreview {
       issues.push({ line, message: `Unit cost “${costRaw.trim()}” is not a number.` });
       return;
     }
+    const marginRaw = cols.marginPercent >= 0 ? (cells[cols.marginPercent] ?? "") : "";
+    const marginPercent = parseMargin(marginRaw);
+    if (marginPercent == null) {
+      issues.push({ line, message: `Margin “${marginRaw.trim()}” is not a percent.` });
+      return;
+    }
     rows.push({
       name,
       kind,
       unit: (cols.unit >= 0 ? (cells[cols.unit] ?? "") : "").trim() || "ea",
       unitCost,
+      marginPercent,
       costCode: (cols.costCode >= 0 ? (cells[cols.costCode] ?? "") : "").trim(),
     });
   });
@@ -216,7 +235,7 @@ export function catalogToCsv(items: CatalogItem[]) {
   const lines = [
     CATALOG_CSV_HEADERS.join(","),
     ...items.map((item) =>
-      [item.name, item.kind, item.unit, item.unitCost.toFixed(2), item.costCode]
+      [item.name, item.kind, item.unit, item.unitCost.toFixed(2), item.costCode, item.marginPercent.toFixed(2)]
         .map((cell) => `"${String(cell).replaceAll('"', '""')}"`)
         .join(","),
     ),

@@ -1,3 +1,4 @@
+import { fillCatalogItem } from "@/lib/catalog-margin";
 import { fillMaterialOrder, fillMaterialOrderLine } from "@/lib/material-orders";
 import { fillMaterialOrderTemplate, fillMaterialOrderTemplateLine } from "@/lib/material-order-templates";
 import { fillEstimate, fillEstimateLine } from "@/lib/estimate-totals";
@@ -125,6 +126,7 @@ export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>):
     logoStoragePath: row.logo_storage_path ?? "",
     defaultEstimateTerms: row.default_estimate_terms ?? null,
     defaultInvoiceTerms: row.default_invoice_terms ?? null,
+    minimumMarginPercent: Number(row.minimum_margin_percent ?? 0),
   };
 }
 
@@ -351,14 +353,15 @@ export function jobPatch(patch: Partial<Job>) {
 }
 
 export function mapCatalogItem(row: CatalogRow): CatalogItem {
-  return {
+  return fillCatalogItem({
     id: row.id,
     name: row.name,
     kind: row.kind,
     unit: row.unit,
     unitCost: Number(row.unit_cost),
+    marginPercent: Number(row.margin_percent ?? 0),
     costCode: row.cost_code,
-  };
+  });
 }
 
 export function catalogPatch(patch: Partial<CatalogItem>) {
@@ -367,6 +370,7 @@ export function catalogPatch(patch: Partial<CatalogItem>) {
   if (patch.kind !== undefined) row.kind = patch.kind;
   if (patch.unit !== undefined) row.unit = patch.unit;
   if (patch.unitCost !== undefined) row.unit_cost = patch.unitCost;
+  if (patch.marginPercent !== undefined) row.margin_percent = patch.marginPercent;
   if (patch.costCode !== undefined) row.cost_code = patch.costCode;
   return row;
 }

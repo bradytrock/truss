@@ -31,6 +31,7 @@ import {
   parseCatalogCsv,
 } from "@/lib/catalog-csv";
 import { useCrm } from "@/lib/crm-store";
+import { catalogProposalUnitPrice, effectiveCatalogMargin, formatMarginPercent } from "@/lib/catalog-margin";
 import { formatMoney } from "@/lib/format";
 import {
   CATALOG_KIND_LABELS,
@@ -44,6 +45,7 @@ type KindFilter = CatalogKind | "all";
 
 export function PriceBookPanel() {
   const crm = useCrm();
+  const minMargin = crm.company.minimumMarginPercent ?? 0;
   const fileRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<KindFilter>("all");
@@ -139,8 +141,10 @@ export function PriceBookPanel() {
         <CardHeader className="border-b">
           <CardTitle>Mass upload</CardTitle>
           <CardDescription>
-            CSV with name, kind, unit, unit cost, and cost code. Rows with a matching cost code (or the same name and
-            kind) update; the rest are added. Changing a unit cost here does not rewrite lines already on a proposal.
+            CSV with name, kind, unit, unit cost, cost code, and optional margin percent. Rows with a matching cost
+            code (or the same name and kind) update; the rest are added. Changing a unit cost or margin here does not
+            rewrite lines already on a proposal. The company minimum margin in Settings is a floor when an item is
+            dropped onto a proposal.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 pt-4">
@@ -176,7 +180,8 @@ export function PriceBookPanel() {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">Drop a CSV here or choose a file</p>
               <p className="text-xs text-muted-foreground">
-                Kind must be labor, material, equipment, allowance, or subcontract. Excel: Save As → CSV UTF-8.
+                Kind must be labor, material, equipment, allowance, or subcontract. Margin is a percent (20, not
+                0.20). Excel: Save As → CSV UTF-8.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -218,6 +223,7 @@ export function PriceBookPanel() {
                         <TableHead>Kind</TableHead>
                         <TableHead>Unit</TableHead>
                         <TableHead className="text-right">Unit cost</TableHead>
+                        <TableHead className="text-right">Margin</TableHead>
                         <TableHead>Code</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -228,6 +234,9 @@ export function PriceBookPanel() {
                           <TableCell>{CATALOG_KIND_LABELS[row.kind]}</TableCell>
                           <TableCell>{row.unit}</TableCell>
                           <TableCell className="text-right tabular-nums">{formatMoney(row.unitCost)}</TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {formatMarginPercent(row.marginPercent)}
+                          </TableCell>
                           <TableCell className="tabular-nums">{row.costCode || "—"}</TableCell>
                         </TableRow>
                       ))}
@@ -327,6 +336,9 @@ export function PriceBookPanel() {
                     <p className="font-medium">{item.name}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {item.costCode || "No code"} · {item.unit}
+                      {effectiveCatalogMargin(item.marginPercent, minMargin) > 0
+                        ? ` · ${formatMarginPercent(effectiveCatalogMargin(item.marginPercent, minMargin))} → ${formatMoney(catalogProposalUnitPrice(item, crm.company))}`
+                        : ""}
                     </p>
                   </div>
                   <p className="shrink-0 tabular-nums text-sm">{formatMoney(item.unitCost)}</p>
@@ -362,6 +374,8 @@ export function PriceBookPanel() {
                   <TableHead>Kind</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead className="text-right">Unit cost</TableHead>
+                  <TableHead className="text-right">Margin</TableHead>
+                  <TableHead className="text-right">Proposal</TableHead>
                   <TableHead className="w-24">
                     <span className="sr-only">Actions</span>
                   </TableHead>
@@ -379,6 +393,15 @@ export function PriceBookPanel() {
                     </TableCell>
                     <TableCell>{item.unit}</TableCell>
                     <TableCell className="text-right tabular-nums">{formatMoney(item.unitCost)}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatMarginPercent(effectiveCatalogMargin(item.marginPercent, minMargin))}
+                      {minMargin > item.marginPercent ? (
+                        <span className="block text-[11px] font-normal text-muted-foreground">min</span>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatMoney(catalogProposalUnitPrice(item, crm.company))}
+                    </TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-1">
                         <Button

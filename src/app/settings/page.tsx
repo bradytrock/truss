@@ -13,6 +13,7 @@ import { PeopleSettings } from "@/components/people-settings";
 import { useCrm } from "@/lib/crm-store";
 import { LOGO_ACCEPT } from "@/lib/company-logo";
 import { DEFAULT_ESTIMATE_TERMS, DEFAULT_INVOICE_TERMS, ESTIMATE_TERMS_HINT, INVOICE_TERMS_HINT } from "@/lib/document-terms";
+import { formatMarginPercent } from "@/lib/catalog-margin";
 import { TermsLockPreview } from "@/components/document-terms-fields";
 import type { CompanySettings } from "@/lib/types";
 import { canManageSettings } from "@/lib/visibility";
@@ -257,6 +258,45 @@ export default function SettingsPage() {
               </p>
               <TermsLockPreview value={form.defaultInvoiceTerms ?? DEFAULT_INVOICE_TERMS} />
             </CollapsibleTerms>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Proposal margin</CardTitle>
+            <CardDescription>
+              Catalog items added to a proposal are marked up from unit cost. This company minimum is a floor — an
+              item can carry a higher margin of its own. Changing it does not rewrite lines already on a proposal.
+              Material orders still copy unit cost.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4 pt-4">
+            <div className="grid gap-1.5 sm:max-w-xs">
+              <Label htmlFor="company-min-margin">Minimum margin</Label>
+              <div className="relative">
+                <Input
+                  id="company-min-margin"
+                  type="number"
+                  min={0}
+                  max={1000}
+                  step="0.01"
+                  className="pr-8"
+                  value={Number.isFinite(form.minimumMarginPercent) ? String(form.minimumMarginPercent) : "0"}
+                  onChange={(event) => {
+                    const next = Number(event.target.value);
+                    patch("minimumMarginPercent", Number.isFinite(next) && next >= 0 ? next : 0);
+                  }}
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
+                  %
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                { (form.minimumMarginPercent ?? 0) > 0
+                  ? `A $100 cost drops onto a proposal at ${formatMarginPercent(form.minimumMarginPercent ?? 0)} — $${(100 * (1 + (form.minimumMarginPercent ?? 0) / 100)).toFixed(2)} — unless the item’s own margin is higher.`
+                  : "0% means no floor. Set a number like 20 so every catalog line is marked up at least that much."}
+              </p>
+            </div>
           </CardContent>
         </Card>
 

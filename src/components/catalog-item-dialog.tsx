@@ -23,6 +23,13 @@ import {
 import { useCrm } from "@/lib/crm-store";
 import { COMMON_UNITS } from "@/lib/estimate-totals";
 import {
+  catalogProposalUnitPrice,
+  clampMarginPercent,
+  effectiveCatalogMargin,
+  formatMarginPercent,
+} from "@/lib/catalog-margin";
+import { formatMoney } from "@/lib/format";
+import {
   CATALOG_KIND_LABELS,
   CATALOG_KINDS,
   type CatalogItem,
@@ -34,6 +41,7 @@ type Draft = {
   kind: CatalogKind;
   unit: string;
   unitCost: string;
+  marginPercent: string;
   costCode: string;
 };
 
@@ -42,6 +50,7 @@ const emptyDraft: Draft = {
   kind: "labor",
   unit: "ea",
   unitCost: "0",
+  marginPercent: "0",
   costCode: "",
 };
 
@@ -51,6 +60,7 @@ function draftFromItem(item: CatalogItem): Draft {
     kind: item.kind,
     unit: item.unit,
     unitCost: String(item.unitCost),
+    marginPercent: String(item.marginPercent),
     costCode: item.costCode,
   };
 }
@@ -59,6 +69,12 @@ function parseCost(value: string) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return 0;
   return Math.round(n * 100) / 100;
+}
+
+function parseMargin(value: string) {
+  const n = Number(value.replace(/%/g, "").trim());
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return clampMarginPercent(n);
 }
 
 export function CatalogItemDialog({
@@ -75,6 +91,13 @@ export function CatalogItemDialog({
   const [pending, setPending] = useState(false);
   const editing = Boolean(item);
   const units = Array.from(new Set([...COMMON_UNITS, draft.unit].filter(Boolean)));
+  const itemMargin = parseMargin(draft.marginPercent);
+  const floor = crm.company.minimumMarginPercent ?? 0;
+  const effective = effectiveCatalogMargin(itemMargin, floor);
+  const sell = catalogProposalUnitPrice(
+    { unitCost: parseCost(draft.unitCost), marginPercent: itemMargin },
+    crm.company,
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -94,6 +117,7 @@ export function CatalogItemDialog({
         kind: draft.kind,
         unit: draft.unit.trim() || "ea",
         unitCost: parseCost(draft.unitCost),
+        marginPercent: parseMargin(draft.marginPercent),
         costCode: draft.costCode.trim(),
       };
       if (item) {
@@ -117,7 +141,8 @@ export function CatalogItemDialog({
         <DialogHeader>
           <DialogTitle>{editing ? "Edit price book item" : "New price book item"}</DialogTitle>
           <DialogDescription>
-            Estimators drop this onto a proposal. Quantity and price stay editable on the estimate.
+            Drop this onto a proposal and the sell price is unit cost plus margin, at least the company
+            minimum. Quantity and price stay editable on the estimate.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
@@ -196,17 +221,45 @@ export function CatalogItemDialog({
               />
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="catalog-code">Cost code</Label>
-              <Input
-                id="catalog-code"
-                value={draft.costCode}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, costCode: event.target.value }))
-                }
-                placeholder="07 31 13"
-                autoComplete="off"
-              />
+              <Label htmlFor="catalog-margin">Margin</Label>
+              <div className="relative">
+                <Input
+                  id="catalog-margin"
+                  type="number"
+                  min={0}
+                  max={1000}
+                  step="0.01"
+                  className="pr-8"
+                  value={draft.marginPercent}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, marginPercent: event.target.value }))
+                  }
+                />
+                <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-muted-foreground">
+                  %
+                </span>
+              </div>
             </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Proposal price {formatMoney(sell)}
+            {effective > 0 ? ` at ${formatMarginPercent(effective)}` : ""}
+            {floor > itemMargin
+              ? ` (company minimum ${formatMarginPercent(floor)})`
+              : ""}
+            . Changing this does not rewrite lines already on a proposal.
+          </p>
+          <div className="grid gap-1.5">
+            <Label htmlFor="catalog-code">Cost code</Label>
+            <Input
+              id="catalog-code"
+              value={draft.costCode}
+              onChange={(event) =>
+                setDraft((current) => ({ ...current, costCode: event.target.value }))
+              }
+              placeholder="07 31 13"
+              autoComplete="off"
+            />
           </div>
         </div>
         <DialogFooter>

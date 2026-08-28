@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId, jobInsertPayload, jobsFilledFromLeads, jobPatchFromLead, leadOverviewBackfill } from "@/lib/job-record";
@@ -29,6 +29,11 @@ import {
 } from "@/lib/estimate-totals";
 import { mergePaymentTerms, lockedTermsChanged, resolveEstimateTerms, resolveInvoiceTerms } from "@/lib/document-terms";
 import { matchCatalogItem, type CatalogImportDraft } from "@/lib/catalog-csv";
+import {
+  catalogProposalUnitPrice,
+  clampMarginPercent,
+  fillCatalogItem,
+} from "@/lib/catalog-margin";
 import { fillMaterialOrder, fillMaterialOrderLine, lineFromCatalogItem } from "@/lib/material-orders";
 import {
   fillMaterialOrderTemplate,
@@ -752,6 +757,7 @@ type CrmContextValue = CrmState & {
     kind: CatalogKind;
     unit: string;
     unitCost: number;
+    marginPercent?: number;
     costCode?: string;
   }) => Promise<CatalogItem>;
   updateCatalogItem: (id: string, patch: Partial<CatalogItem>) => Promise<void>;
@@ -3458,13 +3464,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         description: item.name,
         quantity: 1,
         unit: item.unit,
-        unitCost: item.unitCost,
+        unitCost: catalogProposalUnitPrice(item, companySettings),
         sortOrder,
         groupName: groupName ?? "",
       });
       await persistTemplateLine(line);
     },
-    [state.catalog, state.estimateTemplateLines, user.companyId],
+    [companySettings, state.catalog, state.estimateTemplateLines, user.companyId],
   );
 
   const addCustomTemplateLine = useCallback(
@@ -3618,6 +3624,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       kind: CatalogKind;
       unit: string;
       unitCost: number;
+      marginPercent?: number;
       costCode?: string;
     }) => {
       const name = input.name.trim();
@@ -3625,32 +3632,38 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error("Name the item so estimators can find it.");
         throw new Error("Name is required.");
       }
-      const item: CatalogItem = {
+      const item = fillCatalogItem({
         id: crypto.randomUUID(),
         name,
         kind: input.kind,
         unit: input.unit.trim() || "ea",
         unitCost: Math.max(0, Math.round(input.unitCost * 100) / 100),
+        marginPercent: input.marginPercent,
         costCode: input.costCode?.trim() ?? "",
-      };
+      });
       const supabase = maybeClient();
       if (!supabase) {
         setState((prev) => ({ ...prev, catalog: [item, ...prev.catalog] }));
         return item;
       }
-      const { data, error } = await supabase
-        .from("catalog_items")
-        .insert({
-          id: item.id,
-          company_id: user.companyId,
-          name: item.name,
-          kind: item.kind,
-          unit: item.unit,
-          unit_cost: item.unitCost,
-          cost_code: item.costCode,
-        })
-        .select("*")
-        .single();
+      const payload = {
+        id: item.id,
+        company_id: user.companyId,
+        name: item.name,
+        kind: item.kind,
+        unit: item.unit,
+        unit_cost: item.unitCost,
+        cost_code: item.costCode,
+        margin_percent: item.marginPercent,
+      };
+      let { data, error } = await supabase.from("catalog_items").insert(payload).select("*").single();
+      if (error && isMissingCatalogMargin(error)) {
+        const { margin_percent: _margin, ...rest } = payload;
+        const retry = await supabase.from("catalog_items").insert(rest).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingCatalogMarginMessage());
+      }
       if (error) {
         toast.error(error.message);
         throw error;
@@ -3668,6 +3681,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     if (next.unit !== undefined) next.unit = next.unit.trim() || "ea";
     if (next.costCode !== undefined) next.costCode = next.costCode.trim();
     if (next.unitCost !== undefined) next.unitCost = Math.max(0, Math.round(next.unitCost * 100) / 100);
+    if (next.marginPercent !== undefined) next.marginPercent = clampMarginPercent(next.marginPercent);
     if (next.name === "") {
       toast.error("Name the item so estimators can find it.");
       return;
@@ -3683,6 +3697,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return;
     }
     const { error } = await supabase.from("catalog_items").update(catalogPatch(next)).eq("id", id);
+    if (error && isMissingCatalogMargin(error)) {
+      const { margin_percent: _margin, ...rest } = catalogPatch(next);
+      const retry = await supabase.from("catalog_items").update(rest).eq("id", id);
+      if (!retry.error) {
+        toast.message(missingCatalogMarginMessage());
+        apply();
+        return;
+      }
+      toast.error(retry.error.message);
+      return;
+    }
     if (error) {
       toast.error(error.message);
       return;
@@ -3720,6 +3745,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           kind: row.kind,
           unit: row.unit.trim() || "ea",
           unitCost: Math.max(0, Math.round(row.unitCost * 100) / 100),
+          marginPercent: clampMarginPercent(row.marginPercent),
           costCode: row.costCode.trim(),
         };
         if (!next.name) continue;
@@ -3730,6 +3756,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             existing.kind === next.kind &&
             existing.unit === next.unit &&
             existing.unitCost === next.unitCost &&
+            existing.marginPercent === next.marginPercent &&
             existing.costCode === next.costCode;
           if (!same) {
             toUpdate.push({ id: existing.id, patch: next });
@@ -3737,7 +3764,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           }
           continue;
         }
-        const item: CatalogItem = { id: crypto.randomUUID(), ...next };
+        const item = fillCatalogItem({ id: crypto.randomUUID(), ...next });
         toInsert.push(item);
         working.unshift(item);
       }
@@ -3759,20 +3786,28 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const inserted: CatalogItem[] = [];
       for (let i = 0; i < toInsert.length; i += chunkSize) {
         const chunk = toInsert.slice(i, i + chunkSize);
-        const { data, error } = await supabase
-          .from("catalog_items")
-          .insert(
-            chunk.map((item) => ({
-              id: item.id,
-              company_id: user.companyId,
-              name: item.name,
-              kind: item.kind,
-              unit: item.unit,
-              unit_cost: item.unitCost,
-              cost_code: item.costCode,
-            })),
-          )
-          .select("*");
+        const payload = chunk.map((item) => ({
+          id: item.id,
+          company_id: user.companyId,
+          name: item.name,
+          kind: item.kind,
+          unit: item.unit,
+          unit_cost: item.unitCost,
+          cost_code: item.costCode,
+          margin_percent: item.marginPercent,
+        }));
+        let { data, error } = await supabase.from("catalog_items").insert(payload).select("*");
+        if (error && isMissingCatalogMargin(error)) {
+          const retry = await supabase
+            .from("catalog_items")
+            .insert(
+              payload.map(({ margin_percent: _margin, ...rest }) => rest),
+            )
+            .select("*");
+          data = retry.data;
+          error = retry.error;
+          if (!error) toast.message(missingCatalogMarginMessage());
+        }
         if (error) {
           toast.error(error.message);
           throw error;
@@ -3786,6 +3821,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           .update(catalogPatch(change.patch))
           .eq("id", change.id);
         if (error) {
+          if (isMissingCatalogMargin(error)) {
+            const { margin_percent: _margin, ...rest } = catalogPatch(change.patch);
+            const retry = await supabase.from("catalog_items").update(rest).eq("id", change.id);
+            if (!retry.error) {
+              toast.message(missingCatalogMarginMessage());
+              continue;
+            }
+            toast.error(retry.error.message);
+            throw retry.error;
+          }
           toast.error(error.message);
           throw error;
         }
@@ -3826,7 +3871,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         description: item.name,
         quantity: 1,
         unit: item.unit,
-        unitCost: item.unitCost,
+        unitCost: catalogProposalUnitPrice(item, companySettings),
         sortOrder,
         groupName: groupName ?? "",
       });
@@ -3881,7 +3926,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }));
       return saved;
     },
-    [state.catalog, state.estimateLines, user.companyId]
+    [companySettings, state.catalog, state.estimateLines, user.companyId]
   );
 
   const addCustomEstimateLine = useCallback(
@@ -6201,6 +6246,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         logoStoragePath: next.logoStoragePath?.trim() ?? "",
         defaultEstimateTerms: next.defaultEstimateTerms ?? null,
         defaultInvoiceTerms: next.defaultInvoiceTerms ?? null,
+        minimumMarginPercent: clampMarginPercent(next.minimumMarginPercent),
       };
       if (!isSupabaseConfigured() || !user.companyId || user.companyId === "local") {
         setCompanySettings(settings);
@@ -6224,6 +6270,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         logo_storage_path: settings.logoStoragePath,
         default_estimate_terms: settings.defaultEstimateTerms,
         default_invoice_terms: settings.defaultInvoiceTerms,
+        minimum_margin_percent: settings.minimumMarginPercent,
         updated_at: new Date().toISOString(),
       };
       let { data, error } = await supabase
@@ -6248,6 +6295,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       if (error && isMissingCompanyDocumentTermsColumns(error)) {
         const { default_estimate_terms: _estimateTerms, default_invoice_terms: _invoiceTerms, ...rest } = attempted;
+        attempted = rest;
         const retry = await supabase
           .from("companies")
           .update(rest as typeof payload)
@@ -6257,6 +6305,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         data = retry.data;
         error = retry.error;
         if (!error) toast.message(missingDocumentTermsMessage());
+      }
+      if (error && isMissingCatalogMargin(error)) {
+        const { minimum_margin_percent: _minMargin, ...rest } = attempted;
+        attempted = rest;
+        const retry = await supabase
+          .from("companies")
+          .update(rest as typeof payload)
+          .eq("id", user.companyId)
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingCatalogMarginMessage());
       }
       if (error || !data) {
         const missingColumn =
@@ -6277,6 +6338,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         logoStoragePath: settings.logoStoragePath,
         defaultEstimateTerms: mapped.defaultEstimateTerms ?? settings.defaultEstimateTerms,
         defaultInvoiceTerms: mapped.defaultInvoiceTerms ?? settings.defaultInvoiceTerms,
+        minimumMarginPercent: mapped.minimumMarginPercent ?? settings.minimumMarginPercent,
       };
       setCompanySettings(saved);
       setUser((current) => ({ ...current, company: saved.name }));

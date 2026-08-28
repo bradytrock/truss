@@ -452,3 +452,15 @@ export function isMissingMaterialOrders(error: { message?: string; code?: string
 export function missingMaterialOrdersMessage() {
   return `Saved in this browser. Run ${MATERIAL_ORDERS_SQL} in the SQL editor (or a fresh bootstrap) so material orders persist for the office and the field.`;
 }
+
+export const CATALOG_MARGIN_SQL = "supabase/migrations/20260828140000_catalog_margin.sql";
+
+export function isMissingCatalogMargin(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return message.includes("margin_percent") || message.includes("minimum_margin_percent");
+}
+
+export function missingCatalogMarginMessage() {
+  return `Saved in this browser. Run ${CATALOG_MARGIN_SQL} in the SQL editor (or a fresh bootstrap) so catalog margin and the company minimum persist.`;
+}

@@ -1,7 +1,8 @@
-import type { CatalogItem, Invoice, InvoiceLine, JobPhoto, ScheduleEvent } from "@/lib/types";
+import type { Invoice, InvoiceLine, JobPhoto, ScheduleEvent } from "@/lib/types";
+import type { CatalogItemDraft } from "@/lib/catalog-margin";
 import type { EstimateDraft, EstimateLineDraft } from "@/lib/estimate-totals";
 
-export const extraCatalog: CatalogItem[] = [
+export const extraCatalog: Array<CatalogItemDraft & { id: string }> = [
   { id: "cat_tear", name: "Roof tear-off", kind: "labor", unit: "sq", unitCost: 185, costCode: "07 31 00" },
   { id: "cat_shingle", name: "Architectural shingles", kind: "material", unit: "sq", unitCost: 420, costCode: "07 31 13" },
   { id: "cat_gutter", name: "Gutters & downspouts", kind: "subcontract", unit: "lf", unitCost: 12.5, costCode: "07 71 00" },

@@ -7439,3 +7439,12 @@ begin
 exception
   when duplicate_object then null;
 end $$;
+
+-- Catalog item margin, plus a company floor when dropping a price-book item onto a proposal.
+
+alter table public.companies
+  add column if not exists minimum_margin_percent numeric(8, 2) not null default 0;
+
+alter table public.catalog_items
+  add column if not exists margin_percent numeric(8, 2) not null default 0;
+

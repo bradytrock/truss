@@ -19,6 +19,7 @@ export type Database = {
           logo_storage_path: string;
           default_estimate_terms: string | null;
           default_invoice_terms: string | null;
+          minimum_margin_percent: number;
           created_at: string;
           updated_at: string;
         };
@@ -37,6 +38,7 @@ export type Database = {
           logo_storage_path?: string;
           default_estimate_terms?: string | null;
           default_invoice_terms?: string | null;
+          minimum_margin_percent?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -55,6 +57,7 @@ export type Database = {
           logo_storage_path?: string;
           default_estimate_terms?: string | null;
           default_invoice_terms?: string | null;
+          minimum_margin_percent?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -413,6 +416,7 @@ export type Database = {
           unit: string;
           unit_cost: number;
           cost_code: string;
+          margin_percent: number;
           created_at: string;
         };
         Insert: {
@@ -423,6 +427,7 @@ export type Database = {
           unit?: string;
           unit_cost?: number;
           cost_code?: string;
+          margin_percent?: number;
         };
         Update: Partial<Database["public"]["Tables"]["catalog_items"]["Insert"]>;
         Relationships: [];

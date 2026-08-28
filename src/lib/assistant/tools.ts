@@ -79,7 +79,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   },
   {
     name: "search_catalog",
-    description: "Search the company price book to add lines onto an estimate.",
+    description: "Search the company price book to add lines onto an estimate. Returns unit cost and the proposal price after margin.",
     status: "Searching the price book…",
     gate: "ops",
     parameters: object({ query: str("Product or labor name, e.g. architectural shingle") }, ["query"]),

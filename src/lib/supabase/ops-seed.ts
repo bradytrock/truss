@@ -96,6 +96,7 @@ export async function insertOperations(
       unit: item.unit,
       unit_cost: item.unitCost,
       cost_code: item.costCode,
+      margin_percent: item.marginPercent,
     }))
   );
   if (catalogError) throw catalogError;

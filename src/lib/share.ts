@@ -453,6 +453,7 @@ export function companySettingsFromShared(company: SharedCompany): CompanySettin
     logoUrl: company.logoUrl,
     defaultEstimateTerms: null,
     defaultInvoiceTerms: null,
+    minimumMarginPercent: 0,
   };
 }
 

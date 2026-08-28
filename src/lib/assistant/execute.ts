@@ -25,6 +25,7 @@ import {
 } from "@/lib/types";
 import { canDeleteJobs } from "@/lib/visibility";
 import { isBusinessDevelopment } from "@/lib/bd";
+import { catalogProposalUnitPrice } from "@/lib/catalog-margin";
 import { expenseRequiresJob } from "@/lib/qbwc/work";
 
 type Crm = ReturnType<typeof useCrm>;
@@ -314,6 +315,8 @@ async function runTool(
           name: item.name,
           unit: item.unit,
           unitCost: item.unitCost,
+          marginPercent: item.marginPercent,
+          proposalPrice: catalogProposalUnitPrice(item, crm.company),
           kind: item.kind,
         }));
       return ok({ items });

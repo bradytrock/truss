@@ -147,6 +147,8 @@ export interface CompanySettings {
   /** Null or blank means the app fallback is still in use. */
   defaultEstimateTerms?: string | null;
   defaultInvoiceTerms?: string | null;
+  /** Floor applied when a catalog item is added to a proposal. 20 means 20%. */
+  minimumMarginPercent?: number;
 }
 
 export const NORTHLINE_COMPANY: CompanySettings = {
@@ -161,6 +163,7 @@ export const NORTHLINE_COMPANY: CompanySettings = {
   licenseNumber: "CO-GC-44821",
   defaultEstimateTerms: null,
   defaultInvoiceTerms: null,
+  minimumMarginPercent: 0,
 };
 
 export interface StaffMember {
@@ -374,6 +377,8 @@ export interface CatalogItem {
   kind: CatalogKind;
   unit: string;
   unitCost: number;
+  /** Markup over unit cost when this item is added to a proposal. 20 means 20%. */
+  marginPercent: number;
   costCode: string;
 }
 
