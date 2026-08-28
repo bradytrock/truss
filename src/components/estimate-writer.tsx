@@ -1079,7 +1079,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
             }
           />
           <p className="text-xs text-muted-foreground sm:col-span-2">
-            Payment 1 fills from the deposit. Payment 3 is the contract price not in Payment 1 and Payment 2. Type on those lines to set a different amount.
+            Type the Payment 1, 2, and 3 amounts on the terms lines. They stay blank until you enter them.
           </p>
         </CardContent>
       </Card>

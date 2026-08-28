@@ -1,4 +1,4 @@
-import { DEFAULT_ESTIMATE_TERMS, estimateTotals, roundMoney } from "@/lib/estimate-totals";
+import { DEFAULT_ESTIMATE_TERMS, estimateTotals } from "@/lib/estimate-totals";
 import { formatDate, formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
 import { invoiceBalance, invoiceTotal, paidOnInvoice } from "@/lib/money";
@@ -23,13 +23,13 @@ Payment is due on {{due_date}}. Any deposit on this invoice is due before remain
 {{company}} issued {{invoice_number}} to {{customer}} on {{issued}}.`;
 
 export const ESTIMATE_TERMS_HINT =
-  "Placeholders such as {{contract_price}}, {{deposit}}, {{remaining}}, {{valid_until}}, {{job_site}}, {{customer}}, {{company}}, and {{estimate_number}} fill from this proposal when it is written. Payment 1 fills from the deposit. Payment 3 is the contract price not in Payment 1 and Payment 2. Dollar blanks can be typed on the line.";
+  "Placeholders such as {{contract_price}}, {{deposit}}, {{remaining}}, {{valid_until}}, {{job_site}}, {{customer}}, {{company}}, and {{estimate_number}} fill from this proposal when it is written. Payment-line dollar blanks stay empty until you type an amount on the line.";
 
 export const INVOICE_TERMS_HINT =
-  "Placeholders such as {{total}}, {{paid}}, {{balance}}, {{due_date}}, {{issued}}, {{customer}}, {{company}}, and {{invoice_number}} fill from this invoice when it is written. Dollar blanks ($____) fill from the invoice and can be typed on the line.";
+  "Placeholders such as {{total}}, {{paid}}, {{balance}}, {{due_date}}, {{issued}}, {{customer}}, {{company}}, and {{invoice_number}} fill from this invoice when it is written. Payment-line dollar blanks stay empty until you type an amount on the line.";
 
 export const TERMS_PAYMENT_HINT =
-  "Payment 1 fills from the deposit. Payment 3 is whatever is left after Payment 1 and Payment 2. Type on a line to set a different amount. Scope, schedule, changes, and contractor language stay locked. Number a Payment or Contract price heading, or wrap a block in [[payment]] … [[/payment]].";
+  "Type the dollar amount on each Payment line. Scope, schedule, changes, and contractor language stay locked. Number a Payment or Contract price heading, or wrap a block in [[payment]] … [[/payment]].";
 
 const PLACEHOLDER = /\{\{\s*([a-z0-9_]+)(?::([0-9.,]+))?\s*\}\}/gi;
 const BLANK_RUN = "[_＿—–‐\\-═.\\u2017\\uFF3F\\u00a0\\u2500 ]";
@@ -308,41 +308,15 @@ function amountOverrides(template: string) {
   return amounts;
 }
 
-function moneyValue(...candidates: Array<string | undefined>) {
-  for (const value of candidates) {
-    const amount = parseMoneyInput(value ?? "");
-    if (amount != null) return amount;
-  }
-  return 0;
-}
-
 export function withPaymentDefaults(values: Record<string, string>, template = "") {
   const next = { ...values };
   const overrides = amountOverrides(template);
-  const payLines = lastPayIndex(normalizePaymentBlanks(template));
-  const threePlus = payLines >= 3;
-
-  if (!next.pay_1?.trim()) next.pay_1 = values.deposit ?? "";
-  if (!next.payment_1?.trim()) next.payment_1 = next.pay_1;
-
-  const total = moneyValue(values.contract_price, values.total, values.price);
-  const pay1 = overrides.get("pay_1") ?? overrides.get("payment_1") ?? moneyValue(next.pay_1, values.deposit);
-
-  if (!threePlus) {
-    if (!next.pay_2?.trim()) next.pay_2 = values.remaining || values.balance || "";
-    if (!next.payment_2?.trim()) next.payment_2 = next.pay_2;
-    return next;
+  for (const [key, amount] of overrides) {
+    next[key] = formatMoney(amount);
   }
-
-  if (!overrides.has("pay_2") && !overrides.has("payment_2")) {
-    next.pay_2 = "";
-    next.payment_2 = "";
-  }
-  const pay2 = overrides.get("pay_2") ?? overrides.get("payment_2") ?? moneyValue(next.pay_2);
-  const leftover = roundMoney(Math.max(0, total - pay1 - pay2));
-  if (!overrides.has("pay_3") && !overrides.has("payment_3")) {
-    next.pay_3 = formatMoney(leftover);
-    next.payment_3 = next.pay_3;
+  for (const key of Object.keys(next)) {
+    if (!/^pay_\d+$/.test(key) && !/^payment_\d+$/.test(key)) continue;
+    if (!overrides.has(key)) next[key] = "";
   }
   return next;
 }

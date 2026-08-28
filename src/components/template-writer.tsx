@@ -289,7 +289,7 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
             value={template.terms}
             values={{}}
             emptyLabel="No terms on this template."
-            hint={`${ESTIMATE_TERMS_HINT} Dollar blanks stay on the line. Amounts fill from the estimate when a proposal is written.`}
+            hint={`${ESTIMATE_TERMS_HINT} Type payment-line amounts on each proposal; they do not fill from the estimate totals.`}
             onCommit={(value) => void crm.updateEstimateTemplate(template.id, { terms: value })}
           />
         </CardContent>

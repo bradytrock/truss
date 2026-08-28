@@ -54,7 +54,7 @@ export function DocumentTermsFields({
       {hint === "" ? null : (
         <p className="text-xs text-muted-foreground">
           {hint ??
-            "Payment amounts sit on the lines and fill from the figures above. Other contract language stays locked from Settings."}
+            "Type payment amounts on the lines. Other contract language stays locked from Settings."}
         </p>
       )}
     </div>
@@ -147,7 +147,7 @@ export function TermsLockPreview({ value }: { value: string }) {
     <div className="grid gap-2 text-xs text-muted-foreground">
       <p>
         {blanks.length > 0
-          ? `${blanks.length} payment line${blanks.length === 1 ? "" : "s"} on this contract. Payment 1 fills from deposit; Payment 3 is the amount not in Payment 1 and 2.`
+          ? `${blanks.length} payment line${blanks.length === 1 ? "" : "s"} on this contract. Type each dollar amount on the line; they do not fill from deposit or remaining.`
           : "Add $____ on a payment line to make an amount fill-in on each estimate."}
       </p>
       <p>{TERMS_PAYMENT_HINT}</p>
