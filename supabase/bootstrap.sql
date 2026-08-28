@@ -432,6 +432,10 @@ create table if not exists public.estimates (
   created_at timestamptz not null default now()
 );
 
+alter table public.estimates
+  add column if not exists owner_signed_at timestamptz,
+  add column if not exists owner_signed_name text not null default '';
+
 create index if not exists estimates_company_status_idx on public.estimates (company_id, status);
 create unique index if not exists estimates_company_number_idx on public.estimates (company_id, number);
 
@@ -446,6 +450,9 @@ create table if not exists public.estimate_lines (
   unit_cost numeric(14, 2) not null default 0,
   sort_order integer not null default 0
 );
+
+alter table public.estimate_lines
+  add column if not exists photo_ids uuid[] not null default '{}';
 
 create index if not exists estimate_lines_estimate_id_idx on public.estimate_lines (estimate_id);
 

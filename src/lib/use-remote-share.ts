@@ -39,33 +39,22 @@ export function useRemoteShare<T>({
   initial?: T | null;
   initialSender?: ShareSender | null;
 }) {
-  const served = initial !== undefined;
   const [remote, setRemote] = useState<T | null>(() => initial ?? null);
   const [sender, setSender] = useState<ShareSender | null>(() => initialSender ?? null);
-  const [remoteState, setRemoteState] = useState<"loading" | "ready" | "missing">(() => {
-    if (initial) return "ready";
-    if (served) return "missing";
-    return "loading";
-  });
+  const [remoteState, setRemoteState] = useState<"loading" | "ready" | "missing">(() =>
+    initial ? "ready" : "loading",
+  );
 
   useEffect(() => {
     const trimmed = normalizeShareToken(token);
     if (hasLocal) {
-      setRemote(null);
-      setSender(null);
       setRemoteState("ready");
       return;
     }
-    if (served) {
-      if (initial) {
-        setRemote(initial);
-        setSender(null);
-        setRemoteState("ready");
-        return;
-      }
-      setRemote(null);
-      setSender(initialSender ?? null);
-      setRemoteState("missing");
+    if (initial) {
+      setRemote(initial);
+      setSender(null);
+      setRemoteState("ready");
       return;
     }
     if (!trimmed) {
@@ -87,20 +76,20 @@ export function useRemoteShare<T>({
           return;
         }
         setRemote(null);
-        setSender(result.sender);
+        setSender(result.sender ?? initialSender ?? null);
         setRemoteState("missing");
       })
       .catch(() => {
         if (!cancelled) {
           setRemote(null);
-          setSender(null);
+          setSender(initialSender ?? null);
           setRemoteState("missing");
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [hasLocal, initial, initialSender, parse, path, served, token]);
+  }, [hasLocal, initial, initialSender, parse, path, token]);
 
   return { remote, remoteState, sender, setRemote };
 }

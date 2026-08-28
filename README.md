@@ -63,6 +63,8 @@ Default terms on estimates and invoices need [`20260825130000_document_terms.sql
 
 Notes after the total on estimate and invoice share links need [`20260827180000_document_notes.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260827180000_document_notes.sql) (or a fresh bootstrap). Until that runs, notes still print in the app and on PDFs; client share links stay blank.
 
+Client share links that flash “isn’t available” before the proposal loads need [`20260828160000_share_estimate_owner_signed.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260828160000_share_estimate_owner_signed.sql) (or a fresh bootstrap) so `shared_estimate` can read the contractor signature columns.
+
 Material orders need [`20260828120000_material_orders.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260828120000_material_orders.sql) (or a fresh bootstrap) so a job’s material list persists for the office and the field. Company templates need [`20260828130000_material_order_templates.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260828130000_material_order_templates.sql). Until those run, you can still build an order, save a template, and download a PDF in this browser.
 
 Catalog item margin and a company minimum margin need [`20260828140000_catalog_margin.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260828140000_catalog_margin.sql) (or a fresh bootstrap). Until that runs, you can still set margins and drop catalog items onto a proposal in this browser.

@@ -123,11 +123,10 @@ export function SharePageClient({
     );
   }
 
-  if (remoteState !== "missing" && !remote) {
-    return <ShareLoading />;
-  }
-
-  if (!remote || remoteState === "missing") {
+  if (!remote) {
+    if (!crm.hydrated || remoteState !== "missing") {
+      return <ShareLoading />;
+    }
     return <ShareMissing kind="page" sender={sender} />;
   }
 

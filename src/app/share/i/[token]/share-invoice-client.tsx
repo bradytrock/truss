@@ -96,11 +96,10 @@ export function ShareInvoiceClient({
     );
   }
 
-  if (remoteState !== "missing" && !remote) {
-    return <ShareLoading />;
-  }
-
-  if (!remote || remoteState === "missing") {
+  if (!remote) {
+    if (!crm.hydrated || remoteState !== "missing") {
+      return <ShareLoading />;
+    }
     return <ShareMissing kind="invoice" sender={sender} />;
   }
 
