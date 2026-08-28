@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { EstimateLinePhotos } from "@/components/estimate-line-photos";
+import { BackToJobButton } from "@/components/back-to-job";
 import { ProposalDocument } from "@/components/proposal-document";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { CollectSignatureDialog } from "@/components/signature-pad";
@@ -81,6 +82,7 @@ import { shareUrl } from "@/lib/share";
 import { formatDate, formatMoney } from "@/lib/format";
 import { billingEstimate, defaultTaxRateForMarket, isResidentialMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { formatJobSite } from "@/lib/leads";
+import { jobPaperHref } from "@/lib/job-record";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine, type JobPhoto } from "@/lib/types";
 import { canManageSettings } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
@@ -863,7 +865,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
             <Label>Job</Label>
             <p className="mt-1 text-sm">
               {job ? (
-                <Link href={`/jobs/${job.id}`} className="hover:underline">
+                <Link href={jobPaperHref(job.id)} className="hover:underline">
                   {job.name}
                 </Link>
               ) : (
@@ -1122,6 +1124,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   return (
     <div className="space-y-4">
       <div className="sticky top-0 z-20 -mx-5 flex flex-col gap-3 border-b bg-background/95 px-5 py-3 backdrop-blur sm:-mx-7 sm:px-7 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:backdrop-blur-none">
+        <BackToJobButton jobId={estimate.jobId} />
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
             <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">

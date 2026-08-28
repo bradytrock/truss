@@ -97,6 +97,11 @@ export function jobAddress(job: Pick<Job, "street" | "city" | "state" | "postalC
   );
 }
 
+/** Open the job overlay on Paper — estimates, invoices, and material orders live there. */
+export function jobPaperHref(jobId: string) {
+  return `/jobs?job=${encodeURIComponent(jobId)}&tab=paper`;
+}
+
 export function mapsUrl(address: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 }

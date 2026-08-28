@@ -18,10 +18,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { VendorPicker } from "@/components/vendor-picker";
+import { BackToJobButton } from "@/components/back-to-job";
 import { MaterialOrderItems } from "@/components/material-order-items";
 import { useCrm } from "@/lib/crm-store";
 import { formatMoney } from "@/lib/format";
-import { jobAddress } from "@/lib/job-record";
+import { jobAddress, jobPaperHref } from "@/lib/job-record";
 import type { MaterialOrder } from "@/lib/types";
 import { canManageSettings } from "@/lib/visibility";
 import { downloadMaterialOrderPdf } from "@/lib/material-order-pdf";
@@ -96,7 +97,9 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-5 pb-28 sm:pb-8">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="sticky top-0 z-20 -mx-5 flex flex-col gap-3 border-b bg-background/95 px-5 py-3 backdrop-blur sm:-mx-7 sm:px-7 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:backdrop-blur-none">
+        <BackToJobButton jobId={order.jobId} />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
             {order.number}
@@ -106,7 +109,7 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {job ? (
-              <Link href={`/jobs?job=${job.id}`} className="hover:underline">
+              <Link href={jobPaperHref(job.id)} className="hover:underline">
                 {job.code ? `${job.code} · ` : ""}
                 {job.name}
               </Link>
@@ -149,6 +152,7 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
             <Download />
             PDF
           </Button>
+        </div>
         </div>
       </div>
 

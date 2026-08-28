@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BackToJobButton } from "@/components/back-to-job";
 import { RecordPaymentDialog } from "@/components/create-ops-dialogs";
 import { CommitTextarea } from "@/components/estimate-writer";
 import { RecordProperty } from "@/components/app-shell";
@@ -19,6 +20,7 @@ import { downloadInvoicePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
 import { formatCurrencyFull, formatDate, formatMoney } from "@/lib/format";
+import { jobPaperHref } from "@/lib/job-record";
 import { shareUrl } from "@/lib/share";
 import type { Invoice } from "@/lib/types";
 import {
@@ -109,7 +111,9 @@ export default function InvoiceDetailPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <div className="sticky top-0 z-20 -mx-5 flex flex-col gap-3 border-b bg-background/95 px-5 py-3 backdrop-blur sm:-mx-7 sm:px-7 lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0 lg:backdrop-blur-none">
+        <BackToJobButton jobId={record.jobId} />
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
             {record.number}
@@ -152,6 +156,7 @@ export default function InvoiceDetailPage() {
               Void
             </Button>
           ) : null}
+        </div>
         </div>
       </div>
 
@@ -244,7 +249,7 @@ export default function InvoiceDetailPage() {
               <RecordProperty label="Due">{formatDate(record.dueAt)}</RecordProperty>
               <RecordProperty label="Job">
                 {job ? (
-                  <Link href={`/jobs/${job.id}`} className="hover:underline">
+                  <Link href={jobPaperHref(job.id)} className="hover:underline">
                     {job.name}
                   </Link>
                 ) : (
