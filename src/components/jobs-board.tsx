@@ -35,7 +35,12 @@ import {
   workColumnFor,
   type WorkColumn,
 } from "@/lib/work-board";
-import { assignmentOptions, canAssignLeadsToAnyone, canDeleteJobs } from "@/lib/visibility";
+import {
+  assignmentOptions,
+  canAssignLeadsToAnyone,
+  canDeleteJobs,
+  jobMatchesOwnerFilter,
+} from "@/lib/visibility";
 import { dedupeJobsByOpportunity, isDeletedJob } from "@/lib/job-record";
 import type { Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -54,9 +59,11 @@ const columnAccent: Record<WorkColumn, string> = {
 
 export function JobsBoard({
   query,
+  ownerIds,
   onSelectJob,
 }: {
   query: string;
+  ownerIds?: Set<string> | null;
   onSelectJob: (jobId: string) => void;
 }) {
   const crm = useCrm();
@@ -73,9 +80,10 @@ export function JobsBoard({
     const needle = query.trim().toLowerCase();
     return dedupeJobsByOpportunity(crm.jobs).filter((job) => {
       if (!canTrash && isDeletedJob(job)) return false;
+      const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
+      if (!jobMatchesOwnerFilter(job, opportunity, ownerIds, crm.book.staff)) return false;
       if (!needle) return true;
       const customer = crm.customerName(job);
-      const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
       return (
         job.code.toLowerCase().includes(needle) ||
         job.name.toLowerCase().includes(needle) ||
@@ -85,7 +93,7 @@ export function JobsBoard({
         (opportunity?.code.toLowerCase().includes(needle) ?? false)
       );
     });
-  }, [canTrash, crm, query]);
+  }, [canTrash, crm, ownerIds, query]);
 
   const active = crm.jobs.find((job) => job.id === activeId) ?? null;
 
@@ -130,13 +138,28 @@ export function JobsBoard({
   }
 
   if (filtered.length === 0) {
+    const searching = Boolean(query.trim());
+    const noneSelected = ownerIds !== undefined && ownerIds !== null && ownerIds.size === 0;
+    const peopleFilter = ownerIds !== undefined && ownerIds !== null;
     return (
       <EmptyState
-        title={query ? "No jobs match that search" : "No jobs yet"}
+        title={
+          noneSelected
+            ? "No people selected"
+            : searching
+              ? "No jobs match that search"
+              : peopleFilter
+                ? "No jobs for those people"
+                : "No jobs yet"
+        }
         description={
-          query
-            ? "Try a job code, homeowner, or city."
-            : "Open a new lead. The card stays on this board from the first call through punch."
+          noneSelected
+            ? "Check the people whose pipelines you want on this board, or choose Select all."
+            : searching
+              ? "Try a job code, homeowner, or city. People still checked in the filter stay in play."
+              : peopleFilter
+                ? "Those seats have nothing on this board. Check someone else, or Select all."
+                : "Open a new lead. The card stays on this board from the first call through punch."
         }
       />
     );

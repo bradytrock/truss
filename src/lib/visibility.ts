@@ -1,11 +1,14 @@
 import type {
   CrmState,
+  Job,
+  Opportunity,
   SeatRole,
   StaffMember,
   Team,
 } from "@/lib/types";
 import { SEAT_ROLE_LABELS, isNorthlineDemoName } from "@/lib/types";
 import { bdOpportunityIds, hasBusinessDevelopmentSeat, jobInBdBook, referralPartnerIds } from "@/lib/bd";
+import { documentOwnerStaff } from "@/lib/document-owner";
 
 export type AccessScope = "company" | "bd" | "team" | "own";
 
@@ -45,6 +48,106 @@ export function staffForReports(viewer: StaffMember, staff: StaffMember[]) {
     return staff.filter((member) => member.teamId === viewer.teamId || member.id === viewer.id);
   }
   return staff.filter((member) => member.id === viewer.id);
+}
+
+/** Jobs board people filter — company admin, accounting, and team leads/admins. Restricted seats stay on their own book. */
+export function canFilterJobsByOwner(viewer: StaffMember | undefined) {
+  if (!viewer || viewer.restricted || viewer.locked) return false;
+  const scope = accessScope(viewer.role, viewer.restricted);
+  return scope === "company" || scope === "team";
+}
+
+export const JOBS_UNASSIGNED_OWNER = "unassigned";
+export const JOBS_OWNERS_PARAM = "owners";
+
+export function staffForJobsOwnerFilter(viewer: StaffMember, staff: StaffMember[]) {
+  return staffForReports(viewer, staff)
+    .filter((member) => !isNorthlineDemoName(member.name))
+    .sort((left, right) => {
+      if (left.id === viewer.id && right.id !== viewer.id) return -1;
+      if (right.id === viewer.id && left.id !== viewer.id) return 1;
+      return left.name.localeCompare(right.name);
+    });
+}
+
+export function jobsOwnerFilterIds(people: StaffMember[]) {
+  return [...people.map((member) => member.id), JOBS_UNASSIGNED_OWNER];
+}
+
+export function parseJobsOwnerFilter(raw: string | null, allowedIds: readonly string[]): Set<string> | null {
+  if (raw === null) return null;
+  const allowed = new Set(allowedIds);
+  const tokens = raw
+    .split(",")
+    .map((token) => token.trim())
+    .filter(Boolean);
+  if (tokens.length === 0) return new Set();
+  const selected = new Set(tokens.filter((token) => allowed.has(token)));
+  if (selected.size === 0) return null;
+  if (selected.size === allowedIds.length && allowedIds.every((id) => selected.has(id))) {
+    return null;
+  }
+  return selected;
+}
+
+export function serializeJobsOwnerFilter(
+  selected: Set<string> | null,
+  allowedIds: readonly string[],
+): string | null {
+  if (!selected) return null;
+  if (selected.size === 0) return "";
+  if (selected.size === allowedIds.length && allowedIds.every((id) => selected.has(id))) return null;
+  return allowedIds.filter((id) => selected.has(id)).join(",");
+}
+
+export function toggleJobsOwnerFilter(
+  id: string,
+  selected: Set<string> | null,
+  allowedIds: readonly string[],
+): Set<string> | null {
+  const current = selected ?? new Set(allowedIds);
+  const next = new Set(current);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  const serialized = serializeJobsOwnerFilter(next, allowedIds);
+  return parseJobsOwnerFilter(serialized, allowedIds);
+}
+
+export function jobsOwnerFilterLabel(selected: Set<string> | null, people: StaffMember[]) {
+  if (!selected) return "Everyone";
+  if (selected.size === 0) return "Nobody";
+  const names: string[] = [];
+  for (const member of people) {
+    if (selected.has(member.id)) names.push(member.name);
+  }
+  if (selected.has(JOBS_UNASSIGNED_OWNER)) names.push("Unassigned");
+  if (names.length === 1) return names[0] ?? "People";
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names[0]} + ${names.length - 1} more`;
+}
+
+export function jobPipelineOwnerId(
+  job: Pick<Job, "ownerStaffId" | "projectManager" | "salesRep">,
+  opportunity: Pick<Opportunity, "ownerStaffId" | "estimator"> | undefined,
+  staff: StaffMember[],
+) {
+  return (
+    documentOwnerStaff({
+      job,
+      opportunity,
+      staff,
+    })?.id ?? JOBS_UNASSIGNED_OWNER
+  );
+}
+
+export function jobMatchesOwnerFilter(
+  job: Pick<Job, "ownerStaffId" | "projectManager" | "salesRep">,
+  opportunity: Pick<Opportunity, "ownerStaffId" | "estimator"> | undefined,
+  selected: Set<string> | null | undefined,
+  staff: StaffMember[],
+) {
+  if (!selected) return true;
+  return selected.has(jobPipelineOwnerId(job, opportunity, staff));
 }
 
 export function canViewAccounting(role: SeatRole) {
