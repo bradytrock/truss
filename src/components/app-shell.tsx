@@ -91,19 +91,23 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Brand />
         <Nav pathname={pathname} />
         <div className="mt-auto border-t border-sidebar-border px-4 py-3">
-          <p className="text-[10px] tracking-[0.14em] text-sidebar-foreground/35 uppercase">
+          <LivePulse />
+          <p className="mt-1 text-[10px] tracking-[0.14em] text-sidebar-foreground/35 uppercase">
             Restoration · remodel
           </p>
         </div>
       </aside>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-72 bg-sidebar p-0 text-sidebar-foreground sm:max-w-72">
+        <SheetContent side="left" className="flex h-full w-72 flex-col bg-sidebar p-0 text-sidebar-foreground sm:max-w-72">
           <SheetHeader className="sr-only">
             <SheetTitle>Navigation</SheetTitle>
           </SheetHeader>
           <Brand />
           <Nav pathname={pathname} onNavigate={() => setMobileOpen(false)} />
+          <div className="mt-auto border-t border-sidebar-border px-4 py-3">
+            <LivePulse />
+          </div>
         </SheetContent>
       </Sheet>
 
@@ -220,6 +224,27 @@ function Brand() {
       />
       <p className="mt-2 truncate pl-6 text-[11px] text-sidebar-foreground/45">{user.company}</p>
     </div>
+  );
+}
+
+function LivePulse() {
+  const { configured, liveStatus } = useCrm();
+  if (!configured) return null;
+  const label = liveStatus === "live" ? "Live" : liveStatus === "connecting" ? "Connecting" : "Reconnecting";
+  return (
+    <p
+      className="flex items-center gap-2 text-[10px] tracking-[0.14em] text-sidebar-foreground/35 uppercase"
+      title="This book updates when someone saves in the field app."
+    >
+      <span
+        className={cn(
+          "size-1.5 rounded-full",
+          liveStatus === "live" ? "bg-emerald-400" : "bg-sidebar-foreground/30",
+          liveStatus === "connecting" && "animate-pulse",
+        )}
+      />
+      {label}
+    </p>
   );
 }
 

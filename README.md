@@ -39,6 +39,8 @@ A company logo on estimates, invoices, and Pages needs [`20260821180000_company_
 
 The job owner on estimate and invoice share links needs [`20260825140000_document_project_manager.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825140000_document_project_manager.sql) (or a fresh bootstrap). Until that runs, the project manager block still prints in the app from the job owner.
 
+Live refresh from the field app needs [`20260828170000_live_refresh.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260828170000_live_refresh.sql) (or a fresh bootstrap) so every company table is in the Realtime publication and updates/deletes carry enough columns for RLS. Until that runs, this desk still reloads when you come back to the tab.
+
 Company estimate templates need [`20260821190000_estimate_templates.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821190000_estimate_templates.sql) (or a fresh bootstrap) so they persist in Postgres. Until that runs, you can still build templates and start estimates from them in this browser.
 
 Client signatures on estimates need [`20260821200000_estimate_signature.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821200000_estimate_signature.sql) (or a fresh bootstrap) so the drawing stays on the proposal and PDF. Until that runs, you can still collect a signature in this browser.

@@ -228,6 +228,19 @@ import { resolveCustomerName, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage, missingPageShareMessage, isMissingPageShare, parsePageTemplate } from "@/lib/photo-report";
 import { canDeleteJobs, canLoginAs, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 
+export type LiveStatus = "offline" | "connecting" | "live";
+
+function uiBook(state: CrmState): CrmState {
+  return {
+    ...state,
+    photoReports: state.photoReports.map((report) => ({
+      ...report,
+      template: parsePageTemplate(report.template),
+      shareToken: report.shareToken ?? "",
+    })),
+  };
+}
+
 const emptyState: CrmState = {
   staff: [],
   teams: [],
@@ -675,6 +688,7 @@ type CrmContextValue = CrmState & {
   configured: boolean;
   hydrated: boolean;
   hydrateError: string | null;
+  liveStatus: LiveStatus;
   switchSeat: (staffId: string) => void;
   loginAs: (staffId: string) => void;
   stopLoginAs: () => void;
@@ -951,24 +965,30 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const [impersonatedStaffId, setImpersonatedStaffId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [hydrateError, setHydrateError] = useState<string | null>(null);
+  const [liveStatus, setLiveStatus] = useState<LiveStatus>("offline");
   const seeding = useRef(false);
+  const bookEpoch = useRef(0);
 
   const load = useCallback(async () => {
     if (!isSupabaseConfigured()) {
       setHydrated(true);
+      setLiveStatus("offline");
       return;
     }
+    const epoch = ++bookEpoch.current;
     const supabase = createClient();
     const {
       data: { user: authUser },
       error: authError,
     } = await supabase.auth.getUser();
     if (authError || !authUser) {
+      if (epoch !== bookEpoch.current) return;
       setCompanySettings(NORTHLINE_COMPANY);
       setState(emptyState);
       setUser(guestUser);
       setHydrateError(null);
       setHydrated(true);
+      setLiveStatus("offline");
       const here = `${window.location.pathname}${window.location.search}`;
       if (!isPublicAppPath(window.location.pathname)) {
         router.replace(here && here !== "/" ? `/login?next=${encodeURIComponent(here)}` : "/login");
@@ -1006,6 +1026,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         profileError?.message?.includes("schema cache") ||
         profileError?.code === "PGRST205" ||
         profileError?.message?.includes("Could not find the table");
+      if (epoch !== bookEpoch.current) return;
       setHydrateError(
         missingSchema
           ? "Signed in, but this project is missing the Truss tables. Run the files in supabase/migrations in the SQL editor (in order), then sign out and back in."
@@ -1013,6 +1034,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             "No profile yet. Create an account after the migrations have been applied."
       );
       setHydrated(true);
+      setLiveStatus("offline");
       return;
     }
 
@@ -1118,6 +1140,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const backfilled = await persistLeadFieldsOnJobs(supabase, jobs, opportunities);
       jobs = jobsFilledFromLeads(backfilled.jobs, opportunities);
       const remapJob = (jobId: string | null) => remapDroppedJobId(jobId, pruned.dropped);
+      if (epoch !== bookEpoch.current) return;
       setState({
         ...book.state,
         staff: roster,
@@ -1166,6 +1189,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       setHydrateError(null);
       setHydrated(true);
     } catch (error) {
+      if (epoch !== bookEpoch.current) return;
       setHydrateError(error instanceof Error ? error.message : "Could not load the book of work.");
       setHydrated(true);
     }
@@ -1197,77 +1221,83 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     };
   }, [configured, load]);
 
-  useEffect(() => {
-    if (!configured || !user.companyId) return;
+  const liveRefresh = useCallback(async () => {
+    if (!isSupabaseConfigured()) return;
+    const companyId = user.companyId;
+    if (!companyId) return;
+    const epoch = ++bookEpoch.current;
     const supabase = createClient();
-    const tables = [
-      "clients",
-      "contacts",
-      "opportunities",
-      "jobs",
-      "activities",
-      "tasks",
-      "team_members",
-      "teams",
-      "catalog_items",
-      "estimates",
-      "estimate_lines",
-      "estimate_templates",
-      "estimate_template_lines",
-      "invoices",
-      "invoice_lines",
-      "payments",
-      "schedule_events",
-      "job_photos",
-      "job_files",
-      "expenses",
-      "calendar_accounts",
-      "calendar_shares",
-      "training_progress",
-      "training_bulletins",
-      "account_invites",
-      "photo_reports",
-      "messages",
-      "material_orders",
-      "material_order_lines",
-      "material_order_templates",
-      "material_order_template_lines",
-      "price_lists",
-    ] as const;
-    let timer: number | undefined;
-    const channel = supabase.channel(`truss-company-${user.companyId}`);
-    for (const table of tables) {
-      channel.on(
-        "postgres_changes",
-        { event: "*", schema: "public", table, filter: `company_id=eq.${user.companyId}` },
-        () => {
-          window.clearTimeout(timer);
-          timer = window.setTimeout(() => {
-            void load();
-          }, 200);
-        }
-      );
+    try {
+      const [{ data: companyRow }, book] = await Promise.all([
+        supabase.from("companies").select("*").eq("id", companyId).maybeSingle(),
+        fetchCompanyBook(supabase, companyId),
+      ]);
+      if (epoch !== bookEpoch.current) return;
+      if (companyRow) {
+        const settings = mapCompany(companyRow);
+        setCompanySettings(settings);
+        setUser((current) =>
+          current.companyId === companyId ? { ...current, company: settings.name } : current,
+        );
+      }
+      setState(uiBook(book.state));
+    } catch {
+      // Keep the current book; the next event, focus, or reconnect will try again.
     }
-    channel.on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "companies", filter: `id=eq.${user.companyId}` },
-      () => {
-        void load();
-      }
-    );
-    channel.on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "profiles", filter: `id=eq.${user.id}` },
-      () => {
-        void load();
-      }
-    );
-    channel.subscribe();
-    return () => {
+  }, [user.companyId]);
+
+  useEffect(() => {
+    if (!configured || !hydrated || !user.companyId) {
+      if (!user.companyId) setLiveStatus("offline");
+      return;
+    }
+    const supabase = createClient();
+    let timer: number | undefined;
+    let cancelled = false;
+    setLiveStatus("connecting");
+
+    const kick = () => {
       window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        void liveRefresh();
+      }, 300);
+    };
+
+    const channel = supabase
+      .channel(`truss-live-${user.companyId}`)
+      .on("postgres_changes", { event: "*", schema: "public" }, kick)
+      .subscribe((status) => {
+        if (cancelled) return;
+        if (status === "SUBSCRIBED") {
+          setLiveStatus("live");
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          setLiveStatus("offline");
+          return;
+        }
+        setLiveStatus("connecting");
+      });
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void liveRefresh();
+    };
+    const onOnline = () => {
+      void liveRefresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    window.addEventListener("online", onOnline);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      window.removeEventListener("online", onOnline);
       void supabase.removeChannel(channel);
     };
-  }, [configured, load, user.companyId, user.id]);
+  }, [configured, hydrated, liveRefresh, user.companyId]);
 
   const viewer = useMemo(() => {
     const byId = user.staffId ? state.staff.find((member) => member.id === user.staffId) : undefined;
@@ -7014,6 +7044,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       configured,
       hydrated,
       hydrateError,
+      liveStatus,
       switchSeat,
       loginAs,
       stopLoginAs,
@@ -7143,6 +7174,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       configured,
       hydrated,
       hydrateError,
+      liveStatus,
       switchSeat,
       loginAs,
       stopLoginAs,
