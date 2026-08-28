@@ -2,6 +2,17 @@ import { joinCustomerNames } from "@/lib/estimate-signers";
 import { shareUrl } from "@/lib/share";
 import type { Client, Contact, CrmState, Estimate, Invoice, Job, Opportunity } from "@/lib/types";
 
+/** People who sign proposals: homeowners, not trades, adjusters, or referral partners. */
+export function isJobHomeowner(
+  contact: Contact,
+  job?: Pick<Job, "subcontractorIds"> | null,
+) {
+  if (job?.subcontractorIds.includes(contact.id)) return false;
+  if (contact.isReferralPartner) return false;
+  if (contact.title.toLowerCase().includes("adjuster")) return false;
+  return true;
+}
+
 export type CustomerRecord = {
   clientId?: string | null;
   contactId?: string | null;
@@ -28,9 +39,11 @@ export function resolveCustomerName(record: CustomerRecord, book: PartyBook): st
         ?.primaryContactId ?? null;
   }
   const contact = contactId ? book.contacts.find((item) => item.id === contactId) : undefined;
-  const second = record.secondContactId
-    ? book.contacts.find((item) => item.id === record.secondContactId)
-    : undefined;
+  const job = record.jobId ? book.jobs.find((item) => item.id === record.jobId) : undefined;
+  const second =
+    (record.secondContactId
+      ? book.contacts.find((item) => item.id === record.secondContactId)
+      : undefined) ?? coOwnerContact(job, book.contacts, contactId);
   if (second?.name) {
     const primary = contact?.name ?? client?.name ?? "Homeowner";
     return joinCustomerNames(primary, second.name);
@@ -64,12 +77,12 @@ export function resolveShareContacts(record: CustomerRecord, book: PartyBook): S
         ?.primaryContactId ?? null;
   }
   addRecipient(list, contactId ? book.contacts.find((item) => item.id === contactId) : undefined);
-  addRecipient(
-    list,
-    record.secondContactId
+  const job = record.jobId ? book.jobs.find((item) => item.id === record.jobId) : undefined;
+  const second =
+    (record.secondContactId
       ? book.contacts.find((item) => item.id === record.secondContactId)
-      : undefined
-  );
+      : undefined) ?? coOwnerContact(job, book.contacts, contactId);
+  addRecipient(list, second ?? undefined);
   return list;
 }
 
@@ -138,6 +151,35 @@ export function contactsOnJob(
     .filter((contact): contact is Contact => Boolean(contact));
   if (job) return found;
   return contacts;
+}
+
+export function homeownersOnJob(
+  job: Pick<Job, "primaryContactId" | "relatedContactIds" | "subcontractorIds"> | undefined,
+  contacts: Contact[],
+  extraIds: Array<string | null | undefined> = [],
+) {
+  return contactsOnJob(job, contacts, extraIds).filter((contact) => isJobHomeowner(contact, job));
+}
+
+/** Second signer when a job has two homeowners (primary + a related co-owner). */
+export function coOwnerContact(
+  job: Pick<Job, "primaryContactId" | "relatedContactIds" | "subcontractorIds"> | undefined,
+  contacts: Contact[],
+  primaryId?: string | null,
+) {
+  if (!job) return null;
+  const primary = (primaryId || job.primaryContactId || "").trim();
+  return homeownersOnJob(job, contacts).find((contact) => contact.id !== primary) ?? null;
+}
+
+export function applyCoOwnerToEstimate<
+  T extends { contactId: string | null; secondContactId: string | null; jobId: string | null },
+>(estimate: T, jobs: Job[], contacts: Contact[]): T {
+  if (estimate.secondContactId) return estimate;
+  const job = estimate.jobId ? jobs.find((item) => item.id === estimate.jobId) : undefined;
+  const coOwner = coOwnerContact(job, contacts, estimate.contactId);
+  if (!coOwner) return estimate;
+  return { ...estimate, secondContactId: coOwner.id };
 }
 
 export function opportunitiesForContact(contact: Contact, opportunities: Opportunity[]) {

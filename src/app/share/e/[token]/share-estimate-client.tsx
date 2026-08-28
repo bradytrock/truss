@@ -16,6 +16,7 @@ import {
   type HomeownerSigner,
 } from "@/lib/estimate-signers";
 import { billingEstimate, workMarket } from "@/lib/market";
+import { coOwnerContact } from "@/lib/parties";
 import { parseSharedEstimate, type ShareSender, type SharedEstimatePayload } from "@/lib/share";
 import { SHARE_FETCH, useRemoteShare } from "@/lib/use-remote-share";
 import type { EstimateLine } from "@/lib/types";
@@ -148,9 +149,10 @@ export function ShareEstimateClient({
     const viewerSigned = homeownerHasSigned(fromStore, storeSigner);
     const canSign = fromStore.status !== "declined" && !viewerSigned;
     const primaryName = crm.getContact(fromStore.contactId)?.name || customer;
-    const secondName = fromStore.secondContactId
-      ? crm.getContact(fromStore.secondContactId)?.name
-      : null;
+    const secondName =
+      (fromStore.secondContactId ? crm.getContact(fromStore.secondContactId)?.name : null) ||
+      coOwnerContact(job, crm.contacts, fromStore.contactId)?.name ||
+      null;
     return (
       <ShareFrame
         actions={
@@ -164,6 +166,8 @@ export function ShareEstimateClient({
                   company: letterhead,
                   customer,
                   projectManager,
+                  primaryCustomer: primaryName,
+                  secondCustomer: secondName,
                   photos: crm.photos,
                 }).catch(() => toast.error("Could not build the PDF."))
               }
@@ -241,6 +245,8 @@ export function ShareEstimateClient({
                 company: remote.company,
                 customer: remote.customer,
                 projectManager: remote.projectManager,
+                primaryCustomer: remote.primaryCustomer,
+                secondCustomer: remote.secondCustomer,
               }).catch(() => toast.error("Could not build the PDF."))
             }
           />

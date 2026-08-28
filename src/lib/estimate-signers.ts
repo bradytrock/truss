@@ -187,7 +187,7 @@ export function estimateSignatureLines(
       image: estimate.signatureImage,
     },
   ];
-  if (estimate.secondContactId) {
+  if (estimate.secondContactId || names.second?.trim()) {
     lines.push({
       role: "second",
       party: "homeowner",

@@ -224,7 +224,7 @@ import {
   outboundActivityBody,
 } from "@/lib/job-messages";
 import { toE164 } from "@/lib/phone";
-import { resolveCustomerName, type CustomerRecord } from "@/lib/parties";
+import { resolveCustomerName, applyCoOwnerToEstimate, coOwnerContact, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage, missingPageShareMessage, isMissingPageShare, parsePageTemplate } from "@/lib/photo-report";
 import { canDeleteJobs, canLoginAs, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 
@@ -2648,11 +2648,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ? state.estimateTemplates.find((item) => item.id === input.templateId)
         : undefined;
       const templateFields = template ? estimateFieldsFromTemplate(template) : null;
+      const pipelineJob = pipelineJobId ? state.jobs.find((item) => item.id === pipelineJobId) : undefined;
+      const contactId = input.contactId || pipelineJob?.primaryContactId || null;
+      const secondContactId = coOwnerContact(pipelineJob, state.contacts, contactId)?.id ?? null;
       const market =
         input.market ??
         templateFields?.market ??
         workMarket(
-          pipelineJobId ? state.jobs.find((item) => item.id === pipelineJobId) : undefined,
+          pipelineJob,
           state.opportunities.find((item) => item.id === opportunityId),
         );
       const estimate = fillEstimate({
@@ -2662,7 +2665,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         clientId: input.clientId,
         opportunityId,
         jobId: pipelineJobId,
-        contactId: input.contactId || null,
+        contactId,
+        secondContactId,
         status: "draft",
         notes: input.notes || templateFields?.notes || "",
         validUntil: input.validUntil || defaultEstimateValidUntil(),
@@ -2686,6 +2690,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         depositKind: templateFields?.depositKind,
         depositValue: templateFields?.depositValue,
       });
+      const signerTokens = mintEstimateSignerTokens(estimate);
+      estimate.shareToken = signerTokens.shareToken;
+      estimate.secondShareToken = signerTokens.secondShareToken;
       const copiedLines = template
         ? estimateLinesFromTemplate(template.id, estimate.id, state.estimateTemplateLines)
         : [];
@@ -2706,6 +2713,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         opportunity_id: estimate.opportunityId || null,
         job_id: estimate.jobId || null,
         contact_id: estimate.contactId || null,
+        second_contact_id: estimate.secondContactId || null,
         notes: estimate.notes,
         valid_until: estimate.validUntil,
         tax_rate: estimate.taxRate,
@@ -2720,8 +2728,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         state: estimate.state,
         postal_code: estimate.postalCode,
         share_token: estimate.shareToken,
+        second_share_token: estimate.secondShareToken || undefined,
       };
       let { data, error } = await supabase.from("estimates").insert(payload).select("*").single();
+      if (error && (isMissingSecondSigner(error) || isMissingSignerLinks(error))) {
+        const {
+          second_contact_id: _secondContact,
+          second_share_token: _secondShare,
+          ...withoutSecond
+        } = payload;
+        const retry = await supabase.from("estimates").insert(withoutSecond).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (!error && data) toast.message(missingSecondSignerMessage());
+      }
       if (error && isMissingEstimateWriter(error)) {
         const retry = await supabase
           .from("estimates")
@@ -2781,6 +2801,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     },
     [
       ensureLeadForEstimate,
+      state.contacts,
       state.estimateTemplateLines,
       state.estimateTemplates,
       state.estimates,
@@ -2836,7 +2857,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const current = state.estimates.find((estimate) => estimate.id === id);
       if (!current) return;
       const sentAt = new Date().toISOString();
-      const tokens = mintEstimateSignerTokens(current);
+      const signing = applyCoOwnerToEstimate(current, state.jobs, state.contacts);
+      const tokens = mintEstimateSignerTokens(signing);
       const owner = resolveProjectOwner({
         estimate: current,
         jobs: state.jobs,
@@ -2856,6 +2878,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
                   ...estimate,
                   status: "sent" as const,
                   sentAt,
+                  secondContactId: signing.secondContactId,
                   shareToken: tokens.shareToken,
                   secondShareToken: tokens.secondShareToken,
                   ownerSignedAt,
@@ -2871,6 +2894,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           sent_at: string;
           share_token?: string;
           second_share_token?: string;
+          second_contact_id?: string | null;
           owner_signed_at?: string;
           owner_signed_name?: string;
         } = {
@@ -2878,6 +2902,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           sent_at: sentAt,
           share_token: tokens.shareToken,
           second_share_token: tokens.secondShareToken,
+          second_contact_id: signing.secondContactId,
           owner_signed_at: ownerSignedAt,
           owner_signed_name: ownerSignedName,
         };
@@ -2940,6 +2965,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       companySettings.name,
       ensureLeadForEstimate,
       moveOpportunity,
+      state.contacts,
       state.estimates,
       state.jobs,
       state.opportunities,
@@ -3210,17 +3236,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     async (id: string) => {
       const current = state.estimates.find((estimate) => estimate.id === id);
       if (!current) throw new Error("Estimate not found.");
-      const tokens = mintEstimateSignerTokens(current);
+      const signing = applyCoOwnerToEstimate(current, state.jobs, state.contacts);
+      const tokens = mintEstimateSignerTokens(signing);
       if (
         tokens.shareToken === current.shareToken &&
-        tokens.secondShareToken === current.secondShareToken
+        tokens.secondShareToken === current.secondShareToken &&
+        signing.secondContactId === current.secondContactId
       ) {
         return tokens.shareToken;
       }
-      await updateEstimate(id, tokens);
+      await updateEstimate(id, { ...tokens, secondContactId: signing.secondContactId });
       return tokens.shareToken;
     },
-    [state.estimates, updateEstimate]
+    [state.contacts, state.estimates, state.jobs, updateEstimate]
   );
 
   const duplicateEstimate = useCallback(

@@ -18,6 +18,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
 import { isSignaturePng } from "@/lib/estimate-signature";
 import { estimateSignatureLines } from "@/lib/estimate-signers";
+import { coOwnerContact } from "@/lib/parties";
 import { photosForEstimateLine } from "@/lib/estimate-line-photos";
 import type { CompanySettings, Estimate, EstimateLine, JobMarket, JobPhoto } from "@/lib/types";
 import { estimateTermsValues, resolveEstimateTerms } from "@/lib/document-terms";
@@ -248,7 +249,11 @@ export function ProposalDocument({
         }
         secondName={
           secondCustomer ??
-          (estimate.secondContactId ? crm?.getContact(estimate.secondContactId)?.name : null)
+          (estimate.secondContactId ? crm?.getContact(estimate.secondContactId)?.name : null) ??
+          (estimate.status === "accepted" || estimate.status === "declined"
+            ? null
+            : coOwnerContact(job, crm?.contacts ?? [], estimate.contactId)?.name) ??
+          null
         }
       />
     </div>

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type ComponentProps } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
 import { toast } from "sonner";
 import {
   ArrowDown,
@@ -18,7 +18,7 @@ import { BackToJobButton } from "@/components/back-to-job";
 import { ProposalDocument } from "@/components/proposal-document";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { CollectSignatureDialog } from "@/components/signature-pad";
-import { shareContactsForEstimate, contactsOnJob } from "@/lib/parties";
+import { shareContactsForEstimate, coOwnerContact, homeownersOnJob } from "@/lib/parties";
 import { EstimateStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,6 +78,7 @@ import {
 } from "@/lib/estimate-totals";
 import { downloadEstimatePdf } from "@/lib/document-pdf";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
+import { mintEstimateSignerTokens } from "@/lib/estimate-signers";
 import { shareUrl } from "@/lib/share";
 import { formatDate, formatMoney } from "@/lib/format";
 import {
@@ -459,6 +460,11 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   const client = crm.getClient(estimate.clientId);
   const opportunity = estimate.opportunityId ? crm.getOpportunity(estimate.opportunityId) : undefined;
   const job = estimate.jobId ? crm.getJob(estimate.jobId) : undefined;
+  const inferredCoOwner =
+    estimate.status === "accepted" || estimate.status === "declined"
+      ? null
+      : coOwnerContact(job, crm.contacts, estimate.contactId);
+  const secondSignerName = secondContact?.name || inferredCoOwner?.name || null;
   const jobPhotos = useMemo(
     () => (estimate.jobId ? crm.photos.filter((photo) => photo.jobId === estimate.jobId) : []),
     [crm.photos, estimate.jobId],
@@ -470,7 +476,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     : "Attach this proposal to a job to use that job’s photo gallery.";
   const homeownerContacts = useMemo(
     () =>
-      contactsOnJob(job, crm.contacts, [
+      homeownersOnJob(job, crm.contacts, [
         estimate.contactId,
         estimate.secondContactId,
         opportunity?.primaryContactId,
@@ -484,6 +490,36 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     ],
   );
   const secondHomeownerContacts = homeownerContacts.filter((item) => item.id !== estimate.contactId);
+  const assignedCoOwner = useRef(false);
+  useEffect(() => {
+    assignedCoOwner.current = false;
+  }, [estimate.id]);
+  useEffect(() => {
+    if (assignedCoOwner.current) return;
+    if (estimate.secondContactId) {
+      assignedCoOwner.current = true;
+      return;
+    }
+    if (estimate.status === "accepted" || estimate.status === "declined") return;
+    const coOwner = coOwnerContact(job, crm.contacts, estimate.contactId);
+    if (!coOwner) return;
+    assignedCoOwner.current = true;
+    const tokens = mintEstimateSignerTokens({ ...estimate, secondContactId: coOwner.id });
+    void crm.updateEstimate(estimate.id, {
+      secondContactId: coOwner.id,
+      shareToken: tokens.shareToken,
+      secondShareToken: tokens.secondShareToken,
+    });
+  }, [
+    crm.contacts,
+    crm.updateEstimate,
+    estimate,
+    estimate.contactId,
+    estimate.id,
+    estimate.secondContactId,
+    estimate.status,
+    job,
+  ]);
   const customer = crm.customerName(estimate);
   const site =
     formatJobSite({
@@ -559,6 +595,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       company: letterhead,
       customer,
       projectManager,
+      primaryCustomer: contact?.name,
+      secondCustomer: secondSignerName,
       photos: crm.photos,
     });
   }
@@ -789,7 +827,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
               </p>
             )}
             <p className="mt-1 text-xs text-muted-foreground">
-              {estimate.secondContactId
+              {estimate.secondContactId || secondHomeownerContacts.length > 0
                 ? "Both homeowners must sign this proposal before it is accepted."
                 : job
                   ? "Add a co-owner as a related contact on the job when both signatures are required."
@@ -1134,6 +1172,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       customer={customer}
       market={workMarket(job, opportunity)}
       selectable={optionalOpen}
+      primaryCustomer={contact?.name}
+      secondCustomer={secondSignerName}
       onToggleOptional={(line, selected) => void crm.updateEstimateLine(line.id, { selected })}
       onTermsChange={
         editable ? (terms) => void crm.updateEstimate(estimate.id, { terms }) : undefined
