@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Briefcase,
   Building2,
@@ -31,6 +31,7 @@ import { toast } from "sonner";
 import { ActivityComposer, ActivityList } from "@/components/activity";
 import { AddPhotoDialog, CreateInvoiceDialog } from "@/components/create-ops-dialogs";
 import { StartEstimateButton } from "@/components/start-estimate-button";
+import { LogExpenseDialog } from "@/components/log-financial-dialogs";
 import { CreatePageDialog } from "@/components/create-page-dialog";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
 import { JobFilesPanel } from "@/components/job-files";
@@ -102,6 +103,15 @@ import {
 import { cn } from "@/lib/utils";
 import { PhotoReportBuilder } from "@/components/photo-report-builder";
 import { canDeleteJobs } from "@/lib/visibility";
+import { useStartEstimate } from "@/lib/start-estimate";
+
+const JOB_TABS = ["overview", "photos", "files", "financials", "paper", "fields"] as const;
+type JobTab = (typeof JOB_TABS)[number];
+
+function parseJobTab(raw: string | null): JobTab {
+  const value = raw === "pages" ? "files" : raw;
+  return JOB_TABS.includes(value as JobTab) ? (value as JobTab) : "overview";
+}
 
 function copyText(value: string, label: string) {
   if (!value) return;
@@ -226,12 +236,15 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
   const crm = useCrm();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const requestedTab = searchParams.get("tab") ?? "overview";
-  const initialTab = requestedTab === "pages" ? "files" : requestedTab;
+  const { start: startEstimate, pending: estimatePending } = useStartEstimate();
+  const requestedTab = parseJobTab(searchParams.get("tab"));
+  const [tab, setTab] = useState<JobTab>(requestedTab);
   const [heroOpen, setHeroOpen] = useState(true);
   const [addressOpen, setAddressOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
+  const [expenseOpen, setExpenseOpen] = useState(false);
+  const [activityFocus, setActivityFocus] = useState(0);
   const [reportId, setReportId] = useState<string | null>(null);
   const [pageCreateOpen, setPageCreateOpen] = useState(false);
   const [pageCreating, setPageCreating] = useState(false);
@@ -247,6 +260,45 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
 
   const canTrash = canDeleteJobs(crm.viewer) && !crm.impersonatedStaff;
   const deleted = isDeletedJob(job);
+
+  useEffect(() => {
+    setTab(requestedTab);
+  }, [requestedTab]);
+
+  function setJobTab(next: JobTab) {
+    setTab(next);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "overview") params.delete("tab");
+    else params.set("tab", next);
+    const qs = params.toString();
+    router.replace(qs ? `/jobs?${qs}` : "/jobs", { scroll: false });
+  }
+
+  function openNew(kind: "estimate" | "invoice" | "interaction" | "expense") {
+    if (deleted) return;
+    if (kind === "estimate") {
+      setJobTab("paper");
+      void startEstimate({
+        jobId: job.id,
+        opportunityId: job.opportunityId,
+        contactId: job.primaryContactId,
+        clientId: job.clientId,
+      });
+      return;
+    }
+    if (kind === "invoice") {
+      setJobTab("paper");
+      setInvoiceOpen(true);
+      return;
+    }
+    if (kind === "expense") {
+      setJobTab("financials");
+      setExpenseOpen(true);
+      return;
+    }
+    setJobTab("overview");
+    window.setTimeout(() => setActivityFocus((value) => value + 1), 50);
+  }
 
   const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
   const client = crm.getClient(job.clientId);
@@ -393,17 +445,51 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
           )}
         </p>
       </div>
-      {primary?.phone ? (
-        <div className="mb-3">
-          <Button
-            nativeButton={false}
-            variant="outline"
-            size="sm"
-            render={<Link href={`/messages?job=${job.id}&contact=${primary.id}`} />}
-          >
-            <MessageSquare data-icon="inline-start" />
-            Text homeowner
-          </Button>
+      {primary?.phone || !deleted ? (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {!deleted ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={estimatePending}
+                    aria-label="Create on this job"
+                  />
+                }
+              >
+                <Plus data-icon="inline-start" />
+                {estimatePending ? "Opening…" : "New"}
+                <ChevronDown data-icon="inline-end" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-44">
+                <DropdownMenuItem onClick={() => openNew("estimate")}>
+                  New estimate
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => openNew("invoice")}>
+                  New invoice
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => openNew("interaction")}>
+                  New interaction
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => openNew("expense")}>
+                  New expense
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+          {primary?.phone ? (
+            <Button
+              nativeButton={false}
+              variant="outline"
+              size="sm"
+              render={<Link href={`/messages?job=${job.id}&contact=${primary.id}`} />}
+            >
+              <MessageSquare data-icon="inline-start" />
+              Text homeowner
+            </Button>
+          ) : null}
         </div>
       ) : null}
 
@@ -560,7 +646,12 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
         </div>
       ) : null}
 
-      <Tabs defaultValue={["overview", "photos", "files", "financials", "paper", "fields"].includes(initialTab) ? initialTab : "overview"}>
+      <Tabs
+        value={tab}
+        onValueChange={(value) => {
+          if (typeof value === "string") setJobTab(parseJobTab(value));
+        }}
+      >
         <TabsList variant="line" className="w-full justify-start overflow-x-auto rounded-none border-x px-2">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="photos">Photos</TabsTrigger>
@@ -933,11 +1024,11 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
             </ul>
           </JobSection>
 
-          <div className="px-4 py-4">
+          <div className="px-4 py-4" id="job-activity">
             <p className="mb-3 text-[11px] font-semibold tracking-[0.16em] text-foreground uppercase">
               Activity
             </p>
-            <ActivityComposer entityType="job" entityId={job.id} />
+            <ActivityComposer entityType="job" entityId={job.id} focusRequest={activityFocus} />
             <div className="mt-4">
               <ActivityList
                 items={activities}
@@ -1298,7 +1389,9 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
         onOpenChange={setInvoiceOpen}
         defaultClientId={job.clientId}
         defaultJobId={job.id}
+        onCreated={() => setJobTab("paper")}
       />
+      <LogExpenseDialog open={expenseOpen} onOpenChange={setExpenseOpen} defaultJobId={job.id} />
       {openReport ? (
         <PhotoReportBuilder job={job} report={openReport} onClose={() => setReportId(null)} />
       ) : null}

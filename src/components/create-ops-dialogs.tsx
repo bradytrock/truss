@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,11 +39,13 @@ export function CreateInvoiceDialog({
   onOpenChange,
   defaultClientId,
   defaultJobId,
+  onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultClientId?: string | null;
   defaultJobId?: string;
+  onCreated?: (invoiceId: string) => void;
 }) {
   const router = useRouter();
   const { jobs, addInvoice, customerName } = useCrm();
@@ -57,7 +59,20 @@ export function CreateInvoiceDialog({
   const [dueAt, setDueAt] = useState(dueDefault);
   const [notes, setNotes] = useState("");
 
+  const fallbackJobId = jobs[0]?.id ?? "";
+
+  useEffect(() => {
+    if (!open) return;
+    setName("");
+    setJobId(defaultJobId ?? fallbackJobId);
+    const date = new Date();
+    date.setDate(date.getDate() + 30);
+    setDueAt(localYmd(date));
+    setNotes("");
+  }, [defaultJobId, fallbackJobId, open]);
+
   const job = jobs.find((item) => item.id === jobId);
+  const lockedToJob = Boolean(defaultJobId);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -76,7 +91,8 @@ export function CreateInvoiceDialog({
       toast.success(`${invoice.number} drafted.`);
       onOpenChange(false);
       setName("");
-      router.push(`/invoices/${invoice.id}`);
+      if (onCreated) onCreated(invoice.id);
+      else router.push(`/invoices/${invoice.id}`);
     } catch {
       // Store already toasted.
     }
@@ -104,6 +120,7 @@ export function CreateInvoiceDialog({
             <Select
               value={jobId}
               onValueChange={(value) => setJobId(String(value ?? ""))}
+              disabled={lockedToJob}
               items={jobs.map((item) => ({
                 value: item.id,
                 label: `${item.name} — ${customerName(item)}`,

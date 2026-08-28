@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,13 +14,24 @@ const types = ["note", "call", "email", "text", "meeting", "site_walk"] as const
 export function ActivityComposer({
   entityType,
   entityId,
+  focusRequest = 0,
 }: {
   entityType: "opportunity" | "job" | "client";
   entityId: string;
+  focusRequest?: number;
 }) {
   const { addActivity } = useCrm();
   const [body, setBody] = useState("");
   const [type, setType] = useState<Exclude<ActivityType, "stage_change" | "audit">>("note");
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!focusRequest) return;
+    const field = bodyRef.current;
+    if (!field) return;
+    field.focus();
+    field.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusRequest]);
 
   function submit() {
     if (!body.trim()) {
@@ -48,6 +59,8 @@ export function ActivityComposer({
         ))}
       </div>
       <Textarea
+        ref={bodyRef}
+        id="job-activity-composer"
         value={body}
         onChange={(event) => setBody(event.target.value)}
         placeholder="What happened? Bid recap, owner call, site walk notes..."
