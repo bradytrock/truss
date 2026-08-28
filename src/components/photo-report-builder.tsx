@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -89,8 +89,19 @@ export function PhotoReportBuilder({
   const [shareOpen, setShareOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const skipObserve = useRef(false);
+  const pendingJump = useRef<string | null>(null);
+  const [jumpNonce, setJumpNonce] = useState(0);
+  const [pickerPageId, setPickerPageId] = useState<string | null>(null);
 
   const selected = draft.pages.find((page) => page.id === selectedId) ?? draft.pages[0];
+  const hasCover = draft.pages.some((page) => page.type === "cover");
+  const selectedIndex = selected ? draft.pages.findIndex((page) => page.id === selected.id) : -1;
+  const pickerPage = draft.pages.find(
+    (page): page is Extract<PhotoReportPage, { type: "photos" }> =>
+      page.id === pickerPageId && page.type === "photos",
+  );
   const pendingDelete = pendingDeleteId ? draft.pages.find((page) => page.id === pendingDeleteId) : undefined;
   const pendingDeleteIndex = pendingDelete ? draft.pages.findIndex((page) => page.id === pendingDelete.id) : -1;
 
@@ -119,6 +130,45 @@ export function PhotoReportBuilder({
     return () => window.clearTimeout(timer);
   }, [crm.updatePhotoReport, draft]);
 
+  useEffect(() => {
+    const root = scrollerRef.current;
+    if (!root) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (skipObserve.current) return;
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((left, right) => right.intersectionRatio - left.intersectionRatio)[0];
+        const id = (visible?.target as HTMLElement | undefined)?.dataset.reportPage;
+        if (id) setSelectedId(id);
+      },
+      { root, threshold: [0.25, 0.45, 0.7], rootMargin: "-12% 0px -45% 0px" },
+    );
+    const nodes = root.querySelectorAll("[data-report-page]");
+    nodes.forEach((node) => observer.observe(node));
+    return () => observer.disconnect();
+  }, [draft.pages]);
+
+  useEffect(() => {
+    const id = pendingJump.current;
+    if (!id) return;
+    pendingJump.current = null;
+    skipObserve.current = true;
+    const node = scrollerRef.current?.querySelector(`[data-report-page="${id}"]`);
+    node?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const timer = window.setTimeout(() => {
+      skipObserve.current = false;
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [draft.pages, jumpNonce]);
+
+  function jumpToPage(pageId: string) {
+    skipObserve.current = true;
+    pendingJump.current = pageId;
+    setSelectedId(pageId);
+    setJumpNonce((value) => value + 1);
+  }
+
   function commit(pages: PhotoReportPage[], extra?: Partial<PhotoReport>) {
     const next: PhotoReport = {
       ...draft,
@@ -143,13 +193,13 @@ export function PhotoReportBuilder({
   function addPage(type: "photos" | "cover") {
     const page = type === "cover" ? emptyCoverPage({ title: job.name }) : emptyPhotosPage();
     commit([...draft.pages, page]);
-    setSelectedId(page.id);
+    jumpToPage(page.id);
   }
 
   function addLetterhead(kind: LetterheadKind) {
     const page = emptyTextPage({ kind });
     commit([...draft.pages, page]);
-    setSelectedId(page.id);
+    jumpToPage(page.id);
   }
 
   function removePage(pageId: string) {
@@ -219,6 +269,7 @@ export function PhotoReportBuilder({
     }
     commit(pages);
     setPickerOpen(false);
+    setPickerPageId(null);
   }
 
   async function downloadPdf() {
@@ -312,9 +363,7 @@ export function PhotoReportBuilder({
       <div
         className={cn(
           "grid min-h-0 flex-1",
-          selected?.type === "cover"
-            ? "lg:grid-cols-[16rem_minmax(0,1fr)_18rem]"
-            : "lg:grid-cols-[16rem_minmax(0,1fr)]",
+          hasCover ? "lg:grid-cols-[16rem_minmax(0,1fr)_18rem]" : "lg:grid-cols-[16rem_minmax(0,1fr)]",
         )}
       >
         <aside className="min-h-0 overflow-y-auto border-b p-2 lg:border-r lg:border-b-0">
@@ -328,7 +377,7 @@ export function PhotoReportBuilder({
                     index={index}
                     selected={page.id === selected?.id}
                     canDelete={draft.pages.length > 1}
-                    onSelect={() => setSelectedId(page.id)}
+                    onSelect={() => jumpToPage(page.id)}
                     onDelete={() => requestRemove(page.id)}
                   />
                 ))}
@@ -347,42 +396,89 @@ export function PhotoReportBuilder({
           </Button>
         </aside>
 
-        <div className="min-h-0 overflow-y-auto bg-muted/40 p-4 sm:p-6">
-          {selected ? (
-            <PhotoReportPagePreview
-              page={selected}
-              job={job}
-              photos={photos}
-              report={draft}
-              company={crm.company}
-              contacts={crm.contacts}
-              staff={crm.staff}
-              customerName={crm.customerName(job)}
-              edit={{
-                onChange: (patch) => patchPage(selected.id, patch),
-                onAddPhotos:
-                  selected.type === "photos"
-                    ? () => setPickerOpen(true)
-                    : undefined,
-                onRemovePhoto:
-                  selected.type === "photos"
-                    ? (index) => removePhotoFromPage(selected, index)
-                    : undefined,
-              }}
-            />
-          ) : (
+        <div ref={scrollerRef} className="min-h-0 overflow-y-auto bg-muted/40 p-4 sm:p-6">
+          {draft.pages.length === 0 ? (
             <p className="text-sm text-muted-foreground">Add a page to start this document.</p>
+          ) : (
+            <div className="mx-auto flex w-full max-w-[28rem] flex-col gap-8 pb-16">
+              {draft.pages.length > 1 ? (
+                <div className="pointer-events-none sticky top-0 z-10 -mx-1 flex justify-center pt-0.5">
+                  <p className="rounded-full border bg-background/95 px-3 py-1 text-center text-xs text-muted-foreground shadow-sm">
+                    Page {Math.max(1, selectedIndex + 1)} of {draft.pages.length}
+                    {selected ? ` · ${pageLabel(selected, selectedIndex)}` : ""}
+                    {" — "}
+                    scroll for the rest
+                  </p>
+                </div>
+              ) : null}
+              {draft.pages.map((page, index) => {
+                const photosPage = page.type === "photos" ? page : null;
+                return (
+                  <section
+                    key={page.id}
+                    data-report-page={page.id}
+                    className="scroll-mt-12"
+                    onClick={() => setSelectedId(page.id)}
+                  >
+                    <p className="mb-2 text-center text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+                      Page {index + 1} of {draft.pages.length}
+                      <span className="font-medium tracking-normal text-foreground/70">
+                        {" · "}
+                        {pageLabel(page, index)}
+                      </span>
+                    </p>
+                    <div
+                      className={cn(
+                        "rounded-sm",
+                        page.id === selected?.id && "ring-2 ring-primary/50 ring-offset-2 ring-offset-muted/40",
+                      )}
+                    >
+                      <PhotoReportPagePreview
+                        page={page}
+                        job={job}
+                        photos={photos}
+                        report={draft}
+                        company={crm.company}
+                        contacts={crm.contacts}
+                        staff={crm.staff}
+                        customerName={crm.customerName(job)}
+                        edit={{
+                          onChange: (patch) => patchPage(page.id, patch),
+                          onAddPhotos: photosPage
+                            ? () => {
+                                jumpToPage(page.id);
+                                setPickerPageId(page.id);
+                                setPickerOpen(true);
+                              }
+                            : undefined,
+                          onRemovePhoto: photosPage
+                            ? (photoIndex) => removePhotoFromPage(photosPage, photoIndex)
+                            : undefined,
+                        }}
+                      />
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
           )}
         </div>
 
-        {selected?.type === "cover" ? (
+        {hasCover ? (
           <aside className="min-h-0 overflow-y-auto border-t p-3 lg:border-t-0 lg:border-l">
-            <PageInspector
-              page={selected}
-              photos={photos}
-              onChange={(patch) => patchPage(selected.id, patch)}
-              onRemove={() => requestRemove(selected.id)}
-            />
+            {selected?.type === "cover" ? (
+              <PageInspector
+                page={selected}
+                photos={photos}
+                onChange={(patch) => patchPage(selected.id, patch)}
+                onRemove={() => requestRemove(selected.id)}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Cover fields stay here. Scroll to the cover, or click it in the list, to edit the title,
+                who it is prepared for, and the hero photo.
+              </p>
+            )}
           </aside>
         ) : null}
       </div>
@@ -430,17 +526,23 @@ export function PhotoReportBuilder({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+      <Dialog
+        open={pickerOpen}
+        onOpenChange={(open) => {
+          setPickerOpen(open);
+          if (!open) setPickerPageId(null);
+        }}
+      >
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Add photos</DialogTitle>
             <DialogDescription>Choose shots from this job. Extra photos open a new page.</DialogDescription>
           </DialogHeader>
-          {selected?.type === "photos" ? (
+          {pickerPage ? (
             <PhotoPicker
-              photos={photos.filter((photo) => !selected.items.some((item) => item.photoId === photo.id))}
-              remaining={Math.max(0, layoutCapacity(selected.layout) - selected.items.length)}
-              onAdd={(ids) => addPhotos(selected, ids)}
+              photos={photos.filter((photo) => !pickerPage.items.some((item) => item.photoId === photo.id))}
+              remaining={Math.max(0, layoutCapacity(pickerPage.layout) - pickerPage.items.length)}
+              onAdd={(ids) => addPhotos(pickerPage, ids)}
             />
           ) : (
             <p className="text-sm text-muted-foreground">Open a photo page to add shots.</p>
