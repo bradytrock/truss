@@ -264,7 +264,7 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
 function SearchTrigger() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const { opportunities, jobs, contacts, estimates, invoices, materialOrders, viewer } = useCrm();
+  const { opportunities, jobs, contacts, estimates, invoices, materialOrders, materialOrderTemplates, viewer } = useCrm();
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -422,6 +422,15 @@ function SearchTrigger() {
               ))}
             </CommandGroup>
             <CommandGroup heading="Material orders">
+              <CommandItem
+                value="material order templates company hail roof"
+                onSelect={() => {
+                  setOpen(false);
+                  router.push("/material-orders/templates");
+                }}
+              >
+                Material order templates
+              </CommandItem>
               {(materialOrders ?? []).map((order) => (
                 <CommandItem
                   key={order.id}
@@ -433,6 +442,18 @@ function SearchTrigger() {
                 >
                   {order.number}
                   {order.vendor.trim() ? ` · ${order.vendor}` : ""}
+                </CommandItem>
+              ))}
+              {(materialOrderTemplates ?? []).map((template) => (
+                <CommandItem
+                  key={template.id}
+                  value={`${template.name} ${template.vendor} material order template`}
+                  onSelect={() => {
+                    setOpen(false);
+                    router.push(`/material-orders/templates/${template.id}`);
+                  }}
+                >
+                  {template.name}
                 </CommandItem>
               ))}
             </CommandGroup>

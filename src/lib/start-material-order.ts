@@ -11,13 +11,16 @@ export function useStartMaterialOrder() {
   const inflight = useRef(false);
 
   const start = useCallback(
-    async (jobId: string) => {
+    async (jobId: string, templateId?: string | null) => {
       if (inflight.current) return;
       if (!jobId) return;
       inflight.current = true;
       setPending(true);
       try {
-        const order = await crm.addMaterialOrder({ jobId });
+        const order = await crm.addMaterialOrder({
+          jobId,
+          templateId: templateId || undefined,
+        });
         router.push(`/material-orders/${order.id}`);
       } catch {
         // Store already toasted.

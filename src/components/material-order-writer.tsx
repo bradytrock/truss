@@ -1,56 +1,51 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { Download, Minus, Plus, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { Download } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { VendorPicker } from "@/components/vendor-picker";
+import { MaterialOrderItems } from "@/components/material-order-items";
 import { useCrm } from "@/lib/crm-store";
 import { formatMoney } from "@/lib/format";
 import { jobAddress } from "@/lib/job-record";
-import { CATALOG_KIND_LABELS, type CatalogKind, type MaterialOrder } from "@/lib/types";
+import type { MaterialOrder } from "@/lib/types";
 import { canManageSettings } from "@/lib/visibility";
 import { downloadMaterialOrderPdf } from "@/lib/material-order-pdf";
-import {
-  materialOrderLineAmount,
-  materialOrderLinesFor,
-  materialOrderTotal,
-} from "@/lib/material-orders";
+import { materialOrderLinesFor, materialOrderTotal } from "@/lib/material-orders";
 import { vendorChoices } from "@/lib/qb-vendors";
 import { documentOwnerStaff, documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
 import { cn } from "@/lib/utils";
 
 export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
   const crm = useCrm();
-  const [bookOpen, setBookOpen] = useState(false);
+  const router = useRouter();
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [templateName, setTemplateName] = useState("");
+  const [pending, setPending] = useState(false);
   const job = crm.getJob(order.jobId);
   const lines = materialOrderLinesFor(order.id, crm.materialOrderLines ?? []);
   const total = materialOrderTotal(lines);
   const vendors = vendorChoices(crm.qbVendors ?? [], crm.expenses);
   const vendorNames = [...vendors.fromQb.map((item) => item.name), ...vendors.extras];
-  const extraVendors = (crm.materialOrders ?? [])
-    .map((item) => item.vendor.trim())
-    .filter(Boolean);
+  const extraVendors = [
+    ...(crm.materialOrders ?? []).map((item) => item.vendor.trim()),
+    ...(crm.materialOrderTemplates ?? []).map((item) => item.vendor.trim()),
+  ].filter(Boolean);
   const customer = job ? crm.customerName(job) : "";
   const opportunity = job?.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
   const letterhead = letterheadCompanyForRecord({
@@ -127,6 +122,25 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
+            nativeButton={false}
+            type="button"
+            variant="outline"
+            render={<Link href="/material-orders/templates" />}
+          >
+            Templates
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={lines.length === 0}
+            onClick={() => {
+              setTemplateName(job?.name ? `${job.name} materials` : `${order.number} template`);
+              setSaveOpen(true);
+            }}
+          >
+            Save as template
+          </Button>
+          <Button
             type="button"
             variant="outline"
             disabled={pdfBusy || lines.length === 0}
@@ -139,8 +153,9 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Build this list by hand. It does not follow the estimate or invoice. Unit costs come from the
-        price book when you add a catalog item — upload a pricing sheet under{" "}
+        Build this list by hand, or start from a company template. It does not follow the estimate or
+        invoice. Unit costs come from the price book when you add a catalog item — upload a pricing
+        sheet under{" "}
         {crm.viewer && canManageSettings(crm.viewer.role, crm.viewer) ? (
           <Link href="/settings/price-book" className="text-primary hover:underline">
             Settings → Price book
@@ -175,132 +190,14 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
         </div>
       </section>
 
-      <section className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[11px] font-semibold tracking-[0.16em] uppercase">Items</h2>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => setBookOpen(true)}>
-              Add from price book
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => void crm.addCustomMaterialOrderLine(order.id)}
-            >
-              Custom item
-            </Button>
-          </div>
-        </div>
-        {lines.length === 0 ? (
-          <p className="rounded-md border border-dashed px-3 py-8 text-center text-sm text-muted-foreground">
-            No items yet. Pull from the price book so estimated cost prints on the PDF, or add a custom
-            line and type the cost.
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {lines.map((line) => (
-              <li key={line.id} className="rounded-md border p-3">
-                <div className="flex items-start gap-2">
-                  <Input
-                    value={line.name}
-                    onChange={(event) =>
-                      void crm.updateMaterialOrderLine(line.id, { name: event.target.value })
-                    }
-                    placeholder="Item name"
-                    className="min-w-0 flex-1"
-                    aria-label="Item name"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="shrink-0"
-                    aria-label="Remove item"
-                    onClick={() => void crm.removeMaterialOrderLine(line.id)}
-                  >
-                    <Trash2 />
-                  </Button>
-                </div>
-                <div className="mt-2 grid grid-cols-[auto_1fr_1fr] items-end gap-2 sm:grid-cols-[auto_7rem_7rem_1fr]">
-                  <div>
-                    <p className="mb-1 text-[11px] font-medium text-muted-foreground">Qty</p>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label="Decrease quantity"
-                        onClick={() =>
-                          void crm.updateMaterialOrderLine(line.id, {
-                            quantity: Math.max(0, Math.round((line.quantity - 1) * 100) / 100),
-                          })
-                        }
-                      >
-                        <Minus />
-                      </Button>
-                      <Input
-                        inputMode="decimal"
-                        value={String(line.quantity)}
-                        onChange={(event) => {
-                          const next = Number(event.target.value);
-                          if (!Number.isFinite(next)) return;
-                          void crm.updateMaterialOrderLine(line.id, { quantity: next });
-                        }}
-                        className="h-7 w-14 px-1 text-center tabular-nums"
-                        aria-label="Quantity"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label="Increase quantity"
-                        onClick={() =>
-                          void crm.updateMaterialOrderLine(line.id, {
-                            quantity: Math.round((line.quantity + 1) * 100) / 100,
-                          })
-                        }
-                      >
-                        <Plus />
-                      </Button>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="mb-1 text-[11px] font-medium text-muted-foreground">Unit</p>
-                    <Input
-                      value={line.unit}
-                      onChange={(event) =>
-                        void crm.updateMaterialOrderLine(line.id, { unit: event.target.value })
-                      }
-                      aria-label="Unit"
-                    />
-                  </div>
-                  <div>
-                    <p className="mb-1 text-[11px] font-medium text-muted-foreground">Unit cost</p>
-                    <Input
-                      inputMode="decimal"
-                      value={String(line.unitCost)}
-                      onChange={(event) => {
-                        const next = Number(event.target.value);
-                        if (!Number.isFinite(next)) return;
-                        void crm.updateMaterialOrderLine(line.id, { unitCost: next });
-                      }}
-                      aria-label="Unit cost"
-                      className="tabular-nums"
-                    />
-                  </div>
-                  <p className="hidden text-right text-sm font-medium tabular-nums sm:block">
-                    {formatMoney(materialOrderLineAmount(line))}
-                  </p>
-                </div>
-                <p className="mt-2 text-right text-sm font-medium tabular-nums sm:hidden">
-                  {formatMoney(materialOrderLineAmount(line))}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <MaterialOrderItems
+        lines={lines}
+        emptyHint="No items yet. Pull from the price book so estimated cost prints on the PDF, start from a template, or add a custom line and type the cost."
+        onAddFromCatalog={(catalogItemId) => crm.addMaterialOrderLineFromCatalog(order.id, catalogItemId)}
+        onAddCustom={() => void crm.addCustomMaterialOrderLine(order.id)}
+        onUpdate={(id, patch) => void crm.updateMaterialOrderLine(id, patch)}
+        onRemove={(id) => void crm.removeMaterialOrderLine(id)}
+      />
 
       <section className="grid gap-1.5">
         <Label htmlFor="mo-notes">Notes for the supplier</Label>
@@ -335,121 +232,48 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
         </Button>
       </div>
 
-      <PriceBookSheet
-        open={bookOpen}
-        onOpenChange={setBookOpen}
-        onPick={async (catalogItemId) => {
-          const item = crm.catalog.find((entry) => entry.id === catalogItemId);
-          const saved = await crm.addMaterialOrderLineFromCatalog(order.id, catalogItemId);
-          if (saved) toast.message(`${item?.name ?? "Item"} added`);
-        }}
-      />
-    </div>
-  );
-}
-
-function PriceBookSheet({
-  open,
-  onOpenChange,
-  onPick,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onPick: (catalogItemId: string) => void | Promise<void>;
-}) {
-  const { catalog, viewer } = useCrm();
-  const [kindFilter, setKindFilter] = useState<"material" | "all">("material");
-  const groups = useMemo(() => {
-    const source =
-      kindFilter === "material" ? catalog.filter((item) => item.kind === "material") : catalog;
-    const kinds = Array.from(new Set(source.map((item) => item.kind))) as CatalogKind[];
-    return kinds.map((kind) => ({
-      kind,
-      items: source.filter((item) => item.kind === kind),
-    }));
-  }, [catalog, kindFilter]);
-  const emptyBook = catalog.length === 0;
-  const noMaterials = !emptyBook && kindFilter === "material" && groups.length === 0;
-
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="flex w-full flex-col sm:max-w-md">
-        <SheetHeader>
-          <SheetTitle>Price book</SheetTitle>
-          <SheetDescription>
-            Costs copy onto this order from the catalog. Add as many items as you need, then close the
-            book and set quantities.
-          </SheetDescription>
-        </SheetHeader>
-        <div className="flex gap-2 px-4 pb-2">
-          <Button
-            type="button"
-            size="sm"
-            variant={kindFilter === "material" ? "secondary" : "ghost"}
-            onClick={() => setKindFilter("material")}
-          >
-            Materials
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={kindFilter === "all" ? "secondary" : "ghost"}
-            onClick={() => setKindFilter("all")}
-          >
-            Whole book
-          </Button>
-        </div>
-        <Command className="min-h-0 flex-1 border-0 bg-transparent p-0">
-          <div className="px-4">
-            <CommandInput placeholder="Search the book" />
+      <Dialog open={saveOpen} onOpenChange={setSaveOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Save as company template</DialogTitle>
+            <DialogDescription>
+              Supplier, notes, items, quantities, and unit costs are copied. The next job can start from
+              this instead of a blank order.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-1.5">
+            <Label htmlFor="mo-template-name">Template name</Label>
+            <Input
+              id="mo-template-name"
+              value={templateName}
+              onChange={(event) => setTemplateName(event.target.value)}
+              placeholder="Hail roof — architectural shingles"
+            />
           </div>
-          <CommandList className="max-h-none flex-1 px-2">
-            <CommandEmpty>
-              {emptyBook
-                ? "Price book is empty. A company admin can upload a pricing sheet under Settings → Price book."
-                : noMaterials
-                  ? "No material items in the book. Switch to Whole book, or upload materials as kind material."
-                  : "No items match that search."}
-            </CommandEmpty>
-            {groups.map((group) => (
-              <CommandGroup key={group.kind} heading={CATALOG_KIND_LABELS[group.kind]}>
-                {group.items.map((item) => (
-                  <CommandItem
-                    key={item.id}
-                    value={`${item.costCode} ${item.name}`}
-                    onSelect={() => {
-                      void onPick(item.id);
-                    }}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p>{item.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.costCode} · {item.unit}
-                      </p>
-                    </div>
-                    <span className="tabular-nums text-muted-foreground">{formatMoney(item.unitCost)}</span>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ))}
-          </CommandList>
-        </Command>
-        <div className="border-t px-4 py-3">
-          {viewer && canManageSettings(viewer.role, viewer) ? (
-            <Link
-              href="/settings/price-book"
-              className="text-sm text-primary hover:underline"
-              onClick={() => onOpenChange(false)}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setSaveOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={pending || !templateName.trim()}
+              onClick={() => {
+                setPending(true);
+                void crm
+                  .saveMaterialOrderAsTemplate(order.id, templateName.trim())
+                  .then((template) => {
+                    toast.success(`${template.name} is in company templates.`);
+                    setSaveOpen(false);
+                    router.push(`/material-orders/templates/${template.id}`);
+                  })
+                  .finally(() => setPending(false));
+              }}
             >
-              Upload or edit the price book
-            </Link>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              A company admin uploads the pricing sheet under Settings → Price book.
-            </p>
-          )}
-        </div>
-      </SheetContent>
-    </Sheet>
+              Save template
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

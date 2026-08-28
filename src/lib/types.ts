@@ -568,6 +568,27 @@ export interface MaterialOrderLine {
   sortOrder: number;
 }
 
+export interface MaterialOrderTemplate {
+  id: string;
+  name: string;
+  description: string;
+  vendor: string;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MaterialOrderTemplateLine {
+  id: string;
+  templateId: string;
+  catalogItemId: string | null;
+  name: string;
+  quantity: number;
+  unit: string;
+  unitCost: number;
+  sortOrder: number;
+}
+
 export interface QbVendor {
   id: string;
   listId: string;
@@ -778,6 +799,8 @@ export interface CrmState {
   expenses: Expense[];
   materialOrders: MaterialOrder[];
   materialOrderLines: MaterialOrderLine[];
+  materialOrderTemplates: MaterialOrderTemplate[];
+  materialOrderTemplateLines: MaterialOrderTemplateLine[];
   qbVendors: QbVendor[];
   qbReviewComments: QbReviewComment[];
   events: ScheduleEvent[];

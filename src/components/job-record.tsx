@@ -106,6 +106,7 @@ import { canDeleteJobs } from "@/lib/visibility";
 import { useStartEstimate } from "@/lib/start-estimate";
 import { useStartMaterialOrder } from "@/lib/start-material-order";
 import { materialOrderLinesFor, materialOrderTotal } from "@/lib/material-orders";
+import { MaterialOrderFromTemplateDialog } from "@/components/material-order-from-template-dialog";
 
 const JOB_TABS = ["overview", "photos", "files", "financials", "paper", "fields"] as const;
 type JobTab = (typeof JOB_TABS)[number];
@@ -247,6 +248,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
   const [photoOpen, setPhotoOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
+  const [materialTemplateOpen, setMaterialTemplateOpen] = useState(false);
   const [activityFocus, setActivityFocus] = useState(0);
   const [reportId, setReportId] = useState<string | null>(null);
   const [pageCreateOpen, setPageCreateOpen] = useState(false);
@@ -481,6 +483,9 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => openNew("materials")}>
                   New material order
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setMaterialTemplateOpen(true)}>
+                  New material order from template
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => openNew("interaction")}>
                   New interaction
@@ -1299,14 +1304,32 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
           <div>
             <div className="mb-2 flex items-center justify-between">
               <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Material orders</p>
-              <Button
-                size="sm"
-                variant="ghost"
-                disabled={materialPending}
-                onClick={() => void startMaterialOrder(job.id)}
-              >
-                New
-              </Button>
+              <div className="flex gap-1">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  nativeButton={false}
+                  render={<Link href="/material-orders/templates" />}
+                >
+                  Templates
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={materialPending}
+                  onClick={() => setMaterialTemplateOpen(true)}
+                >
+                  From template
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={materialPending}
+                  onClick={() => void startMaterialOrder(job.id)}
+                >
+                  New
+                </Button>
+              </div>
             </div>
             {materialOrders.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -1444,6 +1467,11 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
         onCreated={() => setJobTab("paper")}
       />
       <LogExpenseDialog open={expenseOpen} onOpenChange={setExpenseOpen} defaultJobId={job.id} />
+      <MaterialOrderFromTemplateDialog
+        jobId={job.id}
+        open={materialTemplateOpen}
+        onOpenChange={setMaterialTemplateOpen}
+      />
       {openReport ? (
         <PhotoReportBuilder job={job} report={openReport} onClose={() => setReportId(null)} />
       ) : null}

@@ -31,6 +31,15 @@ import { mergePaymentTerms, lockedTermsChanged, resolveEstimateTerms, resolveInv
 import { matchCatalogItem, type CatalogImportDraft } from "@/lib/catalog-csv";
 import { fillMaterialOrder, fillMaterialOrderLine, lineFromCatalogItem } from "@/lib/material-orders";
 import {
+  fillMaterialOrderTemplate,
+  fillMaterialOrderTemplateLine,
+  isMissingMaterialOrderTemplates,
+  materialOrderLinesFromTemplate,
+  missingMaterialOrderTemplatesMessage,
+  templateFromMaterialOrder,
+  templateLineFromCatalogItem,
+} from "@/lib/material-order-templates";
+import {
   estimateNeedsSecondSignature,
   mintEstimateSignerTokens,
   nextEstimateSignature,
@@ -102,6 +111,10 @@ import {
   mapMaterialOrderLine,
   materialOrderPatch,
   materialOrderLinePatch,
+  mapMaterialOrderTemplate,
+  mapMaterialOrderTemplateLine,
+  materialOrderTemplatePatch,
+  materialOrderTemplateLinePatch,
   paymentPatch,
   invoiceLinePatch,
   mapQbReviewComment,
@@ -150,6 +163,8 @@ import {
   type ExpenseMethod,
   type MaterialOrder,
   type MaterialOrderLine,
+  type MaterialOrderTemplate,
+  type MaterialOrderTemplateLine,
   type InvoiceLine,
   type Payment,
   type QbReviewComment,
@@ -223,6 +238,8 @@ const emptyState: CrmState = {
   expenses: [],
   materialOrders: [],
   materialOrderLines: [],
+  materialOrderTemplates: [],
+  materialOrderTemplateLines: [],
   qbVendors: [],
   qbReviewComments: [],
   calendarAccounts: [],
@@ -617,6 +634,7 @@ type CrmContextValue = CrmState & {
   getEstimate: (id: string) => Estimate | undefined;
   getInvoice: (id: string) => Invoice | undefined;
   getMaterialOrder: (id: string) => MaterialOrder | undefined;
+  getMaterialOrderTemplate: (id: string) => MaterialOrderTemplate | undefined;
   jobForOpportunity: (opportunityId: string) => Job | undefined;
   company: CompanySettings;
   canEditCompany: boolean;
@@ -788,12 +806,26 @@ type CrmContextValue = CrmState & {
     file?: File;
     extractedByAi?: boolean;
   }) => Promise<Expense | null>;
-  addMaterialOrder: (input: { jobId: string; vendor?: string; notes?: string; neededBy?: string | null }) => Promise<MaterialOrder>;
+  addMaterialOrder: (input: {
+    jobId: string;
+    vendor?: string;
+    notes?: string;
+    neededBy?: string | null;
+    templateId?: string | null;
+  }) => Promise<MaterialOrder>;
   updateMaterialOrder: (id: string, patch: Partial<MaterialOrder>) => Promise<boolean>;
   addMaterialOrderLineFromCatalog: (orderId: string, catalogItemId: string) => Promise<MaterialOrderLine | undefined>;
   addCustomMaterialOrderLine: (orderId: string) => Promise<MaterialOrderLine | undefined>;
   updateMaterialOrderLine: (id: string, patch: Partial<MaterialOrderLine>) => Promise<void>;
   removeMaterialOrderLine: (id: string) => Promise<void>;
+  addMaterialOrderTemplate: (input?: { name?: string }) => Promise<MaterialOrderTemplate>;
+  updateMaterialOrderTemplate: (id: string, patch: Partial<MaterialOrderTemplate>) => Promise<void>;
+  removeMaterialOrderTemplate: (id: string) => Promise<void>;
+  saveMaterialOrderAsTemplate: (orderId: string, name: string) => Promise<MaterialOrderTemplate>;
+  addMaterialOrderTemplateLineFromCatalog: (templateId: string, catalogItemId: string) => Promise<MaterialOrderTemplateLine | undefined>;
+  addCustomMaterialOrderTemplateLine: (templateId: string) => Promise<MaterialOrderTemplateLine | undefined>;
+  updateMaterialOrderTemplateLine: (id: string, patch: Partial<MaterialOrderTemplateLine>) => Promise<void>;
+  removeMaterialOrderTemplateLine: (id: string) => Promise<void>;
   updateExpense: (id: string, patch: Partial<Expense>) => Promise<boolean>;
   updatePayment: (id: string, patch: Partial<Payment>) => Promise<boolean>;
   updateInvoiceLine: (id: string, patch: Partial<InvoiceLine>) => Promise<boolean>;
@@ -1133,6 +1165,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       "messages",
       "material_orders",
       "material_order_lines",
+      "material_order_templates",
+      "material_order_template_lines",
     ] as const;
     let timer: number | undefined;
     const channel = supabase.channel(`truss-company-${user.companyId}`);
@@ -1297,6 +1331,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const getMaterialOrder = useCallback(
     (id: string) => (scoped.materialOrders ?? []).find((order) => order.id === id),
     [scoped.materialOrders]
+  );
+  const getMaterialOrderTemplate = useCallback(
+    (id: string) => (scoped.materialOrderTemplates ?? []).find((template) => template.id === id),
+    [scoped.materialOrderTemplates]
   );
   const jobForOpportunity = useCallback(
     (opportunityId: string) =>
@@ -4561,22 +4599,39 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const addMaterialOrder = useCallback(
-    async (input: { jobId: string; vendor?: string; notes?: string; neededBy?: string | null }) => {
+    async (input: {
+      jobId: string;
+      vendor?: string;
+      notes?: string;
+      neededBy?: string | null;
+      templateId?: string | null;
+    }) => {
+      const template = input.templateId
+        ? (state.materialOrderTemplates ?? []).find((item) => item.id === input.templateId)
+        : undefined;
       const order = fillMaterialOrder({
         id: crypto.randomUUID(),
         number: nextNumber("MO", (state.materialOrders ?? []).map((item) => item.number)),
         jobId: input.jobId,
-        vendor: input.vendor ?? "",
-        notes: input.notes ?? "",
+        vendor: input.vendor ?? template?.vendor ?? "",
+        notes: input.notes ?? template?.notes ?? "",
         neededBy: input.neededBy ?? null,
         createdBy: user.name,
         createdAt: new Date().toISOString(),
       });
+      const copiedLines = template
+        ? materialOrderLinesFromTemplate(
+            template.id,
+            order.id,
+            state.materialOrderTemplateLines ?? [],
+          ).map((line) => fillMaterialOrderLine(line))
+        : [];
       const supabase = maybeClient();
       if (!supabase) {
         setState((prev) => ({
           ...prev,
           materialOrders: [order, ...(prev.materialOrders ?? [])],
+          materialOrderLines: [...(prev.materialOrderLines ?? []), ...copiedLines],
         }));
         return order;
       }
@@ -4597,6 +4652,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           setState((prev) => ({
             ...prev,
             materialOrders: [order, ...(prev.materialOrders ?? [])],
+            materialOrderLines: [...(prev.materialOrderLines ?? []), ...copiedLines],
           }));
           return order;
         }
@@ -4604,13 +4660,38 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         throw error ?? new Error("Could not save the material order.");
       }
       const saved = mapMaterialOrder(data);
+      if (copiedLines.length) {
+        const inserted = await supabase.from("material_order_lines").insert(
+          copiedLines.map((line) => ({
+            id: line.id,
+            company_id: user.companyId,
+            material_order_id: saved.id,
+            catalog_item_id: line.catalogItemId,
+            name: line.name || "Custom item",
+            quantity: line.quantity,
+            unit: line.unit,
+            unit_cost: line.unitCost,
+            sort_order: line.sortOrder,
+          })),
+        );
+        if (inserted.error && !isMissingMaterialOrders(inserted.error)) {
+          toast.error(inserted.error.message);
+        }
+      }
       setState((prev) => ({
         ...prev,
         materialOrders: [saved, ...(prev.materialOrders ?? [])],
+        materialOrderLines: [...(prev.materialOrderLines ?? []), ...copiedLines],
       }));
       return saved;
     },
-    [state.materialOrders, user.companyId, user.name],
+    [
+      state.materialOrders,
+      state.materialOrderTemplates,
+      state.materialOrderTemplateLines,
+      user.companyId,
+      user.name,
+    ],
   );
 
   const updateMaterialOrder = useCallback(async (id: string, patch: Partial<MaterialOrder>) => {
@@ -4796,6 +4877,338 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (isMissingMaterialOrders(error)) {
         toast.message(missingMaterialOrdersMessage());
         apply();
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
+
+  const touchMaterialOrderTemplate = (id: string) => {
+    const updatedAt = new Date().toISOString();
+    return (prev: CrmState): CrmState => ({
+      ...prev,
+      materialOrderTemplates: (prev.materialOrderTemplates ?? []).map((template) =>
+        template.id === id ? { ...template, updatedAt } : template,
+      ),
+    });
+  };
+
+  const addMaterialOrderTemplate = useCallback(
+    async (input?: { name?: string }) => {
+      const now = new Date().toISOString();
+      const template = fillMaterialOrderTemplate({
+        id: crypto.randomUUID(),
+        name: input?.name?.trim() || "New template",
+        createdAt: now,
+        updatedAt: now,
+      });
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({
+          ...prev,
+          materialOrderTemplates: [template, ...(prev.materialOrderTemplates ?? [])],
+        }));
+        return template;
+      }
+      const { data, error } = await supabase
+        .from("material_order_templates")
+        .insert({
+          id: template.id,
+          company_id: user.companyId,
+          name: template.name,
+          description: template.description,
+          vendor: template.vendor,
+          notes: template.notes,
+        })
+        .select("*")
+        .single();
+      if (error) {
+        if (isMissingMaterialOrderTemplates(error)) {
+          setState((prev) => ({
+            ...prev,
+            materialOrderTemplates: [template, ...(prev.materialOrderTemplates ?? [])],
+          }));
+          toast.message(missingMaterialOrderTemplatesMessage());
+          return template;
+        }
+        toast.error(error.message);
+        throw error;
+      }
+      const mapped = data ? mapMaterialOrderTemplate(data) : template;
+      setState((prev) => ({
+        ...prev,
+        materialOrderTemplates: [mapped, ...(prev.materialOrderTemplates ?? [])],
+      }));
+      return mapped;
+    },
+    [user.companyId],
+  );
+
+  const updateMaterialOrderTemplate = useCallback(async (id: string, patch: Partial<MaterialOrderTemplate>) => {
+    const updatedAt = new Date().toISOString();
+    const next = { ...patch, updatedAt };
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        materialOrderTemplates: (prev.materialOrderTemplates ?? []).map((template) =>
+          template.id === id ? fillMaterialOrderTemplate({ ...template, ...next }) : template,
+        ),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase
+      .from("material_order_templates")
+      .update(materialOrderTemplatePatch(next))
+      .eq("id", id);
+    if (error) {
+      if (isMissingMaterialOrderTemplates(error)) {
+        apply();
+        toast.message(missingMaterialOrderTemplatesMessage());
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
+
+  const removeMaterialOrderTemplate = useCallback(async (id: string) => {
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        materialOrderTemplates: (prev.materialOrderTemplates ?? []).filter((template) => template.id !== id),
+        materialOrderTemplateLines: (prev.materialOrderTemplateLines ?? []).filter(
+          (line) => line.templateId !== id,
+        ),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("material_order_templates").delete().eq("id", id);
+    if (error) {
+      if (isMissingMaterialOrderTemplates(error)) {
+        apply();
+        toast.message(missingMaterialOrderTemplatesMessage());
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
+
+  const saveMaterialOrderAsTemplate = useCallback(
+    async (orderId: string, name: string) => {
+      const order = (state.materialOrders ?? []).find((item) => item.id === orderId);
+      if (!order) throw new Error("Material order not found.");
+      const { template, lines } = templateFromMaterialOrder(order, state.materialOrderLines ?? [], {
+        id: crypto.randomUUID(),
+        name,
+      });
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({
+          ...prev,
+          materialOrderTemplates: [template, ...(prev.materialOrderTemplates ?? [])],
+          materialOrderTemplateLines: [...(prev.materialOrderTemplateLines ?? []), ...lines],
+        }));
+        return template;
+      }
+      const { data, error } = await supabase
+        .from("material_order_templates")
+        .insert({
+          id: template.id,
+          company_id: user.companyId,
+          name: template.name,
+          description: template.description,
+          vendor: template.vendor,
+          notes: template.notes,
+        })
+        .select("*")
+        .single();
+      if (error) {
+        if (isMissingMaterialOrderTemplates(error)) {
+          setState((prev) => ({
+            ...prev,
+            materialOrderTemplates: [template, ...(prev.materialOrderTemplates ?? [])],
+            materialOrderTemplateLines: [...(prev.materialOrderTemplateLines ?? []), ...lines],
+          }));
+          toast.message(missingMaterialOrderTemplatesMessage());
+          return template;
+        }
+        toast.error(error.message);
+        throw error;
+      }
+      const mapped = data ? mapMaterialOrderTemplate(data) : template;
+      if (lines.length) {
+        const inserted = await supabase.from("material_order_template_lines").insert(
+          lines.map((line) => ({
+            id: line.id,
+            company_id: user.companyId,
+            template_id: mapped.id,
+            catalog_item_id: line.catalogItemId,
+            name: line.name || "Custom item",
+            quantity: line.quantity,
+            unit: line.unit,
+            unit_cost: line.unitCost,
+            sort_order: line.sortOrder,
+          })),
+        );
+        if (inserted.error && !isMissingMaterialOrderTemplates(inserted.error)) {
+          toast.error(inserted.error.message);
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        materialOrderTemplates: [mapped, ...(prev.materialOrderTemplates ?? [])],
+        materialOrderTemplateLines: [...(prev.materialOrderTemplateLines ?? []), ...lines],
+      }));
+      return mapped;
+    },
+    [state.materialOrderLines, state.materialOrders, user.companyId],
+  );
+
+  const addMaterialOrderTemplateLineFromCatalog = useCallback(
+    async (templateId: string, catalogItemId: string) => {
+      const item = state.catalog.find((entry) => entry.id === catalogItemId);
+      if (!item) return;
+      const sortOrder =
+        Math.max(
+          0,
+          ...(state.materialOrderTemplateLines ?? [])
+            .filter((line) => line.templateId === templateId)
+            .map((line) => line.sortOrder),
+        ) + 1;
+      const line = templateLineFromCatalogItem(templateId, item, sortOrder);
+      await persistMaterialOrderTemplateLine(line);
+      return line;
+    },
+    [state.catalog, state.materialOrderTemplateLines, user.companyId],
+  );
+
+  const addCustomMaterialOrderTemplateLine = useCallback(
+    async (templateId: string) => {
+      const sortOrder =
+        Math.max(
+          0,
+          ...(state.materialOrderTemplateLines ?? [])
+            .filter((line) => line.templateId === templateId)
+            .map((line) => line.sortOrder),
+        ) + 1;
+      const line = fillMaterialOrderTemplateLine({
+        id: crypto.randomUUID(),
+        templateId,
+        name: "",
+        quantity: 1,
+        unit: "EA",
+        unitCost: 0,
+        sortOrder,
+      });
+      await persistMaterialOrderTemplateLine(line);
+      return line;
+    },
+    [state.materialOrderTemplateLines, user.companyId],
+  );
+
+  async function persistMaterialOrderTemplateLine(line: MaterialOrderTemplateLine) {
+    const supabase = maybeClient();
+    if (!supabase) {
+      setState((prev) => ({
+        ...touchMaterialOrderTemplate(line.templateId)(prev),
+        materialOrderTemplateLines: [...(prev.materialOrderTemplateLines ?? []), line],
+      }));
+      return;
+    }
+    const { error } = await supabase.from("material_order_template_lines").insert({
+      id: line.id,
+      company_id: user.companyId,
+      template_id: line.templateId,
+      catalog_item_id: line.catalogItemId,
+      name: line.name || "Custom item",
+      quantity: line.quantity,
+      unit: line.unit,
+      unit_cost: line.unitCost,
+      sort_order: line.sortOrder,
+    });
+    if (error) {
+      if (isMissingMaterialOrderTemplates(error)) {
+        setState((prev) => ({
+          ...touchMaterialOrderTemplate(line.templateId)(prev),
+          materialOrderTemplateLines: [...(prev.materialOrderTemplateLines ?? []), line],
+        }));
+        toast.message(missingMaterialOrderTemplatesMessage());
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    setState((prev) => ({
+      ...touchMaterialOrderTemplate(line.templateId)(prev),
+      materialOrderTemplateLines: [...(prev.materialOrderTemplateLines ?? []), line],
+    }));
+  }
+
+  const updateMaterialOrderTemplateLine = useCallback(
+    async (id: string, patch: Partial<MaterialOrderTemplateLine>) => {
+      const apply = () =>
+        setState((prev) => {
+          const lines = (prev.materialOrderTemplateLines ?? []).map((line) =>
+            line.id === id ? fillMaterialOrderTemplateLine({ ...line, ...patch }) : line,
+          );
+          const templateId = lines.find((line) => line.id === id)?.templateId;
+          return templateId
+            ? { ...touchMaterialOrderTemplate(templateId)(prev), materialOrderTemplateLines: lines }
+            : { ...prev, materialOrderTemplateLines: lines };
+        });
+      const supabase = maybeClient();
+      if (!supabase) {
+        apply();
+        return;
+      }
+      const { error } = await supabase
+        .from("material_order_template_lines")
+        .update(materialOrderTemplateLinePatch(patch))
+        .eq("id", id);
+      if (error) {
+        if (isMissingMaterialOrderTemplates(error)) {
+          apply();
+          toast.message(missingMaterialOrderTemplatesMessage());
+          return;
+        }
+        toast.error(error.message);
+        return;
+      }
+      apply();
+    },
+    [],
+  );
+
+  const removeMaterialOrderTemplateLine = useCallback(async (id: string) => {
+    const apply = () =>
+      setState((prev) => {
+        const current = (prev.materialOrderTemplateLines ?? []).find((line) => line.id === id);
+        const lines = (prev.materialOrderTemplateLines ?? []).filter((line) => line.id !== id);
+        return current
+          ? { ...touchMaterialOrderTemplate(current.templateId)(prev), materialOrderTemplateLines: lines }
+          : { ...prev, materialOrderTemplateLines: lines };
+      });
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("material_order_template_lines").delete().eq("id", id);
+    if (error) {
+      if (isMissingMaterialOrderTemplates(error)) {
+        apply();
+        toast.message(missingMaterialOrderTemplatesMessage());
         return;
       }
       toast.error(error.message);
@@ -6287,6 +6700,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       getEstimateTemplate,
       getInvoice,
       getMaterialOrder,
+      getMaterialOrderTemplate,
       jobForOpportunity,
       company: companySettings,
       canEditCompany,
@@ -6355,6 +6769,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addCustomMaterialOrderLine,
       updateMaterialOrderLine,
       removeMaterialOrderLine,
+      addMaterialOrderTemplate,
+      updateMaterialOrderTemplate,
+      removeMaterialOrderTemplate,
+      saveMaterialOrderAsTemplate,
+      addMaterialOrderTemplateLineFromCatalog,
+      addCustomMaterialOrderTemplateLine,
+      updateMaterialOrderTemplateLine,
+      removeMaterialOrderTemplateLine,
       updateExpense,
       updatePayment,
       updateInvoiceLine,
@@ -6404,6 +6826,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       getEstimateTemplate,
       getInvoice,
       getMaterialOrder,
+      getMaterialOrderTemplate,
       jobForOpportunity,
       companySettings,
       canEditCompany,
@@ -6472,6 +6895,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addCustomMaterialOrderLine,
       updateMaterialOrderLine,
       removeMaterialOrderLine,
+      addMaterialOrderTemplate,
+      updateMaterialOrderTemplate,
+      removeMaterialOrderTemplate,
+      saveMaterialOrderAsTemplate,
+      addMaterialOrderTemplateLineFromCatalog,
+      addCustomMaterialOrderTemplateLine,
+      updateMaterialOrderTemplateLine,
+      removeMaterialOrderTemplateLine,
       updateExpense,
       updatePayment,
       updateInvoiceLine,
