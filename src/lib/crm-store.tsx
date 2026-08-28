@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingPriceLists, missingPriceListsMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId, jobInsertPayload, jobsFilledFromLeads, jobPatchFromLead, leadOverviewBackfill } from "@/lib/job-record";
@@ -34,6 +34,12 @@ import {
   clampMarginPercent,
   fillCatalogItem,
 } from "@/lib/catalog-margin";
+import {
+  catalogForList,
+  copyCatalogItemToList,
+  currentPriceList,
+  isLivePriceList,
+} from "@/lib/price-lists";
 import { fillMaterialOrder, fillMaterialOrderLine, lineFromCatalogItem } from "@/lib/material-orders";
 import {
   fillMaterialOrderTemplate,
@@ -96,6 +102,8 @@ import {
   mapClient,
   mapCatalogItem,
   catalogPatch,
+  mapPriceList,
+  priceListPatch,
   mapCompany,
   mapContact,
   mapEstimate,
@@ -158,6 +166,7 @@ import {
   type PhotoCategory,
   type PhotoReport,
   type PipelineStage,
+  type PriceList,
   type ScheduleEvent,
   type SeatRole,
   type StaffMember,
@@ -228,6 +237,7 @@ const emptyState: CrmState = {
   jobs: [],
   activities: [],
   tasks: [],
+  priceLists: [],
   catalog: [],
   estimates: [],
   estimateLines: [],
@@ -330,6 +340,43 @@ function requireClient() {
 function maybeClient() {
   if (!isSupabaseConfigured()) return null;
   return createClient();
+}
+
+type CatalogInsertRow = Database["public"]["Tables"]["catalog_items"]["Insert"];
+
+async function insertCatalogRows(
+  supabase: ReturnType<typeof createClient>,
+  rows: CatalogInsertRow[],
+) {
+  if (rows.length === 0) return [] as CatalogItem[];
+  const attempts: Array<{ rows: CatalogInsertRow[]; missingMargin?: boolean; missingLists?: boolean }> = [
+    { rows },
+    {
+      rows: rows.map(({ margin_percent: _margin, ...row }) => row),
+      missingMargin: true,
+    },
+    {
+      rows: rows.map(({ price_list_id: _list, ...row }) => row),
+      missingLists: true,
+    },
+    {
+      rows: rows.map(({ margin_percent: _margin, price_list_id: _list, ...row }) => row),
+      missingMargin: true,
+      missingLists: true,
+    },
+  ];
+  let lastError: { message?: string; code?: string } | null = null;
+  for (const attempt of attempts) {
+    const { data, error } = await supabase.from("catalog_items").insert(attempt.rows).select("*");
+    if (!error) {
+      if (attempt.missingMargin) toast.message(missingCatalogMarginMessage());
+      if (attempt.missingLists) toast.message(missingPriceListsMessage());
+      return (data ?? []).map(mapCatalogItem);
+    }
+    lastError = error;
+    if (!isMissingCatalogMargin(error) && !isMissingPriceLists(error)) break;
+  }
+  throw lastError ?? new Error("Could not save catalog items.");
 }
 
 function applyPaymentOnlyTerms<T extends object>(
@@ -759,10 +806,22 @@ type CrmContextValue = CrmState & {
     unitCost: number;
     marginPercent?: number;
     costCode?: string;
+    priceListId?: string | null;
   }) => Promise<CatalogItem>;
   updateCatalogItem: (id: string, patch: Partial<CatalogItem>) => Promise<void>;
   removeCatalogItem: (id: string) => Promise<void>;
-  importCatalogItems: (rows: CatalogImportDraft[]) => Promise<{ added: number; updated: number }>;
+  importCatalogItems: (
+    rows: CatalogImportDraft[],
+    priceListId?: string | null,
+  ) => Promise<{ added: number; updated: number }>;
+  addPriceList: (input: {
+    name: string;
+    effectiveOn: string;
+    copyItems?: boolean;
+    copyFromId?: string | null;
+  }) => Promise<PriceList>;
+  updatePriceList: (id: string, patch: Partial<Pick<PriceList, "name" | "effectiveOn">>) => Promise<void>;
+  outdatePriceList: (id: string) => Promise<void>;
   addTemplateLineFromCatalog: (templateId: string, catalogItemId: string, groupName?: string) => Promise<void>;
   addCustomTemplateLine: (templateId: string, groupName?: string) => Promise<void>;
   updateTemplateLine: (id: string, patch: Partial<EstimateTemplateLine>) => Promise<void>;
@@ -1173,6 +1232,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       "material_order_lines",
       "material_order_templates",
       "material_order_template_lines",
+      "price_lists",
     ] as const;
     let timer: number | undefined;
     const channel = supabase.channel(`truss-company-${user.companyId}`);
@@ -3626,12 +3686,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       unitCost: number;
       marginPercent?: number;
       costCode?: string;
+      priceListId?: string | null;
     }) => {
       const name = input.name.trim();
       if (!name) {
         toast.error("Name the item so estimators can find it.");
         throw new Error("Name is required.");
       }
+      const priceListId =
+        input.priceListId !== undefined
+          ? input.priceListId
+          : currentPriceList(state.priceLists)?.id ?? null;
       const item = fillCatalogItem({
         id: crypto.randomUUID(),
         name,
@@ -3640,39 +3705,36 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         unitCost: Math.max(0, Math.round(input.unitCost * 100) / 100),
         marginPercent: input.marginPercent,
         costCode: input.costCode?.trim() ?? "",
+        priceListId,
       });
       const supabase = maybeClient();
       if (!supabase) {
         setState((prev) => ({ ...prev, catalog: [item, ...prev.catalog] }));
         return item;
       }
-      const payload = {
-        id: item.id,
-        company_id: user.companyId,
-        name: item.name,
-        kind: item.kind,
-        unit: item.unit,
-        unit_cost: item.unitCost,
-        cost_code: item.costCode,
-        margin_percent: item.marginPercent,
-      };
-      let { data, error } = await supabase.from("catalog_items").insert(payload).select("*").single();
-      if (error && isMissingCatalogMargin(error)) {
-        const { margin_percent: _margin, ...rest } = payload;
-        const retry = await supabase.from("catalog_items").insert(rest).select("*").single();
-        data = retry.data;
-        error = retry.error;
-        if (!error) toast.message(missingCatalogMarginMessage());
-      }
-      if (error) {
-        toast.error(error.message);
+      try {
+        const inserted = await insertCatalogRows(supabase, [
+          {
+            id: item.id,
+            company_id: user.companyId,
+            name: item.name,
+            kind: item.kind,
+            unit: item.unit,
+            unit_cost: item.unitCost,
+            cost_code: item.costCode,
+            margin_percent: item.marginPercent,
+            price_list_id: item.priceListId ?? null,
+          },
+        ]);
+        const mapped = inserted[0] ?? item;
+        setState((prev) => ({ ...prev, catalog: [mapped, ...prev.catalog] }));
+        return mapped;
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not add that item.");
         throw error;
       }
-      const mapped = data ? mapCatalogItem(data) : item;
-      setState((prev) => ({ ...prev, catalog: [mapped, ...prev.catalog] }));
-      return mapped;
     },
-    [user.companyId],
+    [state.priceLists, user.companyId],
   );
 
   const updateCatalogItem = useCallback(async (id: string, patch: Partial<CatalogItem>) => {
@@ -3735,8 +3797,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const importCatalogItems = useCallback(
-    async (rows: CatalogImportDraft[]) => {
-      const working = [...state.catalog];
+    async (rows: CatalogImportDraft[], priceListId?: string | null) => {
+      const listId = priceListId ?? currentPriceList(state.priceLists)?.id ?? null;
+      const working = catalogForList(state.catalog, state.priceLists, listId).map((item) => ({ ...item }));
       const toInsert: CatalogItem[] = [];
       const toUpdate: Array<{ id: string; patch: CatalogImportDraft }> = [];
       for (const row of rows) {
@@ -3764,7 +3827,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           }
           continue;
         }
-        const item = fillCatalogItem({ id: crypto.randomUUID(), ...next });
+        const item = fillCatalogItem({ id: crypto.randomUUID(), ...next, priceListId: listId });
         toInsert.push(item);
         working.unshift(item);
       }
@@ -3784,35 +3847,25 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
       const chunkSize = 80;
       const inserted: CatalogItem[] = [];
-      for (let i = 0; i < toInsert.length; i += chunkSize) {
-        const chunk = toInsert.slice(i, i + chunkSize);
-        const payload = chunk.map((item) => ({
-          id: item.id,
-          company_id: user.companyId,
-          name: item.name,
-          kind: item.kind,
-          unit: item.unit,
-          unit_cost: item.unitCost,
-          cost_code: item.costCode,
-          margin_percent: item.marginPercent,
-        }));
-        let { data, error } = await supabase.from("catalog_items").insert(payload).select("*");
-        if (error && isMissingCatalogMargin(error)) {
-          const retry = await supabase
-            .from("catalog_items")
-            .insert(
-              payload.map(({ margin_percent: _margin, ...rest }) => rest),
-            )
-            .select("*");
-          data = retry.data;
-          error = retry.error;
-          if (!error) toast.message(missingCatalogMarginMessage());
+      try {
+        for (let i = 0; i < toInsert.length; i += chunkSize) {
+          const chunk = toInsert.slice(i, i + chunkSize);
+          const payload = chunk.map((item) => ({
+            id: item.id,
+            company_id: user.companyId,
+            name: item.name,
+            kind: item.kind,
+            unit: item.unit,
+            unit_cost: item.unitCost,
+            cost_code: item.costCode,
+            margin_percent: item.marginPercent,
+            price_list_id: item.priceListId ?? null,
+          }));
+          inserted.push(...(await insertCatalogRows(supabase, payload)));
         }
-        if (error) {
-          toast.error(error.message);
-          throw error;
-        }
-        inserted.push(...(data ?? []).map(mapCatalogItem));
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not import the price book.");
+        throw error;
       }
 
       for (const change of toUpdate) {
@@ -3849,7 +3902,218 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       return { added: inserted.length || toInsert.length, updated: toUpdate.length };
     },
-    [state.catalog, user.companyId],
+    [state.catalog, state.priceLists, user.companyId],
+  );
+
+  const addPriceList = useCallback(
+    async (input: {
+      name: string;
+      effectiveOn: string;
+      copyItems?: boolean;
+      copyFromId?: string | null;
+    }) => {
+      const name = input.name.trim();
+      if (!name) {
+        toast.error("Name the price list so you can find it later.");
+        throw new Error("Name is required.");
+      }
+      const effectiveOn = input.effectiveOn.trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveOn)) {
+        toast.error("Pick the date this price list takes effect.");
+        throw new Error("Date is required.");
+      }
+      const now = new Date().toISOString();
+      const list: PriceList = {
+        id: crypto.randomUUID(),
+        name,
+        effectiveOn,
+        outdatedAt: null,
+        createdAt: now,
+      };
+      const firstList = state.priceLists.length === 0;
+      const sourceId = input.copyFromId ?? currentPriceList(state.priceLists)?.id ?? null;
+      const sourceItems = catalogForList(state.catalog, state.priceLists, sourceId);
+      const copies =
+        input.copyItems && !firstList
+          ? sourceItems.map((item) => copyCatalogItemToList(item, list.id))
+          : [];
+      const attachIds = new Set(
+        firstList ? state.catalog.map((item) => item.id) : [],
+      );
+
+      const applyLocal = (mappedList: PriceList, mappedCopies: CatalogItem[]) => {
+        setState((prev) => ({
+          ...prev,
+          priceLists: [
+            ...prev.priceLists.map((entry) =>
+              isLivePriceList(entry) ? { ...entry, outdatedAt: now } : entry,
+            ),
+            mappedList,
+          ],
+          catalog: [
+            ...mappedCopies,
+            ...prev.catalog.map((item) =>
+              attachIds.has(item.id) ? { ...item, priceListId: mappedList.id } : item,
+            ),
+          ],
+        }));
+      };
+
+      const supabase = maybeClient();
+      if (!supabase) {
+        applyLocal(list, copies);
+        return list;
+      }
+
+      const { data, error } = await supabase
+        .from("price_lists")
+        .insert({
+          id: list.id,
+          company_id: user.companyId,
+          name: list.name,
+          effective_on: list.effectiveOn,
+          outdated_at: null,
+          created_at: list.createdAt,
+        })
+        .select("*")
+        .single();
+      if (error) {
+        if (isMissingPriceLists(error)) {
+          toast.message(missingPriceListsMessage());
+          applyLocal(list, copies);
+          return list;
+        }
+        toast.error(error.message);
+        throw error;
+      }
+      const mapped = data ? mapPriceList(data) : list;
+
+      const others = state.priceLists.filter((entry) => isLivePriceList(entry) && entry.id !== mapped.id);
+      if (others.length > 0) {
+        const outdated = await supabase
+          .from("price_lists")
+          .update({ outdated_at: now })
+          .in(
+            "id",
+            others.map((entry) => entry.id),
+          );
+        if (outdated.error && !isMissingPriceLists(outdated.error)) {
+          toast.error(outdated.error.message);
+          throw outdated.error;
+        }
+      }
+
+      let mappedCopies = copies;
+      if (copies.length > 0) {
+        try {
+          mappedCopies = await insertCatalogRows(
+            supabase,
+            copies.map((item) => ({
+              id: item.id,
+              company_id: user.companyId,
+              name: item.name,
+              kind: item.kind,
+              unit: item.unit,
+              unit_cost: item.unitCost,
+              cost_code: item.costCode,
+              margin_percent: item.marginPercent,
+              price_list_id: mapped.id,
+            })),
+          );
+        } catch (copyError) {
+          toast.error(copyError instanceof Error ? copyError.message : "Could not copy items onto the new list.");
+          throw copyError;
+        }
+      }
+
+      if (attachIds.size > 0) {
+        const attached = await supabase
+          .from("catalog_items")
+          .update({ price_list_id: mapped.id })
+          .in("id", [...attachIds]);
+        if (attached.error && isMissingPriceLists(attached.error)) {
+          toast.message(missingPriceListsMessage());
+        } else if (attached.error) {
+          toast.error(attached.error.message);
+          throw attached.error;
+        }
+      }
+
+      applyLocal(mapped, mappedCopies.length > 0 ? mappedCopies : copies);
+      return mapped;
+    },
+    [state.catalog, state.priceLists, user.companyId],
+  );
+
+  const updatePriceList = useCallback(
+    async (id: string, patch: Partial<Pick<PriceList, "name" | "effectiveOn">>) => {
+      const next: Partial<PriceList> = { ...patch };
+      if (next.name !== undefined) next.name = next.name.trim();
+      if (next.name === "") {
+        toast.error("Name the price list so you can find it later.");
+        return;
+      }
+      const apply = () =>
+        setState((prev) => ({
+          ...prev,
+          priceLists: prev.priceLists.map((list) => (list.id === id ? { ...list, ...next } : list)),
+        }));
+      const supabase = maybeClient();
+      if (!supabase) {
+        apply();
+        return;
+      }
+      const { error } = await supabase.from("price_lists").update(priceListPatch(next)).eq("id", id);
+      if (error && isMissingPriceLists(error)) {
+        toast.message(missingPriceListsMessage());
+        apply();
+        return;
+      }
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      apply();
+    },
+    [],
+  );
+
+  const outdatePriceList = useCallback(
+    async (id: string) => {
+      const list = state.priceLists.find((entry) => entry.id === id);
+      if (!list) return;
+      if (!isLivePriceList(list)) return;
+      const liveCount = state.priceLists.filter(isLivePriceList).length;
+      if (liveCount <= 1) {
+        toast.error("Add a new price list first so estimators still have a current book.");
+        return;
+      }
+      const now = new Date().toISOString();
+      const apply = () =>
+        setState((prev) => ({
+          ...prev,
+          priceLists: prev.priceLists.map((entry) =>
+            entry.id === id ? { ...entry, outdatedAt: now } : entry,
+          ),
+        }));
+      const supabase = maybeClient();
+      if (!supabase) {
+        apply();
+        return;
+      }
+      const { error } = await supabase.from("price_lists").update({ outdated_at: now }).eq("id", id);
+      if (error && isMissingPriceLists(error)) {
+        toast.message(missingPriceListsMessage());
+        apply();
+        return;
+      }
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      apply();
+    },
+    [state.priceLists],
   );
 
   const addEstimateLineFromCatalog = useCallback(
@@ -6812,6 +7076,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateCatalogItem,
       removeCatalogItem,
       importCatalogItems,
+      addPriceList,
+      updatePriceList,
+      outdatePriceList,
       addTemplateLineFromCatalog,
       addCustomTemplateLine,
       updateTemplateLine,
@@ -6938,6 +7205,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateCatalogItem,
       removeCatalogItem,
       importCatalogItems,
+      addPriceList,
+      updatePriceList,
+      outdatePriceList,
       addTemplateLineFromCatalog,
       addCustomTemplateLine,
       updateTemplateLine,

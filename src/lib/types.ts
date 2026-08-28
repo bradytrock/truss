@@ -371,6 +371,16 @@ export interface QbReviewComment {
   createdAt: string;
 }
 
+export interface PriceList {
+  id: string;
+  name: string;
+  /** Vendor or office date this book takes effect. YYYY-MM-DD. */
+  effectiveOn: string;
+  /** Set when a newer list replaces this one. Null means the list is still live. */
+  outdatedAt: string | null;
+  createdAt: string;
+}
+
 export interface CatalogItem {
   id: string;
   name: string;
@@ -380,6 +390,8 @@ export interface CatalogItem {
   /** Markup over unit cost when this item is added to a proposal. 20 means 20%. */
   marginPercent: number;
   costCode: string;
+  /** Dated price list this row belongs to. Null until the SQL backfill runs. */
+  priceListId?: string | null;
 }
 
 export interface Estimate {
@@ -793,6 +805,7 @@ export interface CrmState {
   jobs: Job[];
   activities: Activity[];
   tasks: Task[];
+  priceLists: PriceList[];
   catalog: CatalogItem[];
   estimates: Estimate[];
   estimateLines: EstimateLine[];

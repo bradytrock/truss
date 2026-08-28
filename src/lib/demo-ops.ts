@@ -20,6 +20,8 @@ import { fillInvoiceQb } from "@/lib/job-financials";
 import { fillCatalogItem, type CatalogItemDraft } from "@/lib/catalog-margin";
 import { seedShareToken } from "@/lib/share";
 
+export const NORTHLINE_PRICE_LIST_ID = "plist_northline";
+
 const catalogCore: Array<CatalogItemDraft & { id: string }> = [
   { id: "cat_sog", name: "Place & finish slab on grade", kind: "labor", unit: "sf", unitCost: 4.85, costCode: "03 30 00" },
   { id: "cat_mix", name: "Ready-mix 4000 psi", kind: "material", unit: "cy", unitCost: 168, costCode: "03 30 00" },
@@ -55,7 +57,9 @@ export const demoOps: Pick<
   | "events"
   | "photos"
 > = {
-  catalog: [...catalogCore, ...extraCatalog].map((item) => fillCatalogItem({ ...item, id: item.id })),
+  catalog: [...catalogCore, ...extraCatalog].map((item) =>
+    fillCatalogItem({ ...item, id: item.id, priceListId: NORTHLINE_PRICE_LIST_ID }),
+  ),
   estimates: extraEstimates.map((estimate) =>
     fillEstimate({ ...estimate, ...ESTIMATE_RECORD_EXTRAS[estimate.id] }),
   ),

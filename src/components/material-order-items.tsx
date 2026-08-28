@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/command";
 import { useCrm } from "@/lib/crm-store";
 import { formatMoney } from "@/lib/format";
+import { currentCatalog } from "@/lib/price-lists";
 import { CATALOG_KIND_LABELS, type CatalogKind } from "@/lib/types";
 import { canManageSettings } from "@/lib/visibility";
 import { lineAmount } from "@/lib/money";
@@ -191,18 +192,19 @@ function MaterialPriceBookSheet({
   onOpenChange: (open: boolean) => void;
   onPick: (catalogItemId: string) => void | Promise<void>;
 }) {
-  const { catalog, viewer } = useCrm();
+  const { catalog, viewer, priceLists } = useCrm();
+  const items = useMemo(() => currentCatalog(catalog, priceLists ?? []), [catalog, priceLists]);
   const [kindFilter, setKindFilter] = useState<"material" | "all">("material");
   const groups = useMemo(() => {
     const source =
-      kindFilter === "material" ? catalog.filter((item) => item.kind === "material") : catalog;
+      kindFilter === "material" ? items.filter((item) => item.kind === "material") : items;
     const kinds = Array.from(new Set(source.map((item) => item.kind))) as CatalogKind[];
     return kinds.map((kind) => ({
       kind,
       items: source.filter((item) => item.kind === kind),
     }));
-  }, [catalog, kindFilter]);
-  const emptyBook = catalog.length === 0;
+  }, [items, kindFilter]);
+  const emptyBook = items.length === 0;
   const noMaterials = !emptyBook && kindFilter === "material" && groups.length === 0;
 
   return (

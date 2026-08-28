@@ -417,6 +417,7 @@ export type Database = {
           unit_cost: number;
           cost_code: string;
           margin_percent: number;
+          price_list_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -428,8 +429,29 @@ export type Database = {
           unit_cost?: number;
           cost_code?: string;
           margin_percent?: number;
+          price_list_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["catalog_items"]["Insert"]>;
+        Relationships: [];
+      };
+      price_lists: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          effective_on: string;
+          outdated_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          effective_on: string;
+          outdated_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["price_lists"]["Insert"]>;
         Relationships: [];
       };
       material_orders: {

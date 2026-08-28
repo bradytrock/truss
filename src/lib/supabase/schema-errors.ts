@@ -464,3 +464,21 @@ export function isMissingCatalogMargin(error: { message?: string; code?: string 
 export function missingCatalogMarginMessage() {
   return `Saved in this browser. Run ${CATALOG_MARGIN_SQL} in the SQL editor (or a fresh bootstrap) so catalog margin and the company minimum persist.`;
 }
+
+export const PRICE_LISTS_SQL = "supabase/migrations/20260828150000_price_lists.sql";
+
+export function isMissingPriceLists(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentionsTable = message.includes("price_lists") || message.includes("price_list_id");
+  return (
+    (code === "pgrst205" && mentionsTable) ||
+    ((message.includes("schema cache") || message.includes("could not find the")) && mentionsTable) ||
+    message.includes("price_list_id")
+  );
+}
+
+export function missingPriceListsMessage() {
+  return `Saved in this browser. Run ${PRICE_LISTS_SQL} in the SQL editor (or a fresh bootstrap) so dated price lists persist. Old lists stay in the book when you outdate them.`;
+}

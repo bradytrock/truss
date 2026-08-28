@@ -85,6 +85,7 @@ import {
   effectiveCatalogMargin,
   formatMarginPercent,
 } from "@/lib/catalog-margin";
+import { currentCatalog } from "@/lib/price-lists";
 import { billingEstimate, defaultTaxRateForMarket, isResidentialMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { formatJobSite } from "@/lib/leads";
 import { jobPaperHref } from "@/lib/job-record";
@@ -162,14 +163,15 @@ export function PriceBookSheet({
   onOpenChange: (open: boolean) => void;
   onPick: (catalogItemId: string) => void;
 }) {
-  const { catalog, company, viewer } = useCrm();
+  const { catalog, company, viewer, priceLists } = useCrm();
+  const items = useMemo(() => currentCatalog(catalog, priceLists ?? []), [catalog, priceLists]);
   const groups = useMemo(() => {
-    const kinds = Array.from(new Set(catalog.map((item) => item.kind))) as CatalogKind[];
+    const kinds = Array.from(new Set(items.map((item) => item.kind))) as CatalogKind[];
     return kinds.map((kind) => ({
       kind,
-      items: catalog.filter((item) => item.kind === kind),
+      items: items.filter((item) => item.kind === kind),
     }));
-  }, [catalog]);
+  }, [items]);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -187,8 +189,10 @@ export function PriceBookSheet({
           </div>
           <CommandList className="max-h-none flex-1 px-2">
             <CommandEmpty>
-              {catalog.length === 0
-                ? "Price book is empty. A company admin can load it under Settings → Price book."
+              {items.length === 0
+                ? catalog.length === 0
+                  ? "Price book is empty. A company admin can load it under Settings → Price book."
+                  : "The current price list is empty. A company admin can add items under Settings → Price book."
                 : "No items match that search."}
             </CommandEmpty>
             {groups.map((group) => (

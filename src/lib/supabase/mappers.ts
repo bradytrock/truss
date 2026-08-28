@@ -27,6 +27,7 @@ import type {
   JobPhoto,
   Opportunity,
   Payment,
+  PriceList,
   PhotoReport,
   Expense,
   QbReviewComment,
@@ -54,6 +55,7 @@ type JobRow = Database["public"]["Tables"]["jobs"]["Row"];
 type ActivityRow = Database["public"]["Tables"]["activities"]["Row"];
 type TaskRow = Database["public"]["Tables"]["tasks"]["Row"];
 type CatalogRow = Database["public"]["Tables"]["catalog_items"]["Row"];
+type PriceListRow = Database["public"]["Tables"]["price_lists"]["Row"];
 type EstimateRow = Database["public"]["Tables"]["estimates"]["Row"];
 type EstimateLineRow = Database["public"]["Tables"]["estimate_lines"]["Row"];
 type EstimateTemplateRow = Database["public"]["Tables"]["estimate_templates"]["Row"];
@@ -352,6 +354,24 @@ export function jobPatch(patch: Partial<Job>) {
   return row;
 }
 
+export function mapPriceList(row: PriceListRow): PriceList {
+  return {
+    id: row.id,
+    name: row.name,
+    effectiveOn: row.effective_on,
+    outdatedAt: row.outdated_at,
+    createdAt: row.created_at,
+  };
+}
+
+export function priceListPatch(patch: Partial<PriceList>) {
+  const row: Database["public"]["Tables"]["price_lists"]["Update"] = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.effectiveOn !== undefined) row.effective_on = patch.effectiveOn;
+  if (patch.outdatedAt !== undefined) row.outdated_at = patch.outdatedAt;
+  return row;
+}
+
 export function mapCatalogItem(row: CatalogRow): CatalogItem {
   return fillCatalogItem({
     id: row.id,
@@ -361,6 +381,7 @@ export function mapCatalogItem(row: CatalogRow): CatalogItem {
     unitCost: Number(row.unit_cost),
     marginPercent: Number(row.margin_percent ?? 0),
     costCode: row.cost_code,
+    priceListId: row.price_list_id ?? null,
   });
 }
 
@@ -372,6 +393,7 @@ export function catalogPatch(patch: Partial<CatalogItem>) {
   if (patch.unitCost !== undefined) row.unit_cost = patch.unitCost;
   if (patch.marginPercent !== undefined) row.margin_percent = patch.marginPercent;
   if (patch.costCode !== undefined) row.cost_code = patch.costCode;
+  if (patch.priceListId !== undefined) row.price_list_id = patch.priceListId;
   return row;
 }
 

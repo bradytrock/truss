@@ -26,6 +26,7 @@ import {
 import { canDeleteJobs } from "@/lib/visibility";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { catalogProposalUnitPrice } from "@/lib/catalog-margin";
+import { currentCatalog } from "@/lib/price-lists";
 import { expenseRequiresJob } from "@/lib/qbwc/work";
 
 type Crm = ReturnType<typeof useCrm>;
@@ -307,7 +308,7 @@ async function runTool(
     case "search_catalog": {
       const query = arg(args, "query");
       if (!query) return fail("Need a catalog search.");
-      const items = crm.catalog
+      const items = currentCatalog(crm.catalog, crm.priceLists ?? [])
         .filter((item) => matches(haystack(item.name, item.costCode, item.kind), query))
         .slice(0, 12)
         .map((item) => ({

@@ -81,10 +81,12 @@ export function CatalogItemDialog({
   open,
   onOpenChange,
   item,
+  priceListId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   item?: CatalogItem | null;
+  priceListId?: string | null;
 }) {
   const crm = useCrm();
   const [draft, setDraft] = useState<Draft>(emptyDraft);
@@ -124,7 +126,7 @@ export function CatalogItemDialog({
         await crm.updateCatalogItem(item.id, payload);
         toast.success("Price book item updated.");
       } else {
-        await crm.addCatalogItem(payload);
+        await crm.addCatalogItem({ ...payload, priceListId });
         toast.success("Added to the price book.");
       }
       onOpenChange(false);

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { seedState } from "@/lib/seed";
-import { isMissingEstimateWriter, isMissingShareToken, isMissingFinancials, isMissingSignatureColumn, isMissingMessages } from "@/lib/supabase/schema-errors";
+import { isMissingEstimateWriter, isMissingShareToken, isMissingFinancials, isMissingSignatureColumn, isMissingMessages, isMissingPriceLists, isMissingCatalogMargin } from "@/lib/supabase/schema-errors";
 import type { Database } from "@/lib/supabase/database.types";
 
 type Client = SupabaseClient<Database>;
@@ -31,6 +31,7 @@ export async function wipeOperations(supabase: Client, companyId: string) {
     "photo_reports",
     "schedule_events",
     "catalog_items",
+    "price_lists",
     "messages",
   ] as const;
   for (const table of tables) {
@@ -86,19 +87,66 @@ export async function insertOperations(
   householdId: string | null = null,
 ) {
   const seed = seedState;
+  const now = new Date().toISOString();
+  const seedLists = seed.priceLists.length > 0
+    ? seed.priceLists
+    : [
+        {
+          id: crypto.randomUUID(),
+          name: "Price list",
+          effectiveOn: now.slice(0, 10),
+          outdatedAt: null as string | null,
+          createdAt: now,
+        },
+      ];
+  const defaultListId = seedLists[0]?.id;
+  const priceListRows = seedLists.map((list) => ({
+    id: remap(list.id, ids),
+    company_id: companyId,
+    name: list.name,
+    effective_on: list.effectiveOn,
+    outdated_at: list.outdatedAt,
+    created_at: list.createdAt,
+  }));
+  const { error: priceListError } = await supabase.from("price_lists").insert(priceListRows);
+  if (priceListError && !isMissingPriceLists(priceListError)) throw priceListError;
+  const listsPersist = !priceListError;
 
-  const { error: catalogError } = await supabase.from("catalog_items").insert(
-    seed.catalog.map((item) => ({
-      id: remap(item.id, ids),
-      company_id: companyId,
-      name: item.name,
-      kind: item.kind,
-      unit: item.unit,
-      unit_cost: item.unitCost,
-      cost_code: item.costCode,
-      margin_percent: item.marginPercent,
-    }))
-  );
+  const catalogPayload = seed.catalog.map((item) => ({
+    id: remap(item.id, ids),
+    company_id: companyId,
+    name: item.name,
+    kind: item.kind,
+    unit: item.unit,
+    unit_cost: item.unitCost,
+    cost_code: item.costCode,
+    margin_percent: item.marginPercent,
+    price_list_id: listsPersist
+      ? remap(item.priceListId || defaultListId || item.id, ids)
+      : undefined,
+  }));
+  let catalogError = (await supabase.from("catalog_items").insert(catalogPayload)).error;
+  if (catalogError && isMissingCatalogMargin(catalogError)) {
+    catalogError = (
+      await supabase.from("catalog_items").insert(
+        catalogPayload.map(({ margin_percent: _margin, ...row }) => row),
+      )
+    ).error;
+  }
+  if (catalogError && isMissingPriceLists(catalogError)) {
+    catalogError = (
+      await supabase.from("catalog_items").insert(
+        catalogPayload.map(({ price_list_id: _list, ...row }) => row),
+      )
+    ).error;
+  }
+  if (catalogError && isMissingCatalogMargin(catalogError)) {
+    catalogError = (
+      await supabase.from("catalog_items").insert(
+        catalogPayload.map(({ margin_percent: _margin, price_list_id: _list, ...row }) => row),
+      )
+    ).error;
+  }
   if (catalogError) throw catalogError;
 
   const estimateRows = seed.estimates.flatMap((estimate) => {

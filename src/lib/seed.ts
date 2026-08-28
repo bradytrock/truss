@@ -3,7 +3,7 @@ import { seedTrainingBulletins, seedTrainingProgress } from "@/lib/training/seed
 import { backfillRecordCodes } from "@/lib/job-code";
 import { fillJobRecord, JOB_RECORD_EXTRAS, jobsFromOpenLeads } from "@/lib/job-record";
 import { NORTHLINE_STAFF, NORTHLINE_TEAMS, type CrmState } from "@/lib/types";
-import { demoOps } from "@/lib/demo-ops";
+import { demoOps, NORTHLINE_PRICE_LIST_ID } from "@/lib/demo-ops";
 import { extraMessages } from "@/lib/demo-messages";
 import {
   extraActivities,
@@ -39,6 +39,15 @@ export const seedState: CrmState = {
   jobs: allJobs,
   activities: extraActivities,
   tasks: extraTasks,
+  priceLists: [
+    {
+      id: NORTHLINE_PRICE_LIST_ID,
+      name: "Price list",
+      effectiveOn: "2024-01-15",
+      outdatedAt: null,
+      createdAt: "2024-01-15T12:00:00.000Z",
+    },
+  ],
   catalog: demoOps.catalog,
   estimates: demoOps.estimates.map((estimate) => {
     if (estimate.jobId) return estimate;
