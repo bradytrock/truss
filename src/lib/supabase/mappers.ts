@@ -1,3 +1,4 @@
+import { fillMaterialOrder, fillMaterialOrderLine } from "@/lib/material-orders";
 import { fillEstimate, fillEstimateLine } from "@/lib/estimate-totals";
 import { fillEstimateTemplate, fillEstimateTemplateLine } from "@/lib/estimate-templates";
 import { parsePageTemplate, parsePhotoReportPages } from "@/lib/photo-report";
@@ -38,6 +39,8 @@ import type {
   TrainingBulletin,
   TrainingProgress,
   TextMessage,
+  MaterialOrder,
+  MaterialOrderLine,
 } from "@/lib/types";
 
 type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
@@ -66,6 +69,8 @@ type CalendarShareRow = Database["public"]["Tables"]["calendar_shares"]["Row"];
 type TrainingProgressRow = Database["public"]["Tables"]["training_progress"]["Row"];
 type TrainingBulletinRow = Database["public"]["Tables"]["training_bulletins"]["Row"];
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
+type MaterialOrderRow = Database["public"]["Tables"]["material_orders"]["Row"];
+type MaterialOrderLineRow = Database["public"]["Tables"]["material_order_lines"]["Row"];
 
 function stringRecord(value: Json | undefined): Record<string, string> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -831,4 +836,49 @@ export function mapMessage(row: MessageRow): TextMessage {
     createdAt: row.created_at,
     createdBy: row.created_by,
   };
+}
+
+export function mapMaterialOrder(row: MaterialOrderRow): MaterialOrder {
+  return fillMaterialOrder({
+    id: row.id,
+    number: row.number,
+    jobId: row.job_id,
+    vendor: row.vendor,
+    notes: row.notes,
+    neededBy: row.needed_by,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  });
+}
+
+export function materialOrderPatch(patch: Partial<MaterialOrder>) {
+  const row: Database["public"]["Tables"]["material_orders"]["Update"] = {};
+  if (patch.vendor !== undefined) row.vendor = patch.vendor;
+  if (patch.notes !== undefined) row.notes = patch.notes;
+  if (patch.neededBy !== undefined) row.needed_by = patch.neededBy;
+  return row;
+}
+
+export function mapMaterialOrderLine(row: MaterialOrderLineRow): MaterialOrderLine {
+  return fillMaterialOrderLine({
+    id: row.id,
+    materialOrderId: row.material_order_id,
+    catalogItemId: row.catalog_item_id,
+    name: row.name,
+    quantity: Number(row.quantity),
+    unit: row.unit,
+    unitCost: Number(row.unit_cost),
+    sortOrder: row.sort_order,
+  });
+}
+
+export function materialOrderLinePatch(patch: Partial<MaterialOrderLine>) {
+  const row: Database["public"]["Tables"]["material_order_lines"]["Update"] = {};
+  if (patch.catalogItemId !== undefined) row.catalog_item_id = patch.catalogItemId;
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.quantity !== undefined) row.quantity = patch.quantity;
+  if (patch.unit !== undefined) row.unit = patch.unit;
+  if (patch.unitCost !== undefined) row.unit_cost = patch.unitCost;
+  if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder;
+  return row;
 }

@@ -546,6 +546,28 @@ export interface Expense {
   createdBy: string;
 }
 
+export interface MaterialOrder {
+  id: string;
+  number: string;
+  jobId: string;
+  vendor: string;
+  notes: string;
+  neededBy: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface MaterialOrderLine {
+  id: string;
+  materialOrderId: string;
+  catalogItemId: string | null;
+  name: string;
+  quantity: number;
+  unit: string;
+  unitCost: number;
+  sortOrder: number;
+}
+
 export interface QbVendor {
   id: string;
   listId: string;
@@ -754,6 +776,8 @@ export interface CrmState {
   invoiceLines: InvoiceLine[];
   payments: Payment[];
   expenses: Expense[];
+  materialOrders: MaterialOrder[];
+  materialOrderLines: MaterialOrderLine[];
   qbVendors: QbVendor[];
   qbReviewComments: QbReviewComment[];
   events: ScheduleEvent[];

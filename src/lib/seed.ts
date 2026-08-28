@@ -56,6 +56,8 @@ export const seedState: CrmState = {
   jobFiles: [],
   photoReports: [],
   expenses: demoOps.expenses,
+  materialOrders: [],
+  materialOrderLines: [],
   qbVendors: [...new Set(demoOps.expenses.map((item) => item.vendor.trim()).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b))
     .map((name, index) => ({

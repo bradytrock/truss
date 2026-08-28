@@ -427,6 +427,58 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["catalog_items"]["Insert"]>;
         Relationships: [];
       };
+      material_orders: {
+        Row: {
+          id: string;
+          company_id: string;
+          number: string;
+          job_id: string;
+          vendor: string;
+          notes: string;
+          needed_by: string | null;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          number: string;
+          job_id: string;
+          vendor?: string;
+          notes?: string;
+          needed_by?: string | null;
+          created_by?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["material_orders"]["Insert"]>;
+        Relationships: [];
+      };
+      material_order_lines: {
+        Row: {
+          id: string;
+          company_id: string;
+          material_order_id: string;
+          catalog_item_id: string | null;
+          name: string;
+          quantity: number;
+          unit: string;
+          unit_cost: number;
+          sort_order: number;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          material_order_id: string;
+          catalog_item_id?: string | null;
+          name: string;
+          quantity?: number;
+          unit?: string;
+          unit_cost?: number;
+          sort_order?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["material_order_lines"]["Insert"]>;
+        Relationships: [];
+      };
       estimates: {
         Row: {
           id: string;

@@ -104,6 +104,8 @@ import { cn } from "@/lib/utils";
 import { PhotoReportBuilder } from "@/components/photo-report-builder";
 import { canDeleteJobs } from "@/lib/visibility";
 import { useStartEstimate } from "@/lib/start-estimate";
+import { useStartMaterialOrder } from "@/lib/start-material-order";
+import { materialOrderLinesFor, materialOrderTotal } from "@/lib/material-orders";
 
 const JOB_TABS = ["overview", "photos", "files", "financials", "paper", "fields"] as const;
 type JobTab = (typeof JOB_TABS)[number];
@@ -237,6 +239,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
   const router = useRouter();
   const searchParams = useSearchParams();
   const { start: startEstimate, pending: estimatePending } = useStartEstimate();
+  const { start: startMaterialOrder, pending: materialPending } = useStartMaterialOrder();
   const requestedTab = parseJobTab(searchParams.get("tab"));
   const [tab, setTab] = useState<JobTab>(requestedTab);
   const [heroOpen, setHeroOpen] = useState(true);
@@ -274,7 +277,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
     router.replace(qs ? `/jobs?${qs}` : "/jobs", { scroll: false });
   }
 
-  function openNew(kind: "estimate" | "invoice" | "interaction" | "expense") {
+  function openNew(kind: "estimate" | "invoice" | "interaction" | "expense" | "materials") {
     if (deleted) return;
     if (kind === "estimate") {
       setJobTab("paper");
@@ -284,6 +287,11 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
         contactId: job.primaryContactId,
         clientId: job.clientId,
       });
+      return;
+    }
+    if (kind === "materials") {
+      setJobTab("paper");
+      void startMaterialOrder(job.id);
       return;
     }
     if (kind === "invoice") {
@@ -310,6 +318,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
   const address = jobAddress(job);
   const estimates = crm.estimates.filter((estimate) => estimate.jobId === job.id);
   const invoices = crm.invoices.filter((invoice) => invoice.jobId === job.id);
+  const materialOrders = (crm.materialOrders ?? []).filter((order) => order.jobId === job.id);
   const financialDocs = jobFinancialDocs(job.id, {
     invoices: crm.invoices,
     expenses: crm.expenses,
@@ -454,13 +463,13 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                   <Button
                     type="button"
                     size="sm"
-                    disabled={estimatePending}
+                    disabled={estimatePending || materialPending}
                     aria-label="Create on this job"
                   />
                 }
               >
                 <Plus data-icon="inline-start" />
-                {estimatePending ? "Opening…" : "New"}
+                {estimatePending || materialPending ? "Opening…" : "New"}
                 <ChevronDown data-icon="inline-end" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="min-w-44">
@@ -469,6 +478,9 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => openNew("invoice")}>
                   New invoice
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => openNew("materials")}>
+                  New material order
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => openNew("interaction")}>
                   New interaction
@@ -1281,6 +1293,46 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                     </p>
                   </li>
                 ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Material orders</p>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={materialPending}
+                onClick={() => void startMaterialOrder(job.id)}
+              >
+                New
+              </Button>
+            </div>
+            {materialOrders.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No material orders on this job. Build one by hand from the price book — it does not follow
+                the estimate.
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {materialOrders.map((order) => {
+                  const lines = materialOrderLinesFor(order.id, crm.materialOrderLines ?? []);
+                  return (
+                    <li key={order.id}>
+                      <Link href={`/material-orders/${order.id}`} className="text-sm font-medium hover:underline">
+                        {order.number}
+                      </Link>
+                      <div className="mt-1 flex items-center justify-between gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          {order.vendor.trim() || "No supplier yet"}
+                        </span>
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {formatCurrencyFull(materialOrderTotal(lines))} est.
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

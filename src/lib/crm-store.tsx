@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId, jobInsertPayload, jobsFilledFromLeads, jobPatchFromLead, leadOverviewBackfill } from "@/lib/job-record";
@@ -29,6 +29,7 @@ import {
 } from "@/lib/estimate-totals";
 import { mergePaymentTerms, lockedTermsChanged, resolveEstimateTerms, resolveInvoiceTerms } from "@/lib/document-terms";
 import { matchCatalogItem, type CatalogImportDraft } from "@/lib/catalog-csv";
+import { fillMaterialOrder, fillMaterialOrderLine, lineFromCatalogItem } from "@/lib/material-orders";
 import {
   estimateNeedsSecondSignature,
   mintEstimateSignerTokens,
@@ -97,6 +98,10 @@ import {
   mapPayment,
   mapExpense,
   expensePatch,
+  mapMaterialOrder,
+  mapMaterialOrderLine,
+  materialOrderPatch,
+  materialOrderLinePatch,
   paymentPatch,
   invoiceLinePatch,
   mapQbReviewComment,
@@ -143,6 +148,8 @@ import {
   type Expense,
   type ExpenseAccount,
   type ExpenseMethod,
+  type MaterialOrder,
+  type MaterialOrderLine,
   type InvoiceLine,
   type Payment,
   type QbReviewComment,
@@ -214,6 +221,8 @@ const emptyState: CrmState = {
   jobFiles: [],
   photoReports: [],
   expenses: [],
+  materialOrders: [],
+  materialOrderLines: [],
   qbVendors: [],
   qbReviewComments: [],
   calendarAccounts: [],
@@ -473,6 +482,7 @@ async function pruneDuplicateLeadJobs(supabase: ReturnType<typeof createClient>,
         "job_photos",
         "job_files",
         "photo_reports",
+        "material_orders",
       ] as const;
       for (const table of tables) {
         const { error } = await supabase.from(table).update({ job_id: keep.id }).eq("job_id", extra.id);
@@ -606,6 +616,7 @@ type CrmContextValue = CrmState & {
   getJob: (id: string) => Job | undefined;
   getEstimate: (id: string) => Estimate | undefined;
   getInvoice: (id: string) => Invoice | undefined;
+  getMaterialOrder: (id: string) => MaterialOrder | undefined;
   jobForOpportunity: (opportunityId: string) => Job | undefined;
   company: CompanySettings;
   canEditCompany: boolean;
@@ -777,6 +788,12 @@ type CrmContextValue = CrmState & {
     file?: File;
     extractedByAi?: boolean;
   }) => Promise<Expense | null>;
+  addMaterialOrder: (input: { jobId: string; vendor?: string; notes?: string; neededBy?: string | null }) => Promise<MaterialOrder>;
+  updateMaterialOrder: (id: string, patch: Partial<MaterialOrder>) => Promise<boolean>;
+  addMaterialOrderLineFromCatalog: (orderId: string, catalogItemId: string) => Promise<MaterialOrderLine | undefined>;
+  addCustomMaterialOrderLine: (orderId: string) => Promise<MaterialOrderLine | undefined>;
+  updateMaterialOrderLine: (id: string, patch: Partial<MaterialOrderLine>) => Promise<void>;
+  removeMaterialOrderLine: (id: string) => Promise<void>;
   updateExpense: (id: string, patch: Partial<Expense>) => Promise<boolean>;
   updatePayment: (id: string, patch: Partial<Payment>) => Promise<boolean>;
   updateInvoiceLine: (id: string, patch: Partial<InvoiceLine>) => Promise<boolean>;
@@ -1043,6 +1060,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           template: parsePageTemplate(report.template),
           shareToken: report.shareToken ?? "",
         })),
+        materialOrders: (book.state.materialOrders ?? []).map((order) => ({
+          ...order,
+          jobId: remapDroppedJobId(order.jobId, pruned.dropped) ?? order.jobId,
+        })),
+        materialOrderLines: book.state.materialOrderLines ?? [],
       });
       setHydrateError(null);
       setHydrated(true);
@@ -1109,6 +1131,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       "account_invites",
       "photo_reports",
       "messages",
+      "material_orders",
+      "material_order_lines",
     ] as const;
     let timer: number | undefined;
     const channel = supabase.channel(`truss-company-${user.companyId}`);
@@ -1269,6 +1293,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const getInvoice = useCallback(
     (id: string) => scoped.invoices.find((invoice) => invoice.id === id),
     [scoped.invoices]
+  );
+  const getMaterialOrder = useCallback(
+    (id: string) => (scoped.materialOrders ?? []).find((order) => order.id === id),
+    [scoped.materialOrders]
   );
   const jobForOpportunity = useCallback(
     (opportunityId: string) =>
@@ -4532,6 +4560,250 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [addActivity, state.expenses, user.companyId, user.id, user.name, user.staffId],
   );
 
+  const addMaterialOrder = useCallback(
+    async (input: { jobId: string; vendor?: string; notes?: string; neededBy?: string | null }) => {
+      const order = fillMaterialOrder({
+        id: crypto.randomUUID(),
+        number: nextNumber("MO", (state.materialOrders ?? []).map((item) => item.number)),
+        jobId: input.jobId,
+        vendor: input.vendor ?? "",
+        notes: input.notes ?? "",
+        neededBy: input.neededBy ?? null,
+        createdBy: user.name,
+        createdAt: new Date().toISOString(),
+      });
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({
+          ...prev,
+          materialOrders: [order, ...(prev.materialOrders ?? [])],
+        }));
+        return order;
+      }
+      const payload = {
+        id: order.id,
+        company_id: user.companyId,
+        number: order.number,
+        job_id: order.jobId,
+        vendor: order.vendor,
+        notes: order.notes,
+        needed_by: order.neededBy,
+        created_by: order.createdBy,
+      };
+      const { data, error } = await supabase.from("material_orders").insert(payload).select("*").single();
+      if (error || !data) {
+        if (error && isMissingMaterialOrders(error)) {
+          toast.message(missingMaterialOrdersMessage());
+          setState((prev) => ({
+            ...prev,
+            materialOrders: [order, ...(prev.materialOrders ?? [])],
+          }));
+          return order;
+        }
+        toast.error(error?.message ?? "Could not save the material order.");
+        throw error ?? new Error("Could not save the material order.");
+      }
+      const saved = mapMaterialOrder(data);
+      setState((prev) => ({
+        ...prev,
+        materialOrders: [saved, ...(prev.materialOrders ?? [])],
+      }));
+      return saved;
+    },
+    [state.materialOrders, user.companyId, user.name],
+  );
+
+  const updateMaterialOrder = useCallback(async (id: string, patch: Partial<MaterialOrder>) => {
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        materialOrders: (prev.materialOrders ?? []).map((order) =>
+          order.id === id ? fillMaterialOrder({ ...order, ...patch }) : order,
+        ),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return true;
+    }
+    const { error } = await supabase.from("material_orders").update(materialOrderPatch(patch)).eq("id", id);
+    if (error) {
+      if (isMissingMaterialOrders(error)) {
+        toast.message(missingMaterialOrdersMessage());
+        apply();
+        return true;
+      }
+      toast.error(error.message);
+      return false;
+    }
+    apply();
+    return true;
+  }, []);
+
+  const addMaterialOrderLineFromCatalog = useCallback(
+    async (orderId: string, catalogItemId: string) => {
+      const item = state.catalog.find((entry) => entry.id === catalogItemId);
+      if (!item) return;
+      const sortOrder =
+        Math.max(
+          0,
+          ...(state.materialOrderLines ?? [])
+            .filter((line) => line.materialOrderId === orderId)
+            .map((line) => line.sortOrder),
+        ) + 1;
+      const line = lineFromCatalogItem(orderId, item, sortOrder);
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({
+          ...prev,
+          materialOrderLines: [...(prev.materialOrderLines ?? []), line],
+        }));
+        return line;
+      }
+      const payload = {
+        id: line.id,
+        company_id: user.companyId,
+        material_order_id: orderId,
+        catalog_item_id: item.id,
+        name: line.name,
+        quantity: line.quantity,
+        unit: line.unit,
+        unit_cost: line.unitCost,
+        sort_order: sortOrder,
+      };
+      const { data, error } = await supabase.from("material_order_lines").insert(payload).select("*").single();
+      if (error || !data) {
+        if (error && isMissingMaterialOrders(error)) {
+          toast.message(missingMaterialOrdersMessage());
+          setState((prev) => ({
+            ...prev,
+            materialOrderLines: [...(prev.materialOrderLines ?? []), line],
+          }));
+          return line;
+        }
+        toast.error(error?.message ?? "Could not add that catalog item.");
+        return;
+      }
+      const saved = mapMaterialOrderLine(data);
+      setState((prev) => ({
+        ...prev,
+        materialOrderLines: [...(prev.materialOrderLines ?? []), saved],
+      }));
+      return saved;
+    },
+    [state.catalog, state.materialOrderLines, user.companyId],
+  );
+
+  const addCustomMaterialOrderLine = useCallback(
+    async (orderId: string) => {
+      const sortOrder =
+        Math.max(
+          0,
+          ...(state.materialOrderLines ?? [])
+            .filter((line) => line.materialOrderId === orderId)
+            .map((line) => line.sortOrder),
+        ) + 1;
+      const line = fillMaterialOrderLine({
+        id: crypto.randomUUID(),
+        materialOrderId: orderId,
+        name: "",
+        quantity: 1,
+        unit: "EA",
+        unitCost: 0,
+        sortOrder,
+      });
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({
+          ...prev,
+          materialOrderLines: [...(prev.materialOrderLines ?? []), line],
+        }));
+        return line;
+      }
+      const payload = {
+        id: line.id,
+        company_id: user.companyId,
+        material_order_id: orderId,
+        catalog_item_id: null,
+        name: line.name || "Custom item",
+        quantity: line.quantity,
+        unit: line.unit,
+        unit_cost: line.unitCost,
+        sort_order: sortOrder,
+      };
+      const { data, error } = await supabase.from("material_order_lines").insert(payload).select("*").single();
+      if (error || !data) {
+        if (error && isMissingMaterialOrders(error)) {
+          toast.message(missingMaterialOrdersMessage());
+          setState((prev) => ({
+            ...prev,
+            materialOrderLines: [...(prev.materialOrderLines ?? []), line],
+          }));
+          return line;
+        }
+        toast.error(error?.message ?? "Could not add a line.");
+        return;
+      }
+      const saved = mapMaterialOrderLine(data);
+      setState((prev) => ({
+        ...prev,
+        materialOrderLines: [...(prev.materialOrderLines ?? []), saved],
+      }));
+      return saved;
+    },
+    [state.materialOrderLines, user.companyId],
+  );
+
+  const updateMaterialOrderLine = useCallback(async (id: string, patch: Partial<MaterialOrderLine>) => {
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        materialOrderLines: (prev.materialOrderLines ?? []).map((line) =>
+          line.id === id ? fillMaterialOrderLine({ ...line, ...patch }) : line,
+        ),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("material_order_lines").update(materialOrderLinePatch(patch)).eq("id", id);
+    if (error) {
+      if (isMissingMaterialOrders(error)) {
+        toast.message(missingMaterialOrdersMessage());
+        apply();
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
+
+  const removeMaterialOrderLine = useCallback(async (id: string) => {
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        materialOrderLines: (prev.materialOrderLines ?? []).filter((line) => line.id !== id),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("material_order_lines").delete().eq("id", id);
+    if (error) {
+      if (isMissingMaterialOrders(error)) {
+        toast.message(missingMaterialOrdersMessage());
+        apply();
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
+
   const setQbStatus = useCallback(
     async (kind: "invoice" | "payment" | "expense", id: string, status: QbSyncStatus) => {
       const supabase = maybeClient();
@@ -6014,6 +6286,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       getEstimate,
       getEstimateTemplate,
       getInvoice,
+      getMaterialOrder,
       jobForOpportunity,
       company: companySettings,
       canEditCompany,
@@ -6076,6 +6349,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       voidInvoice,
       recordPayment,
       addExpense,
+      addMaterialOrder,
+      updateMaterialOrder,
+      addMaterialOrderLineFromCatalog,
+      addCustomMaterialOrderLine,
+      updateMaterialOrderLine,
+      removeMaterialOrderLine,
       updateExpense,
       updatePayment,
       updateInvoiceLine,
@@ -6124,6 +6403,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       getEstimate,
       getEstimateTemplate,
       getInvoice,
+      getMaterialOrder,
       jobForOpportunity,
       companySettings,
       canEditCompany,
@@ -6186,6 +6466,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       voidInvoice,
       recordPayment,
       addExpense,
+      addMaterialOrder,
+      updateMaterialOrder,
+      addMaterialOrderLineFromCatalog,
+      addCustomMaterialOrderLine,
+      updateMaterialOrderLine,
+      removeMaterialOrderLine,
       updateExpense,
       updatePayment,
       updateInvoiceLine,

@@ -432,3 +432,23 @@ export function isMissingQbwc(error: { message?: string; code?: string } | null 
 export function missingQbwcMessage() {
   return `Run ${QBWC_SQL} in the SQL editor (or a fresh bootstrap) so the Web Connector can sign in and post invoices. Expenses and payments also need ${QBWC_EXPENSES_SQL}. Job expenses posting onto Customer:Job need ${QBWC_EXPENSE_JOB_SQL}. If a job parent is already a vendor, run ${QBWC_CUSTOMER_ALIAS_SQL} so the connector can create a customer and hang the job under it. Expense vendor dropdowns need ${QBWC_VENDORS_SQL} so the connector can pull the vendor list from QuickBooks.`;
 }
+
+export const MATERIAL_ORDERS_SQL = "supabase/migrations/20260828120000_material_orders.sql";
+
+export function isMissingMaterialOrders(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentionsTable =
+    message.includes("material_orders") ||
+    message.includes("material_order_lines") ||
+    message.includes("material_order");
+  return (
+    (code === "pgrst205" && mentionsTable) ||
+    ((message.includes("schema cache") || message.includes("could not find the")) && mentionsTable)
+  );
+}
+
+export function missingMaterialOrdersMessage() {
+  return `Saved in this browser. Run ${MATERIAL_ORDERS_SQL} in the SQL editor (or a fresh bootstrap) so material orders persist for the office and the field.`;
+}

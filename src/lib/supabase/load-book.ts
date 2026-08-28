@@ -28,6 +28,8 @@ import {
   mapTrainingBulletin,
   mapTrainingProgress,
   mapMessage,
+  mapMaterialOrder,
+  mapMaterialOrderLine,
 } from "@/lib/supabase/mappers";
 import type { Database } from "@/lib/supabase/database.types";
 import { initialsFromName, type CrmState, type SeatRole } from "@/lib/types";
@@ -80,6 +82,8 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     photoReportsRes,
     messagesRes,
     jobFilesRes,
+    materialOrdersRes,
+    materialOrderLinesRes,
   ] = await Promise.all([
     supabase.from("clients").select("*").eq("company_id", companyId).order("name"),
     supabase.from("contacts").select("*").eq("company_id", companyId).order("name"),
@@ -121,6 +125,8 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     }),
     supabase.from("messages").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("job_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    supabase.from("material_orders").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    supabase.from("material_order_lines").select("*").eq("company_id", companyId).order("sort_order"),
   ]);
 
   const missingTeams = Boolean(teamsRes.error);
@@ -238,6 +244,10 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       ? []
       : (trainingBulletinsRes.data ?? []).map(mapTrainingBulletin),
     messages: messagesRes.error ? [] : (messagesRes.data ?? []).map(mapMessage),
+    materialOrders: materialOrdersRes.error ? [] : (materialOrdersRes.data ?? []).map(mapMaterialOrder),
+    materialOrderLines: materialOrderLinesRes.error
+      ? []
+      : (materialOrderLinesRes.data ?? []).map(mapMaterialOrderLine),
   };
 
   return {

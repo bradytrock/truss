@@ -238,7 +238,9 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
             ? pathname === "/"
             : item.href === "/accounting"
               ? pathname === "/accounting" || pathname.startsWith("/accounting/")
-              : pathname.startsWith(item.href);
+              : item.href === "/jobs"
+                ? pathname.startsWith("/jobs") || pathname.startsWith("/material-orders")
+                : pathname.startsWith(item.href);
         return (
           <Link
             key={item.href}
@@ -262,7 +264,7 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
 function SearchTrigger() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const { opportunities, jobs, contacts, estimates, invoices, viewer } = useCrm();
+  const { opportunities, jobs, contacts, estimates, invoices, materialOrders, viewer } = useCrm();
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -416,6 +418,21 @@ function SearchTrigger() {
                   }}
                 >
                   {invoice.number} · {invoice.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <CommandGroup heading="Material orders">
+              {(materialOrders ?? []).map((order) => (
+                <CommandItem
+                  key={order.id}
+                  value={`${order.number} ${order.vendor} material order`}
+                  onSelect={() => {
+                    setOpen(false);
+                    router.push(`/material-orders/${order.id}`);
+                  }}
+                >
+                  {order.number}
+                  {order.vendor.trim() ? ` · ${order.vendor}` : ""}
                 </CommandItem>
               ))}
             </CommandGroup>
