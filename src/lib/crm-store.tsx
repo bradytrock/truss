@@ -806,7 +806,11 @@ type CrmContextValue = CrmState & {
   declineEstimate: (id: string) => Promise<void>;
   reopenEstimate: (id: string) => Promise<void>;
   markEstimateViewed: (id: string) => Promise<void>;
-  ensureEstimateShareToken: (id: string) => Promise<string>;
+  ensureEstimateShareToken: (id: string) => Promise<{
+    shareToken: string;
+    secondShareToken: string;
+    secondContactId: string | null;
+  }>;
   ensureInvoiceShareToken: (id: string) => Promise<string>;
   duplicateEstimate: (id: string) => Promise<Estimate>;
   addEstimateTemplate: (input?: { name?: string; market?: EstimateTemplate["market"] }) => Promise<EstimateTemplate>;
@@ -968,6 +972,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const [liveStatus, setLiveStatus] = useState<LiveStatus>("offline");
   const seeding = useRef(false);
   const bookEpoch = useRef(0);
+  const bookRef = useRef(state);
+  bookRef.current = state;
 
   const load = useCallback(async () => {
     if (!isSupabaseConfigured()) {
@@ -2818,12 +2824,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     if (!allowed) return;
     patch = allowed;
     const apply = () =>
-      setState((prev) => ({
-        ...prev,
-        estimates: prev.estimates.map((estimate) =>
-          estimate.id === id ? fillEstimate({ ...estimate, ...patch }) : estimate
-        ),
-      }));
+      setState((prev) => {
+        const next = {
+          ...prev,
+          estimates: prev.estimates.map((estimate) =>
+            estimate.id === id ? fillEstimate({ ...estimate, ...patch }) : estimate
+          ),
+        };
+        bookRef.current = next;
+        return next;
+      });
     const supabase = maybeClient();
     if (!supabase) {
       apply();
@@ -2854,39 +2864,44 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const sendEstimate = useCallback(
     async (id: string) => {
-      const current = state.estimates.find((estimate) => estimate.id === id);
+      const book = bookRef.current;
+      const current = book.estimates.find((estimate) => estimate.id === id);
       if (!current) return;
       const sentAt = new Date().toISOString();
-      const signing = applyCoOwnerToEstimate(current, state.jobs, state.contacts);
+      const signing = applyCoOwnerToEstimate(current, book.jobs, book.contacts);
       const tokens = mintEstimateSignerTokens(signing);
       const owner = resolveProjectOwner({
         estimate: current,
-        jobs: state.jobs,
-        opportunities: state.opportunities,
-        staff: state.staff,
+        jobs: book.jobs,
+        opportunities: book.opportunities,
+        staff: book.staff,
         user,
         companyName: companySettings.name,
       });
       const ownerSignedAt = current.ownerSignedAt || sentAt;
       const ownerSignedName = current.ownerSignedName.trim() || owner.name;
       const apply = () =>
-        setState((prev) => ({
-          ...prev,
-          estimates: prev.estimates.map((estimate) =>
-            estimate.id === id
-              ? {
-                  ...estimate,
-                  status: "sent" as const,
-                  sentAt,
-                  secondContactId: signing.secondContactId,
-                  shareToken: tokens.shareToken,
-                  secondShareToken: tokens.secondShareToken,
-                  ownerSignedAt,
-                  ownerSignedName,
-                }
-              : estimate
-          ),
-        }));
+        setState((prev) => {
+          const next = {
+            ...prev,
+            estimates: prev.estimates.map((estimate) =>
+              estimate.id === id
+                ? {
+                    ...estimate,
+                    status: "sent" as const,
+                    sentAt,
+                    secondContactId: signing.secondContactId,
+                    shareToken: tokens.shareToken,
+                    secondShareToken: tokens.secondShareToken,
+                    ownerSignedAt,
+                    ownerSignedName,
+                  }
+                : estimate
+            ),
+          };
+          bookRef.current = next;
+          return next;
+        });
       const supabase = maybeClient();
       if (supabase) {
         const payload: {
@@ -2945,7 +2960,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         await updateEstimate(id, { opportunityId });
       }
       if (opportunityId) {
-        const opportunity = state.opportunities.find((item) => item.id === opportunityId);
+        const opportunity = bookRef.current.opportunities.find((item) => item.id === opportunityId);
         if (
           opportunity &&
           (opportunity.stage === "pursuing" || opportunity.stage === "estimating")
@@ -2965,11 +2980,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       companySettings.name,
       ensureLeadForEstimate,
       moveOpportunity,
-      state.contacts,
-      state.estimates,
-      state.jobs,
-      state.opportunities,
-      state.staff,
       updateEstimate,
       user,
     ]
@@ -3234,21 +3244,27 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const ensureEstimateShareToken = useCallback(
     async (id: string) => {
-      const current = state.estimates.find((estimate) => estimate.id === id);
+      const book = bookRef.current;
+      const current = book.estimates.find((estimate) => estimate.id === id);
       if (!current) throw new Error("Estimate not found.");
-      const signing = applyCoOwnerToEstimate(current, state.jobs, state.contacts);
+      const signing = applyCoOwnerToEstimate(current, book.jobs, book.contacts);
       const tokens = mintEstimateSignerTokens(signing);
+      const result = {
+        shareToken: tokens.shareToken,
+        secondShareToken: tokens.secondShareToken,
+        secondContactId: signing.secondContactId,
+      };
       if (
         tokens.shareToken === current.shareToken &&
         tokens.secondShareToken === current.secondShareToken &&
         signing.secondContactId === current.secondContactId
       ) {
-        return tokens.shareToken;
+        return result;
       }
       await updateEstimate(id, { ...tokens, secondContactId: signing.secondContactId });
-      return tokens.shareToken;
+      return result;
     },
-    [state.contacts, state.estimates, state.jobs, updateEstimate]
+    [updateEstimate]
   );
 
   const duplicateEstimate = useCallback(

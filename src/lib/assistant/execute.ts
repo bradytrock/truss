@@ -704,7 +704,12 @@ async function runTool(
       await crm.sendEstimate(estimate.id);
       const token = await crm.ensureEstimateShareToken(estimate.id);
       return ok(
-        { id: estimate.id, number: estimate.number, share: `/share/e/${token}` },
+        {
+          id: estimate.id,
+          number: estimate.number,
+          share: `/share/e/${token.shareToken}`,
+          secondShare: token.secondShareToken ? `/share/e/${token.secondShareToken}` : "",
+        },
         { href: `/estimates/${estimate.id}`, label: `Open ${estimate.number}` },
       );
     }

@@ -88,15 +88,23 @@ export function resolveShareContacts(record: CustomerRecord, book: PartyBook): S
 
 export function shareContactsForEstimate(estimate: Estimate, book: PartyBook) {
   const list = resolveShareContacts(estimate, book);
-  return list.map((person, index) => {
-    if (index === 0 && estimate.shareToken) {
-      return { ...person, url: shareUrl("e", estimate.shareToken) };
+  let primaryId = estimate.contactId ?? null;
+  if (!primaryId && estimate.jobId) {
+    primaryId = book.jobs.find((job) => job.id === estimate.jobId)?.primaryContactId ?? null;
+  }
+  const job = estimate.jobId ? book.jobs.find((item) => item.id === estimate.jobId) : undefined;
+  const secondId =
+    estimate.secondContactId || coOwnerContact(job, book.contacts, primaryId)?.id || null;
+  const primaryUrl = estimate.shareToken ? shareUrl("e", estimate.shareToken) : undefined;
+  const secondUrl =
+    estimate.secondShareToken && estimate.secondShareToken !== estimate.shareToken
+      ? shareUrl("e", estimate.secondShareToken)
+      : undefined;
+  return list.map((person) => {
+    if (secondId && person.id === secondId && person.id !== primaryId) {
+      return secondUrl ? { ...person, url: secondUrl } : person;
     }
-    if (index === 1) {
-      const token = estimate.secondShareToken || estimate.shareToken;
-      return token ? { ...person, url: shareUrl("e", token) } : person;
-    }
-    return person;
+    return primaryUrl ? { ...person, url: primaryUrl } : person;
   });
 }
 

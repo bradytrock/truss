@@ -434,6 +434,11 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   const [bookGroup, setBookGroup] = useState<string | undefined>();
   const [pending, setPending] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [shareSigning, setShareSigning] = useState<{
+    shareToken: string;
+    secondShareToken: string;
+    secondContactId: string | null;
+  } | null>(null);
   const [sectionName, setSectionName] = useState("");
   const [emptySections, setEmptySections] = useState<string[]>([]);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
@@ -601,6 +606,19 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     });
   }
 
+  const shareEstimate = useMemo(
+    () =>
+      shareSigning
+        ? {
+            ...estimate,
+            shareToken: shareSigning.shareToken,
+            secondShareToken: shareSigning.secondShareToken,
+            secondContactId: shareSigning.secondContactId ?? estimate.secondContactId,
+          }
+        : estimate,
+    [estimate, shareSigning],
+  );
+
   async function openShare(markSent: boolean) {
     if (markSent && totals.includedCount === 0) {
       toast.error("Add at least one included line before sending.");
@@ -609,9 +627,12 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     setPending(true);
     try {
       if (markSent) await crm.sendEstimate(estimate.id);
-      else await crm.ensureEstimateShareToken(estimate.id);
+      const tokens = await crm.ensureEstimateShareToken(estimate.id);
+      setShareSigning(tokens);
       setShareOpen(true);
       if (markSent) setTab("preview");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not prepare the share links.");
     } finally {
       setPending(false);
     }
@@ -1261,13 +1282,13 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         open={shareOpen}
         onOpenChange={setShareOpen}
         title={`Share ${estimate.number}`}
-        description="Text this to the homeowner or copy the link. They can review the proposal, pick optional items, and sign from their phone — no login required. The signature is stored on the estimate and prints on the PDF."
-        url={estimate.shareToken ? shareUrl("e", estimate.shareToken) : ""}
+        description="Text each homeowner or copy their link. They review the proposal and sign from their phone — no login. Each signer needs their own link; the other person’s link will not let them sign."
+        url={shareEstimate.shareToken ? shareUrl("e", shareEstimate.shareToken) : ""}
         kind="estimate"
         documentNumber={estimate.number}
         documentName={estimate.name}
         companyName={crm.company.name}
-        recipients={shareContactsForEstimate(estimate, crm)}
+        recipients={shareContactsForEstimate(shareEstimate, crm)}
         onDownloadPdf={downloadPdf}
         onTexted={(sent) =>
           crm.logOutboundText({

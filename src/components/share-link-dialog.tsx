@@ -68,7 +68,8 @@ export function ShareLinkDialog({
     [recipients]
   );
   const primary = people[0];
-  const recipientKey = people.map((item) => `${item.id}:${item.name}:${item.phone}`).join("|");
+  const recipientKey = people.map((item) => `${item.id}:${item.name}:${item.phone}:${item.url ?? ""}`).join("|");
+  const perPersonLinks = people.length > 1;
 
   const composedMessage = useMemo(
     () =>
@@ -125,19 +126,20 @@ export function ShareLinkDialog({
         id: person.id,
         name: person.name,
         phone: (phones[person.id] ?? person.phone).trim(),
-        url: person.url || url,
+        url: person.url || (perPersonLinks ? "" : url),
       }));
     const extra = customPhone.trim();
     if (extra && !list.some((item) => item.phone === extra)) {
       list.push({ id: "custom", name: primary?.name || "Homeowner", phone: extra, url });
     }
     return list;
-  }, [customPhone, people, phones, primary?.name, selected, url]);
+  }, [customPhone, people, perPersonLinks, phones, primary?.name, selected, url]);
 
-  async function handleCopy() {
+  async function handleCopy(link = url) {
+    if (!link) return;
     setPending("copy");
     try {
-      const ok = await copyText(url);
+      const ok = await copyText(link);
       if (ok) toast.success("Link copied.");
       else toast.error("Could not copy the link. Select it and copy it yourself.");
     } finally {
@@ -149,6 +151,10 @@ export function ShareLinkDialog({
     const ready = targets.filter((target) => looksLikePhone(target.phone));
     if (ready.length === 0) {
       toast.error("Add a mobile number to text, or copy the link.");
+      return;
+    }
+    if (ready.some((target) => !target.url)) {
+      toast.error("Each signer needs their own link. Close this and send the proposal again.");
       return;
     }
     if (!message.includes(url) && !targets.some((target) => message.includes(target.url))) {
@@ -225,64 +231,104 @@ export function ShareLinkDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="share-link">Client link</Label>
+          {perPersonLinks ? null : (
             <div className="grid gap-2">
-              <Input
-                id="share-link"
-                readOnly
-                value={url}
-                onFocus={(event) => event.target.select()}
-              />
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="outline" disabled={!url || pending !== null} onClick={() => void handleCopy()}>
-                  <Copy />
-                  Copy
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!url}
-                  onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-                >
-                  <ExternalLink />
-                  Open
-                </Button>
+              <Label htmlFor="share-link">Client link</Label>
+              <div className="grid gap-2">
+                <Input
+                  id="share-link"
+                  readOnly
+                  value={url}
+                  onFocus={(event) => event.target.select()}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" disabled={!url || pending !== null} onClick={() => void handleCopy()}>
+                    <Copy />
+                    Copy
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={!url}
+                    onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+                  >
+                    <ExternalLink />
+                    Open
+                  </Button>
+                </div>
               </div>
             </div>
-            {people.some((person) => person.url && person.url !== url) ? (
+          )}
+          <div className="grid gap-2">
+            <Label>{perPersonLinks ? "Signing links" : "Text to the homeowner"}</Label>
+            {perPersonLinks ? (
               <p className="text-xs text-muted-foreground">
-                Each homeowner is texted their own signing link. Copy is the primary homeowner’s.
+                Each homeowner has a unique link. The other person’s link will not let them sign.
               </p>
             ) : null}
-          </div>
-          <div className="grid gap-2">
-            <Label>Text to the homeowner</Label>
             {people.length ? (
               <ul className="grid gap-2">
-                {people.map((person) => (
-                  <li key={person.id} className="flex items-start gap-2 rounded-md border p-2">
-                    <Checkbox
-                      className="mt-2"
-                      checked={Boolean(selected[person.id])}
-                      onCheckedChange={(value) =>
-                        setSelected((current) => ({ ...current, [person.id]: Boolean(value) }))
-                      }
-                      aria-label={`Text ${person.name}`}
-                    />
-                    <div className="grid min-w-0 flex-1 gap-1">
-                      <p className="text-sm font-medium">{person.name}</p>
-                      <Input
-                        type="tel"
-                        value={phones[person.id] ?? person.phone}
-                        placeholder="(303) 555-0100"
-                        onChange={(event) =>
-                          setPhones((current) => ({ ...current, [person.id]: event.target.value }))
+                {people.map((person) => {
+                  const theirUrl = person.url || "";
+                  return (
+                    <li key={person.id} className="flex items-start gap-2 rounded-md border p-2">
+                      <Checkbox
+                        className="mt-2"
+                        checked={Boolean(selected[person.id])}
+                        onCheckedChange={(value) =>
+                          setSelected((current) => ({ ...current, [person.id]: Boolean(value) }))
                         }
+                        aria-label={`Text ${person.name}`}
                       />
-                    </div>
-                  </li>
-                ))}
+                      <div className="grid min-w-0 flex-1 gap-1">
+                        <p className="text-sm font-medium">{person.name}</p>
+                        <Input
+                          type="tel"
+                          value={phones[person.id] ?? person.phone}
+                          placeholder="(303) 555-0100"
+                          onChange={(event) =>
+                            setPhones((current) => ({ ...current, [person.id]: event.target.value }))
+                          }
+                        />
+                        {theirUrl ? (
+                          <div className="grid gap-1">
+                            <Input
+                              readOnly
+                              value={theirUrl}
+                              aria-label={`Signing link for ${person.name}`}
+                              onFocus={(event) => event.target.select()}
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={pending !== null}
+                                onClick={() => void handleCopy(theirUrl)}
+                              >
+                                <Copy />
+                                Copy {person.name.split(" ")[0] || "link"}
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => window.open(theirUrl, "_blank", "noopener,noreferrer")}
+                              >
+                                <ExternalLink />
+                                Open
+                              </Button>
+                            </div>
+                          </div>
+                        ) : perPersonLinks ? (
+                          <p className="text-xs text-muted-foreground">
+                            No unique signing link for {person.name} yet. Close this and share again.
+                          </p>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             ) : null}
             <Input
@@ -297,9 +343,12 @@ export function ShareLinkDialog({
               onChange={(event) => setMessage(event.target.value)}
             />
             <p className="text-xs text-muted-foreground">
+              {perPersonLinks
+                ? "Each text includes that person’s own signing link. Copy the link next to their name — the other homeowner cannot sign with it."
+                : null}{" "}
               {status?.configured
-                ? `Texts go out over Sendblue${status.fromNumber ? ` (${status.fromNumber})` : ""}. Copy the link if you would rather send it yourself.`
-                : "Copy the link anytime. This website does not read Supabase Secrets. Put the three SENDBLUE_ variables on the host (Vercel) or deploy supabase/functions/send-text — until then, Send previews the message without delivering it."}
+                ? `Texts go out over Sendblue${status.fromNumber ? ` (${status.fromNumber})` : ""}.`
+                : "This website does not read Supabase Secrets. Put the three SENDBLUE_ variables on the host (Vercel) or deploy supabase/functions/send-text — until then, Send previews the message without delivering it."}
             </p>
           </div>
         </div>
@@ -320,19 +369,23 @@ export function ShareLinkDialog({
               Download PDF
             </Button>
           ) : null}
-          <Button type="button" variant="outline" disabled={!url || pending !== null} onClick={() => void handleCopy()}>
-            <Copy />
-            Copy link
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={!url}
-            onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-          >
-            <ExternalLink />
-            Open
-          </Button>
+          {perPersonLinks ? null : (
+            <>
+              <Button type="button" variant="outline" disabled={!url || pending !== null} onClick={() => void handleCopy()}>
+                <Copy />
+                Copy link
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!url}
+                onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+              >
+                <ExternalLink />
+                Open
+              </Button>
+            </>
+          )}
           <Button type="button" disabled={!url || pending !== null} onClick={() => void handleText()}>
             <MessageSquare />
             {pending === "text" ? "Sending…" : "Send text"}
