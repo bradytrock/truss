@@ -276,34 +276,41 @@ async function writeAuthorization(
   for (const line of lines) {
     inks.push(isSignaturePng(line.image) ? await loadLogoForPdf(line.image) : null);
   }
+  const contractorIndex = lines.findIndex((line) => line.party === "contractor");
+  const homeownerIndexes = lines
+    .map((line, index) => (line.party === "homeowner" ? index : -1))
+    .filter((index) => index >= 0);
+  const twoCol = contractorIndex >= 0 && homeownerIndexes.length > 0;
   const gap = 24;
-  const twoCol = lines.length > 1;
+  const stackGap = 16;
   const colWidth = twoCol ? (right - 54 - gap) / 2 : right - 54;
-  const rows: number[][] = [];
-  for (let index = 0; index < lines.length; index += twoCol ? 2 : 1) {
-    rows.push(twoCol ? [index, index + 1].filter((item) => item < lines.length) : [index]);
-  }
-  const rowHeights = rows.map((row) =>
-    Math.max(...row.map((index) => signatureCellHeight(doc, lines[index], inks[index], colWidth))),
+  const contractorHeight =
+    contractorIndex >= 0 ? signatureCellHeight(doc, lines[contractorIndex], inks[contractorIndex], colWidth) : 0;
+  const homeownerHeights = homeownerIndexes.map((index) =>
+    signatureCellHeight(doc, lines[index], inks[index], colWidth),
   );
-  const block = 16 + rowHeights.reduce((sum, height) => sum + height, 0);
+  const homeownersHeight =
+    homeownerHeights.reduce((sum, height) => sum + height, 0) +
+    stackGap * Math.max(0, homeownerHeights.length - 1);
+  const block = 16 + Math.max(contractorHeight, homeownersHeight, 0);
   y = ensureSpace(doc, y, block);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(90, 90, 90);
   doc.text("AUTHORIZATION", 54, y);
   y += 16;
-  for (let row = 0; row < rows.length; row++) {
-    y = ensureSpace(doc, y, rowHeights[row]);
-    const rowY = y;
-    for (let col = 0; col < rows[row].length; col++) {
-      const index = rows[row][col];
-      const x = col === 1 ? 54 + colWidth + gap : 54;
-      drawSignatureCell(doc, lines[index], inks[index], x, rowY, colWidth);
-    }
-    y += rowHeights[row];
+  const top = y;
+  if (contractorIndex >= 0) {
+    drawSignatureCell(doc, lines[contractorIndex], inks[contractorIndex], 54, top, colWidth);
   }
-  return y;
+  let homeownerY = top;
+  const homeownerX = twoCol ? 54 + colWidth + gap : 54;
+  for (let i = 0; i < homeownerIndexes.length; i++) {
+    const index = homeownerIndexes[i];
+    drawSignatureCell(doc, lines[index], inks[index], homeownerX, homeownerY, colWidth);
+    homeownerY += homeownerHeights[i] + stackGap;
+  }
+  return top + Math.max(contractorHeight, homeownersHeight, 0);
 }
 
 function writeProjectManager(doc: Doc, manager: ProjectManagerContact | null | undefined, y: number) {

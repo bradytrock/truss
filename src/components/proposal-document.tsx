@@ -276,38 +276,49 @@ export function ProposalSignature({
     primary: primaryName || "Homeowner",
     second: secondName,
   });
+  const contractor = lines.find((line) => line.party === "contractor");
+  const homeowners = lines.filter((line) => line.party === "homeowner");
   return (
     <div>
       <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Authorization</h3>
-      <div className="mt-3 grid gap-6 sm:grid-cols-2">
-        {lines.map((line) => {
-          const signed = Boolean(line.signedAt);
-          const drawn = isSignaturePng(line.image);
-          return (
-            <div key={line.role}>
-              {drawn ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={line.image}
-                  alt={`Signature of ${line.name}`}
-                  className="h-16 w-full max-w-xs object-contain object-left"
-                />
-              ) : signed && line.party === "contractor" ? (
-                <p className="flex h-16 items-end font-serif text-2xl italic leading-none">
-                  {line.name}
-                </p>
-              ) : (
-                <div className="h-16 border-b" />
-              )}
-              <p className="mt-2 border-t pt-2 text-sm">{line.name}</p>
-              <p className="text-xs text-muted-foreground">
-                {line.party === "contractor" ? "Contractor" : "Homeowner signature"}
-                {signed ? ` · ${formatDate(line.signedAt)}` : ""}
-              </p>
-            </div>
-          );
-        })}
+      <div className="mt-3 grid gap-6 sm:grid-cols-2 sm:items-start">
+        {contractor ? <SignatureLineCell key={contractor.role} line={contractor} /> : null}
+        <div className="grid gap-6">
+          {homeowners.map((line) => (
+            <SignatureLineCell key={line.role} line={line} />
+          ))}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function SignatureLineCell({
+  line,
+}: {
+  line: ReturnType<typeof estimateSignatureLines>[number];
+}) {
+  const signed = Boolean(line.signedAt);
+  const drawn = isSignaturePng(line.image);
+  return (
+    <div>
+      {drawn ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={line.image}
+          alt={`Signature of ${line.name}`}
+          className="h-16 w-full max-w-xs object-contain object-left"
+        />
+      ) : signed && line.party === "contractor" ? (
+        <p className="flex h-16 items-end font-serif text-2xl italic leading-none">{line.name}</p>
+      ) : (
+        <div className="h-16 border-b" />
+      )}
+      <p className="mt-2 border-t pt-2 text-sm">{line.name}</p>
+      <p className="text-xs text-muted-foreground">
+        {line.party === "contractor" ? "Contractor" : "Homeowner signature"}
+        {signed ? ` · ${formatDate(line.signedAt)}` : ""}
+      </p>
     </div>
   );
 }
