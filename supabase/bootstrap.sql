@@ -7776,6 +7776,7 @@ begin
   return coalesce((
     select jsonb_agg(jsonb_build_object(
       'id', e.id,
+      'estimateId', e.estimate_id,
       'kind', e.kind,
       'signerRole', e.signer_role,
       'signerName', e.signer_name,
