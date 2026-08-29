@@ -1,7 +1,8 @@
 import { fillJobRecord, parseCustomFields } from "@/lib/job-record";
 import { normalizeLinePhotoIds } from "@/lib/estimate-line-photos";
+import { parseSignatureEvents } from "@/lib/estimate-signature-audit";
 import { parsePageTemplate, parsePhotoReportPages } from "@/lib/photo-report";
-import type { CompanySettings, EstimateLinePhoto, Job, JobPhoto, PhotoReport } from "@/lib/types";
+import type { CompanySettings, EstimateLinePhoto, EstimateSignatureEvent, Job, JobPhoto, PhotoReport } from "@/lib/types";
 import type { ProjectManagerContact } from "@/lib/document-owner";
 
 export function newShareToken() {
@@ -208,6 +209,7 @@ export type SharedEstimatePayload = {
     photos?: EstimateLinePhoto[];
   }>;
   projectManager?: ProjectManagerContact | null;
+  signatureEvents?: EstimateSignatureEvent[];
 };
 
 export type SharedInvoicePayload = {
@@ -366,6 +368,7 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
     };
     }),
     projectManager: parseProjectManager(raw.projectManager),
+    signatureEvents: parseSignatureEvents(raw.signatureEvents),
   };
 }
 

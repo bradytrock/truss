@@ -1184,6 +1184,60 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;
         Relationships: [];
       };
+      estimate_signature_events: {
+        Row: {
+          id: string;
+          company_id: string;
+          estimate_id: string;
+          kind: string;
+          signer_role: string;
+          contact_id: string | null;
+          signer_name: string;
+          token_suffix: string;
+          token_sha256: string;
+          ip_address: string;
+          forwarded_for: string;
+          user_agent: string;
+          accept_language: string;
+          time_zone: string;
+          delivery_channel: string;
+          delivery_to: string;
+          consent_text: string;
+          consent_version: string;
+          document_sha256: string;
+          document_snapshot: Json;
+          captured_in_office: boolean;
+          staff_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          estimate_id: string;
+          kind: string;
+          signer_role?: string;
+          contact_id?: string | null;
+          signer_name?: string;
+          token_suffix?: string;
+          token_sha256?: string;
+          ip_address?: string;
+          forwarded_for?: string;
+          user_agent?: string;
+          accept_language?: string;
+          time_zone?: string;
+          delivery_channel?: string;
+          delivery_to?: string;
+          consent_text?: string;
+          consent_version?: string;
+          document_sha256?: string;
+          document_snapshot?: Json;
+          captured_in_office?: boolean;
+          staff_id?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["estimate_signature_events"]["Insert"]>;
+        Relationships: [];
+      };
       qbwc_connectors: {
         Row: {
           company_id: string;
@@ -1324,6 +1378,29 @@ export type Database = {
       };
       sign_shared_estimate: {
         Args: { p_token: string; p_signer_name: string; p_signature: string };
+        Returns: Json;
+      };
+      record_estimate_share_event: {
+        Args: {
+          p_token: string;
+          p_kind: string;
+          p_signer_name?: string;
+          p_consent_text?: string;
+          p_consent_version?: string;
+          p_document_sha256?: string;
+          p_document_snapshot?: Json;
+          p_ip?: string;
+          p_forwarded_for?: string;
+          p_user_agent?: string;
+          p_accept_language?: string;
+          p_time_zone?: string;
+          p_delivery_channel?: string;
+          p_delivery_to?: string;
+        };
+        Returns: Json;
+      };
+      shared_estimate_audit: {
+        Args: { p_token: string };
         Returns: Json;
       };
       select_shared_estimate_line: {

@@ -55,6 +55,7 @@ export const seedState: CrmState = {
     return job ? { ...estimate, jobId: job.id } : estimate;
   }),
   estimateLines: demoOps.estimateLines,
+  estimateSignatureEvents: [],
   estimateTemplates: [],
   estimateTemplateLines: [],
   invoices: demoOps.invoices,

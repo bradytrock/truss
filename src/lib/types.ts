@@ -431,6 +431,37 @@ export interface Estimate {
   secondSignatureImage: string;
 }
 
+export const SIGNATURE_EVENT_KINDS = ["sent", "opened", "signed", "declined"] as const;
+export type SignatureEventKind = (typeof SIGNATURE_EVENT_KINDS)[number];
+
+export const SIGNATURE_EVENT_ROLES = ["", "primary", "second", "contractor"] as const;
+export type SignatureEventRole = (typeof SIGNATURE_EVENT_ROLES)[number];
+
+export interface EstimateSignatureEvent {
+  id: string;
+  companyId?: string;
+  estimateId: string;
+  kind: SignatureEventKind;
+  signerRole: SignatureEventRole;
+  contactId: string | null;
+  signerName: string;
+  tokenSuffix: string;
+  tokenSha256: string;
+  ipAddress: string;
+  forwardedFor: string;
+  userAgent: string;
+  acceptLanguage: string;
+  timeZone: string;
+  deliveryChannel: string;
+  deliveryTo: string;
+  consentText: string;
+  consentVersion: string;
+  documentSha256: string;
+  capturedInOffice: boolean;
+  staffId: string | null;
+  createdAt: string;
+}
+
 export interface EstimateLinePhoto {
   id: string;
   imageUrl: string;
@@ -809,6 +840,7 @@ export interface CrmState {
   catalog: CatalogItem[];
   estimates: Estimate[];
   estimateLines: EstimateLine[];
+  estimateSignatureEvents: EstimateSignatureEvent[];
   estimateTemplates: EstimateTemplate[];
   estimateTemplateLines: EstimateTemplateLine[];
   invoices: Invoice[];

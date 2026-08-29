@@ -1,6 +1,6 @@
-import type { CompanySettings, Estimate, EstimateLine, Invoice, InvoiceLine, JobPhoto, Payment } from "@/lib/types";
+import type { CompanySettings, Estimate, EstimateLine, EstimateSignatureEvent, Invoice, InvoiceLine, JobPhoto, Payment } from "@/lib/types";
 import { estimateTotals, groupEstimateLines, lineAmount, lineIncluded } from "@/lib/estimate-totals";
-import { formatDate, formatMoney, formatPhone } from "@/lib/format";
+import { formatDate, formatMoney, formatPhone, formatDateTimeUtc } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
 import { photosForEstimateLine } from "@/lib/estimate-line-photos";
 import { writePdfLetterhead, loadLogoForPdf } from "@/lib/letterhead-pdf";
@@ -8,6 +8,10 @@ import { invoiceBalance, invoiceTotal, lineAmount as invoiceLineAmount, paidOnIn
 import { downloadBlob } from "@/lib/share";
 import { isSignaturePng } from "@/lib/estimate-signature";
 import { estimateSignatureLines } from "@/lib/estimate-signers";
+import {
+  signatureEventLabel,
+  signerRoleLabel,
+} from "@/lib/estimate-signature-audit";
 import {
   filledEstimateTerms,
   filledInvoiceTerms,
@@ -70,6 +74,69 @@ function wrapText(doc: Doc, text: string, width: number, fontSize = 10) {
     lines.push(...pieces);
   }
   return lines;
+}
+
+function writeSignatureCertificate(doc: Doc, estimateNumber: string, events: EstimateSignatureEvent[]) {
+  const trail = events.slice().sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  if (!trail.length) return;
+  doc.addPage();
+  let y = 54;
+  const width = doc.internal.pageSize.getWidth();
+  const right = width - 54;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(90, 90, 90);
+  doc.text("SIGNATURE RECORD", 54, y);
+  y += 16;
+  doc.setFont("times", "bold");
+  doc.setFontSize(16);
+  doc.setTextColor(28, 28, 28);
+  doc.text(`Certificate of completion — ${estimateNumber}`, 54, y);
+  y += 18;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(70, 70, 70);
+  y = writeParagraph(
+    doc,
+    "This page is the audit trail for the electronic signatures on this proposal. Each homeowner received a unique link. The IP address, device, time, consent, and SHA-256 hash of the proposal at sign time are stored with the drawing.",
+    y,
+    504,
+    undefined,
+    9,
+  );
+  y += 8;
+  for (const event of trail) {
+    y = ensureSpace(doc, y, 88);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(28, 28, 28);
+    const who = [signatureEventLabel(event.kind), event.signerName, event.signerRole ? signerRoleLabel(event.signerRole) : ""]
+      .filter(Boolean)
+      .join(" · ");
+    doc.text(who, 54, y);
+    y += 13;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(70, 70, 70);
+    const rows = [
+      formatDateTimeUtc(event.createdAt),
+      event.capturedInOffice ? "Collected in the office" : "",
+      event.ipAddress ? `IP ${event.ipAddress}` : "",
+      event.timeZone ? `Time zone ${event.timeZone}` : "",
+      event.deliveryChannel === "sms" && event.deliveryTo ? `Texted to ${event.deliveryTo}` : "",
+      event.tokenSuffix ? `Link …${event.tokenSuffix}` : "",
+      event.documentSha256 ? `SHA-256 ${event.documentSha256}` : "",
+      event.userAgent ? event.userAgent : "",
+      event.consentText ? event.consentText : "",
+    ].filter(Boolean);
+    for (const row of rows) {
+      const wrapped = wrapText(doc, row, right - 54, 8);
+      y = ensureSpace(doc, y, wrapped.length * 11 + 2);
+      doc.text(wrapped, 54, y);
+      y += wrapped.length * 11;
+    }
+    y += 10;
+  }
 }
 
 function writeParagraph(
@@ -177,6 +244,7 @@ export async function downloadEstimatePdf(input: {
   secondCustomer?: string | null;
   contractorName?: string;
   photos?: JobPhoto[];
+  signatureEvents?: EstimateSignatureEvent[];
 }) {
   const doc = await createDoc();
   const width = doc.internal.pageSize.getWidth();
@@ -390,6 +458,8 @@ export async function downloadEstimatePdf(input: {
     doc.text(signed ? `${label} · ${formatDate(line.signedAt)}` : label, 54, y);
     y += 18;
   }
+
+  writeSignatureCertificate(doc, input.estimate.number, input.signatureEvents ?? []);
 
   downloadBlob(doc.output("blob"), `${input.estimate.number}.pdf`);
 }

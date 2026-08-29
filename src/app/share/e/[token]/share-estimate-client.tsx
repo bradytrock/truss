@@ -15,10 +15,15 @@ import {
   signerRoleForToken,
   type HomeownerSigner,
 } from "@/lib/estimate-signers";
+import {
+  browserTimeZone,
+  ESIGN_CONSENT_TEXT,
+} from "@/lib/estimate-signature-audit";
 import { billingEstimate, workMarket } from "@/lib/market";
 import { coOwnerContact } from "@/lib/parties";
 import { parseSharedEstimate, type ShareSender, type SharedEstimatePayload } from "@/lib/share";
 import { SHARE_FETCH, useRemoteShare } from "@/lib/use-remote-share";
+import { SignatureCertificate } from "@/components/signature-certificate";
 import type { EstimateLine } from "@/lib/types";
 
 function payloadError(data: unknown, fallback: string) {
@@ -66,7 +71,7 @@ export function ShareEstimateClient({
     if (fromStore?.status === "sent") void crm.markEstimateViewed(fromStore.id);
   }, [crm.markEstimateViewed, fromStore]);
 
-  async function signFromStore(input: { name: string; image: string }) {
+  async function signFromStore(input: { name: string; image: string; consented: true }) {
     if (!fromStore) return;
     setSigning(true);
     try {
@@ -78,14 +83,20 @@ export function ShareEstimateClient({
     }
   }
 
-  async function signRemote(input: { name: string; image: string }) {
+  async function signRemote(input: { name: string; image: string; consented: true }) {
     setSigning(true);
     try {
       const response = await fetch(`/api/share/estimate/${encodeURIComponent(token)}`, {
         ...SHARE_FETCH,
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signerName: input.name, signature: input.image }),
+        body: JSON.stringify({
+          signerName: input.name,
+          signature: input.image,
+          consented: true,
+          consentText: ESIGN_CONSENT_TEXT,
+          timeZone: browserTimeZone(),
+        }),
       });
       const data: unknown = response.ok ? await response.json() : await response.json().catch(() => null);
       const parsed = parseSharedEstimate(data);
@@ -169,6 +180,9 @@ export function ShareEstimateClient({
                   primaryCustomer: primaryName,
                   secondCustomer: secondName,
                   photos: crm.photos,
+                  signatureEvents: (crm.estimateSignatureEvents ?? []).filter(
+                    (event) => event.estimateId === fromStore.id,
+                  ),
                 }).catch(() => toast.error("Could not build the PDF."))
               }
             />
@@ -197,6 +211,10 @@ export function ShareEstimateClient({
           primaryCustomer={primaryName}
           secondCustomer={secondName}
           onToggleOptional={(line, selected) => void crm.updateEstimateLine(line.id, { selected })}
+        />
+        <SignatureCertificate
+          estimateNumber={fromStore.number}
+          events={(crm.estimateSignatureEvents ?? []).filter((event) => event.estimateId === fromStore.id)}
         />
         <CollectSignatureDialog
           open={signOpen}
@@ -247,6 +265,7 @@ export function ShareEstimateClient({
                 projectManager: remote.projectManager,
                 primaryCustomer: remote.primaryCustomer,
                 secondCustomer: remote.secondCustomer,
+                signatureEvents: remote.signatureEvents ?? [],
               }).catch(() => toast.error("Could not build the PDF."))
             }
           />
@@ -277,6 +296,10 @@ export function ShareEstimateClient({
         primaryCustomer={remote.primaryCustomer}
         secondCustomer={remote.secondCustomer}
         onToggleOptional={(line, selected) => void toggleRemoteOptional(line, selected)}
+      />
+      <SignatureCertificate
+        estimateNumber={remote.estimate.number}
+        events={remote.signatureEvents ?? []}
       />
       <CollectSignatureDialog
         open={signOpen}

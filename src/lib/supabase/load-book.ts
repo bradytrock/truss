@@ -8,6 +8,7 @@ import {
   mapContact,
   mapEstimate,
   mapEstimateLine,
+  mapEstimateSignatureEvent,
   mapEstimateTemplate,
   mapEstimateTemplateLine,
   mapInvoice,
@@ -68,6 +69,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     catalogRes,
     estimatesRes,
     estimateLinesRes,
+    estimateSignatureEventsRes,
     estimateTemplatesRes,
     estimateTemplateLinesRes,
     invoicesRes,
@@ -110,6 +112,11 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     supabase.from("catalog_items").select("*").eq("company_id", companyId).order("cost_code"),
     supabase.from("estimates").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("estimate_lines").select("*").eq("company_id", companyId).order("sort_order"),
+    supabase
+      .from("estimate_signature_events")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("created_at", { ascending: false }),
     supabase.from("estimate_templates").select("*").eq("company_id", companyId).order("name"),
     supabase.from("estimate_template_lines").select("*").eq("company_id", companyId).order("sort_order"),
     supabase.from("invoices").select("*").eq("company_id", companyId).order("issued_at", { ascending: false }),
@@ -222,6 +229,9 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     priceLists: priceListsRes.error ? [] : (priceListsRes.data ?? []).map(mapPriceList),
     estimates: (estimatesRes.data ?? []).map(mapEstimate),
     estimateLines: (estimateLinesRes.data ?? []).map(mapEstimateLine),
+    estimateSignatureEvents: estimateSignatureEventsRes.error
+      ? []
+      : (estimateSignatureEventsRes.data ?? []).map(mapEstimateSignatureEvent),
     estimateTemplates: estimateTemplatesRes.error ? [] : (estimateTemplatesRes.data ?? []).map(mapEstimateTemplate),
     estimateTemplateLines: estimateTemplateLinesRes.error
       ? []

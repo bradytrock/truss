@@ -406,6 +406,9 @@ export function scopeBook(
     jobFiles,
     photoReports,
     estimateLines: state.estimateLines.filter((line) => estimateIds.has(line.estimateId)),
+    estimateSignatureEvents: (state.estimateSignatureEvents ?? []).filter((event) =>
+      estimateIds.has(event.estimateId),
+    ),
     invoiceLines: state.invoiceLines.filter((line) => invoiceIds.has(line.invoiceId)),
     trainingProgress: state.trainingProgress.filter((item) => staffIds.has(item.staffId)),
     messages: state.messages.filter((message) => {

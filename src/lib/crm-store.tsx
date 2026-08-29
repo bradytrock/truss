@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingPriceLists, missingPriceListsMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId, jobInsertPayload, jobsFilledFromLeads, jobPatchFromLead, leadOverviewBackfill } from "@/lib/job-record";
@@ -57,6 +57,12 @@ import {
   resolveProjectOwner,
   type HomeownerSigner,
 } from "@/lib/estimate-signers";
+import {
+  browserTimeZone,
+  ESIGN_CONSENT_TEXT,
+  ESIGN_CONSENT_VERSION,
+  fillSignatureEvent,
+} from "@/lib/estimate-signature-audit";
 import {
   estimateFieldsFromTemplate,
   estimateLinesFromTemplate,
@@ -157,6 +163,7 @@ import {
   type CurrentUser,
   type Estimate,
   type EstimateLine,
+  type EstimateSignatureEvent,
   type EstimateTemplate,
   type EstimateTemplateLine,
   type Invoice,
@@ -254,6 +261,7 @@ const emptyState: CrmState = {
   catalog: [],
   estimates: [],
   estimateLines: [],
+  estimateSignatureEvents: [],
   estimateTemplates: [],
   estimateTemplateLines: [],
   invoices: [],
@@ -1507,6 +1515,75 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [user.companyId, user.name]
   );
 
+  const recordEstimateSignatureEvent = useCallback(
+    async (input: {
+      estimateId: string;
+      kind: EstimateSignatureEvent["kind"];
+      signerRole?: EstimateSignatureEvent["signerRole"];
+      contactId?: string | null;
+      signerName?: string;
+      token?: string;
+      consented?: boolean;
+      deliveryChannel?: string;
+      deliveryTo?: string;
+      capturedInOffice?: boolean;
+    }) => {
+      const event = fillSignatureEvent({
+        id: crypto.randomUUID(),
+        estimateId: input.estimateId,
+        kind: input.kind,
+        signerRole: input.signerRole ?? "",
+        contactId: input.contactId ?? null,
+        signerName: input.signerName ?? "",
+        tokenSuffix: (input.token ?? "").slice(-8),
+        ipAddress: "",
+        userAgent: typeof navigator === "undefined" ? "" : navigator.userAgent,
+        timeZone: browserTimeZone(),
+        deliveryChannel: input.deliveryChannel ?? "",
+        deliveryTo: input.deliveryTo ?? "",
+        consentText: input.kind === "signed" ? ESIGN_CONSENT_TEXT : "",
+        consentVersion: input.kind === "signed" ? ESIGN_CONSENT_VERSION : "",
+        capturedInOffice: Boolean(input.capturedInOffice),
+        staffId: input.capturedInOffice ? user.staffId || null : null,
+        createdAt: new Date().toISOString(),
+      });
+      setState((prev) => ({
+        ...prev,
+        estimateSignatureEvents: [event, ...(prev.estimateSignatureEvents ?? [])],
+      }));
+      try {
+        const response = await fetch("/api/estimates/signature-audit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            estimateId: input.estimateId,
+            kind: input.kind,
+            signerRole: input.signerRole ?? "",
+            contactId: input.contactId ?? null,
+            signerName: input.signerName ?? "",
+            token: input.token ?? "",
+            consented: input.consented ?? input.kind === "signed",
+            consentText: input.kind === "signed" ? ESIGN_CONSENT_TEXT : "",
+            consentVersion: input.kind === "signed" ? ESIGN_CONSENT_VERSION : "",
+            timeZone: browserTimeZone(),
+            deliveryChannel: input.deliveryChannel ?? "",
+            deliveryTo: input.deliveryTo ?? "",
+            capturedInOffice: Boolean(input.capturedInOffice),
+            staffId: input.capturedInOffice ? user.staffId || null : null,
+          }),
+        });
+        const data = (await response.json().catch(() => null)) as { warning?: string } | null;
+        if (data?.warning) toast.message(data.warning);
+        else if (!response.ok && response.status !== 401) {
+          toast.message(missingSignatureAuditMessage());
+        }
+      } catch {
+        toast.message(missingSignatureAuditMessage());
+      }
+    },
+    [user.staffId],
+  );
+
   const logOutboundText = useCallback(
     async (input: {
       to: string;
@@ -1587,8 +1664,30 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           body: activityBody,
         });
       }
+      const shareMatch = content.match(/\/share\/e\/([A-Za-z0-9_-]+)/);
+      const shareToken = shareMatch?.[1] ?? "";
+      if (shareToken) {
+        const estimate = state.estimates.find(
+          (item) =>
+            item.shareToken === shareToken ||
+            (Boolean(item.secondShareToken) && item.secondShareToken === shareToken),
+        );
+        if (estimate) {
+          const second = Boolean(estimate.secondShareToken && estimate.secondShareToken === shareToken);
+          await recordEstimateSignatureEvent({
+            estimateId: estimate.id,
+            kind: "sent",
+            signerRole: second ? "second" : "primary",
+            contactId: second ? estimate.secondContactId : input.contactId || estimate.contactId,
+            signerName: who,
+            token: shareToken,
+            deliveryChannel: "sms",
+            deliveryTo: phone,
+          });
+        }
+      }
     },
-    [addActivity, state.contacts, state.jobs, state.opportunities, user.companyId, user.name],
+    [addActivity, recordEstimateSignatureEvent, state.contacts, state.estimates, state.jobs, state.opportunities, user.companyId, user.name],
   );
 
   const sendTextMessage = useCallback(
@@ -2955,6 +3054,24 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
       apply();
+      void recordEstimateSignatureEvent({
+        estimateId: id,
+        kind: "sent",
+        signerRole: "primary",
+        contactId: signing.contactId,
+        token: tokens.shareToken,
+        deliveryChannel: "link",
+      });
+      if (tokens.secondShareToken && tokens.secondShareToken !== tokens.shareToken) {
+        void recordEstimateSignatureEvent({
+          estimateId: id,
+          kind: "sent",
+          signerRole: "second",
+          contactId: signing.secondContactId,
+          token: tokens.secondShareToken,
+          deliveryChannel: "link",
+        });
+      }
       const opportunityId = current.opportunityId || (await ensureLeadForEstimate(current));
       if (opportunityId && opportunityId !== current.opportunityId) {
         await updateEstimate(id, { opportunityId });
@@ -2982,6 +3099,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       moveOpportunity,
       updateEstimate,
       user,
+      recordEstimateSignatureEvent,
     ]
   );
 
@@ -3043,6 +3161,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
       apply();
+      if (signature?.name) {
+        void recordEstimateSignatureEvent({
+          estimateId: id,
+          kind: "signed",
+          signerRole: role,
+          contactId: role === "second" ? current.secondContactId : current.contactId,
+          signerName: signatureName,
+          token: role === "second" ? current.secondShareToken : current.shareToken,
+          consented: true,
+          capturedInOffice: true,
+        });
+      }
       const opportunityId = current.opportunityId || (await ensureLeadForEstimate(current));
       if (opportunityId && opportunityId !== current.opportunityId) {
         await updateEstimate(id, { opportunityId });
@@ -3109,10 +3239,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateEstimate,
       updateJob,
       updateOpportunity,
+      recordEstimateSignatureEvent,
     ]
   );
 
   const declineEstimate = useCallback(async (id: string) => {
+    const current = state.estimates.find((estimate) => estimate.id === id);
     const apply = () =>
       setState((prev) => ({
         ...prev,
@@ -3123,6 +3255,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     const supabase = maybeClient();
     if (!supabase) {
       apply();
+      if (current) {
+        void recordEstimateSignatureEvent({ estimateId: id, kind: "declined" });
+      }
       return;
     }
     const { error } = await supabase.from("estimates").update({ status: "declined" }).eq("id", id);
@@ -3131,7 +3266,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return;
     }
     apply();
-  }, []);
+    if (current) void recordEstimateSignatureEvent({ estimateId: id, kind: "declined" });
+  }, [recordEstimateSignatureEvent, state.estimates]);
 
   const reopenEstimate = useCallback(
     async (id: string) => {

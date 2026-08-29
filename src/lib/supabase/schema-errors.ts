@@ -482,3 +482,28 @@ export function isMissingPriceLists(error: { message?: string; code?: string } |
 export function missingPriceListsMessage() {
   return `Saved in this browser. Run ${PRICE_LISTS_SQL} in the SQL editor (or a fresh bootstrap) so dated price lists persist. Old lists stay in the book when you outdate them.`;
 }
+
+export const ESTIMATE_SIGNATURE_AUDIT_SQL =
+  "supabase/migrations/20260829120000_estimate_signature_audit.sql";
+
+export function isMissingSignatureAudit(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentions =
+    message.includes("estimate_signature_events") ||
+    message.includes("record_estimate_share_event") ||
+    message.includes("shared_estimate_audit");
+  return (
+    mentions &&
+    (code === "pgrst205" ||
+      code === "pgrst202" ||
+      message.includes("schema cache") ||
+      message.includes("could not find the") ||
+      message.includes("does not exist"))
+  );
+}
+
+export function missingSignatureAuditMessage() {
+  return `The signature is on the proposal. Run ${ESTIMATE_SIGNATURE_AUDIT_SQL} in the SQL editor (or a fresh bootstrap) so IP address, consent, and the document hash stay in the court record.`;
+}

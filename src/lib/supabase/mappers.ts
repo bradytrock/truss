@@ -18,6 +18,7 @@ import type {
   Contact,
   Estimate,
   EstimateLine,
+  EstimateSignatureEvent,
   EstimateTemplate,
   EstimateTemplateLine,
   Invoice,
@@ -58,6 +59,7 @@ type CatalogRow = Database["public"]["Tables"]["catalog_items"]["Row"];
 type PriceListRow = Database["public"]["Tables"]["price_lists"]["Row"];
 type EstimateRow = Database["public"]["Tables"]["estimates"]["Row"];
 type EstimateLineRow = Database["public"]["Tables"]["estimate_lines"]["Row"];
+type EstimateSignatureEventRow = Database["public"]["Tables"]["estimate_signature_events"]["Row"];
 type EstimateTemplateRow = Database["public"]["Tables"]["estimate_templates"]["Row"];
 type EstimateTemplateLineRow = Database["public"]["Tables"]["estimate_template_lines"]["Row"];
 type InvoiceRow = Database["public"]["Tables"]["invoices"]["Row"];
@@ -457,6 +459,37 @@ export function mapEstimateLine(row: EstimateLineRow): EstimateLine {
     taxable: row.taxable ?? true,
     photoIds: Array.isArray(row.photo_ids) ? row.photo_ids.map(String) : [],
   });
+}
+
+export function mapEstimateSignatureEvent(row: EstimateSignatureEventRow): EstimateSignatureEvent {
+  const kind = row.kind;
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    estimateId: row.estimate_id,
+    kind: kind === "sent" || kind === "opened" || kind === "signed" || kind === "declined" ? kind : "opened",
+    signerRole:
+      row.signer_role === "primary" || row.signer_role === "second" || row.signer_role === "contractor"
+        ? row.signer_role
+        : "",
+    contactId: row.contact_id,
+    signerName: row.signer_name,
+    tokenSuffix: row.token_suffix,
+    tokenSha256: row.token_sha256,
+    ipAddress: row.ip_address,
+    forwardedFor: row.forwarded_for,
+    userAgent: row.user_agent,
+    acceptLanguage: row.accept_language,
+    timeZone: row.time_zone,
+    deliveryChannel: row.delivery_channel,
+    deliveryTo: row.delivery_to,
+    consentText: row.consent_text,
+    consentVersion: row.consent_version,
+    documentSha256: row.document_sha256,
+    capturedInOffice: row.captured_in_office,
+    staffId: row.staff_id,
+    createdAt: row.created_at,
+  };
 }
 
 export function mapEstimateTemplate(row: EstimateTemplateRow): EstimateTemplate {

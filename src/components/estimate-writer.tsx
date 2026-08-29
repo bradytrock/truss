@@ -16,6 +16,7 @@ import {
 import { EstimateLinePhotos } from "@/components/estimate-line-photos";
 import { BackToJobButton } from "@/components/back-to-job";
 import { ProposalDocument } from "@/components/proposal-document";
+import { SignatureCertificate } from "@/components/signature-certificate";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { CollectSignatureDialog } from "@/components/signature-pad";
 import { shareContactsForEstimate, coOwnerContact, homeownersOnJob } from "@/lib/parties";
@@ -603,6 +604,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       primaryCustomer: contact?.name,
       secondCustomer: secondSignerName,
       photos: crm.photos,
+      signatureEvents: (crm.estimateSignatureEvents ?? []).filter((event) => event.estimateId === estimate.id),
     });
   }
 
@@ -1186,7 +1188,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   );
 
   const preview = (
-    <ProposalDocument
+    <div className="grid gap-4">
+      <ProposalDocument
       company={crm.company}
       estimate={estimate}
       lines={lines}
@@ -1199,7 +1202,12 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       onTermsChange={
         editable ? (terms) => void crm.updateEstimate(estimate.id, { terms }) : undefined
       }
-    />
+      />
+      <SignatureCertificate
+        estimateNumber={estimate.number}
+        events={(crm.estimateSignatureEvents ?? []).filter((event) => event.estimateId === estimate.id)}
+      />
+    </div>
   );
 
   return (

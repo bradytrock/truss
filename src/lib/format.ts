@@ -169,6 +169,15 @@ export function formatDate(iso: string | null | undefined) {
   });
 }
 
+export function formatDateTimeUtc(iso: string | null | undefined) {
+  if (!iso) return "—";
+  return `${parseDate(iso).toLocaleString("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  })} UTC`;
+}
+
 export function formatDateShort(iso: string | null | undefined) {
   if (!iso) return "—";
   return parseDate(iso).toLocaleDateString("en-US", {

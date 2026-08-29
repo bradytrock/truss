@@ -10,9 +10,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { parseEstimateSignature } from "@/lib/estimate-signature";
+import { ESIGN_CONSENT_TEXT } from "@/lib/estimate-signature-audit";
 import { cn } from "@/lib/utils";
 
 function pointFromEvent(canvas: HTMLCanvasElement, event: PointerEvent) {
@@ -166,10 +168,11 @@ export function CollectSignatureDialog({
   defaultName: string;
   estimateNumber: string;
   pending?: boolean;
-  onSubmit: (input: { name: string; image: string }) => Promise<void> | void;
+  onSubmit: (input: { name: string; image: string; consented: true }) => Promise<void> | void;
 }) {
   const [name, setName] = useState(defaultName);
   const [image, setImage] = useState<string | null>(null);
+  const [consented, setConsented] = useState(false);
   const [error, setError] = useState("");
   const [padKey, setPadKey] = useState(0);
 
@@ -177,18 +180,23 @@ export function CollectSignatureDialog({
     if (!open) return;
     setName(defaultName);
     setImage(null);
+    setConsented(false);
     setError("");
     setPadKey((value) => value + 1);
   }, [defaultName, open]);
 
   async function handleSubmit() {
+    if (!consented) {
+      setError("Check the box to agree to sign electronically.");
+      return;
+    }
     const parsed = parseEstimateSignature({ name, image: image ?? "" });
     if (!parsed.ok) {
       setError(parsed.error);
       return;
     }
     setError("");
-    await onSubmit(parsed.signature);
+    await onSubmit({ ...parsed.signature, consented: true });
   }
 
   return (
@@ -197,7 +205,8 @@ export function CollectSignatureDialog({
         <DialogHeader>
           <DialogTitle>Collect signature</DialogTitle>
           <DialogDescription>
-            Signing {estimateNumber} approves the work. The drawing is stored on the estimate and prints on the PDF.
+            Signing {estimateNumber} approves the work. Your drawing, name, time, IP address, and a
+            hash of this proposal are stored as the court record and print on the PDF.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
@@ -216,6 +225,15 @@ export function CollectSignatureDialog({
             <Label>Signature</Label>
             <SignaturePad key={padKey} disabled={pending} onChange={setImage} />
           </div>
+          <label className="flex items-start gap-2 text-sm">
+            <Checkbox
+              className="mt-0.5"
+              checked={consented}
+              disabled={pending}
+              onCheckedChange={(value) => setConsented(Boolean(value))}
+            />
+            <span>{ESIGN_CONSENT_TEXT}</span>
+          </label>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
         </div>
         <DialogFooter>

@@ -19,6 +19,7 @@ export async function wipeOperations(supabase: Client, companyId: string) {
     "payments",
     "invoice_lines",
     "invoices",
+    "estimate_signature_events",
     "estimate_lines",
     "estimates",
     "estimate_template_lines",
