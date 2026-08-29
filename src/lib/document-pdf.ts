@@ -198,6 +198,114 @@ function writeNotes(doc: Doc, notes: string | null | undefined, y: number) {
   return writeLabeledBlock(doc, "NOTES", notes, y);
 }
 
+type PdfInk = Awaited<ReturnType<typeof loadLogoForPdf>>;
+type AuthLine = ReturnType<typeof estimateSignatureLines>[number];
+
+function signatureInkHeight(ink: PdfInk, colWidth: number) {
+  if (!ink) return 48;
+  return Math.min(56, (ink.height / Math.max(ink.width, 1)) * Math.min(220, colWidth));
+}
+
+function signatureCellHeight(doc: Doc, line: AuthLine, ink: PdfInk, colWidth: number) {
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  const names = doc.splitTextToSize(line.name, colWidth);
+  const nameH = Math.max(12, (Array.isArray(names) ? names.length : 1) * 12);
+  if (ink) return signatureInkHeight(ink, colWidth) + 8 + 14 + nameH + 14;
+  if (line.signedAt && line.party === "contractor") return 40 + 14 + nameH + 14;
+  return 36 + 14 + nameH + 14;
+}
+
+function drawSignatureCell(
+  doc: Doc,
+  line: AuthLine,
+  ink: PdfInk,
+  x: number,
+  y: number,
+  colWidth: number,
+) {
+  const signed = Boolean(line.signedAt);
+  let cursor = y;
+  if (ink) {
+    const sigHeight = signatureInkHeight(ink, colWidth);
+    doc.addImage(ink.data, ink.format, x, cursor, Math.min(220, colWidth), sigHeight);
+    cursor += sigHeight + 8;
+  } else if (signed && line.party === "contractor") {
+    cursor += 28;
+    doc.setFont("times", "italic");
+    doc.setFontSize(16);
+    doc.setTextColor(28, 28, 28);
+    const fit = doc.splitTextToSize(line.name, colWidth);
+    doc.text(fit, x, cursor);
+    cursor += (Array.isArray(fit) ? fit.length : 1) * 12;
+  } else {
+    cursor += 36;
+  }
+  doc.setTextColor(200, 200, 200);
+  doc.line(x, cursor, x + colWidth, cursor);
+  cursor += 14;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(70, 70, 70);
+  const names = doc.splitTextToSize(line.name, colWidth);
+  doc.text(names, x, cursor);
+  cursor += Math.max(12, (Array.isArray(names) ? names.length : 1) * 12);
+  doc.setTextColor(120, 120, 120);
+  const label = line.party === "contractor" ? "Contractor" : "Homeowner signature";
+  doc.text(signed ? `${label} · ${formatDate(line.signedAt)}` : label, x, cursor);
+}
+
+async function writeAuthorization(
+  doc: Doc,
+  estimate: Parameters<typeof estimateSignatureLines>[0],
+  names: {
+    contractor?: string | null;
+    primary: string;
+    second?: string | null;
+  },
+  y: number,
+) {
+  const right = doc.internal.pageSize.getWidth() - 54;
+  const secondName = names.second?.trim() || estimate.secondSignatureName.trim() || null;
+  const lines = estimateSignatureLines(estimate, {
+    contractor: names.contractor,
+    primary: names.primary,
+    second: secondName,
+  });
+  const inks: PdfInk[] = [];
+  for (const line of lines) {
+    inks.push(isSignaturePng(line.image) ? await loadLogoForPdf(line.image) : null);
+  }
+  const gap = 24;
+  const twoCol = lines.length > 1;
+  const colWidth = twoCol ? (right - 54 - gap) / 2 : right - 54;
+  const rows: number[][] = [];
+  for (let index = 0; index < lines.length; index += twoCol ? 2 : 1) {
+    rows.push(twoCol ? [index, index + 1].filter((item) => item < lines.length) : [index]);
+  }
+  const rowHeights = rows.map((row) =>
+    Math.max(...row.map((index) => signatureCellHeight(doc, lines[index], inks[index], colWidth))),
+  );
+  const block = 16 + rowHeights.reduce((sum, height) => sum + height, 0);
+  y = ensureSpace(doc, y, block);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.setTextColor(90, 90, 90);
+  doc.text("AUTHORIZATION", 54, y);
+  y += 16;
+  for (let row = 0; row < rows.length; row++) {
+    y = ensureSpace(doc, y, rowHeights[row]);
+    const rowY = y;
+    for (let col = 0; col < rows[row].length; col++) {
+      const index = rows[row][col];
+      const x = col === 1 ? 54 + colWidth + gap : 54;
+      drawSignatureCell(doc, lines[index], inks[index], x, rowY, colWidth);
+    }
+    y += rowHeights[row];
+  }
+  return y;
+}
+
 function writeProjectManager(doc: Doc, manager: ProjectManagerContact | null | undefined, y: number) {
   const name = manager?.name.trim() ?? "";
   if (!name) return y;
@@ -412,52 +520,16 @@ export async function downloadEstimatePdf(input: {
   );
 
   y += 10;
-  y = ensureSpace(doc, y, 96);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(90, 90, 90);
-  doc.text("AUTHORIZATION", 54, y);
-  y += 16;
-  const authLines = estimateSignatureLines(input.estimate, {
-    contractor: input.contractorName || input.projectManager?.name || input.company.name,
-    primary: input.primaryCustomer || input.customer,
-    second: input.secondCustomer,
-  });
-  for (const line of authLines) {
-    y = ensureSpace(doc, y, 90);
-    const signed = Boolean(line.signedAt);
-    if (isSignaturePng(line.image)) {
-      const ink = await loadLogoForPdf(line.image);
-      const sigWidth = 220;
-      const sigHeight = ink ? Math.min(56, (ink.height / ink.width) * sigWidth) : 48;
-      y = ensureSpace(doc, y, sigHeight + 36);
-      if (ink) {
-        doc.addImage(ink.data, ink.format, 54, y, sigWidth, sigHeight);
-      }
-      y += sigHeight + 8;
-    } else if (signed && line.party === "contractor") {
-      y += 28;
-      doc.setFont("times", "italic");
-      doc.setFontSize(18);
-      doc.setTextColor(28, 28, 28);
-      doc.text(line.name, 54, y);
-      y += 12;
-    } else {
-      y += 36;
-    }
-    doc.setTextColor(200, 200, 200);
-    doc.line(54, y, 280, y);
-    y += 14;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(70, 70, 70);
-    doc.text(line.name, 54, y);
-    y += 12;
-    doc.setTextColor(120, 120, 120);
-    const label = line.party === "contractor" ? "Contractor" : "Homeowner signature";
-    doc.text(signed ? `${label} · ${formatDate(line.signedAt)}` : label, 54, y);
-    y += 18;
-  }
+  y = await writeAuthorization(
+    doc,
+    input.estimate,
+    {
+      contractor: input.contractorName || input.projectManager?.name || input.company.name,
+      primary: input.primaryCustomer || input.customer,
+      second: input.secondCustomer,
+    },
+    y,
+  );
 
   writeSignatureCertificate(doc, input.estimate.number, input.signatureEvents ?? []);
 

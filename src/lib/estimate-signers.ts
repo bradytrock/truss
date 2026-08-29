@@ -187,7 +187,12 @@ export function estimateSignatureLines(
       image: estimate.signatureImage,
     },
   ];
-  if (estimate.secondContactId || names.second?.trim()) {
+  if (
+    estimate.secondContactId ||
+    names.second?.trim() ||
+    estimate.secondSignatureName.trim() ||
+    isSignaturePng(estimate.secondSignatureImage)
+  ) {
     lines.push({
       role: "second",
       party: "homeowner",

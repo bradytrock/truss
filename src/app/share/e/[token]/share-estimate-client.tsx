@@ -264,7 +264,7 @@ export function ShareEstimateClient({
                 customer: remote.customer,
                 projectManager: remote.projectManager,
                 primaryCustomer: remote.primaryCustomer,
-                secondCustomer: remote.secondCustomer,
+                secondCustomer: remote.secondCustomer || estimate.secondSignatureName,
                 signatureEvents: remote.signatureEvents ?? [],
               }).catch(() => toast.error("Could not build the PDF."))
             }
