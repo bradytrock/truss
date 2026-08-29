@@ -208,7 +208,7 @@ export default function InvoiceDetailPage() {
                 onCommit={(value) => void crm.updateInvoice(record.id, { notes: value })}
               />
               <p className="text-xs text-muted-foreground">
-                Prints after the total on the invoice, the client link, and the PDF. Long notes continue onto a second page.
+                Prints after the total on the invoice, the client link, and the PDF. Payment terms start on the next PDF page.
               </p>
             </CardContent>
           </Card>

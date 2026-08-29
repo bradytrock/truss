@@ -55,6 +55,11 @@ function ensureSpace(doc: Doc, y: number, needed: number) {
   return 54;
 }
 
+function startNextPage(doc: Doc) {
+  doc.addPage();
+  return 54;
+}
+
 const TERMS_BODY_SIZE = 7.5;
 
 function wrapText(doc: Doc, text: string, width: number, fontSize = 10) {
@@ -632,20 +637,18 @@ export async function downloadInvoicePdf(input: {
     explicit: input.invoice.terms,
     companyDefault: input.company.defaultInvoiceTerms,
   });
-  y = writeLabeledBlock(
-    doc,
-    "PAYMENT TERMS",
-    filledInvoiceTerms({
-      template: invoiceTerms,
-      invoice: input.invoice,
-      lines: input.lines,
-      payments: input.payments,
-      customer: input.customer,
-      company: input.company,
-    }),
-    y,
-    TERMS_BODY_SIZE,
-  );
+  const paymentTerms = filledInvoiceTerms({
+    template: invoiceTerms,
+    invoice: input.invoice,
+    lines: input.lines,
+    payments: input.payments,
+    customer: input.customer,
+    company: input.company,
+  });
+  if (paymentTerms.trim()) {
+    y = startNextPage(doc);
+    y = writeLabeledBlock(doc, "PAYMENT TERMS", paymentTerms, y, TERMS_BODY_SIZE);
+  }
 
   downloadBlob(doc.output("blob"), `${input.invoice.number}.pdf`);
 }
