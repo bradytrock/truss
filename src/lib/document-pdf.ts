@@ -81,11 +81,15 @@ function wrapText(doc: Doc, text: string, width: number, fontSize = 10) {
   return lines;
 }
 
-function writeSignatureCertificate(doc: Doc, estimateNumber: string, events: EstimateSignatureEvent[]) {
+function writeSignatureCertificate(
+  doc: Doc,
+  estimateNumber: string,
+  events: EstimateSignatureEvent[],
+  startY: number,
+) {
   const trail = events.slice().sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  if (!trail.length) return;
-  doc.addPage();
-  let y = 54;
+  if (!trail.length) return startY;
+  let y = startY;
   const width = doc.internal.pageSize.getWidth();
   const right = width - 54;
   doc.setFont("helvetica", "bold");
@@ -103,7 +107,7 @@ function writeSignatureCertificate(doc: Doc, estimateNumber: string, events: Est
   doc.setTextColor(70, 70, 70);
   y = writeParagraph(
     doc,
-    "This page is the audit trail for the electronic signatures on this proposal. Each homeowner received a unique link. The IP address, device, time, consent, and SHA-256 hash of the proposal at sign time are stored with the drawing.",
+    "This is the office audit trail for the electronic signatures on this proposal. Each homeowner received a unique link. The IP address, device, time, consent, and SHA-256 hash of the proposal at sign time are stored with the drawing. Do not send this page to the homeowner.",
     y,
     504,
     undefined,
@@ -142,6 +146,7 @@ function writeSignatureCertificate(doc: Doc, estimateNumber: string, events: Est
     }
     y += 10;
   }
+  return y;
 }
 
 function writeParagraph(
@@ -364,7 +369,6 @@ export async function downloadEstimatePdf(input: {
   secondCustomer?: string | null;
   contractorName?: string;
   photos?: JobPhoto[];
-  signatureEvents?: EstimateSignatureEvent[];
 }) {
   const doc = await createDoc();
   const width = doc.internal.pageSize.getWidth();
@@ -543,9 +547,45 @@ export async function downloadEstimatePdf(input: {
     y,
   );
 
-  writeSignatureCertificate(doc, input.estimate.number, input.signatureEvents ?? []);
-
   downloadBlob(doc.output("blob"), `${input.estimate.number}.pdf`);
+}
+
+export async function downloadSignatureCertificatePdf(input: {
+  estimate: Pick<Estimate, "number" | "name" | "street" | "city" | "state" | "postalCode" | "validUntil">;
+  company: CompanySettings;
+  customer: string;
+  events: EstimateSignatureEvent[];
+}) {
+  const trail = input.events.slice().sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  if (!trail.length) {
+    throw new Error("No signature record yet.");
+  }
+  const doc = await createDoc();
+  const width = doc.internal.pageSize.getWidth();
+  const right = width - 54;
+  let y = await writePdfLetterhead(doc, input.company, 54, 54, { showContact: false });
+  const site = formatJobSite(input.estimate);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(120, 120, 120);
+  doc.text(input.estimate.number, 54, y);
+  if (input.estimate.validUntil) {
+    doc.text(`Valid until ${formatDate(input.estimate.validUntil)}`, right, y, { align: "right" });
+  }
+  y += 18;
+  doc.setFont("times", "bold");
+  doc.setFontSize(18);
+  doc.setTextColor(28, 28, 28);
+  const title = doc.splitTextToSize(site || input.estimate.name, 400);
+  doc.text(title, 54, y);
+  y += title.length * 20 + 6;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.setTextColor(70, 70, 70);
+  doc.text(`Prepared for ${input.customer}`, 54, y);
+  y += 18;
+  writeSignatureCertificate(doc, input.estimate.number, trail, y);
+  downloadBlob(doc.output("blob"), `${input.estimate.number}-signature-certificate.pdf`);
 }
 
 export async function downloadInvoicePdf(input: {

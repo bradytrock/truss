@@ -164,6 +164,11 @@ export function canEditDocumentTerms(role: SeatRole, member?: StaffMember) {
   return canManageSettings(role, member);
 }
 
+export function canGenerateSignatureCertificate(viewer: StaffMember | undefined) {
+  if (!viewer || viewer.restricted || viewer.locked) return false;
+  return viewer.role === "company_admin";
+}
+
 export function canDeleteJobs(viewer: StaffMember | undefined) {
   if (!viewer || viewer.restricted || viewer.locked) return false;
   return viewer.role === "company_admin";

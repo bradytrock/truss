@@ -7808,7 +7808,8 @@ grant execute on function public.record_estimate_share_event(
 ) to anon, authenticated;
 
 revoke all on function public.shared_estimate_audit(text) from public;
-grant execute on function public.shared_estimate_audit(text) to anon, authenticated;
+revoke execute on function public.shared_estimate_audit(text) from anon;
+grant execute on function public.shared_estimate_audit(text) to authenticated;
 
 create or replace function public.shared_invoice(p_token text)
 returns jsonb
@@ -7898,3 +7899,8 @@ $$;
 
 revoke all on function public.shared_invoice(text) from public;
 grant execute on function public.shared_invoice(text) to anon, authenticated;
+
+-- ========== 20260829150000_signature_audit_office_only.sql ==========
+-- Signature audit (IP, device, hash) is office-only. Guests must not fetch it by share token.
+revoke execute on function public.shared_estimate_audit(text) from anon;
+grant execute on function public.shared_estimate_audit(text) to authenticated;

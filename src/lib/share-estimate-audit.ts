@@ -1,24 +1,7 @@
-import { parseSignatureEvents } from "@/lib/estimate-signature-audit";
 import { requestAudit } from "@/lib/request-audit";
 import { createAnonClient } from "@/lib/supabase/anon";
 import { isMissingSignatureAudit } from "@/lib/supabase/schema-errors";
-import type { EstimateSignatureEvent, SignatureEventKind } from "@/lib/types";
-
-export async function loadShareAudit(token: string): Promise<EstimateSignatureEvent[]> {
-  try {
-    const supabase = createAnonClient();
-    const { data, error } = await supabase.rpc("shared_estimate_audit", { p_token: token });
-    if (error) {
-      if (!isMissingSignatureAudit(error)) {
-        console.error("[share] shared_estimate_audit", error.code, error.message);
-      }
-      return [];
-    }
-    return parseSignatureEvents(data);
-  } catch {
-    return [];
-  }
-}
+import type { SignatureEventKind } from "@/lib/types";
 
 export async function recordShareEvent(
   token: string,

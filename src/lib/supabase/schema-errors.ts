@@ -505,5 +505,5 @@ export function isMissingSignatureAudit(error: { message?: string; code?: string
 }
 
 export function missingSignatureAuditMessage() {
-  return `The signature is on the proposal. Run ${ESTIMATE_SIGNATURE_AUDIT_SQL} in the SQL editor (or a fresh bootstrap) so IP address, consent, and the document hash stay in the court record.`;
+  return `The signature is on the proposal. Run ${ESTIMATE_SIGNATURE_AUDIT_SQL} in the SQL editor (or a fresh bootstrap) so IP address, consent, and the document hash stay in the office certificate.`;
 }

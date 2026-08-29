@@ -1,5 +1,5 @@
 import { normalizeShareToken } from "@/lib/share";
-import { loadShareAudit, recordShareEvent } from "@/lib/share-estimate-audit";
+import { recordShareEvent } from "@/lib/share-estimate-audit";
 import { loadSharedEstimate } from "@/lib/share-server";
 import { ShareEstimateClient } from "./share-estimate-client";
 import { headers } from "next/headers";
@@ -18,7 +18,6 @@ export default async function SharedEstimatePage({
   if (payload) {
     const hdrs = await headers();
     await recordShareEvent(trimmed, hdrs, { kind: "opened" });
-    payload.signatureEvents = await loadShareAudit(trimmed);
   }
   return <ShareEstimateClient token={trimmed} initial={payload} initialSender={sender} />;
 }

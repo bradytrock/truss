@@ -16,7 +16,6 @@ import {
 import { EstimateLinePhotos } from "@/components/estimate-line-photos";
 import { BackToJobButton } from "@/components/back-to-job";
 import { ProposalDocument } from "@/components/proposal-document";
-import { SignatureCertificate } from "@/components/signature-certificate";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { CollectSignatureDialog } from "@/components/signature-pad";
 import { shareContactsForEstimate, coOwnerContact, homeownersOnJob } from "@/lib/parties";
@@ -77,7 +76,7 @@ import {
   linesForEstimate,
   type AdjustmentKind,
 } from "@/lib/estimate-totals";
-import { downloadEstimatePdf } from "@/lib/document-pdf";
+import { downloadEstimatePdf, downloadSignatureCertificatePdf } from "@/lib/document-pdf";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { mintEstimateSignerTokens } from "@/lib/estimate-signers";
 import { shareUrl } from "@/lib/share";
@@ -92,7 +91,7 @@ import { billingEstimate, defaultTaxRateForMarket, isResidentialMarket, projectT
 import { formatJobSite } from "@/lib/leads";
 import { jobPaperHref } from "@/lib/job-record";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine, type JobPhoto } from "@/lib/types";
-import { canManageSettings } from "@/lib/visibility";
+import { canGenerateSignatureCertificate, canManageSettings } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
 
 export function CommitInput({
@@ -604,8 +603,21 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       primaryCustomer: contact?.name,
       secondCustomer: secondSignerName,
       photos: crm.photos,
-      signatureEvents: (crm.estimateSignatureEvents ?? []).filter((event) => event.estimateId === estimate.id),
     });
+  }
+
+  function downloadSignatureCertificate() {
+    const events = (crm.estimateSignatureEvents ?? []).filter((event) => event.estimateId === estimate.id);
+    if (!events.length) {
+      toast.message("No signature record yet. Send the link or collect a signature first.");
+      return;
+    }
+    return downloadSignatureCertificatePdf({
+      estimate: billed,
+      company: letterhead,
+      customer,
+      events,
+    }).catch(() => toast.error("Could not build the signature certificate."));
   }
 
   const shareEstimate = useMemo(
@@ -733,6 +745,11 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           >
             Save as template
           </DropdownMenuItem>
+          {canGenerateSignatureCertificate(crm.viewer) ? (
+            <DropdownMenuItem disabled={pending} onClick={() => void downloadSignatureCertificate()}>
+              Generate Signature Certificate
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -1202,10 +1219,6 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       onTermsChange={
         editable ? (terms) => void crm.updateEstimate(estimate.id, { terms }) : undefined
       }
-      />
-      <SignatureCertificate
-        estimateNumber={estimate.number}
-        events={(crm.estimateSignatureEvents ?? []).filter((event) => event.estimateId === estimate.id)}
       />
     </div>
   );

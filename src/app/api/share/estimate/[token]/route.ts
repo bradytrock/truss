@@ -1,6 +1,6 @@
 import { parseEstimateSignature } from "@/lib/estimate-signature";
 import { normalizeShareToken } from "@/lib/share";
-import { loadShareAudit, recordShareEvent } from "@/lib/share-estimate-audit";
+import { recordShareEvent } from "@/lib/share-estimate-audit";
 import { shareJson, shareNotFoundJson } from "@/lib/share-server";
 import { createAnonClient } from "@/lib/supabase/anon";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -24,14 +24,6 @@ import { parseSharedEstimate } from "@/lib/share";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-async function payloadWithAudit(token: string, data: unknown) {
-  const events = await loadShareAudit(token);
-  if (data && typeof data === "object" && !Array.isArray(data)) {
-    return { ...(data as Record<string, unknown>), signatureEvents: events };
-  }
-  return data;
-}
-
 export async function GET(request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
   const trimmed = normalizeShareToken(token);
@@ -52,7 +44,7 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
       return shareNotFoundJson(trimmed);
     }
     await recordShareEvent(trimmed, request.headers, { kind: "opened" });
-    return shareJson(await payloadWithAudit(trimmed, data));
+    return shareJson(data);
   } catch (error) {
     console.error("[share] shared_estimate threw", error);
     return shareNotFoundJson(trimmed);
@@ -170,7 +162,7 @@ export async function POST(request: Request, context: { params: Promise<{ token:
       documentSnapshot: snapshot ?? undefined,
       timeZone: typeof body.timeZone === "string" ? body.timeZone : "",
     });
-    return shareJson(await payloadWithAudit(trimmed, data));
+    return shareJson(data);
   } catch {
     return shareNotFoundJson(trimmed);
   }
