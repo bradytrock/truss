@@ -8,11 +8,15 @@ type Client = SupabaseClient<Database>;
 
 function ignoreMissing(error: { message?: string; code?: string } | null) {
   if (!error) return true;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toUpperCase();
   return (
-    error.code === "PGRST204" ||
-    error.code === "PGRST205" ||
-    (error.message ?? "").includes("schema cache") ||
-    (error.message ?? "").includes("Could not find the")
+    code === "PGRST204" ||
+    code === "PGRST205" ||
+    code === "42703" ||
+    message.includes("schema cache") ||
+    message.includes("could not find the") ||
+    message.includes("does not exist")
   );
 }
 

@@ -1113,25 +1113,29 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         book.state.staff,
       );
       if (ensured.matched) {
-        const removed = await retireDemoStaff(supabase, companyId, {
-          staffId: ensured.matched.id,
-          name: profile.full_name,
-        });
-        if (removed) {
-          book = await fetchCompanyBook(supabase, companyId);
-          ensured = await ensureSignedInStaff(
-            supabase,
-            companyId,
-            {
-              id: profile.id,
-              full_name: profile.full_name,
-              title: profile.title,
-              initials: profile.initials,
-              role: (profile.role as SeatRole | undefined) ?? "company_admin",
-              staff_id: profile.staff_id,
-            },
-            book.state.staff,
-          );
+        try {
+          const removed = await retireDemoStaff(supabase, companyId, {
+            staffId: ensured.matched.id,
+            name: profile.full_name,
+          });
+          if (removed) {
+            book = await fetchCompanyBook(supabase, companyId);
+            ensured = await ensureSignedInStaff(
+              supabase,
+              companyId,
+              {
+                id: profile.id,
+                full_name: profile.full_name,
+                title: profile.title,
+                initials: profile.initials,
+                role: (profile.role as SeatRole | undefined) ?? "company_admin",
+                staff_id: profile.staff_id,
+              },
+              book.state.staff,
+            );
+          }
+        } catch {
+          // Demo roster cleanup must not blank the book.
         }
       }
       const matched = ensured.matched;

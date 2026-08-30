@@ -863,9 +863,10 @@ export function mapCalendarAccount(row: CalendarAccountRow): CalendarAccount {
 }
 
 export function mapCalendarShare(row: CalendarShareRow): CalendarShare {
+  const record = row as CalendarShareRow & { owner_id?: string | null; viewer_id?: string | null };
   return {
-    ownerStaffId: row.owner_staff_id,
-    viewerStaffId: row.viewer_staff_id,
+    ownerStaffId: record.owner_staff_id || record.owner_id || "",
+    viewerStaffId: record.viewer_staff_id || record.viewer_id || "",
   };
 }
 

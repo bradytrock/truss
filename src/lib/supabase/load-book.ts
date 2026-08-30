@@ -249,7 +249,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       : (calendarAccountsRes.data ?? []).map(mapCalendarAccount),
     calendarShares: calendarSharesRes.error
       ? []
-      : (calendarSharesRes.data ?? []).map(mapCalendarShare),
+      : mapRows(calendarSharesRes.data, mapCalendarShare),
     trainingProgress: trainingProgressRes.error
       ? []
       : (trainingProgressRes.data ?? []).map(mapTrainingProgress),
