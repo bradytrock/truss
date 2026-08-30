@@ -423,6 +423,10 @@ export function scopeBook(
       if (message.contactId && contacts.some((contact) => contact.id === message.contactId)) return true;
       return false;
     }),
+    returningClientLeads: (state.returningClientLeads ?? []).filter((notice) => {
+      if (canManageSettings(effective.role, effective)) return true;
+      return notice.openedByStaffId === effective.id;
+    }),
   };
 }
 

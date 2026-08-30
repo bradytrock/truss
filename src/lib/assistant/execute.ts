@@ -23,11 +23,17 @@ import {
   type LeadSource,
   type PhotoCategory,
 } from "@/lib/types";
-import { canDeleteJobs } from "@/lib/visibility";
+import { canDeleteJobs, canManageSettings } from "@/lib/visibility";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { catalogProposalUnitPrice } from "@/lib/catalog-margin";
 import { currentCatalog } from "@/lib/price-lists";
 import { expenseRequiresJob } from "@/lib/qbwc/work";
+import { phonesMatch } from "@/lib/job-messages";
+import {
+  findReturningClient,
+  needsReturningClientAdminNotice,
+  returningClientWhen,
+} from "@/lib/returning-client";
 
 type Crm = ReturnType<typeof useCrm>;
 
@@ -357,7 +363,19 @@ async function runTool(
       const postalCode = arg(args, "postalCode");
       const site = formatJobSite({ street, city, state, postalCode });
       const fullName = `${firstName} ${lastName}`;
-      const existing = crm.contacts.find(
+      const book = crm.book;
+      const returning = phone
+        ? findReturningClient({
+            phone,
+            contacts: book.contacts,
+            jobs: book.jobs,
+            opportunities: book.opportunities,
+            staff: book.staff,
+          })
+        : null;
+      const existing =
+        (phone ? book.contacts.find((contact) => phonesMatch(contact.phone, phone)) : undefined) ??
+        crm.contacts.find(
         (contact) =>
           contact.name.toLowerCase() === fullName.toLowerCase() ||
           (phone && contact.phone && contact.phone.replace(/\D/g, "") === phone.replace(/\D/g, "")) ||
@@ -379,6 +397,7 @@ async function runTool(
         await crm.updateContact(existing.id, {
           phone: phone || existing.phone,
           email: email || existing.email,
+          ownerStaffId: ownerId || existing.ownerStaffId,
         });
       }
       const created = await crm.addOpportunity({
@@ -413,8 +432,38 @@ async function runTool(
         relatedId: created.id,
         assignee: crm.effectiveStaff?.name || crm.user.name,
       });
+      const viewerIsAdmin = Boolean(crm.viewer && canManageSettings(crm.viewer.role, crm.viewer));
+      if (needsReturningClientAdminNotice(returning, ownerId, viewerIsAdmin)) {
+        await crm.fileReturningClientNotice({
+          opportunityId: created.id,
+          jobId: job?.id ?? null,
+          contactId: contact.id,
+          previous: returning!,
+        });
+      }
+      const returningNote = returning
+        ? ` This phone matches a past client. ${returning.previousStaffName} ran ${returning.job.code}. ${returningClientWhen(returning)}.${
+            needsReturningClientAdminNotice(returning, ownerId, viewerIsAdmin)
+              ? " Company admins were notified to decide whether to send it back."
+              : returning.previousStaffId === ownerId
+                ? " Assigned to that project manager."
+                : viewerIsAdmin
+                  ? " You kept this seat as owner."
+                  : ""
+          }`
+        : "";
       return ok(
-        { opportunityId: created.id, code: created.code, name: created.name, jobId: job?.id, contactId: contact.id },
+        {
+          opportunityId: created.id,
+          code: created.code,
+          name: created.name,
+          jobId: job?.id,
+          contactId: contact.id,
+          note: `Lead opened.${returningNote}`,
+          previousProjectManager: returning?.previousStaffName ?? null,
+          previousJobCode: returning?.job.code ?? null,
+          completedAt: returning?.completedAt ?? null,
+        },
         job ? { href: `/jobs?job=${job.id}`, label: `Open ${created.code}` } : { href: `/opportunities/${created.id}`, label: `Open ${created.code}` },
       );
     }

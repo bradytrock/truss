@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -12,6 +12,7 @@ import {
   daysUntil,
   formatCurrency,
   formatCurrencyFull,
+  formatDate,
   formatDateShort,
   formatRelative,
   formatTime,
@@ -27,12 +28,13 @@ import { cn } from "@/lib/utils";
 import { COURSE, overallProgress, staffProgress } from "@/lib/training/engine";
 import { qbQueue } from "@/lib/job-financials";
 import { itemTitle, jobDocumentHref, pmReviewNotices } from "@/lib/qb-review";
-import { canViewAccounting } from "@/lib/visibility";
+import { canManageSettings, canViewAccounting } from "@/lib/visibility";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { BdRoiPanel } from "@/components/bd-roi";
 
 export default function HomePage() {
   const crm = useCrm();
+  const [decidingId, setDecidingId] = useState<string | null>(null);
 
   const stats = useMemo(() => {
     const open = crm.opportunities.filter(
@@ -142,6 +144,20 @@ export default function HomePage() {
     crm.qbReviewComments,
     crm.staff,
   ]);
+
+  const pendingReturning = useMemo(() => {
+    if (!crm.viewer || !canManageSettings(crm.viewer.role, crm.viewer)) return [];
+    return (crm.returningClientLeads ?? []).filter((notice) => notice.status === "pending");
+  }, [crm.returningClientLeads, crm.viewer]);
+
+  async function decideReturning(noticeId: string, decision: "reassigned" | "kept") {
+    setDecidingId(noticeId);
+    try {
+      await crm.decideReturningClientLead(noticeId, decision);
+    } finally {
+      setDecidingId(null);
+    }
+  }
 
   if (!crm.hydrated) return <LoadingScreen />;
 
@@ -269,6 +285,65 @@ export default function HomePage() {
                   </p>
                 </li>
               ))}
+            </ul>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {pendingReturning.length > 0 ? (
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Returning clients</CardTitle>
+            <CardDescription>
+              Someone opened a lead on a past client&apos;s phone and did not send it back to that
+              project manager. You decide.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <ul className="divide-y">
+              {pendingReturning.map((notice) => {
+                const opportunity = crm.getOpportunity(notice.opportunityId);
+                const job = notice.jobId ? crm.getJob(notice.jobId) : undefined;
+                const href = job
+                  ? `/jobs?job=${job.id}`
+                  : `/opportunities/${notice.opportunityId}`;
+                const busy = decidingId === notice.id;
+                return (
+                  <li key={notice.id} className="py-3 first:pt-1">
+                    <Link href={href} className="text-sm font-medium hover:underline">
+                      {opportunity?.code || opportunity?.name || "Lead"}
+                      {opportunity?.name && opportunity.code ? ` · ${opportunity.name}` : ""}
+                    </Link>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {notice.openedByName} kept their assignment. Previous project manager was{" "}
+                      {notice.previousStaffName}
+                      {notice.previousJobCode ? ` on ${notice.previousJobCode}` : ""}.
+                      {notice.completedAt
+                        ? ` Completed ${formatDate(notice.completedAt)}.`
+                        : ""}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {notice.previousStaffId ? (
+                        <Button
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => void decideReturning(notice.id, "reassigned")}
+                        >
+                          {busy ? "Saving…" : `Reassign to ${notice.previousStaffName}`}
+                        </Button>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => void decideReturning(notice.id, "kept")}
+                      >
+                        Keep assignment
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </CardContent>
         </Card>

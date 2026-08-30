@@ -29,6 +29,7 @@ import {
   mapTrainingBulletin,
   mapTrainingProgress,
   mapMessage,
+  mapReturningClientLead,
   mapMaterialOrder,
   mapMaterialOrderLine,
   mapMaterialOrderTemplate,
@@ -86,6 +87,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     trainingBulletinsRes,
     photoReportsRes,
     messagesRes,
+    returningClientLeadsRes,
     jobFilesRes,
     materialOrdersRes,
     materialOrderLinesRes,
@@ -137,6 +139,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       ascending: false,
     }),
     supabase.from("messages").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    supabase.from("returning_client_leads").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("job_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("material_orders").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("material_order_lines").select("*").eq("company_id", companyId).order("sort_order"),
@@ -264,6 +267,9 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       ? []
       : (trainingBulletinsRes.data ?? []).map(mapTrainingBulletin),
     messages: messagesRes.error ? [] : (messagesRes.data ?? []).map(mapMessage),
+    returningClientLeads: returningClientLeadsRes.error
+      ? []
+      : (returningClientLeadsRes.data ?? []).map(mapReturningClientLead),
     materialOrders: materialOrdersRes.error ? [] : (materialOrdersRes.data ?? []).map(mapMaterialOrder),
     materialOrderLines: materialOrderLinesRes.error
       ? []

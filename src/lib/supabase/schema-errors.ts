@@ -507,3 +507,25 @@ export function isMissingSignatureAudit(error: { message?: string; code?: string
 export function missingSignatureAuditMessage() {
   return `The signature is on the proposal. Run ${ESTIMATE_SIGNATURE_AUDIT_SQL} in the SQL editor (or a fresh bootstrap) so IP address, consent, and the document hash stay in the office certificate.`;
 }
+
+export const RETURNING_CLIENT_LEADS_SQL = "supabase/migrations/20260830120000_returning_client_leads.sql";
+
+export function isMissingReturningClientLeads(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentions = message.includes("returning_client_leads");
+  return (
+    mentions &&
+    (code === "pgrst205" ||
+      code === "pgrst202" ||
+      code === "pgrst204" ||
+      message.includes("schema cache") ||
+      message.includes("could not find the") ||
+      message.includes("does not exist"))
+  );
+}
+
+export function missingReturningClientLeadsMessage() {
+  return `Lead opened. Run ${RETURNING_CLIENT_LEADS_SQL} in the SQL editor so company admins get the returning-client notice.`;
+}

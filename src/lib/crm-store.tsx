@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage } from "@/lib/supabase/schema-errors";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId, jobInsertPayload, jobsFilledFromLeads, jobPatchFromLead, leadOverviewBackfill } from "@/lib/job-record";
@@ -142,6 +142,7 @@ import {
   mapTask,
   mapTrainingBulletin,
   mapMessage,
+  mapReturningClientLead,
   opportunityPatch,
 } from "@/lib/supabase/mappers";
 import { expenseRequiresJob } from "@/lib/qbwc/work";
@@ -193,6 +194,7 @@ import {
   type QbReviewKind,
   type QbSyncStatus,
   type TextMessage,
+  type ReturningClientLead,
 } from "@/lib/types";
 import {
   accountForStaff,
@@ -230,6 +232,7 @@ import {
   opportunityForContact,
   outboundActivityBody,
 } from "@/lib/job-messages";
+import { returningClientWhen, type ReturningClientMatch } from "@/lib/returning-client";
 import { toE164 } from "@/lib/phone";
 import { resolveCustomerName, applyCoOwnerToEstimate, coOwnerContact, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage, missingPageShareMessage, isMissingPageShare, parsePageTemplate } from "@/lib/photo-report";
@@ -283,6 +286,7 @@ const emptyState: CrmState = {
   trainingProgress: [],
   trainingBulletins: [],
   messages: [],
+  returningClientLeads: [],
 };
 
 function userFromStaff(
@@ -737,6 +741,13 @@ type CrmContextValue = CrmState & {
   moveWork: (jobId: string, column: WorkColumn) => Promise<void>;
   updateOpportunity: (id: string, patch: Partial<Opportunity>) => Promise<boolean>;
   assignOpportunityOwner: (id: string, staffId: string) => Promise<boolean>;
+  fileReturningClientNotice: (input: {
+    opportunityId: string;
+    jobId: string | null;
+    contactId: string | null;
+    previous: ReturningClientMatch;
+  }) => Promise<void>;
+  decideReturningClientLead: (noticeId: string, decision: "reassigned" | "kept") => Promise<void>;
   updateJob: (id: string, patch: Partial<Job>) => Promise<boolean>;
   deleteJob: (id: string, reason: string) => Promise<boolean>;
   restoreJob: (id: string) => Promise<boolean>;
@@ -2624,6 +2635,159 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return true;
     },
     [state.contacts, state.jobs, state.opportunities, state.staff, updateContact, updateJob, updateOpportunity]
+  );
+
+  const fileReturningClientNotice = useCallback(
+    async (input: {
+      opportunityId: string;
+      jobId: string | null;
+      contactId: string | null;
+      previous: ReturningClientMatch;
+    }) => {
+      if (
+        state.returningClientLeads.some(
+          (notice) => notice.opportunityId === input.opportunityId && notice.status === "pending",
+        )
+      ) {
+        return;
+      }
+      const notice: ReturningClientLead = {
+        id: crypto.randomUUID(),
+        opportunityId: input.opportunityId,
+        jobId: input.jobId,
+        contactId: input.contactId,
+        previousJobId: input.previous.job.id,
+        previousStaffId: input.previous.previousStaffId,
+        previousStaffName: input.previous.previousStaffName,
+        previousJobCode: input.previous.job.code,
+        completedAt: input.previous.completedAt,
+        openedByStaffId: user.staffId,
+        openedByName: user.name,
+        status: "pending",
+        decidedByStaffId: null,
+        decidedAt: null,
+        createdAt: new Date().toISOString(),
+      };
+      const apply = (row: ReturningClientLead) => {
+        setState((prev) => {
+          if (prev.returningClientLeads.some((item) => item.id === row.id || (item.opportunityId === row.opportunityId && item.status === "pending"))) {
+            return prev;
+          }
+          return { ...prev, returningClientLeads: [row, ...prev.returningClientLeads] };
+        });
+      };
+      const supabase = maybeClient();
+      if (!supabase) {
+        apply(notice);
+      } else {
+        const { data, error } = await supabase
+          .from("returning_client_leads")
+          .insert({
+            id: notice.id,
+            company_id: user.companyId,
+            opportunity_id: notice.opportunityId,
+            job_id: looksLikeUuid(notice.jobId) ? notice.jobId : null,
+            contact_id: looksLikeUuid(notice.contactId) ? notice.contactId : null,
+            previous_job_id: looksLikeUuid(notice.previousJobId) ? notice.previousJobId : null,
+            previous_staff_id: looksLikeUuid(notice.previousStaffId) ? notice.previousStaffId : null,
+            previous_staff_name: notice.previousStaffName,
+            previous_job_code: notice.previousJobCode,
+            completed_at: notice.completedAt,
+            opened_by_staff_id: looksLikeUuid(notice.openedByStaffId) ? notice.openedByStaffId : null,
+            opened_by_name: notice.openedByName,
+            status: "pending",
+          })
+          .select("*")
+          .single();
+        if (error) {
+          if (isMissingReturningClientLeads(error)) toast.message(missingReturningClientLeadsMessage());
+          else toast.error(error.message);
+          apply(notice);
+        } else if (data) {
+          apply(mapReturningClientLead(data));
+        }
+      }
+      toast.message(
+        `Company admins were notified. ${input.previous.previousStaffName} ran ${input.previous.job.code}.`,
+      );
+      await addActivity({
+        entityType: "opportunity",
+        entityId: input.opportunityId,
+        type: "note",
+        body: [
+          `${user.name} opened this lead on a returning client and kept another assignee.`,
+          `${input.previous.previousStaffName} was the project manager on ${input.previous.job.code}.`,
+          returningClientWhen(input.previous),
+        ].join(" "),
+      });
+    },
+    [addActivity, state.returningClientLeads, user.companyId, user.name, user.staffId],
+  );
+
+  const decideReturningClientLead = useCallback(
+    async (noticeId: string, decision: "reassigned" | "kept") => {
+      const notice = state.returningClientLeads.find((item) => item.id === noticeId);
+      if (!notice || notice.status !== "pending") return;
+      if (!viewer || !canManageSettings(viewer.role, viewer)) {
+        toast.error("Only a company admin can decide this.");
+        return;
+      }
+      if (decision === "reassigned") {
+        if (!notice.previousStaffId) {
+          toast.error("That project manager no longer has a seat to assign.");
+          return;
+        }
+        const ok = await assignOpportunityOwner(notice.opportunityId, notice.previousStaffId);
+        if (!ok) return;
+      }
+      const decidedAt = new Date().toISOString();
+      const apply = () => {
+        setState((prev) => ({
+          ...prev,
+          returningClientLeads: prev.returningClientLeads.map((item) =>
+            item.id === noticeId
+              ? { ...item, status: decision, decidedByStaffId: user.staffId, decidedAt }
+              : item,
+          ),
+        }));
+      };
+      const supabase = maybeClient();
+      if (!supabase) {
+        apply();
+      } else {
+        const { error } = await supabase
+          .from("returning_client_leads")
+          .update({
+            status: decision,
+            decided_by_staff_id: looksLikeUuid(user.staffId) ? user.staffId : null,
+            decided_at: decidedAt,
+          })
+          .eq("id", noticeId);
+        if (error) {
+          if (isMissingReturningClientLeads(error)) toast.message(missingReturningClientLeadsMessage());
+          else {
+            toast.error(error.message);
+            return;
+          }
+        }
+        apply();
+      }
+      await addActivity({
+        entityType: "opportunity",
+        entityId: notice.opportunityId,
+        type: "note",
+        body:
+          decision === "reassigned"
+            ? `${user.name} sent this returning-client lead back to ${notice.previousStaffName}.`
+            : `${user.name} kept ${notice.openedByName}'s assignment on this returning-client lead.`,
+      });
+      toast.success(
+        decision === "reassigned"
+          ? `Lead reassigned to ${notice.previousStaffName}.`
+          : "Assignment kept.",
+      );
+    },
+    [addActivity, assignOpportunityOwner, state.returningClientLeads, user.staffId, user.name, viewer],
   );
 
   const addJob = useCallback(
@@ -7252,6 +7416,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       moveWork,
       updateOpportunity,
       assignOpportunityOwner,
+      fileReturningClientNotice,
+      decideReturningClientLead,
       updateJob,
       deleteJob,
       restoreJob,
@@ -7382,6 +7548,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       moveWork,
       updateOpportunity,
       assignOpportunityOwner,
+      fileReturningClientNotice,
+      decideReturningClientLead,
       updateJob,
       deleteJob,
       restoreJob,

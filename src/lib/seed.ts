@@ -85,4 +85,5 @@ export const seedState: CrmState = {
   trainingProgress: structuredClone(seedTrainingProgress),
   trainingBulletins: structuredClone(seedTrainingBulletins),
   messages: extraMessages,
+  returningClientLeads: [],
 };

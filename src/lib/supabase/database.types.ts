@@ -1184,6 +1184,46 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;
         Relationships: [];
       };
+      returning_client_leads: {
+        Row: {
+          id: string;
+          company_id: string;
+          opportunity_id: string;
+          job_id: string | null;
+          contact_id: string | null;
+          previous_job_id: string | null;
+          previous_staff_id: string | null;
+          previous_staff_name: string;
+          previous_job_code: string;
+          completed_at: string | null;
+          opened_by_staff_id: string | null;
+          opened_by_name: string;
+          status: string;
+          decided_by_staff_id: string | null;
+          decided_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          opportunity_id: string;
+          job_id?: string | null;
+          contact_id?: string | null;
+          previous_job_id?: string | null;
+          previous_staff_id?: string | null;
+          previous_staff_name?: string;
+          previous_job_code?: string;
+          completed_at?: string | null;
+          opened_by_staff_id?: string | null;
+          opened_by_name?: string;
+          status?: string;
+          decided_by_staff_id?: string | null;
+          decided_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["returning_client_leads"]["Insert"]>;
+        Relationships: [];
+      };
       estimate_signature_events: {
         Row: {
           id: string;

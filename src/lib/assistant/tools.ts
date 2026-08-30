@@ -100,7 +100,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   {
     name: "create_lead",
     description:
-      "Open a new lead: homeowner, job site, seed, and residential vs commercial. Creates the costing job. Reuse an existing contact when the name already matches.",
+      "Open a new lead: homeowner, job site, seed, and residential vs commercial. Creates the costing job. Reuse an existing contact when the phone or name already matches. If the phone matches a past client, mention the previous project manager and completion date; company admins are notified when the assignee is not that PM.",
     status: "Opening a lead…",
     gate: "any",
     parameters: object(

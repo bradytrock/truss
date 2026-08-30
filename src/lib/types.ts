@@ -827,6 +827,26 @@ export interface TextMessage {
   createdBy: string;
 }
 
+export type ReturningClientLeadStatus = "pending" | "reassigned" | "kept";
+
+export interface ReturningClientLead {
+  id: string;
+  opportunityId: string;
+  jobId: string | null;
+  contactId: string | null;
+  previousJobId: string | null;
+  previousStaffId: string;
+  previousStaffName: string;
+  previousJobCode: string;
+  completedAt: string | null;
+  openedByStaffId: string;
+  openedByName: string;
+  status: ReturningClientLeadStatus;
+  decidedByStaffId: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+}
+
 export interface CrmState {
   staff: StaffMember[];
   teams: Team[];
@@ -862,6 +882,7 @@ export interface CrmState {
   trainingProgress: TrainingProgress[];
   trainingBulletins: TrainingBulletin[];
   messages: TextMessage[];
+  returningClientLeads: ReturningClientLead[];
 }
 
 export const STAGE_LABELS: Record<PipelineStage, string> = {

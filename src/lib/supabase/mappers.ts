@@ -8,6 +8,7 @@ import { customFieldsJson, fillJobRecord, parseCustomFields } from "@/lib/job-re
 import { parseMarket } from "@/lib/market";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { parseQbStatus } from "@/lib/types";
+import { parseReturningClientStatus } from "@/lib/returning-client";
 import type {
   Activity,
   CalendarAccount,
@@ -43,6 +44,7 @@ import type {
   TrainingBulletin,
   TrainingProgress,
   TextMessage,
+  ReturningClientLead,
   MaterialOrder,
   MaterialOrderLine,
   MaterialOrderTemplate,
@@ -77,6 +79,7 @@ type CalendarShareRow = Database["public"]["Tables"]["calendar_shares"]["Row"];
 type TrainingProgressRow = Database["public"]["Tables"]["training_progress"]["Row"];
 type TrainingBulletinRow = Database["public"]["Tables"]["training_bulletins"]["Row"];
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
+type ReturningClientLeadRow = Database["public"]["Tables"]["returning_client_leads"]["Row"];
 type MaterialOrderRow = Database["public"]["Tables"]["material_orders"]["Row"];
 type MaterialOrderLineRow = Database["public"]["Tables"]["material_order_lines"]["Row"];
 type MaterialOrderTemplateRow = Database["public"]["Tables"]["material_order_templates"]["Row"];
@@ -899,6 +902,26 @@ export function mapMessage(row: MessageRow): TextMessage {
     mediaUrl: row.media_url,
     createdAt: row.created_at,
     createdBy: row.created_by,
+  };
+}
+
+export function mapReturningClientLead(row: ReturningClientLeadRow): ReturningClientLead {
+  return {
+    id: row.id,
+    opportunityId: row.opportunity_id,
+    jobId: row.job_id,
+    contactId: row.contact_id,
+    previousJobId: row.previous_job_id,
+    previousStaffId: row.previous_staff_id ?? "",
+    previousStaffName: row.previous_staff_name,
+    previousJobCode: row.previous_job_code,
+    completedAt: row.completed_at,
+    openedByStaffId: row.opened_by_staff_id ?? "",
+    openedByName: row.opened_by_name,
+    status: parseReturningClientStatus(row.status),
+    decidedByStaffId: row.decided_by_staff_id,
+    decidedAt: row.decided_at,
+    createdAt: row.created_at,
   };
 }
 

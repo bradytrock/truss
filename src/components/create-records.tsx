@@ -55,8 +55,16 @@ import {
   type LeadSource,
 } from "@/lib/types";
 import { LeadAssigneeSelect } from "@/components/lead-assignee";
-import { assignmentOptions } from "@/lib/visibility";
+import { assignmentOptions, canManageSettings } from "@/lib/visibility";
 import { hasBusinessDevelopmentSeat } from "@/lib/bd";
+import { phonesMatch } from "@/lib/job-messages";
+import {
+  assignsToPreviousPm,
+  findReturningClient,
+  needsReturningClientAdminNotice,
+  needsReturningClientConfirm,
+  returningClientWhen,
+} from "@/lib/returning-client";
 
 export function CreateOpportunityDialog({
   open,
@@ -84,9 +92,21 @@ export function CreateOpportunityDialog({
   const [referralQuery, setReferralQuery] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const assignee = people.find((member) => member.id === assigneeId);
   const isMe = Boolean(assignee && assignee.id === crm.user.staffId);
+  const returning = useMemo(() => {
+    if (!phone.trim()) return null;
+    return findReturningClient({
+      phone,
+      contacts: crm.book.contacts,
+      jobs: crm.book.jobs,
+      opportunities: crm.book.opportunities,
+      staff: crm.book.staff,
+    });
+  }, [phone, crm.book.contacts, crm.book.jobs, crm.book.opportunities, crm.book.staff]);
+  const viewerIsAdmin = Boolean(crm.viewer && canManageSettings(crm.viewer.role, crm.viewer));
 
   useEffect(() => {
     if (!open) return;
@@ -126,6 +146,7 @@ export function CreateOpportunityDialog({
     setReferralId("");
     setReferralQuery("");
     setNotes("");
+    setConfirmOpen(false);
   }
 
   function handleOpenChange(next: boolean) {
@@ -134,40 +155,40 @@ export function CreateOpportunityDialog({
     onOpenChange(next);
   }
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
+  async function openLead(ownerStaffId: string) {
     const first = firstName.trim();
     const last = lastName.trim();
-    if (!first || !last) {
-      toast.error("First and last name are required.");
-      return;
-    }
-    if (!phone.trim() && !email.trim()) {
-      toast.error("Add a phone or email so the assigned person can respond in five minutes.");
-      return;
-    }
     if (!source) {
       toast.error("Pick a seed.");
       return;
     }
-    if (source === "referral" && !referralId) {
-      toast.error("Search your contacts and connect the person who sent this lead.");
-      return;
-    }
     const site = formatJobSite({ street, city, state: region, postalCode });
     const fullName = `${first} ${last}`;
-    const owner = assignee ?? crm.viewer;
+    const owner = people.find((member) => member.id === ownerStaffId) ?? crm.viewer;
+    const match = returning;
     setSaving(true);
     try {
-      const contact = await crm.addContact({
-        clientId: null,
-        name: fullName,
-        title: "Homeowner",
-        email: email.trim(),
-        phone: phone.trim(),
-        ownerStaffId: owner?.id || crm.user.staffId,
-        isReferralPartner: false,
-      });
+      const existingContact = phone.trim()
+        ? crm.book.contacts.find((contact) => phonesMatch(contact.phone, phone.trim()))
+        : undefined;
+      let contact = existingContact;
+      if (!contact) {
+        contact = await crm.addContact({
+          clientId: null,
+          name: fullName,
+          title: "Homeowner",
+          email: email.trim(),
+          phone: phone.trim(),
+          ownerStaffId: owner?.id || crm.user.staffId,
+          isReferralPartner: false,
+        });
+      } else {
+        await crm.updateContact(contact.id, {
+          email: email.trim() || contact.email,
+          phone: phone.trim() || contact.phone,
+          ownerStaffId: owner?.id || contact.ownerStaffId,
+        });
+      }
       const opportunity = await crm.addOpportunity({
         name: leadName(first, last, site || city.trim()),
         clientId: null,
@@ -193,6 +214,9 @@ export function CreateOpportunityDialog({
         notes: notes.trim(),
       });
       const referrer = source === "referral" ? selectedReferral : undefined;
+      const returningNote = match
+        ? ` Returning client: ${match.previousStaffName} ran ${match.job.code}. ${returningClientWhen(match)}.`
+        : "";
       await crm.addActivity({
         entityType: "opportunity",
         entityId: opportunity.id,
@@ -201,6 +225,7 @@ export function CreateOpportunityDialog({
           `Lead opened for ${fullName}. Seed: ${LEAD_SOURCE_LABELS[source]}.`,
           referrer ? `Referred by ${referrer.name}.` : "",
           notes.trim() ? notes.trim() : "",
+          returningNote.trim(),
         ]
           .filter(Boolean)
           .join(" "),
@@ -212,16 +237,58 @@ export function CreateOpportunityDialog({
         relatedId: opportunity.id,
         assignee: owner?.name || crm.user.name,
       });
-      toast.success(`Lead opened: ${opportunity.code}. Costs post to this job.`);
+      if (needsReturningClientAdminNotice(match, owner?.id, viewerIsAdmin)) {
+        await crm.fileReturningClientNotice({
+          opportunityId: opportunity.id,
+          jobId: opportunity.costingJob?.id ?? null,
+          contactId: contact.id,
+          previous: match!,
+        });
+      }
+      if (match && assignsToPreviousPm(match, owner?.id)) {
+        toast.success(`Lead opened: ${opportunity.code}. Assigned to ${match.previousStaffName}, who ran the last job.`);
+      } else {
+        toast.success(`Lead opened: ${opportunity.code}. Costs post to this job.`);
+      }
       handleOpenChange(false);
     } catch {
       // Store already toasted the error.
     } finally {
       setSaving(false);
+      setConfirmOpen(false);
     }
   }
 
+  async function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    const first = firstName.trim();
+    const last = lastName.trim();
+    if (!first || !last) {
+      toast.error("First and last name are required.");
+      return;
+    }
+    if (!phone.trim() && !email.trim()) {
+      toast.error("Add a phone or email so the assigned person can respond in five minutes.");
+      return;
+    }
+    if (!source) {
+      toast.error("Pick a seed.");
+      return;
+    }
+    if (source === "referral" && !referralId) {
+      toast.error("Search your contacts and connect the person who sent this lead.");
+      return;
+    }
+    const owner = assignee ?? crm.viewer;
+    if (needsReturningClientConfirm(returning, owner?.id)) {
+      setConfirmOpen(true);
+      return;
+    }
+    await openLead(owner?.id || crm.user.staffId);
+  }
+
   return (
+    <>
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
         side="right"
@@ -313,6 +380,22 @@ export function CreateOpportunityDialog({
                 />
               </Field>
             </div>
+
+            {returning ? (
+              <div className="border bg-muted/40 px-3 py-2 text-sm">
+                <p className="font-medium">This phone is already in the book</p>
+                <p className="mt-0.5 text-muted-foreground">
+                  {returning.previousStaffName} was the project manager
+                  {returning.job.code ? ` on ${returning.job.code}` : ""}.{" "}
+                  {returningClientWhen(returning)}.
+                  {assignsToPreviousPm(returning, assigneeId)
+                    ? " This lead will stay with them."
+                    : returning.assignable
+                      ? " You can send it back to them when you save."
+                      : " They no longer have an active seat."}
+                </p>
+              </div>
+            ) : null}
 
             <Field label="Address" htmlFor="lead-street">
               <InputGroup>
@@ -480,6 +563,43 @@ export function CreateOpportunityDialog({
         </form>
       </SheetContent>
     </Sheet>
+    <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Returning client</DialogTitle>
+          <DialogDescription>
+            {returning
+              ? `${returning.previousStaffName} was the project manager${returning.job.code ? ` on ${returning.job.code}` : ""}. ${returningClientWhen(returning)}.`
+              : "This phone matches a past client."}
+          </DialogDescription>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          {viewerIsAdmin
+            ? "Assign the lead to that project manager, or keep your assignment. As company admin, your choice is final."
+            : "Assign the lead to that project manager, or keep your assignment. If you keep it, company admins are notified and make the final call."}
+        </p>
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={saving}
+            onClick={() => void openLead(assigneeId || crm.user.staffId)}
+          >
+            Keep my assignment
+          </Button>
+          {returning?.assignable && returning.previousStaffId ? (
+            <Button
+              type="button"
+              disabled={saving}
+              onClick={() => void openLead(returning.previousStaffId)}
+            >
+              Assign to {returning.previousStaffName}
+            </Button>
+          ) : null}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
