@@ -81,7 +81,7 @@ Pages (job documents you send out) need [`20260821240000_page_share_tokens.sql`]
 
 Job file attachments need [`20260825170000_job_files.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825170000_job_files.sql) (or a fresh bootstrap) so PDFs and other documents live in the `job-files` bucket. If that table already exists but uploads still fail, run [`20260825181000_job_files_grants.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825181000_job_files_grants.sql). Until the bucket is there, Attach still saves the file on the job using existing storage.
 
-Two-way texts need [`20260825120000_messages.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825120000_messages.sql) (or a fresh bootstrap) so Messages persist and inbound replies log on the job. Until that runs, you can still send from this browser; the thread stays local until you run the SQL.
+Two-way texts need [`20260825120000_messages.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825120000_messages.sql) (or a fresh bootstrap) so Messages persist and inbound replies log on the job. Safe to re-run: it adds activity type **text**, upgrades an older Sendblue `messages` table (`to_number` / uuid `created_by`) to `phone` / `handle` / `job_id`, and creates `ingest_inbound_text`. Until that runs, you can still send from this browser; the thread stays local.
 
 In Authentication → URL configuration, add `http://localhost:3847/auth/callback` (and the hosted app origin). For local work you can turn off “Confirm email”. Signup opens a company, a profile, and a seat for you. It does not add sample people. Add real teammates from Settings → People.
 

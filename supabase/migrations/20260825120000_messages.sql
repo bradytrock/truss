@@ -1,4 +1,8 @@
 -- Two-way texts (Sendblue) logged on the related job as communication.
+-- Safe to re-run. Adds activity_type 'text' and aligns older Sendblue `messages`
+-- tables (to_number / uuid created_by) with the app columns (phone, handle, job_id).
+-- Do not assign the new enum value at CREATE FUNCTION time — Postgres rejects that
+-- until COMMIT when ADD VALUE ran in the same script.
 
 alter type public.activity_type add value if not exists 'text';
 
@@ -19,6 +23,105 @@ create table if not exists public.messages (
   constraint messages_direction_check check (direction in ('inbound', 'outbound'))
 );
 
+alter table public.messages add column if not exists contact_id uuid references public.contacts (id) on delete set null;
+alter table public.messages add column if not exists job_id uuid references public.jobs (id) on delete set null;
+alter table public.messages add column if not exists opportunity_id uuid references public.opportunities (id) on delete set null;
+alter table public.messages add column if not exists phone text;
+alter table public.messages add column if not exists handle text;
+alter table public.messages add column if not exists media_url text;
+alter table public.messages add column if not exists status text;
+alter table public.messages add column if not exists direction text;
+alter table public.messages add column if not exists body text;
+alter table public.messages add column if not exists created_by text;
+alter table public.messages add column if not exists created_at timestamptz;
+
+do $$
+declare
+  created_by_type text;
+  leftover text;
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'messages' and column_name = 'from_number'
+  ) then
+    execute $u$
+      update public.messages
+      set phone = case
+        when direction = 'inbound' then coalesce(nullif(phone, ''), from_number, to_number, '')
+        else coalesce(nullif(phone, ''), to_number, from_number, '')
+      end
+      where coalesce(phone, '') = ''
+    $u$;
+  end if;
+
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'messages' and column_name = 'provider_message_id'
+  ) then
+    execute $u$
+      update public.messages
+      set handle = coalesce(nullif(handle, ''), provider_message_id, '')
+      where coalesce(handle, '') = ''
+    $u$;
+  end if;
+
+  foreach leftover in array array['to_number', 'from_number', 'provider', 'provider_message_id', 'error']
+  loop
+    if exists (
+      select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'messages' and column_name = leftover
+    ) then
+      execute format('alter table public.messages alter column %I set default %L', leftover, '');
+      execute format('update public.messages set %I = %L where %I is null', leftover, '', leftover);
+    end if;
+  end loop;
+
+  select c.udt_name into created_by_type
+  from information_schema.columns c
+  where c.table_schema = 'public' and c.table_name = 'messages' and c.column_name = 'created_by';
+
+  if created_by_type = 'uuid' then
+    execute 'alter table public.messages drop constraint if exists messages_created_by_fkey';
+    execute 'alter table public.messages alter column created_by drop default';
+    execute 'alter table public.messages alter column created_by drop not null';
+    execute 'alter table public.messages alter column created_by type text using coalesce(created_by::text, '''')';
+  end if;
+
+  update public.messages set phone = '' where phone is null;
+  update public.messages set handle = '' where handle is null;
+  update public.messages set body = '' where body is null;
+  update public.messages set status = coalesce(nullif(status, ''), 'sent') where status is null or status = '';
+  update public.messages set direction = coalesce(nullif(direction, ''), 'outbound') where direction is null or direction = '';
+  update public.messages set media_url = '' where media_url is null;
+  update public.messages set created_by = '' where created_by is null;
+  update public.messages set created_at = now() where created_at is null;
+
+  execute 'alter table public.messages alter column phone set default ''''';
+  execute 'alter table public.messages alter column phone set not null';
+  execute 'alter table public.messages alter column handle set default ''''';
+  execute 'alter table public.messages alter column handle set not null';
+  execute 'alter table public.messages alter column body set default ''''';
+  execute 'alter table public.messages alter column body set not null';
+  execute 'alter table public.messages alter column status set default ''sent''';
+  execute 'alter table public.messages alter column status set not null';
+  execute 'alter table public.messages alter column direction set default ''outbound''';
+  execute 'alter table public.messages alter column direction set not null';
+  execute 'alter table public.messages alter column media_url set default ''''';
+  execute 'alter table public.messages alter column media_url set not null';
+  execute 'alter table public.messages alter column created_by set default ''''';
+  execute 'alter table public.messages alter column created_by set not null';
+  execute 'alter table public.messages alter column created_at set default now()';
+  execute 'alter table public.messages alter column created_at set not null';
+end $$;
+
+do $$
+begin
+  alter table public.messages
+    add constraint messages_direction_check check (direction in ('inbound', 'outbound'));
+exception
+  when duplicate_object then null;
+end $$;
+
 create index if not exists messages_company_created_idx on public.messages (company_id, created_at desc);
 create index if not exists messages_job_id_idx on public.messages (job_id);
 create index if not exists messages_contact_id_idx on public.messages (contact_id);
@@ -27,6 +130,7 @@ create unique index if not exists messages_company_handle_idx
   where handle <> '';
 
 alter table public.messages enable row level security;
+alter table public.messages replica identity full;
 
 drop policy if exists "company isolation" on public.messages;
 create policy "company isolation" on public.messages
@@ -72,7 +176,7 @@ declare
   v_author text;
   v_body text;
   v_created timestamptz;
-  v_activity_type public.activity_type;
+  v_activity_type public.activity_type := 'call';
 begin
   v_digits := public.phone_last10(p_from);
   if length(v_digits) < 10 then
@@ -199,9 +303,9 @@ begin
 
   v_author := coalesce(nullif(trim(v_contact.name), ''), 'Homeowner');
   begin
-    v_activity_type := 'text';
+    execute 'select $1::public.activity_type' into v_activity_type using 'text';
   exception
-    when invalid_text_representation then
+    when others then
       v_activity_type := 'call';
   end;
 
@@ -252,8 +356,11 @@ begin
 end;
 $$;
 
+revoke all on public.messages from anon, public;
 grant select, insert, update, delete on public.messages to authenticated;
 
 revoke all on function public.ingest_inbound_text(text, text, text, text, text) from public;
 grant execute on function public.ingest_inbound_text(text, text, text, text, text) to anon, authenticated;
 grant execute on function public.phone_last10(text) to anon, authenticated;
+
+notify pgrst, 'reload schema';
