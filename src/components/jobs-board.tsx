@@ -25,6 +25,7 @@ import { DeleteJobDialog } from "@/components/delete-job-dialog";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency } from "@/lib/format";
 import { leadSourceLabel } from "@/lib/leads";
+import { phoneQueryMatches } from "@/lib/phone";
 import { parseMarket, workMarket } from "@/lib/market";
 import { acceptedAmountForJob } from "@/lib/estimate-totals";
 import {
@@ -84,6 +85,14 @@ export function JobsBoard({
       if (!jobMatchesOwnerFilter(job, opportunity, ownerIds, crm.book.staff)) return false;
       if (!needle) return true;
       const customer = crm.customerName(job);
+      const linkedPhones = [job.primaryContactId, ...job.relatedContactIds]
+        .map((id) => (id ? crm.book.contacts.find((contact) => contact.id === id)?.phone : undefined));
+      if (opportunity?.primaryContactId) {
+        linkedPhones.push(
+          crm.book.contacts.find((contact) => contact.id === opportunity.primaryContactId)?.phone,
+        );
+      }
+      if (linkedPhones.some((phone) => phoneQueryMatches(phone, query))) return true;
       return (
         job.code.toLowerCase().includes(needle) ||
         job.name.toLowerCase().includes(needle) ||
@@ -156,7 +165,7 @@ export function JobsBoard({
           noneSelected
             ? "Check the people whose pipelines you want on this board, or choose Select all."
             : searching
-              ? "Try a job code, homeowner, or city. People still checked in the filter stay in play."
+              ? "Try a job code, homeowner, phone, or city. People still checked in the filter stay in play."
               : peopleFilter
                 ? "Those seats have nothing on this board. Check someone else, or Select all."
                 : "Open a new lead. The card stays on this board from the first call through punch."

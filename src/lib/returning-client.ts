@@ -8,7 +8,7 @@ export type { ReturningClientLead, ReturningClientLeadStatus } from "@/lib/types
 
 export type ReturningClientMatch = {
   contact: Contact;
-  job: Job;
+  job: Job | null;
   previousStaffId: string;
   previousStaffName: string;
   completedAt: string | null;
@@ -32,16 +32,43 @@ export function findReturningClient(input: {
   jobs: Job[];
   opportunities: Opportunity[];
   staff: StaffMember[];
+  estimates?: Array<{ jobId: string | null; contactId: string | null; secondContactId?: string | null }>;
 }): ReturningClientMatch | null {
   const contacts = input.contacts.filter((contact) => phonesMatch(contact.phone, input.phone));
   if (!contacts.length) return null;
   const contactIds = new Set(contacts.map((contact) => contact.id));
+  const estimateJobIds = new Set(
+    (input.estimates ?? [])
+      .filter(
+        (estimate) =>
+          (estimate.contactId && contactIds.has(estimate.contactId)) ||
+          (estimate.secondContactId && contactIds.has(estimate.secondContactId)),
+      )
+      .map((estimate) => estimate.jobId)
+      .filter((id): id is string => Boolean(id)),
+  );
   const jobs = input.jobs.filter((job) => {
     if (isDeletedJob(job)) return false;
     const opportunity = input.opportunities.find((item) => item.id === job.opportunityId);
-    return jobTouchesContact(job, opportunity, contactIds);
+    return jobTouchesContact(job, opportunity, contactIds) || estimateJobIds.has(job.id);
   });
-  if (!jobs.length) return null;
+  const contact =
+    contacts.find((item) => jobs.some((job) => job.primaryContactId === item.id)) ||
+    contacts.find((item) => {
+      const opportunity = input.opportunities.find((row) => row.primaryContactId === item.id);
+      return Boolean(opportunity);
+    }) ||
+    contacts[0];
+  if (!jobs.length) {
+    return {
+      contact,
+      job: null,
+      previousStaffId: "",
+      previousStaffName: "",
+      completedAt: null,
+      assignable: false,
+    };
+  }
   const ranked = [...jobs].sort((left, right) => {
     const leftDone = left.status === "complete" ? 0 : 1;
     const rightDone = right.status === "complete" ? 0 : 1;
@@ -53,12 +80,7 @@ export function findReturningClient(input: {
   const owner = documentOwnerStaff({ job, opportunity, staff: input.staff });
   const ownerMember = owner ? input.staff.find((member) => member.id === owner.id) : undefined;
   const previousStaffName = ownerMember?.name.trim() || owner?.name.trim() || job.projectManager.trim();
-  if (!previousStaffName) return null;
   const assignable = Boolean(ownerMember && !ownerMember.locked);
-  const contact =
-    contacts.find((item) => item.id === job.primaryContactId) ||
-    contacts.find((item) => opportunity && item.id === opportunity.primaryContactId) ||
-    contacts[0];
   return {
     contact,
     job,
@@ -70,6 +92,7 @@ export function findReturningClient(input: {
 }
 
 export function returningClientWhen(match: Pick<ReturningClientMatch, "job" | "completedAt">) {
+  if (!match.job) return "No past job is linked yet.";
   if (match.completedAt) return `Completed ${formatDate(match.completedAt)}`;
   return `Last job is ${JOB_STATUS_LABELS[match.job.status]} (started ${formatDate(match.job.startDate)})`;
 }
@@ -84,7 +107,7 @@ export function needsReturningClientConfirm(
   match: ReturningClientMatch | null,
   assigneeId: string | null | undefined,
 ) {
-  if (!match) return false;
+  if (!match?.assignable) return false;
   return !assignsToPreviousPm(match, assigneeId);
 }
 
@@ -94,7 +117,7 @@ export function needsReturningClientAdminNotice(
   assigneeId: string | null | undefined,
   viewerIsCompanyAdmin: boolean,
 ) {
-  if (!match || viewerIsCompanyAdmin) return false;
+  if (!match?.assignable || viewerIsCompanyAdmin) return false;
   return !assignsToPreviousPm(match, assigneeId);
 }
 

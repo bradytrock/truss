@@ -143,7 +143,7 @@ function JobsBoardPage() {
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter by code, homeowner, or city"
+              placeholder="Filter by code, homeowner, phone, or city"
               className="w-full sm:w-72"
             />
             {canFilterOwners ? (

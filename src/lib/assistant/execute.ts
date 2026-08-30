@@ -371,6 +371,7 @@ async function runTool(
             jobs: book.jobs,
             opportunities: book.opportunities,
             staff: book.staff,
+            estimates: book.estimates,
           })
         : null;
       const existing =
@@ -442,7 +443,11 @@ async function runTool(
         });
       }
       const returningNote = returning
-        ? ` This phone matches a past client. ${returning.previousStaffName} ran ${returning.job.code}. ${returningClientWhen(returning)}.${
+        ? ` This phone matches a past client${returning.contact.name ? ` (${returning.contact.name})` : ""}.${
+            returning.previousStaffName
+              ? ` ${returning.previousStaffName} ran ${returning.job?.code || "the last job"}. ${returningClientWhen(returning)}.`
+              : ` ${returningClientWhen(returning)}.`
+          }${
             needsReturningClientAdminNotice(returning, ownerId, viewerIsAdmin)
               ? " Company admins were notified to decide whether to send it back."
               : returning.previousStaffId === ownerId
@@ -461,7 +466,7 @@ async function runTool(
           contactId: contact.id,
           note: `Lead opened.${returningNote}`,
           previousProjectManager: returning?.previousStaffName ?? null,
-          previousJobCode: returning?.job.code ?? null,
+          previousJobCode: returning?.job?.code ?? null,
           completedAt: returning?.completedAt ?? null,
         },
         job ? { href: `/jobs?job=${job.id}`, label: `Open ${created.code}` } : { href: `/opportunities/${created.id}`, label: `Open ${created.code}` },

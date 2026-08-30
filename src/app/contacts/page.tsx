@@ -23,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { ContactRecordWindow } from "@/components/contact-window";
 import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
+import { phoneQueryMatches } from "@/lib/phone";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 
 type BookFilter = "all" | "referral" | "mine";
@@ -73,10 +74,12 @@ function ContactsBookPage() {
       if (!needle) return true;
       const company = crm.getClient(contact.clientId);
       const owner = crm.staff.find((member) => member.id === contact.ownerStaffId);
+      if (phoneQueryMatches(contact.phone, query)) return true;
       return (
         contact.name.toLowerCase().includes(needle) ||
         contact.title.toLowerCase().includes(needle) ||
         contact.email.toLowerCase().includes(needle) ||
+        contact.phone.toLowerCase().includes(needle) ||
         company?.name.toLowerCase().includes(needle) ||
         owner?.name.toLowerCase().includes(needle)
       );
@@ -99,7 +102,7 @@ function ContactsBookPage() {
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search people, homeowners, or companies"
+              placeholder="Search name, phone, email, or company"
               className="sm:w-64"
             />
             <Select

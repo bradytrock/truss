@@ -2656,10 +2656,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         opportunityId: input.opportunityId,
         jobId: input.jobId,
         contactId: input.contactId,
-        previousJobId: input.previous.job.id,
+        previousJobId: input.previous.job?.id ?? null,
         previousStaffId: input.previous.previousStaffId,
         previousStaffName: input.previous.previousStaffName,
-        previousJobCode: input.previous.job.code,
+        previousJobCode: input.previous.job?.code ?? "",
         completedAt: input.previous.completedAt,
         openedByStaffId: user.staffId,
         openedByName: user.name,
@@ -2708,7 +2708,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
       toast.message(
-        `Company admins were notified. ${input.previous.previousStaffName} ran ${input.previous.job.code}.`,
+        `Company admins were notified. ${input.previous.previousStaffName || "The previous project manager"} ran ${input.previous.job?.code || "the last job"}.`,
       );
       await addActivity({
         entityType: "opportunity",
@@ -2716,7 +2716,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         type: "note",
         body: [
           `${user.name} opened this lead on a returning client and kept another assignee.`,
-          `${input.previous.previousStaffName} was the project manager on ${input.previous.job.code}.`,
+          `${input.previous.previousStaffName || "The previous project manager"} was the project manager${input.previous.job?.code ? ` on ${input.previous.job.code}` : ""}.`,
           returningClientWhen(input.previous),
         ].join(" "),
       });

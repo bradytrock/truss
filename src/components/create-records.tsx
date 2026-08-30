@@ -58,6 +58,7 @@ import { LeadAssigneeSelect } from "@/components/lead-assignee";
 import { assignmentOptions, canManageSettings } from "@/lib/visibility";
 import { hasBusinessDevelopmentSeat } from "@/lib/bd";
 import { phonesMatch } from "@/lib/job-messages";
+import { phoneQueryMatches } from "@/lib/phone";
 import {
   assignsToPreviousPm,
   findReturningClient,
@@ -104,8 +105,9 @@ export function CreateOpportunityDialog({
       jobs: crm.book.jobs,
       opportunities: crm.book.opportunities,
       staff: crm.book.staff,
+      estimates: crm.book.estimates,
     });
-  }, [phone, crm.book.contacts, crm.book.jobs, crm.book.opportunities, crm.book.staff]);
+  }, [phone, crm.book.contacts, crm.book.jobs, crm.book.opportunities, crm.book.staff, crm.book.estimates]);
   const viewerIsAdmin = Boolean(crm.viewer && canManageSettings(crm.viewer.role, crm.viewer));
 
   useEffect(() => {
@@ -123,6 +125,7 @@ export function CreateOpportunityDialog({
     if (!needle) return visible.slice(0, 8);
     return visible
       .filter((contact) => {
+        if (phoneQueryMatches(contact.phone, referralQuery)) return true;
         const haystack = `${contact.name} ${contact.title} ${contact.email} ${contact.phone}`.toLowerCase();
         return haystack.includes(needle);
       })
@@ -215,7 +218,9 @@ export function CreateOpportunityDialog({
       });
       const referrer = source === "referral" ? selectedReferral : undefined;
       const returningNote = match
-        ? ` Returning client: ${match.previousStaffName} ran ${match.job.code}. ${returningClientWhen(match)}.`
+        ? match.job
+          ? ` Returning client: ${match.contact.name}. ${match.previousStaffName || "Previous project manager"} ran ${match.job.code}. ${returningClientWhen(match)}.`
+          : ` Returning client: ${match.contact.name} is already in the book at this phone.`
         : "";
       await crm.addActivity({
         entityType: "opportunity",
@@ -385,14 +390,15 @@ export function CreateOpportunityDialog({
               <div className="border bg-muted/40 px-3 py-2 text-sm">
                 <p className="font-medium">This phone is already in the book</p>
                 <p className="mt-0.5 text-muted-foreground">
-                  {returning.previousStaffName} was the project manager
-                  {returning.job.code ? ` on ${returning.job.code}` : ""}.{" "}
-                  {returningClientWhen(returning)}.
+                  {returning.contact.name}.
+                  {returning.job
+                    ? ` ${returning.previousStaffName || "Someone"} was the project manager${returning.job.code ? ` on ${returning.job.code}` : ""}. ${returningClientWhen(returning)}.`
+                    : " No past job is linked yet."}
                   {assignsToPreviousPm(returning, assigneeId)
                     ? " This lead will stay with them."
                     : returning.assignable
                       ? " You can send it back to them when you save."
-                      : " They no longer have an active seat."}
+                      : ""}
                 </p>
               </div>
             ) : null}
@@ -569,7 +575,9 @@ export function CreateOpportunityDialog({
           <DialogTitle>Returning client</DialogTitle>
           <DialogDescription>
             {returning
-              ? `${returning.previousStaffName} was the project manager${returning.job.code ? ` on ${returning.job.code}` : ""}. ${returningClientWhen(returning)}.`
+              ? returning.job
+                ? `${returning.contact.name}. ${returning.previousStaffName || "Someone"} was the project manager${returning.job.code ? ` on ${returning.job.code}` : ""}. ${returningClientWhen(returning)}.`
+                : `${returning.contact.name} is already in the book at this phone.`
               : "This phone matches a past client."}
           </DialogDescription>
         </DialogHeader>

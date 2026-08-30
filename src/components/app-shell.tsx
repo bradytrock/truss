@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Menu, Plus, Search } from "lucide-react";
 import { useCrm } from "@/lib/crm-store";
+import { phoneSearchText } from "@/lib/phone";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -323,7 +324,7 @@ function SearchTrigger() {
         className="sm:max-w-lg"
       >
         <Command>
-          <CommandInput placeholder="Search by project, owner, or city..." />
+          <CommandInput placeholder="Search by project, owner, city, or phone..." />
           <CommandList>
             <CommandEmpty>No matching records.</CommandEmpty>
             <CommandGroup heading="Pursuits">
@@ -346,10 +347,12 @@ function SearchTrigger() {
               ))}
             </CommandGroup>
             <CommandGroup heading="Jobs">
-              {jobs.map((job) => (
+              {jobs.map((job) => {
+                const homeowner = contacts.find((contact) => contact.id === job.primaryContactId);
+                return (
                 <CommandItem
                   key={job.id}
-                  value={`${job.code} ${job.name} ${job.location}`}
+                  value={`${job.code} ${job.name} ${job.location} ${homeowner?.name ?? ""} ${phoneSearchText(homeowner?.phone)}`}
                   onSelect={() => {
                     setOpen(false);
                     router.push(`/jobs/${job.id}`);
@@ -360,7 +363,8 @@ function SearchTrigger() {
                     <span className="ml-auto font-mono text-[10px] text-muted-foreground">{job.code}</span>
                   ) : null}
                 </CommandItem>
-              ))}
+                );
+              })}
             </CommandGroup>
             <CommandGroup heading="Messages">
               <CommandItem
@@ -388,7 +392,7 @@ function SearchTrigger() {
               {contacts.map((contact) => (
                 <CommandItem
                   key={contact.id}
-                  value={`${contact.name} ${contact.title} ${contact.email}`}
+                  value={`${contact.name} ${contact.title} ${contact.email} ${phoneSearchText(contact.phone)}`}
                   onSelect={() => {
                     setOpen(false);
                     router.push(`/contacts?contact=${contact.id}`);
