@@ -44,6 +44,28 @@ export function phoneSearchText(phone: string | null | undefined) {
   return [raw, digits, last10].filter(Boolean).join(" ");
 }
 
+export function contactMatchesQuery(
+  contact: { name: string; title: string; email: string; phone: string | null | undefined },
+  query: string,
+  extra: Array<string | null | undefined> = [],
+) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  if (phoneQueryMatches(contact.phone, query)) return true;
+  const haystack = [
+    contact.name,
+    contact.title,
+    contact.email,
+    contact.phone,
+    phoneSearchText(contact.phone),
+    ...extra,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(needle);
+}
+
 export function firstName(name: string) {
   const token = name.trim().split(/\s+/)[0];
   return token || "there";

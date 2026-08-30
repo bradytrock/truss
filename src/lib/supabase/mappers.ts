@@ -177,12 +177,12 @@ export function mapContact(row: ContactRow): Contact {
   return {
     id: row.id,
     clientId: row.client_id,
-    name: row.name,
-    title: row.title,
-    email: row.email,
-    phone: row.phone,
+    name: row.name ?? "",
+    title: row.title ?? "",
+    email: row.email ?? "",
+    phone: row.phone ?? "",
     ownerStaffId: row.owner_staff_id ?? "",
-    isReferralPartner: row.is_referral_partner,
+    isReferralPartner: Boolean(row.is_referral_partner),
   };
 }
 

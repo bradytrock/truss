@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { ContactRecordWindow } from "@/components/contact-window";
 import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
-import { phoneQueryMatches } from "@/lib/phone";
+import { contactMatchesQuery } from "@/lib/phone";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 
 type BookFilter = "all" | "referral" | "mine";
@@ -67,24 +67,16 @@ function ContactsBookPage() {
   }, [closeContact, crm.hydrated, contactId, openContact]);
 
   const rows = useMemo(() => {
-    const needle = query.trim().toLowerCase();
+    const needle = query.trim();
     return crm.contacts.filter((contact) => {
       if (filter === "referral" && !contact.isReferralPartner) return false;
       if (filter === "mine" && contact.ownerStaffId !== crm.effectiveStaff?.id) return false;
       if (!needle) return true;
       const company = crm.getClient(contact.clientId);
       const owner = crm.staff.find((member) => member.id === contact.ownerStaffId);
-      if (phoneQueryMatches(contact.phone, query)) return true;
-      return (
-        contact.name.toLowerCase().includes(needle) ||
-        contact.title.toLowerCase().includes(needle) ||
-        contact.email.toLowerCase().includes(needle) ||
-        contact.phone.toLowerCase().includes(needle) ||
-        company?.name.toLowerCase().includes(needle) ||
-        owner?.name.toLowerCase().includes(needle)
-      );
+      return contactMatchesQuery(contact, query, [company?.name, owner?.name]);
     });
-  }, [crm, filter, query]);
+  }, [crm.contacts, crm.effectiveStaff?.id, crm, filter, query]);
 
   if (!crm.hydrated) return <LoadingScreen />;
 
@@ -100,10 +92,16 @@ function ContactsBookPage() {
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Input
+              type="search"
+              inputMode="search"
+              autoComplete="off"
+              spellCheck={false}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
+              onValueChange={setQuery}
               placeholder="Search name, phone, email, or company"
               className="sm:w-64"
+              aria-label="Search contacts"
             />
             <Select
               value={filter}

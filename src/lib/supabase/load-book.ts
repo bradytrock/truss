@@ -269,7 +269,13 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     messages: messagesRes.error ? [] : (messagesRes.data ?? []).map(mapMessage),
     returningClientLeads: returningClientLeadsRes.error
       ? []
-      : (returningClientLeadsRes.data ?? []).map(mapReturningClientLead),
+      : (returningClientLeadsRes.data ?? []).flatMap((row) => {
+          try {
+            return [mapReturningClientLead(row)];
+          } catch {
+            return [];
+          }
+        }),
     materialOrders: materialOrdersRes.error ? [] : (materialOrdersRes.data ?? []).map(mapMaterialOrder),
     materialOrderLines: materialOrderLinesRes.error
       ? []
