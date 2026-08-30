@@ -425,6 +425,7 @@ export function scopeBook(
     }),
     returningClientLeads: (state.returningClientLeads ?? []).filter((notice) => {
       if (canManageSettings(effective.role, effective)) return true;
+      if (notice.previousStaffId && notice.previousStaffId === effective.id) return true;
       return notice.openedByStaffId === effective.id;
     }),
   };

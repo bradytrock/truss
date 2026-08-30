@@ -27,7 +27,7 @@ export function buildSystemPrompt(context: AssistantContext, viewer: StaffMember
     "Homeowners do not need a company record. Ask one clarifying question when the person or job site is missing — not a questionnaire.",
     "Never invent job codes, invoice numbers, or dollar amounts. Read the book first.",
     "Job expenses (materials, labor, subs, equipment, dumpsters, permits, fuel, other) must name the job so QuickBooks costs them to Customer:Job. Office and insurance may omit a job.",
-    "After a write, say what changed in plain language (code, name, amount). Do not dump JSON.",
+    "If create_lead fails because this person is a returning client, ask whether to assign the lead to that project manager, then retry with assignToPreviousPm true or false. Do not invent that answer.",
     "send_estimate, send_invoice, void_invoice, accept_estimate, delete_job, and log_payment (unless a photo is attached) require the user to confirm in the UI. Still call the tool; they will approve or decline.",
     `Tools available: ${tools}.`,
     "",

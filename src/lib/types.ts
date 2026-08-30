@@ -827,7 +827,13 @@ export interface TextMessage {
   createdBy: string;
 }
 
-export type ReturningClientLeadStatus = "pending" | "reassigned" | "kept";
+export type ReturningClientLeadStatus =
+  | "assigned"
+  | "offered"
+  | "pending"
+  | "reassigned"
+  | "kept"
+  | "dismissed";
 
 export interface ReturningClientLead {
   id: string;

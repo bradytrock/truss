@@ -8063,3 +8063,16 @@ revoke all on public.returning_client_leads from anon, public;
 grant select, insert, update, delete on public.returning_client_leads to authenticated;
 
 notify pgrst, 'reload schema';
+
+-- ========== 20260830130000_returning_client_notice_flow.sql ==========
+-- Ask the previous project manager first when a returning client calls.
+-- Company admins decide only after that PM declines, or when the seat is locked.
+
+alter table public.returning_client_leads
+  drop constraint if exists returning_client_leads_status_check;
+
+alter table public.returning_client_leads
+  add constraint returning_client_leads_status_check
+    check (status in ('assigned', 'offered', 'pending', 'reassigned', 'kept', 'dismissed'));
+
+notify pgrst, 'reload schema';

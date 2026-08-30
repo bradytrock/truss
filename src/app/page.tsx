@@ -28,7 +28,8 @@ import { cn } from "@/lib/utils";
 import { COURSE, overallProgress, staffProgress } from "@/lib/training/engine";
 import { qbQueue } from "@/lib/job-financials";
 import { itemTitle, jobDocumentHref, pmReviewNotices } from "@/lib/qb-review";
-import { canManageSettings, canViewAccounting } from "@/lib/visibility";
+import { canViewAccounting } from "@/lib/visibility";
+import { actionableReturningClientNotices } from "@/lib/returning-client";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { BdRoiPanel } from "@/components/bd-roi";
 
@@ -145,12 +146,15 @@ export default function HomePage() {
     crm.staff,
   ]);
 
-  const pendingReturning = useMemo(() => {
-    if (!crm.viewer || !canManageSettings(crm.viewer.role, crm.viewer)) return [];
-    return (crm.returningClientLeads ?? []).filter((notice) => notice.status === "pending");
-  }, [crm.returningClientLeads, crm.viewer]);
+  const returningNotices = useMemo(
+    () => actionableReturningClientNotices(crm.returningClientLeads, crm.effectiveStaff),
+    [crm.effectiveStaff, crm.returningClientLeads],
+  );
 
-  async function decideReturning(noticeId: string, decision: "reassigned" | "kept") {
+  async function decideReturning(
+    noticeId: string,
+    decision: "take" | "decline" | "reassigned" | "kept" | "dismiss",
+  ) {
     setDecidingId(noticeId);
     try {
       await crm.decideReturningClientLead(noticeId, decision);
@@ -290,24 +294,24 @@ export default function HomePage() {
         </Card>
       ) : null}
 
-      {pendingReturning.length > 0 ? (
+      {returningNotices.length > 0 ? (
         <Card>
           <CardHeader className="border-b">
             <CardTitle>Returning clients</CardTitle>
             <CardDescription>
-              Someone opened a lead on a past client&apos;s phone and did not send it back to that
-              project manager. You decide.
+              Past clients called back. The previous project manager is asked first. Company admins
+              decide only after they decline, or when that seat is locked.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-2">
             <ul className="divide-y">
-              {pendingReturning.map((notice) => {
+              {returningNotices.map((notice) => {
                 const opportunity = crm.getOpportunity(notice.opportunityId);
                 const job = notice.jobId ? crm.getJob(notice.jobId) : undefined;
-                const href = job
-                  ? `/jobs?job=${job.id}`
-                  : `/opportunities/${notice.opportunityId}`;
+                const href = job ? `/jobs?job=${job.id}` : `/opportunities/${notice.opportunityId}`;
                 const busy = decidingId === notice.id;
+                const when = notice.completedAt ? ` Completed ${formatDate(notice.completedAt)}.` : "";
+                const jobBit = notice.previousJobCode ? ` on ${notice.previousJobCode}` : "";
                 return (
                   <li key={notice.id} className="py-3 first:pt-1">
                     <Link href={href} className="text-sm font-medium hover:underline">
@@ -315,31 +319,61 @@ export default function HomePage() {
                       {opportunity?.name && opportunity.code ? ` · ${opportunity.name}` : ""}
                     </Link>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {notice.openedByName} kept their assignment. Previous project manager was{" "}
-                      {notice.previousStaffName}
-                      {notice.previousJobCode ? ` on ${notice.previousJobCode}` : ""}.
-                      {notice.completedAt
-                        ? ` Completed ${formatDate(notice.completedAt)}.`
-                        : ""}
+                      {notice.status === "assigned"
+                        ? `${notice.openedByName} assigned this past client to you${jobBit}.${when}`
+                        : notice.status === "offered"
+                          ? `${notice.openedByName} opened this lead and did not assign it to you. You ran the last job${jobBit}.${when}`
+                          : notice.openedByStaffId === notice.previousStaffId
+                            ? `${notice.openedByName} assigned this past client away from themselves${jobBit}.${when}`
+                            : `${notice.previousStaffName || "The previous project manager"} declined or cannot take this lead${jobBit}.${when} ${notice.openedByName} kept another assignee.`}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {notice.previousStaffId ? (
+                      {notice.status === "offered" ? (
+                        <>
+                          <Button size="sm" disabled={busy} onClick={() => void decideReturning(notice.id, "take")}>
+                            {busy ? "Saving…" : "Take this lead"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() => void decideReturning(notice.id, "decline")}
+                          >
+                            I don&apos;t want it
+                          </Button>
+                        </>
+                      ) : null}
+                      {notice.status === "assigned" ? (
                         <Button
                           size="sm"
+                          variant="outline"
                           disabled={busy}
-                          onClick={() => void decideReturning(notice.id, "reassigned")}
+                          onClick={() => void decideReturning(notice.id, "dismiss")}
                         >
-                          {busy ? "Saving…" : `Reassign to ${notice.previousStaffName}`}
+                          {busy ? "Saving…" : "Got it"}
                         </Button>
                       ) : null}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busy}
-                        onClick={() => void decideReturning(notice.id, "kept")}
-                      >
-                        Keep assignment
-                      </Button>
+                      {notice.status === "pending" ? (
+                        <>
+                          {notice.previousStaffId ? (
+                            <Button
+                              size="sm"
+                              disabled={busy}
+                              onClick={() => void decideReturning(notice.id, "reassigned")}
+                            >
+                              {busy ? "Saving…" : `Reassign to ${notice.previousStaffName}`}
+                            </Button>
+                          ) : null}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() => void decideReturning(notice.id, "kept")}
+                          >
+                            Keep assignment
+                          </Button>
+                        </>
+                      ) : null}
                     </div>
                   </li>
                 );

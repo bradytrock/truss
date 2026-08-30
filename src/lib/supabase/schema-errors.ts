@@ -509,6 +509,8 @@ export function missingSignatureAuditMessage() {
 }
 
 export const RETURNING_CLIENT_LEADS_SQL = "supabase/migrations/20260830120000_returning_client_leads.sql";
+export const RETURNING_CLIENT_NOTICE_FLOW_SQL =
+  "supabase/migrations/20260830130000_returning_client_notice_flow.sql";
 
 export function isMissingReturningClientLeads(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -522,10 +524,12 @@ export function isMissingReturningClientLeads(error: { message?: string; code?: 
       code === "pgrst204" ||
       message.includes("schema cache") ||
       message.includes("could not find the") ||
-      message.includes("does not exist"))
+      message.includes("does not exist") ||
+      message.includes("status_check") ||
+      message.includes("violates check constraint"))
   );
 }
 
 export function missingReturningClientLeadsMessage() {
-  return `Lead opened. Run ${RETURNING_CLIENT_LEADS_SQL} in the SQL editor so company admins get the returning-client notice.`;
+  return `Lead opened. Run ${RETURNING_CLIENT_LEADS_SQL} then ${RETURNING_CLIENT_NOTICE_FLOW_SQL} in the SQL editor so the previous project manager is asked first.`;
 }

@@ -23,15 +23,17 @@ import {
   type LeadSource,
   type PhotoCategory,
 } from "@/lib/types";
-import { canDeleteJobs, canManageSettings } from "@/lib/visibility";
+import { canDeleteJobs } from "@/lib/visibility";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { catalogProposalUnitPrice } from "@/lib/catalog-margin";
 import { currentCatalog } from "@/lib/price-lists";
 import { expenseRequiresJob } from "@/lib/qbwc/work";
 import { phonesMatch } from "@/lib/job-messages";
 import {
+  askTrussReturningClientPrompt,
+  emailsMatch,
   findReturningClient,
-  needsReturningClientAdminNotice,
+  needsReturningClientConfirm,
   returningClientWhen,
 } from "@/lib/returning-client";
 
@@ -364,25 +366,40 @@ async function runTool(
       const site = formatJobSite({ street, city, state, postalCode });
       const fullName = `${firstName} ${lastName}`;
       const book = crm.book;
-      const returning = phone
-        ? findReturningClient({
-            phone,
-            contacts: book.contacts,
-            jobs: book.jobs,
-            opportunities: book.opportunities,
-            staff: book.staff,
-            estimates: book.estimates,
-          })
-        : null;
+      const returning = findReturningClient({
+        phone,
+        email,
+        contacts: book.contacts,
+        jobs: book.jobs,
+        opportunities: book.opportunities,
+        staff: book.staff,
+        estimates: book.estimates,
+      });
+      let ownerId = crm.effectiveStaff?.id || crm.user.staffId;
+      if (needsReturningClientConfirm(returning, ownerId)) {
+        const assignToPm = asBoolean(args.assignToPreviousPm);
+        if (assignToPm === undefined) {
+          return fail(askTrussReturningClientPrompt(returning!));
+        }
+        if (assignToPm) {
+          if (!returning?.assignable || !returning.previousStaffId) {
+            return fail(
+              `${returning?.previousStaffName || "That project manager"} no longer has an unlocked seat. Ask whether to keep the lead with you, then retry create_lead with assignToPreviousPm false.`,
+            );
+          }
+          ownerId = returning.previousStaffId;
+        }
+      }
       const existing =
+        returning?.contact ??
         (phone ? book.contacts.find((contact) => phonesMatch(contact.phone, phone)) : undefined) ??
+        (email ? book.contacts.find((contact) => emailsMatch(contact.email, email)) : undefined) ??
         crm.contacts.find(
         (contact) =>
           contact.name.toLowerCase() === fullName.toLowerCase() ||
           (phone && contact.phone && contact.phone.replace(/\D/g, "") === phone.replace(/\D/g, "")) ||
-          (email && contact.email && contact.email.toLowerCase() === email.toLowerCase()),
+          (email && contact.email && emailsMatch(contact.email, email)),
       );
-      const ownerId = crm.effectiveStaff?.id || crm.user.staffId;
       const contact =
         existing ??
         (await crm.addContact({
@@ -413,7 +430,7 @@ async function runTool(
         projectType: projectTypeForMarket(market),
         market,
         deliveryMethod: defaultDeliveryForSource(source),
-        estimator: crm.effectiveStaff?.name || crm.user.name,
+        estimator: book.staff.find((member) => member.id === ownerId)?.name || crm.effectiveStaff?.name || crm.user.name,
         ownerStaffId: ownerId,
         originatorStaffId: crm.user.staffId,
         nextStep: "Call back within 5 minutes.",
@@ -431,30 +448,28 @@ async function runTool(
         dueAt: localYmd(new Date()),
         relatedType: "opportunity",
         relatedId: created.id,
-        assignee: crm.effectiveStaff?.name || crm.user.name,
+        assignee: book.staff.find((member) => member.id === ownerId)?.name || crm.effectiveStaff?.name || crm.user.name,
       });
-      const viewerIsAdmin = Boolean(crm.viewer && canManageSettings(crm.viewer.role, crm.viewer));
-      if (needsReturningClientAdminNotice(returning, ownerId, viewerIsAdmin)) {
+      if (returning) {
         await crm.fileReturningClientNotice({
           opportunityId: created.id,
           jobId: job?.id ?? null,
           contactId: contact.id,
-          previous: returning!,
+          previous: returning,
+          assigneeId: ownerId,
         });
       }
       const returningNote = returning
-        ? ` This phone matches a past client${returning.contact.name ? ` (${returning.contact.name})` : ""}.${
+        ? ` This ${returning.matchedOn === "email" ? "email" : "phone"} matches a past client${returning.contact.name ? ` (${returning.contact.name})` : ""}.${
             returning.previousStaffName
               ? ` ${returning.previousStaffName} ran ${returning.job?.code || "the last job"}. ${returningClientWhen(returning)}.`
               : ` ${returningClientWhen(returning)}.`
           }${
-            needsReturningClientAdminNotice(returning, ownerId, viewerIsAdmin)
-              ? " Company admins were notified to decide whether to send it back."
-              : returning.previousStaffId === ownerId
-                ? " Assigned to that project manager."
-                : viewerIsAdmin
-                  ? " You kept this seat as owner."
-                  : ""
+            returning.previousStaffId === ownerId
+              ? " Assigned to that project manager."
+              : returning.assignable
+                ? " That project manager was asked to take it. Company admins decide if they decline."
+                : " Company admins were notified because that project manager no longer has an unlocked seat."
           }`
         : "";
       return ok(

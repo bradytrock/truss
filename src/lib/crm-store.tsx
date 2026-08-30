@@ -232,8 +232,17 @@ import {
   opportunityForContact,
   outboundActivityBody,
 } from "@/lib/job-messages";
-import { returningClientWhen, type ReturningClientMatch } from "@/lib/returning-client";
-import { toE164 } from "@/lib/phone";
+import {
+  companyAdminsForNotice,
+  isOpenReturningClientStatus,
+  returningClientNoticeKind,
+  returningClientSms,
+  returningClientTaskTitle,
+  returningClientWhen,
+  type ReturningClientMatch,
+  type ReturningClientNoticeKind,
+} from "@/lib/returning-client";
+import { looksLikePhone, toE164 } from "@/lib/phone";
 import { resolveCustomerName, applyCoOwnerToEstimate, coOwnerContact, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage, missingPageShareMessage, isMissingPageShare, parsePageTemplate } from "@/lib/photo-report";
 import { canDeleteJobs, canLoginAs, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
@@ -755,8 +764,12 @@ type CrmContextValue = CrmState & {
     jobId: string | null;
     contactId: string | null;
     previous: ReturningClientMatch;
+    assigneeId?: string | null;
   }) => Promise<void>;
-  decideReturningClientLead: (noticeId: string, decision: "reassigned" | "kept") => Promise<void>;
+  decideReturningClientLead: (
+    noticeId: string,
+    decision: "take" | "decline" | "reassigned" | "kept" | "dismiss",
+  ) => Promise<void>;
   updateJob: (id: string, patch: Partial<Job>) => Promise<boolean>;
   deleteJob: (id: string, reason: string) => Promise<boolean>;
   restoreJob: (id: string) => Promise<boolean>;
@@ -1748,6 +1761,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [logOutboundText],
   );
 
+  const notifyStaffByText = useCallback(async (member: StaffMember | undefined, content: string) => {
+    const to = member?.phone?.trim() ?? "";
+    if (!member || !looksLikePhone(to) || !content.trim()) return;
+    try {
+      await fetch("/api/messages/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to, content }),
+      });
+    } catch {
+      // Lead still saved if Sendblue is down.
+    }
+  }, []);
+
   const moveOpportunity = useCallback(
     async (
       id: string,
@@ -2646,159 +2673,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [state.contacts, state.jobs, state.opportunities, state.staff, updateContact, updateJob, updateOpportunity]
   );
 
-  const fileReturningClientNotice = useCallback(
-    async (input: {
-      opportunityId: string;
-      jobId: string | null;
-      contactId: string | null;
-      previous: ReturningClientMatch;
-    }) => {
-      if (
-        state.returningClientLeads.some(
-          (notice) => notice.opportunityId === input.opportunityId && notice.status === "pending",
-        )
-      ) {
-        return;
-      }
-      const notice: ReturningClientLead = {
-        id: crypto.randomUUID(),
-        opportunityId: input.opportunityId,
-        jobId: input.jobId,
-        contactId: input.contactId,
-        previousJobId: input.previous.job?.id ?? null,
-        previousStaffId: input.previous.previousStaffId,
-        previousStaffName: input.previous.previousStaffName,
-        previousJobCode: input.previous.job?.code ?? "",
-        completedAt: input.previous.completedAt,
-        openedByStaffId: user.staffId,
-        openedByName: user.name,
-        status: "pending",
-        decidedByStaffId: null,
-        decidedAt: null,
-        createdAt: new Date().toISOString(),
-      };
-      const apply = (row: ReturningClientLead) => {
-        setState((prev) => {
-          if (prev.returningClientLeads.some((item) => item.id === row.id || (item.opportunityId === row.opportunityId && item.status === "pending"))) {
-            return prev;
-          }
-          return { ...prev, returningClientLeads: [row, ...prev.returningClientLeads] };
-        });
-      };
-      const supabase = maybeClient();
-      if (!supabase) {
-        apply(notice);
-      } else {
-        const { data, error } = await supabase
-          .from("returning_client_leads")
-          .insert({
-            id: notice.id,
-            company_id: user.companyId,
-            opportunity_id: notice.opportunityId,
-            job_id: looksLikeUuid(notice.jobId) ? notice.jobId : null,
-            contact_id: looksLikeUuid(notice.contactId) ? notice.contactId : null,
-            previous_job_id: looksLikeUuid(notice.previousJobId) ? notice.previousJobId : null,
-            previous_staff_id: looksLikeUuid(notice.previousStaffId) ? notice.previousStaffId : null,
-            previous_staff_name: notice.previousStaffName,
-            previous_job_code: notice.previousJobCode,
-            completed_at: notice.completedAt,
-            opened_by_staff_id: looksLikeUuid(notice.openedByStaffId) ? notice.openedByStaffId : null,
-            opened_by_name: notice.openedByName,
-            status: "pending",
-          })
-          .select("*")
-          .single();
-        if (error) {
-          if (isMissingReturningClientLeads(error)) toast.message(missingReturningClientLeadsMessage());
-          else toast.error(error.message);
-          apply(notice);
-        } else if (data) {
-          apply(mapReturningClientLead(data));
-        }
-      }
-      toast.message(
-        `Company admins were notified. ${input.previous.previousStaffName || "The previous project manager"} ran ${input.previous.job?.code || "the last job"}.`,
-      );
-      await addActivity({
-        entityType: "opportunity",
-        entityId: input.opportunityId,
-        type: "note",
-        body: [
-          `${user.name} opened this lead on a returning client and kept another assignee.`,
-          `${input.previous.previousStaffName || "The previous project manager"} was the project manager${input.previous.job?.code ? ` on ${input.previous.job.code}` : ""}.`,
-          returningClientWhen(input.previous),
-        ].join(" "),
-      });
-    },
-    [addActivity, state.returningClientLeads, user.companyId, user.name, user.staffId],
-  );
-
-  const decideReturningClientLead = useCallback(
-    async (noticeId: string, decision: "reassigned" | "kept") => {
-      const notice = state.returningClientLeads.find((item) => item.id === noticeId);
-      if (!notice || notice.status !== "pending") return;
-      if (!viewer || !canManageSettings(viewer.role, viewer)) {
-        toast.error("Only a company admin can decide this.");
-        return;
-      }
-      if (decision === "reassigned") {
-        if (!notice.previousStaffId) {
-          toast.error("That project manager no longer has a seat to assign.");
-          return;
-        }
-        const ok = await assignOpportunityOwner(notice.opportunityId, notice.previousStaffId);
-        if (!ok) return;
-      }
-      const decidedAt = new Date().toISOString();
-      const apply = () => {
-        setState((prev) => ({
-          ...prev,
-          returningClientLeads: prev.returningClientLeads.map((item) =>
-            item.id === noticeId
-              ? { ...item, status: decision, decidedByStaffId: user.staffId, decidedAt }
-              : item,
-          ),
-        }));
-      };
-      const supabase = maybeClient();
-      if (!supabase) {
-        apply();
-      } else {
-        const { error } = await supabase
-          .from("returning_client_leads")
-          .update({
-            status: decision,
-            decided_by_staff_id: looksLikeUuid(user.staffId) ? user.staffId : null,
-            decided_at: decidedAt,
-          })
-          .eq("id", noticeId);
-        if (error) {
-          if (isMissingReturningClientLeads(error)) toast.message(missingReturningClientLeadsMessage());
-          else {
-            toast.error(error.message);
-            return;
-          }
-        }
-        apply();
-      }
-      await addActivity({
-        entityType: "opportunity",
-        entityId: notice.opportunityId,
-        type: "note",
-        body:
-          decision === "reassigned"
-            ? `${user.name} sent this returning-client lead back to ${notice.previousStaffName}.`
-            : `${user.name} kept ${notice.openedByName}'s assignment on this returning-client lead.`,
-      });
-      toast.success(
-        decision === "reassigned"
-          ? `Lead reassigned to ${notice.previousStaffName}.`
-          : "Assignment kept.",
-      );
-    },
-    [addActivity, assignOpportunityOwner, state.returningClientLeads, user.staffId, user.name, viewer],
-  );
-
   const addJob = useCallback(
     async (input: Omit<JobDraft, "id" | "ownerStaffId"> & { ownerStaffId?: string }) => {
       const ownerStaffId =
@@ -2895,6 +2769,305 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       setState((prev) => ({ ...prev, tasks: [mapTask(data), ...prev.tasks] }));
     },
     [user.companyId]
+  );
+
+  const fileReturningClientNotice = useCallback(
+    async (input: {
+      opportunityId: string;
+      jobId: string | null;
+      contactId: string | null;
+      previous: ReturningClientMatch;
+      assigneeId?: string | null;
+    }) => {
+      const kind = returningClientNoticeKind(input.previous, input.assigneeId, user.staffId);
+      if (!kind) return;
+      if (
+        state.returningClientLeads.some(
+          (notice) => notice.opportunityId === input.opportunityId && isOpenReturningClientStatus(notice.status),
+        )
+      ) {
+        return;
+      }
+      const notice: ReturningClientLead = {
+        id: crypto.randomUUID(),
+        opportunityId: input.opportunityId,
+        jobId: input.jobId,
+        contactId: input.contactId,
+        previousJobId: input.previous.job?.id ?? null,
+        previousStaffId: input.previous.previousStaffId,
+        previousStaffName: input.previous.previousStaffName,
+        previousJobCode: input.previous.job?.code ?? "",
+        completedAt: input.previous.completedAt,
+        openedByStaffId: user.staffId,
+        openedByName: user.name,
+        status: kind,
+        decidedByStaffId: null,
+        decidedAt: null,
+        createdAt: new Date().toISOString(),
+      };
+      const apply = (row: ReturningClientLead) => {
+        setState((prev) => {
+          if (
+            prev.returningClientLeads.some(
+              (item) =>
+                item.id === row.id ||
+                (item.opportunityId === row.opportunityId && isOpenReturningClientStatus(item.status)),
+            )
+          ) {
+            return prev;
+          }
+          return { ...prev, returningClientLeads: [row, ...prev.returningClientLeads] };
+        });
+      };
+      const supabase = maybeClient();
+      if (!supabase) {
+        apply(notice);
+      } else {
+        const { data, error } = await supabase
+          .from("returning_client_leads")
+          .insert({
+            id: notice.id,
+            company_id: user.companyId,
+            opportunity_id: notice.opportunityId,
+            job_id: looksLikeUuid(notice.jobId) ? notice.jobId : null,
+            contact_id: looksLikeUuid(notice.contactId) ? notice.contactId : null,
+            previous_job_id: looksLikeUuid(notice.previousJobId) ? notice.previousJobId : null,
+            previous_staff_id: looksLikeUuid(notice.previousStaffId) ? notice.previousStaffId : null,
+            previous_staff_name: notice.previousStaffName,
+            previous_job_code: notice.previousJobCode,
+            completed_at: notice.completedAt,
+            opened_by_staff_id: looksLikeUuid(notice.openedByStaffId) ? notice.openedByStaffId : null,
+            opened_by_name: notice.openedByName,
+            status: kind,
+          })
+          .select("*")
+          .single();
+        if (error) {
+          if (isMissingReturningClientLeads(error)) toast.message(missingReturningClientLeadsMessage());
+          else toast.error(error.message);
+          apply(notice);
+        } else if (data) {
+          apply(mapReturningClientLead(data));
+        }
+      }
+      const pm = input.previous.previousStaffName || "the previous project manager";
+      const job = input.previous.job?.code || "the last job";
+      const toastByKind: Record<ReturningClientNoticeKind, string> = {
+        assigned: `We told ${pm} their past client called back.`,
+        offered: `We asked ${pm} to take this lead. Company admins decide only if they decline.`,
+        pending: input.previous.assignable
+          ? `Company admins will confirm this assignment. ${pm} ran ${job}.`
+          : `${pm} no longer has an unlocked seat. Company admins were notified.`,
+      };
+      toast.message(toastByKind[kind]);
+      const activityByKind: Record<ReturningClientNoticeKind, string> = {
+        assigned: `${user.name} assigned this returning-client lead to ${pm}, who ran ${job}. ${returningClientWhen(input.previous)}`,
+        offered: `${user.name} opened this returning-client lead and kept another assignee. ${pm} was asked to take it. ${returningClientWhen(input.previous)}`,
+        pending: `${user.name} opened this returning-client lead without assigning ${pm}. Company admins decide. ${returningClientWhen(input.previous)}`,
+      };
+      await addActivity({
+        entityType: "opportunity",
+        entityId: input.opportunityId,
+        type: "note",
+        body: activityByKind[kind],
+      });
+      const contactName =
+        (input.contactId ? state.contacts.find((item) => item.id === input.contactId)?.name : "") ||
+        input.previous.contact.name;
+      const sms = returningClientSms(kind, {
+        openerName: user.name,
+        contactName,
+        previousStaffName: pm,
+        jobCode: input.previous.job?.code ?? "",
+        when: returningClientWhen(input.previous),
+      });
+      const title = returningClientTaskTitle(kind, contactName);
+      const audience =
+        kind === "pending"
+          ? companyAdminsForNotice(state.staff, [user.staffId, input.previous.previousStaffId].filter(Boolean))
+          : state.staff.filter((member) => member.id === input.previous.previousStaffId && !member.locked);
+      for (const member of audience) {
+        try {
+          await addTask({
+            title,
+            dueAt: localYmd(new Date()),
+            relatedType: "opportunity",
+            relatedId: input.opportunityId,
+            assignee: member.name,
+          });
+        } catch {
+          // Local book or missing tasks table — notice still stands.
+        }
+        await notifyStaffByText(member, sms);
+      }
+    },
+    [
+      addActivity,
+      addTask,
+      notifyStaffByText,
+      state.contacts,
+      state.returningClientLeads,
+      state.staff,
+      user.companyId,
+      user.name,
+      user.staffId,
+    ],
+  );
+
+  const decideReturningClientLead = useCallback(
+    async (noticeId: string, decision: "take" | "decline" | "reassigned" | "kept" | "dismiss") => {
+      const notice = state.returningClientLeads.find((item) => item.id === noticeId);
+      if (!notice) return;
+      const actor = effectiveStaff ?? viewer;
+      if (!actor) return;
+      const isPm = Boolean(notice.previousStaffId && notice.previousStaffId === actor.id);
+      const isAdmin = canManageSettings(actor.role, actor);
+
+      if (decision === "take" || decision === "decline") {
+        if (notice.status !== "offered" || !isPm) {
+          toast.error("Only that project manager can take or decline this lead.");
+          return;
+        }
+      } else if (decision === "dismiss") {
+        if (notice.status !== "assigned" || !isPm) {
+          toast.error("Only that project manager can dismiss this notice.");
+          return;
+        }
+      } else if (decision === "reassigned" || decision === "kept") {
+        if (notice.status !== "pending" || !isAdmin) {
+          toast.error("Only a company admin can decide this.");
+          return;
+        }
+      }
+
+      if (decision === "take" || decision === "reassigned") {
+        if (!notice.previousStaffId) {
+          toast.error("That project manager no longer has a seat to assign.");
+          return;
+        }
+        const ok = await assignOpportunityOwner(notice.opportunityId, notice.previousStaffId);
+        if (!ok) return;
+      }
+
+      const nextStatus =
+        decision === "take" || decision === "reassigned"
+          ? "reassigned"
+          : decision === "decline"
+            ? "pending"
+            : decision === "dismiss"
+              ? "dismissed"
+              : "kept";
+      const decidedAt = new Date().toISOString();
+      const closerId = decision === "decline" ? null : actor.id;
+      const apply = () => {
+        setState((prev) => ({
+          ...prev,
+          returningClientLeads: prev.returningClientLeads.map((item) =>
+            item.id === noticeId
+              ? {
+                  ...item,
+                  status: nextStatus,
+                  decidedByStaffId: closerId,
+                  decidedAt: decision === "decline" ? null : decidedAt,
+                }
+              : item,
+          ),
+        }));
+      };
+      const supabase = maybeClient();
+      if (!supabase) {
+        apply();
+      } else {
+        const { error } = await supabase
+          .from("returning_client_leads")
+          .update({
+            status: nextStatus,
+            decided_by_staff_id: closerId && looksLikeUuid(closerId) ? closerId : null,
+            decided_at: decision === "decline" ? null : decidedAt,
+          })
+          .eq("id", noticeId);
+        if (error) {
+          if (isMissingReturningClientLeads(error)) toast.message(missingReturningClientLeadsMessage());
+          else {
+            toast.error(error.message);
+            return;
+          }
+        }
+        apply();
+      }
+
+      const activity =
+        decision === "take"
+          ? `${actor.name} took this returning-client lead.`
+          : decision === "decline"
+            ? `${actor.name} declined this returning-client lead. Company admins decide next.`
+            : decision === "dismiss"
+              ? `${actor.name} dismissed the returning-client notice.`
+              : decision === "reassigned"
+                ? `${actor.name} sent this returning-client lead back to ${notice.previousStaffName}.`
+                : `${actor.name} kept ${notice.openedByName}'s assignment on this returning-client lead.`;
+      await addActivity({
+        entityType: "opportunity",
+        entityId: notice.opportunityId,
+        type: "note",
+        body: activity,
+      });
+      toast.success(
+        decision === "take"
+          ? "This lead is yours."
+          : decision === "decline"
+            ? "Company admins will decide."
+            : decision === "dismiss"
+              ? "Notice dismissed."
+              : decision === "reassigned"
+                ? `Lead reassigned to ${notice.previousStaffName}.`
+                : "Assignment kept.",
+      );
+
+      if (decision === "decline") {
+        const contactName =
+          (notice.contactId ? state.contacts.find((item) => item.id === notice.contactId)?.name : "") ||
+          "past client";
+        const sms = returningClientSms("pending", {
+          openerName: notice.openedByName,
+          contactName,
+          previousStaffName: notice.previousStaffName,
+          jobCode: notice.previousJobCode,
+          when: returningClientWhen({
+            job: notice.previousJobId ? state.jobs.find((job) => job.id === notice.previousJobId) ?? null : null,
+            completedAt: notice.completedAt,
+          }),
+        });
+        const title = returningClientTaskTitle("pending", contactName);
+        const audience = companyAdminsForNotice(state.staff, [actor.id, notice.previousStaffId].filter(Boolean));
+        for (const member of audience) {
+          try {
+            await addTask({
+              title,
+              dueAt: localYmd(new Date()),
+              relatedType: "opportunity",
+              relatedId: notice.opportunityId,
+              assignee: member.name,
+            });
+          } catch {
+            // Notice still stands.
+          }
+          await notifyStaffByText(member, sms);
+        }
+      }
+    },
+    [
+      addActivity,
+      addTask,
+      assignOpportunityOwner,
+      effectiveStaff,
+      notifyStaffByText,
+      state.contacts,
+      state.jobs,
+      state.returningClientLeads,
+      state.staff,
+      viewer,
+    ],
   );
 
   const addEstimate = useCallback(

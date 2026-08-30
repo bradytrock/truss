@@ -55,15 +55,16 @@ import {
   type LeadSource,
 } from "@/lib/types";
 import { LeadAssigneeSelect } from "@/components/lead-assignee";
-import { assignmentOptions, canManageSettings } from "@/lib/visibility";
+import { assignmentOptions } from "@/lib/visibility";
 import { hasBusinessDevelopmentSeat } from "@/lib/bd";
 import { phonesMatch } from "@/lib/job-messages";
 import { phoneQueryMatches } from "@/lib/phone";
 import {
   assignsToPreviousPm,
+  emailsMatch,
   findReturningClient,
-  needsReturningClientAdminNotice,
   needsReturningClientConfirm,
+  returningClientBannerTitle,
   returningClientWhen,
 } from "@/lib/returning-client";
 
@@ -98,17 +99,18 @@ export function CreateOpportunityDialog({
   const assignee = people.find((member) => member.id === assigneeId);
   const isMe = Boolean(assignee && assignee.id === crm.user.staffId);
   const returning = useMemo(() => {
-    if (!phone.trim()) return null;
+    if (!phone.trim() && !email.trim()) return null;
     return findReturningClient({
       phone,
+      email,
       contacts: crm.book.contacts,
       jobs: crm.book.jobs,
       opportunities: crm.book.opportunities,
       staff: crm.book.staff,
       estimates: crm.book.estimates,
     });
-  }, [phone, crm.book.contacts, crm.book.jobs, crm.book.opportunities, crm.book.staff, crm.book.estimates]);
-  const viewerIsAdmin = Boolean(crm.viewer && canManageSettings(crm.viewer.role, crm.viewer));
+  }, [phone, email, crm.book.contacts, crm.book.jobs, crm.book.opportunities, crm.book.staff, crm.book.estimates]);
+  const openerIsPreviousPm = Boolean(returning?.previousStaffId && returning.previousStaffId === crm.user.staffId);
 
   useEffect(() => {
     if (!open) return;
@@ -171,9 +173,14 @@ export function CreateOpportunityDialog({
     const match = returning;
     setSaving(true);
     try {
-      const existingContact = phone.trim()
-        ? crm.book.contacts.find((contact) => phonesMatch(contact.phone, phone.trim()))
-        : undefined;
+      const existingContact =
+        match?.contact ??
+        (phone.trim()
+          ? crm.book.contacts.find((contact) => phonesMatch(contact.phone, phone.trim()))
+          : undefined) ??
+        (email.trim()
+          ? crm.book.contacts.find((contact) => emailsMatch(contact.email, email.trim()))
+          : undefined);
       let contact = existingContact;
       if (!contact) {
         contact = await crm.addContact({
@@ -220,7 +227,7 @@ export function CreateOpportunityDialog({
       const returningNote = match
         ? match.job
           ? ` Returning client: ${match.contact.name}. ${match.previousStaffName || "Previous project manager"} ran ${match.job.code}. ${returningClientWhen(match)}.`
-          : ` Returning client: ${match.contact.name} is already in the book at this phone.`
+          : ` Returning client: ${match.contact.name} is already in the book.`
         : "";
       await crm.addActivity({
         entityType: "opportunity",
@@ -242,12 +249,13 @@ export function CreateOpportunityDialog({
         relatedId: opportunity.id,
         assignee: owner?.name || crm.user.name,
       });
-      if (needsReturningClientAdminNotice(match, owner?.id, viewerIsAdmin)) {
+      if (match) {
         await crm.fileReturningClientNotice({
           opportunityId: opportunity.id,
           jobId: opportunity.costingJob?.id ?? null,
           contactId: contact.id,
-          previous: match!,
+          previous: match,
+          assigneeId: owner?.id,
         });
       }
       if (match && assignsToPreviousPm(match, owner?.id)) {
@@ -388,7 +396,7 @@ export function CreateOpportunityDialog({
 
             {returning ? (
               <div className="border bg-muted/40 px-3 py-2 text-sm">
-                <p className="font-medium">This phone is already in the book</p>
+                <p className="font-medium">{returningClientBannerTitle(returning)}</p>
                 <p className="mt-0.5 text-muted-foreground">
                   {returning.contact.name}.
                   {returning.job
@@ -398,7 +406,9 @@ export function CreateOpportunityDialog({
                     ? " This lead will stay with them."
                     : returning.assignable
                       ? " You can send it back to them when you save."
-                      : ""}
+                      : returning.previousStaffName
+                        ? ` ${returning.previousStaffName} no longer has an unlocked seat, so company admins will decide.`
+                        : ""}
                 </p>
               </div>
             ) : null}
@@ -577,14 +587,18 @@ export function CreateOpportunityDialog({
             {returning
               ? returning.job
                 ? `${returning.contact.name}. ${returning.previousStaffName || "Someone"} was the project manager${returning.job.code ? ` on ${returning.job.code}` : ""}. ${returningClientWhen(returning)}.`
-                : `${returning.contact.name} is already in the book at this phone.`
-              : "This phone matches a past client."}
+                : `${returning.contact.name} is already in the book.`
+              : "This matches a past client."}
           </DialogDescription>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          {viewerIsAdmin
-            ? "Assign the lead to that project manager, or keep your assignment. As company admin, your choice is final."
-            : "Assign the lead to that project manager, or keep your assignment. If you keep it, company admins are notified and make the final call."}
+          {openerIsPreviousPm
+            ? "You were the project manager on the last job. If you assign this lead to someone else, company admins confirm that call."
+            : returning?.assignable
+              ? "Assign the lead to that project manager, or keep your assignment. If you keep it, they are asked first. Company admins decide only if they decline."
+              : returning?.previousStaffName
+                ? `${returning.previousStaffName} no longer has an unlocked seat, so company admins will decide.`
+                : "Keep your assignment, or send it back if that project manager still has a seat."}
         </p>
         <DialogFooter>
           <Button

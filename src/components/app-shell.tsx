@@ -43,6 +43,7 @@ import {
 } from "@/components/create-ops-dialogs";
 import { LogExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
 import { canViewReports, canManageSettings, canViewAccounting } from "@/lib/visibility";
+import { actionableReturningClientNotices } from "@/lib/returning-client";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { COURSE } from "@/lib/training/engine";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
@@ -250,7 +251,8 @@ function LivePulse() {
 }
 
 function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
-  const { effectiveStaff } = useCrm();
+  const { effectiveStaff, returningClientLeads } = useCrm();
+  const homeBadge = actionableReturningClientNotices(returningClientLeads, effectiveStaff).length;
   const items = navItems({
     showReports: Boolean(effectiveStaff && canViewReports(effectiveStaff.role)),
     showAccounting: Boolean(effectiveStaff && canViewAccounting(effectiveStaff.role)),
@@ -273,13 +275,18 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
             href={item.href}
             onClick={onNavigate}
             className={cn(
-              "border-l-2 px-3 py-[7px] text-[13px] tracking-tight transition-colors",
+              "flex items-center border-l-2 px-3 py-[7px] text-[13px] tracking-tight transition-colors",
               active
                 ? "border-primary bg-white/6 font-medium text-white"
                 : "border-transparent text-sidebar-foreground/58 hover:bg-white/4 hover:text-white"
             )}
           >
             {item.label}
+            {item.href === "/" && homeBadge > 0 ? (
+              <span className="ml-auto min-w-4 rounded-full bg-primary px-1.5 text-center text-[10px] font-medium text-primary-foreground">
+                {homeBadge}
+              </span>
+            ) : null}
           </Link>
         );
       })}
