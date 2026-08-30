@@ -66,6 +66,7 @@ import {
   needsReturningClientConfirm,
   returningClientBannerTitle,
   returningClientWhen,
+  type ReturningClientMatch,
 } from "@/lib/returning-client";
 
 export function CreateOpportunityDialog({
@@ -395,19 +396,16 @@ export function CreateOpportunityDialog({
             </div>
 
             {returning ? (
-              <div className="border bg-muted/40 px-3 py-2 text-sm">
-                <p className="font-medium">{returningClientBannerTitle(returning)}</p>
-                <p className="mt-0.5 text-muted-foreground">
-                  {returning.contact.name}.
-                  {returning.job
-                    ? ` ${returning.previousStaffName || "Someone"} was the project manager${returning.job.code ? ` on ${returning.job.code}` : ""}. ${returningClientWhen(returning)}.`
-                    : " No past job is linked yet."}
+              <div className="grid gap-2 border bg-muted/40 px-3 py-2.5">
+                <p className="text-sm font-medium">{returningClientBannerTitle(returning)}</p>
+                <ReturningClientFacts match={returning} assigneeName={assignee?.name} />
+                <p className="text-sm text-muted-foreground">
                   {assignsToPreviousPm(returning, assigneeId)
-                    ? " This lead will stay with them."
+                    ? "This lead will stay with that project manager."
                     : returning.assignable
-                      ? " You can send it back to them when you save."
+                      ? "You can send it back to them when you save."
                       : returning.previousStaffName
-                        ? ` ${returning.previousStaffName} no longer has an unlocked seat, so company admins will decide.`
+                        ? `${returning.previousStaffName} no longer has an unlocked seat, so company admins will decide.`
                         : ""}
                 </p>
               </div>
@@ -584,18 +582,18 @@ export function CreateOpportunityDialog({
         <DialogHeader>
           <DialogTitle>Returning client</DialogTitle>
           <DialogDescription>
-            {returning
-              ? returning.job
-                ? `${returning.contact.name}. ${returning.previousStaffName || "Someone"} was the project manager${returning.job.code ? ` on ${returning.job.code}` : ""}. ${returningClientWhen(returning)}.`
-                : `${returning.contact.name} is already in the book.`
-              : "This matches a past client."}
+            This person is already in the book. Send the lead to the previous project manager, or keep
+            your assignment.
           </DialogDescription>
         </DialogHeader>
+        {returning ? (
+          <ReturningClientFacts match={returning} assigneeName={assignee?.name} />
+        ) : null}
         <p className="text-sm text-muted-foreground">
           {openerIsPreviousPm
             ? "You were the project manager on the last job. If you assign this lead to someone else, company admins confirm that call."
             : returning?.assignable
-              ? "Assign the lead to that project manager, or keep your assignment. If you keep it, they are asked first. Company admins decide only if they decline."
+              ? "If you keep your assignment, that project manager is asked first. Company admins decide only if they decline."
               : returning?.previousStaffName
                 ? `${returning.previousStaffName} no longer has an unlocked seat, so company admins will decide.`
                 : "Keep your assignment, or send it back if that project manager still has a seat."}
@@ -1220,6 +1218,46 @@ export function CreateJobDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ReturningClientFacts({
+  match,
+  assigneeName,
+}: {
+  match: ReturningClientMatch;
+  assigneeName?: string;
+}) {
+  const pm = match.previousStaffName.trim() || "Not on file";
+  return (
+    <dl className="grid gap-2 text-sm">
+      <div className="grid gap-0.5">
+        <dt className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Client</dt>
+        <dd className="font-medium">{match.contact.name}</dd>
+      </div>
+      <div className="grid gap-0.5">
+        <dt className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+          Previous project manager
+        </dt>
+        <dd className="font-medium">{pm}</dd>
+      </div>
+      {assigneeName ? (
+        <div className="grid gap-0.5">
+          <dt className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+            Assigned to
+          </dt>
+          <dd>{assigneeName}</dd>
+        </div>
+      ) : null}
+      <div className="grid gap-0.5">
+        <dt className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">Last job</dt>
+        <dd>
+          {match.job
+            ? [match.job.code || null, returningClientWhen(match)].filter(Boolean).join(" · ")
+            : "No past job is linked yet."}
+        </dd>
+      </div>
+    </dl>
   );
 }
 
