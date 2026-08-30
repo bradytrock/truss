@@ -2779,7 +2779,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       previous: ReturningClientMatch;
       assigneeId?: string | null;
     }) => {
-      const kind = returningClientNoticeKind(input.previous, input.assigneeId, user.staffId);
+      const openerId = effectiveStaff?.id || user.staffId;
+      const openerName = effectiveStaff?.name || user.name;
+      const kind = returningClientNoticeKind(input.previous, input.assigneeId, openerId);
       if (!kind) return;
       if (
         state.returningClientLeads.some(
@@ -2798,8 +2800,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         previousStaffName: input.previous.previousStaffName,
         previousJobCode: input.previous.job?.code ?? "",
         completedAt: input.previous.completedAt,
-        openedByStaffId: user.staffId,
-        openedByName: user.name,
+        openedByStaffId: openerId,
+        openedByName: openerName,
         status: kind,
         decidedByStaffId: null,
         decidedAt: null,
@@ -2861,9 +2863,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       };
       toast.message(toastByKind[kind]);
       const activityByKind: Record<ReturningClientNoticeKind, string> = {
-        assigned: `${user.name} assigned this returning-client lead to ${pm}, who ran ${job}. ${returningClientWhen(input.previous)}`,
-        offered: `${user.name} opened this returning-client lead and kept another assignee. ${pm} was asked to take it. ${returningClientWhen(input.previous)}`,
-        pending: `${user.name} opened this returning-client lead without assigning ${pm}. Company admins decide. ${returningClientWhen(input.previous)}`,
+        assigned: `${openerName} assigned this returning-client lead to ${pm}, who ran ${job}. ${returningClientWhen(input.previous)}`,
+        offered: `${openerName} opened this returning-client lead and kept another assignee. ${pm} was asked to take it. ${returningClientWhen(input.previous)}`,
+        pending: `${openerName} opened this returning-client lead without assigning ${pm}. Company admins decide. ${returningClientWhen(input.previous)}`,
       };
       await addActivity({
         entityType: "opportunity",
@@ -2875,7 +2877,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         (input.contactId ? state.contacts.find((item) => item.id === input.contactId)?.name : "") ||
         input.previous.contact.name;
       const sms = returningClientSms(kind, {
-        openerName: user.name,
+        openerName,
         contactName,
         previousStaffName: pm,
         jobCode: input.previous.job?.code ?? "",
@@ -2884,7 +2886,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const title = returningClientTaskTitle(kind, contactName);
       const audience =
         kind === "pending"
-          ? companyAdminsForNotice(state.staff, [user.staffId, input.previous.previousStaffId].filter(Boolean))
+          ? companyAdminsForNotice(state.staff, [openerId, input.previous.previousStaffId].filter(Boolean))
           : state.staff.filter((member) => member.id === input.previous.previousStaffId && !member.locked);
       for (const member of audience) {
         try {
@@ -2904,12 +2906,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [
       addActivity,
       addTask,
+      effectiveStaff,
       notifyStaffByText,
       state.contacts,
       state.returningClientLeads,
       state.staff,
       user.companyId,
-      user.name,
       user.staffId,
     ],
   );
