@@ -240,6 +240,15 @@ import { canDeleteJobs, canLoginAs, canManageSettings, loginAsTargets, scopeBook
 
 export type LiveStatus = "offline" | "connecting" | "live";
 
+function loadErrorMessage(error: unknown) {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return "Could not load the book of work.";
+}
+
 function uiBook(state: CrmState): CrmState {
   return {
     ...state,
@@ -1215,7 +1224,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       setHydrated(true);
     } catch (error) {
       if (epoch !== bookEpoch.current) return;
-      setHydrateError(error instanceof Error ? error.message : "Could not load the book of work.");
+      setHydrateError(loadErrorMessage(error));
       setHydrated(true);
     }
   }, [router]);

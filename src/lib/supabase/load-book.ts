@@ -57,6 +57,23 @@ function inferRole(title: string): SeatRole {
   return "project_manager";
 }
 
+function requireTable(
+  table: string,
+  result: { error?: { message?: string } | null },
+) {
+  if (result.error) throw new Error(`${table}: ${result.error.message || "query failed"}`);
+}
+
+function mapRows<T, R>(rows: T[] | null | undefined, map: (row: T) => R): R[] {
+  return (rows ?? []).flatMap((row) => {
+    try {
+      return [map(row)];
+    } catch {
+      return [];
+    }
+  });
+}
+
 export async function fetchCompanyBook(supabase: Client, companyId: string) {
   const [
     clientsRes,
@@ -149,23 +166,11 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
   ]);
 
   const missingTeams = Boolean(teamsRes.error);
-  const error =
-    clientsRes.error ||
-    contactsRes.error ||
-    oppsRes.error ||
-    jobsRes.error ||
-    activitiesRes.error ||
-    tasksRes.error ||
-    teamRes.error ||
-    catalogRes.error ||
-    estimatesRes.error ||
-    estimateLinesRes.error ||
-    invoicesRes.error ||
-    invoiceLinesRes.error ||
-    paymentsRes.error ||
-    eventsRes.error ||
-    photosRes.error;
-  if (error) throw error;
+  requireTable("clients", clientsRes);
+  requireTable("contacts", contactsRes);
+  requireTable("opportunities", oppsRes);
+  requireTable("jobs", jobsRes);
+  requireTable("team_members", teamRes);
 
   const staff = (teamRes.data ?? []).map((row) => {
     try {
@@ -201,37 +206,22 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
   });
 
   const teams = missingTeams ? [] : (teamsRes.data ?? []).map(mapTeam);
-  const opportunities = (oppsRes.data ?? []).map(mapOpportunity);
-  const jobs = jobsFilledFromLeads((jobsRes.data ?? []).map(mapJob), opportunities);
+  const opportunities = mapRows(oppsRes.data, mapOpportunity);
+  const jobs = jobsFilledFromLeads(mapRows(jobsRes.data, mapJob), opportunities);
 
   const state: CrmState = {
     staff: staffWithInvites,
     teams: teams.length > 0 ? teams : [],
-    clients: (clientsRes.data ?? []).map(mapClient),
-    contacts: (contactsRes.data ?? []).map((row) => {
-      try {
-        return mapContact(row);
-      } catch {
-        return {
-          id: row.id,
-          clientId: row.client_id,
-          name: row.name,
-          title: row.title,
-          email: row.email,
-          phone: row.phone,
-          ownerStaffId: "",
-          isReferralPartner: false,
-        };
-      }
-    }),
+    clients: mapRows(clientsRes.data, mapClient),
+    contacts: mapRows(contactsRes.data, mapContact),
     opportunities,
     jobs,
-    activities: (activitiesRes.data ?? []).map(mapActivity),
-    tasks: (tasksRes.data ?? []).map(mapTask),
-    catalog: (catalogRes.data ?? []).map(mapCatalogItem),
+    activities: activitiesRes.error ? [] : mapRows(activitiesRes.data, mapActivity),
+    tasks: tasksRes.error ? [] : mapRows(tasksRes.data, mapTask),
+    catalog: catalogRes.error ? [] : mapRows(catalogRes.data, mapCatalogItem),
     priceLists: priceListsRes.error ? [] : (priceListsRes.data ?? []).map(mapPriceList),
-    estimates: (estimatesRes.data ?? []).map(mapEstimate),
-    estimateLines: (estimateLinesRes.data ?? []).map(mapEstimateLine),
+    estimates: estimatesRes.error ? [] : mapRows(estimatesRes.data, mapEstimate),
+    estimateLines: estimateLinesRes.error ? [] : mapRows(estimateLinesRes.data, mapEstimateLine),
     estimateSignatureEvents: estimateSignatureEventsRes.error
       ? []
       : (estimateSignatureEventsRes.data ?? []).map(mapEstimateSignatureEvent),
@@ -239,16 +229,16 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     estimateTemplateLines: estimateTemplateLinesRes.error
       ? []
       : (estimateTemplateLinesRes.data ?? []).map(mapEstimateTemplateLine),
-    invoices: (invoicesRes.data ?? []).map(mapInvoice),
-    invoiceLines: (invoiceLinesRes.data ?? []).map(mapInvoiceLine),
-    payments: (paymentsRes.data ?? []).map(mapPayment),
+    invoices: invoicesRes.error ? [] : mapRows(invoicesRes.data, mapInvoice),
+    invoiceLines: invoiceLinesRes.error ? [] : mapRows(invoiceLinesRes.data, mapInvoiceLine),
+    payments: paymentsRes.error ? [] : mapRows(paymentsRes.data, mapPayment),
     expenses: expensesRes.error ? [] : (expensesRes.data ?? []).map(mapExpense),
     qbVendors: qbVendorsRes.error ? [] : (qbVendorsRes.data ?? []).map(mapQbVendor),
     qbReviewComments: qbReviewCommentsRes.error
       ? []
       : (qbReviewCommentsRes.data ?? []).map(mapQbReviewComment),
-    events: (eventsRes.data ?? []).map(mapScheduleEvent),
-    photos: (photosRes.data ?? []).map(mapJobPhoto),
+    events: eventsRes.error ? [] : mapRows(eventsRes.data, mapScheduleEvent),
+    photos: photosRes.error ? [] : mapRows(photosRes.data, mapJobPhoto),
     jobFiles: mergeJobFiles(
       jobFilesRes.error ? [] : (jobFilesRes.data ?? []).map(mapJobFile),
       jobFilesFromJobs(jobs),
