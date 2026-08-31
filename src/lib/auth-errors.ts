@@ -1,9 +1,15 @@
 import { inviteSignupPatchMessage } from "@/lib/accounts";
+import { cardSlugPrivilegeMessage, isCardSlugPrivilegeError } from "@/lib/supabase/schema-errors";
 
 export function authErrorMessage(error: { message?: string; code?: string } | string | null | undefined) {
   const raw = typeof error === "string" ? error : error?.message ?? "";
   const code = typeof error === "object" && error ? error.code ?? "" : "";
   const text = `${code} ${raw}`.toLowerCase();
+  const err = typeof error === "object" && error ? error : { message: raw, code };
+
+  if (isCardSlugPrivilegeError(err) || text.includes("normalize_person_card_slug")) {
+    return cardSlugPrivilegeMessage();
+  }
 
   if (text.includes("email_not_confirmed") || text.includes("email not confirmed")) {
     return "This project requires a confirmed email. In Supabase go to Authentication → Providers → Email and turn off Confirm email, then try again.";

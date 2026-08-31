@@ -160,6 +160,8 @@ $$;
 create or replace function public.companies_mint_slug()
 returns trigger
 language plpgsql
+security definer
+set search_path = public
 as $$
 declare
   desired text;
@@ -186,6 +188,8 @@ create trigger companies_mint_slug
 create or replace function public.team_members_mint_card_slug()
 returns trigger
 language plpgsql
+security definer
+set search_path = public
 as $$
 declare
   desired text;
