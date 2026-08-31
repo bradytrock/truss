@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { ErrorBanner, LoadingScreen, PageHeader, EmptyState } from "@/components/page-chrome";
 import { PeopleSettings } from "@/components/people-settings";
+import { TeamsSettings } from "@/components/teams-settings";
 import { useCrm } from "@/lib/crm-store";
 import { LOGO_ACCEPT } from "@/lib/company-logo";
 import { DEFAULT_ESTIMATE_TERMS, DEFAULT_INVOICE_TERMS, ESTIMATE_TERMS_HINT, INVOICE_TERMS_HINT } from "@/lib/document-terms";
@@ -36,7 +37,7 @@ export default function SettingsPage() {
     return (
       <EmptyState
         title="Settings are restricted"
-        description="Only a company admin can change the business name, invite people, or lock accounts."
+        description="Only a company admin can change the business name, name teams, invite people, or lock accounts."
         action={
           <Link href="/" className="text-sm font-medium text-primary hover:underline">
             Back to home
@@ -73,7 +74,7 @@ export default function SettingsPage() {
       <PageHeader
         eyebrow="Company"
         title="Settings"
-        description="Business letterhead, default estimate terms, invoice payment terms, the price book, QuickBooks Desktop, then the people who can sign in. Invite links join this company — they do not open a second one."
+        description="Business letterhead, default estimate terms, invoice payment terms, the price book, QuickBooks Desktop, then crews and the people who can sign in. Invite links join this company — they do not open a second one."
       />
 
       <form onSubmit={onSubmit} className="max-w-2xl space-y-4">
@@ -348,8 +349,16 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      <div className="max-w-4xl">
+      <div className="max-w-4xl space-y-6">
+        <TeamsSettings
+          teams={crm.book.teams}
+          staff={crm.book.staff}
+          onAdd={crm.addTeam}
+          onUpdate={crm.updateTeam}
+          onRemove={crm.removeTeam}
+        />
         <PeopleSettings
+          teams={crm.book.teams}
           staff={crm.book.staff}
           viewerId={crm.viewer.id}
           onInvite={crm.inviteStaff}

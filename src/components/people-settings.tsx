@@ -39,6 +39,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/page-chrome";
+import { staffTeamLabel, TeamSelect } from "@/components/teams-settings";
 import {
   defaultTitleForRole,
   INVITE_DAYS,
@@ -49,7 +50,8 @@ import {
 } from "@/lib/accounts";
 import { formatDate, formatPhone } from "@/lib/format";
 import { copyText } from "@/lib/share";
-import type { SeatRole, StaffMember } from "@/lib/types";
+import { NO_TEAM, parseTeamSelect } from "@/lib/teams";
+import type { SeatRole, StaffMember, Team } from "@/lib/types";
 import { SEAT_ROLE_LABELS, SEAT_ROLES } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +76,7 @@ async function copyInvite(url: string) {
 }
 
 export function PeopleSettings({
+  teams,
   staff,
   viewerId,
   onInvite,
@@ -81,6 +84,7 @@ export function PeopleSettings({
   onRefreshInvite,
   onRemove,
 }: {
+  teams: Team[];
   staff: StaffMember[];
   viewerId: string;
   onInvite: (input: {
@@ -89,10 +93,11 @@ export function PeopleSettings({
     role: SeatRole;
     title?: string;
     phone?: string;
+    teamId?: string | null;
   }) => Promise<{ member: StaffMember; inviteUrl: string | null } | null>;
   onUpdate: (
     id: string,
-    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "locked" | "restricted">>,
+    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "locked" | "restricted" | "teamId">>,
   ) => Promise<boolean>;
   onRefreshInvite: (id: string) => Promise<string | null>;
   onRemove: (id: string) => Promise<boolean>;
@@ -126,8 +131,9 @@ export function PeopleSettings({
           <div className="space-y-1.5">
             <CardTitle>People</CardTitle>
             <CardDescription>
-              Add a roster seat, send a signup link into this company, restrict someone to their own
-              book, lock a login, or remove them. Invites expire in {INVITE_DAYS} days.
+              Add a roster seat, put them on a team, send a signup link into this company, restrict
+              someone to their own book, lock a login, or remove them. Invites expire in {INVITE_DAYS}{" "}
+              days.
             </CardDescription>
           </div>
           <Button type="button" onClick={() => setAddOpen(true)}>
@@ -156,6 +162,7 @@ export function PeopleSettings({
                       <TableHead>Email</TableHead>
                       <TableHead>Phone</TableHead>
                       <TableHead>Role</TableHead>
+                      <TableHead>Team</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Account</TableHead>
                     </TableRow>
@@ -184,6 +191,13 @@ export function PeopleSettings({
                           <RoleSelect
                             member={member}
                             onChange={(role) => void onUpdate(member.id, { role })}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <TeamSelect
+                            value={member.teamId}
+                            teams={teams}
+                            onChange={(teamId) => void onUpdate(member.id, { teamId })}
                           />
                         </TableCell>
                         <TableCell>
@@ -240,6 +254,17 @@ export function PeopleSettings({
                       onChange={(role) => void onUpdate(member.id, { role })}
                       full
                     />
+                    <div className="grid gap-1.5">
+                      <p className="text-xs text-muted-foreground">
+                        Team · {staffTeamLabel(teams, member)}
+                      </p>
+                      <TeamSelect
+                        value={member.teamId}
+                        teams={teams}
+                        onChange={(teamId) => void onUpdate(member.id, { teamId })}
+                        full
+                      />
+                    </div>
                     <SeatMenu
                       member={member}
                       isSelf={member.id === viewerId}
@@ -270,6 +295,7 @@ export function PeopleSettings({
 
       <AddTeammateDialog
         open={addOpen}
+        teams={teams}
         onOpenChange={setAddOpen}
         onInvite={async (input) => {
           const result = await onInvite(input);
@@ -342,6 +368,7 @@ export function PeopleSettings({
 
       <EditProfileDialog
         member={profileTarget}
+        teams={teams}
         onOpenChange={(open) => !open && setProfileTarget(null)}
         onSave={async (patch) => {
           if (!profileTarget) return false;
@@ -472,10 +499,12 @@ function SeatMenu({
 
 function AddTeammateDialog({
   open,
+  teams,
   onOpenChange,
   onInvite,
 }: {
   open: boolean;
+  teams: Team[];
   onOpenChange: (open: boolean) => void;
   onInvite: (input: {
     name: string;
@@ -483,6 +512,7 @@ function AddTeammateDialog({
     role: SeatRole;
     title?: string;
     phone?: string;
+    teamId?: string | null;
   }) => Promise<boolean>;
 }) {
   const [name, setName] = useState("");
@@ -490,6 +520,7 @@ function AddTeammateDialog({
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<SeatRole>("project_manager");
   const [title, setTitle] = useState(defaultTitleForRole("project_manager"));
+  const [teamId, setTeamId] = useState(NO_TEAM);
   const [pending, setPending] = useState(false);
 
   function reset() {
@@ -498,13 +529,14 @@ function AddTeammateDialog({
     setPhone("");
     setRole("project_manager");
     setTitle(defaultTitleForRole("project_manager"));
+    setTeamId(NO_TEAM);
   }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setPending(true);
     try {
-      const ok = await onInvite({ name, email, role, title, phone });
+      const ok = await onInvite({ name, email, role, title, phone, teamId: parseTeamSelect(teamId) });
       if (ok) reset();
     } finally {
       setPending(false);
@@ -595,6 +627,10 @@ function AddTeammateDialog({
                 />
               </div>
             </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="seat-team">Team</Label>
+              <TeamSelect id="seat-team" value={teamId} teams={teams} onChange={setTeamId} full />
+            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -612,19 +648,22 @@ function AddTeammateDialog({
 
 function EditProfileDialog({
   member,
+  teams,
   onOpenChange,
   onSave,
 }: {
   member: StaffMember | null;
+  teams: Team[];
   onOpenChange: (open: boolean) => void;
   onSave: (
-    patch: Partial<Pick<StaffMember, "name" | "title" | "email" | "phone">>,
+    patch: Partial<Pick<StaffMember, "name" | "title" | "email" | "phone" | "teamId">>,
   ) => Promise<boolean>;
 }) {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [teamId, setTeamId] = useState(NO_TEAM);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -633,6 +672,7 @@ function EditProfileDialog({
     setTitle(member.title);
     setEmail(member.email);
     setPhone(member.phone);
+    setTeamId(member.teamId || NO_TEAM);
   }, [member]);
 
   async function onSubmit(event: FormEvent) {
@@ -645,6 +685,7 @@ function EditProfileDialog({
         title: title.trim(),
         email: email.trim(),
         phone: phone.trim(),
+        teamId: parseTeamSelect(teamId),
       });
     } finally {
       setPending(false);
@@ -658,7 +699,8 @@ function EditProfileDialog({
           <DialogHeader>
             <DialogTitle>Profile for {member?.name}</DialogTitle>
             <DialogDescription>
-              Name, title, and phone print on estimates and invoices for jobs they own.
+              Name, title, and phone print on estimates and invoices for jobs they own. Team controls
+              who sees their book.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
@@ -697,6 +739,10 @@ function EditProfileDialog({
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="profile-edit-team">Team</Label>
+              <TeamSelect id="profile-edit-team" value={teamId} teams={teams} onChange={setTeamId} full />
             </div>
           </div>
           <DialogFooter>

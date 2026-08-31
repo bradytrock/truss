@@ -178,6 +178,7 @@ import {
   type ScheduleEvent,
   type SeatRole,
   type StaffMember,
+  type Team,
   type TrainingBulletin,
   type TrainingProgress,
   type Expense,
@@ -246,6 +247,7 @@ import { looksLikePhone, toE164 } from "@/lib/phone";
 import { resolveCustomerName, applyCoOwnerToEstimate, coOwnerContact, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage, missingPageShareMessage, isMissingPageShare, parsePageTemplate } from "@/lib/photo-report";
 import { canDeleteJobs, canLoginAs, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
+import { teamsAfterLeavingLead } from "@/lib/teams";
 
 export type LiveStatus = "offline" | "connecting" | "live";
 
@@ -743,11 +745,15 @@ type CrmContextValue = CrmState & {
     role: SeatRole;
     title?: string;
     phone?: string;
+    teamId?: string | null;
   }) => Promise<{ member: StaffMember; inviteUrl: string | null } | null>;
   updateStaffAccount: (
     id: string,
-    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "locked" | "restricted">>,
+    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "locked" | "restricted" | "teamId">>,
   ) => Promise<boolean>;
+  addTeam: (input: { name: string; leadStaffId?: string | null }) => Promise<Team | null>;
+  updateTeam: (id: string, patch: { name?: string; leadStaffId?: string | null }) => Promise<boolean>;
+  removeTeam: (id: string) => Promise<boolean>;
   refreshStaffInvite: (id: string) => Promise<string | null>;
   removeStaff: (id: string) => Promise<boolean>;
   moveOpportunity: (
@@ -7253,7 +7259,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         name: member.name,
         title: member.title,
         role: member.role,
-        team_id: member.teamId,
+        team_id: looksLikeUuid(member.teamId) ? member.teamId : null,
         initials: member.initials || initialsFromName(member.name),
         email: member.email,
         phone: member.phone,
@@ -7316,8 +7322,47 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [user.companyId, user.id],
   );
 
+  const persistTeam = useCallback(
+    async (team: Team) => {
+      if (!isSupabaseConfigured() || !user.companyId || user.companyId === "local") return true;
+      const supabase = createClient();
+      const { error } = await supabase.from("teams").upsert({
+        id: team.id,
+        company_id: user.companyId,
+        name: team.name,
+        lead_staff_id: looksLikeUuid(team.leadStaffId) ? team.leadStaffId : null,
+      });
+      if (error) {
+        toast.error("Could not save the team", { description: error.message });
+        return false;
+      }
+      return true;
+    },
+    [user.companyId],
+  );
+
+  const persistLeadClears = useCallback(
+    async (nextTeams: Team[], previous: Team[]) => {
+      for (const team of nextTeams) {
+        const before = previous.find((item) => item.id === team.id);
+        if (!before || before.leadStaffId === team.leadStaffId) continue;
+        const ok = await persistTeam(team);
+        if (!ok) return false;
+      }
+      return true;
+    },
+    [persistTeam],
+  );
+
   const inviteStaff = useCallback(
-    async (input: { name: string; email: string; role: SeatRole; title?: string; phone?: string }) => {
+    async (input: {
+      name: string;
+      email: string;
+      role: SeatRole;
+      title?: string;
+      phone?: string;
+      teamId?: string | null;
+    }) => {
       if (!canEditCompany) {
         toast.error("Only a company admin can add people.");
         return null;
@@ -7332,6 +7377,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error("That email already belongs to someone on this company.");
         return null;
       }
+      const teamId = looksLikeUuid(input.teamId) ? input.teamId! : "";
+      if (teamId && !state.teams.some((team) => team.id === teamId)) {
+        toast.error("Pick a team that still exists.");
+        return null;
+      }
       const token = email ? newInviteToken() : null;
       const expires = email ? inviteExpiry() : null;
       const member: StaffMember = {
@@ -7339,7 +7389,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         name,
         title: input.title?.trim() || defaultTitleForRole(input.role),
         role: input.role,
-        teamId: null,
+        teamId,
         initials: initialsFromName(name),
         email,
         phone: input.phone?.trim() ?? "",
@@ -7350,18 +7400,34 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       };
       const ok = await persistStaffFields(member, { inviteToken: token, inviteExpiresAt: expires });
       if (!ok) return null;
-      setState((current) => ({ ...current, staff: [...current.staff, member] }));
+      let nextTeams = state.teams;
+      if (teamId && member.role === "team_lead") {
+        const team = nextTeams.find((item) => item.id === teamId);
+        if (team && !team.leadStaffId) {
+          const withLead = { ...team, leadStaffId: member.id };
+          const saved = await persistTeam(withLead);
+          if (saved) nextTeams = nextTeams.map((item) => (item.id === teamId ? withLead : item));
+        }
+      }
+      setState((current) => ({
+        ...current,
+        staff: [...current.staff, member],
+        teams: nextTeams,
+      }));
+      if ((member.role === "team_lead" || member.role === "team_admin") && !teamId) {
+        toast.message("Give that seat a team so they can see teammates’ books.");
+      }
       const inviteUrl = token ? inviteSignupUrl(window.location.origin, token) : null;
       toast.success(email ? `Invite ready for ${name}` : `${name} added to the roster`);
       return { member, inviteUrl };
     },
-    [canEditCompany, persistStaffFields, state.staff],
+    [canEditCompany, persistStaffFields, persistTeam, state.staff, state.teams],
   );
 
   const updateStaffAccount = useCallback(
     async (
       id: string,
-      patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "locked" | "restricted">>,
+      patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "locked" | "restricted" | "teamId">>,
     ) => {
       const profileKeys = new Set(["name", "title", "phone"]);
       const onlyOwnProfile = Object.keys(patch).every((key) => profileKeys.has(key));
@@ -7383,6 +7449,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         title: patch.title !== undefined ? patch.title.trim() : current.title,
         email: patch.email !== undefined ? normalizeSeatEmail(patch.email) : current.email,
         phone: patch.phone !== undefined ? patch.phone.trim() : current.phone,
+        teamId: patch.teamId !== undefined ? (looksLikeUuid(patch.teamId) ? patch.teamId : "") : current.teamId,
         initials:
           patch.name !== undefined ? initialsFromName(patch.name.trim() || current.name) : current.initials,
       };
@@ -7411,9 +7478,24 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       const ok = await persistStaffFields(next);
       if (!ok) return false;
+      let nextTeams = state.teams;
+      if (next.teamId !== current.teamId) {
+        nextTeams = teamsAfterLeavingLead(nextTeams, id, next.teamId);
+        if (next.teamId && next.role === "team_lead") {
+          const team = nextTeams.find((item) => item.id === next.teamId);
+          if (team && !team.leadStaffId) {
+            nextTeams = nextTeams.map((item) =>
+              item.id === next.teamId ? { ...item, leadStaffId: id } : item,
+            );
+          }
+        }
+        const savedLeads = await persistLeadClears(nextTeams, state.teams);
+        if (!savedLeads) return false;
+      }
       setState((currentBook) => ({
         ...currentBook,
         staff: currentBook.staff.map((member) => (member.id === id ? next : member)),
+        teams: nextTeams,
       }));
       if (id === user.staffId) {
         setUser((currentUser) => ({
@@ -7421,12 +7503,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           name: next.name,
           title: next.title,
           role: next.role,
+          teamId: next.teamId,
         }));
+      }
+      if ((next.role === "team_lead" || next.role === "team_admin") && !next.teamId) {
+        toast.message("Give that seat a team so they can see teammates’ books.");
       }
       toast.success(`${next.name} updated`);
       return true;
     },
-    [canEditCompany, persistStaffFields, state.staff, user.staffId, viewer?.id],
+    [canEditCompany, persistLeadClears, persistStaffFields, state.staff, state.teams, user.staffId, viewer?.id],
   );
 
   const refreshStaffInvite = useCallback(
@@ -7547,6 +7633,144 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [canEditCompany, persistStaffFields, state.staff, user.companyId, user.staffId, viewer?.id],
   );
 
+  const addTeam = useCallback(
+    async (input: { name: string; leadStaffId?: string | null }) => {
+      if (!canEditCompany) {
+        toast.error("Only a company admin can add teams.");
+        return null;
+      }
+      const name = input.name.trim();
+      if (!name) {
+        toast.error("Name the team.");
+        return null;
+      }
+      if (state.teams.some((team) => team.name.toLowerCase() === name.toLowerCase())) {
+        toast.error("A team with that name already exists.");
+        return null;
+      }
+      const leadStaffId = looksLikeUuid(input.leadStaffId) ? input.leadStaffId! : "";
+      if (leadStaffId && !state.staff.some((member) => member.id === leadStaffId && !member.locked)) {
+        toast.error("Pick someone with an active seat as the lead.");
+        return null;
+      }
+      const team: Team = { id: crypto.randomUUID(), name, leadStaffId: "" };
+      const saved = await persistTeam(team);
+      if (!saved) return null;
+      let nextTeams = [...state.teams, team];
+      let nextStaff = state.staff;
+      if (leadStaffId) {
+        const withLead = { ...team, leadStaffId };
+        const proposed = teamsAfterLeavingLead(
+          nextTeams.map((item) => (item.id === team.id ? withLead : item)),
+          leadStaffId,
+          team.id,
+        );
+        const leadsOk = await persistLeadClears(proposed, nextTeams);
+        if (leadsOk) {
+          nextTeams = proposed;
+          const lead = nextStaff.find((member) => member.id === leadStaffId);
+          if (lead && lead.teamId !== team.id) {
+            const moved = { ...lead, teamId: team.id };
+            const ok = await persistStaffFields(moved);
+            if (ok) nextStaff = nextStaff.map((member) => (member.id === leadStaffId ? moved : member));
+          }
+        } else {
+          toast.message(`${name} is on the roster. Edit the team to set a lead.`);
+        }
+      }
+      setState((current) => ({ ...current, teams: nextTeams, staff: nextStaff }));
+      toast.success(`${name} added`);
+      return nextTeams.find((item) => item.id === team.id) ?? team;
+    },
+    [canEditCompany, persistLeadClears, persistStaffFields, persistTeam, state.staff, state.teams],
+  );
+
+  const updateTeam = useCallback(
+    async (id: string, patch: { name?: string; leadStaffId?: string | null }) => {
+      if (!canEditCompany) {
+        toast.error("Only a company admin can change teams.");
+        return false;
+      }
+      const current = state.teams.find((team) => team.id === id);
+      if (!current) return false;
+      const name = patch.name !== undefined ? patch.name.trim() : current.name;
+      if (!name) {
+        toast.error("Name the team.");
+        return false;
+      }
+      if (state.teams.some((team) => team.id !== id && team.name.toLowerCase() === name.toLowerCase())) {
+        toast.error("A team with that name already exists.");
+        return false;
+      }
+      const leadStaffId =
+        patch.leadStaffId !== undefined
+          ? looksLikeUuid(patch.leadStaffId)
+            ? patch.leadStaffId ?? ""
+            : ""
+          : current.leadStaffId;
+      if (leadStaffId && !state.staff.some((member) => member.id === leadStaffId)) {
+        toast.error("That lead is no longer on the roster.");
+        return false;
+      }
+      const next: Team = { ...current, name, leadStaffId };
+      let nextTeams = state.teams.map((team) => (team.id === id ? next : team));
+      if (leadStaffId) nextTeams = teamsAfterLeavingLead(nextTeams, leadStaffId, id);
+      const saved = await persistTeam(next);
+      if (!saved) return false;
+      const leadsOk = await persistLeadClears(nextTeams, state.teams);
+      if (!leadsOk) return false;
+      let nextStaff = state.staff;
+      if (leadStaffId) {
+        const lead = nextStaff.find((member) => member.id === leadStaffId);
+        if (lead && lead.teamId !== id) {
+          const moved = { ...lead, teamId: id };
+          const ok = await persistStaffFields(moved);
+          if (!ok) return false;
+          nextStaff = nextStaff.map((member) => (member.id === leadStaffId ? moved : member));
+        }
+      }
+      setState((currentBook) => ({ ...currentBook, teams: nextTeams, staff: nextStaff }));
+      toast.success(`${name} updated`);
+      return true;
+    },
+    [canEditCompany, persistLeadClears, persistStaffFields, persistTeam, state.staff, state.teams],
+  );
+
+  const removeTeam = useCallback(
+    async (id: string) => {
+      if (!canEditCompany) {
+        toast.error("Only a company admin can remove teams.");
+        return false;
+      }
+      const current = state.teams.find((team) => team.id === id);
+      if (!current) return false;
+      const apply = () => {
+        setState((currentBook) => ({
+          ...currentBook,
+          teams: currentBook.teams.filter((team) => team.id !== id),
+          staff: currentBook.staff.map((member) =>
+            member.teamId === id ? { ...member, teamId: "" } : member,
+          ),
+        }));
+      };
+      if (!isSupabaseConfigured() || !user.companyId || user.companyId === "local") {
+        apply();
+        toast.success(`${current.name} removed`);
+        return true;
+      }
+      const supabase = createClient();
+      const { error } = await supabase.from("teams").delete().eq("id", id).eq("company_id", user.companyId);
+      if (error) {
+        toast.error("Could not remove the team", { description: error.message });
+        return false;
+      }
+      apply();
+      toast.success(`${current.name} removed. People on it are unassigned.`);
+      return true;
+    },
+    [canEditCompany, state.teams, user.companyId],
+  );
+
   const reload = useCallback(async () => {
     await load();
   }, [load]);
@@ -7598,6 +7822,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       removeCompanyLogo,
       inviteStaff,
       updateStaffAccount,
+      addTeam,
+      updateTeam,
+      removeTeam,
       refreshStaffInvite,
       removeStaff,
       moveOpportunity,
@@ -7730,6 +7957,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       removeCompanyLogo,
       inviteStaff,
       updateStaffAccount,
+      addTeam,
+      updateTeam,
+      removeTeam,
       refreshStaffInvite,
       removeStaff,
       moveOpportunity,
