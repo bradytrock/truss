@@ -45,6 +45,7 @@ export function isMissingEstimateWriter(error: { message?: string; code?: string
   if (isMissingSecondSigner(error)) return false;
   if (isMissingOwnerSignature(error)) return false;
   if (isMissingEstimateLinePhotos(error)) return false;
+  if (isMissingEstimatePackages(error)) return false;
   const message = error.message ?? "";
   return (
     error.code === "PGRST204" ||
@@ -61,6 +62,25 @@ export function isMissingEstimateWriter(error: { message?: string; code?: string
 
 export function missingEstimateWriterMessage() {
   return `Saved in this browser. Run ${ESTIMATE_WRITER_SQL} in the SQL editor to keep tax, optional lines, and terms in Postgres.`;
+}
+
+export const ESTIMATE_PACKAGES_SQL = "supabase/migrations/20260831140000_estimate_packages.sql";
+
+export function isMissingEstimatePackages(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("package_mode") ||
+    message.includes("selected_package") ||
+    message.includes("select_shared_estimate_package") ||
+    (message.includes("package") && message.includes("estimate_lines")) ||
+    (message.includes("'package'") && message.includes("column")) ||
+    (message.includes('"package"') && message.includes("column"))
+  );
+}
+
+export function missingEstimatePackagesMessage() {
+  return `Saved in this browser. Run ${ESTIMATE_PACKAGES_SQL} in the SQL editor so Good / Better / Best packages stay on the proposal.`;
 }
 
 export const SHARE_TOKEN_SQL = "supabase/migrations/20260819300000_share_tokens.sql";

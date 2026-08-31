@@ -598,6 +598,8 @@ export type Database = {
           signature_image: string;
           second_signature_name: string;
           second_signature_image: string;
+          package_mode: string;
+          selected_package: string;
         };
         Insert: {
           id?: string;
@@ -635,6 +637,8 @@ export type Database = {
           signature_image?: string;
           second_signature_name?: string;
           second_signature_image?: string;
+          package_mode?: string;
+          selected_package?: string;
         };
         Update: Partial<Database["public"]["Tables"]["estimates"]["Insert"]>;
         Relationships: [];
@@ -656,6 +660,7 @@ export type Database = {
           selected: boolean;
           taxable: boolean;
           photo_ids: string[];
+          package: string;
         };
         Insert: {
           id?: string;
@@ -673,6 +678,7 @@ export type Database = {
           selected?: boolean;
           taxable?: boolean;
           photo_ids?: string[];
+          package?: string;
         };
         Update: Partial<Database["public"]["Tables"]["estimate_lines"]["Insert"]>;
         Relationships: [];
@@ -1454,6 +1460,10 @@ export type Database = {
       };
       select_shared_estimate_line: {
         Args: { p_token: string; p_line_id: string; p_selected: boolean };
+        Returns: Json;
+      };
+      select_shared_estimate_package: {
+        Args: { p_token: string; p_package: string };
         Returns: Json;
       };
       invite_preview: {

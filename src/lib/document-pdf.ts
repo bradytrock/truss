@@ -1,5 +1,12 @@
 import type { CompanySettings, Estimate, EstimateLine, EstimateSignatureEvent, Invoice, InvoiceLine, JobPhoto, Payment } from "@/lib/types";
-import { estimateTotals, groupEstimateLines, lineAmount, lineIncluded } from "@/lib/estimate-totals";
+import { estimateTotals, groupEstimateLines, lineAmount, lineIncluded, totalsForPackage } from "@/lib/estimate-totals";
+import {
+  ESTIMATE_PACKAGES,
+  PACKAGE_LABEL,
+  isGbbEstimate,
+  parseEstimatePackage,
+  scopedEstimateLines,
+} from "@/lib/estimate-packages";
 import { formatDate, formatMoney, formatPhone, formatDateTimeUtc } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
 import { photosForEstimateLine } from "@/lib/estimate-line-photos";
@@ -375,7 +382,9 @@ export async function downloadEstimatePdf(input: {
   const right = width - 54;
   let y = await writePdfLetterhead(doc, input.company, 54, 54, { showContact: false });
   const site = formatJobSite(input.estimate);
+  const visibleLines = scopedEstimateLines(input.estimate, input.lines);
   const totals = estimateTotals(input.estimate, input.lines);
+  const selectedPackage = parseEstimatePackage(input.estimate.selectedPackage);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
@@ -403,8 +412,36 @@ export async function downloadEstimatePdf(input: {
     y += 6;
     y = writeParagraph(doc, input.estimate.intro, y);
   }
+  if (isGbbEstimate(input.estimate)) {
+    y += 8;
+    y = ensureSpace(doc, y, 70);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(90, 90, 90);
+    doc.text("PACKAGES", 54, y);
+    y += 14;
+    for (const pkg of ESTIMATE_PACKAGES) {
+      const amount = totalsForPackage(input.estimate, input.lines, pkg).total;
+      const active = pkg === selectedPackage;
+      doc.setFont("helvetica", active ? "bold" : "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(active ? 28 : 70, active ? 28 : 70, active ? 28 : 70);
+      const label = active ? `${PACKAGE_LABEL[pkg]} — this proposal` : PACKAGE_LABEL[pkg];
+      doc.text(label, 54, y);
+      doc.text(formatMoney(amount), right, y, { align: "right" });
+      y += 14;
+    }
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(70, 70, 70);
+    y = writeParagraph(
+      doc,
+      `This proposal is the ${PACKAGE_LABEL[selectedPackage]} package plus shared work. Packages replace each other; they do not stack.`,
+      y,
+    );
+  }
 
-  for (const group of groupEstimateLines(input.lines)) {
+  for (const group of groupEstimateLines(visibleLines)) {
     y = ensureSpace(doc, y, 28);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
@@ -527,7 +564,7 @@ export async function downloadEstimatePdf(input: {
     filledEstimateTerms({
       template: estimateTerms,
       estimate: input.estimate,
-      lines: input.lines,
+      lines: visibleLines,
       customer: input.customer,
       company: input.company,
     }),

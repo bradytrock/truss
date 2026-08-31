@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCrmOptional } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord, type ProjectManagerContact } from "@/lib/document-owner";
+import { PackagePicker } from "@/components/package-picker";
 import { billingEstimate, workMarket } from "@/lib/market";
 import {
   estimateTotals,
@@ -14,6 +15,7 @@ import {
   lineAmount,
   lineIncluded,
 } from "@/lib/estimate-totals";
+import { isGbbEstimate, scopedEstimateLines, type EstimatePackage } from "@/lib/estimate-packages";
 import { formatDate, formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
 import { isSignaturePng } from "@/lib/estimate-signature";
@@ -93,6 +95,7 @@ export function ProposalDocument({
   secondCustomer,
   contractorName,
   onTermsChange,
+  onSelectPackage,
 }: {
   estimate: Estimate;
   lines: EstimateLine[];
@@ -107,8 +110,10 @@ export function ProposalDocument({
   secondCustomer?: string | null;
   contractorName?: string;
   onTermsChange?: (terms: string) => void;
+  onSelectPackage?: (pkg: EstimatePackage) => void;
 }) {
-  const groups = groupEstimateLines(lines);
+  const visibleLines = scopedEstimateLines(estimate, lines);
+  const groups = groupEstimateLines(visibleLines);
   const site = formatJobSite(estimate);
   const crm = useCrmOptional();
   const job = estimate.jobId && crm ? crm.jobs.find((item) => item.id === estimate.jobId) : undefined;
@@ -168,6 +173,20 @@ export function ProposalDocument({
       {estimate.intro ? (
         <p className="text-sm leading-relaxed whitespace-pre-wrap">{estimate.intro}</p>
       ) : null}
+      {isGbbEstimate(estimate) ? (
+        <div className="space-y-2">
+          <h3 className="text-[11px] font-semibold tracking-[0.16em] uppercase">Choose a package</h3>
+          <PackagePicker
+            estimate={estimate}
+            lines={lines}
+            locked={!selectable || !onSelectPackage}
+            onSelect={onSelectPackage}
+          />
+          <p className="text-xs text-muted-foreground">
+            Pick one package. The items below are that package plus shared work. Packages do not stack.
+          </p>
+        </div>
+      ) : null}
       {groups.length === 0 ? (
         <p className="text-sm text-muted-foreground">No line items on this proposal yet.</p>
       ) : (
@@ -221,7 +240,7 @@ export function ProposalDocument({
           ))}
         </div>
       )}
-      <EstimateTotals estimate={billed} lines={lines} className="ml-auto max-w-xs" />
+      <EstimateTotals estimate={billed} lines={visibleLines} className="ml-auto max-w-xs" />
       <DocumentNotesBlock notes={estimate.notes} />
       <div className="break-inside-auto">
         <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>
@@ -229,7 +248,7 @@ export function ProposalDocument({
           value={terms}
           values={estimateTermsValues({
             estimate: billed,
-            lines,
+            lines: visibleLines,
             customer,
             company: letterhead,
           })}

@@ -1,5 +1,6 @@
 import { fillJobRecord, parseCustomFields } from "@/lib/job-record";
 import { normalizeLinePhotoIds } from "@/lib/estimate-line-photos";
+import { parseEstimatePackage, parseEstimatePackageMode, parseLinePackage } from "@/lib/estimate-packages";
 import { parsePageTemplate, parsePhotoReportPages } from "@/lib/photo-report";
 import type { CompanySettings, EstimateLinePhoto, Job, JobPhoto, PhotoReport } from "@/lib/types";
 import type { ProjectManagerContact } from "@/lib/document-owner";
@@ -190,6 +191,8 @@ export type SharedEstimatePayload = {
     signatureImage: string;
     secondSignatureName: string;
     secondSignatureImage: string;
+    packageMode: "" | "gbb";
+    selectedPackage: "good" | "better" | "best";
   };
   lines: Array<{
     id: string;
@@ -205,6 +208,7 @@ export type SharedEstimatePayload = {
     optional: boolean;
     selected: boolean;
     taxable: boolean;
+    package: "" | "good" | "better" | "best";
     photoIds: string[];
     photos?: EstimateLinePhoto[];
   }>;
@@ -335,6 +339,8 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
       signatureImage: asString(estimate.signatureImage),
       secondSignatureName: asString(estimate.secondSignatureName),
       secondSignatureImage: asString(estimate.secondSignatureImage),
+      packageMode: parseEstimatePackageMode(asString(estimate.packageMode)),
+      selectedPackage: parseEstimatePackage(asString(estimate.selectedPackage)),
     },
     lines: linesRaw.filter(isRecord).map((line, index) => {
       const photos = Array.isArray(line.photos)
@@ -363,6 +369,7 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
       optional: asBool(line.optional),
       selected: asBool(line.selected, true),
       taxable: asBool(line.taxable, true),
+      package: parseLinePackage(asString(line.package)),
       photoIds,
       photos,
     };

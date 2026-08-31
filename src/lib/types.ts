@@ -434,6 +434,10 @@ export interface Estimate {
   signatureImage: string;
   secondSignatureName: string;
   secondSignatureImage: string;
+  /** `gbb` offers mutually exclusive Good / Better / Best packages. Empty is a single-scope proposal. */
+  packageMode: "" | "gbb";
+  /** Which package is selected for preview, signing, and convert-to-invoice. */
+  selectedPackage: "good" | "better" | "best";
 }
 
 export const SIGNATURE_EVENT_KINDS = ["sent", "opened", "signed", "declined"] as const;
@@ -487,6 +491,8 @@ export interface EstimateLine {
   optional: boolean;
   selected: boolean;
   taxable: boolean;
+  /** Empty = in every package. `good` / `better` / `best` = only that package. */
+  package: "" | "good" | "better" | "best";
   photoIds: string[];
   photos?: EstimateLinePhoto[];
 }

@@ -201,6 +201,16 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
         job: str("Job id or code"),
         name: str("Estimate title. Default the job name."),
         notes: str("Notes that print after the total on the proposal"),
+        packageMode: {
+          type: "string",
+          enum: ["", "gbb"],
+          description: "Pass gbb to start a Good / Better / Best proposal.",
+        },
+        selectedPackage: {
+          type: "string",
+          enum: ["good", "better", "best"],
+          description: "Default selected package when packageMode is gbb. Default better.",
+        },
       },
       ["job"],
     ),
@@ -220,13 +230,19 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
         unit: str("Unit, e.g. SQ or LS"),
         groupName: str("Section name, e.g. Roofing"),
         optional: bool("True if this is optional work"),
+        package: {
+          type: "string",
+          enum: ["", "good", "better", "best"],
+          description:
+            "Good / Better / Best assignment. Empty is in every package. Use good, better, or best for one package only.",
+        },
       },
       ["estimate"],
     ),
   },
   {
     name: "update_estimate_line",
-    description: "Change quantity, price, or title on an existing estimate line.",
+    description: "Change quantity, price, title, optional flag, or Good / Better / Best package on a line.",
     status: "Updating the line…",
     gate: "ops",
     parameters: object(
@@ -237,8 +253,35 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
         title: str("Title"),
         optional: bool("Optional work"),
         selected: bool("Whether an optional line is included"),
+        package: {
+          type: "string",
+          enum: ["", "good", "better", "best"],
+          description: "Empty for all packages, or good / better / best.",
+        },
       },
       ["lineId"],
+    ),
+  },
+  {
+    name: "update_estimate",
+    description: "Turn Good / Better / Best packages on or off, or pick which package is selected.",
+    status: "Updating the estimate…",
+    gate: "ops",
+    parameters: object(
+      {
+        estimate: str("Estimate id or number"),
+        packageMode: {
+          type: "string",
+          enum: ["", "gbb"],
+          description: "gbb offers three mutually exclusive packages. Empty is a single-scope proposal.",
+        },
+        selectedPackage: {
+          type: "string",
+          enum: ["good", "better", "best"],
+          description: "Which package is selected for preview, signing, and convert-to-invoice.",
+        },
+      },
+      ["estimate"],
     ),
   },
   {

@@ -2,6 +2,7 @@ import { fillCatalogItem } from "@/lib/catalog-margin";
 import { fillMaterialOrder, fillMaterialOrderLine } from "@/lib/material-orders";
 import { fillMaterialOrderTemplate, fillMaterialOrderTemplateLine } from "@/lib/material-order-templates";
 import { fillEstimate, fillEstimateLine } from "@/lib/estimate-totals";
+import { parseEstimatePackage, parseEstimatePackageMode, parseLinePackage } from "@/lib/estimate-packages";
 import { fillEstimateTemplate, fillEstimateTemplateLine } from "@/lib/estimate-templates";
 import { parsePageTemplate, parsePhotoReportPages } from "@/lib/photo-report";
 import { customFieldsJson, fillJobRecord, parseCustomFields } from "@/lib/job-record";
@@ -444,6 +445,10 @@ export function mapEstimate(row: EstimateRow): Estimate {
     signatureImage: row.signature_image ?? "",
     secondSignatureName: "second_signature_name" in row ? String(row.second_signature_name ?? "") : "",
     secondSignatureImage: "second_signature_image" in row ? String(row.second_signature_image ?? "") : "",
+    packageMode: parseEstimatePackageMode("package_mode" in row ? String(row.package_mode ?? "") : ""),
+    selectedPackage: parseEstimatePackage(
+      "selected_package" in row ? String(row.selected_package ?? "") : "",
+    ),
   });
 }
 
@@ -462,6 +467,7 @@ export function mapEstimateLine(row: EstimateLineRow): EstimateLine {
     optional: Boolean(row.optional),
     selected: row.selected ?? true,
     taxable: row.taxable ?? true,
+    package: parseLinePackage("package" in row ? String(row.package ?? "") : ""),
     photoIds: Array.isArray(row.photo_ids) ? row.photo_ids.map(String) : [],
   });
 }
@@ -600,6 +606,8 @@ export function estimatePatch(patch: Partial<Estimate>) {
   if (patch.signatureImage !== undefined) row.signature_image = patch.signatureImage;
   if (patch.secondSignatureName !== undefined) row.second_signature_name = patch.secondSignatureName;
   if (patch.secondSignatureImage !== undefined) row.second_signature_image = patch.secondSignatureImage;
+  if (patch.packageMode !== undefined) row.package_mode = patch.packageMode;
+  if (patch.selectedPackage !== undefined) row.selected_package = patch.selectedPackage;
   return row;
 }
 
@@ -617,6 +625,7 @@ export function estimateLinePatch(patch: Partial<EstimateLine>) {
   if (patch.selected !== undefined) row.selected = patch.selected;
   if (patch.taxable !== undefined) row.taxable = patch.taxable;
   if (patch.photoIds !== undefined) row.photo_ids = patch.photoIds;
+  if (patch.package !== undefined) row.package = patch.package;
   return row;
 }
 

@@ -1,7 +1,8 @@
 import { defaultDeliveryForSource, formatJobSite, leadName } from "@/lib/leads";
 import { localYmd } from "@/lib/format";
 import { isDeletedJob } from "@/lib/job-record";
-import { estimateTotals } from "@/lib/estimate-totals";
+import { estimateTotals, allPackageTotals } from "@/lib/estimate-totals";
+import { isGbbEstimate, parseEstimatePackage, parseEstimatePackageMode, parseLinePackage } from "@/lib/estimate-packages";
 import { invoiceBalance, invoiceTotal } from "@/lib/money";
 import { compressReceipt, guessExpenseAccount, isExpenseAccount, isExpenseMethod, jobProfitAndLoss } from "@/lib/job-financials";
 import { projectTypeForMarket, workMarket } from "@/lib/market";
@@ -286,6 +287,13 @@ async function runTool(
         status: estimate.status,
         job: job ? { id: job.id, code: job.code, name: job.name } : null,
         total: totals.total,
+        packageMode: estimate.packageMode,
+        selectedPackage: estimate.selectedPackage,
+        packages: isGbbEstimate(estimate)
+          ? Object.fromEntries(
+              Object.entries(allPackageTotals(estimate, lines)).map(([pkg, value]) => [pkg, value.total]),
+            )
+          : null,
         lineCount: lines.length,
         lines: lines.slice(0, 20).map((line) => ({
           id: line.id,
@@ -294,6 +302,7 @@ async function runTool(
           unit: line.unit,
           unitCost: line.unitCost,
           optional: line.optional,
+          package: line.package,
         })),
       });
     }
@@ -562,8 +571,14 @@ async function runTool(
         postalCode: job.postalCode,
         market: job.market,
       });
+      if (arg(args, "packageMode") === "gbb") {
+        await crm.updateEstimate(estimate.id, {
+          packageMode: "gbb",
+          selectedPackage: parseEstimatePackage(arg(args, "selectedPackage")),
+        });
+      }
       return ok(
-        { id: estimate.id, number: estimate.number, name: estimate.name },
+        { id: estimate.id, number: estimate.number, name: estimate.name, packageMode: arg(args, "packageMode") === "gbb" ? "gbb" : "" },
         { href: `/estimates/${estimate.id}`, label: `Open ${estimate.number}` },
       );
     }
@@ -585,11 +600,13 @@ async function runTool(
         unitCost?: number;
         unit?: string;
         optional?: boolean;
+        package?: ReturnType<typeof parseLinePackage>;
       } = { quantity };
       if (title) patch.title = title;
       if (args.unitCost !== undefined) patch.unitCost = asNumber(args.unitCost);
       if (arg(args, "unit")) patch.unit = arg(args, "unit");
       if (asBoolean(args.optional) !== undefined) patch.optional = asBoolean(args.optional);
+      if (args.package !== undefined) patch.package = parseLinePackage(arg(args, "package"));
       await crm.updateEstimateLine(line.id, patch);
       return ok({ lineId: line.id, estimateId: estimate.id, title: title || line.title, quantity }, { href: `/estimates/${estimate.id}`, label: `Open ${estimate.number}` });
     }
@@ -603,8 +620,26 @@ async function runTool(
         title: arg(args, "title") || line.title,
         optional: asBoolean(args.optional) ?? line.optional,
         selected: asBoolean(args.selected) ?? line.selected,
+        package: args.package !== undefined ? parseLinePackage(arg(args, "package")) : line.package,
       });
       return ok({ lineId }, { href: `/estimates/${line.estimateId}`, label: "Open estimate" });
+    }
+    case "update_estimate": {
+      const estimate = resolveEstimate(crm, arg(args, "estimate"));
+      if (!estimate) return fail("No estimate matches that.");
+      const patch: { packageMode?: "" | "gbb"; selectedPackage?: "good" | "better" | "best" } = {};
+      if (args.packageMode !== undefined) patch.packageMode = parseEstimatePackageMode(arg(args, "packageMode"));
+      if (args.selectedPackage !== undefined) patch.selectedPackage = parseEstimatePackage(arg(args, "selectedPackage"));
+      if (!Object.keys(patch).length) return fail("Set packageMode or selectedPackage.");
+      await crm.updateEstimate(estimate.id, patch);
+      return ok(
+        {
+          id: estimate.id,
+          packageMode: patch.packageMode ?? estimate.packageMode,
+          selectedPackage: patch.selectedPackage ?? estimate.selectedPackage,
+        },
+        { href: `/estimates/${estimate.id}`, label: `Open ${estimate.number}` },
+      );
     }
     case "create_invoice": {
       const job = resolveJob(crm, arg(args, "job"));

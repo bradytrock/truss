@@ -24,6 +24,7 @@ import { coOwnerContact } from "@/lib/parties";
 import { parseSharedEstimate, type ShareSender, type SharedEstimatePayload } from "@/lib/share";
 import { SHARE_FETCH, useRemoteShare } from "@/lib/use-remote-share";
 import type { EstimateLine } from "@/lib/types";
+import type { EstimatePackage } from "@/lib/estimate-packages";
 
 function payloadError(data: unknown, fallback: string) {
   if (data && typeof data === "object" && "error" in data && typeof data.error === "string") {
@@ -132,6 +133,22 @@ export function ShareEstimateClient({
     setRemote(parsed);
   }
 
+  async function selectRemotePackage(pkg: EstimatePackage) {
+    const response = await fetch(`/api/share/estimate/${encodeURIComponent(token)}`, {
+      ...SHARE_FETCH,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ package: pkg }),
+    });
+    const data: unknown = response.ok ? await response.json() : await response.json().catch(() => null);
+    const parsed = parseSharedEstimate(data);
+    if (!parsed) {
+      toast.error(payloadError(data, "Could not update the package."));
+      return;
+    }
+    setRemote(parsed);
+  }
+
   if (fromStore) {
     const lines = linesForEstimate(crm.estimateLines, fromStore.id);
     const customer = crm.customerName(fromStore);
@@ -207,6 +224,11 @@ export function ShareEstimateClient({
           primaryCustomer={primaryName}
           secondCustomer={secondName}
           onToggleOptional={(line, selected) => void crm.updateEstimateLine(line.id, { selected })}
+          onSelectPackage={
+            optionalOpen
+              ? (pkg) => void crm.updateEstimate(fromStore.id, { selectedPackage: pkg })
+              : undefined
+          }
         />
         <CollectSignatureDialog
           open={signOpen}
@@ -287,6 +309,7 @@ export function ShareEstimateClient({
         primaryCustomer={remote.primaryCustomer}
         secondCustomer={remote.secondCustomer}
         onToggleOptional={(line, selected) => void toggleRemoteOptional(line, selected)}
+        onSelectPackage={optionalOpen ? (pkg) => void selectRemotePackage(pkg) : undefined}
       />
       <CollectSignatureDialog
         open={signOpen}

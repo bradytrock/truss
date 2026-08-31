@@ -68,14 +68,16 @@ import { ContactSelectOption } from "@/components/contact-option";
 import { MarketField } from "@/components/market-field";
 import { useCrm } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
+import { COMMON_UNITS, estimateTotals, groupEstimateLines, lineAmount, linesForEstimate, type AdjustmentKind } from "@/lib/estimate-totals";
 import {
-  COMMON_UNITS,
-  estimateTotals,
-  groupEstimateLines,
-  lineAmount,
-  linesForEstimate,
-  type AdjustmentKind,
-} from "@/lib/estimate-totals";
+  ESTIMATE_PACKAGES,
+  PACKAGE_LABEL,
+  isGbbEstimate,
+  linePackageFromSelect,
+  linePackageSelectValue,
+  parseEstimatePackage,
+} from "@/lib/estimate-packages";
+import { PackagePicker } from "@/components/package-picker";
 import { downloadEstimatePdf, downloadSignatureCertificatePdf } from "@/lib/document-pdf";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { mintEstimateSignerTokens } from "@/lib/estimate-signers";
@@ -259,12 +261,14 @@ export type PricedLine = {
   optional: boolean;
   selected: boolean;
   taxable: boolean;
+  package?: "" | "good" | "better" | "best";
 };
 
 export function LineCard({
   line,
   editable,
   showTax,
+  showPackage,
   onPatch,
   onMove,
   onRemove,
@@ -275,6 +279,7 @@ export function LineCard({
   line: PricedLine & { photoIds?: string[]; photos?: EstimateLine["photos"] };
   editable: boolean;
   showTax: boolean;
+  showPackage?: boolean;
   onPatch: (patch: Partial<PricedLine>) => void;
   onMove: (direction: "up" | "down") => void;
   onRemove: () => void;
@@ -409,6 +414,39 @@ export function LineCard({
           Taxable
         </label>
         ) : null}
+        {showPackage ? (
+          <div className="flex min-w-[10rem] items-center gap-2">
+            <Label className="text-xs text-muted-foreground">Package</Label>
+            {editable ? (
+              <Select
+                value={linePackageSelectValue(line.package)}
+                onValueChange={(value) =>
+                  onPatch({ package: linePackageFromSelect(String(value ?? "all")) })
+                }
+                items={[
+                  { value: "all", label: "All packages" },
+                  ...ESTIMATE_PACKAGES.map((pkg) => ({ value: pkg, label: PACKAGE_LABEL[pkg] })),
+                ]}
+              >
+                <SelectTrigger size="sm" className="w-[9.5rem]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All packages</SelectItem>
+                  {ESTIMATE_PACKAGES.map((pkg) => (
+                    <SelectItem key={pkg} value={pkg}>
+                      {PACKAGE_LABEL[pkg]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="text-sm">
+                {line.package ? PACKAGE_LABEL[parseEstimatePackage(line.package)] : "All packages"}
+              </p>
+            )}
+          </div>
+        ) : null}
       </div>
       {onPhotosChange || (line.photoIds && line.photoIds.length > 0) || line.photos?.length ? (
         <EstimateLinePhotos
@@ -538,6 +576,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   const residential = isResidentialMarket(market);
   const billed = billingEstimate(estimate, market);
   const totals = estimateTotals(billed, lines);
+  const gbb = isGbbEstimate(estimate);
+  const selectedPackage = parseEstimatePackage(estimate.selectedPackage);
   const letterhead = letterheadCompanyForRecord({
     company: crm.company,
     job,
@@ -989,6 +1029,45 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         </CardContent>
       </Card>
 
+      {editable || gbb ? (
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Good / Better / Best</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox
+                className="mt-0.5"
+                checked={gbb}
+                disabled={!editable}
+                onCheckedChange={(value) =>
+                  void crm.updateEstimate(estimate.id, {
+                    packageMode: value ? "gbb" : "",
+                    selectedPackage: value ? selectedPackage : estimate.selectedPackage,
+                  })
+                }
+              />
+              <span>
+                <span className="font-medium">Offer Good / Better / Best packages</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Packages replace each other — the homeowner picks one, they do not stack. Put shared
+                  work like tear-off and dumpster on All packages. Put 3-tab on Good, architectural on
+                  Better, and designer on Best.
+                </span>
+              </span>
+            </label>
+            {gbb ? (
+              <PackagePicker
+                estimate={estimate}
+                lines={lines}
+                locked={!editable && !optionalOpen}
+                onSelect={(pkg) => void crm.updateEstimate(estimate.id, { selectedPackage: pkg })}
+              />
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="space-y-4">
         {editable ? (
           <div className="space-y-2">
@@ -1116,6 +1195,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                     line={line}
                     editable={editable}
                     showTax={!residential}
+                    showPackage={gbb}
                     galleryPhotos={jobPhotos}
                     galleryHint={galleryHint}
                     onPhotosChange={(photoIds) => void crm.updateEstimateLine(line.id, { photoIds })}
@@ -1216,6 +1296,9 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       primaryCustomer={contact?.name}
       secondCustomer={secondSignerName}
       onToggleOptional={(line, selected) => void crm.updateEstimateLine(line.id, { selected })}
+      onSelectPackage={
+        optionalOpen ? (pkg) => void crm.updateEstimate(estimate.id, { selectedPackage: pkg }) : undefined
+      }
       onTermsChange={
         editable ? (terms) => void crm.updateEstimate(estimate.id, { terms }) : undefined
       }
@@ -1265,10 +1348,28 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       </div>
 
       <div className="rounded-md border bg-muted/40 px-4 py-3 sm:flex sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">
-          {totals.includedCount} included
-          {totals.optionalCount ? ` · ${totals.optionalCount} optional off` : ""}
-        </p>
+        {gbb ? (
+          <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            {ESTIMATE_PACKAGES.map((pkg) => {
+              const amount = estimateTotals({ ...billed, packageMode: "gbb", selectedPackage: pkg }, lines)
+                .total;
+              const active = pkg === selectedPackage;
+              return (
+                <span
+                  key={pkg}
+                  className={active ? "font-medium tabular-nums" : "text-muted-foreground tabular-nums"}
+                >
+                  {PACKAGE_LABEL[pkg]} {formatMoney(amount)}
+                </span>
+              );
+            })}
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {totals.includedCount} included
+            {totals.optionalCount ? ` · ${totals.optionalCount} optional off` : ""}
+          </p>
+        )}
         <p className="font-heading text-xl font-medium tabular-nums">{formatMoney(totals.total)}</p>
       </div>
 

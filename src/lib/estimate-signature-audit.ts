@@ -25,6 +25,8 @@ export type EstimateDocumentSnapshot = {
   discountValue: number;
   depositKind: string;
   depositValue: number;
+  packageMode: string;
+  selectedPackage: string;
   totals: { subtotal: number; discount: number; tax: number; total: number; deposit: number };
   lines: Array<{
     id: string;
@@ -36,6 +38,7 @@ export type EstimateDocumentSnapshot = {
     optional: boolean;
     selected: boolean;
     taxable: boolean;
+    package: string;
     groupName: string;
     sortOrder: number;
   }>;
@@ -85,6 +88,8 @@ export function estimateDocumentSnapshot(
     | "discountValue"
     | "depositKind"
     | "depositValue"
+    | "packageMode"
+    | "selectedPackage"
   >,
   lines: EstimateLine[],
 ): EstimateDocumentSnapshot {
@@ -107,6 +112,8 @@ export function estimateDocumentSnapshot(
     discountValue: estimate.discountValue,
     depositKind: estimate.depositKind,
     depositValue: estimate.depositValue,
+    packageMode: estimate.packageMode ?? "",
+    selectedPackage: estimate.selectedPackage ?? "better",
     totals: {
       subtotal: totals.subtotal,
       discount: totals.discount,
@@ -124,6 +131,7 @@ export function estimateDocumentSnapshot(
       optional: line.optional,
       selected: line.selected,
       taxable: line.taxable,
+      package: line.package ?? "",
       groupName: line.groupName,
       sortOrder: line.sortOrder,
     })),

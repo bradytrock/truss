@@ -37,8 +37,11 @@ A line amount is `quantity * unitCost`.
 
 A line is **included** if `!optional || selected`. Optional + not selected is **out of the total** but still shown on the document.
 
+When `packageMode` is `gbb`, first drop lines that are not in the selected package. A line is in a package if `package` is empty (shared / all packages) or `package` equals `selectedPackage`. Good, Better, and Best **replace** each other — they do not stack. Then apply the optional-line rule to the remaining lines.
+
 ```
-included = lines where !optional || selected
+scoped = lines where packageMode != "gbb" OR package == "" OR package == selectedPackage
+included = scoped where !optional || selected
 subtotal = sum of included line amounts
 discount = discountKind == "percent"
   ? subtotal * discountValue / 100
@@ -87,8 +90,10 @@ Unselected optional work should be summarized (“$X in optional work is not in 
 | street, city, state, postalCode | string | Job site on the proposal (not the office letterhead) |
 | signatureName | string | Printed name under the drawing. Empty until signed. |
 | signatureImage | string | PNG data URL of the drawn signature. Empty until signed. Prints on the proposal and PDF. |
+| packageMode | "" \| gbb | Empty is a single-scope proposal. `gbb` offers mutually exclusive Good / Better / Best packages. |
+| selectedPackage | good \| better \| best | Which package is selected for preview, signing, job-card amount, and convert-to-invoice. Default `better`. |
 
-Postgres: `estimates` plus columns from `supabase/migrations/20260819290000_estimate_writer.sql` (`contact_id`, `tax_rate`, `discount_kind`, `discount_value`, `deposit_kind`, `deposit_value`, `intro`, `terms`, `street`, `city`, `state`, `postal_code`) and `supabase/migrations/20260821200000_estimate_signature.sql` (`signature_name`, `signature_image`). If those columns are missing, keep working locally and tell the user to run that SQL.
+Postgres: `estimates` plus columns from `supabase/migrations/20260819290000_estimate_writer.sql` (`contact_id`, `tax_rate`, `discount_kind`, `discount_value`, `deposit_kind`, `deposit_value`, `intro`, `terms`, `street`, `city`, `state`, `postal_code`) and `supabase/migrations/20260821200000_estimate_signature.sql` (`signature_name`, `signature_image`). Good / Better / Best needs `supabase/migrations/20260831140000_estimate_packages.sql` (`package_mode`, `selected_package`). If those columns are missing, keep working locally and tell the user to run that SQL.
 
 ### Estimate line
 
@@ -105,8 +110,9 @@ Postgres: `estimates` plus columns from `supabase/migrations/20260819290000_esti
 | optional | bool | Default false |
 | selected | bool | Default true. Only matters when optional. |
 | taxable | bool | Default true |
+| package | "" \| good \| better \| best | Empty (default) is in every package. Assign 3-tab to Good, architectural to Better, designer to Best. Tear-off and dumpster stay empty. |
 
-Postgres: `estimate_lines` plus `title`, `group_name`, `optional`, `selected`, `taxable`.
+Postgres: `estimate_lines` plus `title`, `group_name`, `optional`, `selected`, `taxable`, and `package` from `20260831140000_estimate_packages.sql`.
 
 ### Catalog (price book)
 
@@ -125,7 +131,8 @@ Mirror the web, adapted to iPhone/iPad.
 3. **Writer (office)** — sticky actions: Send / Accept / Decline / Convert / Duplicate. Identity: number, editable name, status, homeowner, job site.
    - Customer & job site (contact picker, street/city/state/ZIP, links to lead/job).
    - Cover note (`intro`).
-   - Line items grouped by `groupName`. Each line is a card: title, description, qty, unit, unit price, amount, Optional, Include in total (when optional), Taxable, up/down reorder, delete.
+   - **Good / Better / Best** toggle on a draft. When on: each line has a Package control (All packages / Good / Better / Best), and three running totals. Selecting a card sets `selectedPackage` (the homeowner default).
+   - Line items grouped by `groupName`. Each line is a card: title, description, qty, unit, unit price, amount, Optional, Include in total (when optional), Taxable, Package (when GBB is on), up/down reorder, delete.
    - Add from price book (search sheet grouped by kind), custom item, add section (creates a custom line in that group).
    - Tax rate %, discount (% or $), deposit (% or $), valid until.
    - Terms, internal notes.
@@ -133,7 +140,7 @@ Mirror the web, adapted to iPhone/iPad.
 
    Empty draft: “No lines yet. Pull items from the price book or add a lump-sum line. Optional work stays out of the total until you check it.”
 
-4. **Preview (client document)** — company letterhead (name, office address, phone/email, license). Number, name, “Prepared for {homeowner}”, job site, valid until, intro, sections, line amounts, optional badges, totals (subtotal, discount, tax, total, deposit due), terms. Optional lines that are off are visually muted / struck on the amount. On `sent`/`viewed`, optional lines have a checkbox so the homeowner can add them. Internal notes are office-only; do not print them on a customer PDF.
+4. **Preview (client document)** — company letterhead (name, office address, phone/email, license). Number, name, “Prepared for {homeowner}”, job site, valid until, intro, **Good / Better / Best cards when `packageMode` is `gbb`** (tappable on `draft`/`sent`/`viewed`; locked after accept), sections for the **selected package plus shared lines only**, line amounts, optional badges, totals (subtotal, discount, tax, total, deposit due), terms. Optional lines that are off are visually muted / struck on the amount. On `sent`/`viewed`, optional lines have a checkbox so the homeowner can add them. Internal notes are office-only; do not print them on a customer PDF. PDF shows all three package prices, then the selected package’s lines.
 
    iPhone: Write | Preview tabs. iPad: writer + preview side by side.
 

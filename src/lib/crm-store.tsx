@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
@@ -3193,6 +3193,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         postal_code: estimate.postalCode,
         share_token: estimate.shareToken,
         second_share_token: estimate.secondShareToken || undefined,
+        package_mode: estimate.packageMode,
+        selected_package: estimate.selectedPackage,
       };
       let { data, error } = await supabase.from("estimates").insert(payload).select("*").single();
       if (error && (isMissingSecondSigner(error) || isMissingSignerLinks(error))) {
@@ -3205,6 +3207,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         data = retry.data;
         error = retry.error;
         if (!error && data) toast.message(missingSecondSignerMessage());
+      }
+      if (error && isMissingEstimatePackages(error)) {
+        const { package_mode: _mode, selected_package: _pkg, ...withoutPackages } = payload;
+        const retry = await supabase.from("estimates").insert(withoutPackages).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (!error && data) toast.message(missingEstimatePackagesMessage());
       }
       if (error && isMissingEstimateWriter(error)) {
         const retry = await supabase
@@ -3248,9 +3257,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           selected: line.selected,
           taxable: line.taxable,
           photo_ids: line.photoIds,
+          package: line.package,
         }));
         const inserted = await supabase.from("estimate_lines").insert(linePayload);
-        if (inserted.error && isMissingEstimateLinePhotos(inserted.error)) {
+        if (inserted.error && isMissingEstimatePackages(inserted.error)) {
+          const retry = await supabase.from("estimate_lines").insert(
+            linePayload.map(({ package: _pkg, ...row }) => row),
+          );
+          if (!retry.error) toast.message(missingEstimatePackagesMessage());
+          else if (retry.error && isMissingEstimateLinePhotos(retry.error)) {
+            toast.message(missingEstimateLinePhotosMessage());
+          } else if (retry.error && !isMissingEstimateWriter(retry.error)) {
+            toast.error(retry.error.message);
+          }
+        } else if (inserted.error && isMissingEstimateLinePhotos(inserted.error)) {
           toast.message(missingEstimateLinePhotosMessage());
         } else if (inserted.error && !isMissingEstimateWriter(inserted.error)) {
           toast.error(inserted.error.message);
@@ -3299,6 +3319,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     const { error } = await supabase.from("estimates").update(estimatePatch(patch)).eq("id", id);
     if (error) {
+      if (isMissingEstimatePackages(error)) {
+        apply();
+        toast.message(missingEstimatePackagesMessage());
+        return;
+      }
       if (isMissingSignerLinks(error)) {
         apply();
         toast.message(missingSignerLinksMessage());
@@ -3792,6 +3817,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         discountValue: source.discountValue,
         depositKind: source.depositKind,
         depositValue: source.depositValue,
+        packageMode: source.packageMode,
+        selectedPackage: source.selectedPackage,
       });
       const copied = lines
         .slice()
@@ -3813,6 +3840,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           discountValue: source.discountValue,
           depositKind: source.depositKind,
           depositValue: source.depositValue,
+          packageMode: source.packageMode,
+          selectedPackage: source.selectedPackage,
         });
       }
       if (copied.length) {
@@ -3832,8 +3861,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           selected: line.selected,
           taxable: line.taxable,
           photo_ids: line.photoIds,
+          package: line.package,
         }));
         let { error } = await supabase.from("estimate_lines").insert(payload);
+        if (error && isMissingEstimatePackages(error)) {
+          const retry = await supabase.from("estimate_lines").insert(
+            payload.map(({ package: _pkg, ...row }) => row),
+          );
+          error = retry.error;
+          if (!error) toast.message(missingEstimatePackagesMessage());
+        }
         if (error && isMissingEstimateLinePhotos(error)) {
           const retry = await supabase.from("estimate_lines").insert(
             payload.map(({ photo_ids: _photos, ...row }) => row),
@@ -3870,6 +3907,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         discountValue: source.discountValue,
         depositKind: source.depositKind,
         depositValue: source.depositValue,
+        packageMode: source.packageMode,
+        selectedPackage: source.selectedPackage,
       });
     },
     [addEstimate, state.estimateLines, state.estimates, state.jobs, state.opportunities, updateEstimate, user.companyId]
@@ -4727,8 +4766,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         optional: line.optional,
         selected: line.selected,
         taxable: line.taxable,
+        package: line.package,
       };
       let { data, error } = await supabase.from("estimate_lines").insert(payload).select("*").single();
+      if (error && isMissingEstimatePackages(error)) {
+        const { package: _pkg, ...withoutPackage } = payload;
+        const retry = await supabase.from("estimate_lines").insert(withoutPackage).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingEstimatePackagesMessage());
+      }
       if (error && isMissingEstimateWriter(error)) {
         const retry = await supabase
           .from("estimate_lines")
@@ -4801,8 +4848,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         optional: line.optional,
         selected: line.selected,
         taxable: line.taxable,
+        package: line.package,
       };
       let { data, error } = await supabase.from("estimate_lines").insert(payload).select("*").single();
+      if (error && isMissingEstimatePackages(error)) {
+        const { package: _pkg, ...withoutPackage } = payload;
+        const retry = await supabase.from("estimate_lines").insert(withoutPackage).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingEstimatePackagesMessage());
+      }
       if (error && isMissingEstimateWriter(error)) {
         const retry = await supabase
           .from("estimate_lines")
@@ -4850,6 +4905,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     const { error } = await supabase.from("estimate_lines").update(estimateLinePatch(patch)).eq("id", id);
     if (error) {
+      if (isMissingEstimatePackages(error)) {
+        apply();
+        toast.message(missingEstimatePackagesMessage());
+        return;
+      }
       if (isMissingEstimateLinePhotos(error)) {
         apply();
         toast.message(missingEstimateLinePhotosMessage());

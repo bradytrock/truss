@@ -1,6 +1,14 @@
 import { seedShareToken } from "@/lib/share";
 import { billingEstimate } from "@/lib/market";
 import { normalizeLinePhotoIds } from "@/lib/estimate-line-photos";
+import {
+  ESTIMATE_PACKAGES,
+  parseEstimatePackage,
+  parseEstimatePackageMode,
+  parseLinePackage,
+  scopedEstimateLines,
+  type EstimatePackage,
+} from "@/lib/estimate-packages";
 import type { Estimate, EstimateLine, JobMarket } from "@/lib/types";
 
 export type AdjustmentKind = "percent" | "amount";
@@ -22,11 +30,16 @@ export function includedLines<T extends Pick<EstimateLine, "optional" | "selecte
 }
 
 export function estimateTotals(
-  estimate: Pick<Estimate, "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue">,
-  lines: Array<Pick<EstimateLine, "quantity" | "unitCost" | "optional" | "selected" | "taxable">>,
+  estimate: Pick<Estimate, "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue"> &
+    Partial<Pick<Estimate, "packageMode" | "selectedPackage">>,
+  lines: Array<
+    Pick<EstimateLine, "quantity" | "unitCost" | "optional" | "selected" | "taxable"> &
+      Partial<Pick<EstimateLine, "package">>
+  >,
 ) {
-  const included = includedLines(lines);
-  const optionalOpen = lines.filter((line) => line.optional && !line.selected);
+  const scoped = scopedEstimateLines(estimate, lines);
+  const included = includedLines(scoped);
+  const optionalOpen = scoped.filter((line) => line.optional && !line.selected);
   const subtotal = roundMoney(included.reduce((sum, line) => sum + lineAmount(line), 0));
   const optionalTotal = roundMoney(optionalOpen.reduce((sum, line) => sum + lineAmount(line), 0));
   const discount =
@@ -126,13 +139,32 @@ export function lineLabel(line: Pick<EstimateLine, "title" | "description">) {
   return title || description || "Item";
 }
 
+export function totalsForPackage(
+  estimate: Pick<Estimate, "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue"> &
+    Partial<Pick<Estimate, "packageMode" | "selectedPackage">>,
+  lines: EstimateLine[],
+  pkg: EstimatePackage,
+) {
+  return estimateTotals({ ...estimate, packageMode: "gbb", selectedPackage: pkg }, lines);
+}
+
+export function allPackageTotals(
+  estimate: Pick<Estimate, "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue"> &
+    Partial<Pick<Estimate, "packageMode" | "selectedPackage">>,
+  lines: EstimateLine[],
+) {
+  return Object.fromEntries(
+    ESTIMATE_PACKAGES.map((pkg) => [pkg, totalsForPackage(estimate, lines, pkg)]),
+  ) as Record<EstimatePackage, ReturnType<typeof estimateTotals>>;
+}
+
 export function invoiceLinesFromEstimate(
   estimate: Estimate,
   lines: EstimateLine[],
   market?: JobMarket | "" | null,
 ) {
   const billedEstimate = billingEstimate(estimate, market);
-  const billed = includedLines(linesForEstimate(lines, estimate.id));
+  const billed = includedLines(scopedEstimateLines(estimate, linesForEstimate(lines, estimate.id)));
   const totals = estimateTotals(billedEstimate, billed);
   const out = billed.map((line, index) => ({
     description: lineLabel(line),
@@ -206,6 +238,8 @@ export type EstimateDraft = Omit<
   | "signatureImage"
   | "secondSignatureName"
   | "secondSignatureImage"
+  | "packageMode"
+  | "selectedPackage"
 > &
   Partial<
     Pick<
@@ -232,15 +266,20 @@ export type EstimateDraft = Omit<
       | "signatureImage"
       | "secondSignatureName"
       | "secondSignatureImage"
+      | "packageMode"
+      | "selectedPackage"
     >
   >;
 
 export type EstimateLineDraft = Omit<
   EstimateLine,
-  "title" | "groupName" | "optional" | "selected" | "taxable" | "photoIds" | "photos"
+  "title" | "groupName" | "optional" | "selected" | "taxable" | "photoIds" | "photos" | "package"
 > &
   Partial<
-    Pick<EstimateLine, "title" | "groupName" | "optional" | "selected" | "taxable" | "photoIds" | "photos">
+    Pick<
+      EstimateLine,
+      "title" | "groupName" | "optional" | "selected" | "taxable" | "photoIds" | "photos" | "package"
+    >
   >;
 
 export function fillEstimate(estimate: EstimateDraft): Estimate {
@@ -276,6 +315,8 @@ export function fillEstimate(estimate: EstimateDraft): Estimate {
     signatureImage: estimate.signatureImage ?? "",
     secondSignatureName: secondContactId ? (estimate.secondSignatureName ?? "") : "",
     secondSignatureImage: secondContactId ? (estimate.secondSignatureImage ?? "") : "",
+    packageMode: parseEstimatePackageMode(estimate.packageMode),
+    selectedPackage: parseEstimatePackage(estimate.selectedPackage),
   };
 }
 
@@ -288,6 +329,7 @@ export function fillEstimateLine(line: EstimateLineDraft): EstimateLine {
     optional: Boolean(line.optional),
     selected: line.selected ?? true,
     taxable: line.taxable ?? true,
+    package: parseLinePackage(line.package),
     photoIds,
     photos: line.photos,
   };
