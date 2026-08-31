@@ -79,7 +79,7 @@ export function SettingsMobileBar() {
   const pathname = usePathname();
   if (!pathname.startsWith("/settings")) return null;
   return (
-    <div className="sticky top-12 z-20 border-b bg-background lg:hidden">
+    <div className="border-t lg:hidden">
       <SettingsNav variant="bar" />
     </div>
   );

@@ -115,7 +115,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col bg-background">
-        <header className="sticky top-0 z-30 flex h-12 items-center gap-2 border-b bg-background px-3 sm:px-5">
+        <header className="sticky top-0 z-30 border-b bg-background">
+          <div className="flex h-12 items-center gap-2 px-3 sm:px-5">
           <Button
             variant="ghost"
             size="icon"
@@ -180,9 +181,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             </DropdownMenu>
             <UserMenu />
           </div>
+          </div>
+          <SettingsMobileBar />
         </header>
         <ScopeBanners />
-        <SettingsMobileBar />
         <main className="flex-1 p-5 sm:p-7">{children}</main>
       </div>
 
