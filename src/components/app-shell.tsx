@@ -49,6 +49,7 @@ import { COURSE } from "@/lib/training/engine";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand";
+import { SettingsMobileBar } from "@/components/settings-nav";
 import { AssistantPanel } from "@/components/assistant-panel";
 import { useStartEstimate } from "@/lib/start-estimate";
 
@@ -181,6 +182,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </header>
         <ScopeBanners />
+        <SettingsMobileBar />
         <main className="flex-1 p-5 sm:p-7">{children}</main>
       </div>
 
