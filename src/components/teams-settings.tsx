@@ -39,12 +39,14 @@ export function TeamsSettings({
   onAdd,
   onUpdate,
   onRemove,
+  hideIntro = false,
 }: {
   teams: Team[];
   staff: StaffMember[];
   onAdd: (input: { name: string; leadStaffId?: string | null }) => Promise<Team | null>;
   onUpdate: (id: string, patch: { name?: string; leadStaffId?: string | null }) => Promise<boolean>;
   onRemove: (id: string) => Promise<boolean>;
+  hideIntro?: boolean;
 }) {
   const [editor, setEditor] = useState<{ mode: "add" } | { mode: "edit"; team: Team } | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Team | null>(null);
@@ -56,14 +58,22 @@ export function TeamsSettings({
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-col gap-3 border-b sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1.5">
-            <CardTitle>Teams</CardTitle>
-            <CardDescription>
-              Crews that share a book. Team leads and team admins see jobs and contacts owned by
-              people on their team, and can Login As a teammate.
-            </CardDescription>
-          </div>
+        <CardHeader
+          className={
+            hideIntro
+              ? "flex flex-row items-center justify-end border-b"
+              : "flex flex-col gap-3 border-b sm:flex-row sm:items-start sm:justify-between"
+          }
+        >
+          {hideIntro ? null : (
+            <div className="space-y-1.5">
+              <CardTitle>Teams</CardTitle>
+              <CardDescription>
+                Crews that share a book. Team leads and team admins see jobs and contacts owned by
+                people on their team, and can Login As a teammate.
+              </CardDescription>
+            </div>
+          )}
           <Button type="button" onClick={() => setEditor({ mode: "add" })}>
             <Plus />
             Add team
@@ -73,7 +83,7 @@ export function TeamsSettings({
           {sorted.length === 0 ? (
             <EmptyState
               title="No teams yet"
-              description="Add a crew, pick a lead, then put people on it from People below."
+              description="Add a crew, pick a lead, then put people on it in People."
               action={
                 <Button type="button" onClick={() => setEditor({ mode: "add" })}>
                   Add team

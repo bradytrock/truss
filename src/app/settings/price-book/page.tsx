@@ -35,11 +35,6 @@ export default function PriceBookSettingsPage() {
         eyebrow="Settings"
         title="Price book"
         description="Company catalog of labor, material, equipment, allowances, and subcontract packages, organized as dated price lists. Outdate a list when a new book comes out — old lists stay for lookup. Each item can carry a margin. Upload a CSV to load the current list at once, or add items one at a time."
-        actions={
-          <Button nativeButton={false} variant="outline" render={<Link href="/settings" />}>
-            All settings
-          </Button>
-        }
       />
       <PriceBookPanel />
     </div>

@@ -83,6 +83,7 @@ export function PeopleSettings({
   onUpdate,
   onRefreshInvite,
   onRemove,
+  hideIntro = false,
 }: {
   teams: Team[];
   staff: StaffMember[];
@@ -101,6 +102,7 @@ export function PeopleSettings({
   ) => Promise<boolean>;
   onRefreshInvite: (id: string) => Promise<string | null>;
   onRemove: (id: string) => Promise<boolean>;
+  hideIntro?: boolean;
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
@@ -127,15 +129,23 @@ export function PeopleSettings({
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-col gap-3 border-b sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-1.5">
-            <CardTitle>People</CardTitle>
-            <CardDescription>
-              Add a roster seat, put them on a team, send a signup link into this company, restrict
-              someone to their own book, lock a login, or remove them. Invites expire in {INVITE_DAYS}{" "}
-              days.
-            </CardDescription>
-          </div>
+        <CardHeader
+          className={
+            hideIntro
+              ? "flex flex-row items-center justify-end border-b"
+              : "flex flex-col gap-3 border-b sm:flex-row sm:items-start sm:justify-between"
+          }
+        >
+          {hideIntro ? null : (
+            <div className="space-y-1.5">
+              <CardTitle>People</CardTitle>
+              <CardDescription>
+                Add a roster seat, put them on a team, send a signup link into this company, restrict
+                someone to their own book, lock a login, or remove them. Invites expire in {INVITE_DAYS}{" "}
+                days.
+              </CardDescription>
+            </div>
+          )}
           <Button type="button" onClick={() => setAddOpen(true)}>
             <Plus />
             Add teammate

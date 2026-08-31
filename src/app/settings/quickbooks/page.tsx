@@ -31,8 +31,6 @@ export default function QuickBooksSettingsPage() {
     );
   }
 
-  const showSettings = Boolean(crm.viewer && canManageSettings(crm.viewer.role, crm.viewer));
-
   return (
     <div className="space-y-5">
       {crm.hydrateError ? (
@@ -43,16 +41,9 @@ export default function QuickBooksSettingsPage() {
         title="QuickBooks"
         description="The Web Connector posts approved invoices onto Customer:Job, and job expenses as a check or credit card charge on that same Customer:Job, using the vendor, account, and amount from Truss."
         actions={
-          <div className="flex flex-wrap gap-2">
-            {showSettings ? (
-              <Button nativeButton={false} variant="outline" render={<Link href="/settings" />}>
-                All settings
-              </Button>
-            ) : null}
-            <Button nativeButton={false} variant="outline" render={<Link href="/accounting" />}>
-              Accounting
-            </Button>
-          </div>
+          <Button nativeButton={false} variant="outline" render={<Link href="/accounting" />}>
+            Accounting
+          </Button>
         }
       />
       <QbwcPanel />
