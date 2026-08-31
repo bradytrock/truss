@@ -34,6 +34,7 @@ function viewerFromContext(context: AssistantContext): StaffMember | undefined {
     initials: "",
     email: "",
     phone: "",
+    cardSlug: "",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,

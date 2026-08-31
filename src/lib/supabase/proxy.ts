@@ -1,4 +1,4 @@
-import { isPublicAppPath } from "@/lib/auth-paths";
+import { isPublicAppPath, isPublicCardPath } from "@/lib/auth-paths";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import {
@@ -21,7 +21,8 @@ function isSharePath(path: string) {
   return (
     path.startsWith("/share") ||
     path.startsWith("/api/share") ||
-    path.startsWith("/api/qbwc")
+    path.startsWith("/api/qbwc") ||
+    isPublicCardPath(path)
   );
 }
 

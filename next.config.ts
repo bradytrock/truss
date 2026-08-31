@@ -15,6 +15,10 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],
       },
       {
+        source: "/:company/card/:person",
+        headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],
+      },
+      {
         source: "/api/share/:path*",
         headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],
       },

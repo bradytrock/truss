@@ -1,5 +1,6 @@
 "use client";
 
+import { isPublicAppPath } from "@/lib/auth-paths";
 import { ThemeProvider } from "next-themes";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -21,15 +22,12 @@ export function Providers({ children }: { children: ReactNode }) {
 
 function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const isAuth =
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/signup") ||
-    pathname.startsWith("/auth");
-  const isShare = pathname.startsWith("/share");
-
-  if (isAuth) return children;
-
-  if (isShare) {
+  if (isPublicAppPath(pathname) && !pathname.startsWith("/api/")) {
+    const isAuth =
+      pathname.startsWith("/login") ||
+      pathname.startsWith("/signup") ||
+      pathname.startsWith("/auth");
+    if (isAuth) return children;
     return <CrmProvider>{children}</CrmProvider>;
   }
 

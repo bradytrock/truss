@@ -37,6 +37,7 @@ export function staffMemberFromProfile(input: {
     restricted: false,
     inviteExpiresAt: null,
     inviteToken: null,
+    cardSlug: "",
   };
 }
 

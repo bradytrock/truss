@@ -136,6 +136,7 @@ function asNullable(value: unknown) {
 
 export type SharedCompany = {
   name: string;
+  slug: string;
   phone: string;
   email: string;
   website: string;
@@ -257,6 +258,7 @@ function parseCompany(raw: unknown): SharedCompany {
   const data = isRecord(raw) ? raw : {};
   return {
     name: asString(data.name, "Contractor"),
+    slug: asString(data.slug),
     phone: asString(data.phone),
     email: asString(data.email),
     website: asString(data.website),
@@ -442,6 +444,7 @@ export type SharedPagePayload = {
 export function companySettingsFromShared(company: SharedCompany): CompanySettings {
   return {
     name: company.name,
+    slug: "",
     phone: company.phone,
     email: company.email,
     website: company.website,

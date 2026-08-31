@@ -1,13 +1,18 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { Copy } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
+import { cardUrl } from "@/lib/card";
+import { mintPersonCardSlug } from "@/lib/card-slug";
 import { useCrm } from "@/lib/crm-store";
 import { formatPhone } from "@/lib/format";
+import { copyText } from "@/lib/share";
 
 export default function ProfilePage() {
   const crm = useCrm();
@@ -61,7 +66,7 @@ export default function ProfilePage() {
       <PageHeader
         eyebrow="Account"
         title="Profile"
-        description="Your name, title, and direct phone print on estimates and invoices for jobs you own."
+        description="Your name, title, and direct phone print on estimates and invoices for jobs you own. Copy your public card for NFC or a text."
       />
 
       <form onSubmit={onSubmit} className="max-w-2xl space-y-4">
@@ -117,6 +122,20 @@ export default function ProfilePage() {
             </div>
           </CardContent>
         </Card>
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Public card</CardTitle>
+            <CardDescription>
+              Tap-to-call card at a stable URL. Renaming you here does not change the link — a company
+              admin can edit it under People.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 pt-4">
+            <CardLinkRow companySlug={crm.company.slug} member={seat} onMint={async (cardSlug) => {
+              await crm.updateStaffAccount(seat.id, { cardSlug });
+            }} />
+          </CardContent>
+        </Card>
         <div className="flex flex-wrap items-center gap-3">
           <Button type="submit" disabled={pending || !dirty || !name.trim()}>
             {pending ? "Saving…" : "Save profile"}
@@ -139,6 +158,65 @@ export default function ProfilePage() {
           )}
         </div>
       </form>
+    </div>
+  );
+}
+
+function CardLinkRow({
+  companySlug,
+  member,
+  onMint,
+}: {
+  companySlug: string;
+  member: { id: string; name: string; cardSlug: string; locked: boolean };
+  onMint: (cardSlug: string) => Promise<void>;
+}) {
+  const [pending, setPending] = useState(false);
+  const url =
+    companySlug && member.cardSlug
+      ? cardUrl(companySlug, member.cardSlug, typeof window !== "undefined" ? window.location.origin : "")
+      : "";
+
+  async function copy() {
+    if (member.locked) {
+      toast.error("Locked seats do not have a live card.");
+      return;
+    }
+    if (!companySlug) {
+      toast.error("A company admin needs to set the company card URL under Settings → Company.");
+      return;
+    }
+    let personSlug = member.cardSlug.trim();
+    if (!personSlug) {
+      setPending(true);
+      try {
+        personSlug = mintPersonCardSlug(member.name);
+        await onMint(personSlug);
+      } finally {
+        setPending(false);
+      }
+    }
+    const live = cardUrl(companySlug, personSlug, window.location.origin);
+    const ok = await copyText(live);
+    if (ok) toast.success("Card link copied.");
+    else toast.error("Could not copy the link. Select it and copy it yourself.");
+  }
+
+  return (
+    <div className="grid gap-2">
+      <Label htmlFor="profile-card-url">Card link</Label>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Input
+          id="profile-card-url"
+          readOnly
+          value={url || (companySlug ? `/${companySlug}/card/${member.cardSlug || "first.last"}` : "Not set yet")}
+          onFocus={(event) => event.target.select()}
+        />
+        <Button type="button" variant="outline" disabled={pending || member.locked} onClick={() => void copy()}>
+          <Copy />
+          {pending ? "Saving…" : "Copy"}
+        </Button>
+      </div>
     </div>
   );
 }

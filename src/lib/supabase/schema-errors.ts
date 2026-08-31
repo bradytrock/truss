@@ -533,3 +533,49 @@ export function isMissingReturningClientLeads(error: { message?: string; code?: 
 export function missingReturningClientLeadsMessage() {
   return `Lead opened. Run ${RETURNING_CLIENT_LEADS_SQL} then ${RETURNING_CLIENT_NOTICE_FLOW_SQL} in the SQL editor so the previous project manager is asked first.`;
 }
+
+export const BUSINESS_CARDS_SQL = "supabase/migrations/20260831130000_business_cards.sql";
+
+export function isMissingCompanySlug(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("slug") &&
+    (error.code === "PGRST204" ||
+      message.includes("schema cache") ||
+      message.includes("could not find the") ||
+      message.includes("column"))
+  );
+}
+
+export function isMissingCardSlug(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("card_slug") &&
+    (error.code === "PGRST204" ||
+      message.includes("schema cache") ||
+      message.includes("could not find the") ||
+      message.includes("column"))
+  );
+}
+
+export function isReservedCompanySlugError(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return message.includes("company slug is reserved") || message.includes("slug is reserved");
+}
+
+export function isDuplicateCardSlug(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  return (
+    (code === "23505" || message.includes("duplicate")) &&
+    (message.includes("slug") || message.includes("card_slug") || message.includes("_uidx"))
+  );
+}
+
+export function missingBusinessCardsMessage() {
+  return `Saved in this browser. Run ${BUSINESS_CARDS_SQL} in the SQL editor so public cards at /company/card/first.last stay in Postgres.`;
+}

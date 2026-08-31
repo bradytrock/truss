@@ -121,6 +121,7 @@ function mapAttempts(value: Json | undefined, staffId: string): TrainingAttempt[
 export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>): CompanySettings {
   return {
     name: row.name,
+    slug: "slug" in row ? String(row.slug ?? "") : "",
     phone: row.phone ?? "",
     email: row.email ?? "",
     website: row.website ?? "",
@@ -147,6 +148,7 @@ export function mapStaff(row: StaffRow): StaffMember {
     initials: row.initials || row.name.slice(0, 2).toUpperCase(),
     email: row.email ?? "",
     phone: row.phone ?? "",
+    cardSlug: "card_slug" in row ? String(row.card_slug ?? "") : "",
     locked: Boolean(row.locked),
     restricted: Boolean(row.restricted),
     inviteExpiresAt: row.invite_expires_at ?? null,

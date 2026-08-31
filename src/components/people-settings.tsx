@@ -50,6 +50,8 @@ import {
 } from "@/lib/accounts";
 import { formatDate, formatPhone } from "@/lib/format";
 import { copyText } from "@/lib/share";
+import { cardUrl } from "@/lib/card";
+import { mintPersonCardSlug } from "@/lib/card-slug";
 import { NO_TEAM, parseTeamSelect } from "@/lib/teams";
 import type { SeatRole, StaffMember, Team } from "@/lib/types";
 import { SEAT_ROLE_LABELS, SEAT_ROLES } from "@/lib/types";
@@ -79,6 +81,7 @@ export function PeopleSettings({
   teams,
   staff,
   viewerId,
+  companySlug,
   onInvite,
   onUpdate,
   onRefreshInvite,
@@ -88,6 +91,7 @@ export function PeopleSettings({
   teams: Team[];
   staff: StaffMember[];
   viewerId: string;
+  companySlug: string;
   onInvite: (input: {
     name: string;
     email: string;
@@ -98,7 +102,7 @@ export function PeopleSettings({
   }) => Promise<{ member: StaffMember; inviteUrl: string | null } | null>;
   onUpdate: (
     id: string,
-    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "locked" | "restricted" | "teamId">>,
+    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "locked" | "restricted" | "teamId" | "cardSlug">>,
   ) => Promise<boolean>;
   onRefreshInvite: (id: string) => Promise<string | null>;
   onRemove: (id: string) => Promise<boolean>;
@@ -124,6 +128,31 @@ export function PeopleSettings({
     setInviteName(name);
     setInviteUrl(url);
     await copyInvite(url);
+  }
+
+  async function copyCard(member: StaffMember) {
+    if (!companySlug) {
+      toast.error("Set a company card URL under Settings → Company first.");
+      return;
+    }
+    if (member.locked) {
+      toast.error("Locked seats do not have a live card.");
+      return;
+    }
+    let personSlug = member.cardSlug.trim();
+    if (!personSlug) {
+      personSlug = mintPersonCardSlug(
+        member.name,
+        "",
+        staff.filter((item) => item.id !== member.id).map((item) => item.cardSlug),
+      );
+      const ok = await onUpdate(member.id, { cardSlug: personSlug });
+      if (!ok) return;
+    }
+    const url = cardUrl(companySlug, personSlug, window.location.origin);
+    const ok = await copyText(url);
+    if (ok) toast.success("Card link copied.");
+    else toast.error("Could not copy the link. Select it and copy it yourself.");
   }
 
   return (
@@ -219,6 +248,7 @@ export function PeopleSettings({
                             isSelf={member.id === viewerId}
                             onEditProfile={() => setProfileTarget(member)}
                             onUpdate={onUpdate}
+                            onCopyCard={() => void copyCard(member)}
                             onRefreshInvite={async () => {
                               const url = await onRefreshInvite(member.id);
                               await showInvite(url, member.name);
@@ -280,6 +310,7 @@ export function PeopleSettings({
                       isSelf={member.id === viewerId}
                       onEditProfile={() => setProfileTarget(member)}
                       onUpdate={onUpdate}
+                      onCopyCard={() => void copyCard(member)}
                       onRefreshInvite={async () => {
                         const url = await onRefreshInvite(member.id);
                         await showInvite(url, member.name);
@@ -443,6 +474,7 @@ function SeatMenu({
   isSelf,
   onEditProfile,
   onUpdate,
+  onCopyCard,
   onRefreshInvite,
   onCopyInvite,
   onRemove,
@@ -455,6 +487,7 @@ function SeatMenu({
     id: string,
     patch: Partial<Pick<StaffMember, "locked" | "restricted">>,
   ) => Promise<boolean>;
+  onCopyCard: () => void;
   onRefreshInvite: () => Promise<void>;
   onCopyInvite: () => Promise<void>;
   onRemove: () => void;
@@ -478,6 +511,9 @@ function SeatMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={onEditProfile}>Edit profile</DropdownMenuItem>
+        <DropdownMenuItem disabled={member.locked} onClick={onCopyCard}>
+          Copy card link
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled={!canInvite} onClick={() => void onCopyInvite()}>
           Copy invite link
@@ -666,13 +702,14 @@ function EditProfileDialog({
   teams: Team[];
   onOpenChange: (open: boolean) => void;
   onSave: (
-    patch: Partial<Pick<StaffMember, "name" | "title" | "email" | "phone" | "teamId">>,
+    patch: Partial<Pick<StaffMember, "name" | "title" | "email" | "phone" | "teamId" | "cardSlug">>,
   ) => Promise<boolean>;
 }) {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [cardSlug, setCardSlug] = useState("");
   const [teamId, setTeamId] = useState(NO_TEAM);
   const [pending, setPending] = useState(false);
 
@@ -682,6 +719,7 @@ function EditProfileDialog({
     setTitle(member.title);
     setEmail(member.email);
     setPhone(member.phone);
+    setCardSlug(member.cardSlug);
     setTeamId(member.teamId || NO_TEAM);
   }, [member]);
 
@@ -695,6 +733,7 @@ function EditProfileDialog({
         title: title.trim(),
         email: email.trim(),
         phone: phone.trim(),
+        cardSlug: cardSlug.trim(),
         teamId: parseTeamSelect(teamId),
       });
     } finally {
@@ -749,6 +788,18 @@ function EditProfileDialog({
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="profile-edit-card">Card URL</Label>
+              <Input
+                id="profile-edit-card"
+                value={cardSlug}
+                onChange={(event) => setCardSlug(event.target.value)}
+                placeholder="jordan.hale"
+              />
+              <p className="text-xs text-muted-foreground">
+                first.last. Changing this breaks NFC and QR that already use the old link.
+              </p>
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="profile-edit-team">Team</Label>

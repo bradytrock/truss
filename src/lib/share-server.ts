@@ -10,6 +10,7 @@ import {
   type SharedInvoicePayload,
   type SharedPagePayload,
 } from "@/lib/share";
+import { parseSharedCard, type SharedCardPayload } from "@/lib/card";
 import { createAnonClient } from "@/lib/supabase/anon";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
@@ -116,4 +117,30 @@ export async function loadSharedPage(token: string): Promise<{
     return { payload: null, sender: sender ?? (await lookupShareSender(token)) };
   }
   return { payload, sender };
+}
+
+export async function loadSharedCard(
+  company: string,
+  person: string,
+): Promise<SharedCardPayload | null> {
+  const companySlug = company.trim().toLowerCase();
+  const personSlug = person.trim().toLowerCase();
+  if (!companySlug || !personSlug || !isSupabaseConfigured()) return null;
+  try {
+    const supabase = createAnonClient();
+    const { data, error } = await supabase.rpc("shared_card", {
+      p_company: companySlug,
+      p_person: personSlug,
+    });
+    if (error) {
+      logShareRpc("shared_card", `${companySlug}/${personSlug}`, error);
+      return null;
+    }
+    return parseSharedCard(data);
+  } catch (error) {
+    logShareRpc("shared_card", `${companySlug}/${personSlug}`, {
+      message: error instanceof Error ? error.message : "threw",
+    });
+    return null;
+  }
 }

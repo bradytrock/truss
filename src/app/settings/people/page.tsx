@@ -28,6 +28,7 @@ function PeopleSettingsBody() {
         teams={crm.book.teams}
         staff={crm.book.staff}
         viewerId={crm.viewer.id}
+        companySlug={crm.company.slug}
         onInvite={crm.inviteStaff}
         onUpdate={crm.updateStaffAccount}
         onRefreshInvite={crm.refreshStaffInvite}

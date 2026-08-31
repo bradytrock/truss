@@ -185,6 +185,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
         initials: initialsFromName(row.name),
         email: "",
         phone: "",
+        cardSlug: "card_slug" in row ? String(row.card_slug ?? "") : "",
         locked: false,
         restricted: false,
         inviteExpiresAt: null,

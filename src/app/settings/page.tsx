@@ -34,7 +34,7 @@ function CompanySettingsForm() {
       <PageHeader
         eyebrow="Settings"
         title="Company"
-        description="How the company is named on paper, in the sidebar, and on estimates and invoices."
+        description="How the company is named on paper, in the sidebar, and on estimates, invoices, and public cards."
         actions={<SettingsSaveActions dirty={dirty} pending={pending} />}
       />
 
@@ -51,6 +51,22 @@ function CompanySettingsForm() {
             onChange={(value) => patch("name", value)}
             required
           />
+          <div className="grid gap-1.5">
+            <Field
+              id="company-slug"
+              label="Card URL"
+              value={form.slug}
+              onChange={(value) => patch("slug", value)}
+              placeholder="northline-construction"
+            />
+            <p className="text-xs text-muted-foreground">
+              Public cards live at{" "}
+              <span className="font-mono">
+                /{form.slug.trim() || "your-company"}/card/first.last
+              </span>
+              . Changing this breaks existing NFC and QR links.
+            </p>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
               id="company-phone"

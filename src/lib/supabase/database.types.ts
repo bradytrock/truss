@@ -17,6 +17,7 @@ export type Database = {
           license_number: string;
           logo_url: string;
           logo_storage_path: string;
+          slug: string;
           default_estimate_terms: string | null;
           default_invoice_terms: string | null;
           minimum_margin_percent: number;
@@ -36,6 +37,7 @@ export type Database = {
           license_number?: string;
           logo_url?: string;
           logo_storage_path?: string;
+          slug?: string;
           default_estimate_terms?: string | null;
           default_invoice_terms?: string | null;
           minimum_margin_percent?: number;
@@ -55,6 +57,7 @@ export type Database = {
           license_number?: string;
           logo_url?: string;
           logo_storage_path?: string;
+          slug?: string;
           default_estimate_terms?: string | null;
           default_invoice_terms?: string | null;
           minimum_margin_percent?: number;
@@ -124,6 +127,7 @@ export type Database = {
           initials: string;
           email: string;
           phone: string;
+          card_slug: string;
           locked: boolean;
           restricted: boolean;
           invite_expires_at: string | null;
@@ -139,6 +143,7 @@ export type Database = {
           initials?: string;
           email?: string;
           phone?: string;
+          card_slug?: string;
           locked?: boolean;
           restricted?: boolean;
           invite_expires_at?: string | null;
@@ -1410,6 +1415,10 @@ export type Database = {
       };
       shared_page: {
         Args: { p_token: string };
+        Returns: Json;
+      };
+      shared_card: {
+        Args: { p_company: string; p_person: string };
         Returns: Json;
       };
       shared_link_sender: {

@@ -134,6 +134,8 @@ export interface CurrentUser {
 
 export interface CompanySettings {
   name: string;
+  /** Hyphenated public URL segment. Unique across Truss. */
+  slug: string;
   phone: string;
   email: string;
   website: string;
@@ -153,6 +155,7 @@ export interface CompanySettings {
 
 export const NORTHLINE_COMPANY: CompanySettings = {
   name: "Northline Construction",
+  slug: "northline-construction",
   phone: "(303) 555-0140",
   email: "office@northlineco.com",
   website: "northlineco.com",
@@ -175,6 +178,8 @@ export interface StaffMember {
   initials: string;
   email: string;
   phone: string;
+  /** first.last, unique per company. Sticky on rename. */
+  cardSlug: string;
   locked: boolean;
   restricted: boolean;
   inviteExpiresAt: string | null;
@@ -1084,6 +1089,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     initials: "JH",
     email: "",
     phone: "",
+    cardSlug: "jordan.hale",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,
@@ -1098,6 +1104,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     initials: "PS",
     email: "",
     phone: "",
+    cardSlug: "priya.shah",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,
@@ -1112,6 +1119,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     initials: "CD",
     email: "",
     phone: "",
+    cardSlug: "claire.duvall",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,
@@ -1126,6 +1134,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     initials: "LO",
     email: "",
     phone: "",
+    cardSlug: "luis.ortega",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,
@@ -1140,6 +1149,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     initials: "MC",
     email: "",
     phone: "",
+    cardSlug: "maya.chen",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,
@@ -1154,6 +1164,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     initials: "EV",
     email: "",
     phone: "",
+    cardSlug: "elena.voss",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,
@@ -1168,6 +1179,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     initials: "TB",
     email: "",
     phone: "",
+    cardSlug: "tom.brennan",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,
@@ -1182,6 +1194,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     initials: "NK",
     email: "",
     phone: "",
+    cardSlug: "nora.keene",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,
