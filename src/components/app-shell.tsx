@@ -43,6 +43,7 @@ import {
 } from "@/components/create-ops-dialogs";
 import { LogExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
 import { canViewReports, canManageSettings, canViewAccounting } from "@/lib/visibility";
+import { isInboxPath } from "@/lib/inbox";
 import { actionableReturningClientNotices } from "@/lib/returning-client";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { COURSE } from "@/lib/training/engine";
@@ -58,8 +59,7 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
     return [
       { href: "/", label: "Home" },
       { href: "/jobs", label: "Jobs" },
-      { href: "/messages", label: "Messages" },
-      { href: "/mail", label: "Mail" },
+      { href: "/messages", label: "Inbox" },
       { href: "/photos", label: "Photos" },
       { href: "/contacts", label: "Agents & contacts" },
       { href: "/reports", label: "ROI" },
@@ -68,8 +68,7 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
   return [
     { href: "/", label: "Home" },
     { href: "/jobs", label: "Jobs" },
-    { href: "/messages", label: "Messages" },
-    { href: "/mail", label: "Mail" },
+    { href: "/messages", label: "Inbox" },
     { href: "/photos", label: "Photos" },
     { href: "/estimates", label: "Estimates" },
     { href: "/invoices", label: "Invoices" },
@@ -274,6 +273,8 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
               ? pathname === "/accounting" || pathname.startsWith("/accounting/")
               : item.href === "/jobs"
                 ? pathname.startsWith("/jobs") || pathname.startsWith("/material-orders")
+                : item.href === "/messages"
+                  ? isInboxPath(pathname)
                 : pathname.startsWith(item.href);
         return (
           <Link
@@ -379,9 +380,9 @@ function SearchTrigger() {
                 );
               })}
             </CommandGroup>
-            <CommandGroup heading="Messages">
+            <CommandGroup heading="Inbox">
               <CommandItem
-                value="messages texts sms sendblue homeowner"
+                value="inbox messages texts sms sendblue homeowner"
                 onSelect={() => {
                   setOpen(false);
                   router.push("/messages");
@@ -390,13 +391,13 @@ function SearchTrigger() {
                 Texts with homeowners
               </CommandItem>
               <CommandItem
-                value="mail gmail email inbox job"
+                value="inbox mail gmail email job"
                 onSelect={() => {
                   setOpen(false);
                   router.push("/mail");
                 }}
               >
-                Gmail tagged to jobs
+                Mail tagged to jobs
               </CommandItem>
             </CommandGroup>
             <CommandGroup heading="Photos">

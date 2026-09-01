@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronsUpDown, MessageSquare, Phone, Search, Send, Smartphone } from "lucide-react";
+import { ChevronLeft, ChevronsUpDown, Mail, MessageSquare, Phone, Search, Send, Smartphone } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, ErrorBanner, LoadingScreen } from "@/components/page-chrome";
+import { InboxChannelSwitch } from "@/components/inbox-channel-switch";
 import { useCrm } from "@/lib/crm-store";
 import {
   contactForPhone,
@@ -38,6 +39,7 @@ import {
   sameLocalDay,
 } from "@/lib/format";
 import { looksLikePhone } from "@/lib/phone";
+import { mailHref } from "@/lib/job-emails";
 import { cn } from "@/lib/utils";
 
 export function MessagesInbox() {
@@ -124,9 +126,17 @@ export function MessagesInbox() {
 
   const openThread = useCallback(
     (key: string) => {
-      router.replace(messagesHref({ thread: key }), { scroll: false });
+      const thread = threads.find((item) => item.key === key);
+      router.replace(
+        messagesHref({
+          thread: key,
+          contact: thread?.contactId,
+          job: thread?.jobId,
+        }),
+        { scroll: false },
+      );
     },
-    [router],
+    [router, threads],
   );
 
   const openCompose = useCallback(() => {
@@ -209,12 +219,15 @@ export function MessagesInbox() {
                 <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
                   Communication
                 </p>
-                <h1 className="font-heading text-lg font-medium">Messages</h1>
+                <h1 className="font-heading text-lg font-medium">Inbox</h1>
               </div>
               <Button type="button" size="sm" variant="outline" onClick={openCompose}>
                 <MessageSquare data-icon="inline-start" />
                 New text
               </Button>
+            </div>
+            <div className="mt-3">
+              <InboxChannelSwitch />
             </div>
             <div className="relative mt-3">
               <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -316,6 +329,25 @@ export function MessagesInbox() {
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-1">
+                  {selected.contact?.email ? (
+                    <Button
+                      nativeButton={false}
+                      variant="outline"
+                      size="sm"
+                      render={
+                        <Link
+                          href={mailHref({
+                            contact: selected.contactId,
+                            job: selected.jobId,
+                            email: selected.contact.email,
+                          })}
+                        />
+                      }
+                    >
+                      <Mail />
+                      Mail
+                    </Button>
+                  ) : null}
                   {selected.phone ? (
                     <Button
                       nativeButton={false}
@@ -359,7 +391,7 @@ export function MessagesInbox() {
               </>
             ) : (
               <div className="min-w-0">
-                <p className="text-sm font-semibold">Messages</p>
+                <p className="text-sm font-semibold">Inbox</p>
                 <p className="text-xs text-muted-foreground">Pick a conversation or start a new text.</p>
               </div>
             )}

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronsUpDown, Mail, PenLine, RefreshCw, Reply, Search, Sparkles, Tag } from "lucide-react";
+import { ChevronLeft, ChevronsUpDown, Mail, MessageSquare, PenLine, RefreshCw, Reply, Search, Sparkles, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, ErrorBanner, LoadingScreen } from "@/components/page-chrome";
+import { InboxChannelSwitch } from "@/components/inbox-channel-switch";
 import { askTruss } from "@/lib/assistant/ask";
 import { useCrm } from "@/lib/crm-store";
 import {
@@ -34,6 +35,7 @@ import {
   type MailThread,
 } from "@/lib/job-emails";
 import { formatInboxTime, formatMessageStamp, initials } from "@/lib/format";
+import { messagesHref } from "@/lib/job-messages";
 import { cn } from "@/lib/utils";
 
 export function MailInbox() {
@@ -153,9 +155,18 @@ export function MailInbox() {
     (key: string) => {
       setComposeOpen(false);
       setReplyThreadId(null);
-      router.replace(mailHref({ thread: key }), { scroll: false });
+      const thread = threads.find((item) => item.key === key);
+      router.replace(
+        mailHref({
+          thread: key,
+          contact: thread?.contactId,
+          job: thread?.jobId ?? thread?.job?.id,
+          email: thread?.contact?.email || thread?.fromEmail,
+        }),
+        { scroll: false },
+      );
     },
-    [router],
+    [router, threads],
   );
 
   const startCompose = useCallback(
@@ -273,7 +284,7 @@ export function MailInbox() {
                 <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
                   Communication
                 </p>
-                <h1 className="font-heading text-lg font-medium">Mail</h1>
+                <h1 className="font-heading text-lg font-medium">Inbox</h1>
                 {mine?.linked ? (
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">
                     {mine.googleEmail}
@@ -291,6 +302,9 @@ export function MailInbox() {
                   </Button>
                 ) : null}
               </div>
+            </div>
+            <div className="mt-3">
+              <InboxChannelSwitch />
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {mine?.linked ? (
@@ -516,6 +530,24 @@ export function MailInbox() {
                     {selected.fromEmail ? ` · ${selected.fromEmail}` : ""}
                   </p>
                 </div>
+                {selected.contact?.phone ? (
+                  <Button
+                    nativeButton={false}
+                    size="sm"
+                    variant="outline"
+                    render={
+                      <Link
+                        href={messagesHref({
+                          contact: selected.contact.id,
+                          job: taggedJob?.id ?? selected.job?.id,
+                        })}
+                      />
+                    }
+                  >
+                    <MessageSquare />
+                    Text
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   size="sm"

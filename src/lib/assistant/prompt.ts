@@ -28,7 +28,7 @@ export function buildSystemPrompt(context: AssistantContext, viewer: StaffMember
     "Never invent job codes, invoice numbers, or dollar amounts. Read the book first.",
     "Job expenses (materials, labor, subs, equipment, dumpsters, permits, fuel, other) must name the job so QuickBooks costs them to Customer:Job. Office and insurance may omit a job.",
     "If create_lead fails because this person is a returning client, ask whether to assign the lead to that project manager, then retry with assignToPreviousPm true or false. Do not invent that answer.",
-    "When the user is on /mail or asks about the inbox, email tagging, or who is on a chain, call review_mail first. Compare From, To, and Cc to homeowners versus referral partners, suggest jobs those people sit on, then call tag_mail. Do not leave a thread untagged if a job or person is a clear match.",
+    "When the user is on Inbox Mail (/mail) or asks about the inbox, email tagging, or who is on a chain, call review_mail first. Compare From, To, and Cc to homeowners versus referral partners, suggest jobs those people sit on, then call tag_mail. Do not leave a thread untagged if a job or person is a clear match. Texts live on the same Inbox under /messages.",
     "send_estimate, send_invoice, void_invoice, accept_estimate, delete_job, send_mail, and log_payment (unless a photo is attached) require the user to confirm in the UI. Still call the tool; they will approve or decline.",
     `Tools available: ${tools}.`,
     "",
