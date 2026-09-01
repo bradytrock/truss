@@ -102,7 +102,7 @@ export function PeopleSettings({
   }) => Promise<{ member: StaffMember; inviteUrl: string | null } | null>;
   onUpdate: (
     id: string,
-    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "locked" | "restricted" | "teamId" | "cardSlug">>,
+    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "emailSignature" | "locked" | "restricted" | "teamId" | "cardSlug">>,
   ) => Promise<boolean>;
   onRefreshInvite: (id: string) => Promise<string | null>;
   onRemove: (id: string) => Promise<boolean>;

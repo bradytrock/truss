@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { cardUrl } from "@/lib/card";
@@ -20,6 +21,7 @@ export default function ProfilePage() {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
   const [phone, setPhone] = useState("");
+  const [emailSignature, setEmailSignature] = useState("");
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -27,6 +29,7 @@ export default function ProfilePage() {
     setName(member.name);
     setTitle(member.title);
     setPhone(member.phone);
+    setEmailSignature(member.emailSignature ?? "");
   }, [member]);
 
   if (!crm.hydrated) return <LoadingScreen />;
@@ -42,7 +45,10 @@ export default function ProfilePage() {
 
   const seat = member;
   const dirty =
-    name.trim() !== seat.name || title.trim() !== seat.title || phone.trim() !== seat.phone;
+    name.trim() !== seat.name ||
+    title.trim() !== seat.title ||
+    phone.trim() !== seat.phone ||
+    emailSignature !== (seat.emailSignature ?? "");
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -52,6 +58,7 @@ export default function ProfilePage() {
         name: name.trim(),
         title: title.trim(),
         phone: phone.trim(),
+        emailSignature,
       });
     } finally {
       setPending(false);
@@ -66,7 +73,7 @@ export default function ProfilePage() {
       <PageHeader
         eyebrow="Account"
         title="Profile"
-        description="Your name, title, and direct phone print on estimates and invoices for jobs you own. Copy your public card for NFC or a text."
+        description="Your name, title, and direct phone print on estimates and invoices for jobs you own. Your email signature signs off mail you send from Inbox. Copy your public card for NFC or a text."
       />
 
       <form onSubmit={onSubmit} className="max-w-2xl space-y-4">
@@ -124,6 +131,36 @@ export default function ProfilePage() {
         </Card>
         <Card>
           <CardHeader className="border-b">
+            <CardTitle>Email signature</CardTitle>
+            <CardDescription>
+              Sign-off on mail you send from Inbox. Leave blank to use the company default from
+              Settings → Company.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 pt-4">
+            <Label htmlFor="profile-email-signature">Your signature</Label>
+            <Textarea
+              id="profile-email-signature"
+              rows={5}
+              className="field-sizing-fixed min-h-28 resize-y"
+              value={emailSignature}
+              placeholder={
+                crm.company.defaultEmailSignature?.trim() ||
+                "Best,\n" + (seat.name || "Your name")
+              }
+              onChange={(event) => setEmailSignature(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {emailSignature.trim()
+                ? "This seat’s signature is used instead of the company default."
+                : crm.company.defaultEmailSignature?.trim()
+                  ? "Blank — new mail will use the company default until you save one here."
+                  : "No company default is set. New mail will have no sign-off until someone adds one."}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="border-b">
             <CardTitle>Public card</CardTitle>
             <CardDescription>
               Tap-to-call card at a stable URL. Renaming you here does not change the link — a company
@@ -149,6 +186,7 @@ export default function ProfilePage() {
                 setName(seat.name);
                 setTitle(seat.title);
                 setPhone(seat.phone);
+                setEmailSignature(seat.emailSignature ?? "");
               }}
             >
               Discard

@@ -40,6 +40,7 @@ function staffFromShared(payload: SharedPagePayload): StaffMember[] {
     email: "",
     phone: "",
     cardSlug: "",
+    emailSignature: "",
     locked: false,
     restricted: false,
     inviteExpiresAt: null,

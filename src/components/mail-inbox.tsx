@@ -24,6 +24,7 @@ import { EmptyState, ErrorBanner, LoadingScreen } from "@/components/page-chrome
 import { InboxChannelSwitch } from "@/components/inbox-channel-switch";
 import { askTruss } from "@/lib/assistant/ask";
 import { useCrm } from "@/lib/crm-store";
+import { appendEmailSignature, resolveEmailSignature } from "@/lib/email-signature";
 import {
   addressesOnMessage,
   filterMailThreads,
@@ -74,6 +75,11 @@ export function MailInbox() {
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
 
+  const emailSignature = useMemo(
+    () => resolveEmailSignature(crm.company, crm.viewer),
+    [crm.company, crm.viewer],
+  );
+
   const visibleThreads = useMemo(() => filterMailThreads(threads, query), [query, threads]);
 
   const selected: MailThread | null = useMemo(() => {
@@ -122,8 +128,8 @@ export function MailInbox() {
     setReplyThreadId(null);
     setComposeTo(wantedEmail || person?.email || "");
     setComposeSubject("");
-    setComposeBody("");
-  }, [crm.contacts, wantedCompose, wantedContact, wantedEmail]);
+    setComposeBody(appendEmailSignature("", emailSignature));
+  }, [crm.contacts, emailSignature, wantedCompose, wantedContact, wantedEmail]);
 
   const syncInbox = useCallback(async () => {
     if (!crm.user.staffId) return;
@@ -175,14 +181,14 @@ export function MailInbox() {
       setReplyThreadId(opts?.threadId ?? null);
       setComposeTo(opts?.to ?? "");
       setComposeSubject(opts?.subject ?? "");
-      setComposeBody(opts?.body ?? "");
+      setComposeBody(appendEmailSignature(opts?.body ?? "", emailSignature));
       if (opts?.threadId) {
         router.replace(mailHref({ thread: opts.threadId }), { scroll: false });
         return;
       }
       router.replace(mailHref({ compose: true, email: opts?.to }), { scroll: false });
     },
-    [router],
+    [emailSignature, router],
   );
 
   const closeCompose = useCallback(() => {

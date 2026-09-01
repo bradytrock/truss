@@ -140,6 +140,8 @@ export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>):
     defaultEstimateTerms: row.default_estimate_terms ?? null,
     defaultInvoiceTerms: row.default_invoice_terms ?? null,
     minimumMarginPercent: Number(row.minimum_margin_percent ?? 0),
+    defaultEmailSignature:
+      "default_email_signature" in row ? String(row.default_email_signature ?? "") : "",
   };
 }
 
@@ -154,6 +156,7 @@ export function mapStaff(row: StaffRow): StaffMember {
     email: row.email ?? "",
     phone: row.phone ?? "",
     cardSlug: "card_slug" in row ? String(row.card_slug ?? "") : "",
+    emailSignature: "email_signature" in row ? String(row.email_signature ?? "") : "",
     locked: Boolean(row.locked),
     restricted: Boolean(row.restricted),
     inviteExpiresAt: row.invite_expires_at ?? null,

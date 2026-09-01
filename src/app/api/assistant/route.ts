@@ -39,6 +39,7 @@ function viewerFromContext(context: AssistantContext): StaffMember | undefined {
     restricted: false,
     inviteExpiresAt: null,
     inviteToken: null,
+    emailSignature: "",
   };
 }
 

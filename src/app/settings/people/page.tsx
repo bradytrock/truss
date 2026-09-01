@@ -1,5 +1,6 @@
 "use client";
 
+import { EmailSignatureRoster } from "@/components/email-signature-settings";
 import { PageHeader } from "@/components/page-chrome";
 import { PeopleSettings } from "@/components/people-settings";
 import { SettingsAdminGate } from "@/components/settings-nav";
@@ -22,7 +23,7 @@ function PeopleSettingsBody() {
       <PageHeader
         eyebrow="Settings"
         title="People"
-        description={`Add a roster seat, put them on a team, send a signup link into this company, restrict someone to their own book, lock a login, or remove them. Invite links join this company — they do not open a second one. Invites expire in ${INVITE_DAYS} days.`}
+        description={`Add a roster seat, put them on a team, send a signup link into this company, set each person’s email signature, restrict someone to their own book, lock a login, or remove them. Invite links join this company — they do not open a second one. Invites expire in ${INVITE_DAYS} days.`}
       />
       <PeopleSettings
         teams={crm.book.teams}
@@ -35,6 +36,7 @@ function PeopleSettingsBody() {
         onRemove={crm.removeStaff}
         hideIntro
       />
+      <EmailSignatureRoster />
     </div>
   );
 }

@@ -151,6 +151,8 @@ export interface CompanySettings {
   defaultInvoiceTerms?: string | null;
   /** Floor applied when a catalog item is added to a proposal. 20 means 20%. */
   minimumMarginPercent?: number;
+  /** Plain-text email sign-off used when a seat has no signature of their own. */
+  defaultEmailSignature?: string;
 }
 
 export const NORTHLINE_COMPANY: CompanySettings = {
@@ -167,6 +169,7 @@ export const NORTHLINE_COMPANY: CompanySettings = {
   defaultEstimateTerms: null,
   defaultInvoiceTerms: null,
   minimumMarginPercent: 0,
+  defaultEmailSignature: "",
 };
 
 export interface StaffMember {
@@ -180,6 +183,8 @@ export interface StaffMember {
   phone: string;
   /** first.last, unique per company. Sticky on rename. */
   cardSlug: string;
+  /** Own sign-off. Empty means use the company default. */
+  emailSignature: string;
   locked: boolean;
   restricted: boolean;
   inviteExpiresAt: string | null;
@@ -1125,6 +1130,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     initials: "JH",
     email: "",
     phone: "",
+    emailSignature: "",
     cardSlug: "jordan.hale",
     locked: false,
     restricted: false,
@@ -1140,6 +1146,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     initials: "PS",
     email: "",
     phone: "",
+    emailSignature: "",
     cardSlug: "priya.shah",
     locked: false,
     restricted: false,
@@ -1155,6 +1162,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     initials: "CD",
     email: "",
     phone: "",
+    emailSignature: "",
     cardSlug: "claire.duvall",
     locked: false,
     restricted: false,
@@ -1170,6 +1178,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     initials: "LO",
     email: "",
     phone: "",
+    emailSignature: "",
     cardSlug: "luis.ortega",
     locked: false,
     restricted: false,
@@ -1185,6 +1194,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     initials: "MC",
     email: "",
     phone: "",
+    emailSignature: "",
     cardSlug: "maya.chen",
     locked: false,
     restricted: false,
@@ -1200,6 +1210,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     initials: "EV",
     email: "",
     phone: "",
+    emailSignature: "",
     cardSlug: "elena.voss",
     locked: false,
     restricted: false,
@@ -1215,6 +1226,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     initials: "TB",
     email: "",
     phone: "",
+    emailSignature: "",
     cardSlug: "tom.brennan",
     locked: false,
     restricted: false,
@@ -1230,6 +1242,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     initials: "NK",
     email: "",
     phone: "",
+    emailSignature: "",
     cardSlug: "nora.keene",
     locked: false,
     restricted: false,

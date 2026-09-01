@@ -38,6 +38,7 @@ export function staffMemberFromProfile(input: {
     inviteExpiresAt: null,
     inviteToken: null,
     cardSlug: "",
+    emailSignature: "",
   };
 }
 

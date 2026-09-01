@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
@@ -239,6 +239,7 @@ import {
   outboundActivityBody,
 } from "@/lib/job-messages";
 import { emailActivityBody, tagsFromAddresses } from "@/lib/job-emails";
+import { appendEmailSignature, resolveEmailSignature } from "@/lib/email-signature";
 import { sampleGmailMessages } from "@/lib/demo-emails";
 import {
   companyAdminsForNotice,
@@ -758,7 +759,12 @@ type CrmContextValue = CrmState & {
   }) => Promise<{ member: StaffMember; inviteUrl: string | null } | null>;
   updateStaffAccount: (
     id: string,
-    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "locked" | "restricted" | "teamId" | "cardSlug">>,
+    patch: Partial<
+      Pick<
+        StaffMember,
+        "name" | "title" | "role" | "email" | "phone" | "emailSignature" | "locked" | "restricted" | "teamId" | "cardSlug"
+      >
+    >,
   ) => Promise<boolean>;
   addTeam: (input: { name: string; leadStaffId?: string | null }) => Promise<Team | null>;
   updateTeam: (id: string, patch: { name?: string; leadStaffId?: string | null }) => Promise<boolean>;
@@ -6838,7 +6844,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }) => {
       const to = input.to.trim();
       const subject = input.subject.trim();
-      const body = input.body.trim();
+      const sender = state.staff.find((item) => item.id === user.staffId);
+      const body = appendEmailSignature(
+        input.body,
+        resolveEmailSignature(companySettings, sender),
+      ).trim();
       if (!to.includes("@") || !subject || !body) {
         toast.error("Add a recipient, subject, and message.");
         return { ok: false };
@@ -6938,7 +6948,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       toast.success(account.source === "google" ? "Email sent." : "Saved to this inbox (sample send).");
       return { ok: true, threadId };
     },
-    [addActivity, state.contacts, state.gmailAccounts, user.companyId, user.name, user.staffId],
+    [addActivity, companySettings, state.contacts, state.gmailAccounts, state.staff, user.companyId, user.name, user.staffId],
   );
 
   const setShareWithTeam = useCallback(
@@ -7534,6 +7544,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         defaultEstimateTerms: next.defaultEstimateTerms ?? null,
         defaultInvoiceTerms: next.defaultInvoiceTerms ?? null,
         minimumMarginPercent: clampMarginPercent(next.minimumMarginPercent),
+        defaultEmailSignature: next.defaultEmailSignature?.trim() ?? "",
       };
       if (!isSupabaseConfigured() || !user.companyId || user.companyId === "local") {
         setCompanySettings(settings);
@@ -7559,6 +7570,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         default_estimate_terms: settings.defaultEstimateTerms,
         default_invoice_terms: settings.defaultInvoiceTerms,
         minimum_margin_percent: settings.minimumMarginPercent,
+        default_email_signature: settings.defaultEmailSignature ?? "",
         updated_at: new Date().toISOString(),
       };
       let { data, error } = await supabase
@@ -7606,6 +7618,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         data = retry.data;
         error = retry.error;
         if (!error) toast.message(missingCatalogMarginMessage());
+      }
+      if (error && isMissingEmailSignatureColumns(error)) {
+        const { default_email_signature: _sig, ...rest } = attempted;
+        attempted = rest;
+        const retry = await supabase
+          .from("companies")
+          .update(rest as typeof payload)
+          .eq("id", user.companyId)
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingEmailSignatureMessage());
       }
       if (error && isMissingCompanySlug(error)) {
         const { slug: _slug, ...rest } = attempted;
@@ -7740,6 +7765,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         email: member.email,
         phone: member.phone,
         card_slug: member.cardSlug || mintPersonCardSlug(member.name),
+        email_signature: member.emailSignature ?? "",
         locked: member.locked,
         restricted: member.restricted,
         invite_expires_at: inviteExpiresAt,
@@ -7756,6 +7782,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         const retry = await supabase.from("team_members").upsert(withoutSlug);
         error = retry.error;
         if (!retry.error) toast.message(missingBusinessCardsMessage());
+      }
+      if (error && isMissingEmailSignatureColumns(error)) {
+        const { email_signature: _sig, ...withoutSig } = payload;
+        const retry = await supabase.from("team_members").upsert(withoutSig);
+        error = retry.error;
+        if (!retry.error) toast.message(missingEmailSignatureMessage());
       }
       if (error) {
         toast.error("Could not save teammate", {
@@ -7889,6 +7921,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         restricted: false,
         inviteToken: token,
         inviteExpiresAt: expires,
+        emailSignature: "",
       };
       const ok = await persistStaffFields(member, { inviteToken: token, inviteExpiresAt: expires });
       if (!ok) return null;
@@ -7919,9 +7952,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const updateStaffAccount = useCallback(
     async (
       id: string,
-      patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "locked" | "restricted" | "teamId" | "cardSlug">>,
+      patch: Partial<
+        Pick<
+          StaffMember,
+          "name" | "title" | "role" | "email" | "phone" | "emailSignature" | "locked" | "restricted" | "teamId" | "cardSlug"
+        >
+      >,
     ) => {
-      const profileKeys = new Set(["name", "title", "phone"]);
+      const profileKeys = new Set(["name", "title", "phone", "emailSignature"]);
       const mintingOwnCard = Boolean(
         patch.cardSlug &&
           id === viewer?.id &&
@@ -7948,6 +7986,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         title: patch.title !== undefined ? patch.title.trim() : current.title,
         email: patch.email !== undefined ? normalizeSeatEmail(patch.email) : current.email,
         phone: patch.phone !== undefined ? patch.phone.trim() : current.phone,
+        emailSignature:
+          patch.emailSignature !== undefined ? patch.emailSignature.trim() : current.emailSignature,
         teamId: patch.teamId !== undefined ? (looksLikeUuid(patch.teamId) ? patch.teamId : "") : current.teamId,
         cardSlug:
           patch.cardSlug !== undefined

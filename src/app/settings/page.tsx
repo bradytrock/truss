@@ -1,5 +1,7 @@
 "use client";
 
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-chrome";
 import { SettingsAdminGate } from "@/components/settings-nav";
@@ -158,6 +160,31 @@ function CompanySettingsForm() {
               />
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Default email signature</CardTitle>
+          <CardDescription>
+            Appended to mail this company sends when that person has not set their own sign-off.
+            Set each person under Settings → People, or they can edit it on Profile.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-2 pt-4">
+          <Label htmlFor="company-email-signature">Company signature</Label>
+          <Textarea
+            id="company-email-signature"
+            rows={6}
+            className="field-sizing-fixed min-h-32 resize-y"
+            value={form.defaultEmailSignature ?? ""}
+            placeholder={"Best,\nNorthline Construction\n(303) 555-0140"}
+            onChange={(event) => patch("defaultEmailSignature", event.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Plain text. New and reply compose start with this unless the sender has their own
+            signature. Ask Truss uses the same rule when it sends mail.
+          </p>
         </CardContent>
       </Card>
     </form>

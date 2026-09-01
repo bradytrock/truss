@@ -510,6 +510,18 @@ export function missingCatalogMarginMessage() {
   return `Saved in this browser. Run ${CATALOG_MARGIN_SQL} in the SQL editor (or a fresh bootstrap) so catalog margin and the company minimum persist.`;
 }
 
+export const EMAIL_SIGNATURES_SQL = "supabase/migrations/20260901150000_email_signatures.sql";
+
+export function isMissingEmailSignatureColumns(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return message.includes("default_email_signature") || message.includes("email_signature");
+}
+
+export function missingEmailSignatureMessage() {
+  return `Saved in this browser. Run ${EMAIL_SIGNATURES_SQL} in the SQL editor (or a fresh bootstrap) so email signatures persist.`;
+}
+
 export const PRICE_LISTS_SQL = "supabase/migrations/20260828150000_price_lists.sql";
 
 export function isMissingPriceLists(error: { message?: string; code?: string } | null | undefined) {
