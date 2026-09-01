@@ -685,6 +685,32 @@ export interface CalendarShare {
   viewerStaffId: string;
 }
 
+export interface GmailAccount {
+  id: string;
+  staffId: string;
+  googleEmail: string;
+  linked: boolean;
+  linkedAt: string | null;
+  source: "google" | "demo";
+}
+
+export interface GmailMessage {
+  id: string;
+  accountId: string;
+  gmailId: string;
+  threadId: string;
+  fromName: string;
+  fromEmail: string;
+  toEmail: string;
+  subject: string;
+  snippet: string;
+  bodyText: string;
+  receivedAt: string;
+  direction: "inbound" | "outbound";
+  jobId: string | null;
+  contactId: string | null;
+}
+
 export interface JobPhoto {
   id: string;
   jobId: string;
@@ -896,6 +922,8 @@ export interface CrmState {
   photoReports: PhotoReport[];
   calendarAccounts: CalendarAccount[];
   calendarShares: CalendarShare[];
+  gmailAccounts: GmailAccount[];
+  gmailMessages: GmailMessage[];
   trainingProgress: TrainingProgress[];
   trainingBulletins: TrainingBulletin[];
   messages: TextMessage[];

@@ -82,6 +82,8 @@ export const seedState: CrmState = {
   qbReviewComments: [],
   calendarAccounts: structuredClone(seedCalendarAccounts),
   calendarShares: structuredClone(seedCalendarShares),
+  gmailAccounts: [],
+  gmailMessages: [],
   trainingProgress: structuredClone(seedTrainingProgress),
   trainingBulletins: structuredClone(seedTrainingBulletins),
   messages: extraMessages,

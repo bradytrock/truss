@@ -423,6 +423,12 @@ export function scopeBook(
       if (message.contactId && contacts.some((contact) => contact.id === message.contactId)) return true;
       return false;
     }),
+    gmailMessages: (state.gmailMessages ?? []).filter((message) => {
+      if (message.jobId && jobIds.has(message.jobId)) return true;
+      if (message.contactId && contacts.some((contact) => contact.id === message.contactId)) return true;
+      if (!message.jobId && !message.contactId) return true;
+      return false;
+    }),
     returningClientLeads: (state.returningClientLeads ?? []).filter((notice) => {
       if (canManageSettings(effective.role, effective)) return true;
       if (notice.previousStaffId && notice.previousStaffId === effective.id) return true;

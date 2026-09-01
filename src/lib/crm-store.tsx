@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
@@ -143,6 +143,8 @@ import {
   mapTask,
   mapTrainingBulletin,
   mapMessage,
+  mapGmailAccount,
+  mapGmailMessage,
   mapReturningClientLead,
   opportunityPatch,
 } from "@/lib/supabase/mappers";
@@ -196,6 +198,8 @@ import {
   type QbReviewKind,
   type QbSyncStatus,
   type TextMessage,
+  type GmailAccount,
+  type GmailMessage,
   type ReturningClientLead,
 } from "@/lib/types";
 import {
@@ -234,6 +238,8 @@ import {
   opportunityForContact,
   outboundActivityBody,
 } from "@/lib/job-messages";
+import { emailActivityBody } from "@/lib/job-emails";
+import { sampleGmailMessages } from "@/lib/demo-emails";
 import {
   companyAdminsForNotice,
   isOpenReturningClientStatus,
@@ -304,6 +310,8 @@ const emptyState: CrmState = {
   qbReviewComments: [],
   calendarAccounts: [],
   calendarShares: [],
+  gmailAccounts: [],
+  gmailMessages: [],
   trainingProgress: [],
   trainingBulletins: [],
   messages: [],
@@ -978,6 +986,11 @@ type CrmContextValue = CrmState & {
   disconnectCalendar: () => Promise<void>;
   setShareWithTeam: (shareWithTeam: boolean) => Promise<void>;
   setCalendarShare: (viewerStaffId: string, shared: boolean) => Promise<void>;
+  loadSampleInbox: () => Promise<void>;
+  markGmailLinked: (staffId: string, googleEmail: string, source: "google" | "demo") => Promise<void>;
+  disconnectGmail: () => Promise<void>;
+  mergeGmailMessages: (messages: GmailMessage[]) => void;
+  tagGmailThread: (threadId: string, jobId: string | null) => Promise<void>;
   progressFor: (staffId: string) => TrainingProgress;
   markLessonRead: (chapterId: string, index: number) => Promise<void>;
   submitQuiz: (input: {
@@ -6554,6 +6567,211 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     toast.message("Google Calendar disconnected.");
   }, [state.calendarAccounts, upsertAccount, user.staffId]);
 
+  const upsertGmailAccount = useCallback(
+    async (account: GmailAccount) => {
+      setState((prev) => {
+        const exists = prev.gmailAccounts.some((item) => item.staffId === account.staffId);
+        const gmailAccounts = exists
+          ? prev.gmailAccounts.map((item) => (item.staffId === account.staffId ? { ...item, ...account } : item))
+          : [...prev.gmailAccounts, account];
+        return { ...prev, gmailAccounts };
+      });
+      const supabase = maybeClient();
+      if (!supabase || !user.companyId || user.companyId === "local") return account;
+      if (!looksLikeUuid(account.staffId)) return account;
+      const { data, error } = await supabase
+        .from("gmail_accounts")
+        .upsert(
+          {
+            company_id: user.companyId,
+            staff_id: account.staffId,
+            google_email: account.googleEmail,
+            linked: account.linked,
+            linked_at: account.linkedAt,
+            source: account.source,
+          },
+          { onConflict: "company_id,staff_id" },
+        )
+        .select("*")
+        .single();
+      if (error) {
+        if (isMissingGmail(error)) toast.message(missingGmailMessage());
+        else toast.error(error.message);
+        return account;
+      }
+      if (!data) return account;
+      const saved = mapGmailAccount(data);
+      setState((prev) => ({
+        ...prev,
+        gmailAccounts: prev.gmailAccounts.map((item) => (item.staffId === saved.staffId ? saved : item)),
+      }));
+      return saved;
+    },
+    [user.companyId],
+  );
+
+  const mergeGmailMessages = useCallback((messages: GmailMessage[]) => {
+    setState((prev) => {
+      const incomingIds = new Set(messages.map((item) => item.gmailId));
+      const accountIds = new Set(messages.map((item) => item.accountId).filter(Boolean));
+      const kept = prev.gmailMessages.filter(
+        (item) => !accountIds.has(item.accountId) || !incomingIds.has(item.gmailId),
+      );
+      const byGmail = new Map(kept.map((item) => [`${item.accountId}:${item.gmailId}`, item]));
+      for (const message of messages) {
+        byGmail.set(`${message.accountId}:${message.gmailId}`, message);
+      }
+      return { ...prev, gmailMessages: [...byGmail.values()] };
+    });
+  }, []);
+
+  const markGmailLinked = useCallback(
+    async (staffId: string, googleEmail: string, source: "google" | "demo") => {
+      const current = state.gmailAccounts.find((item) => item.staffId === staffId);
+      await upsertGmailAccount({
+        id: current?.id || crypto.randomUUID(),
+        staffId,
+        googleEmail,
+        linked: true,
+        linkedAt: new Date().toISOString(),
+        source,
+      });
+    },
+    [state.gmailAccounts, upsertGmailAccount],
+  );
+
+  const disconnectGmail = useCallback(async () => {
+    const staffId = user.staffId;
+    if (!staffId) return;
+    try {
+      await fetch("/api/google/gmail/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staffId }),
+      });
+    } catch {
+      // Local demo still unlinks below.
+    }
+    const current = state.gmailAccounts.find((item) => item.staffId === staffId);
+    if (current) {
+      await upsertGmailAccount({
+        ...current,
+        googleEmail: "",
+        linked: false,
+        linkedAt: null,
+        source: "demo",
+      });
+    }
+    toast.message("Gmail disconnected.");
+  }, [state.gmailAccounts, upsertGmailAccount, user.staffId]);
+
+  const loadSampleInbox = useCallback(async () => {
+    const staffId = user.staffId;
+    if (!staffId) return;
+    const existing = state.gmailAccounts.find((item) => item.staffId === staffId);
+    const account = await upsertGmailAccount({
+      id: existing?.id || crypto.randomUUID(),
+      staffId,
+      googleEmail: existing?.googleEmail || "demo@northlineco.com",
+      linked: true,
+      linkedAt: new Date().toISOString(),
+      source: "demo",
+    });
+    if (state.gmailMessages.some((item) => item.accountId === account.id)) {
+      toast.message("Sample inbox is already loaded.");
+      return;
+    }
+    const samples = sampleGmailMessages({
+      accountId: account.id,
+      contacts: state.contacts,
+      jobs: state.jobs,
+      opportunities: state.opportunities,
+    });
+    const supabase = maybeClient();
+    if (!supabase || !user.companyId || user.companyId === "local") {
+      setState((prev) => ({ ...prev, gmailMessages: [...samples, ...prev.gmailMessages] }));
+      toast.success("Sample inbox loaded. Tag a thread to a job.");
+      return;
+    }
+    const rows = samples.map((message) => ({
+      id: message.id,
+      company_id: user.companyId,
+      account_id: account.id,
+      gmail_id: message.gmailId,
+      thread_id: message.threadId,
+      from_name: message.fromName,
+      from_email: message.fromEmail,
+      to_email: message.toEmail,
+      subject: message.subject,
+      snippet: message.snippet,
+      body_text: message.bodyText,
+      received_at: message.receivedAt,
+      direction: message.direction,
+      job_id: looksLikeUuid(message.jobId) ? message.jobId : null,
+      contact_id: looksLikeUuid(message.contactId) ? message.contactId : null,
+    }));
+    const { data, error } = await supabase.from("gmail_messages").insert(rows).select("*");
+    if (error) {
+      if (isMissingGmail(error)) toast.message(missingGmailMessage());
+      else toast.error(error.message);
+      setState((prev) => ({ ...prev, gmailMessages: [...samples, ...prev.gmailMessages] }));
+      return;
+    }
+    const saved = (data ?? []).map(mapGmailMessage);
+    setState((prev) => ({ ...prev, gmailMessages: [...saved, ...prev.gmailMessages] }));
+    toast.success("Sample inbox loaded. Tag a thread to a job.");
+  }, [
+    state.contacts,
+    state.gmailAccounts,
+    state.gmailMessages,
+    state.jobs,
+    state.opportunities,
+    upsertGmailAccount,
+    user.companyId,
+    user.staffId,
+  ]);
+
+  const tagGmailThread = useCallback(
+    async (threadId: string, jobId: string | null) => {
+      const thread = state.gmailMessages.filter((item) => (item.threadId || item.id) === threadId);
+      if (thread.length === 0) return;
+      const previousJobId = [...thread].reverse().find((item) => item.jobId)?.jobId ?? null;
+      const ids = thread.map((item) => item.id);
+      setState((prev) => ({
+        ...prev,
+        gmailMessages: prev.gmailMessages.map((item) =>
+          ids.includes(item.id) ? { ...item, jobId } : item,
+        ),
+      }));
+      const supabase = maybeClient();
+      if (supabase && user.companyId && user.companyId !== "local") {
+        const { error } = await supabase
+          .from("gmail_messages")
+          .update({ job_id: looksLikeUuid(jobId) ? jobId : null })
+          .in("id", ids.filter((id) => looksLikeUuid(id)));
+        if (error) {
+          if (isMissingGmail(error)) toast.message(missingGmailMessage());
+          else toast.error(error.message);
+        }
+      }
+      if (jobId && jobId !== previousJobId) {
+        const latest = [...thread].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))[0];
+        const contact = latest.contactId
+          ? state.contacts.find((item) => item.id === latest.contactId)
+          : undefined;
+        await addActivity({
+          entityType: "job",
+          entityId: jobId,
+          type: "email",
+          body: emailActivityBody(latest, contact?.name),
+        });
+      }
+      if (jobId) toast.success("Tagged to the job.");
+      else toast.message("Removed job tag.");
+    },
+    [addActivity, state.contacts, state.gmailMessages, user.companyId],
+  );
+
   const setShareWithTeam = useCallback(
     async (shareWithTeam: boolean) => {
       const staffId = user.staffId;
@@ -8034,6 +8252,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       disconnectCalendar,
       setShareWithTeam,
       setCalendarShare,
+      loadSampleInbox,
+      markGmailLinked,
+      disconnectGmail,
+      mergeGmailMessages,
+      tagGmailThread,
       progressFor,
       markLessonRead,
       submitQuiz,
@@ -8169,6 +8392,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       disconnectCalendar,
       setShareWithTeam,
       setCalendarShare,
+      loadSampleInbox,
+      markGmailLinked,
+      disconnectGmail,
+      mergeGmailMessages,
+      tagGmailThread,
       progressFor,
       markLessonRead,
       submitQuiz,

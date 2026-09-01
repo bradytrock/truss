@@ -358,6 +358,28 @@ export function missingMessagesMessage() {
   return `Saved in this browser. Run ${MESSAGES_SQL} in the SQL editor so texts stay on the job and in Messages.`;
 }
 
+export const GMAIL_SQL = "supabase/migrations/20260901120000_gmail.sql";
+
+export function isMissingGmail(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    (error.code === "PGRST204" ||
+      error.code === "PGRST205" ||
+      message.includes("schema cache") ||
+      message.includes("could not find the")) &&
+    (message.includes("gmail_messages") ||
+      message.includes("gmail_accounts") ||
+      message.includes("save_gmail_tokens") ||
+      message.includes("gmail_credentials") ||
+      message.includes("disconnect_gmail"))
+  );
+}
+
+export function missingGmailMessage() {
+  return `Saved in this browser. Run ${GMAIL_SQL} in the SQL editor so Gmail stays linked and tagged mail stays on the job.`;
+}
+
 export function missingPrimaryContactHint() {
   return `Run ${RESIDENTIAL_ENUMS_SQL} in the SQL editor so jobs can store a homeowner, then try again.`;
 }

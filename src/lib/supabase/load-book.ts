@@ -29,6 +29,8 @@ import {
   mapTrainingBulletin,
   mapTrainingProgress,
   mapMessage,
+  mapGmailAccount,
+  mapGmailMessage,
   mapReturningClientLead,
   mapMaterialOrder,
   mapMaterialOrderLine,
@@ -104,6 +106,8 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     trainingBulletinsRes,
     photoReportsRes,
     messagesRes,
+    gmailAccountsRes,
+    gmailMessagesRes,
     returningClientLeadsRes,
     jobFilesRes,
     materialOrdersRes,
@@ -156,6 +160,12 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       ascending: false,
     }),
     supabase.from("messages").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    supabase.from("gmail_accounts").select("*").eq("company_id", companyId),
+    supabase
+      .from("gmail_messages")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("received_at", { ascending: false }),
     supabase.from("returning_client_leads").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("job_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("material_orders").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
@@ -258,6 +268,8 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       ? []
       : (trainingBulletinsRes.data ?? []).map(mapTrainingBulletin),
     messages: messagesRes.error ? [] : (messagesRes.data ?? []).map(mapMessage),
+    gmailAccounts: gmailAccountsRes.error ? [] : (gmailAccountsRes.data ?? []).map(mapGmailAccount),
+    gmailMessages: gmailMessagesRes.error ? [] : (gmailMessagesRes.data ?? []).map(mapGmailMessage),
     returningClientLeads: returningClientLeadsRes.error
       ? []
       : (returningClientLeadsRes.data ?? []).flatMap((row) => {

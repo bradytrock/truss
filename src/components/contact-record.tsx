@@ -9,6 +9,7 @@ import { RecordProperty } from "@/components/app-shell";
 import { JobStatusBadge, StageBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency, initials } from "@/lib/format";
+import { mailHref } from "@/lib/job-emails";
 import { jobsForContact, opportunitiesForContact } from "@/lib/parties";
 import { SEAT_ROLE_LABELS, type Contact } from "@/lib/types";
 
@@ -36,10 +37,21 @@ export function ContactRecord({ contact }: { contact: Contact }) {
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {contact.email ? (
-              <Button nativeButton={false} size="sm" variant="outline" render={<a href={`mailto:${contact.email}`} />}>
-                <Mail />
-                Email
-              </Button>
+              <>
+                <Button nativeButton={false} size="sm" variant="outline" render={<a href={`mailto:${contact.email}`} />}>
+                  <Mail />
+                  Email
+                </Button>
+                <Button
+                  nativeButton={false}
+                  size="sm"
+                  variant="outline"
+                  render={<Link href={mailHref({ contact: contact.id })} />}
+                >
+                  <Mail />
+                  Open in Mail
+                </Button>
+              </>
             ) : null}
             {contact.phone ? (
               <Button nativeButton={false} size="sm" variant="outline" render={<a href={`tel:${contact.phone}`} />}>

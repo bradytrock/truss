@@ -59,6 +59,7 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
       { href: "/", label: "Home" },
       { href: "/jobs", label: "Jobs" },
       { href: "/messages", label: "Messages" },
+      { href: "/mail", label: "Mail" },
       { href: "/photos", label: "Photos" },
       { href: "/contacts", label: "Agents & contacts" },
       { href: "/reports", label: "ROI" },
@@ -68,6 +69,7 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
     { href: "/", label: "Home" },
     { href: "/jobs", label: "Jobs" },
     { href: "/messages", label: "Messages" },
+    { href: "/mail", label: "Mail" },
     { href: "/photos", label: "Photos" },
     { href: "/estimates", label: "Estimates" },
     { href: "/invoices", label: "Invoices" },
@@ -386,6 +388,15 @@ function SearchTrigger() {
                 }}
               >
                 Texts with homeowners
+              </CommandItem>
+              <CommandItem
+                value="mail gmail email inbox job"
+                onSelect={() => {
+                  setOpen(false);
+                  router.push("/mail");
+                }}
+              >
+                Gmail tagged to jobs
               </CommandItem>
             </CommandGroup>
             <CommandGroup heading="Photos">

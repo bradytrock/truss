@@ -1161,6 +1161,85 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["training_bulletins"]["Insert"]>;
         Relationships: [];
       };
+      gmail_accounts: {
+        Row: {
+          id: string;
+          company_id: string;
+          staff_id: string;
+          google_email: string;
+          linked: boolean;
+          linked_at: string | null;
+          source: "demo" | "google";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          staff_id: string;
+          google_email?: string;
+          linked?: boolean;
+          linked_at?: string | null;
+          source?: "demo" | "google";
+        };
+        Update: Partial<Database["public"]["Tables"]["gmail_accounts"]["Insert"]>;
+        Relationships: [];
+      };
+      gmail_tokens: {
+        Row: {
+          account_id: string;
+          refresh_token: string | null;
+          access_token: string | null;
+          token_expires_at: string | null;
+        };
+        Insert: {
+          account_id: string;
+          refresh_token?: string | null;
+          access_token?: string | null;
+          token_expires_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["gmail_tokens"]["Insert"]>;
+        Relationships: [];
+      };
+      gmail_messages: {
+        Row: {
+          id: string;
+          company_id: string;
+          account_id: string;
+          gmail_id: string;
+          thread_id: string;
+          from_name: string;
+          from_email: string;
+          to_email: string;
+          subject: string;
+          snippet: string;
+          body_text: string;
+          received_at: string;
+          direction: string;
+          job_id: string | null;
+          contact_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          account_id: string;
+          gmail_id?: string;
+          thread_id?: string;
+          from_name?: string;
+          from_email?: string;
+          to_email?: string;
+          subject?: string;
+          snippet?: string;
+          body_text?: string;
+          received_at?: string;
+          direction?: string;
+          job_id?: string | null;
+          contact_id?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["gmail_messages"]["Insert"]>;
+        Relationships: [];
+      };
       messages: {
         Row: {
           id: string;
@@ -1404,6 +1483,30 @@ export type Database = {
         }[];
       };
       disconnect_google_calendar: {
+        Args: { p_staff_id: string };
+        Returns: undefined;
+      };
+      save_gmail_tokens: {
+        Args: {
+          p_staff_id: string;
+          p_google_email: string;
+          p_refresh_token: string;
+          p_access_token: string;
+          p_token_expires_at: string;
+        };
+        Returns: string;
+      };
+      gmail_credentials: {
+        Args: { target_staff_id: string };
+        Returns: {
+          account_id: string;
+          refresh_token: string | null;
+          access_token: string | null;
+          token_expires_at: string | null;
+          google_email: string;
+        }[];
+      };
+      disconnect_gmail: {
         Args: { p_staff_id: string };
         Returns: undefined;
       };

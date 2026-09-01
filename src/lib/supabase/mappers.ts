@@ -45,6 +45,8 @@ import type {
   TrainingBulletin,
   TrainingProgress,
   TextMessage,
+  GmailAccount,
+  GmailMessage,
   ReturningClientLead,
   MaterialOrder,
   MaterialOrderLine,
@@ -77,6 +79,8 @@ type TeamRow = Database["public"]["Tables"]["teams"]["Row"];
 type CompanyRow = Database["public"]["Tables"]["companies"]["Row"];
 type CalendarAccountRow = Database["public"]["Tables"]["calendar_accounts"]["Row"];
 type CalendarShareRow = Database["public"]["Tables"]["calendar_shares"]["Row"];
+type GmailAccountRow = Database["public"]["Tables"]["gmail_accounts"]["Row"];
+type GmailMessageRow = Database["public"]["Tables"]["gmail_messages"]["Row"];
 type TrainingProgressRow = Database["public"]["Tables"]["training_progress"]["Row"];
 type TrainingBulletinRow = Database["public"]["Tables"]["training_bulletins"]["Row"];
 type MessageRow = Database["public"]["Tables"]["messages"]["Row"];
@@ -914,6 +918,36 @@ export function mapMessage(row: MessageRow): TextMessage {
     mediaUrl: row.media_url,
     createdAt: row.created_at,
     createdBy: row.created_by,
+  };
+}
+
+export function mapGmailAccount(row: GmailAccountRow): GmailAccount {
+  return {
+    id: row.id,
+    staffId: row.staff_id,
+    googleEmail: row.google_email,
+    linked: row.linked,
+    linkedAt: row.linked_at,
+    source: row.source === "google" ? "google" : "demo",
+  };
+}
+
+export function mapGmailMessage(row: GmailMessageRow): GmailMessage {
+  return {
+    id: row.id,
+    accountId: row.account_id,
+    gmailId: row.gmail_id,
+    threadId: row.thread_id,
+    fromName: row.from_name,
+    fromEmail: row.from_email,
+    toEmail: row.to_email,
+    subject: row.subject,
+    snippet: row.snippet,
+    bodyText: row.body_text,
+    receivedAt: row.received_at,
+    direction: row.direction === "outbound" ? "outbound" : "inbound",
+    jobId: row.job_id,
+    contactId: row.contact_id,
   };
 }
 

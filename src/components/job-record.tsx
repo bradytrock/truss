@@ -65,7 +65,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { RecordCode } from "@/components/page-chrome";
 import { EstimateStatusBadge, InvoiceStatusBadge, PhotoCategoryBadge, QbStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
-import { formatCurrencyFull, formatDate } from "@/lib/format";
+import { formatCurrencyFull, formatDate, formatInboxTime } from "@/lib/format";
+import { mailHref } from "@/lib/job-emails";
 import { assignedCrewPatch, isDeletedJob, jobAddress, mapsUrl, uniqueIds, uniqueNames } from "@/lib/job-record";
 import { visibleJobCustomFields } from "@/lib/job-files";
 import {
@@ -335,6 +336,9 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
         activity.entityId === job.opportunityId)
   );
   const tasks = crm.tasks.filter((task) => task.relatedType === "job" && task.relatedId === job.id);
+  const jobMail = (crm.gmailMessages ?? [])
+    .filter((message) => message.jobId === job.id)
+    .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
 
   const related = useMemo(() => {
     const ids = uniqueIds([
@@ -507,6 +511,27 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
               Text homeowner
             </Button>
           ) : null}
+          {primary?.email ? (
+            <Button
+              nativeButton={false}
+              variant="outline"
+              size="sm"
+              render={<Link href={mailHref({ job: job.id, contact: primary.id })} />}
+            >
+              <Mail data-icon="inline-start" />
+              Mail
+            </Button>
+          ) : (
+            <Button
+              nativeButton={false}
+              variant="outline"
+              size="sm"
+              render={<Link href={mailHref({ job: job.id })} />}
+            >
+              <Mail data-icon="inline-start" />
+              Mail
+            </Button>
+          )}
         </div>
       ) : null}
 
@@ -1045,6 +1070,42 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
             <p className="mb-3 text-[11px] font-semibold tracking-[0.16em] text-foreground uppercase">
               Activity
             </p>
+            {jobMail.length > 0 ? (
+              <div className="mb-4 space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">Tagged mail</p>
+                <ul className="space-y-2">
+                  {jobMail.map((message) => (
+                    <li key={message.id}>
+                      <Link
+                        href={mailHref({ thread: message.threadId || message.id, job: job.id })}
+                        className="block border px-3 py-2 hover:bg-muted/50"
+                      >
+                        <span className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-sm font-medium">
+                            {message.subject.trim() || "(no subject)"}
+                          </span>
+                          <span className="shrink-0 text-[10px] text-muted-foreground">
+                            {formatInboxTime(message.receivedAt)}
+                          </span>
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                          {message.direction === "outbound" ? "To" : "From"}{" "}
+                          {message.fromName || message.fromEmail} · {message.snippet || message.bodyText}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="mb-4 text-sm text-muted-foreground">
+                No Gmail tagged to this job yet.{" "}
+                <Link href={mailHref({ job: job.id, contact: primary?.id })} className="font-medium hover:underline">
+                  Open Mail
+                </Link>{" "}
+                to tag a thread.
+              </p>
+            )}
             <ActivityComposer entityType="job" entityId={job.id} focusRequest={activityFocus} />
             <div className="mt-4">
               <ActivityList
