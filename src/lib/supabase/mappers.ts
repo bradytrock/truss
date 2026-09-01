@@ -941,6 +941,7 @@ export function mapGmailMessage(row: GmailMessageRow): GmailMessage {
     fromName: row.from_name,
     fromEmail: row.from_email,
     toEmail: row.to_email,
+    ccEmail: "cc_email" in row ? String(row.cc_email ?? "") : "",
     subject: row.subject,
     snippet: row.snippet,
     bodyText: row.body_text,
@@ -948,6 +949,7 @@ export function mapGmailMessage(row: GmailMessageRow): GmailMessage {
     direction: row.direction === "outbound" ? "outbound" : "inbound",
     jobId: row.job_id,
     contactId: row.contact_id,
+    relatedContactIds: Array.isArray(row.related_contact_ids) ? row.related_contact_ids : [],
   };
 }
 

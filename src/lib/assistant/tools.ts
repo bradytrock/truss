@@ -34,15 +34,15 @@ function object(
 export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   {
     name: "search_book",
-    description: "Search jobs, contacts, estimates, and invoices the current seat can see.",
+    description: "Search jobs, contacts, estimates, invoices, and mail the current seat can see.",
     status: "Searching the book…",
     gate: "any",
     parameters: object(
       {
-        query: str("Name, job code, address, phone, email, or estimate/invoice number"),
+        query: str("Name, job code, address, phone, email, estimate/invoice number, or mail subject"),
         kind: {
           type: "string",
-          enum: ["all", "job", "contact", "estimate", "invoice"],
+          enum: ["all", "job", "contact", "estimate", "invoice", "mail"],
           description: "Limit the search. Default all.",
         },
       },
@@ -86,12 +86,12 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   },
   {
     name: "open_record",
-    description: "Navigate the user to a job, contact, estimate, or invoice in the app.",
+    description: "Navigate the user to a job, contact, estimate, invoice, or mail thread in the app.",
     status: "Opening the record…",
     gate: "any",
     parameters: object(
       {
-        kind: { type: "string", enum: ["job", "contact", "estimate", "invoice"] },
+        kind: { type: "string", enum: ["job", "contact", "estimate", "invoice", "mail"] },
         id: str("Record id"),
       },
       ["kind", "id"],
@@ -451,6 +451,52 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
         reason: str("Why it is being deleted"),
       },
       ["job", "reason"],
+    ),
+  },
+  {
+    name: "review_mail",
+    description:
+      "Read this seat’s Gmail threads. Match From/To/Cc to homeowners and referral partners, suggest jobs to tag, and summarize each chain. Use when the user asks to review, file, or tag mail.",
+    status: "Reading the inbox…",
+    gate: "any",
+    parameters: object({
+      thread: str("Optional thread id from Mail, or a subject snippet"),
+      untaggedOnly: bool("If true, only threads that are not tagged to a job yet"),
+    }),
+  },
+  {
+    name: "tag_mail",
+    description:
+      "Tag a Gmail thread to a job and to people in the book. Put the homeowner on contact. Put referral partners (realtor, adjuster, architect) on relatedContacts.",
+    status: "Tagging mail…",
+    gate: "any",
+    parameters: object(
+      {
+        thread: str("Thread id from review_mail, or the subject"),
+        job: str("Job id or code to attach. Empty string clears the job tag."),
+        contact: str("Primary person — usually the homeowner"),
+        relatedContacts: str("Comma-separated names or ids of referral partners also on the chain"),
+      },
+      ["thread"],
+    ),
+  },
+  {
+    name: "send_mail",
+    description:
+      "Send an email from the linked Gmail account. Confirm with the user in the UI. Use a job and contact when the thread belongs on a record.",
+    status: "Sending email…",
+    gate: "any",
+    confirm: true,
+    parameters: object(
+      {
+        to: str("Recipient email"),
+        subject: str("Subject"),
+        body: str("Plain-text body"),
+        thread: str("Optional existing thread id to reply on"),
+        job: str("Optional job id or code to log this send on"),
+        contact: str("Optional contact id or name"),
+      },
+      ["to", "subject", "body"],
     ),
   },
 ];

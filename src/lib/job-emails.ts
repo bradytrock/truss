@@ -18,6 +18,90 @@ export function contactForEmail(contacts: Contact[], email: string) {
   return contacts.find((contact) => normalizeEmail(contact.email) === needle);
 }
 
+export function splitEmails(value: string | null | undefined) {
+  return (value ?? "")
+    .split(/[;,]/)
+    .map((part) => normalizeEmail(part.replace(/.*<([^>]+)>.*/, "$1")))
+    .filter((email) => email.includes("@"));
+}
+
+export function addressesOnMessage(message: Pick<GmailMessage, "fromEmail" | "toEmail" | "ccEmail">) {
+  return [...new Set([...splitEmails(message.fromEmail), ...splitEmails(message.toEmail), ...splitEmails(message.ccEmail)])];
+}
+
+export function tagsFromAddresses(
+  contacts: Array<Pick<Contact, "id" | "email" | "isReferralPartner" | "name" | "title">>,
+  emails: string[],
+) {
+  const matched = emails
+    .map((email) => contacts.find((contact) => emailsMatch(contact.email, email)))
+    .filter((contact): contact is NonNullable<typeof contact> => Boolean(contact));
+  const unique: typeof matched = [];
+  for (const contact of matched) {
+    if (!unique.some((item) => item.id === contact.id)) unique.push(contact);
+  }
+  const homeowners = unique.filter((contact) => !contact.isReferralPartner);
+  const partners = unique.filter((contact) => contact.isReferralPartner);
+  const contactId = homeowners[0]?.id ?? unique[0]?.id ?? null;
+  return {
+    contactId,
+    relatedContactIds: unique.filter((contact) => contact.id !== contactId).map((contact) => contact.id),
+    homeowners,
+    partners,
+    unknown: emails.filter((email) => !contacts.some((contact) => emailsMatch(contact.email, email))),
+  };
+}
+
+export function messageTouchesContact(
+  message: GmailMessage,
+  contact: Contact,
+) {
+  if (message.contactId === contact.id) return true;
+  if ((message.relatedContactIds ?? []).includes(contact.id)) return true;
+  return addressesOnMessage(message).some((email) => emailsMatch(email, contact.email));
+}
+
+export function mailForContact(messages: GmailMessage[], contact: Contact) {
+  return [...messages]
+    .filter((message) => messageTouchesContact(message, contact))
+    .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+}
+
+export function relatedContactsOnThread(messages: GmailMessage[], contacts: Contact[]) {
+  const ids = new Set<string>();
+  for (const message of messages) {
+    if (message.contactId) ids.add(message.contactId);
+    for (const id of message.relatedContactIds ?? []) ids.add(id);
+    for (const email of addressesOnMessage(message)) {
+      const match = contactForEmail(contacts, email);
+      if (match) ids.add(match.id);
+    }
+  }
+  return contacts.filter((contact) => ids.has(contact.id));
+}
+
+export function suggestedJobsForPeople(
+  jobs: Job[],
+  opportunities: Opportunity[],
+  contactIds: string[],
+) {
+  const ranked = contactIds
+    .map((id) => jobForContact(jobs, opportunities, id))
+    .filter((job): job is Job => Boolean(job));
+  const unique: Job[] = [];
+  for (const job of ranked) {
+    if (!unique.some((item) => item.id === job.id)) unique.push(job);
+  }
+  const extras = jobs.filter(
+    (job) =>
+      !isDeletedJob(job) &&
+      !unique.some((item) => item.id === job.id) &&
+      ((job.primaryContactId ? contactIds.includes(job.primaryContactId) : false) ||
+        job.relatedContactIds.some((id) => contactIds.includes(id))),
+  );
+  return [...unique, ...extras].slice(0, 6);
+}
+
 export function counterpartEmail(message: GmailMessage) {
   return message.direction === "outbound" ? message.toEmail : message.fromEmail;
 }
@@ -36,6 +120,7 @@ export type MailThread = {
   contactId: string | null;
   jobId: string | null;
   contact: Contact | undefined;
+  relatedContacts: Contact[];
   job: Job | undefined;
   preview: string;
   messages: GmailMessage[];
@@ -71,9 +156,15 @@ export function mailThreads(
         sorted.map((item) => contacts.find((row) => row.id === item.contactId)).find(Boolean) ??
         contactForEmail(contacts, counterpart);
       const taggedJobId = [...sorted].reverse().find((item) => item.jobId)?.jobId ?? null;
+      const relatedContacts = relatedContactsOnThread(sorted, contacts);
       const job =
         jobs.find((item) => item.id === taggedJobId) ??
-        (contact ? jobForContact(jobs, opportunities, contact.id) : undefined);
+        (contact ? jobForContact(jobs, opportunities, contact.id) : undefined) ??
+        suggestedJobsForPeople(
+          jobs,
+          opportunities,
+          relatedContacts.map((item) => item.id),
+        )[0];
       return {
         key,
         subject: last.subject.trim() || "(no subject)",
@@ -82,6 +173,7 @@ export function mailThreads(
         contactId: contact?.id ?? last.contactId,
         jobId: taggedJobId ?? job?.id ?? last.jobId,
         contact,
+        relatedContacts,
         job: taggedJobId ? jobs.find((item) => item.id === taggedJobId) : job,
         preview: previewOf(last.snippet || last.bodyText),
         messages: sorted,
@@ -121,8 +213,10 @@ export function mailHref(opts?: {
   email?: string | null;
   job?: string | null;
   contact?: string | null;
+  compose?: boolean;
 }) {
   const params = new URLSearchParams();
+  if (opts?.compose) params.set("compose", "1");
   if (opts?.thread) params.set("thread", opts.thread);
   if (opts?.email) params.set("email", opts.email);
   if (opts?.job) params.set("job", opts.job);

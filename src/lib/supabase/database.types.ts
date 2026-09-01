@@ -1210,6 +1210,7 @@ export type Database = {
           from_name: string;
           from_email: string;
           to_email: string;
+          cc_email: string;
           subject: string;
           snippet: string;
           body_text: string;
@@ -1217,6 +1218,7 @@ export type Database = {
           direction: string;
           job_id: string | null;
           contact_id: string | null;
+          related_contact_ids: string[];
           created_at: string;
         };
         Insert: {
@@ -1228,6 +1230,7 @@ export type Database = {
           from_name?: string;
           from_email?: string;
           to_email?: string;
+          cc_email?: string;
           subject?: string;
           snippet?: string;
           body_text?: string;
@@ -1235,6 +1238,7 @@ export type Database = {
           direction?: string;
           job_id?: string | null;
           contact_id?: string | null;
+          related_contact_ids?: string[];
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["gmail_messages"]["Insert"]>;

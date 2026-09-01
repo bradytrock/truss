@@ -1,4 +1,4 @@
-import { contactForEmail } from "@/lib/job-emails";
+import { addressesOnMessage, contactForEmail, tagsFromAddresses } from "@/lib/job-emails";
 import { jobForContact } from "@/lib/job-messages";
 import type { Contact, GmailMessage, Job, Opportunity } from "@/lib/types";
 
@@ -8,6 +8,7 @@ type Sample = {
   fromName: string;
   fromEmail: string;
   toEmail: string;
+  ccEmail?: string;
   subject: string;
   body: string;
   receivedAt: string;
@@ -81,11 +82,12 @@ const SAMPLES: Sample[] = [
   {
     gmailId: "demo_adjuster_1",
     threadId: "demo_adjuster",
-    fromName: "Chris Lang",
-    fromEmail: "chris.lang@summitadjusting.com",
+    fromName: "Al Brennan",
+    fromEmail: "al@summitclaims.co",
     toEmail: OFFICE,
+    ccEmail: "dana.alvarez.parkhill@gmail.com",
     subject: "Alvarez — supplement on ridge and ice barrier",
-    body: "Elena, I can meet the supplement on the two ridge caps and ice & water. Send the photos from Friday and I’ll write it up this afternoon.",
+    body: "Elena, I can meet the supplement on the two ridge caps and ice & water. Dana is copied. Send the photos from Friday and I’ll write it up this afternoon.",
     receivedAt: "2026-08-26T18:40:00.000Z",
     direction: "inbound",
     tagIfMatched: false,
@@ -101,7 +103,19 @@ export function sampleGmailMessages(input: {
   return SAMPLES.map((sample) => {
     const counterpart = sample.direction === "outbound" ? sample.toEmail : sample.fromEmail;
     const contact = contactForEmail(input.contacts, counterpart);
-    const job = contact ? jobForContact(input.jobs, input.opportunities, contact.id) : undefined;
+    const tags = tagsFromAddresses(
+      input.contacts,
+      addressesOnMessage({
+        fromEmail: sample.fromEmail,
+        toEmail: sample.toEmail,
+        ccEmail: sample.ccEmail ?? "",
+      }),
+    );
+    const job = tags.contactId
+      ? jobForContact(input.jobs, input.opportunities, tags.contactId)
+      : contact
+        ? jobForContact(input.jobs, input.opportunities, contact.id)
+        : undefined;
     const tagged = Boolean(sample.tagIfMatched && job);
     return {
       id: crypto.randomUUID(),
@@ -111,13 +125,15 @@ export function sampleGmailMessages(input: {
       fromName: sample.fromName,
       fromEmail: sample.fromEmail,
       toEmail: sample.toEmail,
+      ccEmail: sample.ccEmail ?? "",
       subject: sample.subject,
       snippet: sample.body.slice(0, 180),
       bodyText: sample.body,
       receivedAt: sample.receivedAt,
       direction: sample.direction,
       jobId: tagged ? job!.id : null,
-      contactId: contact?.id ?? null,
+      contactId: tags.contactId ?? contact?.id ?? null,
+      relatedContactIds: tags.relatedContactIds,
     };
   });
 }

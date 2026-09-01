@@ -359,6 +359,7 @@ export function missingMessagesMessage() {
 }
 
 export const GMAIL_SQL = "supabase/migrations/20260901120000_gmail.sql";
+export const GMAIL_SEND_SQL = "supabase/migrations/20260901140000_gmail_send.sql";
 
 export function isMissingGmail(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -372,12 +373,14 @@ export function isMissingGmail(error: { message?: string; code?: string } | null
       message.includes("gmail_accounts") ||
       message.includes("save_gmail_tokens") ||
       message.includes("gmail_credentials") ||
-      message.includes("disconnect_gmail"))
+      message.includes("disconnect_gmail") ||
+      message.includes("related_contact_ids") ||
+      message.includes("cc_email"))
   );
 }
 
 export function missingGmailMessage() {
-  return `Saved in this browser. Run ${GMAIL_SQL} in the SQL editor so Gmail stays linked and tagged mail stays on the job.`;
+  return `Saved in this browser. Run ${GMAIL_SQL} and ${GMAIL_SEND_SQL} in the SQL editor so Gmail stays linked, send works, and tagged mail stays on the job and contact.`;
 }
 
 export function missingPrimaryContactHint() {

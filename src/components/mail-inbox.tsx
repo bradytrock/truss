@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronsUpDown, Mail, RefreshCw, Search, Tag } from "lucide-react";
+import { ChevronLeft, ChevronsUpDown, Mail, PenLine, RefreshCw, Reply, Search, Sparkles, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Command,
@@ -16,14 +17,20 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, ErrorBanner, LoadingScreen } from "@/components/page-chrome";
+import { askTruss } from "@/lib/assistant/ask";
 import { useCrm } from "@/lib/crm-store";
 import {
+  addressesOnMessage,
   filterMailThreads,
   jobsForMailPicker,
   mailHref,
   mailThreads,
+  suggestedJobsForPeople,
+  tagsFromAddresses,
   type MailThread,
 } from "@/lib/job-emails";
 import { formatInboxTime, formatMessageStamp, initials } from "@/lib/format";
@@ -51,12 +58,19 @@ export function MailInbox() {
   const wantedContact = params.get("contact");
   const wantedThread = params.get("thread");
   const wantedEmail = params.get("email");
+  const wantedCompose = params.get("compose") === "1";
 
   const [query, setQuery] = useState("");
   const [oauthReady, setOauthReady] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [sending, setSending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
+  const [composeOpen, setComposeOpen] = useState(wantedCompose);
+  const [replyThreadId, setReplyThreadId] = useState<string | null>(null);
+  const [composeTo, setComposeTo] = useState("");
+  const [composeSubject, setComposeSubject] = useState("");
+  const [composeBody, setComposeBody] = useState("");
 
   const visibleThreads = useMemo(() => filterMailThreads(threads, query), [query, threads]);
 
@@ -74,10 +88,10 @@ export function MailInbox() {
       const hit = threads.find((thread) => thread.jobId === wantedJob || thread.job?.id === wantedJob);
       if (hit) return hit;
     }
-    return threads[0] ?? null;
-  }, [threads, wantedContact, wantedEmail, wantedJob, wantedThread]);
+    return composeOpen ? null : (threads[0] ?? null);
+  }, [composeOpen, threads, wantedContact, wantedEmail, wantedJob, wantedThread]);
 
-  const conversationOpen = Boolean(selected);
+  const conversationOpen = Boolean(selected) || composeOpen;
 
   useEffect(() => {
     const gmail = params.get("gmail");
@@ -85,7 +99,7 @@ export function MailInbox() {
       const email = params.get("email") || "";
       const staffId = params.get("staffId") || crm.user.staffId;
       void crm.markGmailLinked(staffId, email, "google");
-      toast.success(`Gmail linked${email ? ` as ${email}` : ""}.`);
+      toast.success(`Gmail linked${email ? ` as ${email}` : ""}. Disconnect and reconnect if sending is not in the consent yet.`);
       window.history.replaceState({}, "", "/mail");
       void syncInbox();
     } else if (gmail === "error") {
@@ -98,6 +112,16 @@ export function MailInbox() {
       .catch(() => setOauthReady(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
+
+  useEffect(() => {
+    if (!wantedCompose) return;
+    const person = wantedContact ? crm.contacts.find((contact) => contact.id === wantedContact) : undefined;
+    setComposeOpen(true);
+    setReplyThreadId(null);
+    setComposeTo(wantedEmail || person?.email || "");
+    setComposeSubject("");
+    setComposeBody("");
+  }, [crm.contacts, wantedCompose, wantedContact, wantedEmail]);
 
   const syncInbox = useCallback(async () => {
     if (!crm.user.staffId) return;
@@ -127,10 +151,34 @@ export function MailInbox() {
 
   const openThread = useCallback(
     (key: string) => {
+      setComposeOpen(false);
+      setReplyThreadId(null);
       router.replace(mailHref({ thread: key }), { scroll: false });
     },
     [router],
   );
+
+  const startCompose = useCallback(
+    (opts?: { to?: string; subject?: string; body?: string; threadId?: string | null }) => {
+      setComposeOpen(true);
+      setReplyThreadId(opts?.threadId ?? null);
+      setComposeTo(opts?.to ?? "");
+      setComposeSubject(opts?.subject ?? "");
+      setComposeBody(opts?.body ?? "");
+      if (opts?.threadId) {
+        router.replace(mailHref({ thread: opts.threadId }), { scroll: false });
+        return;
+      }
+      router.replace(mailHref({ compose: true, email: opts?.to }), { scroll: false });
+    },
+    [router],
+  );
+
+  const closeCompose = useCallback(() => {
+    setComposeOpen(false);
+    setReplyThreadId(null);
+    router.replace(selected ? mailHref({ thread: selected.key }) : "/mail", { scroll: false });
+  }, [router, selected]);
 
   const pickableJobs = useMemo(() => {
     const needle = pickerQuery.trim().toLowerCase();
@@ -146,7 +194,64 @@ export function MailInbox() {
     ? crm.jobs.find((job) => job.id === selected.messages.find((item) => item.jobId)?.jobId)
     : undefined;
 
+  const suggestedPeople = useMemo(() => {
+    if (!selected) return null;
+    const emails = [...new Set(selected.messages.flatMap((message) => addressesOnMessage(message)))];
+    return tagsFromAddresses(crm.contacts, emails);
+  }, [crm.contacts, selected]);
+
+  async function applySuggestedTags() {
+    if (!selected || !suggestedPeople) return;
+    const peopleIds = [suggestedPeople.contactId, ...suggestedPeople.relatedContactIds].filter(
+      (id): id is string => Boolean(id),
+    );
+    const jobs = suggestedJobsForPeople(crm.jobs, crm.opportunities, peopleIds);
+    await crm.tagGmailPeople(selected.key, {
+      contactId: suggestedPeople.contactId,
+      relatedContactIds: suggestedPeople.relatedContactIds,
+    });
+    if (!taggedJob && jobs[0]) await crm.tagGmailThread(selected.key, jobs[0].id);
+    const homeowner = suggestedPeople.homeowners[0]?.name;
+    const partners = suggestedPeople.partners.map((person) => person.name);
+    toast.success(
+      [
+        homeowner ? `${homeowner} as homeowner` : "",
+        partners.length ? `partners ${partners.join(", ")}` : "",
+        !taggedJob && jobs[0] ? `job ${jobs[0].code || jobs[0].name}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ") || "People on this chain tagged.",
+    );
+  }
+
+  async function sendCompose() {
+    setSending(true);
+    try {
+      const thread = replyThreadId ? threads.find((item) => item.key === replyThreadId) : selected;
+      const person = wantedContact
+        ? crm.contacts.find((contact) => contact.id === wantedContact)
+        : thread?.contact;
+      const result = await crm.sendGmailMessage({
+        to: composeTo,
+        subject: composeSubject,
+        body: composeBody,
+        threadId: replyThreadId ?? undefined,
+        jobId: wantedJob || thread?.messages.find((item) => item.jobId)?.jobId || undefined,
+        contactId: person?.id,
+      });
+      if (!result.ok) return;
+      setComposeOpen(false);
+      setReplyThreadId(null);
+      if (result.threadId) router.replace(mailHref({ thread: result.threadId }), { scroll: false });
+      else router.replace("/mail", { scroll: false });
+    } finally {
+      setSending(false);
+    }
+  }
+
   if (!crm.hydrated) return <LoadingScreen />;
+
+  const paneOpen = conversationOpen;
 
   return (
     <div className="-m-5 flex h-[calc(100dvh-3rem)] min-h-0 flex-col bg-background sm:-m-7">
@@ -159,7 +264,7 @@ export function MailInbox() {
         <aside
           className={cn(
             "flex min-h-0 flex-col border-b bg-background lg:border-r lg:border-b-0",
-            conversationOpen && "hidden lg:flex",
+            paneOpen && "hidden lg:flex",
           )}
         >
           <div className="border-b px-4 py-3">
@@ -175,7 +280,7 @@ export function MailInbox() {
                     {mine.source === "demo" ? " · sample" : ""}
                   </p>
                 ) : (
-                  <p className="mt-0.5 text-xs text-muted-foreground">Link Gmail to pull job mail here.</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">Link Gmail to send and pull job mail here.</p>
                 )}
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
@@ -189,9 +294,15 @@ export function MailInbox() {
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {mine?.linked ? (
-                <Button type="button" size="sm" variant="outline" onClick={() => void crm.disconnectGmail()}>
-                  Disconnect
-                </Button>
+                <>
+                  <Button type="button" size="sm" onClick={() => startCompose()}>
+                    <PenLine />
+                    New mail
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" onClick={() => void crm.disconnectGmail()}>
+                    Disconnect
+                  </Button>
+                </>
               ) : oauthReady ? (
                 <Button
                   size="sm"
@@ -210,10 +321,26 @@ export function MailInbox() {
                   Sample inbox
                 </Button>
               ) : null}
+              {mine?.linked ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    askTruss(
+                      "Review this inbox. Compare everyone on each chain to homeowners and referral partners, suggest the matching job, and tag the threads.",
+                    )
+                  }
+                >
+                  <Sparkles />
+                  Ask Truss to tag
+                </Button>
+              ) : null}
             </div>
             {!oauthReady ? (
               <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
                 Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, plus the Gmail callback URI, to connect a real mailbox.
+                Sending needs gmail.send — reconnect after that scope is added.
               </p>
             ) : null}
             <div className="relative mt-3">
@@ -235,7 +362,7 @@ export function MailInbox() {
                     description={
                       mine?.linked
                         ? "Sync Gmail to pull the last 30 days, then tag a thread to a job so it shows on the field record."
-                        : "Connect Gmail for this seat, or load the sample inbox to try tagging mail to a job."
+                        : "Connect Gmail for this seat, or load the sample inbox to try sending and tagging mail."
                     }
                   />
                 ) : (
@@ -244,7 +371,8 @@ export function MailInbox() {
               </div>
             ) : (
               visibleThreads.map((thread) => {
-                const active = selected?.key === thread.key;
+                const active = selected?.key === thread.key && !composeOpen;
+                const partners = thread.relatedContacts.filter((contact) => contact.isReferralPartner);
                 return (
                   <button
                     key={thread.key}
@@ -277,6 +405,11 @@ export function MailInbox() {
                       ) : (
                         <span className="mt-1 block text-[11px] text-muted-foreground">Untagged</span>
                       )}
+                      {partners.length ? (
+                        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                          Partner: {partners.map((contact) => contact.name).join(", ")}
+                        </span>
+                      ) : null}
                     </span>
                   </button>
                 );
@@ -285,8 +418,80 @@ export function MailInbox() {
           </div>
         </aside>
 
-        <section className={cn("flex min-h-0 flex-1 flex-col", !conversationOpen && "hidden lg:flex")}>
-          {selected ? (
+        <section className={cn("flex min-h-0 flex-1 flex-col", !paneOpen && "hidden lg:flex")}>
+          {composeOpen ? (
+            <form
+              className="flex min-h-0 flex-1 flex-col"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void sendCompose();
+              }}
+            >
+              <header className="flex items-start gap-2 border-b px-3 py-3 sm:px-4">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="lg:hidden"
+                  aria-label="Back to inbox"
+                  onClick={closeCompose}
+                >
+                  <ChevronLeft />
+                </Button>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{replyThreadId ? "Reply" : "New mail"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {mine?.source === "google"
+                      ? `Sends from ${mine.googleEmail}`
+                      : mine?.linked
+                        ? "Sample send stays in this inbox"
+                        : "Connect Gmail or load the sample inbox to send"}
+                  </p>
+                </div>
+                <Button type="button" variant="ghost" size="sm" onClick={closeCompose}>
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm" disabled={sending || !mine?.linked}>
+                  Send
+                </Button>
+              </header>
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="mail-to">To</Label>
+                  <Input
+                    id="mail-to"
+                    type="email"
+                    autoComplete="email"
+                    value={composeTo}
+                    onChange={(event) => setComposeTo(event.target.value)}
+                    placeholder="homeowner@email.com"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="mail-subject">Subject</Label>
+                  <Input
+                    id="mail-subject"
+                    value={composeSubject}
+                    onChange={(event) => setComposeSubject(event.target.value)}
+                    placeholder="Subject"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="mail-body">Message</Label>
+                  <Textarea
+                    id="mail-body"
+                    value={composeBody}
+                    onChange={(event) => setComposeBody(event.target.value)}
+                    placeholder="Write the email…"
+                    className="min-h-48"
+                    required
+                  />
+                </div>
+              </div>
+            </form>
+          ) : selected ? (
             <>
               <header className="flex items-start gap-2 border-b px-3 py-3 sm:px-4">
                 <Button
@@ -311,6 +516,23 @@ export function MailInbox() {
                     {selected.fromEmail ? ` · ${selected.fromEmail}` : ""}
                   </p>
                 </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    startCompose({
+                      to: selected.fromEmail,
+                      subject: selected.subject.toLowerCase().startsWith("re:")
+                        ? selected.subject
+                        : `Re: ${selected.subject}`,
+                      threadId: selected.key,
+                    })
+                  }
+                >
+                  <Reply />
+                  Reply
+                </Button>
                 <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
                   <PopoverTrigger
                     className={cn(buttonVariants({ variant: "outline", size: "sm" }), "font-normal")}
@@ -364,18 +586,57 @@ export function MailInbox() {
                   </PopoverContent>
                 </Popover>
               </header>
-              {taggedJob ? (
-                <div className="border-b px-4 py-2 text-xs">
-                  Tagged to{" "}
-                  <Link href={`/jobs/${taggedJob.id}`} className="font-medium hover:underline">
-                    {taggedJob.code ? `${taggedJob.code} · ` : ""}
-                    {taggedJob.name}
-                  </Link>
-                </div>
-              ) : selected.job ? (
-                <div className="border-b px-4 py-2 text-xs text-muted-foreground">
-                  Suggested job: {selected.job.code ? `${selected.job.code} · ` : ""}
-                  {selected.job.name}
+              <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2 text-xs">
+                {taggedJob ? (
+                  <span>
+                    Tagged to{" "}
+                    <Link href={`/jobs/${taggedJob.id}`} className="font-medium hover:underline">
+                      {taggedJob.code ? `${taggedJob.code} · ` : ""}
+                      {taggedJob.name}
+                    </Link>
+                  </span>
+                ) : selected.job ? (
+                  <span className="text-muted-foreground">
+                    Suggested job: {selected.job.code ? `${selected.job.code} · ` : ""}
+                    {selected.job.name}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">No job tagged</span>
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="ml-auto h-7"
+                  onClick={() =>
+                    askTruss(
+                      `Review this email thread and tag it. Thread id ${selected.key}. Subject: ${selected.subject}. Compare everyone on the chain to homeowners and referral partners, then tag the homeowner, partners, and the matching job.`,
+                    )
+                  }
+                >
+                  <Sparkles />
+                  Ask Truss
+                </Button>
+                <Button type="button" size="sm" variant="ghost" className="h-7" onClick={() => void applySuggestedTags()}>
+                  Match people
+                </Button>
+              </div>
+              {(selected.relatedContacts.length > 0 || suggestedPeople?.homeowners.length || suggestedPeople?.partners.length) ? (
+                <div className="flex flex-wrap gap-1.5 border-b px-4 py-2">
+                  {selected.relatedContacts.map((contact) => (
+                    <Link key={contact.id} href={`/contacts?contact=${contact.id}`}>
+                      <Badge variant={contact.isReferralPartner ? "secondary" : "outline"}>
+                        {contact.name}
+                        {" · "}
+                        {contact.isReferralPartner ? contact.title || "Partner" : "Homeowner"}
+                      </Badge>
+                    </Link>
+                  ))}
+                  {suggestedPeople?.unknown.map((email) => (
+                    <Badge key={email} variant="outline" className="text-muted-foreground">
+                      Unknown · {email}
+                    </Badge>
+                  ))}
                 </div>
               ) : null}
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
@@ -391,6 +652,7 @@ export function MailInbox() {
                     </div>
                     <p className="mt-0.5 truncate text-xs text-muted-foreground">
                       {message.direction === "outbound" ? `To ${message.toEmail}` : `From ${message.fromEmail}`}
+                      {message.ccEmail ? ` · Cc ${message.ccEmail}` : ""}
                     </p>
                     <pre className="mt-3 font-sans text-sm leading-relaxed whitespace-pre-wrap">
                       {message.bodyText || message.snippet || "(no body)"}
@@ -404,7 +666,7 @@ export function MailInbox() {
               <div className="max-w-sm text-center">
                 <Mail className="mx-auto size-8 text-muted-foreground" />
                 <p className="mt-3 text-sm text-muted-foreground">
-                  Pick a thread to read it and tag it to a job.
+                  Pick a thread to read it, reply, or tag it to a job.
                 </p>
               </div>
             </div>

@@ -709,6 +709,8 @@ export interface GmailMessage {
   direction: "inbound" | "outbound";
   jobId: string | null;
   contactId: string | null;
+  ccEmail: string;
+  relatedContactIds: string[];
 }
 
 export interface JobPhoto {

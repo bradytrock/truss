@@ -29,6 +29,14 @@ import { isBusinessDevelopment } from "@/lib/bd";
 import { catalogProposalUnitPrice } from "@/lib/catalog-margin";
 import { currentCatalog } from "@/lib/price-lists";
 import { expenseRequiresJob } from "@/lib/qbwc/work";
+import {
+  addressesOnMessage,
+  mailForContact,
+  mailHref,
+  mailThreads,
+  suggestedJobsForPeople,
+  tagsFromAddresses,
+} from "@/lib/job-emails";
 import { phonesMatch } from "@/lib/job-messages";
 import {
   askTrussReturningClientPrompt,
@@ -104,6 +112,63 @@ function resolveInvoice(crm: Crm, value: string) {
   );
 }
 
+function inboxThreads(crm: Crm) {
+  return mailThreads(crm.gmailMessages ?? [], crm.contacts, crm.jobs, crm.opportunities);
+}
+
+function resolveMailThread(crm: Crm, value: string) {
+  const needle = value.trim();
+  if (!needle) return undefined;
+  const threads = inboxThreads(crm);
+  const lower = needle.toLowerCase();
+  return (
+    threads.find((thread) => thread.key === needle) ||
+    threads.find((thread) => thread.messages.some((message) => message.id === needle || message.threadId === needle)) ||
+    threads.find((thread) => thread.subject.toLowerCase() === lower) ||
+    threads.find((thread) => matches(haystack(thread.subject, thread.fromName, thread.fromEmail), needle))
+  );
+}
+
+function reviewOneThread(crm: Crm, thread: ReturnType<typeof inboxThreads>[number]) {
+  const emails = [...new Set(thread.messages.flatMap((message) => addressesOnMessage(message)))];
+  const tags = tagsFromAddresses(crm.contacts, emails);
+  const peopleIds = [tags.contactId, ...tags.relatedContactIds].filter((id): id is string => Boolean(id));
+  const jobs = suggestedJobsForPeople(crm.jobs, crm.opportunities, peopleIds);
+  const taggedJobId = thread.messages.find((item) => item.jobId)?.jobId ?? null;
+  const taggedJob = taggedJobId ? crm.getJob(taggedJobId) : undefined;
+  return {
+    threadId: thread.key,
+    subject: thread.subject,
+    messageCount: thread.messages.length,
+    from: `${thread.fromName} <${thread.fromEmail}>`,
+    addresses: emails,
+    homeowner: tags.homeowners[0]
+      ? { id: tags.homeowners[0].id, name: tags.homeowners[0].name, email: tags.homeowners[0].email }
+      : null,
+    referralPartners: tags.partners.map((partner) => ({
+      id: partner.id,
+      name: partner.name,
+      title: partner.title,
+      email: partner.email,
+    })),
+    otherPeople: tags.homeowners.slice(1).map((person) => ({
+      id: person.id,
+      name: person.name,
+      email: person.email,
+    })),
+    unknownAddresses: tags.unknown,
+    taggedJob: taggedJob ? { id: taggedJob.id, code: taggedJob.code, name: taggedJob.name } : null,
+    suggestedJobs: jobs.map((job) => ({ id: job.id, code: job.code, name: job.name })),
+    alreadyTaggedPeople: thread.relatedContacts.map((contact) => ({
+      id: contact.id,
+      name: contact.name,
+      referralPartner: contact.isReferralPartner,
+    })),
+    suggestedContactId: tags.contactId,
+    suggestedRelatedContactIds: tags.relatedContactIds,
+  };
+}
+
 function isLeadSource(value: string): value is LeadSource {
   return (LEAD_SOURCES as readonly string[]).includes(value);
 }
@@ -153,6 +218,8 @@ export function describeToolCall(call: AssistantToolCall) {
       return `Delete job ${arg(args, "job") || "this job"}? ${arg(args, "reason") || "A reason is required."}`;
     case "log_payment":
       return `Record a ${money(asNumber(args.amount))} payment${arg(args, "invoice") || arg(args, "job") ? ` on ${arg(args, "invoice") || arg(args, "job")}` : ""}?`;
+    case "send_mail":
+      return `Send “${arg(args, "subject") || "this email"}” to ${arg(args, "to") || "the recipient"}?`;
     default:
       return toolByName(call.name)?.status ?? "Do this?";
   }
@@ -216,7 +283,29 @@ async function runTool(
               .slice(0, 8)
               .map((invoice) => ({ kind: "invoice", id: invoice.id, number: invoice.number, name: invoice.name, status: invoice.status }))
           : [];
-      return ok({ jobs, contacts, estimates, invoices, total: jobs.length + contacts.length + estimates.length + invoices.length });
+      const mail =
+        kind === "all" || kind === "mail"
+          ? inboxThreads(crm)
+              .filter((thread) =>
+                matches(haystack(thread.subject, thread.fromName, thread.fromEmail, thread.preview, thread.job?.code, thread.job?.name), query),
+              )
+              .slice(0, 8)
+              .map((thread) => ({
+                kind: "mail",
+                id: thread.key,
+                subject: thread.subject,
+                from: thread.fromName,
+                job: thread.job ? `${thread.job.code} ${thread.job.name}`.trim() : null,
+              }))
+          : [];
+      return ok({
+        jobs,
+        contacts,
+        estimates,
+        invoices,
+        mail,
+        total: jobs.length + contacts.length + estimates.length + invoices.length + mail.length,
+      });
     }
     case "get_job": {
       const job = resolveJob(crm, arg(args, "job"));
@@ -264,6 +353,16 @@ async function runTool(
         .filter((job) => !isDeletedJob(job) && (job.primaryContactId === contact.id || job.relatedContactIds.includes(contact.id)))
         .slice(0, 8)
         .map((job) => ({ id: job.id, code: job.code, name: job.name }));
+      const mail = mailForContact(crm.gmailMessages ?? [], contact)
+        .slice(0, 8)
+        .map((message) => ({
+          id: message.id,
+          threadId: message.threadId || message.id,
+          subject: message.subject,
+          direction: message.direction,
+          from: message.fromName || message.fromEmail,
+          receivedAt: message.receivedAt,
+        }));
       return ok({
         id: contact.id,
         name: contact.name,
@@ -272,6 +371,7 @@ async function runTool(
         phone: contact.phone,
         referralPartner: contact.isReferralPartner,
         jobs,
+        mail,
       });
     }
     case "get_estimate": {
@@ -352,6 +452,8 @@ async function runTool(
               ? `/estimates/${id}`
               : kind === "invoice"
                 ? `/invoices/${id}`
+                : kind === "mail"
+                  ? mailHref({ thread: id })
                 : "";
       if (!href) return fail("Unknown record kind.");
       return ok({ kind, id }, { href, label: "Open" });
@@ -847,6 +949,110 @@ async function runTool(
       const deleted = await crm.deleteJob(job.id, reason);
       if (!deleted) return fail("Could not delete that job.");
       return ok({ id: job.id, code: job.code }, { href: "/jobs", label: "Open jobs" });
+    }
+    case "review_mail": {
+      const needle = arg(args, "thread");
+      const untaggedOnly = asBoolean(args.untaggedOnly) === true;
+      const all = inboxThreads(crm);
+      if (all.length === 0) return fail("No mail in this seat’s inbox. Load the sample inbox or connect Gmail first.");
+      const picked = needle ? resolveMailThread(crm, needle) : undefined;
+      if (needle && !picked) return fail("No mail thread matches that.");
+      const pool = picked
+        ? [picked]
+        : untaggedOnly
+          ? all.filter((thread) => !thread.messages.some((message) => message.jobId))
+          : all;
+      const threads = pool.slice(0, 8).map((thread) => reviewOneThread(crm, thread));
+      return ok(
+        {
+          threadCount: pool.length,
+          showing: threads.length,
+          threads,
+        },
+        threads[0] ? { href: mailHref({ thread: threads[0].threadId }), label: "Open mail" } : undefined,
+      );
+    }
+    case "tag_mail": {
+      const thread = resolveMailThread(crm, arg(args, "thread"));
+      if (!thread) return fail("No mail thread matches that.");
+      const jobRaw = args.job;
+      const contactRaw = args.contact;
+      const relatedRaw = args.relatedContacts;
+      let jobId: string | null | undefined;
+      if (typeof jobRaw === "string") {
+        if (!jobRaw.trim()) jobId = null;
+        else {
+          const job = resolveJob(crm, jobRaw);
+          if (!job) return fail("No job matches that.");
+          jobId = job.id;
+        }
+      }
+      let contactId: string | null | undefined;
+      if (typeof contactRaw === "string") {
+        if (!contactRaw.trim()) contactId = null;
+        else {
+          const person = resolveContact(crm, contactRaw);
+          if (!person) return fail("No person matches that contact.");
+          contactId = person.id;
+        }
+      }
+      let relatedContactIds: string[] | undefined;
+      if (typeof relatedRaw === "string") {
+        if (!relatedRaw.trim()) relatedContactIds = [];
+        else {
+          const ids: string[] = [];
+          for (const part of relatedRaw.split(/[,;]/).map((item) => item.trim()).filter(Boolean)) {
+            const person = resolveContact(crm, part);
+            if (!person) return fail(`No person matches “${part}”.`);
+            if (person.id !== contactId && !ids.includes(person.id)) ids.push(person.id);
+          }
+          relatedContactIds = ids;
+        }
+      }
+      if (jobId === undefined && contactId === undefined && relatedContactIds === undefined) {
+        const review = reviewOneThread(crm, thread);
+        if (review.suggestedJobs[0] && !review.taggedJob) jobId = review.suggestedJobs[0].id;
+        if (review.suggestedContactId) contactId = review.suggestedContactId;
+        relatedContactIds = review.suggestedRelatedContactIds;
+      }
+      if (jobId !== undefined) await crm.tagGmailThread(thread.key, jobId);
+      if (contactId !== undefined || relatedContactIds !== undefined) {
+        await crm.tagGmailPeople(thread.key, { contactId, relatedContactIds });
+      }
+      return ok(
+        {
+          threadId: thread.key,
+          jobId: jobId ?? undefined,
+          contactId: contactId ?? undefined,
+          relatedContactIds,
+        },
+        { href: mailHref({ thread: thread.key }), label: `Open ${thread.subject}` },
+      );
+    }
+    case "send_mail": {
+      const to = arg(args, "to");
+      const subject = arg(args, "subject");
+      const body = arg(args, "body");
+      if (!to.includes("@")) return fail("Enter a valid email address.");
+      if (!subject) return fail("Add a subject.");
+      if (!body) return fail("Write a message before sending.");
+      const threadArg = arg(args, "thread");
+      const thread = threadArg ? resolveMailThread(crm, threadArg) : undefined;
+      const job = arg(args, "job") ? resolveJob(crm, arg(args, "job")) : undefined;
+      const contact = arg(args, "contact") ? resolveContact(crm, arg(args, "contact")) : undefined;
+      const result = await crm.sendGmailMessage({
+        to,
+        subject,
+        body,
+        threadId: thread?.key ?? (threadArg || undefined),
+        jobId: job?.id,
+        contactId: contact?.id,
+      });
+      if (!result.ok) return fail("Could not send that email.");
+      return ok(
+        { to, subject, threadId: result.threadId },
+        { href: mailHref({ thread: result.threadId }), label: "Open mail" },
+      );
     }
     default:
       return fail(`Unknown tool ${call.name}.`);

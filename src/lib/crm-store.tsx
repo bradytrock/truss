@@ -238,7 +238,7 @@ import {
   opportunityForContact,
   outboundActivityBody,
 } from "@/lib/job-messages";
-import { emailActivityBody } from "@/lib/job-emails";
+import { emailActivityBody, tagsFromAddresses } from "@/lib/job-emails";
 import { sampleGmailMessages } from "@/lib/demo-emails";
 import {
   companyAdminsForNotice,
@@ -991,6 +991,18 @@ type CrmContextValue = CrmState & {
   disconnectGmail: () => Promise<void>;
   mergeGmailMessages: (messages: GmailMessage[]) => void;
   tagGmailThread: (threadId: string, jobId: string | null) => Promise<void>;
+  tagGmailPeople: (
+    threadId: string,
+    input: { contactId?: string | null; relatedContactIds?: string[] },
+  ) => Promise<void>;
+  sendGmailMessage: (input: {
+    to: string;
+    subject: string;
+    body: string;
+    threadId?: string | null;
+    jobId?: string | null;
+    contactId?: string | null;
+  }) => Promise<{ ok: boolean; threadId?: string }>;
   progressFor: (staffId: string) => TrainingProgress;
   markLessonRead: (chapterId: string, index: number) => Promise<void>;
   submitQuiz: (input: {
@@ -6702,6 +6714,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       from_name: message.fromName,
       from_email: message.fromEmail,
       to_email: message.toEmail,
+      cc_email: message.ccEmail,
       subject: message.subject,
       snippet: message.snippet,
       body_text: message.bodyText,
@@ -6709,6 +6722,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       direction: message.direction,
       job_id: looksLikeUuid(message.jobId) ? message.jobId : null,
       contact_id: looksLikeUuid(message.contactId) ? message.contactId : null,
+      related_contact_ids: (message.relatedContactIds ?? []).filter((id) => looksLikeUuid(id)),
     }));
     const { data, error } = await supabase.from("gmail_messages").insert(rows).select("*");
     if (error) {
@@ -6770,6 +6784,161 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       else toast.message("Removed job tag.");
     },
     [addActivity, state.contacts, state.gmailMessages, user.companyId],
+  );
+
+  const tagGmailPeople = useCallback(
+    async (threadId: string, input: { contactId?: string | null; relatedContactIds?: string[] }) => {
+      const thread = state.gmailMessages.filter((item) => (item.threadId || item.id) === threadId);
+      if (thread.length === 0) return;
+      const ids = thread.map((item) => item.id);
+      const contactId = input.contactId === undefined ? undefined : input.contactId;
+      const relatedContactIds = input.relatedContactIds;
+      setState((prev) => ({
+        ...prev,
+        gmailMessages: prev.gmailMessages.map((item) =>
+          ids.includes(item.id)
+            ? {
+                ...item,
+                contactId: contactId === undefined ? item.contactId : contactId,
+                relatedContactIds: relatedContactIds ?? item.relatedContactIds,
+              }
+            : item,
+        ),
+      }));
+      const supabase = maybeClient();
+      if (!supabase || !user.companyId || user.companyId === "local") return;
+      const patch: { contact_id?: string | null; related_contact_ids?: string[] } = {};
+      if (contactId !== undefined) patch.contact_id = looksLikeUuid(contactId) ? contactId : null;
+      if (relatedContactIds)
+        patch.related_contact_ids = relatedContactIds.filter((id) => looksLikeUuid(id));
+      if (Object.keys(patch).length === 0) return;
+      const { error } = await supabase
+        .from("gmail_messages")
+        .update(patch)
+        .in(
+          "id",
+          ids.filter((id) => looksLikeUuid(id)),
+        );
+      if (error) {
+        if (isMissingGmail(error)) toast.message(missingGmailMessage());
+        else toast.error(error.message);
+      }
+    },
+    [state.gmailMessages, user.companyId],
+  );
+
+  const sendGmailMessage = useCallback(
+    async (input: {
+      to: string;
+      subject: string;
+      body: string;
+      threadId?: string | null;
+      jobId?: string | null;
+      contactId?: string | null;
+    }) => {
+      const to = input.to.trim();
+      const subject = input.subject.trim();
+      const body = input.body.trim();
+      if (!to.includes("@") || !subject || !body) {
+        toast.error("Add a recipient, subject, and message.");
+        return { ok: false };
+      }
+      const account = state.gmailAccounts.find((item) => item.staffId === user.staffId);
+      if (!account?.linked) {
+        toast.error("Connect Gmail for this seat, or load the sample inbox.");
+        return { ok: false };
+      }
+      let gmailId = `local_${crypto.randomUUID()}`;
+      let threadId = input.threadId?.trim() || gmailId;
+      const office = account.googleEmail || user.name;
+      if (account.source === "google") {
+        const response = await fetch("/api/google/gmail/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            staffId: user.staffId,
+            to,
+            subject,
+            body,
+            threadId: input.threadId || undefined,
+          }),
+        });
+        const json = (await response.json()) as { error?: string; gmailId?: string; threadId?: string };
+        if (!response.ok) {
+          toast.error(json.error || "Could not send that email.");
+          return { ok: false };
+        }
+        gmailId = json.gmailId || gmailId;
+        threadId = json.threadId || threadId;
+      }
+      const tags = tagsFromAddresses(state.contacts, [to]);
+      const contactId = input.contactId || tags.contactId;
+      const message = {
+        id: crypto.randomUUID(),
+        accountId: account.id,
+        gmailId,
+        threadId,
+        fromName: user.name,
+        fromEmail: office,
+        toEmail: to,
+        ccEmail: "",
+        subject,
+        snippet: body.slice(0, 180),
+        bodyText: body,
+        receivedAt: new Date().toISOString(),
+        direction: "outbound" as const,
+        jobId: input.jobId || null,
+        contactId,
+        relatedContactIds: tags.relatedContactIds,
+      };
+      const supabase = maybeClient();
+      if (!supabase || !user.companyId || user.companyId === "local") {
+        setState((prev) => ({ ...prev, gmailMessages: [message, ...prev.gmailMessages] }));
+      } else {
+        const { data, error } = await supabase
+          .from("gmail_messages")
+          .insert({
+            id: message.id,
+            company_id: user.companyId,
+            account_id: account.id,
+            gmail_id: message.gmailId,
+            thread_id: message.threadId,
+            from_name: message.fromName,
+            from_email: message.fromEmail,
+            to_email: message.toEmail,
+            cc_email: message.ccEmail,
+            subject: message.subject,
+            snippet: message.snippet,
+            body_text: message.bodyText,
+            received_at: message.receivedAt,
+            direction: message.direction,
+            job_id: looksLikeUuid(message.jobId) ? message.jobId : null,
+            contact_id: looksLikeUuid(message.contactId) ? message.contactId : null,
+            related_contact_ids: message.relatedContactIds.filter((id) => looksLikeUuid(id)),
+          })
+          .select("*")
+          .single();
+        if (error) {
+          if (isMissingGmail(error)) toast.message(missingGmailMessage());
+          else toast.error(error.message);
+          setState((prev) => ({ ...prev, gmailMessages: [message, ...prev.gmailMessages] }));
+        } else if (data) {
+          setState((prev) => ({ ...prev, gmailMessages: [mapGmailMessage(data), ...prev.gmailMessages] }));
+        }
+      }
+      if (message.jobId) {
+        const contact = contactId ? state.contacts.find((item) => item.id === contactId) : undefined;
+        await addActivity({
+          entityType: "job",
+          entityId: message.jobId,
+          type: "email",
+          body: emailActivityBody(message, contact?.name),
+        });
+      }
+      toast.success(account.source === "google" ? "Email sent." : "Saved to this inbox (sample send).");
+      return { ok: true, threadId };
+    },
+    [addActivity, state.contacts, state.gmailAccounts, user.companyId, user.name, user.staffId],
   );
 
   const setShareWithTeam = useCallback(
@@ -8257,6 +8426,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       disconnectGmail,
       mergeGmailMessages,
       tagGmailThread,
+      tagGmailPeople,
+      sendGmailMessage,
       progressFor,
       markLessonRead,
       submitQuiz,
@@ -8397,6 +8568,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       disconnectGmail,
       mergeGmailMessages,
       tagGmailThread,
+      tagGmailPeople,
+      sendGmailMessage,
       progressFor,
       markLessonRead,
       submitQuiz,

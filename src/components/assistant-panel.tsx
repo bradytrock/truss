@@ -16,6 +16,7 @@ import {
 import { useCrm } from "@/lib/crm-store";
 import { compressReceipt } from "@/lib/job-financials";
 import { buildAssistantContext } from "@/lib/assistant/context";
+import { TRUSS_ASK_EVENT } from "@/lib/assistant/ask";
 import {
   describeToolCall,
   executeToolCall,
@@ -30,7 +31,7 @@ import { cn } from "@/lib/utils";
 const EXAMPLES = [
   "Log a hail roof at 412 Maple for Jane Ortiz, phone 214-555-0144, seed Website",
   "Draft a reroof estimate on the open job from the price book",
-  "What is outstanding on the newest job?",
+  "Review my inbox, match people, and tag mail to jobs",
 ];
 
 const MAX_HOPS = 8;
@@ -64,6 +65,7 @@ export function AssistantPanel() {
   const fileRef = useRef<HTMLInputElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const hops = useRef(0);
+  const sendRef = useRef<(text: string) => Promise<void>>(async () => {});
 
   const extras = useCallback((): ExecuteExtras => ({ attachment }), [attachment]);
 
@@ -234,6 +236,18 @@ export function AssistantPanel() {
     hops.current = 0;
     await runLoop(history, 0);
   }
+  sendRef.current = send;
+
+  useEffect(() => {
+    function onAsk(event: Event) {
+      const prompt = (event as CustomEvent<{ prompt?: string }>).detail?.prompt?.trim();
+      if (!prompt) return;
+      setOpen(true);
+      void sendRef.current(prompt);
+    }
+    window.addEventListener(TRUSS_ASK_EVENT, onAsk);
+    return () => window.removeEventListener(TRUSS_ASK_EVENT, onAsk);
+  }, []);
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -283,7 +297,7 @@ export function AssistantPanel() {
                 <div className="space-y-3">
                   <p className="text-sm text-muted-foreground">
                     People who would rather talk than click can run the book from here: leads, estimates, invoices, expenses, photos,
-                    and the calendar.
+                    calendar, and mail.
                   </p>
                   <ul className="space-y-2">
                     {EXAMPLES.map((example) => (

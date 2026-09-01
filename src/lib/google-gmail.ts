@@ -8,6 +8,7 @@ import {
 
 export const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
+  "https://www.googleapis.com/auth/gmail.send",
   "https://www.googleapis.com/auth/userinfo.email",
 ].join(" ");
 
@@ -90,6 +91,7 @@ export type ParsedGmailMessage = {
   fromName: string;
   fromEmail: string;
   toEmail: string;
+  ccEmail: string;
   subject: string;
   snippet: string;
   bodyText: string;
@@ -151,12 +153,21 @@ export function parseEmailAddress(raw: string) {
   return { name: value, email: "" };
 }
 
+export function parseAddressList(raw: string) {
+  return raw
+    .split(",")
+    .map((part) => parseEmailAddress(part))
+    .filter((item) => item.email);
+}
+
 export function parseGmailMessage(message: GmailApiMessage, linkedEmail: string): ParsedGmailMessage | null {
   const gmailId = message.id?.trim();
   if (!gmailId) return null;
   const headers = message.payload?.headers;
   const from = parseEmailAddress(headerValue(headers, "From"));
-  const to = parseEmailAddress(headerValue(headers, "To"));
+  const toList = parseAddressList(headerValue(headers, "To"));
+  const ccList = parseAddressList(headerValue(headers, "Cc"));
+  const to = toList[0] ?? parseEmailAddress(headerValue(headers, "To"));
   const subject = headerValue(headers, "Subject").trim();
   const dateHeader = headerValue(headers, "Date");
   const internal = message.internalDate ? Number(message.internalDate) : NaN;
@@ -179,7 +190,8 @@ export function parseGmailMessage(message: GmailApiMessage, linkedEmail: string)
     threadId: message.threadId?.trim() || gmailId,
     fromName: from.name,
     fromEmail: from.email,
-    toEmail: to.email,
+    toEmail: to.email || toList.map((item) => item.email).join(", "),
+    ccEmail: ccList.map((item) => item.email).join(", "),
     subject,
     snippet: (message.snippet ?? bodyText).replace(/\s+/g, " ").trim().slice(0, 280),
     bodyText,
@@ -222,4 +234,67 @@ export async function listRecentGmailMessages(input: {
     if (message) parsed.push(message);
   }
   return parsed.sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
+}
+
+function encodeRfc822(message: string) {
+  return Buffer.from(message, "utf8").toString("base64url");
+}
+
+export function buildRfc822(input: {
+  from: string;
+  to: string;
+  subject: string;
+  body: string;
+}) {
+  const needsEncode = /[^\u0000-\u007f]/.test(input.subject);
+  const subject = needsEncode
+    ? `=?UTF-8?B?${Buffer.from(input.subject, "utf8").toString("base64")}?=`
+    : input.subject;
+  return [
+    `From: ${input.from}`,
+    `To: ${input.to}`,
+    `Subject: ${subject}`,
+    "MIME-Version: 1.0",
+    "Content-Type: text/plain; charset=UTF-8",
+    "",
+    input.body.replace(/\r?\n/g, "\r\n"),
+  ].join("\r\n");
+}
+
+export async function sendGmailMessage(input: {
+  accessToken: string;
+  from: string;
+  to: string;
+  subject: string;
+  body: string;
+  threadId?: string;
+}) {
+  const raw = encodeRfc822(
+    buildRfc822({
+      from: input.from,
+      to: input.to,
+      subject: input.subject,
+      body: input.body,
+    }),
+  );
+  const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${input.accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      raw,
+      ...(input.threadId ? { threadId: input.threadId } : {}),
+    }),
+  });
+  const json = (await response.json()) as {
+    id?: string;
+    threadId?: string;
+    error?: { message?: string };
+  };
+  if (!response.ok || !json.id) {
+    throw new Error(json.error?.message || "Gmail did not send that message.");
+  }
+  return { gmailId: json.id, threadId: json.threadId || json.id };
 }

@@ -1,48 +1,34 @@
 import { NextResponse } from "next/server";
 import {
   listRecentGmailMessages,
-  refreshGoogleAccessToken,
-  type StoredGmailTokens,
 } from "@/lib/google-gmail";
-import { readGmailTokenCookie } from "@/lib/google-gmail-cookie";
+import { gmailAccessToken, gmailCredentialsForStaff } from "@/lib/google-gmail-server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { normalizeEmail } from "@/lib/job-emails";
+import { addressesOnMessage, tagsFromAddresses } from "@/lib/job-emails";
 import type { Database } from "@/lib/supabase/database.types";
 
-async function credentialsForStaff(staffId: string): Promise<StoredGmailTokens | null> {
-  const cookieTokens = await readGmailTokenCookie();
-  if (cookieTokens?.staffId === staffId && cookieTokens.refreshToken) return cookieTokens;
-
-  if (!isSupabaseConfigured()) {
-    return cookieTokens?.staffId === staffId ? cookieTokens : null;
-  }
-
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("gmail_credentials", {
-    target_staff_id: staffId,
-  });
-  if (error || !data || data.length === 0) {
-    return cookieTokens?.staffId === staffId ? cookieTokens : null;
-  }
-  const row = data[0];
+function mapRow(row: Database["public"]["Tables"]["gmail_messages"]["Row"]) {
   return {
-    staffId,
+    id: row.id,
     accountId: row.account_id,
-    googleEmail: row.google_email,
-    refreshToken: row.refresh_token ?? "",
-    accessToken: row.access_token ?? "",
-    expiresAt: row.token_expires_at ? new Date(row.token_expires_at).getTime() : 0,
+    gmailId: row.gmail_id,
+    threadId: row.thread_id,
+    fromName: row.from_name,
+    fromEmail: row.from_email,
+    toEmail: row.to_email,
+    ccEmail: "cc_email" in row ? String(row.cc_email ?? "") : "",
+    subject: row.subject,
+    snippet: row.snippet,
+    bodyText: row.body_text,
+    receivedAt: row.received_at,
+    direction: row.direction === "outbound" ? "outbound" : "inbound",
+    jobId: row.job_id,
+    contactId: row.contact_id,
+    relatedContactIds: Array.isArray((row as { related_contact_ids?: string[] }).related_contact_ids)
+      ? ((row as { related_contact_ids?: string[] }).related_contact_ids ?? [])
+      : [],
   };
-}
-
-async function accessToken(tokens: StoredGmailTokens) {
-  if (tokens.accessToken && tokens.expiresAt > Date.now() + 30_000) {
-    return tokens.accessToken;
-  }
-  if (!tokens.refreshToken) return tokens.accessToken;
-  const refreshed = await refreshGoogleAccessToken(tokens.refreshToken);
-  return refreshed.access_token ?? tokens.accessToken;
 }
 
 export async function POST(request: Request) {
@@ -53,11 +39,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const tokens = await credentialsForStaff(staffId);
+    const tokens = await gmailCredentialsForStaff(staffId);
     if (!tokens?.accessToken && !tokens?.refreshToken) {
       return NextResponse.json({ messages: [], accountId: null, googleEmail: "" });
     }
-    const token = await accessToken(tokens);
+    const token = await gmailAccessToken(tokens);
     const parsed = await listRecentGmailMessages({
       accessToken: token,
       linkedEmail: tokens.googleEmail,
@@ -73,6 +59,7 @@ export async function POST(request: Request) {
           fromName: message.fromName,
           fromEmail: message.fromEmail,
           toEmail: message.toEmail,
+          ccEmail: message.ccEmail,
           subject: message.subject,
           snippet: message.snippet,
           bodyText: message.bodyText,
@@ -80,6 +67,7 @@ export async function POST(request: Request) {
           direction: message.direction,
           jobId: null,
           contactId: null,
+          relatedContactIds: [] as string[],
         })),
         accountId: tokens.accountId || null,
         googleEmail: tokens.googleEmail,
@@ -99,22 +87,28 @@ export async function POST(request: Request) {
     const [{ data: existing }, { data: contacts }] = await Promise.all([
       supabase
         .from("gmail_messages")
-        .select("id, gmail_id, job_id, contact_id")
+        .select("id, gmail_id, job_id, contact_id, related_contact_ids")
         .eq("account_id", accountRow.id),
-      supabase.from("contacts").select("id, email").eq("company_id", accountRow.company_id),
+      supabase.from("contacts").select("id, email, name, title, is_referral_partner").eq("company_id", accountRow.company_id),
     ]);
 
+    const bookContacts = (contacts ?? []).map((row) => ({
+      id: row.id,
+      email: row.email,
+      name: row.name,
+      title: row.title,
+      isReferralPartner: Boolean(row.is_referral_partner),
+    }));
+
     const byGmailId = new Map((existing ?? []).map((row) => [row.gmail_id, row]));
-    const contactByEmail = new Map(
-      (contacts ?? [])
-        .filter((row) => row.email)
-        .map((row) => [normalizeEmail(row.email), row.id]),
-    );
 
     const rows = parsed.map((message) => {
       const prior = byGmailId.get(message.gmailId);
-      const counterpart = message.direction === "outbound" ? message.toEmail : message.fromEmail;
-      const contactId = prior?.contact_id ?? contactByEmail.get(normalizeEmail(counterpart)) ?? null;
+      const tags = tagsFromAddresses(bookContacts, addressesOnMessage({
+        fromEmail: message.fromEmail,
+        toEmail: message.toEmail,
+        ccEmail: message.ccEmail,
+      }));
       const row: Database["public"]["Tables"]["gmail_messages"]["Insert"] = {
         company_id: accountRow.company_id,
         account_id: accountRow.id,
@@ -123,13 +117,17 @@ export async function POST(request: Request) {
         from_name: message.fromName,
         from_email: message.fromEmail,
         to_email: message.toEmail,
+        cc_email: message.ccEmail,
         subject: message.subject,
         snippet: message.snippet,
         body_text: message.bodyText,
         received_at: message.receivedAt,
         direction: message.direction,
         job_id: prior?.job_id ?? null,
-        contact_id: contactId,
+        contact_id: prior?.contact_id ?? tags.contactId,
+        related_contact_ids: prior?.related_contact_ids?.length
+          ? prior.related_contact_ids
+          : tags.relatedContactIds,
       };
       if (prior?.id) row.id = prior.id;
       return row;
@@ -154,22 +152,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({
-      messages: (saved ?? []).map((row) => ({
-        id: row.id,
-        accountId: row.account_id,
-        gmailId: row.gmail_id,
-        threadId: row.thread_id,
-        fromName: row.from_name,
-        fromEmail: row.from_email,
-        toEmail: row.to_email,
-        subject: row.subject,
-        snippet: row.snippet,
-        bodyText: row.body_text,
-        receivedAt: row.received_at,
-        direction: row.direction === "outbound" ? "outbound" : "inbound",
-        jobId: row.job_id,
-        contactId: row.contact_id,
-      })),
+      messages: (saved ?? []).map(mapRow),
       accountId: accountRow.id,
       googleEmail: accountRow.google_email,
     });
