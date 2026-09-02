@@ -89,7 +89,7 @@ function ContactsBookPage() {
 
   if (!crm.hydrated) return <LoadingScreen />;
 
-  const looking = Boolean(query.trim()) || filter !== "homeowners";
+  const empty = emptyCopy(filter, query);
 
   return (
     <div className="space-y-5">
@@ -143,14 +143,7 @@ function ContactsBookPage() {
       </div>
 
       {rows.length === 0 ? (
-        <EmptyState
-          title={looking ? "No one matches" : "No homeowners in this book"}
-          description={
-            looking
-              ? "Clear the search or switch tabs to see the rest of the book."
-              : "Add a homeowner from Create, or start a lead. They show up here without a company."
-          }
-        />
+        <EmptyState title={empty.title} description={empty.description} />
       ) : (
         <div className="flex gap-2">
           <div className="min-w-0 flex-1">
@@ -198,6 +191,31 @@ function ContactsBookPage() {
       ) : null}
     </div>
   );
+}
+
+function emptyCopy(filter: BookFilter, query: string) {
+  if (query.trim()) {
+    return {
+      title: "No one matches",
+      description: "Try another name, phone, or street — or clear the search.",
+    };
+  }
+  if (filter === "partners") {
+    return {
+      title: "No partners in this book",
+      description: "Adjusters, realtors, and other referral people show up here when you mark them as partners.",
+    };
+  }
+  if (filter === "mine") {
+    return {
+      title: "No one in your book",
+      description: "People assigned to you land here. Company-wide homeowners stay on the Homeowners tab.",
+    };
+  }
+  return {
+    title: "No homeowners in this book",
+    description: "Add a homeowner from Create, or start a lead. They show up here without a company.",
+  };
 }
 
 function ContactBookRow({
