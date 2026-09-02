@@ -62,3 +62,33 @@ export function contactOptionLabel(
   if (extras.length === 0 && email) extras.push(email);
   return extras.length ? `${name} · ${extras.join(" · ")}` : name;
 }
+
+/** Last word of a personal name — how a paper contact book files the card. */
+export function contactFamilyName(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return parts[parts.length - 1] ?? "";
+}
+
+export function contactLetter(name: string) {
+  const family = contactFamilyName(name);
+  const letter = family.replace(/[^A-Za-z]/g, "").charAt(0).toUpperCase();
+  return letter || "#";
+}
+
+export function groupContactsByLetter<T extends { name: string }>(contacts: T[]) {
+  const sorted = [...contacts].sort((left, right) => {
+    const family = contactFamilyName(left.name).localeCompare(contactFamilyName(right.name), undefined, {
+      sensitivity: "base",
+    });
+    if (family !== 0) return family;
+    return left.name.localeCompare(right.name, undefined, { sensitivity: "base" });
+  });
+  const groups: { letter: string; contacts: T[] }[] = [];
+  for (const contact of sorted) {
+    const letter = contactLetter(contact.name);
+    const last = groups.at(-1);
+    if (last?.letter === letter) last.contacts.push(contact);
+    else groups.push({ letter, contacts: [contact] });
+  }
+  return groups;
+}
