@@ -89,10 +89,10 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
             <img
               src={person.photoUrl}
               alt={person.name}
-              className="size-24 rounded-full border object-cover"
+              className="size-32 rounded-full border object-cover sm:size-36"
             />
           ) : (
-            <div className="flex size-24 items-center justify-center rounded-full border bg-muted/50 font-heading text-2xl">
+            <div className="font-heading flex size-32 items-center justify-center rounded-full border bg-muted/50 text-3xl sm:size-36">
               {person.initials}
             </div>
           )}
