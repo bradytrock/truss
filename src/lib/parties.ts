@@ -180,14 +180,30 @@ export function coOwnerContact(
   return homeownersOnJob(job, contacts).find((contact) => contact.id !== primary) ?? null;
 }
 
+/** Primary + co-owner from the job — estimates should not invent people outside that set. */
+export function jobHomeownersForEstimate(
+  job: Pick<Job, "primaryContactId" | "relatedContactIds" | "subcontractorIds"> | undefined,
+  contacts: Contact[],
+) {
+  if (!job) {
+    return { contactId: null as string | null, secondContactId: null as string | null };
+  }
+  const contactId = (job.primaryContactId || "").trim() || null;
+  const secondContactId = coOwnerContact(job, contacts, contactId)?.id ?? null;
+  return { contactId, secondContactId };
+}
+
 export function applyCoOwnerToEstimate<
   T extends { contactId: string | null; secondContactId: string | null; jobId: string | null },
 >(estimate: T, jobs: Job[], contacts: Contact[]): T {
-  if (estimate.secondContactId) return estimate;
   const job = estimate.jobId ? jobs.find((item) => item.id === estimate.jobId) : undefined;
-  const coOwner = coOwnerContact(job, contacts, estimate.contactId);
-  if (!coOwner) return estimate;
-  return { ...estimate, secondContactId: coOwner.id };
+  if (!job) return estimate;
+  const fromJob = jobHomeownersForEstimate(job, contacts);
+  return {
+    ...estimate,
+    contactId: fromJob.contactId || estimate.contactId,
+    secondContactId: fromJob.secondContactId,
+  };
 }
 
 export function opportunitiesForContact(contact: Contact, opportunities: Opportunity[]) {

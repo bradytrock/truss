@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react";
+import { useEffect, useMemo, useState, type ComponentProps } from "react";
 import { toast } from "sonner";
 import {
   ArrowDown,
@@ -18,7 +18,7 @@ import { BackToJobButton } from "@/components/back-to-job";
 import { ProposalDocument } from "@/components/proposal-document";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { CollectSignatureDialog } from "@/components/signature-pad";
-import { shareContactsForEstimate, coOwnerContact, homeownersOnJob } from "@/lib/parties";
+import { shareContactsForEstimate, coOwnerContact, homeownersOnJob, jobHomeownersForEstimate } from "@/lib/parties";
 import { EstimateStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -91,7 +91,7 @@ import {
 import { currentCatalog } from "@/lib/price-lists";
 import { billingEstimate, defaultTaxRateForMarket, isResidentialMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { formatJobSite } from "@/lib/leads";
-import { jobPaperHref, primaryHomeownerPatch } from "@/lib/job-record";
+import { jobPaperHref } from "@/lib/job-record";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine, type JobPhoto } from "@/lib/types";
 import { canGenerateSignatureCertificate, canManageSettings } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
@@ -518,47 +518,49 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       : undefined
     : "Attach this proposal to a job to use that job’s photo gallery.";
   const homeownerContacts = useMemo(() => {
-    const selected = new Set(
-      [estimate.contactId, estimate.secondContactId, job?.primaryContactId, opportunity?.primaryContactId].filter(
-        (id): id is string => Boolean(id),
-      ),
-    );
-    // Primary can be anyone in the book — not only people already tagged on the job.
-    return [...crm.contacts]
-      .filter((contact) => selected.has(contact.id) || !contact.isReferralPartner)
-      .sort((left, right) => left.name.localeCompare(right.name));
-  }, [
-    crm.contacts,
-    estimate.contactId,
-    estimate.secondContactId,
-    job?.primaryContactId,
-    opportunity?.primaryContactId,
-  ]);
-  const secondHomeownerContacts = useMemo(() => {
-    const onJob = homeownersOnJob(job, crm.contacts, [estimate.contactId, estimate.secondContactId]);
-    const pool = onJob.length > 0 ? onJob : homeownerContacts;
-    return pool.filter((item) => item.id !== estimate.contactId);
-  }, [crm.contacts, estimate.contactId, estimate.secondContactId, homeownerContacts, job]);
-  const assignedCoOwner = useRef(false);
-  useEffect(() => {
-    assignedCoOwner.current = false;
-  }, [estimate.id]);
-  useEffect(() => {
-    if (assignedCoOwner.current) return;
-    if (estimate.secondContactId) {
-      assignedCoOwner.current = true;
-      return;
+    if (!job) {
+      // Orphan proposals (no job yet) — keep a book list so the writer is still usable.
+      return [...crm.contacts]
+        .filter((contact) => !contact.isReferralPartner)
+        .sort((left, right) => left.name.localeCompare(right.name));
     }
+    return homeownersOnJob(job, crm.contacts);
+  }, [crm.contacts, job]);
+  const secondHomeownerContacts = homeownerContacts.filter((item) => item.id !== estimate.contactId);
+  const jobRelatedKey = job ? `${job.primaryContactId}:${job.relatedContactIds.join(",")}` : "";
+  useEffect(() => {
+    if (!job) return;
     if (estimate.status === "accepted" || estimate.status === "declined") return;
-    const coOwner = coOwnerContact(job, crm.contacts, estimate.contactId);
-    if (!coOwner) return;
-    assignedCoOwner.current = true;
-    const tokens = mintEstimateSignerTokens({ ...estimate, secondContactId: coOwner.id });
-    void crm.updateEstimate(estimate.id, {
-      secondContactId: coOwner.id,
-      shareToken: tokens.shareToken,
-      secondShareToken: tokens.secondShareToken,
-    });
+    const fromJob = jobHomeownersForEstimate(job, crm.contacts);
+    const contactMatches = (estimate.contactId || null) === fromJob.contactId;
+    const secondMatches = (estimate.secondContactId || null) === fromJob.secondContactId;
+    if (contactMatches && secondMatches) return;
+    const nextContact = fromJob.contactId
+      ? crm.contacts.find((item) => item.id === fromJob.contactId)
+      : undefined;
+    const patch: {
+      contactId: string | null;
+      clientId?: string | null;
+      secondContactId: string | null;
+      secondAcceptedAt?: string | null;
+      shareToken?: string;
+      secondShareToken?: string;
+    } = {
+      contactId: fromJob.contactId,
+      secondContactId: fromJob.secondContactId,
+    };
+    if (nextContact?.clientId) patch.clientId = nextContact.clientId;
+    if (!secondMatches) {
+      patch.secondAcceptedAt = null;
+      const tokens = mintEstimateSignerTokens({
+        shareToken: estimate.shareToken,
+        secondShareToken: estimate.secondShareToken,
+        secondContactId: fromJob.secondContactId,
+      });
+      patch.shareToken = tokens.shareToken;
+      patch.secondShareToken = tokens.secondShareToken;
+    }
+    void crm.updateEstimate(estimate.id, patch);
   }, [
     crm.contacts,
     crm.updateEstimate,
@@ -568,6 +570,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     estimate.secondContactId,
     estimate.status,
     job,
+    jobRelatedKey,
   ]);
   const customer = crm.customerName(estimate);
   const site =
@@ -810,7 +813,34 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         <CardContent className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2">
             <Label>Homeowner</Label>
-            {editable ? (
+            {job ? (
+              <>
+                <p className="mt-1 text-sm">
+                  {contact ? (
+                    <Link href={`/contacts?contact=${contact.id}`} className="hover:underline">
+                      {contact.name}
+                    </Link>
+                  ) : (
+                    <span className="text-muted-foreground">No primary homeowner on the job yet.</span>
+                  )}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Pulled from the job. Change primary homeowner on the job record
+                  {job.id ? (
+                    <>
+                      {" "}
+                      (
+                      <Link href={`/jobs?job=${encodeURIComponent(job.id)}`} className="hover:underline">
+                        open job
+                      </Link>
+                      ).
+                    </>
+                  ) : (
+                    "."
+                  )}
+                </p>
+              </>
+            ) : editable ? (
               <Select
                 value={estimate.contactId || "none"}
                 onValueChange={(value) => {
@@ -822,13 +852,6 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                     secondContactId:
                       contactId && contactId === estimate.secondContactId ? null : estimate.secondContactId,
                   });
-                  if (job && contactId) {
-                    const jobPatch = primaryHomeownerPatch(job, contactId);
-                    if (jobPatch) void crm.updateJob(job.id, jobPatch);
-                    if (opportunity && opportunity.primaryContactId !== contactId) {
-                      void crm.updateOpportunity(opportunity.id, { primaryContactId: contactId });
-                    }
-                  }
                 }}
                 items={[
                   { value: "none", label: "Choose a contact" },
@@ -868,17 +891,32 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                   {client.name}
                 </Link>
               </p>
-            ) : job ? (
+            ) : !job ? (
               <p className="mt-1 text-xs text-muted-foreground">
-                {homeownerContacts.length === 0
-                  ? "Add a homeowner in Contacts, then pick them here."
-                  : "Changing this also updates the primary homeowner on the job."}
+                Attach this proposal to a job to pull homeowners from that record.
               </p>
             ) : null}
           </div>
           <div className="sm:col-span-2">
             <Label>Second homeowner</Label>
-            {editable ? (
+            {job ? (
+              <>
+                <p className="mt-1 text-sm">
+                  {secondContact ? (
+                    <Link href={`/contacts?contact=${secondContact.id}`} className="hover:underline">
+                      {secondContact.name}
+                    </Link>
+                  ) : (
+                    <span className="text-muted-foreground">None — one signature</span>
+                  )}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {secondContact
+                    ? "Pulled from related contacts on the job. Both must sign before this proposal is accepted."
+                    : "Add a co-owner as a related contact on the job when both signatures are required."}
+                </p>
+              </>
+            ) : editable ? (
               <Select
                 value={estimate.secondContactId || "none"}
                 onValueChange={(value) => {
@@ -911,7 +949,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
             ) : (
               <p className="mt-1 text-sm">
                 {secondContact ? (
-                  <Link href={`/contacts/${secondContact.id}`} className="hover:underline">
+                  <Link href={`/contacts?contact=${secondContact.id}`} className="hover:underline">
                     {secondContact.name}
                   </Link>
                 ) : (
@@ -919,13 +957,11 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                 )}
               </p>
             )}
-            <p className="mt-1 text-xs text-muted-foreground">
-              {estimate.secondContactId || secondHomeownerContacts.length > 0
-                ? "Both homeowners must sign this proposal before it is accepted."
-                : job
-                  ? "Add a co-owner as a related contact on the job when both signatures are required."
-                  : "Add a co-owner when both signatures are required."}
-            </p>
+            {!job ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Attach this proposal to a job to pull a co-owner from related contacts.
+              </p>
+            ) : null}
           </div>
           <div>
             <Label>Street</Label>
