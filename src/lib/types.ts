@@ -149,6 +149,15 @@ export interface CompanySettings {
   /** Wide logo for the top of a digital card. Blank falls back to logoUrl. */
   cardLogoUrl?: string;
   cardLogoStoragePath?: string;
+  /** Handles or profile links homeowners can pay through. */
+  paymentVenmo?: string;
+  paymentZelle?: string;
+  paymentCashapp?: string;
+  paymentPaypal?: string;
+  /** Free text under the payment options, e.g. who to make a check out to. */
+  paymentNote?: string;
+  /** Company-wide "leave us a review" link. Seats can point at their own office. */
+  googleReviewUrl?: string;
   /** Null or blank means the app fallback is still in use. */
   defaultEstimateTerms?: string | null;
   defaultInvoiceTerms?: string | null;
@@ -171,6 +180,12 @@ export const NORTHLINE_COMPANY: CompanySettings = {
   licenseNumber: "CO-GC-44821",
   cardLogoUrl: "",
   cardLogoStoragePath: "",
+  paymentVenmo: "",
+  paymentZelle: "",
+  paymentCashapp: "",
+  paymentPaypal: "",
+  paymentNote: "",
+  googleReviewUrl: "",
   defaultEstimateTerms: null,
   defaultInvoiceTerms: null,
   minimumMarginPercent: 0,
@@ -191,6 +206,8 @@ export interface StaffMember {
   /** Headshot on the digital card. Blank falls back to initials. */
   photoUrl?: string;
   photoStoragePath?: string;
+  /** Review link for this seat's office. Blank uses the company link. */
+  googleReviewUrl?: string;
   /** Own sign-off. Empty means use the company default. */
   emailSignature: string;
   locked: boolean;

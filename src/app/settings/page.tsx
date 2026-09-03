@@ -199,6 +199,89 @@ function CompanySettingsForm() {
 
       <Card>
         <CardHeader className="border-b">
+          <CardTitle>Getting paid</CardTitle>
+          <CardDescription>
+            Payment options on every digital business card. Paste a handle or a profile link —
+            homeowners get a tap-through for Venmo, Cash App, and PayPal, and a copy button for
+            Zelle. Leave a row blank to hide it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 pt-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              id="payment-venmo"
+              label="Venmo"
+              value={form.paymentVenmo ?? ""}
+              onChange={(value) => patch("paymentVenmo", value)}
+              placeholder="@t-rock-roofing"
+            />
+            <Field
+              id="payment-zelle"
+              label="Zelle"
+              value={form.paymentZelle ?? ""}
+              onChange={(value) => patch("paymentZelle", value)}
+              placeholder="pay@trockroofing.com"
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              id="payment-cashapp"
+              label="Cash App"
+              value={form.paymentCashapp ?? ""}
+              onChange={(value) => patch("paymentCashapp", value)}
+              placeholder="$trockroofing"
+            />
+            <Field
+              id="payment-paypal"
+              label="PayPal"
+              value={form.paymentPaypal ?? ""}
+              onChange={(value) => patch("paymentPaypal", value)}
+              placeholder="trockroofing"
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="payment-note">Note</Label>
+            <Textarea
+              id="payment-note"
+              rows={2}
+              className="field-sizing-fixed min-h-16 resize-y"
+              value={form.paymentNote ?? ""}
+              placeholder="Checks payable to T-Rock Roofing & Contracting."
+              onChange={(event) => patch("paymentNote", event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Prints under the payment options. Do not put account or routing numbers on a public
+              card.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Google review link</CardTitle>
+          <CardDescription>
+            The company default. Multi-office teams can point each person at their own listing
+            under Settings → People.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 pt-4">
+          <Field
+            id="google-review-url"
+            label="Review link"
+            value={form.googleReviewUrl ?? ""}
+            onChange={(value) => patch("googleReviewUrl", value)}
+            placeholder="https://g.page/r/CxxxxxxxxxxxxEBM/review"
+          />
+          <p className="text-xs text-muted-foreground">
+            In Google Business Profile choose <span className="font-medium">Ask for reviews</span>{" "}
+            and paste the short link. Blank hides the review button on cards.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="border-b">
           <CardTitle>Default email signature</CardTitle>
           <CardDescription>
             Appended to mail this company sends when that person has not set their own sign-off.

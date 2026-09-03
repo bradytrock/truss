@@ -13,6 +13,12 @@ export type SharedCardCompany = {
   logoUrl: string;
   /** Wide logo for the card header. Blank falls back to logoUrl. */
   cardLogoUrl: string;
+  googleReviewUrl: string;
+  paymentVenmo: string;
+  paymentZelle: string;
+  paymentCashapp: string;
+  paymentPaypal: string;
+  paymentNote: string;
   slug: string;
 };
 
@@ -23,6 +29,8 @@ export type SharedCardPerson = {
   email: string;
   phone: string;
   photoUrl: string;
+  /** This seat's office listing. Blank falls back to the company link. */
+  googleReviewUrl: string;
   cardSlug: string;
 };
 
@@ -162,6 +170,12 @@ export function parseSharedCard(raw: unknown): SharedCardPayload | null {
     postalCode: asString(companyRaw.postalCode).trim(),
     logoUrl: asString(companyRaw.logoUrl).trim(),
     cardLogoUrl: asString(companyRaw.cardLogoUrl).trim(),
+    googleReviewUrl: asString(companyRaw.googleReviewUrl).trim(),
+    paymentVenmo: asString(companyRaw.paymentVenmo).trim(),
+    paymentZelle: asString(companyRaw.paymentZelle).trim(),
+    paymentCashapp: asString(companyRaw.paymentCashapp).trim(),
+    paymentPaypal: asString(companyRaw.paymentPaypal).trim(),
+    paymentNote: asString(companyRaw.paymentNote).trim(),
     slug: asString(companyRaw.slug).trim(),
   };
   if (!company.name && !company.slug) return null;
@@ -177,6 +191,7 @@ export function parseSharedCard(raw: unknown): SharedCardPayload | null {
     email: asString(personRaw.email).trim(),
     phone: asString(personRaw.phone).trim(),
     photoUrl: asString(personRaw.photoUrl).trim(),
+    googleReviewUrl: asString(personRaw.googleReviewUrl).trim(),
     cardSlug: asString(personRaw.cardSlug).trim(),
   };
   if (!person.name) return { available: false, company, person: null };

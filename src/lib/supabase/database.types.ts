@@ -20,6 +20,12 @@ export type Database = {
           slug: string;
           card_logo_url: string;
           card_logo_storage_path: string;
+          payment_venmo: string;
+          payment_zelle: string;
+          payment_cashapp: string;
+          payment_paypal: string;
+          payment_note: string;
+          google_review_url: string;
           default_estimate_terms: string | null;
           default_invoice_terms: string | null;
           minimum_margin_percent: number;
@@ -43,6 +49,12 @@ export type Database = {
           slug?: string;
           card_logo_url?: string;
           card_logo_storage_path?: string;
+          payment_venmo?: string;
+          payment_zelle?: string;
+          payment_cashapp?: string;
+          payment_paypal?: string;
+          payment_note?: string;
+          google_review_url?: string;
           default_estimate_terms?: string | null;
           default_invoice_terms?: string | null;
           minimum_margin_percent?: number;
@@ -66,6 +78,12 @@ export type Database = {
           slug?: string;
           card_logo_url?: string;
           card_logo_storage_path?: string;
+          payment_venmo?: string;
+          payment_zelle?: string;
+          payment_cashapp?: string;
+          payment_paypal?: string;
+          payment_note?: string;
+          google_review_url?: string;
           default_estimate_terms?: string | null;
           default_invoice_terms?: string | null;
           minimum_margin_percent?: number;
@@ -139,6 +157,7 @@ export type Database = {
           card_slug: string;
           photo_url: string;
           photo_storage_path: string;
+          google_review_url: string;
           email_signature: string;
           locked: boolean;
           restricted: boolean;
@@ -158,6 +177,7 @@ export type Database = {
           card_slug?: string;
           photo_url?: string;
           photo_storage_path?: string;
+          google_review_url?: string;
           email_signature?: string;
           locked?: boolean;
           restricted?: boolean;

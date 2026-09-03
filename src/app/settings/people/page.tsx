@@ -1,6 +1,7 @@
 "use client";
 
 import { EmailSignatureRoster } from "@/components/email-signature-settings";
+import { GoogleReviewRoster } from "@/components/google-review-settings";
 import { PageHeader } from "@/components/page-chrome";
 import { PeopleSettings } from "@/components/people-settings";
 import { SettingsAdminGate } from "@/components/settings-nav";
@@ -38,6 +39,7 @@ function PeopleSettingsBody() {
         hideIntro
       />
       <StaffPhotoRoster />
+      <GoogleReviewRoster />
       <EmailSignatureRoster />
     </div>
   );

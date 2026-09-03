@@ -654,6 +654,20 @@ export function missingCardPhotoMessage() {
   return `Saved in this browser. Run ${CARD_PHOTOS_SQL} in the SQL editor (or a fresh bootstrap) so card logos and seat photos persist.`;
 }
 
+export const PAYMENTS_REVIEWS_SQL = "supabase/migrations/20260903170000_payments_reviews.sql";
+
+export function isMissingPaymentReviewColumns(
+  error: { message?: string; code?: string } | null | undefined,
+) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return message.includes("payment_") || message.includes("google_review_url");
+}
+
+export function missingPaymentReviewMessage() {
+  return `Saved in this browser. Run ${PAYMENTS_REVIEWS_SQL} in the SQL editor (or a fresh bootstrap) so payment options and review links persist.`;
+}
+
 export const CARD_SLUG_TRIGGER_SQL = "supabase/migrations/20260831150000_card_slug_trigger_rights.sql";
 
 export function isCardSlugPrivilegeError(error: { message?: string; code?: string } | null | undefined) {

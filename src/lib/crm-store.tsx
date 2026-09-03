@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
@@ -773,6 +773,7 @@ type CrmContextValue = CrmState & {
         | "emailSignature"
         | "photoUrl"
         | "photoStoragePath"
+        | "googleReviewUrl"
         | "locked"
         | "restricted"
         | "teamId"
@@ -7559,6 +7560,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         logoStoragePath: next.logoStoragePath?.trim() ?? "",
         cardLogoUrl: next.cardLogoUrl?.trim() ?? "",
         cardLogoStoragePath: next.cardLogoStoragePath?.trim() ?? "",
+        paymentVenmo: next.paymentVenmo?.trim() ?? "",
+        paymentZelle: next.paymentZelle?.trim() ?? "",
+        paymentCashapp: next.paymentCashapp?.trim() ?? "",
+        paymentPaypal: next.paymentPaypal?.trim() ?? "",
+        paymentNote: next.paymentNote?.trim() ?? "",
+        googleReviewUrl: next.googleReviewUrl?.trim() ?? "",
         defaultEstimateTerms: next.defaultEstimateTerms ?? null,
         defaultInvoiceTerms: next.defaultInvoiceTerms ?? null,
         minimumMarginPercent: clampMarginPercent(next.minimumMarginPercent),
@@ -7587,6 +7594,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         logo_storage_path: settings.logoStoragePath,
         card_logo_url: settings.cardLogoUrl ?? "",
         card_logo_storage_path: settings.cardLogoStoragePath ?? "",
+        payment_venmo: settings.paymentVenmo ?? "",
+        payment_zelle: settings.paymentZelle ?? "",
+        payment_cashapp: settings.paymentCashapp ?? "",
+        payment_paypal: settings.paymentPaypal ?? "",
+        payment_note: settings.paymentNote ?? "",
+        google_review_url: settings.googleReviewUrl ?? "",
         default_estimate_terms: settings.defaultEstimateTerms,
         default_invoice_terms: settings.defaultInvoiceTerms,
         minimum_margin_percent: settings.minimumMarginPercent,
@@ -7665,6 +7678,27 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         error = retry.error;
         if (!error) toast.message(missingCardPhotoMessage());
       }
+      if (error && isMissingPaymentReviewColumns(error)) {
+        const {
+          payment_venmo: _venmo,
+          payment_zelle: _zelle,
+          payment_cashapp: _cashapp,
+          payment_paypal: _paypal,
+          payment_note: _note,
+          google_review_url: _review,
+          ...rest
+        } = attempted;
+        attempted = rest;
+        const retry = await supabase
+          .from("companies")
+          .update(rest as typeof payload)
+          .eq("id", user.companyId)
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingPaymentReviewMessage());
+      }
       if (error && isMissingCompanySlug(error)) {
         const { slug: _slug, ...rest } = attempted;
         attempted = rest;
@@ -7704,6 +7738,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         logoStoragePath: settings.logoStoragePath,
         cardLogoUrl: settings.cardLogoUrl,
         cardLogoStoragePath: settings.cardLogoStoragePath,
+        paymentVenmo: settings.paymentVenmo,
+        paymentZelle: settings.paymentZelle,
+        paymentCashapp: settings.paymentCashapp,
+        paymentPaypal: settings.paymentPaypal,
+        paymentNote: settings.paymentNote,
+        googleReviewUrl: settings.googleReviewUrl,
         defaultEstimateTerms: mapped.defaultEstimateTerms ?? settings.defaultEstimateTerms,
         defaultInvoiceTerms: mapped.defaultInvoiceTerms ?? settings.defaultInvoiceTerms,
         minimumMarginPercent: mapped.minimumMarginPercent ?? settings.minimumMarginPercent,
@@ -7827,6 +7867,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         card_slug: member.cardSlug || mintPersonCardSlug(member.name),
         photo_url: member.photoUrl ?? "",
         photo_storage_path: member.photoStoragePath ?? "",
+        google_review_url: member.googleReviewUrl ?? "",
         email_signature: member.emailSignature ?? "",
         locked: member.locked,
         restricted: member.restricted,
@@ -7856,6 +7897,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         const retry = await supabase.from("team_members").upsert(withoutPhoto);
         error = retry.error;
         if (!retry.error) toast.message(missingCardPhotoMessage());
+      }
+      if (error && isMissingPaymentReviewColumns(error)) {
+        const { google_review_url: _review, ...withoutReview } = payload;
+        const retry = await supabase.from("team_members").upsert(withoutReview);
+        error = retry.error;
+        if (!retry.error) toast.message(missingPaymentReviewMessage());
       }
       if (error) {
         toast.error("Could not save teammate", {
@@ -8031,6 +8078,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           | "emailSignature"
           | "photoUrl"
           | "photoStoragePath"
+          | "googleReviewUrl"
           | "locked"
           | "restricted"
           | "teamId"
@@ -8045,6 +8093,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         "emailSignature",
         "photoUrl",
         "photoStoragePath",
+        "googleReviewUrl",
       ]);
       const mintingOwnCard = Boolean(
         patch.cardSlug &&
@@ -8074,6 +8123,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         phone: patch.phone !== undefined ? patch.phone.trim() : current.phone,
         emailSignature:
           patch.emailSignature !== undefined ? patch.emailSignature.trim() : current.emailSignature,
+        googleReviewUrl:
+          patch.googleReviewUrl !== undefined
+            ? patch.googleReviewUrl.trim()
+            : current.googleReviewUrl,
         teamId: patch.teamId !== undefined ? (looksLikeUuid(patch.teamId) ? patch.teamId : "") : current.teamId,
         cardSlug:
           patch.cardSlug !== undefined

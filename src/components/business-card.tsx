@@ -1,6 +1,7 @@
 "use client";
 
-import { Mail, MessageSquare, Phone, UserPlus } from "lucide-react";
+import { Copy, Mail, MessageSquare, Phone, Star, UserPlus } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   cardHeaderLogo,
@@ -13,6 +14,8 @@ import {
   type SharedCardPayload,
 } from "@/lib/card";
 import { formatPhone } from "@/lib/format";
+import { paymentOptions, resolveGoogleReviewUrl, type PaymentOption } from "@/lib/payments";
+import { copyText } from "@/lib/share";
 
 function officeLine(company: SharedCardPayload["company"]) {
   const parts = [company.street, [company.city, company.state].filter(Boolean).join(", "), company.postalCode]
@@ -56,6 +59,9 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
   const text = smsHref(live.phone);
   const url = cardUrl(company.slug, live.cardSlug);
   const address = officeLine(company);
+  const reviewUrl = resolveGoogleReviewUrl(company, live);
+  const payments = paymentOptions(company);
+  const paymentNote = company.paymentNote.trim();
 
   function saveContact() {
     downloadVcard(
@@ -140,6 +146,39 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
           </Button>
         </div>
 
+        {reviewUrl ? (
+          <Button
+            nativeButton={false}
+            size="lg"
+            variant="outline"
+            className="mt-2 h-11 w-full"
+            render={<a href={reviewUrl} target="_blank" rel="noreferrer" />}
+          >
+            <Star />
+            Leave a Google review
+          </Button>
+        ) : null}
+
+        {payments.length > 0 || paymentNote ? (
+          <section className="mt-8 border-t pt-5">
+            <h2 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Pay {company.name || "us"}
+            </h2>
+            {payments.length > 0 ? (
+              <ul className="mt-3 grid gap-2">
+                {payments.map((option) => (
+                  <li key={option.rail}>
+                    <PaymentRow option={option} />
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {paymentNote ? (
+              <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{paymentNote}</p>
+            ) : null}
+          </section>
+        ) : null}
+
         {website || address ? (
           <footer className="mt-8 border-t pt-4 text-center text-xs leading-relaxed text-muted-foreground">
             {website ? (
@@ -158,6 +197,44 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
         ) : null}
       </article>
     </div>
+  );
+}
+
+function PaymentRow({ option }: { option: PaymentOption }) {
+  const body = (
+    <>
+      <span className="text-sm font-medium">{option.label}</span>
+      <span className="ml-auto truncate text-sm text-muted-foreground">{option.handle}</span>
+    </>
+  );
+
+  if (option.href) {
+    return (
+      <a
+        href={option.href}
+        target="_blank"
+        rel="noreferrer"
+        className="flex min-h-11 w-full items-center gap-3 rounded-md border px-3 py-2 hover:bg-muted/50"
+      >
+        {body}
+      </a>
+    );
+  }
+
+  // Zelle has no deep link, so the handle is copied into their banking app.
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        const ok = await copyText(option.handle);
+        if (ok) toast.success(`${option.label} copied: ${option.handle}`);
+        else toast.error(`Copy this into ${option.label}: ${option.handle}`);
+      }}
+      className="flex min-h-11 w-full items-center gap-3 rounded-md border px-3 py-2 text-left hover:bg-muted/50"
+    >
+      {body}
+      <Copy className="size-4 shrink-0 text-muted-foreground" />
+    </button>
   );
 }
 

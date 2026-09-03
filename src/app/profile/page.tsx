@@ -23,6 +23,7 @@ export default function ProfilePage() {
   const [title, setTitle] = useState("");
   const [phone, setPhone] = useState("");
   const [emailSignature, setEmailSignature] = useState("");
+  const [reviewUrl, setReviewUrl] = useState("");
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -31,6 +32,7 @@ export default function ProfilePage() {
     setTitle(member.title);
     setPhone(member.phone);
     setEmailSignature(member.emailSignature ?? "");
+    setReviewUrl(member.googleReviewUrl ?? "");
   }, [member]);
 
   if (!crm.hydrated) return <LoadingScreen />;
@@ -49,7 +51,8 @@ export default function ProfilePage() {
     name.trim() !== seat.name ||
     title.trim() !== seat.title ||
     phone.trim() !== seat.phone ||
-    emailSignature !== (seat.emailSignature ?? "");
+    emailSignature !== (seat.emailSignature ?? "") ||
+    reviewUrl.trim() !== (seat.googleReviewUrl ?? "");
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -60,6 +63,7 @@ export default function ProfilePage() {
         title: title.trim(),
         phone: phone.trim(),
         emailSignature,
+        googleReviewUrl: reviewUrl.trim(),
       });
     } finally {
       setPending(false);
@@ -147,6 +151,35 @@ export default function ProfilePage() {
         </Card>
         <Card>
           <CardHeader className="border-b">
+            <CardTitle>Google review link</CardTitle>
+            <CardDescription>
+              Where the review button on your card sends people. Leave blank to use the company
+              link — set it only if your office collects reviews on its own listing.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-2 pt-4">
+            <Label htmlFor="profile-review-url">Review link</Label>
+            <Input
+              id="profile-review-url"
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              spellCheck={false}
+              value={reviewUrl}
+              placeholder={crm.company.googleReviewUrl?.trim() || "https://g.page/r/…/review"}
+              onChange={(event) => setReviewUrl(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              {reviewUrl.trim()
+                ? "Your card sends reviews here instead of the company listing."
+                : crm.company.googleReviewUrl?.trim()
+                  ? "Blank — your card uses the company listing."
+                  : "No company link is set yet, so the review button stays hidden."}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="border-b">
             <CardTitle>Email signature</CardTitle>
             <CardDescription>
               Sign-off on mail you send from Inbox. Leave blank to use the company default from
@@ -203,6 +236,7 @@ export default function ProfilePage() {
                 setTitle(seat.title);
                 setPhone(seat.phone);
                 setEmailSignature(seat.emailSignature ?? "");
+                setReviewUrl(seat.googleReviewUrl ?? "");
               }}
             >
               Discard
