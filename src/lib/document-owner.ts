@@ -1,7 +1,14 @@
 import { namesMatch } from "@/lib/seats";
 import { NORTHLINE_COMPANY, type CompanySettings } from "@/lib/types";
 
-type StaffContact = { id: string; name: string; title?: string; email: string; phone?: string };
+type StaffContact = {
+  id: string;
+  name: string;
+  title?: string;
+  email: string;
+  phone?: string;
+  emailSignature?: string;
+};
 
 export type ProjectManagerContact = {
   name: string;
@@ -67,13 +74,26 @@ export function documentProjectManager(input: {
   };
 }
 
+function firstNonEmpty(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const trimmed = value?.trim() ?? "";
+    if (trimmed) return trimmed;
+  }
+  return "";
+}
+
 /** Project manager fields used when emailing a share link. */
 export function shareEmailOwnerFromBook(input: {
   job?: { ownerStaffId?: string | null; projectManager?: string; salesRep?: string } | null;
   opportunity?: { ownerStaffId?: string | null; estimator?: string } | null;
-  staff: Array<StaffContact & { emailSignature?: string }>;
+  staff: StaffContact[];
   fallbackStaffId?: string;
+  /** Seat currently sending (viewer / effective staff). */
+  senderStaff?: StaffContact | null;
+  /** Auth login email when the seat row has none yet. */
+  loginEmail?: string;
   companyPhone?: string;
+  companyEmail?: string;
   companySignature?: string;
 }): {
   name: string;
@@ -83,15 +103,54 @@ export function shareEmailOwnerFromBook(input: {
   signature: string;
 } | null {
   const pm = documentProjectManager(input);
-  if (!pm) return null;
   const owner = documentOwnerStaff(input);
-  const ownSignature = owner && "emailSignature" in owner ? String(owner.emailSignature ?? "").trim() : "";
-  const signature = ownSignature || input.companySignature?.trim() || "";
+  const sender = input.senderStaff ?? undefined;
+  const fallback = input.fallbackStaffId
+    ? input.staff.find((member) => member.id === input.fallbackStaffId)
+    : undefined;
+
+  const displayName = firstNonEmpty(pm?.name, sender?.name, fallback?.name);
+  if (!displayName) return null;
+
+  const sameAsSender =
+    Boolean(sender) &&
+    ((Boolean(owner && sender && owner.id === sender.id) ||
+      Boolean(sender && namesMatch(sender.name, displayName))));
+
+  const email = firstNonEmpty(
+    pm?.email,
+    sameAsSender ? sender?.email : "",
+    // Prefer the sender's email when the job PM seat has none — they are sending.
+    sender?.email,
+    fallback?.email,
+    input.loginEmail,
+    input.companyEmail,
+  );
+
+  const title =
+    firstNonEmpty(pm?.title, sameAsSender ? sender?.title : "", sender?.title, fallback?.title) ||
+    "Project Manager";
+  const phone = firstNonEmpty(
+    pm?.phone,
+    sameAsSender ? sender?.phone : "",
+    sender?.phone,
+    fallback?.phone,
+    input.companyPhone,
+  );
+
+  const signature = firstNonEmpty(
+    sameAsSender ? sender?.emailSignature : "",
+    owner?.emailSignature,
+    sender?.emailSignature,
+    fallback?.emailSignature,
+    input.companySignature,
+  );
+
   return {
-    name: pm.name,
-    title: pm.title,
-    email: pm.email,
-    phone: pm.phone,
+    name: displayName,
+    title,
+    email,
+    phone,
     signature,
   };
 }

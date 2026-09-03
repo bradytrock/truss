@@ -91,7 +91,9 @@ export function PhotoReportBuilder({
     opportunity,
     staff: crm.staff,
     fallbackStaffId: crm.user.staffId,
+    senderStaff: crm.effectiveStaff ?? crm.viewer,
     companyPhone: crm.company.phone,
+    companyEmail: crm.company.email,
     companySignature: crm.company.defaultEmailSignature,
   });
   const propertyAddress =

@@ -595,7 +595,9 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       city: estimate.city,
       state: estimate.state,
       postalCode: estimate.postalCode,
-    }) || "";
+    }) ||
+    job?.location?.trim() ||
+    "";
   const title = site || estimate.name;
   const market = workMarket(job, opportunity);
   const residential = isResidentialMarket(market);
@@ -623,7 +625,9 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     opportunity,
     staff: crm.staff,
     fallbackStaffId: crm.user.staffId,
+    senderStaff: crm.effectiveStaff ?? crm.viewer,
     companyPhone: letterhead.phone,
+    companyEmail: crm.company.email,
     companySignature: crm.company.defaultEmailSignature,
   });
 

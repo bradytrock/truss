@@ -89,7 +89,9 @@ export default function InvoiceDetailPage() {
     opportunity,
     staff: crm.staff,
     fallbackStaffId: crm.user.staffId,
+    senderStaff: crm.effectiveStaff ?? crm.viewer,
     companyPhone: letterhead.phone,
+    companyEmail: crm.company.email,
     companySignature: crm.company.defaultEmailSignature,
   });
   const propertyAddress =

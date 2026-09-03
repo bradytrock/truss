@@ -321,7 +321,7 @@ export function ShareLinkDialog({
     }
     if (!looksLikeEmail(replyTo)) {
       toast.error(
-        "Add an email on the project manager’s profile (Settings → People or Profile). Replies go there.",
+        "Add an email on the project manager’s profile (Settings → People). Replies go there. Your login email is used automatically once it is saved on that seat.",
       );
       return;
     }

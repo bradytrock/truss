@@ -690,11 +690,28 @@ async function ensureSignedInStaff(
     staff_id?: string | null;
   },
   roster: StaffMember[],
+  authEmail?: string,
 ) {
   const matched = findStaffForProfile(roster, profile);
+  const loginEmail = normalizeSeatEmail(authEmail || "");
   if (matched) {
     if (profile.staff_id !== matched.id) {
       await linkProfileStaff(supabase, profile.id, matched.id);
+    }
+    // Seats created at signup often have no email; backfill from the login address.
+    if (loginEmail && !normalizeSeatEmail(matched.email)) {
+      const { error } = await supabase
+        .from("team_members")
+        .update({ email: loginEmail })
+        .eq("id", matched.id)
+        .eq("company_id", companyId);
+      if (!error) {
+        const updated = { ...matched, email: loginEmail };
+        return {
+          roster: roster.map((member) => (member.id === matched.id ? updated : member)),
+          matched: updated,
+        };
+      }
     }
     return { roster, matched };
   }
@@ -708,6 +725,7 @@ async function ensureSignedInStaff(
       role: profile.role || "company_admin",
       team_id: null,
       initials: profile.initials || initialsFromName(profile.full_name),
+      ...(loginEmail ? { email: loginEmail } : {}),
     })
     .select("*")
     .single();
@@ -1183,6 +1201,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           staff_id: profile.staff_id,
         },
         book.state.staff,
+        authUser.email ?? "",
       );
       if (ensured.matched) {
         try {
@@ -1204,6 +1223,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
                 staff_id: profile.staff_id,
               },
               book.state.staff,
+              authUser.email ?? "",
             );
           }
         } catch {
