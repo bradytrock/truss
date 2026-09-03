@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LOGO_ACCEPT } from "@/lib/company-logo";
 import { useCrm } from "@/lib/crm-store";
 import { initials } from "@/lib/format";
@@ -77,49 +76,5 @@ export function StaffPhotoField({
         </p>
       </div>
     </div>
-  );
-}
-
-export function StaffPhotoRoster() {
-  const crm = useCrm();
-  const people = useMemo(
-    () =>
-      [...crm.staff].sort((left, right) => {
-        if (left.id === crm.viewer?.id) return -1;
-        if (right.id === crm.viewer?.id) return 1;
-        return left.name.localeCompare(right.name);
-      }),
-    [crm.staff, crm.viewer?.id],
-  );
-
-  return (
-    <Card>
-      <CardHeader className="border-b">
-        <CardTitle>Card photos</CardTitle>
-        <CardDescription>
-          A headshot for each person’s digital business card. Blank shows their initials instead.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="divide-y pt-0">
-        {people.length === 0 ? (
-          <p className="pt-4 text-sm text-muted-foreground">No seats yet.</p>
-        ) : (
-          people.map((member) => (
-            <div key={member.id} className="grid gap-2 py-4 first:pt-4">
-              <p className="text-sm font-medium">
-                {member.name}
-                {member.title ? (
-                  <span className="ml-2 font-normal text-muted-foreground">{member.title}</span>
-                ) : null}
-              </p>
-              <StaffPhotoField
-                member={member}
-                description={`Tops ${member.name}’s card.`}
-              />
-            </div>
-          ))
-        )}
-      </CardContent>
-    </Card>
   );
 }

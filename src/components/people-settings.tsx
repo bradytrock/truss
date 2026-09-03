@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Copy, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -39,6 +41,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/page-chrome";
+import { StaffPhotoField } from "@/components/staff-photo-field";
 import { staffTeamLabel, TeamSelect } from "@/components/teams-settings";
 import {
   defaultTitleForRole,
@@ -48,7 +51,7 @@ import {
   inviteSignupUrl,
   staffStatusLabel,
 } from "@/lib/accounts";
-import { formatDate, formatPhone } from "@/lib/format";
+import { formatDate, formatPhone, initials } from "@/lib/format";
 import { copyText } from "@/lib/share";
 import { cardUrl } from "@/lib/card";
 import { mintPersonCardSlug } from "@/lib/card-slug";
@@ -82,6 +85,8 @@ export function PeopleSettings({
   staff,
   viewerId,
   companySlug,
+  companyReviewUrl = "",
+  companySignature = "",
   onInvite,
   onUpdate,
   onRefreshInvite,
@@ -92,6 +97,9 @@ export function PeopleSettings({
   staff: StaffMember[];
   viewerId: string;
   companySlug: string;
+  /** Shown as the placeholder a blank seat field falls back to. */
+  companyReviewUrl?: string;
+  companySignature?: string;
   onInvite: (input: {
     name: string;
     email: string;
@@ -210,14 +218,17 @@ export function PeopleSettings({
                     {people.map((member) => (
                       <TableRow key={member.id}>
                         <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-medium">
-                              {member.name}
-                              {member.id === viewerId ? (
-                                <span className="ml-2 text-xs font-normal text-muted-foreground">You</span>
-                              ) : null}
-                            </span>
-                            <span className="text-xs text-muted-foreground">{member.title}</span>
+                          <div className="flex items-center gap-2.5">
+                            <SeatAvatar member={member} />
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                {member.name}
+                                {member.id === viewerId ? (
+                                  <span className="ml-2 text-xs font-normal text-muted-foreground">You</span>
+                                ) : null}
+                              </span>
+                              <span className="text-xs text-muted-foreground">{member.title}</span>
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-muted-foreground">
@@ -274,18 +285,21 @@ export function PeopleSettings({
                 {people.map((member) => (
                   <div key={member.id} className="grid gap-3 border p-3">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium">
-                          {member.name}
-                          {member.id === viewerId ? (
-                            <span className="ml-2 text-xs font-normal text-muted-foreground">You</span>
+                      <div className="flex min-w-0 items-start gap-2.5">
+                        <SeatAvatar member={member} />
+                        <div className="min-w-0">
+                          <p className="font-medium">
+                            {member.name}
+                            {member.id === viewerId ? (
+                              <span className="ml-2 text-xs font-normal text-muted-foreground">You</span>
+                            ) : null}
+                          </p>
+                          <p className="text-xs text-muted-foreground">{member.title}</p>
+                          <p className="mt-1 text-sm text-muted-foreground">{member.email || "No email"}</p>
+                          {member.phone ? (
+                            <p className="text-sm text-muted-foreground">{formatPhone(member.phone)}</p>
                           ) : null}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{member.title}</p>
-                        <p className="mt-1 text-sm text-muted-foreground">{member.email || "No email"}</p>
-                        {member.phone ? (
-                          <p className="text-sm text-muted-foreground">{formatPhone(member.phone)}</p>
-                        ) : null}
+                        </div>
                       </div>
                       <StatusBadge member={member} />
                     </div>
@@ -410,6 +424,8 @@ export function PeopleSettings({
       <EditProfileDialog
         member={profileTarget}
         teams={teams}
+        companyReviewUrl={companyReviewUrl}
+        companySignature={companySignature}
         onOpenChange={(open) => !open && setProfileTarget(null)}
         onSave={async (patch) => {
           if (!profileTarget) return false;
@@ -419,6 +435,16 @@ export function PeopleSettings({
         }}
       />
     </>
+  );
+}
+
+function SeatAvatar({ member }: { member: StaffMember }) {
+  const photo = member.photoUrl?.trim() ?? "";
+  return (
+    <Avatar className="mt-0.5">
+      {photo ? <AvatarImage src={photo} alt="" /> : null}
+      <AvatarFallback className="text-xs">{initials(member.name) || "?"}</AvatarFallback>
+    </Avatar>
   );
 }
 
@@ -692,18 +718,34 @@ function AddTeammateDialog({
   );
 }
 
+type ProfilePatch = Partial<
+  Pick<
+    StaffMember,
+    | "name"
+    | "title"
+    | "email"
+    | "phone"
+    | "teamId"
+    | "cardSlug"
+    | "googleReviewUrl"
+    | "emailSignature"
+  >
+>;
+
 function EditProfileDialog({
   member,
   teams,
+  companyReviewUrl,
+  companySignature,
   onOpenChange,
   onSave,
 }: {
   member: StaffMember | null;
   teams: Team[];
+  companyReviewUrl: string;
+  companySignature: string;
   onOpenChange: (open: boolean) => void;
-  onSave: (
-    patch: Partial<Pick<StaffMember, "name" | "title" | "email" | "phone" | "teamId" | "cardSlug">>,
-  ) => Promise<boolean>;
+  onSave: (patch: ProfilePatch) => Promise<boolean>;
 }) {
   const [name, setName] = useState("");
   const [title, setTitle] = useState("");
@@ -711,6 +753,8 @@ function EditProfileDialog({
   const [phone, setPhone] = useState("");
   const [cardSlug, setCardSlug] = useState("");
   const [teamId, setTeamId] = useState(NO_TEAM);
+  const [reviewUrl, setReviewUrl] = useState("");
+  const [signature, setSignature] = useState("");
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -721,6 +765,8 @@ function EditProfileDialog({
     setPhone(member.phone);
     setCardSlug(member.cardSlug);
     setTeamId(member.teamId || NO_TEAM);
+    setReviewUrl(member.googleReviewUrl ?? "");
+    setSignature(member.emailSignature ?? "");
   }, [member]);
 
   async function onSubmit(event: FormEvent) {
@@ -735,6 +781,8 @@ function EditProfileDialog({
         phone: phone.trim(),
         cardSlug: cardSlug.trim(),
         teamId: parseTeamSelect(teamId),
+        googleReviewUrl: reviewUrl.trim(),
+        emailSignature: signature,
       });
     } finally {
       setPending(false);
@@ -743,69 +791,122 @@ function EditProfileDialog({
 
   return (
     <Dialog open={Boolean(member)} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <form onSubmit={onSubmit} className="grid gap-4">
           <DialogHeader>
             <DialogTitle>Profile for {member?.name}</DialogTitle>
             <DialogDescription>
-              Name, title, and phone print on estimates and invoices for jobs they own. Team controls
-              who sees their book.
+              Everything about this person lives here. Name, title, and phone print on estimates and
+              invoices for jobs they own. Team controls who sees their book.
             </DialogDescription>
           </DialogHeader>
+
           <div className="grid gap-3">
-            <div className="grid gap-1.5">
-              <Label htmlFor="profile-edit-name">Name</Label>
-              <Input
-                id="profile-edit-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                required
-              />
+            {member ? (
+              <div className="grid gap-1.5">
+                <Label>Card photo</Label>
+                <StaffPhotoField
+                  member={member}
+                  description={`Tops ${member.name.split(" ")[0] || "their"}’s digital card. Saves as soon as you pick it.`}
+                />
+              </div>
+            ) : null}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label htmlFor="profile-edit-name">Name</Label>
+                <Input
+                  id="profile-edit-name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="profile-edit-title">Title</Label>
+                <Input
+                  id="profile-edit-title"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label htmlFor="profile-edit-phone">Phone</Label>
+                <Input
+                  id="profile-edit-phone"
+                  type="tel"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                  placeholder="(303) 555-0142"
+                />
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="profile-edit-email">Email</Label>
+                <Input
+                  id="profile-edit-email"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label htmlFor="profile-edit-card">Card URL</Label>
+                <Input
+                  id="profile-edit-card"
+                  value={cardSlug}
+                  onChange={(event) => setCardSlug(event.target.value)}
+                  placeholder="jordan.hale"
+                />
+                <p className="text-xs text-muted-foreground">
+                  first.last. Changing this breaks NFC and QR that already use the old link.
+                </p>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="profile-edit-team">Team</Label>
+                <TeamSelect id="profile-edit-team" value={teamId} teams={teams} onChange={setTeamId} full />
+              </div>
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="profile-edit-title">Title</Label>
+              <Label htmlFor="profile-edit-review">Google review link</Label>
               <Input
-                id="profile-edit-title"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="profile-edit-phone">Phone</Label>
-              <Input
-                id="profile-edit-phone"
-                type="tel"
-                value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="(303) 555-0142"
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="profile-edit-email">Email</Label>
-              <Input
-                id="profile-edit-email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="profile-edit-card">Card URL</Label>
-              <Input
-                id="profile-edit-card"
-                value={cardSlug}
-                onChange={(event) => setCardSlug(event.target.value)}
-                placeholder="jordan.hale"
+                id="profile-edit-review"
+                type="url"
+                inputMode="url"
+                autoComplete="off"
+                spellCheck={false}
+                value={reviewUrl}
+                onChange={(event) => setReviewUrl(event.target.value)}
+                placeholder={companyReviewUrl || "https://g.page/r/…/review"}
               />
               <p className="text-xs text-muted-foreground">
-                first.last. Changing this breaks NFC and QR that already use the old link.
+                {reviewUrl.trim()
+                  ? "Their card sends reviews here instead of the company listing."
+                  : companyReviewUrl
+                    ? "Blank uses the company listing. Set it for people at another office."
+                    : "No company link is set yet, so the review button stays hidden."}
               </p>
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="profile-edit-team">Team</Label>
-              <TeamSelect id="profile-edit-team" value={teamId} teams={teams} onChange={setTeamId} full />
+              <Label htmlFor="profile-edit-signature">Email signature</Label>
+              <Textarea
+                id="profile-edit-signature"
+                rows={4}
+                className="field-sizing-fixed min-h-24 resize-y"
+                value={signature}
+                onChange={(event) => setSignature(event.target.value)}
+                placeholder={companySignature || "Best,\nJordan Hale"}
+              />
+              <p className="text-xs text-muted-foreground">
+                {signature.trim()
+                  ? "Signs off mail they send from Inbox."
+                  : "Blank uses the company default from Settings → Company."}
+              </p>
             </div>
           </div>
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
