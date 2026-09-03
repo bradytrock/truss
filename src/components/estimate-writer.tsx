@@ -18,7 +18,7 @@ import { BackToJobButton } from "@/components/back-to-job";
 import { ProposalDocument } from "@/components/proposal-document";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { CollectSignatureDialog } from "@/components/signature-pad";
-import { shareContactsForEstimate, coOwnerContact, homeownersOnJob, jobHomeownersForEstimate } from "@/lib/parties";
+import { shareContactsForEstimate, coOwnerContact, jobHomeownersForEstimate } from "@/lib/parties";
 import { EstimateStatusBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,8 +63,6 @@ import {
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { contactOptionLabel } from "@/lib/contacts";
-import { ContactSelectOption } from "@/components/contact-option";
 import { MarketField } from "@/components/market-field";
 import { useCrm } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
@@ -500,7 +498,6 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     !relatedInvoice;
   const contact = estimate.contactId ? crm.getContact(estimate.contactId) : undefined;
   const secondContact = estimate.secondContactId ? crm.getContact(estimate.secondContactId) : undefined;
-  const client = crm.getClient(estimate.clientId);
   const opportunity = estimate.opportunityId ? crm.getOpportunity(estimate.opportunityId) : undefined;
   const job = estimate.jobId ? crm.getJob(estimate.jobId) : undefined;
   const inferredCoOwner =
@@ -517,27 +514,31 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       ? "This job does not have photos yet. Add them on the job record, then attach them here."
       : undefined
     : "Attach this proposal to a job to use that job’s photo gallery.";
-  const homeownerContacts = useMemo(() => {
-    if (!job) {
-      // Orphan proposals (no job yet) — keep a book list so the writer is still usable.
-      return [...crm.contacts]
-        .filter((contact) => !contact.isReferralPartner)
-        .sort((left, right) => left.name.localeCompare(right.name));
-    }
-    return homeownersOnJob(job, crm.contacts);
-  }, [crm.contacts, job]);
-  const secondHomeownerContacts = homeownerContacts.filter((item) => item.id !== estimate.contactId);
-  const jobRelatedKey = job ? `${job.primaryContactId}:${job.relatedContactIds.join(",")}` : "";
+  const jobRelatedKey = job
+    ? `${job.primaryContactId}:${job.relatedContactIds.join(",")}:${job.street}:${job.city}:${job.state}:${job.postalCode}:${job.location}`
+    : "";
   useEffect(() => {
     if (!job) return;
     if (estimate.status === "accepted" || estimate.status === "declined") return;
     const fromJob = jobHomeownersForEstimate(job, crm.contacts);
+    const site = {
+      street: job.street.trim(),
+      city: job.city.trim(),
+      state: job.state.trim(),
+      postalCode: job.postalCode.trim(),
+    };
     const contactMatches = (estimate.contactId || null) === fromJob.contactId;
     const secondMatches = (estimate.secondContactId || null) === fromJob.secondContactId;
-    if (contactMatches && secondMatches) return;
+    const siteMatches =
+      estimate.street === site.street &&
+      estimate.city === site.city &&
+      estimate.state === site.state &&
+      estimate.postalCode === site.postalCode;
+    if (contactMatches && secondMatches && siteMatches) return;
     const nextContact = fromJob.contactId
       ? crm.contacts.find((item) => item.id === fromJob.contactId)
       : undefined;
+    const siteLabel = formatJobSite(site) || job.name;
     const patch: {
       contactId: string | null;
       clientId?: string | null;
@@ -545,10 +546,20 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       secondAcceptedAt?: string | null;
       shareToken?: string;
       secondShareToken?: string;
+      street?: string;
+      city?: string;
+      state?: string;
+      postalCode?: string;
+      name?: string;
     } = {
       contactId: fromJob.contactId,
       secondContactId: fromJob.secondContactId,
+      street: site.street,
+      city: site.city,
+      state: site.state,
+      postalCode: site.postalCode,
     };
+    if (siteLabel) patch.name = siteLabel;
     if (nextContact?.clientId) patch.clientId = nextContact.clientId;
     if (!secondMatches) {
       patch.secondAcceptedAt = null;
@@ -569,6 +580,10 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     estimate.id,
     estimate.secondContactId,
     estimate.status,
+    estimate.street,
+    estimate.city,
+    estimate.state,
+    estimate.postalCode,
     job,
     jobRelatedKey,
   ]);
@@ -602,21 +617,6 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     fallbackStaffId: crm.user.staffId,
     companyPhone: letterhead.phone,
   });
-
-  function patchSite(
-    patch: Partial<Pick<Estimate, "street" | "city" | "state" | "postalCode">>,
-  ) {
-    const next = {
-      street: patch.street ?? estimate.street,
-      city: patch.city ?? estimate.city,
-      state: patch.state ?? estimate.state,
-      postalCode: patch.postalCode ?? estimate.postalCode,
-    };
-    void crm.updateEstimate(estimate.id, {
-      ...patch,
-      name: formatJobSite(next) || estimate.name,
-    });
-  }
 
   function lastGroup() {
     return pendingSections.at(-1) || groups.at(-1)?.name;
@@ -808,194 +808,9 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     <div className="space-y-4">
       <Card>
         <CardHeader className="border-b">
-          <CardTitle>Customer & job site</CardTitle>
+          <CardTitle>Proposal details</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <Label>Homeowner</Label>
-            {job ? (
-              <>
-                <p className="mt-1 text-sm">
-                  {contact ? (
-                    <Link href={`/contacts?contact=${contact.id}`} className="hover:underline">
-                      {contact.name}
-                    </Link>
-                  ) : (
-                    <span className="text-muted-foreground">No primary homeowner on the job yet.</span>
-                  )}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Pulled from the job. Change primary homeowner on the job record
-                  {job.id ? (
-                    <>
-                      {" "}
-                      (
-                      <Link href={`/jobs?job=${encodeURIComponent(job.id)}`} className="hover:underline">
-                        open job
-                      </Link>
-                      ).
-                    </>
-                  ) : (
-                    "."
-                  )}
-                </p>
-              </>
-            ) : editable ? (
-              <Select
-                value={estimate.contactId || "none"}
-                onValueChange={(value) => {
-                  const contactId = value === "none" ? null : String(value ?? "");
-                  const next = crm.contacts.find((item) => item.id === contactId);
-                  void crm.updateEstimate(estimate.id, {
-                    contactId,
-                    clientId: next?.clientId ?? estimate.clientId,
-                    secondContactId:
-                      contactId && contactId === estimate.secondContactId ? null : estimate.secondContactId,
-                  });
-                }}
-                items={[
-                  { value: "none", label: "Choose a contact" },
-                  ...homeownerContacts.map((item) => ({
-                    value: item.id,
-                    label: contactOptionLabel(item, [...crm.jobs, ...crm.opportunities, ...crm.estimates]),
-                  })),
-                ]}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Choose a contact</SelectItem>
-                  {homeownerContacts.map((item) => (
-                    <SelectItem key={item.id} value={item.id} className="h-auto items-start py-1.5">
-                      <ContactSelectOption contact={item} sites={[...crm.jobs, ...crm.opportunities, ...crm.estimates]} />
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <p className="mt-1 text-sm">
-                {contact ? (
-                  <Link href={`/contacts?contact=${contact.id}`} className="hover:underline">
-                    {contact.name}
-                  </Link>
-                ) : (
-                  customer
-                )}
-              </p>
-            )}
-            {client ? (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Company{" "}
-                <Link href={`/clients/${client.id}`} className="hover:underline">
-                  {client.name}
-                </Link>
-              </p>
-            ) : !job ? (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Attach this proposal to a job to pull homeowners from that record.
-              </p>
-            ) : null}
-          </div>
-          <div className="sm:col-span-2">
-            <Label>Second homeowner</Label>
-            {job ? (
-              <>
-                <p className="mt-1 text-sm">
-                  {secondContact ? (
-                    <Link href={`/contacts?contact=${secondContact.id}`} className="hover:underline">
-                      {secondContact.name}
-                    </Link>
-                  ) : (
-                    <span className="text-muted-foreground">None — one signature</span>
-                  )}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {secondContact
-                    ? "Pulled from related contacts on the job. Both must sign before this proposal is accepted."
-                    : "Add a co-owner as a related contact on the job when both signatures are required."}
-                </p>
-              </>
-            ) : editable ? (
-              <Select
-                value={estimate.secondContactId || "none"}
-                onValueChange={(value) => {
-                  const secondContactId = value === "none" ? null : String(value ?? "");
-                  void crm.updateEstimate(estimate.id, {
-                    secondContactId,
-                    secondAcceptedAt: secondContactId === estimate.secondContactId ? estimate.secondAcceptedAt : null,
-                  });
-                }}
-                items={[
-                  { value: "none", label: "None — one signature" },
-                  ...secondHomeownerContacts.map((item) => ({
-                    value: item.id,
-                    label: contactOptionLabel(item, [...crm.jobs, ...crm.opportunities, ...crm.estimates]),
-                  })),
-                ]}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None — one signature</SelectItem>
-                  {secondHomeownerContacts.map((item) => (
-                    <SelectItem key={item.id} value={item.id} className="h-auto items-start py-1.5">
-                      <ContactSelectOption contact={item} sites={[...crm.jobs, ...crm.opportunities, ...crm.estimates]} />
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : (
-              <p className="mt-1 text-sm">
-                {secondContact ? (
-                  <Link href={`/contacts?contact=${secondContact.id}`} className="hover:underline">
-                    {secondContact.name}
-                  </Link>
-                ) : (
-                  "None"
-                )}
-              </p>
-            )}
-            {!job ? (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Attach this proposal to a job to pull a co-owner from related contacts.
-              </p>
-            ) : null}
-          </div>
-          <div>
-            <Label>Street</Label>
-            <CommitInput
-              disabled={!editable}
-              value={estimate.street}
-              placeholder="860 S Washington St"
-              onCommit={(value) => patchSite({ street: value })}
-            />
-          </div>
-          <div>
-            <Label>City</Label>
-            <CommitInput
-              disabled={!editable}
-              value={estimate.city}
-              onCommit={(value) => patchSite({ city: value })}
-            />
-          </div>
-          <div>
-            <Label>State</Label>
-            <CommitInput
-              disabled={!editable}
-              value={estimate.state}
-              onCommit={(value) => patchSite({ state: value })}
-            />
-          </div>
-          <div>
-            <Label>ZIP</Label>
-            <CommitInput
-              disabled={!editable}
-              value={estimate.postalCode}
-              onCommit={(value) => patchSite({ postalCode: value })}
-            />
-          </div>
           <div>
             <Label>Valid until</Label>
             {editable ? (
@@ -1059,6 +874,15 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                 "—"
               )}
             </p>
+            {!job ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Homeowner, co-owner, and job site come from the job once this proposal is attached.
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Homeowner, co-owner, and job site pull from this job.
+              </p>
+            )}
           </div>
         </CardContent>
       </Card>
