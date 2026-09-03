@@ -1291,6 +1291,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         kind="estimate"
         documentNumber={estimate.number}
         documentName={estimate.name}
+        propertyAddress={site}
         companyName={crm.company.name}
         companyLogoUrl={cardHeaderLogo(crm.company)}
         sender={emailOwner}

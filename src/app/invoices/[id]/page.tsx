@@ -20,6 +20,7 @@ import { downloadInvoicePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord, shareEmailOwnerFromBook } from "@/lib/document-owner";
 import { cardHeaderLogo } from "@/lib/card";
+import { formatJobSite } from "@/lib/leads";
 import { formatCurrencyFull, formatDate, formatMoney } from "@/lib/format";
 import { jobPaperHref } from "@/lib/job-record";
 import { shareUrl } from "@/lib/share";
@@ -91,6 +92,15 @@ export default function InvoiceDetailPage() {
     companyPhone: letterhead.phone,
     companySignature: crm.company.defaultEmailSignature,
   });
+  const propertyAddress =
+    formatJobSite({
+      street: job?.street,
+      city: job?.city,
+      state: job?.state,
+      postalCode: job?.postalCode,
+    }) ||
+    job?.location?.trim() ||
+    "";
 
   function downloadPdf() {
     if (lines.length === 0) {
@@ -289,6 +299,7 @@ export default function InvoiceDetailPage() {
         kind="invoice"
         documentNumber={record.number}
         documentName={record.name}
+        propertyAddress={propertyAddress}
         companyName={crm.company.name}
         companyLogoUrl={cardHeaderLogo(crm.company)}
         sender={emailOwner}

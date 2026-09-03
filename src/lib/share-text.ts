@@ -38,16 +38,27 @@ export function defaultShareEmailSubject(input: {
   company: string;
   number: string;
   name: string;
+  /** Job / property address, e.g. "123 Main St, Denver, CO 80205". */
+  propertyAddress?: string;
 }) {
   const company = input.company.trim() || "Office";
+  const address = input.propertyAddress?.trim() || "";
+  if (input.kind === "estimate") {
+    return address
+      ? `Your Proposal from ${company} for ${address}`
+      : `Your Proposal from ${company}`;
+  }
   if (input.kind === "invoice") {
-    return `${company}: invoice ${input.number}`;
+    return address
+      ? `Your Invoice from ${company} for ${address}`
+      : input.number.trim()
+        ? `Your Invoice from ${company} (${input.number.trim()})`
+        : `Your Invoice from ${company}`;
   }
-  if (input.kind === "page") {
-    const label = input.name.trim() || "document";
-    return `${company}: ${label}`;
-  }
-  return `${company}: proposal ${input.number}`;
+  const label = input.name.trim() || "document";
+  return address
+    ? `${label} from ${company} for ${address}`
+    : `${label} from ${company}`;
 }
 
 function escapeHtml(value: string) {

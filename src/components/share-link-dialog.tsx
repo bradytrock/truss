@@ -44,6 +44,7 @@ export function ShareLinkDialog({
   documentName,
   companyName,
   companyLogoUrl,
+  propertyAddress,
   /** Project manager on the job — From name, Reply-To, sign-off, and contact block. */
   sender,
   recipients = [],
@@ -62,6 +63,8 @@ export function ShareLinkDialog({
   companyName?: string;
   /** Wide card logo (same as the business card header). */
   companyLogoUrl?: string;
+  /** Job site / property address for the email subject. */
+  propertyAddress?: string;
   sender?: ShareEmailOwner | null;
   recipients?: ShareRecipient[];
   onDownloadPdf?: () => Promise<void> | void;
@@ -121,8 +124,9 @@ export function ShareLinkDialog({
         company: companyName || "Office",
         number: documentNumber || "",
         name: documentName || "",
+        propertyAddress: propertyAddress || "",
       }),
-    [companyName, documentName, documentNumber, kind],
+    [companyName, documentName, documentNumber, kind, propertyAddress],
   );
 
   useEffect(() => {

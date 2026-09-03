@@ -63,6 +63,7 @@ import { shareUrl } from "@/lib/share";
 import { resolveShareContacts } from "@/lib/parties";
 import { shareEmailOwnerFromBook } from "@/lib/document-owner";
 import { cardHeaderLogo } from "@/lib/card";
+import { formatJobSite } from "@/lib/leads";
 import {
   type Job,
   type JobPhoto,
@@ -93,6 +94,15 @@ export function PhotoReportBuilder({
     companyPhone: crm.company.phone,
     companySignature: crm.company.defaultEmailSignature,
   });
+  const propertyAddress =
+    formatJobSite({
+      street: job.street,
+      city: job.city,
+      state: job.state,
+      postalCode: job.postalCode,
+    }) ||
+    job.location.trim() ||
+    "";
   const [draft, setDraft] = useState(report);
   const [selectedId, setSelectedId] = useState(report.pages[0]?.id ?? "");
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -501,6 +511,7 @@ export function PhotoReportBuilder({
         url={draft.shareToken ? shareUrl("p", draft.shareToken) : ""}
         kind="page"
         documentName={draft.title}
+        propertyAddress={propertyAddress}
         companyName={crm.company.name}
         companyLogoUrl={cardHeaderLogo(crm.company)}
         sender={emailOwner}
