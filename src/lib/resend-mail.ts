@@ -1,14 +1,16 @@
 import { Resend } from "resend";
 import {
   DEFAULT_RESEND_FROM_EMAIL,
+  formatResendFromDisplay,
+  RESEND_FROM_ADDRESS,
   RESEND_FROM_DOMAIN,
-  resendMailbox,
 } from "@/lib/resend-from";
 
 export {
   DEFAULT_RESEND_FROM_EMAIL,
   formatResendFrom,
   formatResendFromDisplay,
+  RESEND_FROM_ADDRESS,
   RESEND_FROM_DOMAIN,
   resendMailbox,
 } from "@/lib/resend-from";
@@ -18,8 +20,8 @@ export function resendApiKey() {
 }
 
 /**
- * Optional env override for non-PM sends.
- * Prefer `RESEND_FROM_EMAIL` / `RESEND_FROM`. Bare local-parts become `@updates.theroofingcrm.com`.
+ * From always uses no-reply@updates.theroofingcrm.com (required for Resend delivery).
+ * Optional RESEND_FROM_EMAIL may set the display name only.
  */
 export function resendFromEmail() {
   const configured = process.env.RESEND_FROM_EMAIL?.trim() || process.env.RESEND_FROM?.trim() || "";
@@ -28,20 +30,13 @@ export function resendFromEmail() {
   const angled = configured.match(/^(.*)<([^>]+)>$/);
   if (angled) {
     const display = angled[1].trim();
-    const address = normalizeFromAddress(angled[2].trim());
-    return display ? `${display} <${address}>` : address;
+    return display ? `${display} <${RESEND_FROM_ADDRESS}>` : RESEND_FROM_ADDRESS;
   }
 
-  return normalizeFromAddress(configured);
-}
-
-function normalizeFromAddress(value: string) {
-  if (value.includes("@")) {
-    const at = value.lastIndexOf("@");
-    const local = value.slice(0, at).trim() || "noreply";
-    return resendMailbox(local);
+  if (configured.includes("@")) {
+    return RESEND_FROM_ADDRESS;
   }
-  return resendMailbox(value);
+  return `${configured} <${RESEND_FROM_ADDRESS}>`;
 }
 
 export function resendReplyTo() {
@@ -57,7 +52,21 @@ export function resendStatus() {
     configured: isResendConfigured(),
     from: resendFromEmail(),
     domain: RESEND_FROM_DOMAIN,
+    address: RESEND_FROM_ADDRESS,
   };
+}
+
+/** Keep display name; force the verified no-reply mailbox. */
+export function enforceResendFrom(from: string) {
+  const trimmed = from.trim();
+  if (!trimmed) return DEFAULT_RESEND_FROM_EMAIL;
+  const angled = trimmed.match(/^(.*)<([^>]+)>$/);
+  if (angled) {
+    const display = angled[1].trim();
+    return display ? `${display} <${RESEND_FROM_ADDRESS}>` : RESEND_FROM_ADDRESS;
+  }
+  if (trimmed.includes("@")) return RESEND_FROM_ADDRESS;
+  return `${formatResendFromDisplay(trimmed, "Truss")} <${RESEND_FROM_ADDRESS}>`;
 }
 
 export async function sendResendEmail(input: {
@@ -65,7 +74,7 @@ export async function sendResendEmail(input: {
   subject: string;
   html: string;
   text: string;
-  /** Project manager display + mailbox, e.g. Brady at Company <brady@updates…>. */
+  /** Project manager display name; mailbox is always no-reply@updates… */
   from?: string;
   /** Always the project manager’s real inbox. */
   replyTo?: string;
@@ -82,7 +91,7 @@ export async function sendResendEmail(input: {
     return { ok: true as const, mocked: true as const, id: "" };
   }
 
-  const from = input.from?.trim() || resendFromEmail();
+  const from = enforceResendFrom(input.from?.trim() || resendFromEmail());
   const replyTo = input.replyTo?.trim() || resendReplyTo() || undefined;
   if (!replyTo) {
     return {
@@ -104,5 +113,5 @@ export async function sendResendEmail(input: {
   if (error) {
     return { ok: false as const, error: error.message || "Resend could not send that email." };
   }
-  return { ok: true as const, mocked: false as const, id: data?.id ?? "" };
+  return { ok: true as const, mocked: false as const, id: data?.id ?? "", from };
 }

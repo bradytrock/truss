@@ -28,7 +28,7 @@ import {
   type ShareDocumentKind,
   type ShareEmailOwner,
 } from "@/lib/share-text";
-import { formatResendFromDisplay, RESEND_FROM_DOMAIN } from "@/lib/resend-from";
+import { formatResendFromDisplay, RESEND_FROM_ADDRESS } from "@/lib/resend-from";
 
 type SendblueStatus = { configured: boolean; fromNumber: string };
 type ResendStatus = { configured: boolean; from: string; domain?: string };
@@ -558,14 +558,14 @@ export function ShareLinkDialog({
                 const reply = sender?.email?.trim() || "";
                 if (emailStatus?.configured) {
                   if (fromLabel && looksLikeEmail(reply)) {
-                    return `Email shows as ${fromLabel} (@${RESEND_FROM_DOMAIN}); replies go to ${reply}.`;
+                    return `Email shows as ${fromLabel} from ${RESEND_FROM_ADDRESS}; replies go to ${reply}.`;
                   }
                   if (fromLabel) {
-                    return `Email shows as ${fromLabel} (@${RESEND_FROM_DOMAIN}). Add the project manager’s email on their profile for Reply-To.`;
+                    return `Email shows as ${fromLabel} from ${RESEND_FROM_ADDRESS}. Add the project manager’s email on their profile for Reply-To.`;
                   }
-                  return `Email goes out through Resend (@${RESEND_FROM_DOMAIN}).`;
+                  return `Email goes out through Resend from ${RESEND_FROM_ADDRESS}.`;
                 }
-                return `Email needs RESEND_API_KEY on the host (@${RESEND_FROM_DOMAIN}${fromLabel ? `, as ${fromLabel}` : ""}) — until then Send email previews without delivering.`;
+                return `Email needs RESEND_API_KEY on the host (from ${RESEND_FROM_ADDRESS}${fromLabel ? `, as ${fromLabel}` : ""}) — until then Send email previews without delivering.`;
               })()}
             </p>
           </div>
