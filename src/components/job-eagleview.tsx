@@ -64,13 +64,20 @@ export function JobEagleviewPanel({
           estimateId: applyEstimateId || estimates[0]?.id || null,
         }),
       });
-      const data = (await response.json()) as {
-        error?: string;
-        mocked?: boolean;
-        order?: EagleviewOrder;
-      };
+      const raw = await response.text();
+      let data: { error?: string; mocked?: boolean; order?: EagleviewOrder } = {};
+      try {
+        data = raw ? (JSON.parse(raw) as typeof data) : {};
+      } catch {
+        toast.error(
+          raw.trim()
+            ? `Could not order EagleView (${response.status}).`
+            : "Could not order EagleView.",
+        );
+        return;
+      }
       if (!response.ok) {
-        toast.error(data.error || "Could not order EagleView.");
+        toast.error(data.error || `Could not order EagleView (${response.status}).`);
         return;
       }
       toast.success(
@@ -78,9 +85,13 @@ export function JobEagleviewPanel({
           ? "Mock EagleView report ready — PDF attached under Files."
           : "EagleView order submitted.",
       );
-      await crm.reload();
+      try {
+        await crm.reload();
+      } catch {
+        // Order already saved; refresh can fail without undoing it.
+      }
     } catch {
-      toast.error("Could not order EagleView.");
+      toast.error("Could not reach Truss to order EagleView.");
     } finally {
       setPending(false);
     }

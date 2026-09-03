@@ -1,25 +1,30 @@
 import { firstName } from "@/lib/phone";
 
-/** Product presets we expose in Truss. Mapped to EagleView product IDs when ordering live. */
+/** Regular delivery id for most Measurement Orders products. */
+export const EAGLEVIEW_REGULAR_DELIVERY_ID = 8;
+
+/** Product presets we expose in Truss. Mapped to EagleView catalog PrimaryProductIds. */
 export const EAGLEVIEW_PRODUCTS = [
   {
     id: "premium_residential",
     label: "Premium Residential",
     description: "Full roof report with squares, pitch, and diagram.",
-    /** EagleView PrimaryProductId — confirm in your EagleView account catalog. */
     eagleviewProductId: 31,
+    deliveryProductId: EAGLEVIEW_REGULAR_DELIVERY_ID,
   },
   {
     id: "standard_residential",
-    label: "Standard Residential",
-    description: "Core roof measurements without premium extras.",
-    eagleviewProductId: 1,
+    label: "ClaimsReady Residential",
+    description: "ClaimsReady residential roof measurements.",
+    eagleviewProductId: 13,
+    deliveryProductId: EAGLEVIEW_REGULAR_DELIVERY_ID,
   },
   {
     id: "commercial",
-    label: "Commercial",
-    description: "Commercial roof measurement report.",
-    eagleviewProductId: 2,
+    label: "Premium Commercial",
+    description: "Premium commercial roof measurement report.",
+    eagleviewProductId: 32,
+    deliveryProductId: EAGLEVIEW_REGULAR_DELIVERY_ID,
   },
 ] as const;
 
@@ -104,6 +109,30 @@ export function eagleviewProductLabel(id: string) {
 
 export function eagleviewProductNumericId(id: string) {
   return EAGLEVIEW_PRODUCTS.find((item) => item.id === id)?.eagleviewProductId ?? 31;
+}
+
+export function eagleviewDeliveryProductId(id: string) {
+  return (
+    EAGLEVIEW_PRODUCTS.find((item) => item.id === id)?.deliveryProductId ??
+    EAGLEVIEW_REGULAR_DELIVERY_ID
+  );
+}
+
+function eagleviewErrorMessage(data: Record<string, unknown> | null, fallback: string) {
+  if (!data) return fallback;
+  const candidates = [
+    data.error_description,
+    data.errorSummary,
+    data.error_summary,
+    data.Message,
+    data.message,
+    data.error,
+    data.errorCode,
+  ];
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return fallback;
 }
 
 export function isEagleviewProductId(value: string): value is EagleviewProductId {
@@ -208,36 +237,50 @@ export async function fetchEagleviewAccessToken(input: {
   clientId: string;
   clientSecret: string;
 }) {
-  const body = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: input.clientId,
-    client_secret: input.clientSecret,
-  });
-  const response = await fetch(eagleviewTokenUrl(), {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-  });
-  const data = (await response.json().catch(() => null)) as
-    | { access_token?: string; expires_in?: number; error?: string; error_description?: string }
-    | null;
-  if (!response.ok || !data?.access_token) {
+  // EagleView / Okta expect HTTP Basic auth, not client_id in the form body.
+  const basic = Buffer.from(`${input.clientId}:${input.clientSecret}`, "utf8").toString("base64");
+  try {
+    const response = await fetch(eagleviewTokenUrl(), {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${basic}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: new URLSearchParams({ grant_type: "client_credentials" }),
+    });
+    const data = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    const accessToken = typeof data?.access_token === "string" ? data.access_token : "";
+    if (!response.ok || !accessToken) {
+      return {
+        ok: false as const,
+        error: eagleviewErrorMessage(
+          data,
+          `EagleView could not issue an access token (${response.status}). Check Client ID and secret.`,
+        ),
+      };
+    }
+    return {
+      ok: true as const,
+      accessToken,
+      expiresIn: typeof data?.expires_in === "number" ? data.expires_in : 3600,
+    };
+  } catch (error) {
     return {
       ok: false as const,
-      error: data?.error_description || data?.error || "EagleView could not issue an access token.",
+      error:
+        error instanceof Error
+          ? `Could not reach EagleView auth (${error.message}).`
+          : "Could not reach EagleView auth.",
     };
   }
-  return {
-    ok: true as const,
-    accessToken: data.access_token,
-    expiresIn: typeof data.expires_in === "number" ? data.expires_in : 3600,
-  };
 }
 
 export async function placeEagleviewOrder(input: {
   accessToken: string;
   sandbox: boolean;
   productId: number;
+  deliveryProductId?: number;
   referenceId: string;
   street: string;
   city: string;
@@ -255,39 +298,51 @@ export async function placeEagleviewOrder(input: {
             City: input.city,
             State: input.state,
             Zip: input.postalCode,
+            Country: "US",
           },
         ],
         PrimaryProductId: input.productId,
-        DeliveryProductId: input.productId,
+        DeliveryProductId: input.deliveryProductId ?? EAGLEVIEW_REGULAR_DELIVERY_ID,
         MeasurementInstructionType: 1,
+        ChangesInLast4Years: false,
         ReferenceId: input.referenceId,
         ...(input.claimNumber?.trim()
-          ? { ClaimInfo: input.claimNumber.trim() }
+          ? { ClaimNumber: input.claimNumber.trim() }
           : {}),
       },
     ],
   };
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${input.accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-  const data = (await response.json().catch(() => null)) as
-    | { OrderId?: number | string; ReportIds?: Array<number | string>; Message?: string; message?: string }
-    | null;
-  if (!response.ok) {
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.accessToken}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!response.ok) {
+      return {
+        ok: false as const,
+        error: eagleviewErrorMessage(data, `EagleView order failed (${response.status}).`),
+      };
+    }
+    const orderId = data?.OrderId != null ? String(data.OrderId) : "";
+    const reportIds = data?.ReportIds;
+    const reportId =
+      Array.isArray(reportIds) && reportIds[0] != null ? String(reportIds[0]) : "";
+    return { ok: true as const, orderId, reportId };
+  } catch (error) {
     return {
       ok: false as const,
-      error: data?.Message || data?.message || `EagleView order failed (${response.status}).`,
+      error:
+        error instanceof Error
+          ? `Could not reach EagleView order API (${error.message}).`
+          : "Could not reach EagleView order API.",
     };
   }
-  const orderId = data?.OrderId != null ? String(data.OrderId) : "";
-  const reportId =
-    Array.isArray(data?.ReportIds) && data.ReportIds[0] != null ? String(data.ReportIds[0]) : "";
-  return { ok: true as const, orderId, reportId };
 }
 
 export async function fetchEagleviewReport(input: {
@@ -296,17 +351,27 @@ export async function fetchEagleviewReport(input: {
   reportId: string;
 }) {
   const url = `${eagleviewApiBase(input.sandbox)}/v3/Report/GetReport?reportId=${encodeURIComponent(input.reportId)}`;
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${input.accessToken}` },
-  });
-  const data = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!response.ok || !data) {
+  try {
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${input.accessToken}`, Accept: "application/json" },
+    });
+    const data = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!response.ok || !data) {
+      return {
+        ok: false as const,
+        error: eagleviewErrorMessage(data, "EagleView could not return that report."),
+      };
+    }
+    return { ok: true as const, report: data };
+  } catch (error) {
     return {
       ok: false as const,
-      error: "EagleView could not return that report.",
+      error:
+        error instanceof Error
+          ? `Could not reach EagleView report API (${error.message}).`
+          : "Could not reach EagleView report API.",
     };
   }
-  return { ok: true as const, report: data };
 }
 
 /** Deterministic mock measurements from an address so demos stay stable. */

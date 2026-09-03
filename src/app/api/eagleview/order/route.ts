@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   buildEagleviewReportPdf,
+  eagleviewDeliveryProductId,
   eagleviewProductLabel,
   eagleviewProductNumericId,
   isEagleviewProductId,
@@ -27,6 +28,23 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  try {
+    return await placeOrder(request);
+  } catch (error) {
+    console.error("[eagleview/order]", error);
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Could not order EagleView. Try again or disconnect credentials to use mock mode.",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+async function placeOrder(request: Request) {
   const supabase = await createClient();
   const { profile, error: authError } = await loadProfileCompany(supabase);
   if (!profile) {
@@ -108,6 +126,7 @@ export async function POST(request: Request) {
       accessToken: token.accessToken,
       sandbox: token.creds.sandbox,
       productId: eagleviewProductNumericId(product),
+      deliveryProductId: eagleviewDeliveryProductId(product),
       referenceId,
       street,
       city,
