@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useMemo, useState, type ReactNode } from "react";
 import { CalendarDays, ChevronDown, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,6 +36,7 @@ import {
   type WorkflowRow,
 } from "@/lib/reports";
 import { BdRoiPanel } from "@/components/bd-roi";
+import { CardAnalyticsReport } from "@/components/card-analytics-report";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { accessScope, canSeeTeamPerformance, canViewReports } from "@/lib/visibility";
 import { isBusinessDevelopment } from "@/lib/bd";
@@ -46,11 +48,25 @@ const SCOPE_COPY = {
   own: "Limited to your own jobs and leads.",
 } as const;
 
+function tabFromSearch(value: string | null): ReportTab {
+  if (value && REPORT_TABS.some((item) => item.id === value)) return value as ReportTab;
+  return "jobs";
+}
+
 export default function ReportsPage() {
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <ReportsPageInner />
+    </Suspense>
+  );
+}
+
+function ReportsPageInner() {
   const crm = useCrm();
   const viewer = crm.effectiveStaff;
+  const searchParams = useSearchParams();
   const [preset, setPreset] = useState<DatePreset>("ytd");
-  const [tab, setTab] = useState<ReportTab>("jobs");
+  const [tab, setTab] = useState<ReportTab>(() => tabFromSearch(searchParams.get("tab")));
   const [pipelineMode, setPipelineMode] = useState<"funnel" | "bars">("funnel");
 
   const showTeam = Boolean(viewer && canSeeTeamPerformance(viewer.role));
@@ -176,29 +192,31 @@ export default function ReportsPage() {
             : SCOPE_COPY[scope]
         }
         actions={
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <p className="text-sm text-muted-foreground">Showing {rangeLabel(report.range)}</p>
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button type="button" size="sm" />}>
-                <CalendarDays />
-                {DATE_PRESETS.find((item) => item.id === preset)?.label}
-                <ChevronDown />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {DATE_PRESETS.map((item) => (
-                  <DropdownMenuItem key={item.id} onClick={() => setPreset(item.id)}>
-                    {item.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {isBd ? null : (
-              <Button type="button" variant="outline" onClick={exportCurrent}>
-                <Download />
-                Export data
-              </Button>
-            )}
-          </div>
+          activeTab === "cards" ? null : (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <p className="text-sm text-muted-foreground">Showing {rangeLabel(report.range)}</p>
+              <DropdownMenu>
+                <DropdownMenuTrigger render={<Button type="button" size="sm" />}>
+                  <CalendarDays />
+                  {DATE_PRESETS.find((item) => item.id === preset)?.label}
+                  <ChevronDown />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {DATE_PRESETS.map((item) => (
+                    <DropdownMenuItem key={item.id} onClick={() => setPreset(item.id)}>
+                      {item.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {isBd ? null : (
+                <Button type="button" variant="outline" onClick={exportCurrent}>
+                  <Download />
+                  Export data
+                </Button>
+              )}
+            </div>
+          )
         }
       />
 
@@ -589,6 +607,10 @@ export default function ReportsPage() {
             </div>
             <PipelineBars rows={report.pipeline} mode={pipelineMode} formatMoney={money} />
           </Panel>
+        </TabsContent>
+
+        <TabsContent value="cards" className="mt-5 space-y-5">
+          <CardAnalyticsReport />
         </TabsContent>
       </Tabs>
     </div>

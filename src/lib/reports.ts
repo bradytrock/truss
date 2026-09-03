@@ -33,7 +33,8 @@ export type ReportTab =
   | "lost"
   | "overview"
   | "workflow"
-  | "pipeline";
+  | "pipeline"
+  | "cards";
 
 export const DATE_PRESETS: { id: DatePreset; label: string }[] = [
   { id: "mtd", label: "Month to date" },
@@ -51,6 +52,7 @@ export const REPORT_TABS: { id: ReportTab; label: string; teamOnly?: boolean }[]
   { id: "overview", label: "Overview" },
   { id: "workflow", label: "Workflow" },
   { id: "pipeline", label: "Pipeline" },
+  { id: "cards", label: "Card activity" },
 ];
 
 const QUALIFIED_STAGES: ReadonlySet<PipelineStage> = new Set([
