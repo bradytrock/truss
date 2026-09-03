@@ -281,6 +281,11 @@ export default function InvoiceDetailPage() {
         documentNumber={record.number}
         documentName={record.name}
         companyName={crm.company.name}
+        sender={
+          projectManager
+            ? { name: projectManager.name, email: projectManager.email }
+            : null
+        }
         recipients={shareContactsForInvoice(record, crm)}
         onDownloadPdf={downloadPdf}
         onTexted={(sent) =>

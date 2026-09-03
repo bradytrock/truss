@@ -27,6 +27,7 @@ import {
   looksLikeEmail,
   type ShareDocumentKind,
 } from "@/lib/share-text";
+import { formatResendFromDisplay, RESEND_FROM_DOMAIN } from "@/lib/resend-from";
 
 type SendblueStatus = { configured: boolean; fromNumber: string };
 type ResendStatus = { configured: boolean; from: string; domain?: string };
@@ -41,6 +42,8 @@ export function ShareLinkDialog({
   documentNumber,
   documentName,
   companyName,
+  /** Project manager on the job — From name and Reply-To. */
+  sender,
   recipients = [],
   onDownloadPdf,
   onTexted,
@@ -55,6 +58,7 @@ export function ShareLinkDialog({
   documentNumber?: string;
   documentName?: string;
   companyName?: string;
+  sender?: { name: string; email: string } | null;
   recipients?: ShareRecipient[];
   onDownloadPdf?: () => Promise<void> | void;
   onTexted?: (sent: {
@@ -301,6 +305,18 @@ export function ShareLinkDialog({
       toast.error("Add a subject before sending.");
       return;
     }
+    const senderName = sender?.name?.trim() || "";
+    const replyTo = sender?.email?.trim() || "";
+    if (!senderName) {
+      toast.error("This document needs a project manager before you can email it.");
+      return;
+    }
+    if (!looksLikeEmail(replyTo)) {
+      toast.error(
+        "Add an email on the project manager’s profile (Settings → People or Profile). Replies go there.",
+      );
+      return;
+    }
     setPending("email");
     try {
       let mocked = false;
@@ -325,6 +341,9 @@ export function ShareLinkDialog({
             html,
             text,
             url: theirUrl,
+            senderName,
+            companyName: companyName || "the office",
+            replyTo,
           }),
         });
         const data = (await response.json().catch(() => null)) as
@@ -515,9 +534,23 @@ export function ShareLinkDialog({
               {textStatus?.configured
                 ? `Texts go out over Sendblue${textStatus.fromNumber ? ` (${textStatus.fromNumber})` : ""}. `
                 : "Texts need SENDBLUE_ keys on the host until then Send text previews without delivering. "}
-              {emailStatus?.configured
-                ? `Email goes out through Resend${emailStatus.from ? ` from ${emailStatus.from}` : ""} (@updates.theroofingcrm.com).`
-                : "Email needs RESEND_API_KEY on the host (from @updates.theroofingcrm.com) — until then Send email previews without delivering."}
+              {(() => {
+                const fromLabel =
+                  sender?.name?.trim() && companyName?.trim()
+                    ? formatResendFromDisplay(sender.name, companyName)
+                    : "";
+                const reply = sender?.email?.trim() || "";
+                if (emailStatus?.configured) {
+                  if (fromLabel && looksLikeEmail(reply)) {
+                    return `Email shows as ${fromLabel} (@${RESEND_FROM_DOMAIN}); replies go to ${reply}.`;
+                  }
+                  if (fromLabel) {
+                    return `Email shows as ${fromLabel} (@${RESEND_FROM_DOMAIN}). Add the project manager’s email on their profile for Reply-To.`;
+                  }
+                  return `Email goes out through Resend (@${RESEND_FROM_DOMAIN}).`;
+                }
+                return `Email needs RESEND_API_KEY on the host (@${RESEND_FROM_DOMAIN}${fromLabel ? `, as ${fromLabel}` : ""}) — until then Send email previews without delivering.`;
+              })()}
             </p>
           </div>
         </div>

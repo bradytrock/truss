@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
-import { isResendConfigured, resendStatus, sendResendEmail } from "@/lib/resend-mail";
+import {
+  formatResendFrom,
+  isResendConfigured,
+  resendStatus,
+  sendResendEmail,
+} from "@/lib/resend-mail";
 import {
   looksLikeEmail,
   requestOrigin,
@@ -25,7 +30,9 @@ export async function POST(request: Request) {
   const html = typeof body.html === "string" ? body.html : "";
   const text = typeof body.text === "string" ? body.text : "";
   const url = typeof body.url === "string" ? body.url : "";
-  const replyTo = typeof body.replyTo === "string" ? body.replyTo : "";
+  const senderName = typeof body.senderName === "string" ? body.senderName.trim() : "";
+  const companyName = typeof body.companyName === "string" ? body.companyName.trim() : "";
+  const replyTo = typeof body.replyTo === "string" ? body.replyTo.trim() : "";
 
   if (!looksLikeEmail(to)) {
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
@@ -42,9 +49,29 @@ export async function POST(request: Request) {
   if (!(html.includes(url) || text.includes(url))) {
     return NextResponse.json({ error: "The email has to include the share link." }, { status: 400 });
   }
+  if (!senderName) {
+    return NextResponse.json(
+      { error: "This document needs a project manager before you can email it." },
+      { status: 400 },
+    );
+  }
+  if (!looksLikeEmail(replyTo)) {
+    return NextResponse.json(
+      {
+        error:
+          "Add an email on the project manager’s profile (Settings → People or Profile). Replies go to that address.",
+      },
+      { status: 400 },
+    );
+  }
+
+  const from = formatResendFrom({
+    senderName,
+    companyName: companyName || "the office",
+  });
 
   try {
-    const result = await sendResendEmail({ to, subject, html, text, replyTo });
+    const result = await sendResendEmail({ to, subject, html, text, from, replyTo });
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 502 });
     }
@@ -54,6 +81,8 @@ export async function POST(request: Request) {
       configured: isResendConfigured() || !result.mocked,
       id: result.id,
       to,
+      from,
+      replyTo,
     });
   } catch (error) {
     return NextResponse.json(

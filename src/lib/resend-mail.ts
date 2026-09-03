@@ -1,19 +1,25 @@
 import { Resend } from "resend";
+import {
+  DEFAULT_RESEND_FROM_EMAIL,
+  RESEND_FROM_DOMAIN,
+  resendMailbox,
+} from "@/lib/resend-from";
 
-/** Verified sending domain in Resend for estimates, invoices, and pages. */
-export const RESEND_FROM_DOMAIN = "updates.theroofingcrm.com";
-
-/** Default From when RESEND_FROM_EMAIL is unset. */
-export const DEFAULT_RESEND_FROM_EMAIL = `Truss <noreply@${RESEND_FROM_DOMAIN}>`;
+export {
+  DEFAULT_RESEND_FROM_EMAIL,
+  formatResendFrom,
+  formatResendFromDisplay,
+  RESEND_FROM_DOMAIN,
+  resendMailbox,
+} from "@/lib/resend-from";
 
 export function resendApiKey() {
   return process.env.RESEND_API_KEY?.trim() || "";
 }
 
 /**
- * Verified sender for Resend.
- * Prefer `RESEND_FROM_EMAIL` / `RESEND_FROM` (e.g. `Northline <proposals@updates.theroofingcrm.com>`).
- * Bare local-parts like `proposals` become `proposals@updates.theroofingcrm.com`.
+ * Optional env override for non-PM sends.
+ * Prefer `RESEND_FROM_EMAIL` / `RESEND_FROM`. Bare local-parts become `@updates.theroofingcrm.com`.
  */
 export function resendFromEmail() {
   const configured = process.env.RESEND_FROM_EMAIL?.trim() || process.env.RESEND_FROM?.trim() || "";
@@ -30,9 +36,12 @@ export function resendFromEmail() {
 }
 
 function normalizeFromAddress(value: string) {
-  if (value.includes("@")) return value;
-  const local = value.replace(/[^a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]/g, "") || "noreply";
-  return `${local}@${RESEND_FROM_DOMAIN}`;
+  if (value.includes("@")) {
+    const at = value.lastIndexOf("@");
+    const local = value.slice(0, at).trim() || "noreply";
+    return resendMailbox(local);
+  }
+  return resendMailbox(value);
 }
 
 export function resendReplyTo() {
@@ -56,6 +65,9 @@ export async function sendResendEmail(input: {
   subject: string;
   html: string;
   text: string;
+  /** Project manager display + mailbox, e.g. Brady at Company <brady@updates…>. */
+  from?: string;
+  /** Always the project manager’s real inbox. */
   replyTo?: string;
 }) {
   const to = input.to.trim();
@@ -70,15 +82,23 @@ export async function sendResendEmail(input: {
     return { ok: true as const, mocked: true as const, id: "" };
   }
 
-  const resend = new Resend(resendApiKey());
+  const from = input.from?.trim() || resendFromEmail();
   const replyTo = input.replyTo?.trim() || resendReplyTo() || undefined;
+  if (!replyTo) {
+    return {
+      ok: false as const,
+      error: "The project manager needs an email on their profile before you can send.",
+    };
+  }
+
+  const resend = new Resend(resendApiKey());
   const { data, error } = await resend.emails.send({
-    from: resendFromEmail(),
+    from,
     to: [to],
     subject,
     html: html || text,
     text: text || html,
-    ...(replyTo ? { replyTo } : {}),
+    replyTo,
   });
 
   if (error) {

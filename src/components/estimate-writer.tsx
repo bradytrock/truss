@@ -1283,6 +1283,11 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         documentNumber={estimate.number}
         documentName={estimate.name}
         companyName={crm.company.name}
+        sender={
+          projectManager
+            ? { name: projectManager.name, email: projectManager.email }
+            : null
+        }
         recipients={shareContactsForEstimate(shareEstimate, crm)}
         onDownloadPdf={downloadPdf}
         onTexted={(sent) =>
