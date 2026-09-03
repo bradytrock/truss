@@ -275,7 +275,7 @@ export default function InvoiceDetailPage() {
         open={shareOpen}
         onOpenChange={setShareOpen}
         title={`Share ${record.number}`}
-        description="Text this to the homeowner or copy the link. They can open the invoice and download a PDF — no login required."
+        description="Email or text this to the homeowner, or copy the link. They can open the invoice and download a PDF — no login required."
         url={record.shareToken ? shareUrl("i", record.shareToken) : ""}
         kind="invoice"
         documentNumber={record.number}
@@ -285,6 +285,13 @@ export default function InvoiceDetailPage() {
         onDownloadPdf={downloadPdf}
         onTexted={(sent) =>
           crm.logOutboundText({
+            ...sent,
+            jobId: record.jobId,
+            contactId: sent.contactId,
+          })
+        }
+        onEmailed={(sent) =>
+          crm.logOutboundEmail({
             ...sent,
             jobId: record.jobId,
             contactId: sent.contactId,

@@ -1277,7 +1277,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         open={shareOpen}
         onOpenChange={setShareOpen}
         title={`Share ${estimate.number}`}
-        description="Text each homeowner or copy their link. They review the proposal and sign from their phone — no login. Each signer needs their own link; the other person’s link will not let them sign."
+        description="Email or text each homeowner, or copy their link. They review the proposal and sign from their phone — no login. Each signer needs their own link; the other person’s link will not let them sign."
         url={shareEstimate.shareToken ? shareUrl("e", shareEstimate.shareToken) : ""}
         kind="estimate"
         documentNumber={estimate.number}
@@ -1287,6 +1287,14 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         onDownloadPdf={downloadPdf}
         onTexted={(sent) =>
           crm.logOutboundText({
+            ...sent,
+            jobId: estimate.jobId,
+            opportunityId: estimate.opportunityId,
+            contactId: sent.contactId || estimate.contactId,
+          })
+        }
+        onEmailed={(sent) =>
+          crm.logOutboundEmail({
             ...sent,
             jobId: estimate.jobId,
             opportunityId: estimate.opportunityId,

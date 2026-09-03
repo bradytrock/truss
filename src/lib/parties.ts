@@ -56,13 +56,20 @@ export type ShareRecipient = {
   id: string;
   name: string;
   phone: string;
+  email: string;
   url?: string;
 };
 
 function addRecipient(list: ShareRecipient[], contact: Contact | undefined, url?: string) {
   if (!contact) return;
   if (list.some((item) => item.id === contact.id)) return;
-  list.push({ id: contact.id, name: contact.name, phone: contact.phone.trim(), url });
+  list.push({
+    id: contact.id,
+    name: contact.name,
+    phone: contact.phone.trim(),
+    email: contact.email.trim(),
+    url,
+  });
 }
 
 export function resolveShareContacts(record: CustomerRecord, book: PartyBook): ShareRecipient[] {

@@ -486,7 +486,7 @@ export function PhotoReportBuilder({
         open={shareOpen}
         onOpenChange={setShareOpen}
         title="Send this page"
-        description="Copy a client link or download a PDF. Anyone with the link can view this document."
+        description="Email or text a client link, copy it, or download a PDF. Anyone with the link can view this document."
         url={draft.shareToken ? shareUrl("p", draft.shareToken) : ""}
         kind="page"
         documentName={draft.title}
@@ -498,6 +498,14 @@ export function PhotoReportBuilder({
         onDownloadPdf={downloadPdf}
         onTexted={(sent) =>
           crm.logOutboundText({
+            ...sent,
+            jobId: job.id,
+            opportunityId: job.opportunityId,
+            contactId: sent.contactId || job.primaryContactId,
+          })
+        }
+        onEmailed={(sent) =>
+          crm.logOutboundEmail({
             ...sent,
             jobId: job.id,
             opportunityId: job.opportunityId,

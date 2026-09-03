@@ -858,6 +858,15 @@ type CrmContextValue = CrmState & {
     name?: string;
     handle?: string;
   }) => Promise<void>;
+  logOutboundEmail: (input: {
+    to: string;
+    subject: string;
+    url: string;
+    jobId?: string | null;
+    contactId?: string | null;
+    opportunityId?: string | null;
+    name?: string;
+  }) => Promise<void>;
   toggleTask: (id: string) => Promise<void>;
   addTask: (input: {
     title: string;
@@ -1788,6 +1797,69 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
     },
     [addActivity, recordEstimateSignatureEvent, state.contacts, state.estimates, state.jobs, state.opportunities, user.companyId, user.name],
+  );
+
+  const logOutboundEmail = useCallback(
+    async (input: {
+      to: string;
+      subject: string;
+      url: string;
+      jobId?: string | null;
+      contactId?: string | null;
+      opportunityId?: string | null;
+      name?: string;
+    }) => {
+      const email = input.to.trim();
+      const subject = input.subject.replace(/[\r\n]+/g, " ").trim();
+      const url = input.url.trim();
+      if (!email || !subject) return;
+      const contact =
+        (input.contactId ? state.contacts.find((item) => item.id === input.contactId) : undefined) ??
+        state.contacts.find((item) => item.email.trim().toLowerCase() === email.toLowerCase());
+      const job =
+        (input.jobId ? state.jobs.find((item) => item.id === input.jobId) : undefined) ??
+        (contact ? jobForContact(state.jobs, state.opportunities, contact.id) : undefined);
+      const opportunityId =
+        input.opportunityId ||
+        job?.opportunityId ||
+        (contact ? opportunityForContact(state.opportunities, contact.id)?.id : null) ||
+        null;
+      const who = input.name?.trim() || contact?.name || "homeowner";
+      const activityBody = `Emailed ${who} (${email}): ${subject}${url ? ` — ${url}` : ""}`;
+      if (job) {
+        await addActivity({ entityType: "job", entityId: job.id, type: "email", body: activityBody });
+      } else if (opportunityId) {
+        await addActivity({
+          entityType: "opportunity",
+          entityId: opportunityId,
+          type: "email",
+          body: activityBody,
+        });
+      }
+      const shareMatch = url.match(/\/share\/e\/([A-Za-z0-9_-]+)/);
+      const shareToken = shareMatch?.[1] ?? "";
+      if (shareToken) {
+        const estimate = state.estimates.find(
+          (item) =>
+            item.shareToken === shareToken ||
+            (Boolean(item.secondShareToken) && item.secondShareToken === shareToken),
+        );
+        if (estimate) {
+          const second = Boolean(estimate.secondShareToken && estimate.secondShareToken === shareToken);
+          await recordEstimateSignatureEvent({
+            estimateId: estimate.id,
+            kind: "sent",
+            signerRole: second ? "second" : "primary",
+            contactId: second ? estimate.secondContactId : input.contactId || estimate.contactId,
+            signerName: who,
+            token: shareToken,
+            deliveryChannel: "email",
+            deliveryTo: email,
+          });
+        }
+      }
+    },
+    [addActivity, recordEstimateSignatureEvent, state.contacts, state.estimates, state.jobs, state.opportunities],
   );
 
   const sendTextMessage = useCallback(
@@ -8746,6 +8818,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addActivity,
       sendTextMessage,
       logOutboundText,
+      logOutboundEmail,
       toggleTask,
       addTask,
       addEstimate,
@@ -8893,6 +8966,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addActivity,
       sendTextMessage,
       logOutboundText,
+      logOutboundEmail,
       toggleTask,
       addTask,
       addEstimate,
