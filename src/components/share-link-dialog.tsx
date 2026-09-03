@@ -29,7 +29,7 @@ import {
 } from "@/lib/share-text";
 
 type SendblueStatus = { configured: boolean; fromNumber: string };
-type ResendStatus = { configured: boolean; from: string };
+type ResendStatus = { configured: boolean; from: string; domain?: string };
 
 export function ShareLinkDialog({
   open,
@@ -345,7 +345,7 @@ export function ShareLinkDialog({
       }
       if (mocked) {
         toast.message(
-          "Resend is not connected on this host. Add RESEND_API_KEY and RESEND_FROM_EMAIL (verified sender) to the host env and redeploy.",
+          "Resend is not connected on this host. Add RESEND_API_KEY on the host (and verify updates.theroofingcrm.com in Resend) and redeploy.",
         );
       } else {
         toast.success(
@@ -516,8 +516,8 @@ export function ShareLinkDialog({
                 ? `Texts go out over Sendblue${textStatus.fromNumber ? ` (${textStatus.fromNumber})` : ""}. `
                 : "Texts need SENDBLUE_ keys on the host until then Send text previews without delivering. "}
               {emailStatus?.configured
-                ? `Email goes out through Resend${emailStatus.from ? ` from ${emailStatus.from}` : ""}.`
-                : "Email needs RESEND_API_KEY and RESEND_FROM_EMAIL on the host — until then Send email previews without delivering."}
+                ? `Email goes out through Resend${emailStatus.from ? ` from ${emailStatus.from}` : ""} (@updates.theroofingcrm.com).`
+                : "Email needs RESEND_API_KEY on the host (from @updates.theroofingcrm.com) — until then Send email previews without delivering."}
             </p>
           </div>
         </div>

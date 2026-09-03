@@ -1,12 +1,38 @@
 import { Resend } from "resend";
 
+/** Verified sending domain in Resend for estimates, invoices, and pages. */
+export const RESEND_FROM_DOMAIN = "updates.theroofingcrm.com";
+
+/** Default From when RESEND_FROM_EMAIL is unset. */
+export const DEFAULT_RESEND_FROM_EMAIL = `Truss <noreply@${RESEND_FROM_DOMAIN}>`;
+
 export function resendApiKey() {
   return process.env.RESEND_API_KEY?.trim() || "";
 }
 
-/** Verified sender, e.g. `Northline <proposals@mail.example.com>` or `proposals@mail.example.com`. */
+/**
+ * Verified sender for Resend.
+ * Prefer `RESEND_FROM_EMAIL` / `RESEND_FROM` (e.g. `Northline <proposals@updates.theroofingcrm.com>`).
+ * Bare local-parts like `proposals` become `proposals@updates.theroofingcrm.com`.
+ */
 export function resendFromEmail() {
-  return process.env.RESEND_FROM_EMAIL?.trim() || process.env.RESEND_FROM?.trim() || "";
+  const configured = process.env.RESEND_FROM_EMAIL?.trim() || process.env.RESEND_FROM?.trim() || "";
+  if (!configured) return DEFAULT_RESEND_FROM_EMAIL;
+
+  const angled = configured.match(/^(.*)<([^>]+)>$/);
+  if (angled) {
+    const display = angled[1].trim();
+    const address = normalizeFromAddress(angled[2].trim());
+    return display ? `${display} <${address}>` : address;
+  }
+
+  return normalizeFromAddress(configured);
+}
+
+function normalizeFromAddress(value: string) {
+  if (value.includes("@")) return value;
+  const local = value.replace(/[^a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]/g, "") || "noreply";
+  return `${local}@${RESEND_FROM_DOMAIN}`;
 }
 
 export function resendReplyTo() {
@@ -14,13 +40,14 @@ export function resendReplyTo() {
 }
 
 export function isResendConfigured() {
-  return Boolean(resendApiKey() && resendFromEmail());
+  return Boolean(resendApiKey());
 }
 
 export function resendStatus() {
   return {
     configured: isResendConfigured(),
     from: resendFromEmail(),
+    domain: RESEND_FROM_DOMAIN,
   };
 }
 
