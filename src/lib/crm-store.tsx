@@ -181,6 +181,7 @@ import {
   type ScheduleEvent,
   type SeatRole,
   type StaffMember,
+  type GoogleLocation,
   type Team,
   type TrainingBulletin,
   type TrainingProgress,
@@ -285,6 +286,7 @@ function uiBook(state: CrmState): CrmState {
 const emptyState: CrmState = {
   staff: [],
   teams: [],
+  googleLocations: [],
   clients: [],
   contacts: [],
   opportunities: [],
@@ -773,7 +775,7 @@ type CrmContextValue = CrmState & {
         | "emailSignature"
         | "photoUrl"
         | "photoStoragePath"
-        | "googleReviewUrl"
+        | "googleLocationId"
         | "locked"
         | "restricted"
         | "teamId"
@@ -783,6 +785,12 @@ type CrmContextValue = CrmState & {
   ) => Promise<boolean>;
   uploadStaffPhoto: (staffId: string, file: File) => Promise<boolean>;
   removeStaffPhoto: (staffId: string) => Promise<boolean>;
+  addGoogleLocation: (input: { name: string; reviewUrl: string }) => Promise<GoogleLocation | null>;
+  updateGoogleLocation: (
+    id: string,
+    patch: { name?: string; reviewUrl?: string; isDefault?: boolean },
+  ) => Promise<boolean>;
+  removeGoogleLocation: (id: string) => Promise<boolean>;
   addTeam: (input: { name: string; leadStaffId?: string | null }) => Promise<Team | null>;
   updateTeam: (id: string, patch: { name?: string; leadStaffId?: string | null }) => Promise<boolean>;
   removeTeam: (id: string) => Promise<boolean>;
@@ -7565,7 +7573,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         paymentCashapp: next.paymentCashapp?.trim() ?? "",
         paymentPaypal: next.paymentPaypal?.trim() ?? "",
         paymentNote: next.paymentNote?.trim() ?? "",
-        googleReviewUrl: next.googleReviewUrl?.trim() ?? "",
         defaultEstimateTerms: next.defaultEstimateTerms ?? null,
         defaultInvoiceTerms: next.defaultInvoiceTerms ?? null,
         minimumMarginPercent: clampMarginPercent(next.minimumMarginPercent),
@@ -7599,7 +7606,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         payment_cashapp: settings.paymentCashapp ?? "",
         payment_paypal: settings.paymentPaypal ?? "",
         payment_note: settings.paymentNote ?? "",
-        google_review_url: settings.googleReviewUrl ?? "",
         default_estimate_terms: settings.defaultEstimateTerms,
         default_invoice_terms: settings.defaultInvoiceTerms,
         minimum_margin_percent: settings.minimumMarginPercent,
@@ -7685,7 +7691,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           payment_cashapp: _cashapp,
           payment_paypal: _paypal,
           payment_note: _note,
-          google_review_url: _review,
           ...rest
         } = attempted;
         attempted = rest;
@@ -7743,7 +7748,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         paymentCashapp: settings.paymentCashapp,
         paymentPaypal: settings.paymentPaypal,
         paymentNote: settings.paymentNote,
-        googleReviewUrl: settings.googleReviewUrl,
         defaultEstimateTerms: mapped.defaultEstimateTerms ?? settings.defaultEstimateTerms,
         defaultInvoiceTerms: mapped.defaultInvoiceTerms ?? settings.defaultInvoiceTerms,
         minimumMarginPercent: mapped.minimumMarginPercent ?? settings.minimumMarginPercent,
@@ -7867,7 +7871,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         card_slug: member.cardSlug || mintPersonCardSlug(member.name),
         photo_url: member.photoUrl ?? "",
         photo_storage_path: member.photoStoragePath ?? "",
-        google_review_url: member.googleReviewUrl ?? "",
+        google_location_id: looksLikeUuid(member.googleLocationId) ? member.googleLocationId : null,
         email_signature: member.emailSignature ?? "",
         locked: member.locked,
         restricted: member.restricted,
@@ -7899,7 +7903,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         if (!retry.error) toast.message(missingCardPhotoMessage());
       }
       if (error && isMissingPaymentReviewColumns(error)) {
-        const { google_review_url: _review, ...withoutReview } = payload;
+        const { google_location_id: _review, ...withoutReview } = payload;
         const retry = await supabase.from("team_members").upsert(withoutReview);
         error = retry.error;
         if (!retry.error) toast.message(missingPaymentReviewMessage());
@@ -8078,7 +8082,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           | "emailSignature"
           | "photoUrl"
           | "photoStoragePath"
-          | "googleReviewUrl"
+          | "googleLocationId"
           | "locked"
           | "restricted"
           | "teamId"
@@ -8093,7 +8097,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         "emailSignature",
         "photoUrl",
         "photoStoragePath",
-        "googleReviewUrl",
+        "googleLocationId",
       ]);
       const mintingOwnCard = Boolean(
         patch.cardSlug &&
@@ -8123,10 +8127,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         phone: patch.phone !== undefined ? patch.phone.trim() : current.phone,
         emailSignature:
           patch.emailSignature !== undefined ? patch.emailSignature.trim() : current.emailSignature,
-        googleReviewUrl:
-          patch.googleReviewUrl !== undefined
-            ? patch.googleReviewUrl.trim()
-            : current.googleReviewUrl,
+        googleLocationId:
+          patch.googleLocationId !== undefined
+            ? (looksLikeUuid(patch.googleLocationId) ? patch.googleLocationId : null)
+            : (current.googleLocationId ?? null),
         teamId: patch.teamId !== undefined ? (looksLikeUuid(patch.teamId) ? patch.teamId : "") : current.teamId,
         cardSlug:
           patch.cardSlug !== undefined
@@ -8383,6 +8387,129 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [canEditCompany, persistStaffFields, state.staff, user.companyId, user.staffId, viewer?.id],
   );
 
+  const persistGoogleLocations = useCallback(
+    async (next: GoogleLocation[], message: string) => {
+      if (!canEditCompany) {
+        toast.error("Only a company admin can change review locations.");
+        return false;
+      }
+      setState((book) => ({ ...book, googleLocations: next }));
+      if (isSupabaseConfigured() && user.companyId && user.companyId !== "local") {
+        const supabase = createClient();
+        const { error } = await supabase.from("google_locations").upsert(
+          next.map((location) => ({
+            id: location.id,
+            company_id: user.companyId,
+            name: location.name,
+            review_url: location.reviewUrl,
+            is_default: location.isDefault,
+          })),
+        );
+        if (error) {
+          toast.error(
+            isMissingPaymentReviewColumns(error) ? missingPaymentReviewMessage() : error.message,
+          );
+          return false;
+        }
+      }
+      if (message) toast.success(message);
+      return true;
+    },
+    [canEditCompany, user.companyId],
+  );
+
+  const addGoogleLocation = useCallback(
+    async (input: { name: string; reviewUrl: string }) => {
+      const name = input.name.trim();
+      if (!name) {
+        toast.error("Name the location.");
+        return null;
+      }
+      const location: GoogleLocation = {
+        id: crypto.randomUUID(),
+        name,
+        reviewUrl: input.reviewUrl.trim(),
+        // The first listing is what everyone without one of their own uses.
+        isDefault: state.googleLocations.length === 0,
+      };
+      const ok = await persistGoogleLocations(
+        [...state.googleLocations, location],
+        `${name} added.`,
+      );
+      return ok ? location : null;
+    },
+    [persistGoogleLocations, state.googleLocations],
+  );
+
+  const updateGoogleLocation = useCallback(
+    async (id: string, patch: { name?: string; reviewUrl?: string; isDefault?: boolean }) => {
+      const current = state.googleLocations.find((location) => location.id === id);
+      if (!current) return false;
+      const name = patch.name !== undefined ? patch.name.trim() : current.name;
+      if (!name) {
+        toast.error("Name the location.");
+        return false;
+      }
+      const makeDefault = patch.isDefault ?? current.isDefault;
+      const next = state.googleLocations.map((location) => {
+        if (location.id === id) {
+          return {
+            ...location,
+            name,
+            reviewUrl: patch.reviewUrl !== undefined ? patch.reviewUrl.trim() : location.reviewUrl,
+            isDefault: makeDefault,
+          };
+        }
+        // Postgres allows one default per company.
+        return makeDefault ? { ...location, isDefault: false } : location;
+      });
+      return persistGoogleLocations(next, `${name} saved.`);
+    },
+    [persistGoogleLocations, state.googleLocations],
+  );
+
+  const removeGoogleLocation = useCallback(
+    async (id: string) => {
+      const current = state.googleLocations.find((location) => location.id === id);
+      if (!current) return false;
+      if (!canEditCompany) {
+        toast.error("Only a company admin can change review locations.");
+        return false;
+      }
+      const assigned = state.staff.filter((member) => member.googleLocationId === id);
+      if (isSupabaseConfigured() && user.companyId && user.companyId !== "local") {
+        const supabase = createClient();
+        const { error } = await supabase.from("google_locations").delete().eq("id", id);
+        if (error) {
+          toast.error(error.message);
+          return false;
+        }
+      }
+      const remaining = state.googleLocations.filter((location) => location.id !== id);
+      // Postgres nulls the seats out on delete; mirror that here.
+      setState((book) => ({
+        ...book,
+        googleLocations: remaining,
+        staff: book.staff.map((member) =>
+          member.googleLocationId === id ? { ...member, googleLocationId: null } : member,
+        ),
+      }));
+      if (current.isDefault && remaining.length > 0) {
+        await persistGoogleLocations(
+          remaining.map((location, index) => ({ ...location, isDefault: index === 0 })),
+          "",
+        );
+      }
+      toast.success(
+        assigned.length > 0
+          ? `${current.name} removed. ${assigned.length} ${assigned.length === 1 ? "person" : "people"} moved to the default listing.`
+          : `${current.name} removed.`,
+      );
+      return true;
+    },
+    [canEditCompany, persistGoogleLocations, state.googleLocations, state.staff, user.companyId],
+  );
+
   const addTeam = useCallback(
     async (input: { name: string; leadStaffId?: string | null }) => {
       if (!canEditCompany) {
@@ -8574,6 +8701,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateStaffAccount,
       uploadStaffPhoto,
       removeStaffPhoto,
+      addGoogleLocation,
+      updateGoogleLocation,
+      removeGoogleLocation,
       addTeam,
       updateTeam,
       removeTeam,
@@ -8718,6 +8848,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateStaffAccount,
       uploadStaffPhoto,
       removeStaffPhoto,
+      addGoogleLocation,
+      updateGoogleLocation,
+      removeGoogleLocation,
       addTeam,
       updateTeam,
       removeTeam,

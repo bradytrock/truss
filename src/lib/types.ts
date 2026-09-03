@@ -156,8 +156,6 @@ export interface CompanySettings {
   paymentPaypal?: string;
   /** Free text under the payment options, e.g. who to make a check out to. */
   paymentNote?: string;
-  /** Company-wide "leave us a review" link. Seats can point at their own office. */
-  googleReviewUrl?: string;
   /** Null or blank means the app fallback is still in use. */
   defaultEstimateTerms?: string | null;
   defaultInvoiceTerms?: string | null;
@@ -185,7 +183,6 @@ export const NORTHLINE_COMPANY: CompanySettings = {
   paymentCashapp: "",
   paymentPaypal: "",
   paymentNote: "",
-  googleReviewUrl: "",
   defaultEstimateTerms: null,
   defaultInvoiceTerms: null,
   minimumMarginPercent: 0,
@@ -206,8 +203,8 @@ export interface StaffMember {
   /** Headshot on the digital card. Blank falls back to initials. */
   photoUrl?: string;
   photoStoragePath?: string;
-  /** Review link for this seat's office. Blank uses the company link. */
-  googleReviewUrl?: string;
+  /** Which office listing their reviews go to. Null uses the default location. */
+  googleLocationId?: string | null;
   /** Own sign-off. Empty means use the company default. */
   emailSignature: string;
   locked: boolean;
@@ -220,6 +217,15 @@ export interface Team {
   id: string;
   name: string;
   leadStaffId: string;
+}
+
+/** A Google Business Profile listing. Multi-office companies keep one per office. */
+export interface GoogleLocation {
+  id: string;
+  name: string;
+  reviewUrl: string;
+  /** Used by seats with no location of their own. One per company. */
+  isDefault: boolean;
 }
 
 export interface Client {
@@ -925,6 +931,7 @@ export interface ReturningClientLead {
 export interface CrmState {
   staff: StaffMember[];
   teams: Team[];
+  googleLocations: GoogleLocation[];
   clients: Client[];
   contacts: Contact[];
   opportunities: Opportunity[];

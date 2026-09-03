@@ -655,17 +655,23 @@ export function missingCardPhotoMessage() {
 }
 
 export const PAYMENTS_REVIEWS_SQL = "supabase/migrations/20260903170000_payments_reviews.sql";
+export const GOOGLE_LOCATIONS_SQL = "supabase/migrations/20260903190000_google_locations.sql";
 
 export function isMissingPaymentReviewColumns(
   error: { message?: string; code?: string } | null | undefined,
 ) {
   if (!error) return false;
   const message = (error.message ?? "").toLowerCase();
-  return message.includes("payment_") || message.includes("google_review_url");
+  return (
+    message.includes("payment_") ||
+    message.includes("google_review_url") ||
+    message.includes("google_location_id") ||
+    message.includes("google_locations")
+  );
 }
 
 export function missingPaymentReviewMessage() {
-  return `Saved in this browser. Run ${PAYMENTS_REVIEWS_SQL} in the SQL editor (or a fresh bootstrap) so payment options and review links persist.`;
+  return `Saved in this browser. Run ${PAYMENTS_REVIEWS_SQL} and ${GOOGLE_LOCATIONS_SQL} in the SQL editor (or a fresh bootstrap) so payment options and Google locations persist.`;
 }
 
 export const CARD_SLUG_TRIGGER_SQL = "supabase/migrations/20260831150000_card_slug_trigger_rights.sql";

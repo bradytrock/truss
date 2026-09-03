@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
+import { GoogleLocationSelect } from "@/components/google-locations-settings";
 import { StaffPhotoField } from "@/components/staff-photo-field";
 import { cardUrl } from "@/lib/card";
 import { mintPersonCardSlug } from "@/lib/card-slug";
@@ -23,7 +24,7 @@ export default function ProfilePage() {
   const [title, setTitle] = useState("");
   const [phone, setPhone] = useState("");
   const [emailSignature, setEmailSignature] = useState("");
-  const [reviewUrl, setReviewUrl] = useState("");
+  const [locationId, setLocationId] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -32,7 +33,7 @@ export default function ProfilePage() {
     setTitle(member.title);
     setPhone(member.phone);
     setEmailSignature(member.emailSignature ?? "");
-    setReviewUrl(member.googleReviewUrl ?? "");
+    setLocationId(member.googleLocationId ?? null);
   }, [member]);
 
   if (!crm.hydrated) return <LoadingScreen />;
@@ -52,7 +53,7 @@ export default function ProfilePage() {
     title.trim() !== seat.title ||
     phone.trim() !== seat.phone ||
     emailSignature !== (seat.emailSignature ?? "") ||
-    reviewUrl.trim() !== (seat.googleReviewUrl ?? "");
+    locationId !== (seat.googleLocationId ?? null);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -63,7 +64,7 @@ export default function ProfilePage() {
         title: title.trim(),
         phone: phone.trim(),
         emailSignature,
-        googleReviewUrl: reviewUrl.trim(),
+        googleLocationId: locationId,
       });
     } finally {
       setPending(false);
@@ -151,30 +152,25 @@ export default function ProfilePage() {
         </Card>
         <Card>
           <CardHeader className="border-b">
-            <CardTitle>Google review link</CardTitle>
+            <CardTitle>Google location</CardTitle>
             <CardDescription>
-              Where the review button on your card sends people. Leave blank to use the company
-              link — set it only if your office collects reviews on its own listing.
+              Which listing the review button on your card opens. Leave it on the default unless
+              your office collects reviews on its own listing.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-2 pt-4">
-            <Label htmlFor="profile-review-url">Review link</Label>
-            <Input
-              id="profile-review-url"
-              type="url"
-              inputMode="url"
-              autoComplete="off"
-              spellCheck={false}
-              value={reviewUrl}
-              placeholder={crm.company.googleReviewUrl?.trim() || "https://g.page/r/…/review"}
-              onChange={(event) => setReviewUrl(event.target.value)}
+            <Label htmlFor="profile-location">Location</Label>
+            <GoogleLocationSelect
+              id="profile-location"
+              value={locationId}
+              locations={crm.googleLocations}
+              onChange={setLocationId}
+              full
             />
             <p className="text-xs text-muted-foreground">
-              {reviewUrl.trim()
-                ? "Your card sends reviews here instead of the company listing."
-                : crm.company.googleReviewUrl?.trim()
-                  ? "Blank — your card uses the company listing."
-                  : "No company link is set yet, so the review button stays hidden."}
+              {crm.googleLocations.length === 0
+                ? "No locations yet. A company admin adds them under Settings → Locations."
+                : "A company admin manages the list under Settings → Locations."}
             </p>
           </CardContent>
         </Card>
@@ -236,7 +232,7 @@ export default function ProfilePage() {
                 setTitle(seat.title);
                 setPhone(seat.phone);
                 setEmailSignature(seat.emailSignature ?? "");
-                setReviewUrl(seat.googleReviewUrl ?? "");
+                setLocationId(seat.googleLocationId ?? null);
               }}
             >
               Discard

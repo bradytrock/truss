@@ -25,6 +25,7 @@ import {
   mapScheduleEvent,
   mapStaff,
   mapTask,
+  mapGoogleLocation,
   mapTeam,
   mapTrainingBulletin,
   mapTrainingProgress,
@@ -86,6 +87,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     tasksRes,
     teamRes,
     teamsRes,
+    googleLocationsRes,
     catalogRes,
     estimatesRes,
     estimateLinesRes,
@@ -132,6 +134,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     supabase.from("tasks").select("*").eq("company_id", companyId).order("due_at"),
     supabase.from("team_members").select("*").eq("company_id", companyId).order("name"),
     supabase.from("teams").select("*").eq("company_id", companyId).order("name"),
+    supabase.from("google_locations").select("*").eq("company_id", companyId).order("name"),
     supabase.from("catalog_items").select("*").eq("company_id", companyId).order("cost_code"),
     supabase.from("estimates").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("estimate_lines").select("*").eq("company_id", companyId).order("sort_order"),
@@ -218,12 +221,16 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
   });
 
   const teams = missingTeams ? [] : (teamsRes.data ?? []).map(mapTeam);
+  const googleLocations = googleLocationsRes.error
+    ? []
+    : (googleLocationsRes.data ?? []).map(mapGoogleLocation);
   const opportunities = mapRows(oppsRes.data, mapOpportunity);
   const jobs = jobsFilledFromLeads(mapRows(jobsRes.data, mapJob), opportunities);
 
   const state: CrmState = {
     staff: staffWithInvites,
     teams: teams.length > 0 ? teams : [],
+    googleLocations,
     clients: mapRows(clientsRes.data, mapClient),
     contacts: mapRows(contactsRes.data, mapContact),
     opportunities,

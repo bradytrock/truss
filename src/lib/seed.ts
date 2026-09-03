@@ -33,6 +33,7 @@ const allJobs = [...jobs, ...jobsFromOpenLeads(stamped.opportunities, jobs)];
 export const seedState: CrmState = {
   staff: structuredClone(NORTHLINE_STAFF),
   teams: structuredClone(NORTHLINE_TEAMS),
+  googleLocations: [],
   clients: extraClients,
   contacts: extraContacts,
   opportunities: stamped.opportunities,

@@ -143,6 +143,26 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["teams"]["Insert"]>;
         Relationships: [];
       };
+      google_locations: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          review_url: string;
+          is_default: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          review_url?: string;
+          is_default?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["google_locations"]["Insert"]>;
+        Relationships: [];
+      };
       team_members: {
         Row: {
           id: string;
@@ -158,6 +178,7 @@ export type Database = {
           photo_url: string;
           photo_storage_path: string;
           google_review_url: string;
+          google_location_id: string | null;
           email_signature: string;
           locked: boolean;
           restricted: boolean;
@@ -178,6 +199,7 @@ export type Database = {
           photo_url?: string;
           photo_storage_path?: string;
           google_review_url?: string;
+          google_location_id?: string | null;
           email_signature?: string;
           locked?: boolean;
           restricted?: boolean;

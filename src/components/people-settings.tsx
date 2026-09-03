@@ -41,6 +41,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/page-chrome";
+import { GoogleLocationSelect } from "@/components/google-locations-settings";
 import { StaffPhotoField } from "@/components/staff-photo-field";
 import { staffTeamLabel, TeamSelect } from "@/components/teams-settings";
 import {
@@ -56,7 +57,7 @@ import { copyText } from "@/lib/share";
 import { cardUrl } from "@/lib/card";
 import { mintPersonCardSlug } from "@/lib/card-slug";
 import { NO_TEAM, parseTeamSelect } from "@/lib/teams";
-import type { SeatRole, StaffMember, Team } from "@/lib/types";
+import type { GoogleLocation, SeatRole, StaffMember, Team } from "@/lib/types";
 import { SEAT_ROLE_LABELS, SEAT_ROLES } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -85,7 +86,7 @@ export function PeopleSettings({
   staff,
   viewerId,
   companySlug,
-  companyReviewUrl = "",
+  googleLocations,
   companySignature = "",
   onInvite,
   onUpdate,
@@ -97,8 +98,8 @@ export function PeopleSettings({
   staff: StaffMember[];
   viewerId: string;
   companySlug: string;
-  /** Shown as the placeholder a blank seat field falls back to. */
-  companyReviewUrl?: string;
+  googleLocations: GoogleLocation[];
+  /** Shown as the placeholder a blank signature falls back to. */
   companySignature?: string;
   onInvite: (input: {
     name: string;
@@ -424,7 +425,7 @@ export function PeopleSettings({
       <EditProfileDialog
         member={profileTarget}
         teams={teams}
-        companyReviewUrl={companyReviewUrl}
+        googleLocations={googleLocations}
         companySignature={companySignature}
         onOpenChange={(open) => !open && setProfileTarget(null)}
         onSave={async (patch) => {
@@ -727,7 +728,7 @@ type ProfilePatch = Partial<
     | "phone"
     | "teamId"
     | "cardSlug"
-    | "googleReviewUrl"
+    | "googleLocationId"
     | "emailSignature"
   >
 >;
@@ -735,14 +736,14 @@ type ProfilePatch = Partial<
 function EditProfileDialog({
   member,
   teams,
-  companyReviewUrl,
+  googleLocations,
   companySignature,
   onOpenChange,
   onSave,
 }: {
   member: StaffMember | null;
   teams: Team[];
-  companyReviewUrl: string;
+  googleLocations: GoogleLocation[];
   companySignature: string;
   onOpenChange: (open: boolean) => void;
   onSave: (patch: ProfilePatch) => Promise<boolean>;
@@ -753,7 +754,7 @@ function EditProfileDialog({
   const [phone, setPhone] = useState("");
   const [cardSlug, setCardSlug] = useState("");
   const [teamId, setTeamId] = useState(NO_TEAM);
-  const [reviewUrl, setReviewUrl] = useState("");
+  const [locationId, setLocationId] = useState<string | null>(null);
   const [signature, setSignature] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -765,7 +766,7 @@ function EditProfileDialog({
     setPhone(member.phone);
     setCardSlug(member.cardSlug);
     setTeamId(member.teamId || NO_TEAM);
-    setReviewUrl(member.googleReviewUrl ?? "");
+    setLocationId(member.googleLocationId ?? null);
     setSignature(member.emailSignature ?? "");
   }, [member]);
 
@@ -781,7 +782,7 @@ function EditProfileDialog({
         phone: phone.trim(),
         cardSlug: cardSlug.trim(),
         teamId: parseTeamSelect(teamId),
-        googleReviewUrl: reviewUrl.trim(),
+        googleLocationId: locationId,
         emailSignature: signature,
       });
     } finally {
@@ -870,23 +871,18 @@ function EditProfileDialog({
               </div>
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="profile-edit-review">Google review link</Label>
-              <Input
-                id="profile-edit-review"
-                type="url"
-                inputMode="url"
-                autoComplete="off"
-                spellCheck={false}
-                value={reviewUrl}
-                onChange={(event) => setReviewUrl(event.target.value)}
-                placeholder={companyReviewUrl || "https://g.page/r/…/review"}
+              <Label htmlFor="profile-edit-location">Google location</Label>
+              <GoogleLocationSelect
+                id="profile-edit-location"
+                value={locationId}
+                locations={googleLocations}
+                onChange={setLocationId}
+                full
               />
               <p className="text-xs text-muted-foreground">
-                {reviewUrl.trim()
-                  ? "Their card sends reviews here instead of the company listing."
-                  : companyReviewUrl
-                    ? "Blank uses the company listing. Set it for people at another office."
-                    : "No company link is set yet, so the review button stays hidden."}
+                {googleLocations.length === 0
+                  ? "No locations yet. Add one under Settings → Locations to turn on the review button."
+                  : "Which listing the review button on their card opens. Manage the list under Settings → Locations."}
               </p>
             </div>
             <div className="grid gap-1.5">

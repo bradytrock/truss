@@ -23,6 +23,7 @@ import type {
   EstimateSignatureEvent,
   EstimateTemplate,
   EstimateTemplateLine,
+  GoogleLocation,
   Invoice,
   InvoiceLine,
   Job,
@@ -145,7 +146,6 @@ export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>):
     paymentCashapp: "payment_cashapp" in row ? String(row.payment_cashapp ?? "") : "",
     paymentPaypal: "payment_paypal" in row ? String(row.payment_paypal ?? "") : "",
     paymentNote: "payment_note" in row ? String(row.payment_note ?? "") : "",
-    googleReviewUrl: "google_review_url" in row ? String(row.google_review_url ?? "") : "",
     defaultEstimateTerms: row.default_estimate_terms ?? null,
     defaultInvoiceTerms: row.default_invoice_terms ?? null,
     minimumMarginPercent: Number(row.minimum_margin_percent ?? 0),
@@ -167,7 +167,8 @@ export function mapStaff(row: StaffRow): StaffMember {
     cardSlug: "card_slug" in row ? String(row.card_slug ?? "") : "",
     photoUrl: "photo_url" in row ? String(row.photo_url ?? "") : "",
     photoStoragePath: "photo_storage_path" in row ? String(row.photo_storage_path ?? "") : "",
-    googleReviewUrl: "google_review_url" in row ? String(row.google_review_url ?? "") : "",
+    googleLocationId:
+      "google_location_id" in row ? ((row.google_location_id as string | null) ?? null) : null,
     emailSignature: "email_signature" in row ? String(row.email_signature ?? "") : "",
     locked: Boolean(row.locked),
     restricted: Boolean(row.restricted),
@@ -181,6 +182,20 @@ export function mapTeam(row: TeamRow): Team {
     id: row.id,
     name: row.name,
     leadStaffId: row.lead_staff_id ?? "",
+  };
+}
+
+export function mapGoogleLocation(row: {
+  id: string;
+  name: string;
+  review_url: string | null;
+  is_default: boolean | null;
+}): GoogleLocation {
+  return {
+    id: row.id,
+    name: row.name,
+    reviewUrl: row.review_url ?? "",
+    isDefault: Boolean(row.is_default),
   };
 }
 

@@ -259,29 +259,6 @@ function CompanySettingsForm() {
 
       <Card>
         <CardHeader className="border-b">
-          <CardTitle>Google review link</CardTitle>
-          <CardDescription>
-            The company default. Multi-office teams can point each person at their own listing
-            under Settings → People.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 pt-4">
-          <Field
-            id="google-review-url"
-            label="Review link"
-            value={form.googleReviewUrl ?? ""}
-            onChange={(value) => patch("googleReviewUrl", value)}
-            placeholder="https://g.page/r/CxxxxxxxxxxxxEBM/review"
-          />
-          <p className="text-xs text-muted-foreground">
-            In Google Business Profile choose <span className="font-medium">Ask for reviews</span>{" "}
-            and paste the short link. Blank hides the review button on cards.
-          </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="border-b">
           <CardTitle>Default email signature</CardTitle>
           <CardDescription>
             Appended to mail this company sends when that person has not set their own sign-off.

@@ -22,14 +22,14 @@ function PeopleSettingsBody() {
       <PageHeader
         eyebrow="Settings"
         title="People"
-        description={`Add a roster seat, put them on a team, or send a signup link into this company. Open a person to edit their whole profile — photo, contact, card URL, review link, and email signature. Invite links join this company — they do not open a second one. Invites expire in ${INVITE_DAYS} days.`}
+        description={`Add a roster seat, put them on a team, or send a signup link into this company. Open a person to edit their whole profile — photo, contact, card URL, Google location, and email signature. Invite links join this company — they do not open a second one. Invites expire in ${INVITE_DAYS} days.`}
       />
       <PeopleSettings
         teams={crm.book.teams}
         staff={crm.book.staff}
         viewerId={crm.viewer.id}
         companySlug={crm.company.slug}
-        companyReviewUrl={crm.company.googleReviewUrl ?? ""}
+        googleLocations={crm.googleLocations}
         companySignature={crm.company.defaultEmailSignature ?? ""}
         onInvite={crm.inviteStaff}
         onUpdate={crm.updateStaffAccount}
