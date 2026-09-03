@@ -166,8 +166,8 @@ export function downloadVcard(filename: string, contents: string) {
 }
 
 /** Wide card logo when one is set, otherwise the document logo. */
-export function cardHeaderLogo(company: Pick<SharedCardCompany, "cardLogoUrl" | "logoUrl">) {
-  return company.cardLogoUrl.trim() || company.logoUrl.trim();
+export function cardHeaderLogo(company: Pick<SharedCardCompany, "cardLogoUrl" | "logoUrl"> | Pick<CompanySettings, "cardLogoUrl" | "logoUrl">) {
+  return (company.cardLogoUrl ?? "").trim() || (company.logoUrl ?? "").trim();
 }
 
 export function cardUrlForSeat(

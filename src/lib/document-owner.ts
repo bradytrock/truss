@@ -67,6 +67,35 @@ export function documentProjectManager(input: {
   };
 }
 
+/** Project manager fields used when emailing a share link. */
+export function shareEmailOwnerFromBook(input: {
+  job?: { ownerStaffId?: string | null; projectManager?: string; salesRep?: string } | null;
+  opportunity?: { ownerStaffId?: string | null; estimator?: string } | null;
+  staff: Array<StaffContact & { emailSignature?: string }>;
+  fallbackStaffId?: string;
+  companyPhone?: string;
+  companySignature?: string;
+}): {
+  name: string;
+  title: string;
+  email: string;
+  phone: string;
+  signature: string;
+} | null {
+  const pm = documentProjectManager(input);
+  if (!pm) return null;
+  const owner = documentOwnerStaff(input);
+  const ownSignature = owner && "emailSignature" in owner ? String(owner.emailSignature ?? "").trim() : "";
+  const signature = ownSignature || input.companySignature?.trim() || "";
+  return {
+    name: pm.name,
+    title: pm.title,
+    email: pm.email,
+    phone: pm.phone,
+    signature,
+  };
+}
+
 export function companyWithOwnerEmail(company: CompanySettings | undefined, ownerEmail: string): CompanySettings {
   const base = company ?? NORTHLINE_COMPANY;
   return { ...base, email: ownerEmail.trim() };

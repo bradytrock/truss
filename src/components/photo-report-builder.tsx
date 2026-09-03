@@ -61,7 +61,8 @@ import {
 } from "@/lib/photo-report";
 import { shareUrl } from "@/lib/share";
 import { resolveShareContacts } from "@/lib/parties";
-import { documentProjectManager } from "@/lib/document-owner";
+import { shareEmailOwnerFromBook } from "@/lib/document-owner";
+import { cardHeaderLogo } from "@/lib/card";
 import {
   type Job,
   type JobPhoto,
@@ -84,12 +85,13 @@ export function PhotoReportBuilder({
   const crm = useCrm();
   const photos = crm.photos.filter((photo) => photo.jobId === job.id);
   const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
-  const projectManager = documentProjectManager({
+  const emailOwner = shareEmailOwnerFromBook({
     job,
     opportunity,
     staff: crm.staff,
     fallbackStaffId: crm.user.staffId,
     companyPhone: crm.company.phone,
+    companySignature: crm.company.defaultEmailSignature,
   });
   const [draft, setDraft] = useState(report);
   const [selectedId, setSelectedId] = useState(report.pages[0]?.id ?? "");
@@ -500,11 +502,8 @@ export function PhotoReportBuilder({
         kind="page"
         documentName={draft.title}
         companyName={crm.company.name}
-        sender={
-          projectManager
-            ? { name: projectManager.name, email: projectManager.email }
-            : null
-        }
+        companyLogoUrl={cardHeaderLogo(crm.company)}
+        sender={emailOwner}
         recipients={resolveShareContacts(
           { jobId: job.id, primaryContactId: job.primaryContactId },
           crm,

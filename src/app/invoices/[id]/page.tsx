@@ -18,7 +18,8 @@ import { shareContactsForInvoice } from "@/lib/parties";
 import { InvoiceStatusBadge } from "@/components/status-badge";
 import { downloadInvoicePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
-import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
+import { documentProjectManager, letterheadCompanyForRecord, shareEmailOwnerFromBook } from "@/lib/document-owner";
+import { cardHeaderLogo } from "@/lib/card";
 import { formatCurrencyFull, formatDate, formatMoney } from "@/lib/format";
 import { jobPaperHref } from "@/lib/job-record";
 import { shareUrl } from "@/lib/share";
@@ -81,6 +82,14 @@ export default function InvoiceDetailPage() {
     staff: crm.staff,
     fallbackStaffId: crm.user.staffId,
     companyPhone: letterhead.phone,
+  });
+  const emailOwner = shareEmailOwnerFromBook({
+    job,
+    opportunity,
+    staff: crm.staff,
+    fallbackStaffId: crm.user.staffId,
+    companyPhone: letterhead.phone,
+    companySignature: crm.company.defaultEmailSignature,
   });
 
   function downloadPdf() {
@@ -281,11 +290,8 @@ export default function InvoiceDetailPage() {
         documentNumber={record.number}
         documentName={record.name}
         companyName={crm.company.name}
-        sender={
-          projectManager
-            ? { name: projectManager.name, email: projectManager.email }
-            : null
-        }
+        companyLogoUrl={cardHeaderLogo(crm.company)}
+        sender={emailOwner}
         recipients={shareContactsForInvoice(record, crm)}
         onDownloadPdf={downloadPdf}
         onTexted={(sent) =>

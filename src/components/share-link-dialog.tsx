@@ -26,6 +26,7 @@ import {
   defaultShareText,
   looksLikeEmail,
   type ShareDocumentKind,
+  type ShareEmailOwner,
 } from "@/lib/share-text";
 import { formatResendFromDisplay, RESEND_FROM_DOMAIN } from "@/lib/resend-from";
 
@@ -42,7 +43,8 @@ export function ShareLinkDialog({
   documentNumber,
   documentName,
   companyName,
-  /** Project manager on the job — From name and Reply-To. */
+  companyLogoUrl,
+  /** Project manager on the job — From name, Reply-To, sign-off, and contact block. */
   sender,
   recipients = [],
   onDownloadPdf,
@@ -58,7 +60,9 @@ export function ShareLinkDialog({
   documentNumber?: string;
   documentName?: string;
   companyName?: string;
-  sender?: { name: string; email: string } | null;
+  /** Wide card logo (same as the business card header). */
+  companyLogoUrl?: string;
+  sender?: ShareEmailOwner | null;
   recipients?: ShareRecipient[];
   onDownloadPdf?: () => Promise<void> | void;
   onTexted?: (sent: {
@@ -329,6 +333,14 @@ export function ShareLinkDialog({
           number: documentNumber || "",
           name: documentName || "",
           url: theirUrl,
+          logoUrl: companyLogoUrl || "",
+          owner: {
+            name: senderName,
+            title: sender?.title || "",
+            email: replyTo,
+            phone: sender?.phone || "",
+            signature: sender?.signature || "",
+          },
         };
         const html = defaultShareEmailHtml(payload);
         const text = defaultShareEmailText(payload);

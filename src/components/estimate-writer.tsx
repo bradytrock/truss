@@ -65,7 +65,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { MarketField } from "@/components/market-field";
 import { useCrm } from "@/lib/crm-store";
-import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
+import { documentProjectManager, letterheadCompanyForRecord, shareEmailOwnerFromBook } from "@/lib/document-owner";
+import { cardHeaderLogo } from "@/lib/card";
 import { COMMON_UNITS, estimateTotals, groupEstimateLines, lineAmount, linesForEstimate, type AdjustmentKind } from "@/lib/estimate-totals";
 import {
   ESTIMATE_PACKAGES,
@@ -616,6 +617,14 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     staff: crm.staff,
     fallbackStaffId: crm.user.staffId,
     companyPhone: letterhead.phone,
+  });
+  const emailOwner = shareEmailOwnerFromBook({
+    job,
+    opportunity,
+    staff: crm.staff,
+    fallbackStaffId: crm.user.staffId,
+    companyPhone: letterhead.phone,
+    companySignature: crm.company.defaultEmailSignature,
   });
 
   function lastGroup() {
@@ -1283,11 +1292,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         documentNumber={estimate.number}
         documentName={estimate.name}
         companyName={crm.company.name}
-        sender={
-          projectManager
-            ? { name: projectManager.name, email: projectManager.email }
-            : null
-        }
+        companyLogoUrl={cardHeaderLogo(crm.company)}
+        sender={emailOwner}
         recipients={shareContactsForEstimate(shareEstimate, crm)}
         onDownloadPdf={downloadPdf}
         onTexted={(sent) =>
