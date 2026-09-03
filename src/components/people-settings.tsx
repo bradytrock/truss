@@ -203,48 +203,49 @@ export function PeopleSettings({
           ) : (
             <>
               <div className="hidden md:block">
-                <Table>
+                <Table className="table-fixed">
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Team</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Account</TableHead>
+                      <TableHead className="w-[44%]">Person</TableHead>
+                      <TableHead className="w-[28%]">Role</TableHead>
+                      <TableHead className="w-[18%]">Status</TableHead>
+                      <TableHead className="w-[10%] text-right">
+                        <span className="sr-only">Account</span>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {people.map((member) => (
                       <TableRow key={member.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-2.5">
+                        <TableCell className="max-w-0 whitespace-normal">
+                          <div className="flex items-start gap-2.5">
                             <SeatAvatar member={member} />
-                            <div className="flex flex-col">
-                              <span className="font-medium">
+                            <div className="min-w-0">
+                              <p className="truncate font-medium">
                                 {member.name}
                                 {member.id === viewerId ? (
                                   <span className="ml-2 text-xs font-normal text-muted-foreground">You</span>
                                 ) : null}
-                              </span>
-                              <span className="text-xs text-muted-foreground">{member.title}</span>
+                              </p>
+                              {member.title ? (
+                                <p className="truncate text-xs text-muted-foreground">{member.title}</p>
+                              ) : null}
+                              <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                                {member.email || "No email"}
+                              </p>
+                              {member.phone ? (
+                                <p className="truncate text-sm text-muted-foreground">
+                                  {formatPhone(member.phone)}
+                                </p>
+                              ) : null}
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {member.email || "No email"}
+                        <TableCell className="whitespace-normal text-muted-foreground">
+                          <p>{SEAT_ROLE_LABELS[member.role]}</p>
+                          <p className="text-xs">{staffTeamLabel(teams, member)}</p>
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {member.phone ? formatPhone(member.phone) : "—"}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {SEAT_ROLE_LABELS[member.role]}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {staffTeamLabel(teams, member)}
-                        </TableCell>
-                        <TableCell>
+                        <TableCell className="whitespace-normal">
                           <StatusBadge member={member} />
                         </TableCell>
                         <TableCell className="text-right">
