@@ -167,6 +167,25 @@ function inferredTags(opportunity?: Opportunity | null): string[] {
   return tags;
 }
 
+/** Move `nextPrimaryId` to primary; keep the previous primary as a related contact. */
+export function primaryHomeownerPatch(
+  job: Pick<Job, "primaryContactId" | "relatedContactIds" | "subcontractorIds">,
+  nextPrimaryId: string,
+): Partial<Job> | null {
+  const next = nextPrimaryId.trim();
+  if (!next) return null;
+  if (next === (job.primaryContactId ?? "").trim()) return null;
+  const previous = (job.primaryContactId ?? "").trim();
+  return {
+    primaryContactId: next,
+    relatedContactIds: uniqueIds([
+      ...job.relatedContactIds.filter((id) => id !== next),
+      previous,
+    ]).filter((id) => id && id !== next),
+    subcontractorIds: job.subcontractorIds.filter((id) => id !== next),
+  };
+}
+
 export function fillJobRecord(job: JobDraft, opportunity?: Opportunity | null): Job {
   const parsed = parseLocation(job.location || "");
   const assigned = uniqueNames(

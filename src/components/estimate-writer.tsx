@@ -91,7 +91,7 @@ import {
 import { currentCatalog } from "@/lib/price-lists";
 import { billingEstimate, defaultTaxRateForMarket, isResidentialMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { formatJobSite } from "@/lib/leads";
-import { jobPaperHref } from "@/lib/job-record";
+import { jobPaperHref, primaryHomeownerPatch } from "@/lib/job-record";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine, type JobPhoto } from "@/lib/types";
 import { canGenerateSignatureCertificate, canManageSettings } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
@@ -517,22 +517,28 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       ? "This job does not have photos yet. Add them on the job record, then attach them here."
       : undefined
     : "Attach this proposal to a job to use that job’s photo gallery.";
-  const homeownerContacts = useMemo(
-    () =>
-      homeownersOnJob(job, crm.contacts, [
-        estimate.contactId,
-        estimate.secondContactId,
-        opportunity?.primaryContactId,
-      ]),
-    [
-      crm.contacts,
-      estimate.contactId,
-      estimate.secondContactId,
-      job,
-      opportunity?.primaryContactId,
-    ],
-  );
-  const secondHomeownerContacts = homeownerContacts.filter((item) => item.id !== estimate.contactId);
+  const homeownerContacts = useMemo(() => {
+    const selected = new Set(
+      [estimate.contactId, estimate.secondContactId, job?.primaryContactId, opportunity?.primaryContactId].filter(
+        (id): id is string => Boolean(id),
+      ),
+    );
+    // Primary can be anyone in the book — not only people already tagged on the job.
+    return [...crm.contacts]
+      .filter((contact) => selected.has(contact.id) || !contact.isReferralPartner)
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [
+    crm.contacts,
+    estimate.contactId,
+    estimate.secondContactId,
+    job?.primaryContactId,
+    opportunity?.primaryContactId,
+  ]);
+  const secondHomeownerContacts = useMemo(() => {
+    const onJob = homeownersOnJob(job, crm.contacts, [estimate.contactId, estimate.secondContactId]);
+    const pool = onJob.length > 0 ? onJob : homeownerContacts;
+    return pool.filter((item) => item.id !== estimate.contactId);
+  }, [crm.contacts, estimate.contactId, estimate.secondContactId, homeownerContacts, job]);
   const assignedCoOwner = useRef(false);
   useEffect(() => {
     assignedCoOwner.current = false;
@@ -816,6 +822,13 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                     secondContactId:
                       contactId && contactId === estimate.secondContactId ? null : estimate.secondContactId,
                   });
+                  if (job && contactId) {
+                    const jobPatch = primaryHomeownerPatch(job, contactId);
+                    if (jobPatch) void crm.updateJob(job.id, jobPatch);
+                    if (opportunity && opportunity.primaryContactId !== contactId) {
+                      void crm.updateOpportunity(opportunity.id, { primaryContactId: contactId });
+                    }
+                  }
                 }}
                 items={[
                   { value: "none", label: "Choose a contact" },
@@ -858,8 +871,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
             ) : job ? (
               <p className="mt-1 text-xs text-muted-foreground">
                 {homeownerContacts.length === 0
-                  ? "Add the homeowner as a related contact on the job, then pick them here."
-                  : "People on this job."}
+                  ? "Add a homeowner in Contacts, then pick them here."
+                  : "Changing this also updates the primary homeowner on the job."}
               </p>
             ) : null}
           </div>

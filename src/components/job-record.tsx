@@ -67,7 +67,7 @@ import { EstimateStatusBadge, InvoiceStatusBadge, PhotoCategoryBadge, QbStatusBa
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate, formatInboxTime } from "@/lib/format";
 import { mailHref } from "@/lib/job-emails";
-import { assignedCrewPatch, isDeletedJob, jobAddress, mapsUrl, uniqueIds, uniqueNames } from "@/lib/job-record";
+import { assignedCrewPatch, isDeletedJob, jobAddress, mapsUrl, primaryHomeownerPatch, uniqueIds, uniqueNames } from "@/lib/job-record";
 import { visibleJobCustomFields } from "@/lib/job-files";
 import {
   isWaitingOnPm,
@@ -358,6 +358,26 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
       !job.subcontractorIds.includes(contact.id)
   );
   const tradeOptions = crm.contacts.filter((contact) => !job.subcontractorIds.includes(contact.id));
+  const primaryHomeownerOptions = useMemo(() => {
+    const onJob = new Set(
+      [job.primaryContactId, ...job.relatedContactIds, ...job.subcontractorIds].filter(Boolean),
+    );
+    return [...crm.contacts]
+      .filter((contact) => onJob.has(contact.id) || !contact.isReferralPartner)
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [crm.contacts, job.primaryContactId, job.relatedContactIds, job.subcontractorIds]);
+
+  function setPrimaryHomeowner(contactId: string) {
+    if (deleted) return;
+    const next = primaryHomeownerPatch(job, contactId);
+    if (!next) return;
+    patch(next);
+    if (opportunity && opportunity.primaryContactId !== contactId) {
+      void crm.updateOpportunity(opportunity.id, { primaryContactId: contactId });
+    }
+    const name = crm.getContact(contactId)?.name?.trim();
+    toast.success(name ? `${name} is now the primary homeowner.` : "Primary homeowner updated.");
+  }
 
   async function startPage(template: PageTemplateId) {
     setPageCreating(true);
@@ -825,6 +845,36 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                 </SelectContent>
               </Select>
             </FieldRow>
+            <FieldRow icon={User} label="Primary homeowner">
+              <Select
+                value={job.primaryContactId || undefined}
+                disabled={deleted || primaryHomeownerOptions.length === 0}
+                onValueChange={(value) => {
+                  if (!value || deleted) return;
+                  setPrimaryHomeowner(String(value));
+                }}
+                items={primaryHomeownerOptions.map((contact) => ({
+                  value: contact.id,
+                  label: contact.name,
+                }))}
+              >
+                <SelectTrigger
+                  className={cn(quietSelect, !job.primaryContactId && "text-muted-foreground")}
+                >
+                  <SelectValue placeholder="Choose a homeowner" />
+                </SelectTrigger>
+                <SelectContent align="end" className="max-h-72">
+                  {primaryHomeownerOptions.map((contact) => (
+                    <SelectItem key={contact.id} value={contact.id}>
+                      {contact.name}
+                      {contact.title ? (
+                        <span className="ml-2 text-xs text-muted-foreground">{contact.title}</span>
+                      ) : null}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FieldRow>
             <FieldRow icon={User} label="Assigned">
               <PeopleChips
                 names={job.assigned}
@@ -995,20 +1045,33 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                         <Badge variant="outline">{contactKind(contact, job)}</Badge>
                       </div>
                       {contact.id !== job.primaryContactId ? (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-7"
-                          onClick={() =>
-                            patch({
-                              relatedContactIds: job.relatedContactIds.filter((id) => id !== contact.id),
-                              subcontractorIds: job.subcontractorIds.filter((id) => id !== contact.id),
-                            })
-                          }
-                          aria-label={`Remove ${contact.name}`}
-                        >
-                          <XIcon className="size-3.5" />
-                        </Button>
+                        <div className="flex shrink-0 items-center gap-0.5">
+                          {!deleted && !contact.isReferralPartner && !job.subcontractorIds.includes(contact.id) ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => setPrimaryHomeowner(contact.id)}
+                            >
+                              Make primary
+                            </Button>
+                          ) : null}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7"
+                            onClick={() =>
+                              patch({
+                                relatedContactIds: job.relatedContactIds.filter((id) => id !== contact.id),
+                                subcontractorIds: job.subcontractorIds.filter((id) => id !== contact.id),
+                              })
+                            }
+                            aria-label={`Remove ${contact.name}`}
+                          >
+                            <XIcon className="size-3.5" />
+                          </Button>
+                        </div>
                       ) : null}
                     </div>
                     <Link href={`/contacts?contact=${contact.id}`} className="flex items-center gap-2 text-sm font-medium hover:underline">
