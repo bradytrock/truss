@@ -238,18 +238,11 @@ export function PeopleSettings({
                         <TableCell className="text-muted-foreground">
                           {member.phone ? formatPhone(member.phone) : "—"}
                         </TableCell>
-                        <TableCell>
-                          <RoleSelect
-                            member={member}
-                            onChange={(role) => void onUpdate(member.id, { role })}
-                          />
+                        <TableCell className="text-muted-foreground">
+                          {SEAT_ROLE_LABELS[member.role]}
                         </TableCell>
-                        <TableCell>
-                          <TeamSelect
-                            value={member.teamId}
-                            teams={teams}
-                            onChange={(teamId) => void onUpdate(member.id, { teamId })}
-                          />
+                        <TableCell className="text-muted-foreground">
+                          {staffTeamLabel(teams, member)}
                         </TableCell>
                         <TableCell>
                           <StatusBadge member={member} />
@@ -304,22 +297,9 @@ export function PeopleSettings({
                       </div>
                       <StatusBadge member={member} />
                     </div>
-                    <RoleSelect
-                      member={member}
-                      onChange={(role) => void onUpdate(member.id, { role })}
-                      full
-                    />
-                    <div className="grid gap-1.5">
-                      <p className="text-xs text-muted-foreground">
-                        Team · {staffTeamLabel(teams, member)}
-                      </p>
-                      <TeamSelect
-                        value={member.teamId}
-                        teams={teams}
-                        onChange={(teamId) => void onUpdate(member.id, { teamId })}
-                        full
-                      />
-                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      {SEAT_ROLE_LABELS[member.role]} · {staffTeamLabel(teams, member)}
+                    </p>
                     <SeatMenu
                       member={member}
                       isSelf={member.id === viewerId}
@@ -468,21 +448,23 @@ function StatusBadge({ member }: { member: StaffMember }) {
 }
 
 function RoleSelect({
-  member,
+  id,
+  value,
   onChange,
   full,
 }: {
-  member: StaffMember;
+  id?: string;
+  value: SeatRole;
   onChange: (role: SeatRole) => void;
   full?: boolean;
 }) {
   return (
     <Select
-      value={member.role}
-      onValueChange={(value) => onChange(String(value ?? member.role) as SeatRole)}
+      value={value}
+      onValueChange={(next) => onChange(String(next ?? value) as SeatRole)}
       items={ROLE_ITEMS}
     >
-      <SelectTrigger className={full ? "w-full" : "w-44"} size="sm">
+      <SelectTrigger id={id} className={full ? "w-full" : "w-44"} size={full ? "default" : "sm"}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -726,6 +708,7 @@ type ProfilePatch = Partial<
     | "title"
     | "email"
     | "phone"
+    | "role"
     | "teamId"
     | "cardSlug"
     | "googleLocationId"
@@ -753,6 +736,7 @@ function EditProfileDialog({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [cardSlug, setCardSlug] = useState("");
+  const [role, setRole] = useState<SeatRole>("project_manager");
   const [teamId, setTeamId] = useState(NO_TEAM);
   const [locationId, setLocationId] = useState<string | null>(null);
   const [signature, setSignature] = useState("");
@@ -765,6 +749,7 @@ function EditProfileDialog({
     setEmail(member.email);
     setPhone(member.phone);
     setCardSlug(member.cardSlug);
+    setRole(member.role);
     setTeamId(member.teamId || NO_TEAM);
     setLocationId(member.googleLocationId ?? null);
     setSignature(member.emailSignature ?? "");
@@ -781,6 +766,7 @@ function EditProfileDialog({
         email: email.trim(),
         phone: phone.trim(),
         cardSlug: cardSlug.trim(),
+        role,
         teamId: parseTeamSelect(teamId),
         googleLocationId: locationId,
         emailSignature: signature,
@@ -854,21 +840,25 @@ function EditProfileDialog({
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="grid gap-1.5">
-                <Label htmlFor="profile-edit-card">Card URL</Label>
-                <Input
-                  id="profile-edit-card"
-                  value={cardSlug}
-                  onChange={(event) => setCardSlug(event.target.value)}
-                  placeholder="jordan.hale"
-                />
-                <p className="text-xs text-muted-foreground">
-                  first.last. Changing this breaks NFC and QR that already use the old link.
-                </p>
+                <Label htmlFor="profile-edit-role">Role</Label>
+                <RoleSelect id="profile-edit-role" value={role} onChange={setRole} full />
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="profile-edit-team">Team</Label>
                 <TeamSelect id="profile-edit-team" value={teamId} teams={teams} onChange={setTeamId} full />
               </div>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="profile-edit-card">Card URL</Label>
+              <Input
+                id="profile-edit-card"
+                value={cardSlug}
+                onChange={(event) => setCardSlug(event.target.value)}
+                placeholder="jordan.hale"
+              />
+              <p className="text-xs text-muted-foreground">
+                first.last. Changing this breaks NFC and QR that already use the old link.
+              </p>
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="profile-edit-location">Google location</Label>
