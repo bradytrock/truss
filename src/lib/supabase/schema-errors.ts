@@ -510,6 +510,31 @@ export function missingCatalogMarginMessage() {
   return `Saved in this browser. Run ${CATALOG_MARGIN_SQL} in the SQL editor (or a fresh bootstrap) so catalog margin and the company minimum persist.`;
 }
 
+export const EAGLEVIEW_SQL = "supabase/migrations/20260903220000_eagleview.sql";
+
+export function isMissingEagleview(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentions =
+    message.includes("eagleview_orders") ||
+    message.includes("eagleview_connections") ||
+    message.includes("eagleview_ingest_webhook") ||
+    message.includes("eagleview");
+  return (
+    (code === "pgrst205" && mentions) ||
+    (code === "pgrst202" && mentions) ||
+    ((message.includes("schema cache") ||
+      message.includes("could not find the") ||
+      message.includes("does not exist")) &&
+      mentions)
+  );
+}
+
+export function missingEagleviewMessage() {
+  return `Run ${EAGLEVIEW_SQL} in the SQL editor so EagleView orders and credentials persist.`;
+}
+
 export const EMAIL_SIGNATURES_SQL = "supabase/migrations/20260901150000_email_signatures.sql";
 
 export function isMissingEmailSignatureColumns(error: { message?: string; code?: string } | null | undefined) {

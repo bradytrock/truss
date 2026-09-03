@@ -35,6 +35,7 @@ import { LogExpenseDialog } from "@/components/log-financial-dialogs";
 import { CreatePageDialog } from "@/components/create-page-dialog";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
 import { JobFilesPanel } from "@/components/job-files";
+import { JobEagleviewPanel } from "@/components/job-eagleview";
 import { JobFinancials } from "@/components/job-financials";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1253,6 +1254,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
               </ul>
             )}
           </section>
+          <JobEagleviewPanel jobId={job.id} disabled={deleted} />
           <JobFilesPanel jobId={job.id} disabled={deleted} />
           <section>
             <div className="mb-3 flex items-center justify-between gap-2">

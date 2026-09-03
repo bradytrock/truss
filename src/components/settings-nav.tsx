@@ -15,6 +15,7 @@ const SECTIONS = [
   { href: "/settings/locations", label: "Locations", hint: "Google reviews", admin: true, accounting: false },
   { href: "/settings/people", label: "People", hint: "Seats and invites", admin: true, accounting: false },
   { href: "/settings/price-book", label: "Price book", hint: "Catalog and lists", admin: true, accounting: false },
+  { href: "/settings/eagleview", label: "EagleView", hint: "Roof reports", admin: true, accounting: false },
   { href: "/settings/quickbooks", label: "QuickBooks", hint: "Web Connector", admin: true, accounting: true },
 ] as const;
 

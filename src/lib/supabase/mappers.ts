@@ -1,4 +1,11 @@
 import { fillCatalogItem } from "@/lib/catalog-margin";
+import {
+  isEagleviewProductId,
+  parseEagleviewMeasurements,
+  type EagleviewConnection,
+  type EagleviewOrder,
+  type EagleviewOrderStatus,
+} from "@/lib/eagleview";
 import { fillMaterialOrder, fillMaterialOrderLine } from "@/lib/material-orders";
 import { fillMaterialOrderTemplate, fillMaterialOrderTemplateLine } from "@/lib/material-order-templates";
 import { fillEstimate, fillEstimateLine } from "@/lib/estimate-totals";
@@ -1098,3 +1105,70 @@ export function materialOrderTemplateLinePatch(patch: Partial<MaterialOrderTempl
   if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder;
   return row;
 }
+
+type EagleviewConnectionRow = Database["public"]["Tables"]["eagleview_connections"]["Row"];
+type EagleviewOrderRow = Database["public"]["Tables"]["eagleview_orders"]["Row"];
+
+function parseEagleviewStatus(value: string): EagleviewOrderStatus {
+  if (
+    value === "queued" ||
+    value === "in_progress" ||
+    value === "ready" ||
+    value === "failed" ||
+    value === "cancelled"
+  ) {
+    return value;
+  }
+  return "queued";
+}
+
+export function mapEagleviewConnection(row: EagleviewConnectionRow): EagleviewConnection {
+  const product = isEagleviewProductId(row.default_product)
+    ? row.default_product
+    : "premium_residential";
+  return {
+    companyId: row.company_id,
+    clientId: row.client_id ?? "",
+    hasSecret: Boolean(row.client_secret?.trim()),
+    sandbox: Boolean(row.sandbox),
+    defaultProduct: product,
+    webhookToken: row.webhook_token ?? "",
+    linked: Boolean(row.linked),
+    linkedAt: row.linked_at,
+  };
+}
+
+export function mapEagleviewOrder(row: EagleviewOrderRow): EagleviewOrder {
+  const product = isEagleviewProductId(row.product) ? row.product : "premium_residential";
+  const measurements = parseEagleviewMeasurements(row.measurements);
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    jobId: row.job_id,
+    estimateId: row.estimate_id,
+    referenceId: row.reference_id ?? "",
+    eagleviewOrderId: row.eagleview_order_id ?? "",
+    eagleviewReportId: row.eagleview_report_id ?? "",
+    product,
+    status: parseEagleviewStatus(row.status),
+    statusDetail: row.status_detail ?? "",
+    addressLine: row.address_line ?? "",
+    city: row.city ?? "",
+    state: row.state ?? "",
+    postalCode: row.postal_code ?? "",
+    claimNumber: row.claim_number ?? "",
+    totalSquares: row.total_squares == null ? null : Number(row.total_squares),
+    wastePercent: row.waste_percent == null ? null : Number(row.waste_percent),
+    pitchSummary: row.pitch_summary ?? measurements.pitchSummary ?? "",
+    measurements,
+    reportFileId: row.report_file_id,
+    reportUrl: row.report_url ?? "",
+    appliedEstimateId: row.applied_estimate_id,
+    appliedAt: row.applied_at,
+    mocked: Boolean(row.mocked),
+    orderedBy: row.ordered_by ?? "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+

@@ -322,6 +322,7 @@ const emptyState: CrmState = {
   trainingBulletins: [],
   messages: [],
   returningClientLeads: [],
+  eagleviewOrders: [],
 };
 
 function userFromStaff(

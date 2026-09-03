@@ -434,6 +434,7 @@ export function scopeBook(
       if (notice.previousStaffId && notice.previousStaffId === effective.id) return true;
       return notice.openedByStaffId === effective.id;
     }),
+    eagleviewOrders: (state.eagleviewOrders ?? []).filter((order) => jobIds.has(order.jobId)),
   };
 }
 

@@ -921,6 +921,14 @@ export type ReturningClientLeadStatus =
   | "kept"
   | "dismissed";
 
+import type {
+  EagleviewOrder,
+  EagleviewOrderStatus,
+  EagleviewProductId,
+} from "@/lib/eagleview";
+
+export type { EagleviewOrder, EagleviewOrderStatus, EagleviewProductId };
+
 export interface ReturningClientLead {
   id: string;
   opportunityId: string;
@@ -978,6 +986,7 @@ export interface CrmState {
   trainingBulletins: TrainingBulletin[];
   messages: TextMessage[];
   returningClientLeads: ReturningClientLead[];
+  eagleviewOrders: EagleviewOrder[];
 }
 
 export const STAGE_LABELS: Record<PipelineStage, string> = {
