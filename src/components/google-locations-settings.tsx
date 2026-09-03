@@ -35,7 +35,8 @@ export function GoogleLocationSelect({
   full?: boolean;
 }) {
   const fallback = locations.find((location) => location.isDefault);
-  const noneLabel = fallback ? `Default — ${fallback.name}` : "Default listing";
+  // Distinct from picking that listing outright: this one follows the default if it moves.
+  const noneLabel = fallback ? `Use the default (${fallback.name})` : "Use the default";
   const options = [...locations].sort((left, right) => left.name.localeCompare(right.name));
   const current = value && options.some((item) => item.id === value) ? value : DEFAULT_LOCATION;
 
