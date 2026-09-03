@@ -1,8 +1,10 @@
 "use client";
 
+import { useCallback, useEffect, useRef } from "react";
 import { Copy, Globe, Mail, MessageSquare, Phone, Star, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { recordCardEvent, type CardEventKind } from "@/lib/card-analytics";
 import {
   cardHeaderLogo,
   cardUrl,
@@ -28,6 +30,22 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
   const company = card.company;
   const person = card.person;
   const headerLogo = cardHeaderLogo(company);
+  const personSlug = person?.cardSlug ?? "";
+  const viewSent = useRef(false);
+
+  const track = useCallback(
+    (kind: CardEventKind, detail?: string) => {
+      recordCardEvent({ company: company.slug, person: personSlug, kind, detail });
+    },
+    [company.slug, personSlug],
+  );
+
+  useEffect(() => {
+    // One open per mount: StrictMode runs effects twice in development.
+    if (viewSent.current || !personSlug) return;
+    viewSent.current = true;
+    track("view");
+  }, [personSlug, track]);
 
   if (!card.available || !person) {
     return (
@@ -63,6 +81,7 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
   const follow = socialLinks(company);
 
   function saveContact() {
+    track("save_contact");
     downloadVcard(
       live.cardSlug || live.name,
       vcardText({
@@ -110,7 +129,12 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
 
         <div className="mt-8 grid gap-2">
           {call ? (
-            <Button nativeButton={false} size="lg" className="h-11 w-full" render={<a href={call} />}>
+            <Button
+              nativeButton={false}
+              size="lg"
+              className="h-11 w-full"
+              render={<a href={call} onClick={() => track("call")} />}
+            >
               <Phone />
               Call {formatPhone(person.phone)}
             </Button>
@@ -121,7 +145,7 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
               variant="outline"
               size="lg"
               className="h-11 w-full"
-              render={<a href={text} />}
+              render={<a href={text} onClick={() => track("text")} />}
             >
               <MessageSquare />
               Text
@@ -133,7 +157,7 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
               variant="outline"
               size="lg"
               className="h-11 w-full"
-              render={<a href={`mailto:${person.email}`} />}
+              render={<a href={`mailto:${person.email}`} onClick={() => track("email")} />}
             >
               <Mail />
               Email
@@ -151,7 +175,14 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
             size="lg"
             variant="outline"
             className="mt-2 h-11 w-full"
-            render={<a href={reviewUrl} target="_blank" rel="noreferrer" />}
+            render={
+              <a
+                href={reviewUrl}
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => track("review")}
+              />
+            }
           >
             <Star />
             Leave a Google review
@@ -170,6 +201,9 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
                     href={link.href}
                     target="_blank"
                     rel="noreferrer"
+                    onClick={() =>
+                      track(link.key === "website" ? "website" : "social", link.key)
+                    }
                     className="inline-flex min-h-9 items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-muted/50"
                   >
                     {link.key === "website" ? <Globe className="size-4" /> : null}
@@ -190,7 +224,7 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
               <ul className="mt-3 grid gap-2">
                 {payments.map((option) => (
                   <li key={option.rail}>
-                    <PaymentRow option={option} />
+                    <PaymentRow option={option} onUse={() => track("payment", option.rail)} />
                   </li>
                 ))}
               </ul>
@@ -211,7 +245,7 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
   );
 }
 
-function PaymentRow({ option }: { option: PaymentOption }) {
+function PaymentRow({ option, onUse }: { option: PaymentOption; onUse: () => void }) {
   const body = (
     <>
       <span className="text-sm font-medium">{option.label}</span>
@@ -225,6 +259,7 @@ function PaymentRow({ option }: { option: PaymentOption }) {
         href={option.href}
         target="_blank"
         rel="noreferrer"
+        onClick={onUse}
         className="flex min-h-11 w-full items-center gap-3 rounded-md border px-3 py-2 hover:bg-muted/50"
       >
         {body}
@@ -237,6 +272,7 @@ function PaymentRow({ option }: { option: PaymentOption }) {
     <button
       type="button"
       onClick={async () => {
+        onUse();
         const ok = await copyText(option.handle);
         if (ok) toast.success(`${option.label} copied: ${option.handle}`);
         else toast.error(`Copy this into ${option.label}: ${option.handle}`);

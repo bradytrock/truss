@@ -1606,6 +1606,21 @@ export type Database = {
         Args: { p_company: string; p_person: string };
         Returns: Json;
       };
+      record_card_event: {
+        Args: {
+          p_company: string;
+          p_person: string;
+          p_kind: string;
+          p_detail?: string;
+          p_ip?: string;
+          p_user_agent?: string;
+        };
+        Returns: undefined;
+      };
+      card_event_totals: {
+        Args: { p_since?: string | null };
+        Returns: { staff_id: string; kind: string; total: number }[];
+      };
       shared_link_sender: {
         Args: { p_token: string };
         Returns: Json;

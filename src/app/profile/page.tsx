@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
+import { CardAnalyticsReport } from "@/components/card-analytics-report";
 import { GoogleLocationSelect } from "@/components/google-locations-settings";
 import { StaffPhotoField } from "@/components/staff-photo-field";
 import { cardUrl } from "@/lib/card";
@@ -242,6 +243,18 @@ export default function ProfilePage() {
           )}
         </div>
       </form>
+
+      <div className="max-w-2xl">
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Card activity</CardTitle>
+            <CardDescription>What people did after opening your card.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <CardAnalyticsReport staffId={seat.id} />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
