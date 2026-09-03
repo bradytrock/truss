@@ -89,10 +89,30 @@ function splitName(name: string) {
   return { first: parts[0], last: parts.slice(1).join(" ") };
 }
 
+/** Soft-fold long vCard lines so PHOTO base64 stays valid on phones. */
+export function foldVcardLine(line: string) {
+  if (line.length <= 75) return line;
+  const parts: string[] = [line.slice(0, 75)];
+  let rest = line.slice(75);
+  while (rest.length) {
+    parts.push(` ${rest.slice(0, 74)}`);
+    rest = rest.slice(74);
+  }
+  return parts.join("\r\n");
+}
+
+export type VcardPhotoEmbed = {
+  /** Raw base64 without data: prefix or whitespace. */
+  base64: string;
+  type: "JPEG" | "PNG";
+};
+
 export function vcardText(input: {
   person: SharedCardPerson;
   company: SharedCardCompany;
   url: string;
+  /** Embedded headshot — phones ignore remote PHOTO URIs more often than not. */
+  photo?: VcardPhotoEmbed | null;
 }) {
   const { first, last } = splitName(input.person.name);
   const phone = toE164(input.person.phone) || digitsOnly(input.person.phone);
@@ -107,7 +127,11 @@ export function vcardText(input: {
   if (input.person.title.trim()) lines.push(`TITLE:${vcardEscape(input.person.title.trim())}`);
   if (phone) lines.push(`TEL;TYPE=CELL,VOICE:${phone}`);
   if (input.person.email.trim()) lines.push(`EMAIL;TYPE=INTERNET:${vcardEscape(input.person.email.trim())}`);
-  if (/^https?:\/\//i.test(input.person.photoUrl.trim())) {
+  if (input.photo?.base64) {
+    lines.push(
+      foldVcardLine(`PHOTO;ENCODING=b;TYPE=${input.photo.type}:${input.photo.base64.replace(/\s+/g, "")}`),
+    );
+  } else if (/^https?:\/\//i.test(input.person.photoUrl.trim())) {
     lines.push(`PHOTO;VALUE=URI:${vcardEscape(input.person.photoUrl.trim())}`);
   }
   if (input.url) lines.push(`URL:${vcardEscape(input.url)}`);

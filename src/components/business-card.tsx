@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Copy, Globe, Mail, MessageSquare, Phone, Star, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
   vcardText,
   type SharedCardPayload,
 } from "@/lib/card";
+import { embedVcardPhoto } from "@/lib/card-vcard-photo";
 import { formatPhone } from "@/lib/format";
 import { paymentOptions, resolveGoogleReviewUrl, type PaymentOption } from "@/lib/payments";
 import { copyText } from "@/lib/share";
@@ -79,17 +80,26 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
   const payments = paymentOptions(company);
   const paymentNote = company.paymentNote.trim();
   const follow = socialLinks(company);
+  const [savingContact, setSavingContact] = useState(false);
 
-  function saveContact() {
+  async function saveContact() {
+    if (savingContact) return;
+    setSavingContact(true);
     track("save_contact");
-    downloadVcard(
-      live.cardSlug || live.name,
-      vcardText({
-        person: live,
-        company,
-        url: typeof window !== "undefined" ? window.location.href : url,
-      }),
-    );
+    try {
+      const photo = await embedVcardPhoto(live.photoUrl);
+      downloadVcard(
+        live.cardSlug || live.name,
+        vcardText({
+          person: live,
+          company,
+          url: typeof window !== "undefined" ? window.location.href : url,
+          photo,
+        }),
+      );
+    } finally {
+      setSavingContact(false);
+    }
   }
 
   return (
@@ -163,9 +173,16 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
               Email
             </Button>
           ) : null}
-          <Button type="button" variant="outline" size="lg" className="h-11 w-full" onClick={saveContact}>
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="h-11 w-full"
+            disabled={savingContact}
+            onClick={() => void saveContact()}
+          >
             <UserPlus />
-            Save contact
+            {savingContact ? "Saving…" : "Save contact"}
           </Button>
         </div>
 
