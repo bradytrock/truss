@@ -171,6 +171,9 @@ function EagleviewSettingsForm() {
             />
             Use EagleView sandbox API
           </label>
+          <p className="text-xs text-muted-foreground">
+            Sandbox is often unreliable. For real job addresses, leave this unchecked (production API).
+          </p>
 
           <div className="flex flex-wrap gap-2">
             <Button type="button" disabled={pending} onClick={() => void save()}>

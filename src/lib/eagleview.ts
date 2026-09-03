@@ -120,6 +120,20 @@ export function eagleviewDeliveryProductId(id: string) {
 
 function eagleviewErrorMessage(data: Record<string, unknown> | null, fallback: string) {
   if (!data) return fallback;
+  const modelState = data.ModelState;
+  if (modelState && typeof modelState === "object") {
+    const parts: string[] = [];
+    for (const value of Object.values(modelState as Record<string, unknown>)) {
+      if (Array.isArray(value)) {
+        for (const item of value) {
+          if (typeof item === "string" && item.trim()) parts.push(item.trim());
+        }
+      } else if (typeof value === "string" && value.trim()) {
+        parts.push(value.trim());
+      }
+    }
+    if (parts.length) return parts.join(" ");
+  }
   const candidates = [
     data.error_description,
     data.errorSummary,
@@ -299,6 +313,8 @@ export async function placeEagleviewOrder(input: {
             State: input.state,
             Zip: input.postalCode,
             Country: "US",
+            /** 1 = residential street address (required; 0 fails validation). */
+            AddressType: 1,
           },
         ],
         PrimaryProductId: input.productId,
@@ -322,12 +338,27 @@ export async function placeEagleviewOrder(input: {
       },
       body: JSON.stringify(payload),
     });
-    const data = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+    const raw = await response.text();
+    let data: Record<string, unknown> | null = null;
+    try {
+      data = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+    } catch {
+      data = null;
+    }
     if (!response.ok) {
-      return {
-        ok: false as const,
-        error: eagleviewErrorMessage(data, `EagleView order failed (${response.status}).`),
-      };
+      const parsed = eagleviewErrorMessage(data, "");
+      const snippet = !parsed && raw.trim() ? raw.trim().slice(0, 240) : "";
+      let error =
+        parsed ||
+        snippet ||
+        `EagleView order failed (${response.status}).`;
+      if (
+        input.sandbox &&
+        (response.status >= 500 || /upstream connect|connection termination/i.test(error))
+      ) {
+        error = `${error} Sandbox looks down — uncheck “Use EagleView sandbox API” in Settings → EagleView and try again.`;
+      }
+      return { ok: false as const, error };
     }
     const orderId = data?.OrderId != null ? String(data.OrderId) : "";
     const reportIds = data?.ReportIds;
@@ -335,12 +366,15 @@ export async function placeEagleviewOrder(input: {
       Array.isArray(reportIds) && reportIds[0] != null ? String(reportIds[0]) : "";
     return { ok: true as const, orderId, reportId };
   } catch (error) {
+    const message =
+      error instanceof Error
+        ? `Could not reach EagleView order API (${error.message}).`
+        : "Could not reach EagleView order API.";
     return {
       ok: false as const,
-      error:
-        error instanceof Error
-          ? `Could not reach EagleView order API (${error.message}).`
-          : "Could not reach EagleView order API.",
+      error: input.sandbox
+        ? `${message} If this keeps happening, uncheck sandbox in Settings → EagleView.`
+        : message,
     };
   }
 }
