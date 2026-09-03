@@ -664,6 +664,7 @@ export function isMissingPaymentReviewColumns(
   const message = (error.message ?? "").toLowerCase();
   return (
     message.includes("payment_") ||
+    message.includes("social_") ||
     message.includes("google_review_url") ||
     message.includes("google_location_id") ||
     message.includes("google_locations")

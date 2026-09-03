@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Mail, MessageSquare, Phone, Star, UserPlus } from "lucide-react";
+import { Copy, Globe, Mail, MessageSquare, Phone, Star, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,12 +10,12 @@ import {
   smsHref,
   telHref,
   vcardText,
-  websiteHref,
   type SharedCardPayload,
 } from "@/lib/card";
 import { formatPhone } from "@/lib/format";
 import { paymentOptions, resolveGoogleReviewUrl, type PaymentOption } from "@/lib/payments";
 import { copyText } from "@/lib/share";
+import { socialLinks } from "@/lib/social";
 
 function officeLine(company: SharedCardPayload["company"]) {
   const parts = [company.street, [company.city, company.state].filter(Boolean).join(", "), company.postalCode]
@@ -27,8 +27,6 @@ function officeLine(company: SharedCardPayload["company"]) {
 export function BusinessCardView({ card }: { card: SharedCardPayload }) {
   const company = card.company;
   const person = card.person;
-  const website = websiteHref(company.website);
-
   const headerLogo = cardHeaderLogo(company);
 
   if (!card.available || !person) {
@@ -62,6 +60,7 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
   const reviewUrl = resolveGoogleReviewUrl(company, live);
   const payments = paymentOptions(company);
   const paymentNote = company.paymentNote.trim();
+  const follow = socialLinks(company);
 
   function saveContact() {
     downloadVcard(
@@ -159,6 +158,29 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
           </Button>
         ) : null}
 
+        {follow.length > 0 ? (
+          <section className="mt-8 border-t pt-5">
+            <h2 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Follow {company.name || "us"}
+            </h2>
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {follow.map((link) => (
+                <li key={link.key}>
+                  <a
+                    href={link.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:bg-muted/50"
+                  >
+                    {link.key === "website" ? <Globe className="size-4" /> : null}
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
         {payments.length > 0 || paymentNote ? (
           <section className="mt-8 border-t pt-5">
             <h2 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
@@ -179,20 +201,9 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
           </section>
         ) : null}
 
-        {website || address ? (
+        {address ? (
           <footer className="mt-8 border-t pt-4 text-center text-xs leading-relaxed text-muted-foreground">
-            {website ? (
-              <a
-                href={website}
-                target="_blank"
-                rel="noreferrer"
-                className="text-primary underline-offset-4 hover:underline"
-              >
-                {company.website.replace(/^https?:\/\//i, "")}
-              </a>
-            ) : null}
-            {website && address ? <span className="mx-1.5">·</span> : null}
-            {address ? <span>{address}</span> : null}
+            {address}
           </footer>
         ) : null}
       </article>

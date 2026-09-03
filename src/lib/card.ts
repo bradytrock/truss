@@ -1,4 +1,5 @@
 import { digitsOnly, toE164 } from "@/lib/phone";
+import { socialLinks } from "@/lib/social";
 import type { CompanySettings, StaffMember } from "@/lib/types";
 
 export type SharedCardCompany = {
@@ -19,6 +20,11 @@ export type SharedCardCompany = {
   paymentCashapp: string;
   paymentPaypal: string;
   paymentNote: string;
+  socialFacebook: string;
+  socialInstagram: string;
+  socialYoutube: string;
+  socialLinkedin: string;
+  socialTiktok: string;
   slug: string;
 };
 
@@ -106,6 +112,10 @@ export function vcardText(input: {
   }
   if (input.url) lines.push(`URL:${vcardEscape(input.url)}`);
   if (website) lines.push(`URL;TYPE=WORK:${vcardEscape(website)}`);
+  for (const link of socialLinks(input.company)) {
+    if (link.key === "website") continue;
+    lines.push(`X-SOCIALPROFILE;TYPE=${link.key}:${vcardEscape(link.href)}`);
+  }
   const street = input.company.street.trim();
   const city = input.company.city.trim();
   const state = input.company.state.trim();
@@ -176,6 +186,11 @@ export function parseSharedCard(raw: unknown): SharedCardPayload | null {
     paymentCashapp: asString(companyRaw.paymentCashapp).trim(),
     paymentPaypal: asString(companyRaw.paymentPaypal).trim(),
     paymentNote: asString(companyRaw.paymentNote).trim(),
+    socialFacebook: asString(companyRaw.socialFacebook).trim(),
+    socialInstagram: asString(companyRaw.socialInstagram).trim(),
+    socialYoutube: asString(companyRaw.socialYoutube).trim(),
+    socialLinkedin: asString(companyRaw.socialLinkedin).trim(),
+    socialTiktok: asString(companyRaw.socialTiktok).trim(),
     slug: asString(companyRaw.slug).trim(),
   };
   if (!company.name && !company.slug) return null;

@@ -156,6 +156,12 @@ export interface CompanySettings {
   paymentPaypal?: string;
   /** Free text under the payment options, e.g. who to make a check out to. */
   paymentNote?: string;
+  /** Handles or profile links for the pages a homeowner can follow. */
+  socialFacebook?: string;
+  socialInstagram?: string;
+  socialYoutube?: string;
+  socialLinkedin?: string;
+  socialTiktok?: string;
   /** Null or blank means the app fallback is still in use. */
   defaultEstimateTerms?: string | null;
   defaultInvoiceTerms?: string | null;
@@ -183,6 +189,11 @@ export const NORTHLINE_COMPANY: CompanySettings = {
   paymentCashapp: "",
   paymentPaypal: "",
   paymentNote: "",
+  socialFacebook: "",
+  socialInstagram: "",
+  socialYoutube: "",
+  socialLinkedin: "",
+  socialTiktok: "",
   defaultEstimateTerms: null,
   defaultInvoiceTerms: null,
   minimumMarginPercent: 0,

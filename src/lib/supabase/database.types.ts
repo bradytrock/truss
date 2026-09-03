@@ -25,6 +25,11 @@ export type Database = {
           payment_cashapp: string;
           payment_paypal: string;
           payment_note: string;
+          social_facebook: string;
+          social_instagram: string;
+          social_youtube: string;
+          social_linkedin: string;
+          social_tiktok: string;
           google_review_url: string;
           default_estimate_terms: string | null;
           default_invoice_terms: string | null;
@@ -54,6 +59,11 @@ export type Database = {
           payment_cashapp?: string;
           payment_paypal?: string;
           payment_note?: string;
+          social_facebook?: string;
+          social_instagram?: string;
+          social_youtube?: string;
+          social_linkedin?: string;
+          social_tiktok?: string;
           google_review_url?: string;
           default_estimate_terms?: string | null;
           default_invoice_terms?: string | null;
@@ -83,6 +93,11 @@ export type Database = {
           payment_cashapp?: string;
           payment_paypal?: string;
           payment_note?: string;
+          social_facebook?: string;
+          social_instagram?: string;
+          social_youtube?: string;
+          social_linkedin?: string;
+          social_tiktok?: string;
           google_review_url?: string;
           default_estimate_terms?: string | null;
           default_invoice_terms?: string | null;

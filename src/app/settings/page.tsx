@@ -199,6 +199,61 @@ function CompanySettingsForm() {
 
       <Card>
         <CardHeader className="border-b">
+          <CardTitle>Social pages</CardTitle>
+          <CardDescription>
+            Buttons on every digital business card, next to the website homepage above. Paste a
+            handle or the full page link. Leave a row blank to hide it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 pt-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              id="social-facebook"
+              label="Facebook"
+              value={form.socialFacebook ?? ""}
+              onChange={(value) => patch("socialFacebook", value)}
+              placeholder="trockroofing"
+            />
+            <Field
+              id="social-instagram"
+              label="Instagram"
+              value={form.socialInstagram ?? ""}
+              onChange={(value) => patch("socialInstagram", value)}
+              placeholder="@trockroofing"
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              id="social-youtube"
+              label="YouTube"
+              value={form.socialYoutube ?? ""}
+              onChange={(value) => patch("socialYoutube", value)}
+              placeholder="@trockroofing"
+            />
+            <Field
+              id="social-linkedin"
+              label="LinkedIn"
+              value={form.socialLinkedin ?? ""}
+              onChange={(value) => patch("socialLinkedin", value)}
+              placeholder="trock-roofing"
+            />
+          </div>
+          <Field
+            id="social-tiktok"
+            label="TikTok"
+            value={form.socialTiktok ?? ""}
+            onChange={(value) => patch("socialTiktok", value)}
+            placeholder="@trockroofing"
+          />
+          <p className="text-xs text-muted-foreground">
+            The website homepage under Business is linked on the card too — no need to repeat it
+            here.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="border-b">
           <CardTitle>Getting paid</CardTitle>
           <CardDescription>
             Payment options on every digital business card. Paste a handle or a profile link —
