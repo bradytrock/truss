@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken } from "@/lib/share";
@@ -258,6 +258,9 @@ import { canDeleteJobs, canLoginAs, canManageSettings, loginAsTargets, scopeBook
 import { teamsAfterLeavingLead } from "@/lib/teams";
 
 export type LiveStatus = "offline" | "connecting" | "live";
+
+/** Which logo a company upload replaces: paperwork or the top of a digital card. */
+export type CompanyLogoSlot = "document" | "card";
 
 function loadErrorMessage(error: unknown) {
   if (error instanceof Error && error.message.trim()) return error.message;
@@ -747,8 +750,8 @@ type CrmContextValue = CrmState & {
   company: CompanySettings;
   canEditCompany: boolean;
   updateCompany: (settings: CompanySettings) => Promise<boolean>;
-  uploadCompanyLogo: (file: File) => Promise<CompanySettings | null>;
-  removeCompanyLogo: () => Promise<boolean>;
+  uploadCompanyLogo: (file: File, slot?: CompanyLogoSlot) => Promise<CompanySettings | null>;
+  removeCompanyLogo: (slot?: CompanyLogoSlot) => Promise<boolean>;
   inviteStaff: (input: {
     name: string;
     email: string;
@@ -762,10 +765,23 @@ type CrmContextValue = CrmState & {
     patch: Partial<
       Pick<
         StaffMember,
-        "name" | "title" | "role" | "email" | "phone" | "emailSignature" | "locked" | "restricted" | "teamId" | "cardSlug"
+        | "name"
+        | "title"
+        | "role"
+        | "email"
+        | "phone"
+        | "emailSignature"
+        | "photoUrl"
+        | "photoStoragePath"
+        | "locked"
+        | "restricted"
+        | "teamId"
+        | "cardSlug"
       >
     >,
   ) => Promise<boolean>;
+  uploadStaffPhoto: (staffId: string, file: File) => Promise<boolean>;
+  removeStaffPhoto: (staffId: string) => Promise<boolean>;
   addTeam: (input: { name: string; leadStaffId?: string | null }) => Promise<Team | null>;
   updateTeam: (id: string, patch: { name?: string; leadStaffId?: string | null }) => Promise<boolean>;
   removeTeam: (id: string) => Promise<boolean>;
@@ -7541,6 +7557,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         licenseNumber: next.licenseNumber.trim(),
         logoUrl: next.logoUrl?.trim() ?? "",
         logoStoragePath: next.logoStoragePath?.trim() ?? "",
+        cardLogoUrl: next.cardLogoUrl?.trim() ?? "",
+        cardLogoStoragePath: next.cardLogoStoragePath?.trim() ?? "",
         defaultEstimateTerms: next.defaultEstimateTerms ?? null,
         defaultInvoiceTerms: next.defaultInvoiceTerms ?? null,
         minimumMarginPercent: clampMarginPercent(next.minimumMarginPercent),
@@ -7567,6 +7585,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         license_number: settings.licenseNumber,
         logo_url: settings.logoUrl,
         logo_storage_path: settings.logoStoragePath,
+        card_logo_url: settings.cardLogoUrl ?? "",
+        card_logo_storage_path: settings.cardLogoStoragePath ?? "",
         default_estimate_terms: settings.defaultEstimateTerms,
         default_invoice_terms: settings.defaultInvoiceTerms,
         minimum_margin_percent: settings.minimumMarginPercent,
@@ -7632,6 +7652,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         error = retry.error;
         if (!error) toast.message(missingEmailSignatureMessage());
       }
+      if (error && isMissingCardPhotoColumns(error)) {
+        const { card_logo_url: _cardLogo, card_logo_storage_path: _cardLogoPath, ...rest } = attempted;
+        attempted = rest;
+        const retry = await supabase
+          .from("companies")
+          .update(rest as typeof payload)
+          .eq("id", user.companyId)
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingCardPhotoMessage());
+      }
       if (error && isMissingCompanySlug(error)) {
         const { slug: _slug, ...rest } = attempted;
         attempted = rest;
@@ -7669,6 +7702,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         slug: mapped.slug || settings.slug,
         logoUrl: settings.logoUrl,
         logoStoragePath: settings.logoStoragePath,
+        cardLogoUrl: settings.cardLogoUrl,
+        cardLogoStoragePath: settings.cardLogoStoragePath,
         defaultEstimateTerms: mapped.defaultEstimateTerms ?? settings.defaultEstimateTerms,
         defaultInvoiceTerms: mapped.defaultInvoiceTerms ?? settings.defaultInvoiceTerms,
         minimumMarginPercent: mapped.minimumMarginPercent ?? settings.minimumMarginPercent,
@@ -7686,8 +7721,35 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [persistCompany]
   );
 
+  const uploadCompanyAsset = useCallback(
+    async (file: File, folder: string, previousPath: string) => {
+      const supabase = maybeClient();
+      if (!supabase || !user.companyId || user.companyId === "local") {
+        return { url: await fileToDataUrl(file), path: "" };
+      }
+      const path = `${user.companyId}/${folder}/${crypto.randomUUID()}.${logoExtension(file)}`;
+      const { error } = await supabase.storage
+        .from(COMPANY_ASSETS_BUCKET)
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (error) {
+        const missingBucket =
+          /bucket/i.test(error.message) || /not found/i.test(error.message) || error.message.includes("404");
+        toast.error(missingBucket ? missingLogoMessage() : error.message);
+        return null;
+      }
+      if (previousPath && previousPath !== path) {
+        void supabase.storage.from(COMPANY_ASSETS_BUCKET).remove([previousPath]);
+      }
+      return {
+        url: supabase.storage.from(COMPANY_ASSETS_BUCKET).getPublicUrl(path).data.publicUrl,
+        path,
+      };
+    },
+    [user.companyId],
+  );
+
   const uploadCompanyLogo = useCallback(
-    async (file: File) => {
+    async (file: File, slot: CompanyLogoSlot = "document") => {
       const invalid = validateLogoFile(file);
       if (invalid) {
         toast.error(invalid);
@@ -7697,53 +7759,51 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error("Only a company admin can change business settings.");
         return null;
       }
-      const previousPath = companySettings.logoStoragePath?.trim() ?? "";
-      let logoUrl = "";
-      let logoStoragePath = "";
-      const supabase = maybeClient();
-      if (supabase && user.companyId && user.companyId !== "local") {
-        const path = `${user.companyId}/logo/${crypto.randomUUID()}.${logoExtension(file)}`;
-        const { error } = await supabase.storage
-          .from(COMPANY_ASSETS_BUCKET)
-          .upload(path, file, { contentType: file.type, upsert: false });
-        if (error) {
-          const missingBucket =
-            /bucket/i.test(error.message) || /not found/i.test(error.message) || error.message.includes("404");
-          toast.error(missingBucket ? missingLogoMessage() : error.message);
-          return null;
-        }
-        logoUrl = supabase.storage.from(COMPANY_ASSETS_BUCKET).getPublicUrl(path).data.publicUrl;
-        logoStoragePath = path;
-        if (previousPath && previousPath !== path) {
-          void supabase.storage.from(COMPANY_ASSETS_BUCKET).remove([previousPath]);
-        }
-      } else {
-        logoUrl = await fileToDataUrl(file);
-      }
+      const card = slot === "card";
+      const previousPath =
+        (card ? companySettings.cardLogoStoragePath : companySettings.logoStoragePath)?.trim() ?? "";
+      const stored = await uploadCompanyAsset(file, card ? "card-logo" : "logo", previousPath);
+      if (!stored) return null;
       const saved = await persistCompany(
-        { ...companySettings, logoUrl, logoStoragePath },
+        card
+          ? { ...companySettings, cardLogoUrl: stored.url, cardLogoStoragePath: stored.path }
+          : { ...companySettings, logoUrl: stored.url, logoStoragePath: stored.path },
         true,
       );
-      if (saved) toast.success("Logo added to estimates, invoices, and reports.");
+      if (saved) {
+        toast.success(
+          card ? "Card logo added to digital cards." : "Logo added to estimates, invoices, and reports.",
+        );
+      }
       return saved;
     },
-    [canEditCompany, companySettings, persistCompany, user.companyId]
+    [canEditCompany, companySettings, persistCompany, uploadCompanyAsset],
   );
 
-  const removeCompanyLogo = useCallback(async () => {
-    if (!canEditCompany) {
-      toast.error("Only a company admin can change business settings.");
-      return false;
-    }
-    const previousPath = companySettings.logoStoragePath?.trim() ?? "";
-    const supabase = maybeClient();
-    if (previousPath && supabase) {
-      void supabase.storage.from(COMPANY_ASSETS_BUCKET).remove([previousPath]);
-    }
-    const saved = await persistCompany({ ...companySettings, logoUrl: "", logoStoragePath: "" }, true);
-    if (saved) toast.success("Logo removed.");
-    return Boolean(saved);
-  }, [canEditCompany, companySettings, persistCompany]);
+  const removeCompanyLogo = useCallback(
+    async (slot: CompanyLogoSlot = "document") => {
+      if (!canEditCompany) {
+        toast.error("Only a company admin can change business settings.");
+        return false;
+      }
+      const card = slot === "card";
+      const previousPath =
+        (card ? companySettings.cardLogoStoragePath : companySettings.logoStoragePath)?.trim() ?? "";
+      const supabase = maybeClient();
+      if (previousPath && supabase) {
+        void supabase.storage.from(COMPANY_ASSETS_BUCKET).remove([previousPath]);
+      }
+      const saved = await persistCompany(
+        card
+          ? { ...companySettings, cardLogoUrl: "", cardLogoStoragePath: "" }
+          : { ...companySettings, logoUrl: "", logoStoragePath: "" },
+        true,
+      );
+      if (saved) toast.success(card ? "Card logo removed." : "Logo removed.");
+      return Boolean(saved);
+    },
+    [canEditCompany, companySettings, persistCompany],
+  );
 
   const persistStaffFields = useCallback(
     async (
@@ -7765,6 +7825,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         email: member.email,
         phone: member.phone,
         card_slug: member.cardSlug || mintPersonCardSlug(member.name),
+        photo_url: member.photoUrl ?? "",
+        photo_storage_path: member.photoStoragePath ?? "",
         email_signature: member.emailSignature ?? "",
         locked: member.locked,
         restricted: member.restricted,
@@ -7788,6 +7850,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         const retry = await supabase.from("team_members").upsert(withoutSig);
         error = retry.error;
         if (!retry.error) toast.message(missingEmailSignatureMessage());
+      }
+      if (error && isMissingCardPhotoColumns(error)) {
+        const { photo_url: _photo, photo_storage_path: _photoPath, ...withoutPhoto } = payload;
+        const retry = await supabase.from("team_members").upsert(withoutPhoto);
+        error = retry.error;
+        if (!retry.error) toast.message(missingCardPhotoMessage());
       }
       if (error) {
         toast.error("Could not save teammate", {
@@ -7955,11 +8023,29 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       patch: Partial<
         Pick<
           StaffMember,
-          "name" | "title" | "role" | "email" | "phone" | "emailSignature" | "locked" | "restricted" | "teamId" | "cardSlug"
+          | "name"
+          | "title"
+          | "role"
+          | "email"
+          | "phone"
+          | "emailSignature"
+          | "photoUrl"
+          | "photoStoragePath"
+          | "locked"
+          | "restricted"
+          | "teamId"
+          | "cardSlug"
         >
       >,
     ) => {
-      const profileKeys = new Set(["name", "title", "phone", "emailSignature"]);
+      const profileKeys = new Set([
+        "name",
+        "title",
+        "phone",
+        "emailSignature",
+        "photoUrl",
+        "photoStoragePath",
+      ]);
       const mintingOwnCard = Boolean(
         patch.cardSlug &&
           id === viewer?.id &&
@@ -8065,6 +8151,65 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return true;
     },
     [canEditCompany, persistLeadClears, persistStaffFields, state.staff, state.teams, user.staffId, viewer?.id],
+  );
+
+  const persistStaffPhoto = useCallback(
+    async (staffId: string, photoUrl: string, photoStoragePath: string, message: string) => {
+      const current = state.staff.find((member) => member.id === staffId);
+      if (!current) return false;
+      if (!canEditCompany && staffId !== viewer?.id) {
+        toast.error("Only a company admin can change other accounts.");
+        return false;
+      }
+      const next: StaffMember = { ...current, photoUrl, photoStoragePath };
+      const ok = await persistStaffFields(next);
+      if (!ok) return false;
+      setState((book) => ({
+        ...book,
+        staff: book.staff.map((member) => (member.id === staffId ? next : member)),
+      }));
+      toast.success(message);
+      return true;
+    },
+    [canEditCompany, persistStaffFields, state.staff, viewer?.id],
+  );
+
+  const uploadStaffPhoto = useCallback(
+    async (staffId: string, file: File) => {
+      const invalid = validateLogoFile(file);
+      if (invalid) {
+        toast.error(invalid);
+        return false;
+      }
+      const current = state.staff.find((member) => member.id === staffId);
+      if (!current) return false;
+      if (!canEditCompany && staffId !== viewer?.id) {
+        toast.error("Only a company admin can change other accounts.");
+        return false;
+      }
+      const stored = await uploadCompanyAsset(
+        file,
+        "seat-photo",
+        current.photoStoragePath?.trim() ?? "",
+      );
+      if (!stored) return false;
+      return persistStaffPhoto(staffId, stored.url, stored.path, "Photo added to their card.");
+    },
+    [canEditCompany, persistStaffPhoto, state.staff, uploadCompanyAsset, viewer?.id],
+  );
+
+  const removeStaffPhoto = useCallback(
+    async (staffId: string) => {
+      const current = state.staff.find((member) => member.id === staffId);
+      if (!current) return false;
+      const previousPath = current.photoStoragePath?.trim() ?? "";
+      const supabase = maybeClient();
+      if (previousPath && supabase) {
+        void supabase.storage.from(COMPANY_ASSETS_BUCKET).remove([previousPath]);
+      }
+      return persistStaffPhoto(staffId, "", "", "Photo removed. The card falls back to initials.");
+    },
+    [persistStaffPhoto, state.staff],
   );
 
   const refreshStaffInvite = useCallback(
@@ -8374,6 +8519,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       removeCompanyLogo,
       inviteStaff,
       updateStaffAccount,
+      uploadStaffPhoto,
+      removeStaffPhoto,
       addTeam,
       updateTeam,
       removeTeam,
@@ -8516,6 +8663,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       removeCompanyLogo,
       inviteStaff,
       updateStaffAccount,
+      uploadStaffPhoto,
+      removeStaffPhoto,
       addTeam,
       updateTeam,
       removeTeam,

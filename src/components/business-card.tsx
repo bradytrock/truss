@@ -3,6 +3,7 @@
 import { Mail, MessageSquare, Phone, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
+  cardHeaderLogo,
   cardUrl,
   downloadVcard,
   smsHref,
@@ -25,16 +26,18 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
   const person = card.person;
   const website = websiteHref(company.website);
 
+  const headerLogo = cardHeaderLogo(company);
+
   if (!card.available || !person) {
     return (
       <div className="flex min-h-full flex-1 items-center justify-center bg-muted/40 px-4 py-10">
         <div className="w-full max-w-md border bg-card px-6 py-10 text-center">
-          {company.logoUrl ? (
+          {headerLogo ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={company.logoUrl}
+              src={headerLogo}
               alt=""
-              className="mx-auto mb-6 max-h-12 max-w-[10rem] object-contain"
+              className="mx-auto mb-6 max-h-16 w-full max-w-[16rem] object-contain"
             />
           ) : null}
           <h1 className="font-heading text-2xl font-medium">This card isn’t available</h1>
@@ -69,24 +72,33 @@ export function BusinessCardView({ card }: { card: SharedCardPayload }) {
     <div className="flex min-h-full flex-1 items-center justify-center bg-muted/40 px-4 py-10">
       <article className="w-full max-w-md border bg-card px-6 py-8 sm:px-8">
         <header className="flex flex-col items-center text-center">
-          {company.logoUrl ? (
+          {headerLogo ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={company.logoUrl}
+              src={headerLogo}
               alt={company.name}
-              className="mb-5 max-h-12 max-w-[12rem] object-contain"
+              className="mb-6 max-h-24 w-full max-w-[20rem] object-contain sm:max-h-28"
             />
           ) : (
             <p className="mb-5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
               {company.name}
             </p>
           )}
-          <div className="flex size-16 items-center justify-center rounded-full border bg-muted/50 font-heading text-xl">
-            {person.initials}
-          </div>
+          {person.photoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={person.photoUrl}
+              alt={person.name}
+              className="size-24 rounded-full border object-cover"
+            />
+          ) : (
+            <div className="flex size-24 items-center justify-center rounded-full border bg-muted/50 font-heading text-2xl">
+              {person.initials}
+            </div>
+          )}
           <h1 className="mt-4 font-heading text-3xl font-medium tracking-tight">{person.name}</h1>
           {person.title ? <p className="mt-1 text-sm text-muted-foreground">{person.title}</p> : null}
-          {company.logoUrl && company.name ? (
+          {headerLogo && company.name ? (
             <p className="mt-1 text-sm text-muted-foreground">{company.name}</p>
           ) : null}
         </header>

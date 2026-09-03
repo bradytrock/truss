@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
+import { StaffPhotoField } from "@/components/staff-photo-field";
 import { cardUrl } from "@/lib/card";
 import { mintPersonCardSlug } from "@/lib/card-slug";
 import { useCrm } from "@/lib/crm-store";
@@ -73,10 +74,25 @@ export default function ProfilePage() {
       <PageHeader
         eyebrow="Account"
         title="Profile"
-        description="Your name, title, and direct phone print on estimates and invoices for jobs you own. Your email signature signs off mail you send from Inbox. Copy your public card for NFC or a text."
+        description="Your photo and name front your digital business card. Name, title, and direct phone print on estimates and invoices for jobs you own. Your email signature signs off mail you send from Inbox."
       />
 
       <form onSubmit={onSubmit} className="max-w-2xl space-y-4">
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Photo</CardTitle>
+            <CardDescription>
+              Your headshot on your digital business card. Saves on its own — no need to hit Save
+              profile.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <StaffPhotoField
+              member={seat}
+              description="Homeowners see this at the top of your card, and it rides along when they save your contact."
+            />
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader className="border-b">
             <CardTitle>Your contact</CardTitle>

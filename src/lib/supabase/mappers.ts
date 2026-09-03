@@ -137,6 +137,9 @@ export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>):
     licenseNumber: row.license_number ?? "",
     logoUrl: row.logo_url ?? "",
     logoStoragePath: row.logo_storage_path ?? "",
+    cardLogoUrl: "card_logo_url" in row ? String(row.card_logo_url ?? "") : "",
+    cardLogoStoragePath:
+      "card_logo_storage_path" in row ? String(row.card_logo_storage_path ?? "") : "",
     defaultEstimateTerms: row.default_estimate_terms ?? null,
     defaultInvoiceTerms: row.default_invoice_terms ?? null,
     minimumMarginPercent: Number(row.minimum_margin_percent ?? 0),
@@ -156,6 +159,8 @@ export function mapStaff(row: StaffRow): StaffMember {
     email: row.email ?? "",
     phone: row.phone ?? "",
     cardSlug: "card_slug" in row ? String(row.card_slug ?? "") : "",
+    photoUrl: "photo_url" in row ? String(row.photo_url ?? "") : "",
+    photoStoragePath: "photo_storage_path" in row ? String(row.photo_storage_path ?? "") : "",
     emailSignature: "email_signature" in row ? String(row.email_signature ?? "") : "",
     locked: Boolean(row.locked),
     restricted: Boolean(row.restricted),

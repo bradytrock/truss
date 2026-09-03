@@ -18,6 +18,8 @@ export type Database = {
           logo_url: string;
           logo_storage_path: string;
           slug: string;
+          card_logo_url: string;
+          card_logo_storage_path: string;
           default_estimate_terms: string | null;
           default_invoice_terms: string | null;
           minimum_margin_percent: number;
@@ -39,6 +41,8 @@ export type Database = {
           logo_url?: string;
           logo_storage_path?: string;
           slug?: string;
+          card_logo_url?: string;
+          card_logo_storage_path?: string;
           default_estimate_terms?: string | null;
           default_invoice_terms?: string | null;
           minimum_margin_percent?: number;
@@ -60,6 +64,8 @@ export type Database = {
           logo_url?: string;
           logo_storage_path?: string;
           slug?: string;
+          card_logo_url?: string;
+          card_logo_storage_path?: string;
           default_estimate_terms?: string | null;
           default_invoice_terms?: string | null;
           minimum_margin_percent?: number;
@@ -131,6 +137,8 @@ export type Database = {
           email: string;
           phone: string;
           card_slug: string;
+          photo_url: string;
+          photo_storage_path: string;
           email_signature: string;
           locked: boolean;
           restricted: boolean;
@@ -148,6 +156,8 @@ export type Database = {
           email?: string;
           phone?: string;
           card_slug?: string;
+          photo_url?: string;
+          photo_storage_path?: string;
           email_signature?: string;
           locked?: boolean;
           restricted?: boolean;

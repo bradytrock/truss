@@ -6,7 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Menu, Plus, Search } from "lucide-react";
 import { useCrm } from "@/lib/crm-store";
 import { phoneSearchText } from "@/lib/phone";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -557,6 +557,7 @@ function UserMenu() {
   const router = useRouter();
   const { signOut, user, loginAs, loginAsOptions, viewer, impersonatedStaff, stopLoginAs } =
     useCrm();
+  const seatPhoto = (impersonatedStaff ?? viewer)?.photoUrl?.trim() ?? "";
 
   return (
     <DropdownMenu>
@@ -566,6 +567,7 @@ function UserMenu() {
         }
       >
         <Avatar size="sm">
+          {seatPhoto ? <AvatarImage src={seatPhoto} alt="" /> : null}
           <AvatarFallback className="bg-primary text-primary-foreground">
             {user.initials}
           </AvatarFallback>

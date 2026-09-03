@@ -21,8 +21,21 @@ export default function CompanySettingsPage() {
 }
 
 function CompanySettingsForm() {
-  const { crm, form, dirty, pending, logoBusy, patch, save, discard, uploadLogo, removeLogo } =
-    useCompanySettingsDraft();
+  const {
+    crm,
+    form,
+    dirty,
+    pending,
+    logoBusy,
+    cardLogoBusy,
+    patch,
+    save,
+    discard,
+    uploadLogo,
+    removeLogo,
+    uploadCardLogo,
+    removeCardLogo,
+  } = useCompanySettingsDraft();
 
   return (
     <form
@@ -117,6 +130,27 @@ function CompanySettingsForm() {
             busy={logoBusy}
             onPick={uploadLogo}
             onRemove={removeLogo}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Card logo</CardTitle>
+          <CardDescription>
+            Sits across the top of every digital business card. Use the wide, horizontal version of
+            the logo — it prints much larger than the one on paperwork.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 pt-4">
+          <LogoField
+            url={crm.company.cardLogoUrl || form.cardLogoUrl}
+            busy={cardLogoBusy}
+            onPick={uploadCardLogo}
+            onRemove={removeCardLogo}
+            wide
+            emptyLabel="Using the paperwork logo"
+            hint="Wide PNG with a transparent background reads best. Under 2 MB. Blank falls back to the logo above."
           />
         </CardContent>
       </Card>

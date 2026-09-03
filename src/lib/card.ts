@@ -11,6 +11,8 @@ export type SharedCardCompany = {
   state: string;
   postalCode: string;
   logoUrl: string;
+  /** Wide logo for the card header. Blank falls back to logoUrl. */
+  cardLogoUrl: string;
   slug: string;
 };
 
@@ -20,6 +22,7 @@ export type SharedCardPerson = {
   initials: string;
   email: string;
   phone: string;
+  photoUrl: string;
   cardSlug: string;
 };
 
@@ -90,6 +93,9 @@ export function vcardText(input: {
   if (input.person.title.trim()) lines.push(`TITLE:${vcardEscape(input.person.title.trim())}`);
   if (phone) lines.push(`TEL;TYPE=CELL,VOICE:${phone}`);
   if (input.person.email.trim()) lines.push(`EMAIL;TYPE=INTERNET:${vcardEscape(input.person.email.trim())}`);
+  if (/^https?:\/\//i.test(input.person.photoUrl.trim())) {
+    lines.push(`PHOTO;VALUE=URI:${vcardEscape(input.person.photoUrl.trim())}`);
+  }
   if (input.url) lines.push(`URL:${vcardEscape(input.url)}`);
   if (website) lines.push(`URL;TYPE=WORK:${vcardEscape(website)}`);
   const street = input.company.street.trim();
@@ -115,6 +121,11 @@ export function downloadVcard(filename: string, contents: string) {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(href);
+}
+
+/** Wide card logo when one is set, otherwise the document logo. */
+export function cardHeaderLogo(company: Pick<SharedCardCompany, "cardLogoUrl" | "logoUrl">) {
+  return company.cardLogoUrl.trim() || company.logoUrl.trim();
 }
 
 export function cardUrlForSeat(
@@ -150,6 +161,7 @@ export function parseSharedCard(raw: unknown): SharedCardPayload | null {
     state: asString(companyRaw.state).trim(),
     postalCode: asString(companyRaw.postalCode).trim(),
     logoUrl: asString(companyRaw.logoUrl).trim(),
+    cardLogoUrl: asString(companyRaw.cardLogoUrl).trim(),
     slug: asString(companyRaw.slug).trim(),
   };
   if (!company.name && !company.slug) return null;
@@ -164,6 +176,7 @@ export function parseSharedCard(raw: unknown): SharedCardPayload | null {
     initials: asString(personRaw.initials).trim() || asString(personRaw.name).slice(0, 2).toUpperCase(),
     email: asString(personRaw.email).trim(),
     phone: asString(personRaw.phone).trim(),
+    photoUrl: asString(personRaw.photoUrl).trim(),
     cardSlug: asString(personRaw.cardSlug).trim(),
   };
   if (!person.name) return { available: false, company, person: null };

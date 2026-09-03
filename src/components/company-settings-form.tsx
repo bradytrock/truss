@@ -15,6 +15,7 @@ export function useCompanySettingsDraft() {
   const [draft, setDraft] = useState<CompanySettings | null>(null);
   const [pending, setPending] = useState(false);
   const [logoBusy, setLogoBusy] = useState(false);
+  const [cardLogoBusy, setCardLogoBusy] = useState(false);
   const form = draft ?? crm.company;
   const dirty = useMemo(
     () => draft !== null && JSON.stringify(draft) !== JSON.stringify(crm.company),
@@ -66,17 +67,54 @@ export function useCompanySettingsDraft() {
     }
   }
 
+  async function uploadCardLogo(file: File) {
+    setCardLogoBusy(true);
+    try {
+      const next = await crm.uploadCompanyLogo(file, "card");
+      if (next) {
+        setDraft((current) =>
+          current
+            ? {
+                ...current,
+                cardLogoUrl: next.cardLogoUrl,
+                cardLogoStoragePath: next.cardLogoStoragePath,
+              }
+            : null,
+        );
+      }
+    } finally {
+      setCardLogoBusy(false);
+    }
+  }
+
+  async function removeCardLogo() {
+    setCardLogoBusy(true);
+    try {
+      const ok = await crm.removeCompanyLogo("card");
+      if (ok) {
+        setDraft((current) =>
+          current ? { ...current, cardLogoUrl: "", cardLogoStoragePath: "" } : null,
+        );
+      }
+    } finally {
+      setCardLogoBusy(false);
+    }
+  }
+
   return {
     crm,
     form,
     dirty,
     pending,
     logoBusy,
+    cardLogoBusy,
     patch,
     save,
     discard: () => setDraft(null),
     uploadLogo,
     removeLogo,
+    uploadCardLogo,
+    removeCardLogo,
   };
 }
 
@@ -140,22 +178,38 @@ export function LogoField({
   busy,
   onPick,
   onRemove,
+  wide = false,
+  emptyLabel = "No logo yet",
+  hint = "PNG, JPG, WebP, or GIF. Under 2 MB.",
 }: {
   url?: string;
   busy: boolean;
   onPick: (file: File) => Promise<void>;
   onRemove: () => Promise<void>;
+  /** Preview shaped for a horizontal lockup instead of a square mark. */
+  wide?: boolean;
+  emptyLabel?: string;
+  hint?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const preview = url?.trim() ?? "";
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-      <div className="flex h-20 w-36 items-center justify-center border bg-muted/40">
+      <div
+        className={cn(
+          "flex items-center justify-center border bg-muted/40",
+          wide ? "h-20 w-full sm:w-64" : "h-20 w-36",
+        )}
+      >
         {preview ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={preview} alt="Company logo" className="max-h-16 max-w-32 object-contain" />
+          <img
+            src={preview}
+            alt="Company logo"
+            className={cn("object-contain", wide ? "max-h-16 max-w-60" : "max-h-16 max-w-32")}
+          />
         ) : (
-          <p className="px-2 text-center text-xs text-muted-foreground">No logo yet</p>
+          <p className="px-2 text-center text-xs text-muted-foreground">{emptyLabel}</p>
         )}
       </div>
       <div className="flex flex-wrap gap-2">
@@ -178,7 +232,7 @@ export function LogoField({
             Remove
           </Button>
         ) : null}
-        <p className="basis-full text-xs text-muted-foreground">PNG, JPG, WebP, or GIF. Under 2 MB.</p>
+        <p className="basis-full text-xs text-muted-foreground">{hint}</p>
       </div>
     </div>
   );

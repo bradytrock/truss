@@ -637,6 +637,23 @@ export function missingBusinessCardsMessage() {
   return `Saved in this browser. Run ${BUSINESS_CARDS_SQL} in the SQL editor so public cards at /company/card/first.last stay in Postgres.`;
 }
 
+export const CARD_PHOTOS_SQL = "supabase/migrations/20260903150000_card_photos.sql";
+
+export function isMissingCardPhotoColumns(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("card_logo_url") ||
+    message.includes("card_logo_storage_path") ||
+    message.includes("photo_url") ||
+    message.includes("photo_storage_path")
+  );
+}
+
+export function missingCardPhotoMessage() {
+  return `Saved in this browser. Run ${CARD_PHOTOS_SQL} in the SQL editor (or a fresh bootstrap) so card logos and seat photos persist.`;
+}
+
 export const CARD_SLUG_TRIGGER_SQL = "supabase/migrations/20260831150000_card_slug_trigger_rights.sql";
 
 export function isCardSlugPrivilegeError(error: { message?: string; code?: string } | null | undefined) {

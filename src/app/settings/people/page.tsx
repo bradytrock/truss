@@ -4,6 +4,7 @@ import { EmailSignatureRoster } from "@/components/email-signature-settings";
 import { PageHeader } from "@/components/page-chrome";
 import { PeopleSettings } from "@/components/people-settings";
 import { SettingsAdminGate } from "@/components/settings-nav";
+import { StaffPhotoRoster } from "@/components/staff-photo-field";
 import { INVITE_DAYS } from "@/lib/accounts";
 import { useCrm } from "@/lib/crm-store";
 
@@ -36,6 +37,7 @@ function PeopleSettingsBody() {
         onRemove={crm.removeStaff}
         hideIntro
       />
+      <StaffPhotoRoster />
       <EmailSignatureRoster />
     </div>
   );

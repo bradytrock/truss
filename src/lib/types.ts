@@ -146,6 +146,9 @@ export interface CompanySettings {
   licenseNumber: string;
   logoUrl?: string;
   logoStoragePath?: string;
+  /** Wide logo for the top of a digital card. Blank falls back to logoUrl. */
+  cardLogoUrl?: string;
+  cardLogoStoragePath?: string;
   /** Null or blank means the app fallback is still in use. */
   defaultEstimateTerms?: string | null;
   defaultInvoiceTerms?: string | null;
@@ -166,6 +169,8 @@ export const NORTHLINE_COMPANY: CompanySettings = {
   state: "CO",
   postalCode: "80205",
   licenseNumber: "CO-GC-44821",
+  cardLogoUrl: "",
+  cardLogoStoragePath: "",
   defaultEstimateTerms: null,
   defaultInvoiceTerms: null,
   minimumMarginPercent: 0,
@@ -183,6 +188,9 @@ export interface StaffMember {
   phone: string;
   /** first.last, unique per company. Sticky on rename. */
   cardSlug: string;
+  /** Headshot on the digital card. Blank falls back to initials. */
+  photoUrl?: string;
+  photoStoragePath?: string;
   /** Own sign-off. Empty means use the company default. */
   emailSignature: string;
   locked: boolean;
