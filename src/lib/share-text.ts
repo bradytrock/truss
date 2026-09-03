@@ -72,6 +72,20 @@ export function absoluteShareAssetUrl(url: string, origin = "") {
   }
 }
 
+function documentEyebrow(input: {
+  kind: ShareDocumentKind;
+  number: string;
+  name: string;
+}) {
+  if (input.kind === "invoice") {
+    return input.number.trim() ? `Invoice ${input.number.trim()}` : "Invoice";
+  }
+  if (input.kind === "page") {
+    return input.name.trim() || "Document";
+  }
+  return input.number.trim() ? `Proposal ${input.number.trim()}` : "Proposal";
+}
+
 function documentLead(input: {
   kind: ShareDocumentKind;
   company: string;
@@ -98,12 +112,12 @@ function ctaLabel(kind: ShareDocumentKind) {
 
 function supportingLine(kind: ShareDocumentKind) {
   if (kind === "estimate") {
-    return "Open the link below to review the proposal and sign from your phone — no login needed.";
+    return "Review the scope, pick your package if needed, and sign from your phone — no account required.";
   }
   if (kind === "invoice") {
-    return "Open the link below to view the invoice and download a PDF — no login needed.";
+    return "Open the invoice on any device and download a PDF when you need it — no account required.";
   }
-  return "Open the link below to view the document — no login needed.";
+  return "Open the document on any device — no account required.";
 }
 
 function ownerContactLines(owner?: ShareEmailOwner | null) {
@@ -137,25 +151,21 @@ export function defaultShareEmailHtml(input: {
   const company = escapeHtml(input.company.trim() || "the contractor");
   const url = escapeHtml(input.url);
   const cta = ctaLabel(input.kind);
+  const eyebrow = escapeHtml(documentEyebrow(input));
   const lead = escapeHtml(documentLead(input));
   const support = escapeHtml(supportingLine(input.kind));
   const logo = absoluteShareAssetUrl(input.logoUrl || "", input.origin);
   const logoSrc = escapeHtml(logo);
   const signOff = signOffBlock(input.owner);
+  const jobLabel = escapeHtml(input.name.trim());
 
-  const logoRow = logo
-    ? `<tr>
-        <td style="padding:28px 32px 8px;text-align:left;">
-          <img src="${logoSrc}" alt="${company}" width="220" style="display:block;max-width:220px;width:100%;height:auto;border:0;outline:none;text-decoration:none;" />
-        </td>
-      </tr>`
-    : `<tr>
-        <td style="padding:28px 32px 8px;font-size:18px;line-height:1.3;font-weight:700;letter-spacing:0.02em;color:#0f3d4c;">${company}</td>
-      </tr>`;
+  const logoBlock = logo
+    ? `<img src="${logoSrc}" alt="${company}" width="200" style="display:block;max-width:200px;width:100%;height:auto;border:0;outline:none;text-decoration:none;" />`
+    : `<span style="display:inline-block;font-size:20px;line-height:1.2;font-weight:700;letter-spacing:-0.02em;color:#fafafa;">${company}</span>`;
 
   const signOffHtml = signOff
     ? `<tr>
-        <td style="padding:8px 32px 4px;font-size:15px;line-height:1.6;color:#0f172a;white-space:pre-line;">${escapeHtml(signOff)}</td>
+        <td style="padding:4px 40px 0;font-size:15px;line-height:1.65;color:#3f3f46;white-space:pre-line;">${escapeHtml(signOff)}</td>
       </tr>`
     : "";
 
@@ -163,35 +173,54 @@ export function defaultShareEmailHtml(input: {
   const ownerTitle = input.owner?.title?.trim() ?? "";
   const ownerPhone = input.owner?.phone?.trim() ?? "";
   const ownerEmail = input.owner?.email?.trim() ?? "";
-  const contactHtml =
-    ownerName
-      ? `<tr>
-        <td style="padding:16px 32px 28px;">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-top:1px solid #e2e8f0;">
+  const telHref = ownerPhone.replace(/[^\d+]/g, "");
+
+  const contactHtml = ownerName
+    ? `<tr>
+        <td style="padding:0;background:#0a0a0a;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
             <tr>
-              <td style="padding-top:16px;font-size:12px;line-height:1.2;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;font-weight:600;">Your project manager</td>
+              <td style="padding:28px 40px 6px;font-size:11px;line-height:1.2;letter-spacing:0.18em;text-transform:uppercase;color:#737373;font-weight:600;">Project manager</td>
             </tr>
             <tr>
-              <td style="padding-top:10px;font-size:15px;line-height:1.55;color:#0f172a;">
-                <strong style="font-size:16px;">${escapeHtml(ownerName)}</strong>${
-                  ownerTitle
-                    ? `<br/><span style="color:#475569;">${escapeHtml(ownerTitle)}</span>`
-                    : ""
-                }${
-                  ownerPhone
-                    ? `<br/><a href="tel:${escapeHtml(ownerPhone.replace(/[^\d+]/g, ""))}" style="color:#0f3d4c;text-decoration:none;">${escapeHtml(ownerPhone)}</a>`
-                    : ""
-                }${
-                  ownerEmail
-                    ? `<br/><a href="mailto:${escapeHtml(ownerEmail)}" style="color:#0f3d4c;text-decoration:none;">${escapeHtml(ownerEmail)}</a>`
-                    : ""
-                }
+              <td style="padding:2px 40px ${ownerTitle ? "4px" : ownerPhone || ownerEmail ? "12px" : "28px"};font-size:22px;line-height:1.2;font-weight:700;letter-spacing:-0.03em;color:#fafafa;">${escapeHtml(ownerName)}</td>
+            </tr>
+            ${
+              ownerTitle
+                ? `<tr><td style="padding:0 40px 16px;font-size:14px;line-height:1.4;color:#a3a3a3;">${escapeHtml(ownerTitle)}</td></tr>`
+                : ""
+            }
+            ${
+              ownerPhone || ownerEmail
+                ? `<tr>
+              <td style="padding:0 40px 28px;">
+                <table role="presentation" cellspacing="0" cellpadding="0">
+                  <tr>
+                    ${
+                      ownerPhone
+                        ? `<td style="padding:10px 14px;background:#171717;font-size:13px;line-height:1.3;">
+                      <a href="tel:${escapeHtml(telHref)}" style="color:#5eead4;text-decoration:none;font-weight:600;">${escapeHtml(ownerPhone)}</a>
+                    </td>
+                    <td style="width:8px;font-size:0;">&nbsp;</td>`
+                        : ""
+                    }
+                    ${
+                      ownerEmail
+                        ? `<td style="padding:10px 14px;background:#171717;font-size:13px;line-height:1.3;">
+                      <a href="mailto:${escapeHtml(ownerEmail)}" style="color:#e5e5e5;text-decoration:none;">${escapeHtml(ownerEmail)}</a>
+                    </td>`
+                        : ""
+                    }
+                  </tr>
+                </table>
               </td>
-            </tr>
+            </tr>`
+                : ""
+            }
           </table>
         </td>
       </tr>`
-      : `<tr><td style="padding-bottom:28px;"></td></tr>`;
+    : "";
 
   return `<!DOCTYPE html>
 <html>
@@ -200,36 +229,71 @@ export function defaultShareEmailHtml(input: {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${escapeHtml(cta)}</title>
   </head>
-  <body style="margin:0;padding:0;background:#e8eef3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#0f172a;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#e8eef3;padding:24px 12px;">
+  <body style="margin:0;padding:0;background:#e5e5e5;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#0a0a0a;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#e5e5e5;background-image:radial-gradient(ellipse at top left,#ccfbf1 0%,transparent 42%),radial-gradient(ellipse at bottom right,#e5e5e5 0%,#d4d4d4 100%);padding:36px 12px;">
       <tr>
         <td align="center">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border:1px solid #d5dee8;">
-            ${logoRow}
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border-collapse:collapse;">
             <tr>
-              <td style="padding:20px 32px 6px;font-size:22px;line-height:1.3;font-weight:600;color:#0f172a;">Hi ${who},</td>
-            </tr>
-            <tr>
-              <td style="padding:6px 32px 10px;font-size:16px;line-height:1.55;color:#334155;">${lead}</td>
-            </tr>
-            <tr>
-              <td style="padding:0 32px 22px;font-size:15px;line-height:1.55;color:#64748b;">${support}</td>
-            </tr>
-            <tr>
-              <td style="padding:0 32px 8px;">
-                <a href="${url}" style="display:inline-block;background:#0f3d4c;color:#ffffff;text-decoration:none;padding:13px 20px;font-size:15px;font-weight:600;border-radius:4px;">${escapeHtml(cta)}</a>
+              <td style="padding:0;background:#0a0a0a;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td style="padding:32px 40px 28px;">
+                      <table role="presentation" cellspacing="0" cellpadding="0" style="background:#ffffff;">
+                        <tr>
+                          <td style="padding:16px 20px;">${logoBlock}</td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td style="height:3px;line-height:3px;font-size:0;background:#14b8a6;">&nbsp;</td>
+                  </tr>
+                </table>
               </td>
             </tr>
             <tr>
-              <td style="padding:8px 32px 24px;font-size:12px;line-height:1.5;color:#94a3b8;word-break:break-all;">
-                Or paste this link into your browser:<br/>
-                <a href="${url}" style="color:#0f3d4c;">${url}</a>
+              <td style="padding:40px 40px 0;">
+                <p style="margin:0 0 18px;font-size:12px;line-height:1.2;letter-spacing:0.2em;text-transform:uppercase;color:#0f766e;font-weight:700;">${eyebrow}</p>
+                <h1 style="margin:0;font-size:36px;line-height:1.08;font-weight:800;letter-spacing:-0.04em;color:#0a0a0a;">Hi ${who}</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 40px 0;font-size:17px;line-height:1.55;color:#404040;">${lead}</td>
+            </tr>
+            ${
+              jobLabel && input.kind !== "page"
+                ? `<tr><td style="padding:20px 40px 0;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#fafafa;border-collapse:collapse;">
+                <tr>
+                  <td style="width:4px;background:#14b8a6;font-size:0;line-height:0;">&nbsp;</td>
+                  <td style="padding:14px 18px;font-size:15px;line-height:1.4;color:#262626;font-weight:600;">
+                    <span style="display:block;font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:#737373;font-weight:600;margin-bottom:6px;">${input.kind === "invoice" ? "Invoice" : "Job"}</span>
+                    ${jobLabel}
+                  </td>
+                </tr>
+              </table>
+            </td></tr>`
+                : ""
+            }
+            <tr>
+              <td style="padding:18px 40px 32px;font-size:15px;line-height:1.6;color:#737373;">${support}</td>
+            </tr>
+            <tr>
+              <td style="padding:0 40px 8px;">
+                <a href="${url}" style="display:block;background:#0a0a0a;color:#ffffff;text-decoration:none;padding:18px 24px;font-size:16px;font-weight:700;letter-spacing:-0.01em;text-align:center;">${escapeHtml(cta)}&nbsp;&nbsp;&#8594;</a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:10px 40px 28px;font-size:12px;line-height:1.5;color:#a3a3a3;text-align:center;">
+                Prefer a raw link? <a href="${url}" style="color:#0f766e;text-decoration:underline;">Open securely</a>
               </td>
             </tr>
             ${signOffHtml}
+            <tr><td style="height:28px;line-height:28px;font-size:0;">&nbsp;</td></tr>
             ${contactHtml}
           </table>
-          <p style="margin:16px 0 0;font-size:11px;line-height:1.4;color:#94a3b8;max-width:560px;">Sent by ${company}</p>
+          <p style="margin:22px 0 0;font-size:11px;line-height:1.5;color:#737373;max-width:600px;text-align:center;">Sent by ${company}</p>
         </td>
       </tr>
     </table>
@@ -249,14 +313,24 @@ export function defaultShareEmailText(input: {
   const who = firstName(input.customer);
   const lead = documentLead(input);
   const support = supportingLine(input.kind);
-  const parts = [`Hi ${who},`, "", lead, support, "", ctaLabel(input.kind) + ":", input.url];
+  const parts = [
+    documentEyebrow(input).toUpperCase(),
+    "",
+    `Hi ${who},`,
+    "",
+    lead,
+    support,
+    "",
+    `${ctaLabel(input.kind)}:`,
+    input.url,
+  ];
   const signOff = signOffBlock(input.owner);
   if (signOff) {
     parts.push("", signOff);
   }
   const contact = ownerContactLines(input.owner);
   if (contact.length) {
-    parts.push("", "Your project manager", ...contact);
+    parts.push("", "Project manager", ...contact);
   }
   return parts.join("\n");
 }
