@@ -14,7 +14,7 @@ import { fillEstimateTemplate, fillEstimateTemplateLine } from "@/lib/estimate-t
 import { parsePageTemplate, parsePhotoReportPages } from "@/lib/photo-report";
 import { customFieldsJson, fillJobRecord, parseCustomFields } from "@/lib/job-record";
 import { parseMarket } from "@/lib/market";
-import { resolveStoredFileUrl } from "@/lib/storage/urls";
+import { resolveStoredFileUrl, normalizeObjectKey } from "@/lib/storage/urls";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { parseQbStatus } from "@/lib/types";
 import { parseReturningClientStatus } from "@/lib/returning-client";
@@ -147,11 +147,13 @@ export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>):
     logoUrl: resolveStoredFileUrl({
       storagePath: row.logo_storage_path,
       url: row.logo_url,
+      kind: "company-assets",
     }),
     logoStoragePath: row.logo_storage_path ?? "",
     cardLogoUrl: resolveStoredFileUrl({
       storagePath: "card_logo_storage_path" in row ? row.card_logo_storage_path : "",
       url: "card_logo_url" in row ? row.card_logo_url : "",
+      kind: "company-assets",
     }),
     cardLogoStoragePath:
       "card_logo_storage_path" in row ? String(row.card_logo_storage_path ?? "") : "",
@@ -755,6 +757,7 @@ export function mapPayment(row: PaymentRow): Payment {
     receiptUrl: resolveStoredFileUrl({
       storagePath: row.receipt_storage_path,
       url: row.receipt_url,
+      kind: "receipts",
     }),
     receiptStoragePath: row.receipt_storage_path ?? null,
     qbStatus: parseQbStatus(row.qb_status),
@@ -797,6 +800,7 @@ export function mapExpense(row: Database["public"]["Tables"]["expenses"]["Row"])
     receiptUrl: resolveStoredFileUrl({
       storagePath: row.receipt_storage_path,
       url: row.receipt_url,
+      kind: "receipts",
     }),
     receiptStoragePath: row.receipt_storage_path,
     qbStatus: parseQbStatus(row.qb_status),
@@ -894,6 +898,7 @@ export function mapJobPhoto(row: PhotoRow): JobPhoto {
     imageUrl: resolveStoredFileUrl({
       storagePath: row.storage_path,
       url: row.image_url,
+      kind: "job-photos",
     }),
     storagePath: row.storage_path,
     createdBy: "created_by" in row ? String(row.created_by ?? "") : "",
@@ -922,8 +927,9 @@ export function mapJobFile(row: JobFileRow): JobFile {
     url: resolveStoredFileUrl({
       storagePath: row.storage_path,
       url: row.url,
+      kind: "job-files",
     }),
-    storagePath: row.storage_path,
+    storagePath: normalizeObjectKey(row.storage_path, "job-files") || row.storage_path,
     createdBy,
     createdAt: row.created_at,
     shareToken:

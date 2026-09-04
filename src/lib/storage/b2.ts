@@ -206,7 +206,7 @@ export async function uploadToB2(input: {
     kind: input.kind,
     bucket: `b2:${bucket}`,
     storagePath: key,
-    url: publicObjectUrl(key, publicBaseUrl),
+    url: publicObjectUrl(key),
   };
 }
 
