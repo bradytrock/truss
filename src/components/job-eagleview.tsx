@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { FileText, Ruler } from "lucide-react";
+import { FileText, Ruler, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,7 @@ export function JobEagleviewPanel({
   disabled?: boolean;
 }) {
   const crm = useCrm();
+  const uploadRef = useRef<HTMLInputElement>(null);
   const job = crm.jobs.find((item) => item.id === jobId);
   const orders = useMemo(
     () => (crm.eagleviewOrders ?? []).filter((order) => order.jobId === jobId),
@@ -45,6 +46,9 @@ export function JobEagleviewPanel({
   const [pending, setPending] = useState(false);
   const [applyEstimateId, setApplyEstimateId] = useState("");
   const [includeWaste, setIncludeWaste] = useState(true);
+  const [manualSquares, setManualSquares] = useState("");
+  const [manualWaste, setManualWaste] = useState("");
+  const [showManual, setShowManual] = useState(false);
 
   async function orderReport() {
     if (!job || disabled) return;
@@ -94,6 +98,61 @@ export function JobEagleviewPanel({
       toast.error("Could not reach Truss to order EagleView.");
     } finally {
       setPending(false);
+    }
+  }
+
+  async function importReport(file: File | null) {
+    if (!file || disabled) return;
+    setPending(true);
+    try {
+      const body = new FormData();
+      body.set("jobId", jobId);
+      body.set("file", file);
+      body.set("product", product);
+      if (claimNumber.trim()) body.set("claimNumber", claimNumber.trim());
+      const estimateId = applyEstimateId || estimates[0]?.id || "";
+      if (estimateId) body.set("estimateId", estimateId);
+      if (manualSquares.trim()) body.set("totalSquares", manualSquares.trim());
+      if (manualWaste.trim()) body.set("wastePercent", manualWaste.trim());
+
+      const response = await fetch("/api/eagleview/import", {
+        method: "POST",
+        body,
+      });
+      const data = (await response.json()) as {
+        error?: string;
+        needsManualSquares?: boolean;
+        order?: EagleviewOrder;
+        measurements?: { totalSquares?: number; wastePercent?: number };
+      };
+      if (!response.ok) {
+        if (data.needsManualSquares) {
+          setShowManual(true);
+          toast.error(data.error || "Enter total squares and try again.");
+        } else {
+          toast.error(data.error || "Could not import that report.");
+        }
+        return;
+      }
+      const squares = data.measurements?.totalSquares;
+      toast.success(
+        squares != null
+          ? `Imported EagleView report — ${squares} squares.`
+          : "Imported EagleView report.",
+      );
+      setShowManual(false);
+      setManualSquares("");
+      setManualWaste("");
+      try {
+        await crm.reload();
+      } catch {
+        /* order saved */
+      }
+    } catch {
+      toast.error("Could not upload that EagleView PDF.");
+    } finally {
+      setPending(false);
+      if (uploadRef.current) uploadRef.current.value = "";
     }
   }
 
@@ -152,7 +211,7 @@ export function JobEagleviewPanel({
         <div className="min-w-0">
           <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">EagleView</p>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Order a roof report, attach the PDF, then apply squares to an estimate line.
+            Order a roof report, upload one you already have, then apply squares to an estimate.
           </p>
         </div>
         <Button nativeButton={false} size="sm" variant="ghost" render={<Link href="/settings/eagleview" />}>
@@ -224,10 +283,68 @@ export function JobEagleviewPanel({
           Include suggested waste when applying squares
         </label>
 
-        <Button type="button" size="sm" disabled={disabled || pending} onClick={() => void orderReport()}>
-          <Ruler data-icon="inline-start" />
-          Order report
-        </Button>
+        {showManual ? (
+          <div className="grid gap-3 rounded-md border border-dashed p-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor={`ev-manual-sq-${jobId}`}>Total squares</Label>
+              <Input
+                id={`ev-manual-sq-${jobId}`}
+                inputMode="decimal"
+                value={manualSquares}
+                disabled={disabled || pending}
+                onChange={(event) => setManualSquares(event.target.value)}
+                placeholder="e.g. 24.5"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor={`ev-manual-waste-${jobId}`}>Waste % (optional)</Label>
+              <Input
+                id={`ev-manual-waste-${jobId}`}
+                inputMode="decimal"
+                value={manualWaste}
+                disabled={disabled || pending}
+                onChange={(event) => setManualWaste(event.target.value)}
+                placeholder="e.g. 15"
+              />
+            </div>
+            <p className="sm:col-span-2 text-xs text-muted-foreground">
+              Entered when the PDF could not be read automatically (common for scanned reports).
+            </p>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+            onClick={() => setShowManual(true)}
+          >
+            Enter squares manually for a scanned PDF
+          </button>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" disabled={disabled || pending} onClick={() => void orderReport()}>
+            <Ruler data-icon="inline-start" />
+            Order report
+          </Button>
+          <input
+            ref={uploadRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            className="sr-only"
+            tabIndex={-1}
+            onChange={(event) => void importReport(event.target.files?.[0] ?? null)}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={disabled || pending}
+            onClick={() => uploadRef.current?.click()}
+          >
+            <Upload data-icon="inline-start" />
+            Upload existing PDF
+          </Button>
+        </div>
       </div>
 
       {orders.length === 0 ? (
@@ -238,6 +355,7 @@ export function JobEagleviewPanel({
             const file = order.reportFileId
               ? crm.jobFiles.find((item) => item.id === order.reportFileId)
               : null;
+            const imported = order.statusDetail.toLowerCase().includes("imported");
             return (
               <li key={order.id} className="rounded-md border px-3 py-2.5">
                 <div className="flex flex-wrap items-start justify-between gap-2">
@@ -245,6 +363,7 @@ export function JobEagleviewPanel({
                     <p className="text-sm font-medium">
                       {eagleviewProductLabel(order.product)}
                       {order.mocked ? " · Mock" : ""}
+                      {imported ? " · Imported" : ""}
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {EAGLEVIEW_STATUS_LABELS[order.status]}
@@ -277,7 +396,7 @@ export function JobEagleviewPanel({
                         PDF
                       </Button>
                     ) : null}
-                    {order.status !== "ready" || order.totalSquares == null ? (
+                    {!imported && (order.status !== "ready" || order.totalSquares == null) ? (
                       <Button
                         type="button"
                         size="sm"
