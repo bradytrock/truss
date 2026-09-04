@@ -507,7 +507,10 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       : coOwnerContact(job, crm.contacts, estimate.contactId);
   const secondSignerName = secondContact?.name || inferredCoOwner?.name || null;
   const jobPhotos = useMemo(
-    () => (estimate.jobId ? crm.photos.filter((photo) => photo.jobId === estimate.jobId) : []),
+    () =>
+      estimate.jobId
+        ? crm.photos.filter((photo) => photo.jobId === estimate.jobId && !photo.deletedAt)
+        : [],
     [crm.photos, estimate.jobId],
   );
   const galleryHint = estimate.jobId

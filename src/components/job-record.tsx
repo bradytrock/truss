@@ -36,6 +36,7 @@ import { CreatePageDialog } from "@/components/create-page-dialog";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
 import { JobFilesPanel } from "@/components/job-files";
 import { JobEagleviewPanel } from "@/components/job-eagleview";
+import { JobPhotosPanel } from "@/components/job-photos-panel";
 import { JobFinancials } from "@/components/job-financials";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,7 +65,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { RecordCode } from "@/components/page-chrome";
-import { EstimateStatusBadge, InvoiceStatusBadge, PhotoCategoryBadge, QbStatusBadge } from "@/components/status-badge";
+import { EstimateStatusBadge, InvoiceStatusBadge, QbStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate, formatInboxTime } from "@/lib/format";
 import { mailHref } from "@/lib/job-emails";
@@ -80,6 +81,7 @@ import {
   reviewItemStatus,
 } from "@/lib/qb-review";
 import { createPhotoReport, PAGE_TEMPLATE_OPTIONS } from "@/lib/photo-report";
+import { livePhotos } from "@/lib/photo-trash";
 import { shareUrl } from "@/lib/share";
 import { leadSourceChoices, leadSourceLabel } from "@/lib/leads";
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
@@ -316,7 +318,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
   const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
   const client = crm.getClient(job.clientId);
   const primary = crm.getContact(job.primaryContactId);
-  const photos = crm.photos.filter((photo) => photo.jobId === job.id);
+  const photos = livePhotos(crm.photos, job.id);
   const reports = crm.photoReports.filter((report) => report.jobId === job.id);
   const openReport = reportId ? reports.find((report) => report.id === reportId) : undefined;
   const hero = photos[0];
@@ -1182,37 +1184,11 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
         </TabsContent>
 
         <TabsContent value="photos" className="border-x border-b p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <p className="text-sm text-muted-foreground">
-              {photos.length === 0 ? "No photos on this job." : `${photos.length} photos`}
-            </p>
-            <Button size="sm" variant="outline" onClick={() => setPhotoOpen(true)}>
-              Add photo
-            </Button>
-          </div>
-          {photos.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {photos.map((photo) => (
-                <figure key={photo.id} className="overflow-hidden border">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={photo.imageUrl}
-                    alt={photo.caption || "Job photo"}
-                    className="aspect-[4/3] w-full object-cover"
-                  />
-                  <figcaption className="space-y-1 p-2.5">
-                    <PhotoCategoryBadge category={photo.category} />
-                    <p className="text-sm leading-snug">{photo.caption || "Untitled"}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {photo.createdBy?.trim()
-                        ? `Taken by ${photo.createdBy.trim()} · ${formatDate(photo.takenAt)}`
-                        : formatDate(photo.takenAt)}
-                    </p>
-                  </figcaption>
-                </figure>
-              ))}
-            </div>
-          ) : null}
+          <JobPhotosPanel
+            jobId={job.id}
+            disabled={deleted}
+            onAddPhoto={() => setPhotoOpen(true)}
+          />
         </TabsContent>
 
         <TabsContent value="files" className="space-y-8 border-x border-b p-4">

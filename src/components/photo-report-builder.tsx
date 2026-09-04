@@ -84,7 +84,7 @@ export function PhotoReportBuilder({
   onClose: () => void;
 }) {
   const crm = useCrm();
-  const photos = crm.photos.filter((photo) => photo.jobId === job.id);
+  const photos = crm.photos.filter((photo) => photo.jobId === job.id && !photo.deletedAt);
   const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
   const emailOwner = shareEmailOwnerFromBook({
     job,

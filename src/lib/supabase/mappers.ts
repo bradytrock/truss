@@ -906,6 +906,8 @@ export function mapJobPhoto(row: PhotoRow): JobPhoto {
     }),
     storagePath: row.storage_path,
     createdBy: "created_by" in row ? String(row.created_by ?? "") : "",
+    deletedAt: "deleted_at" in row ? ((row.deleted_at as string | null) ?? null) : null,
+    deletedBy: "deleted_by" in row ? String(row.deleted_by ?? "") : "",
   };
 }
 

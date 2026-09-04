@@ -1,3 +1,4 @@
+import { mapPhotoAuditEvent } from "@/lib/photo-trash";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   mapActivity,
@@ -101,6 +102,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     paymentsRes,
     eventsRes,
     photosRes,
+    photoAuditRes,
     expensesRes,
     qbVendorsRes,
     qbReviewCommentsRes,
@@ -154,6 +156,12 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     supabase.from("payments").select("*").eq("company_id", companyId).order("paid_at", { ascending: false }),
     supabase.from("schedule_events").select("*").eq("company_id", companyId).order("starts_at"),
     supabase.from("job_photos").select("*").eq("company_id", companyId).order("taken_at", { ascending: false }),
+    supabase
+      .from("photo_audit_events")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("created_at", { ascending: false })
+      .limit(2000),
     supabase.from("expenses").select("*").eq("company_id", companyId).order("incurred_at", { ascending: false }),
     supabase.from("qb_vendors").select("*").eq("company_id", companyId).order("name"),
     supabase.from("qb_review_comments").select("*").eq("company_id", companyId).order("created_at"),
@@ -268,6 +276,9 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       : (qbReviewCommentsRes.data ?? []).map(mapQbReviewComment),
     events: eventsRes.error ? [] : mapRows(eventsRes.data, mapScheduleEvent),
     photos: photosRes.error ? [] : mapRows(photosRes.data, mapJobPhoto),
+    photoAuditEvents: photoAuditRes.error
+      ? []
+      : (photoAuditRes.data ?? []).map(mapPhotoAuditEvent),
     jobFiles: mergeJobFiles(
       jobFilesRes.error ? [] : (jobFilesRes.data ?? []).map(mapJobFile),
       jobFilesFromJobs(jobs),

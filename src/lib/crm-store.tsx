@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken, shareUrl } from "@/lib/share";
@@ -306,6 +306,7 @@ const emptyState: CrmState = {
   payments: [],
   events: [],
   photos: [],
+  photoAuditEvents: [],
   jobFiles: [],
   companyFiles: [],
   photoReports: [],
@@ -1082,6 +1083,10 @@ type CrmContextValue = CrmState & {
     imageUrl?: string;
     file?: File;
   }) => Promise<void>;
+  /** Soft-delete a job photo from the UI. Never removes the Backblaze object. */
+  deleteJobPhoto: (id: string) => Promise<boolean>;
+  /** Restore a soft-deleted job photo from the Project Trashcan. */
+  restoreJobPhoto: (id: string) => Promise<boolean>;
   addJobFiles: (jobId: string, files: File[]) => Promise<JobFile[]>;
   deleteJobFile: (id: string) => Promise<boolean>;
   /** Mint or return an existing public share link for one job file. */
@@ -7341,6 +7346,180 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [effectiveStaff?.name, user.companyId, user.name]
   );
 
+  const recordPhotoAudit = useCallback(
+    async (input: {
+      jobId: string;
+      photoId: string;
+      action: "deleted" | "restored";
+      caption: string;
+      category: string;
+      imageUrl: string;
+      storagePath: string;
+      detail: string;
+    }) => {
+      const actor = (effectiveStaff?.name || user.name).trim();
+      const event = {
+        id: crypto.randomUUID(),
+        company_id: user.companyId,
+        job_id: input.jobId,
+        photo_id: input.photoId,
+        action: input.action,
+        actor,
+        actor_staff_id: looksLikeUuid(effectiveStaff?.id || user.staffId) ? (effectiveStaff?.id || user.staffId) : null,
+        caption: input.caption,
+        category: input.category,
+        image_url: input.imageUrl,
+        storage_path: input.storagePath,
+        detail: input.detail,
+        created_at: new Date().toISOString(),
+      };
+      const supabase = maybeClient();
+      if (supabase && user.companyId && user.companyId !== "local") {
+        const { data, error } = await supabase.from("photo_audit_events").insert(event).select("*").single();
+        if (error) {
+          if (isMissingPhotoTrashcan(error)) toast.message(missingPhotoTrashcanMessage());
+          else toast.error(error.message);
+        } else if (data) {
+          setState((prev) => ({
+            ...prev,
+            photoAuditEvents: [
+              {
+                id: data.id,
+                jobId: data.job_id,
+                photoId: data.photo_id,
+                action: data.action === "restored" ? "restored" : "deleted",
+                actor: data.actor ?? actor,
+                actorStaffId: data.actor_staff_id,
+                caption: data.caption ?? "",
+                category: data.category ?? "",
+                imageUrl: data.image_url ?? "",
+                storagePath: data.storage_path ?? "",
+                detail: data.detail ?? "",
+                createdAt: data.created_at,
+              },
+              ...(prev.photoAuditEvents ?? []),
+            ],
+          }));
+          return;
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        photoAuditEvents: [
+          {
+            id: event.id,
+            jobId: event.job_id,
+            photoId: event.photo_id,
+            action: event.action,
+            actor: event.actor,
+            actorStaffId: event.actor_staff_id,
+            caption: event.caption,
+            category: event.category,
+            imageUrl: event.image_url,
+            storagePath: event.storage_path,
+            detail: event.detail,
+            createdAt: event.created_at,
+          },
+          ...(prev.photoAuditEvents ?? []),
+        ],
+      }));
+    },
+    [effectiveStaff?.id, effectiveStaff?.name, user.companyId, user.name, user.staffId],
+  );
+
+  const deleteJobPhoto = useCallback(
+    async (id: string) => {
+      const current = state.photos.find((photo) => photo.id === id);
+      if (!current) return false;
+      if (current.deletedAt) {
+        toast.message("That photo is already in the trashcan.");
+        return false;
+      }
+      const actor = (effectiveStaff?.name || user.name).trim();
+      const deletedAt = new Date().toISOString();
+      const supabase = maybeClient();
+      if (supabase) {
+        const { error } = await supabase
+          .from("job_photos")
+          .update({ deleted_at: deletedAt, deleted_by: actor })
+          .eq("id", id);
+        if (error) {
+          if (isMissingPhotoTrashcan(error)) toast.error(missingPhotoTrashcanMessage());
+          else toast.error(error.message);
+          return false;
+        }
+      }
+      // Soft-delete only — never call deleteViaApi / removeFromB2 for job photos.
+      setState((prev) => ({
+        ...prev,
+        photos: prev.photos.map((photo) =>
+          photo.id === id ? { ...photo, deletedAt, deletedBy: actor } : photo,
+        ),
+      }));
+      await recordPhotoAudit({
+        jobId: current.jobId,
+        photoId: current.id,
+        action: "deleted",
+        caption: current.caption,
+        category: current.category,
+        imageUrl: current.imageUrl,
+        storagePath: current.storagePath ?? "",
+        detail: "Moved to Project Trashcan. Backblaze object kept.",
+      });
+      await addActivity({
+        entityType: "job",
+        entityId: current.jobId,
+        type: "audit",
+        body: `Moved photo “${current.caption.trim() || "Untitled"}” to the Project Trashcan.`,
+      });
+      return true;
+    },
+    [addActivity, effectiveStaff?.name, recordPhotoAudit, state.photos, user.name],
+  );
+
+  const restoreJobPhoto = useCallback(
+    async (id: string) => {
+      const current = state.photos.find((photo) => photo.id === id);
+      if (!current?.deletedAt) return false;
+      const supabase = maybeClient();
+      if (supabase) {
+        const { error } = await supabase
+          .from("job_photos")
+          .update({ deleted_at: null, deleted_by: "" })
+          .eq("id", id);
+        if (error) {
+          if (isMissingPhotoTrashcan(error)) toast.error(missingPhotoTrashcanMessage());
+          else toast.error(error.message);
+          return false;
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        photos: prev.photos.map((photo) =>
+          photo.id === id ? { ...photo, deletedAt: null, deletedBy: "" } : photo,
+        ),
+      }));
+      await recordPhotoAudit({
+        jobId: current.jobId,
+        photoId: current.id,
+        action: "restored",
+        caption: current.caption,
+        category: current.category,
+        imageUrl: current.imageUrl,
+        storagePath: current.storagePath ?? "",
+        detail: "Restored from Project Trashcan.",
+      });
+      await addActivity({
+        entityType: "job",
+        entityId: current.jobId,
+        type: "audit",
+        body: `Restored photo “${current.caption.trim() || "Untitled"}” from the Project Trashcan.`,
+      });
+      return true;
+    },
+    [addActivity, recordPhotoAudit, state.photos],
+  );
+
   const addJobFiles = useCallback(
     async (jobId: string, files: File[]) => {
       const supabase = requireClient();
@@ -9223,6 +9402,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       submitQuiz,
       addTrainingBulletin,
       addJobPhoto,
+      deleteJobPhoto,
+      restoreJobPhoto,
       addJobFiles,
       deleteJobFile,
       shareJobFile,
@@ -9377,6 +9558,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       submitQuiz,
       addTrainingBulletin,
       addJobPhoto,
+      deleteJobPhoto,
+      restoreJobPhoto,
       addJobFiles,
       deleteJobFile,
       shareJobFile,

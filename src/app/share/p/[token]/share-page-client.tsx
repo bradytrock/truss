@@ -75,7 +75,7 @@ export function SharePageClient({
   if (fromStore) {
     const job = crm.jobs.find((item) => item.id === fromStore.jobId);
     if (!job) return <ShareMissing kind="page" />;
-    const photos = crm.photos.filter((photo) => photo.jobId === job.id);
+    const photos = crm.photos.filter((photo) => photo.jobId === job.id && !photo.deletedAt);
     const opportunity = job.opportunityId ? crm.opportunities.find((item) => item.id === job.opportunityId) : undefined;
     const letterhead = letterheadCompanyForRecord({
       company: crm.company,

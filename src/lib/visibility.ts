@@ -366,6 +366,9 @@ export function scopeBook(
   const materialOrders = (state.materialOrders ?? []).filter((order) => jobIds.has(order.jobId));
   const materialOrderIds = new Set(materialOrders.map((order) => order.id));
   const photos = state.photos;
+  const photoAuditEvents = (state.photoAuditEvents ?? []).filter(
+    (event) => !event.jobId || jobIds.has(event.jobId),
+  );
   const jobFiles = (state.jobFiles ?? []).filter((file) => jobIds.has(file.jobId));
   const photoReports = state.photoReports.filter((report) => jobIds.has(report.jobId));
   const events = state.events.filter((event) => {
@@ -408,6 +411,7 @@ export function scopeBook(
     ),
     events,
     photos,
+    photoAuditEvents,
     jobFiles,
     companyFiles: state.companyFiles ?? [],
     photoReports,

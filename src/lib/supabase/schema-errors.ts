@@ -358,6 +358,24 @@ export function missingPhotoCreatedByMessage() {
   return `Saved in this browser. Run ${JOB_PHOTO_CREATED_BY_SQL} in the SQL editor so the Photos feed can show who took each shot.`;
 }
 
+export const PHOTO_TRASHCAN_SQL = "supabase/migrations/20260904190000_photo_trashcan.sql";
+
+export function isMissingPhotoTrashcan(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("deleted_at") ||
+    message.includes("deleted_by") ||
+    message.includes("photo_audit_events") ||
+    error.code === "PGRST205" ||
+    message.includes("could not find the table")
+  );
+}
+
+export function missingPhotoTrashcanMessage() {
+  return `Saved in this browser. Run ${PHOTO_TRASHCAN_SQL} in the SQL editor so the Project Trashcan and photo audit log persist.`;
+}
+
 export const MESSAGES_SQL = "supabase/migrations/20260825120000_messages.sql";
 
 export function isMissingMessages(error: { message?: string; code?: string } | null | undefined) {

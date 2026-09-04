@@ -1062,6 +1062,8 @@ export type Database = {
           storage_path: string | null;
           created_at: string;
           created_by: string;
+          deleted_at?: string | null;
+          deleted_by?: string;
         };
         Insert: {
           id?: string;
@@ -1073,8 +1075,44 @@ export type Database = {
           image_url: string;
           storage_path?: string | null;
           created_by?: string;
+          deleted_at?: string | null;
+          deleted_by?: string;
         };
         Update: Partial<Database["public"]["Tables"]["job_photos"]["Insert"]>;
+        Relationships: [];
+      };
+      photo_audit_events: {
+        Row: {
+          id: string;
+          company_id: string;
+          job_id: string | null;
+          photo_id: string;
+          action: string;
+          actor: string;
+          actor_staff_id: string | null;
+          caption: string;
+          category: string;
+          image_url: string;
+          storage_path: string;
+          detail: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          job_id?: string | null;
+          photo_id: string;
+          action: string;
+          actor?: string;
+          actor_staff_id?: string | null;
+          caption?: string;
+          category?: string;
+          image_url?: string;
+          storage_path?: string;
+          detail?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["photo_audit_events"]["Insert"]>;
         Relationships: [];
       };
       job_files: {

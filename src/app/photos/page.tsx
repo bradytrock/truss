@@ -56,7 +56,9 @@ export default function PhotosPage() {
   }, [crm.book.contacts]);
 
   const items = useMemo(() => {
-    return crm.photos.map((photo) => {
+    return crm.photos
+      .filter((photo) => !photo.deletedAt)
+      .map((photo) => {
       const job = jobsById.get(photo.jobId);
       const contact = job?.primaryContactId ? contactsById.get(job.primaryContactId) : undefined;
       const feed: PhotoFeedItem = {

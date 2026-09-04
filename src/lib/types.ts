@@ -769,6 +769,27 @@ export interface JobPhoto {
   imageUrl: string;
   storagePath: string | null;
   createdBy?: string;
+  /** Soft-delete timestamp. Null means the photo is live on the job. */
+  deletedAt?: string | null;
+  deletedBy?: string;
+}
+
+export type PhotoAuditAction = "deleted" | "restored";
+
+/** Append-only log of photo trash / restore events. B2 objects are never removed. */
+export interface PhotoAuditEvent {
+  id: string;
+  jobId: string | null;
+  photoId: string;
+  action: PhotoAuditAction;
+  actor: string;
+  actorStaffId: string | null;
+  caption: string;
+  category: string;
+  imageUrl: string;
+  storagePath: string;
+  detail: string;
+  createdAt: string;
 }
 
 export interface JobFile {
@@ -1013,6 +1034,7 @@ export interface CrmState {
   qbReviewComments: QbReviewComment[];
   events: ScheduleEvent[];
   photos: JobPhoto[];
+  photoAuditEvents: PhotoAuditEvent[];
   jobFiles: JobFile[];
   companyFiles: CompanyFile[];
   photoReports: PhotoReport[];
