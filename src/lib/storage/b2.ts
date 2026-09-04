@@ -1,4 +1,10 @@
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export const STORAGE_KINDS = [
   "job-files",
@@ -38,6 +44,8 @@ export function b2Status() {
     region: cfg.region || null,
     endpoint: cfg.endpoint || null,
     publicBaseUrl: cfg.publicBaseUrl || null,
+    /** True when URLs go through /api/storage/object (needed for private buckets). */
+    proxied: !cfg.publicBaseUrl,
   };
 }
 
@@ -70,14 +78,56 @@ export function storageObjectKey(kind: StorageKind, path: string) {
   return `${kind}/${clean}`;
 }
 
-export function publicObjectUrl(kind: StorageKind, path: string) {
+/**
+ * Browser/email URL for an object.
+ * Prefer B2_PUBLIC_BASE_URL when the bucket is public; otherwise use the app proxy
+ * (private buckets cannot be made public on unpaid Backblaze accounts).
+ */
+export function publicObjectUrl(kind: StorageKind, path: string, appOrigin?: string) {
   const key = storageObjectKey(kind, path);
-  const { publicBaseUrl, endpoint, bucket } = b2Config();
+  const { publicBaseUrl } = b2Config();
   if (publicBaseUrl) {
     return `${publicBaseUrl}/${key}`;
   }
-  // Path-style S3 URL (works when the bucket allows public reads).
-  return `${endpoint.replace(/\/+$/, "")}/${bucket}/${key}`;
+  const origin = (appOrigin || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, "");
+  const proxy = `/api/storage/object?path=${encodeURIComponent(key)}`;
+  return origin ? `${origin}${proxy}` : proxy;
+}
+
+export async function signedObjectUrl(kind: StorageKind | string, path: string, expiresIn = 60 * 60 * 24 * 7) {
+  const client = getB2Client();
+  const { bucket } = b2Config();
+  let key = path.replace(/^\/+/, "");
+  if (isStorageKind(kind) && !key.startsWith(`${kind}/`)) {
+    key = storageObjectKey(kind, key);
+  }
+  return getSignedUrl(
+    client,
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    }),
+    { expiresIn },
+  );
+}
+
+export async function getObjectFromB2(path: string) {
+  const client = getB2Client();
+  const { bucket } = b2Config();
+  const key = path.replace(/^\/+/, "");
+  const result = await client.send(
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    }),
+  );
+  return {
+    key,
+    body: result.Body,
+    contentType: result.ContentType || "application/octet-stream",
+    contentLength: result.ContentLength,
+    cacheControl: result.CacheControl,
+  };
 }
 
 export async function uploadToB2(input: {
@@ -85,6 +135,8 @@ export async function uploadToB2(input: {
   path: string;
   body: Buffer | Uint8Array;
   contentType: string;
+  /** App origin for durable proxy URLs when the bucket is private. */
+  appOrigin?: string;
 }) {
   const client = getB2Client();
   const { bucket } = b2Config();
@@ -108,7 +160,7 @@ export async function uploadToB2(input: {
     kind: input.kind,
     bucket: `b2:${bucket}`,
     storagePath: key,
-    url: publicObjectUrl(input.kind, key),
+    url: publicObjectUrl(input.kind, key, input.appOrigin),
   };
 }
 

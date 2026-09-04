@@ -67,12 +67,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "That file is over 25 MB." }, { status: 400 });
     }
 
+    const origin = new URL(request.url).origin;
     const buffer = Buffer.from(await file.arrayBuffer());
     const uploaded = await uploadToB2({
       kind,
       path,
       body: buffer,
       contentType: file.type || "application/octet-stream",
+      appOrigin: origin,
     });
 
     return NextResponse.json({
