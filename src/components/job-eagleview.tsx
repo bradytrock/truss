@@ -191,12 +191,21 @@ export function JobEagleviewPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId: order.id, estimateId, includeWaste }),
       });
-      const data = (await response.json()) as { error?: string; quantity?: number };
+      const data = (await response.json()) as {
+        error?: string;
+        quantity?: number;
+        updatedLineIds?: string[];
+      };
       if (!response.ok) {
         toast.error(data.error || "Could not apply squares.");
         return;
       }
-      toast.success(`Applied ${data.quantity} squares to the estimate.`);
+      const lineCount = data.updatedLineIds?.length ?? 0;
+      toast.success(
+        lineCount > 1
+          ? `Applied EagleView measurements to ${lineCount} estimate lines.`
+          : `Applied ${data.quantity} squares to the estimate.`,
+      );
       await crm.reload();
     } catch {
       toast.error("Could not apply squares.");
@@ -211,7 +220,9 @@ export function JobEagleviewPanel({
         <div className="min-w-0">
           <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">EagleView</p>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Order a roof report, upload one you already have, then apply squares to an estimate.
+            Order a roof report or upload one you already have. Report Summary lengths
+            (ridges, hips, valleys, rakes, eaves, drip edge, flashing) save on the job
+            for the estimate.
           </p>
         </div>
         <Button nativeButton={false} size="sm" variant="ghost" render={<Link href="/settings/eagleview" />}>
@@ -376,6 +387,7 @@ export function JobEagleviewPanel({
                     {order.statusDetail ? (
                       <p className="mt-1 text-xs text-muted-foreground">{order.statusDetail}</p>
                     ) : null}
+                    {order.status === "ready" ? <MeasurementSummary order={order} /> : null}
                     {order.appliedAt ? (
                       <p className="mt-1 text-xs text-muted-foreground">
                         Applied to estimate {formatDate(order.appliedAt)}
@@ -425,5 +437,41 @@ export function JobEagleviewPanel({
         </ul>
       )}
     </section>
+  );
+}
+
+function MeasurementSummary({ order }: { order: EagleviewOrder }) {
+  const m = order.measurements ?? {};
+  const candidates: Array<[string, string]> = [
+    ["Squares", m.totalSquares != null ? String(m.totalSquares) : order.totalSquares != null ? String(order.totalSquares) : ""],
+    ["Suggested sq", m.suggestedSquares != null ? String(m.suggestedSquares) : ""],
+    ["Waste", m.wastePercent != null ? `${m.wastePercent}%` : order.wastePercent != null ? `${order.wastePercent}%` : ""],
+    ["Pitch", m.pitchSummary || order.pitchSummary || ""],
+    ["Ridges", m.ridgesLf != null ? `${m.ridgesLf} LF` : ""],
+    ["Hips", m.hipsLf != null ? `${m.hipsLf} LF` : ""],
+    ["Valleys", m.valleysLf != null ? `${m.valleysLf} LF` : ""],
+    ["Rakes", m.rakesLf != null ? `${m.rakesLf} LF` : ""],
+    ["Eaves / starter", m.eavesLf != null ? `${m.eavesLf} LF` : ""],
+    ["Drip edge", m.dripEdgeLf != null ? `${m.dripEdgeLf} LF` : ""],
+    ["Parapets", m.parapetWallsLf != null ? `${m.parapetWallsLf} LF` : ""],
+    ["Flashing", m.flashingLf != null ? `${m.flashingLf} LF` : ""],
+    ["Step flashing", m.stepFlashingLf != null ? `${m.stepFlashingLf} LF` : ""],
+    ["Facets", m.facets != null ? String(m.facets) : ""],
+  ];
+  const rows = candidates.filter((row) => Boolean(row[1]));
+
+  if (rows.length === 0) return null;
+
+  return (
+    <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 sm:grid-cols-3">
+      {rows.map(([label, value]) => (
+        <div key={label} className="min-w-0">
+          <dt className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            {label}
+          </dt>
+          <dd className="truncate text-xs font-medium">{value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }

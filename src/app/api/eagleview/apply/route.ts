@@ -97,13 +97,13 @@ export async function POST(request: Request) {
   const lines = (lineRows ?? []).map(mapEstimateLine);
   const includeWaste = body?.includeWaste !== false;
   const waste = includeWaste ? order.wastePercent : null;
-  const applied = applySquaresToEstimateLines(lines, order.totalSquares, waste);
+  const applied = applySquaresToEstimateLines(lines, order.totalSquares, waste, order.measurements);
 
   if (applied.updated.length === 0) {
     return NextResponse.json(
       {
         error:
-          "No estimate line looks like field coverage (unit SQ/square, or title with shingle/square/field/roofing). Add one, then try again.",
+          "No estimate line matches EagleView measurements yet. Add a field-coverage line (SQ / shingles) and/or length lines named ridge, hip, valley, rake, eave, drip, flashing, etc.",
       },
       { status: 400 },
     );

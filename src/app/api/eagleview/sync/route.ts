@@ -13,6 +13,8 @@ import {
   loadProfileCompany,
   measurementsJson,
 } from "@/lib/eagleview-server";
+import { mergeEagleviewJobCustomFields } from "@/lib/eagleview-parse";
+import { customFieldsJson, parseCustomFields } from "@/lib/job-record";
 import { mapEagleviewOrder } from "@/lib/supabase/mappers";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -140,6 +142,24 @@ export async function POST(request: Request) {
       { error: updateError?.message || "Could not update the order." },
       { status: 400 },
     );
+  }
+
+  const { data: jobRow } = await supabase
+    .from("jobs")
+    .select("id, custom_fields")
+    .eq("id", order.jobId)
+    .eq("company_id", profile.company_id)
+    .maybeSingle();
+  if (jobRow) {
+    const nextFields = mergeEagleviewJobCustomFields(
+      parseCustomFields(jobRow.custom_fields),
+      measurements,
+    );
+    await supabase
+      .from("jobs")
+      .update({ custom_fields: customFieldsJson(nextFields) })
+      .eq("id", jobRow.id)
+      .eq("company_id", profile.company_id);
   }
 
   return NextResponse.json({ ok: true, order: mapEagleviewOrder(updated) });

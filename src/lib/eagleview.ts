@@ -50,13 +50,21 @@ export const EAGLEVIEW_STATUS_LABELS: Record<EagleviewOrderStatus, string> = {
 
 export type EagleviewMeasurements = {
   totalSquares?: number;
+  /** Total roof area in square feet (all pitches). */
+  totalAreaSqFt?: number;
   wastePercent?: number;
+  /** EagleView suggested squares including waste (from the waste table). */
+  suggestedSquares?: number;
   pitchSummary?: string;
   ridgesLf?: number;
   hipsLf?: number;
   valleysLf?: number;
   eavesLf?: number;
   rakesLf?: number;
+  dripEdgeLf?: number;
+  parapetWallsLf?: number;
+  flashingLf?: number;
+  stepFlashingLf?: number;
   facets?: number;
   notes?: string;
 };
@@ -164,7 +172,9 @@ export function parseEagleviewMeasurements(value: unknown): EagleviewMeasurement
   };
   return {
     totalSquares: num("totalSquares") ?? num("total_squares"),
+    totalAreaSqFt: num("totalAreaSqFt") ?? num("total_area_sq_ft"),
     wastePercent: num("wastePercent") ?? num("waste_percent"),
+    suggestedSquares: num("suggestedSquares") ?? num("suggested_squares"),
     pitchSummary:
       typeof row.pitchSummary === "string"
         ? row.pitchSummary
@@ -176,6 +186,10 @@ export function parseEagleviewMeasurements(value: unknown): EagleviewMeasurement
     valleysLf: num("valleysLf") ?? num("valleys_lf"),
     eavesLf: num("eavesLf") ?? num("eaves_lf"),
     rakesLf: num("rakesLf") ?? num("rakes_lf"),
+    dripEdgeLf: num("dripEdgeLf") ?? num("drip_edge_lf"),
+    parapetWallsLf: num("parapetWallsLf") ?? num("parapet_walls_lf"),
+    flashingLf: num("flashingLf") ?? num("flashing_lf"),
+    stepFlashingLf: num("stepFlashingLf") ?? num("step_flashing_lf"),
     facets: num("facets"),
     notes: typeof row.notes === "string" ? row.notes : undefined,
   };
@@ -216,13 +230,20 @@ export function measurementsFromEagleviewReport(report: Record<string, unknown>)
 
   return {
     totalSquares: squares,
+    totalAreaSqFt: direct.totalAreaSqFt ?? nested.totalAreaSqFt ?? num("TotalArea", "AreaSquareFeet"),
     wastePercent: waste,
+    suggestedSquares: direct.suggestedSquares ?? nested.suggestedSquares ?? num("SuggestedSquares"),
     pitchSummary: pitch,
     ridgesLf: direct.ridgesLf ?? nested.ridgesLf ?? num("LengthRidges", "RidgeLength", "Ridges"),
     hipsLf: direct.hipsLf ?? nested.hipsLf ?? num("LengthHips", "HipLength", "Hips"),
     valleysLf: direct.valleysLf ?? nested.valleysLf ?? num("LengthValleys", "ValleyLength", "Valleys"),
     eavesLf: direct.eavesLf ?? nested.eavesLf ?? num("LengthEaves", "EaveLength", "Eaves"),
     rakesLf: direct.rakesLf ?? nested.rakesLf ?? num("LengthRakes", "RakeLength", "Rakes"),
+    dripEdgeLf: direct.dripEdgeLf ?? nested.dripEdgeLf ?? num("LengthDripEdge", "DripEdge"),
+    parapetWallsLf: direct.parapetWallsLf ?? nested.parapetWallsLf ?? num("LengthParapets", "Parapets"),
+    flashingLf: direct.flashingLf ?? nested.flashingLf ?? num("LengthFlashing", "Flashing"),
+    stepFlashingLf:
+      direct.stepFlashingLf ?? nested.stepFlashingLf ?? num("LengthStepFlashing", "StepFlashing"),
     facets: direct.facets ?? nested.facets ?? num("FacetCount", "Facets"),
     notes: direct.notes ?? nested.notes,
   };
@@ -446,13 +467,18 @@ export function buildEagleviewReportPdf(input: {
     input.orderedBy ? `Ordered by: ${firstName(input.orderedBy)}` : "",
     "",
     `Total squares: ${input.measurements.totalSquares ?? "—"}`,
+    `Suggested squares: ${input.measurements.suggestedSquares ?? "—"}`,
     `Suggested waste: ${input.measurements.wastePercent ?? "—"}%`,
     `Pitch: ${input.measurements.pitchSummary || "—"}`,
     `Ridges: ${input.measurements.ridgesLf ?? "—"} lf`,
     `Hips: ${input.measurements.hipsLf ?? "—"} lf`,
     `Valleys: ${input.measurements.valleysLf ?? "—"} lf`,
-    `Eaves: ${input.measurements.eavesLf ?? "—"} lf`,
+    `Eaves/Starter: ${input.measurements.eavesLf ?? "—"} lf`,
     `Rakes: ${input.measurements.rakesLf ?? "—"} lf`,
+    `Drip edge: ${input.measurements.dripEdgeLf ?? "—"} lf`,
+    `Parapet walls: ${input.measurements.parapetWallsLf ?? "—"} lf`,
+    `Flashing: ${input.measurements.flashingLf ?? "—"} lf`,
+    `Step flashing: ${input.measurements.stepFlashingLf ?? "—"} lf`,
     `Facets: ${input.measurements.facets ?? "—"}`,
     "",
     input.measurements.notes || "",
@@ -488,37 +514,80 @@ export function buildEagleviewReportPdf(input: {
 }
 
 /**
- * Phase 2 helper: pick estimate lines that look like field coverage (SQ / square)
- * and set quantity from report squares (+ optional waste).
+ * Apply EagleView measurements to estimate lines.
+ * Squares → field coverage lines; LF lengths → ridge/hip/valley/eave/etc. lines by title.
  */
-export function applySquaresToEstimateLines<T extends { id: string; title: string; unit: string; quantity: number }>(
+export function applySquaresToEstimateLines<
+  T extends { id: string; title: string; unit: string; quantity: number },
+>(
   lines: T[],
   totalSquares: number,
   wastePercent: number | null | undefined,
+  measurements?: EagleviewMeasurements | null,
 ) {
+  const suggested = measurements?.suggestedSquares;
   const withWaste =
-    wastePercent != null && Number.isFinite(wastePercent)
-      ? Math.round(totalSquares * (1 + wastePercent / 100) * 100) / 100
-      : totalSquares;
-  const targets = lines.filter((line) => {
-    const unit = line.unit.trim().toLowerCase();
+    suggested != null && Number.isFinite(suggested)
+      ? suggested
+      : wastePercent != null && Number.isFinite(wastePercent)
+        ? Math.round(totalSquares * (1 + wastePercent / 100) * 100) / 100
+        : totalSquares;
+
+  const updated: Array<{ id: string; quantity: number }> = [];
+  const used = new Set<string>();
+
+  const titleHas = (line: T, ...words: string[]) => {
     const title = line.title.trim().toLowerCase();
+    return words.some((word) => new RegExp(`\\b${word}\\b`, "i").test(title));
+  };
+
+  const pickByTitle = (words: string[], quantity: number | undefined) => {
+    if (quantity == null || !Number.isFinite(quantity)) return;
+    const target = lines.find((line) => !used.has(line.id) && titleHas(line, ...words));
+    if (!target) return;
+    used.add(target.id);
+    updated.push({ id: target.id, quantity });
+  };
+
+  // Field coverage / squares
+  const squareLine = lines.find((line) => {
+    if (used.has(line.id)) return false;
+    const unit = line.unit.trim().toLowerCase();
     return (
       unit === "sq" ||
       unit === "square" ||
       unit === "squares" ||
-      title.includes("shingle") ||
-      title.includes("square") ||
-      title.includes("field") ||
-      title.includes("roofing")
+      titleHas(line, "shingle", "square", "field", "roofing")
     );
   });
-  if (targets.length === 0) {
-    return { updated: [] as Array<{ id: string; quantity: number }>, quantity: withWaste };
+  if (squareLine) {
+    used.add(squareLine.id);
+    updated.push({ id: squareLine.id, quantity: withWaste });
   }
-  // Put full quantity on the first matching line; leave others untouched.
+
+  const m = measurements ?? {};
+  pickByTitle(["ridge"], m.ridgesLf);
+  pickByTitle(["hip"], m.hipsLf);
+  pickByTitle(["valley"], m.valleysLf);
+  pickByTitle(["rake"], m.rakesLf);
+  pickByTitle(["eave", "starter"], m.eavesLf);
+  pickByTitle(["drip"], m.dripEdgeLf);
+  pickByTitle(["parapet"], m.parapetWallsLf);
+  pickByTitle(["step flashing", "step-flashing"], m.stepFlashingLf);
+  const flashingLine = lines.find(
+    (line) =>
+      !used.has(line.id) &&
+      titleHas(line, "flashing") &&
+      !titleHas(line, "step"),
+  );
+  if (flashingLine && m.flashingLf != null && Number.isFinite(m.flashingLf)) {
+    used.add(flashingLine.id);
+    updated.push({ id: flashingLine.id, quantity: m.flashingLf });
+  }
+
   return {
-    updated: [{ id: targets[0].id, quantity: withWaste }],
+    updated,
     quantity: withWaste,
+    appliedLengths: updated.length,
   };
 }

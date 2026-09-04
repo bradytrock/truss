@@ -6,6 +6,7 @@ import {
 } from "@/lib/eagleview";
 import {
   extractPdfText,
+  mergeEagleviewJobCustomFields,
   mergeEagleviewMeasurementOverrides,
   parseEagleviewReportText,
 } from "@/lib/eagleview-parse";
@@ -14,6 +15,7 @@ import {
   loadProfileCompany,
   measurementsJson,
 } from "@/lib/eagleview-server";
+import { customFieldsJson, parseCustomFields } from "@/lib/job-record";
 import { mapEagleviewOrder } from "@/lib/supabase/mappers";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -82,7 +84,7 @@ async function importReport(request: Request) {
 
   const { data: job, error: jobError } = await supabase
     .from("jobs")
-    .select("id, company_id, street, city, state, postal_code, name, code")
+    .select("id, company_id, street, city, state, postal_code, name, code, custom_fields")
     .eq("id", jobId)
     .eq("company_id", profile.company_id)
     .maybeSingle();
@@ -102,10 +104,12 @@ async function importReport(request: Request) {
 
   const pdf = Buffer.from(await file.arrayBuffer());
   let extractedText = "";
+  let extractedPages: string[] = [];
   let pageCount = 0;
   try {
     const extracted = await extractPdfText(pdf);
     extractedText = extracted.text;
+    extractedPages = extracted.pages;
     pageCount = extracted.totalPages;
   } catch (error) {
     console.error("[eagleview/import] pdf text", error);
@@ -122,7 +126,7 @@ async function importReport(request: Request) {
     }
   }
 
-  const parsed = parseEagleviewReportText(extractedText);
+  const parsed = parseEagleviewReportText(extractedText, extractedPages);
   const measurements = mergeEagleviewMeasurementOverrides(parsed, {
     totalSquares: squaresOverride,
     wastePercent: wasteOverride,
@@ -200,6 +204,16 @@ async function importReport(request: Request) {
     );
   }
 
+  const nextFields = mergeEagleviewJobCustomFields(
+    parseCustomFields(job.custom_fields),
+    measurements,
+  );
+  await supabase
+    .from("jobs")
+    .update({ custom_fields: customFieldsJson(nextFields) })
+    .eq("id", job.id)
+    .eq("company_id", profile.company_id);
+
   await supabase.from("activities").insert({
     company_id: profile.company_id,
     entity_type: "job",
@@ -207,6 +221,8 @@ async function importReport(request: Request) {
     type: "note",
     body: `Imported EagleView PDF (${eagleviewProductLabel(product)}): ${measurements.totalSquares} squares${
       measurements.wastePercent != null ? `, ${measurements.wastePercent}% waste` : ""
+    }${measurements.ridgesLf != null ? `, ridges ${measurements.ridgesLf} LF` : ""}${
+      measurements.hipsLf != null ? `, hips ${measurements.hipsLf} LF` : ""
     }.`,
     author: orderedBy,
   });
