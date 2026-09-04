@@ -202,6 +202,7 @@ async function placeOrder(request: Request) {
       fileName: `EagleView ${job.code || "report"} ${new Date().toISOString().slice(0, 10)}.pdf`,
       pdf,
       createdBy: orderedBy,
+      uploadedBy: profile.id,
     });
     if (attached.ok) {
       reportFileId = attached.file.id;

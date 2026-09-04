@@ -71,8 +71,8 @@ async function importReport(request: Request) {
   if (!(file instanceof File) || file.size <= 0) {
     return NextResponse.json({ error: "Choose an EagleView PDF to upload." }, { status: 400 });
   }
-  if (file.size > 25 * 1024 * 1024) {
-    return NextResponse.json({ error: "That PDF is over 25 MB." }, { status: 400 });
+  if (file.size > 15 * 1024 * 1024) {
+    return NextResponse.json({ error: "That PDF is over 15 MB." }, { status: 400 });
   }
   const mime = (file.type || "").toLowerCase();
   const name = file.name || "eagleview-report.pdf";
@@ -153,6 +153,7 @@ async function importReport(request: Request) {
     fileName: name.replace(/^.*[/\\]/, "").trim() || `EagleView ${job.code || "report"}.pdf`,
     pdf,
     createdBy: orderedBy,
+    uploadedBy: profile.id,
   });
   if (!attached.ok) {
     return NextResponse.json({ error: attached.error }, { status: 400 });

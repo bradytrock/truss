@@ -109,6 +109,7 @@ export async function POST(request: Request) {
       fileName: `EagleView ${order.referenceId || order.id}.pdf`,
       pdf,
       createdBy: profile.full_name || order.orderedBy || "",
+      uploadedBy: profile.id,
     });
     if (attached.ok) {
       reportFileId = attached.file.id;

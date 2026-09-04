@@ -83,7 +83,10 @@ export async function attachEagleviewPdf(input: {
   jobId: string;
   fileName: string;
   pdf: Buffer;
+  /** Display name (legacy schema). */
   createdBy: string;
+  /** Auth user id when the live schema uses uploaded_by uuid. */
+  uploadedBy?: string | null;
 }) {
   const fileId = crypto.randomUUID();
   const storagePath = `${input.companyId}/${input.jobId}/${fileId}.pdf`;
@@ -111,26 +114,60 @@ export async function attachEagleviewPdf(input: {
     return { ok: false as const, error: uploaded.error.message || "Could not upload the report PDF." };
   }
 
-  const { data, error } = await input.supabase
-    .from("job_files")
-    .insert({
-      id: fileId,
-      company_id: input.companyId,
-      job_id: input.jobId,
-      name: input.fileName,
-      mime_type: contentType,
-      size_bytes: input.pdf.byteLength,
-      storage_path: uploaded.storagePath,
-      url: uploaded.url,
-      created_by: input.createdBy,
-    })
-    .select("*")
-    .single();
+  const base = {
+    id: fileId,
+    company_id: input.companyId,
+    job_id: input.jobId,
+    name: input.fileName,
+    size_bytes: input.pdf.byteLength,
+    storage_path: uploaded.storagePath,
+    url: uploaded.url,
+  };
+
+  // Live Truss schema: content_type + category + uploaded_by (uuid).
+  const livePayload = {
+    ...base,
+    content_type: contentType,
+    category: "other",
+    uploaded_by: input.uploadedBy?.trim() || null,
+  };
+  // Repo migration schema: mime_type + created_by (text).
+  const legacyPayload = {
+    ...base,
+    mime_type: contentType,
+    created_by: input.createdBy || "",
+  };
+
+  type JobFileRow = Database["public"]["Tables"]["job_files"]["Row"];
+
+  async function tryInsert(payload: Record<string, unknown>) {
+    return input.supabase
+      .from("job_files")
+      .insert(payload as Database["public"]["Tables"]["job_files"]["Insert"])
+      .select("*")
+      .single();
+  }
+
+  let { data, error } = await tryInsert(livePayload);
+  if (error) {
+    const message = (error.message ?? "").toLowerCase();
+    const schemaMismatch =
+      message.includes("content_type") ||
+      message.includes("uploaded_by") ||
+      message.includes("category") ||
+      message.includes("mime_type") ||
+      message.includes("created_by") ||
+      message.includes("schema cache") ||
+      message.includes("could not find the");
+    if (schemaMismatch) {
+      ({ data, error } = await tryInsert(legacyPayload));
+    }
+  }
 
   if (error || !data) {
     return { ok: false as const, error: error?.message || "Could not save the report file." };
   }
-  return { ok: true as const, file: data };
+  return { ok: true as const, file: data as JobFileRow };
 }
 
 export function measurementsJson(value: Record<string, unknown>): Json {

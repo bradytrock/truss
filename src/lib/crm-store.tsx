@@ -7433,13 +7433,40 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           company_id: user.companyId,
           job_id: record.jobId,
           name: record.name,
-          mime_type: record.mimeType,
+          content_type: record.mimeType || "application/octet-stream",
+          category: "other",
           size_bytes: record.sizeBytes,
           storage_path: record.storagePath,
           url: record.url,
-          created_by: record.createdBy,
+          uploaded_by: looksLikeUuid(user.id) ? user.id : null,
         };
-        const { data, error } = await supabase.from("job_files").insert(payload).select("*").single();
+        let { data, error } = await supabase.from("job_files").insert(payload).select("*").single();
+        if (error) {
+          const message = (error.message ?? "").toLowerCase();
+          if (
+            message.includes("content_type") ||
+            message.includes("uploaded_by") ||
+            message.includes("category") ||
+            message.includes("schema cache") ||
+            message.includes("could not find the")
+          ) {
+            ({ data, error } = await supabase
+              .from("job_files")
+              .insert({
+                id: record.id,
+                company_id: user.companyId,
+                job_id: record.jobId,
+                name: record.name,
+                mime_type: record.mimeType,
+                size_bytes: record.sizeBytes,
+                storage_path: record.storagePath,
+                url: record.url,
+                created_by: record.createdBy,
+              })
+              .select("*")
+              .single());
+          }
+        }
         if (data && !error) {
           saved.push({ ...mapJobFile(data), bucket: uploaded.bucket });
           continue;

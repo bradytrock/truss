@@ -880,15 +880,27 @@ export function mapJobPhoto(row: PhotoRow): JobPhoto {
 }
 
 export function mapJobFile(row: JobFileRow): JobFile {
+  const mimeType =
+    "mime_type" in row && typeof row.mime_type === "string"
+      ? row.mime_type
+      : "content_type" in row && typeof (row as { content_type?: string }).content_type === "string"
+        ? String((row as { content_type?: string }).content_type)
+        : "";
+  const createdBy =
+    "created_by" in row && row.created_by != null
+      ? String(row.created_by)
+      : "uploaded_by" in row && (row as { uploaded_by?: string | null }).uploaded_by
+        ? String((row as { uploaded_by?: string | null }).uploaded_by)
+        : "";
   return {
     id: row.id,
-    jobId: row.job_id,
+    jobId: row.job_id ?? "",
     name: row.name,
-    mimeType: row.mime_type ?? "",
+    mimeType,
     sizeBytes: Number(row.size_bytes) || 0,
     url: row.url,
     storagePath: row.storage_path,
-    createdBy: row.created_by ?? "",
+    createdBy,
     createdAt: row.created_at,
   };
 }

@@ -1081,28 +1081,51 @@ export type Database = {
         Row: {
           id: string;
           company_id: string;
-          job_id: string;
+          job_id: string | null;
+          opportunity_id?: string | null;
           name: string;
-          mime_type: string;
+          mime_type?: string;
+          content_type?: string;
+          category?: string;
           size_bytes: number;
           storage_path: string;
           url: string;
-          created_by: string;
+          created_by?: string;
+          uploaded_by?: string | null;
           created_at: string;
         };
         Insert: {
           id?: string;
           company_id: string;
-          job_id: string;
+          job_id?: string | null;
+          opportunity_id?: string | null;
           name: string;
           mime_type?: string;
+          content_type?: string;
+          category?: string;
           size_bytes?: number;
           storage_path: string;
           url: string;
           created_by?: string;
+          uploaded_by?: string | null;
           created_at?: string;
         };
-        Update: Partial<Database["public"]["Tables"]["job_files"]["Insert"]>;
+        Update: {
+          id?: string;
+          company_id?: string;
+          job_id?: string | null;
+          opportunity_id?: string | null;
+          name?: string;
+          mime_type?: string;
+          content_type?: string;
+          category?: string;
+          size_bytes?: number;
+          storage_path?: string;
+          url?: string;
+          created_by?: string;
+          uploaded_by?: string | null;
+          created_at?: string;
+        };
         Relationships: [];
       };
       eagleview_connections: {
