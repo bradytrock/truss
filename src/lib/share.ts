@@ -69,11 +69,11 @@ export function seedShareToken(kind: "e" | "i", number: string) {
   return digits ? `nl-${kind}-${digits}` : newShareToken();
 }
 
-export function sharePath(kind: "e" | "i" | "p", token: string) {
+export function sharePath(kind: "e" | "i" | "p" | "f", token: string) {
   return `/share/${kind}/${token}`;
 }
 
-export function shareUrl(kind: "e" | "i" | "p", token: string, origin = "") {
+export function shareUrl(kind: "e" | "i" | "p" | "f", token: string, origin = "") {
   const path = sharePath(kind, token);
   if (origin) return `${origin.replace(/\/+$/, "")}${path}`;
   if (typeof window !== "undefined") return `${window.location.origin}${path}`;

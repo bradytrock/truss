@@ -1,5 +1,6 @@
 import { normalizeShareToken } from "@/lib/share";
 import { shareJson, shareNotFoundJson } from "@/lib/share-server";
+import { withStorageShareAccessDeep } from "@/lib/storage/share-access";
 import { createAnonClient } from "@/lib/supabase/anon";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
@@ -25,7 +26,7 @@ export async function GET(_request: Request, context: { params: Promise<{ token:
     if (data == null) {
       return shareNotFoundJson(trimmed);
     }
-    return shareJson(data);
+    return shareJson(withStorageShareAccessDeep(data, trimmed));
   } catch (error) {
     console.error("[share] shared_invoice threw", error);
     return shareNotFoundJson(trimmed);

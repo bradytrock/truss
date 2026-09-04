@@ -1093,6 +1093,8 @@ export type Database = {
           created_by?: string;
           uploaded_by?: string | null;
           created_at: string;
+          share_token?: string | null;
+          share_token_created_at?: string | null;
         };
         Insert: {
           id?: string;
@@ -1109,6 +1111,8 @@ export type Database = {
           created_by?: string;
           uploaded_by?: string | null;
           created_at?: string;
+          share_token?: string | null;
+          share_token_created_at?: string | null;
         };
         Update: {
           id?: string;
@@ -1125,6 +1129,8 @@ export type Database = {
           created_by?: string;
           uploaded_by?: string | null;
           created_at?: string;
+          share_token?: string | null;
+          share_token_created_at?: string | null;
         };
         Relationships: [];
       };
@@ -1759,6 +1765,14 @@ export type Database = {
       shared_page: {
         Args: { p_token: string };
         Returns: Json;
+      };
+      shared_job_file: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      storage_share_access: {
+        Args: { p_token: string; p_path: string };
+        Returns: boolean;
       };
       shared_card: {
         Args: { p_company: string; p_person: string };

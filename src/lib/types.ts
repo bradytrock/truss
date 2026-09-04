@@ -782,6 +782,8 @@ export interface JobFile {
   createdBy: string;
   createdAt: string;
   bucket?: string;
+  /** Unguessable public share token; blank means no public link. */
+  shareToken?: string;
 }
 
 export const PHOTO_PAGE_LAYOUTS = ["one", "two", "four"] as const;

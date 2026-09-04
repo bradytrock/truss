@@ -926,6 +926,10 @@ export function mapJobFile(row: JobFileRow): JobFile {
     storagePath: row.storage_path,
     createdBy,
     createdAt: row.created_at,
+    shareToken:
+      "share_token" in row && typeof (row as { share_token?: string | null }).share_token === "string"
+        ? String((row as { share_token?: string | null }).share_token ?? "").trim()
+        : "",
   };
 }
 

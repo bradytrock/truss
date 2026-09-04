@@ -32,14 +32,21 @@ export function storageProxyPath(key: string) {
 
 /**
  * Durable browser URL for a stored object.
- * Prefer B2_PUBLIC_BASE_URL when the bucket is public; otherwise a relative
- * `/api/storage/object` path so links work on whatever host the user is on
- * (never bake request.origin — cloud previews become localhost:randomPort).
+ * Private kinds (job files, photos, receipts) always go through the authenticated
+ * `/api/storage/object` proxy. Only company-assets may use a public B2 base URL
+ * (logos on share pages / cards).
  */
 export function publicObjectUrl(key: string, publicBaseUrl?: string) {
   const objectKey = key.replace(/^\/+/, "");
+  const parts = objectKey.split("/");
+  const kind =
+    parts.length >= 2 && isCompanyId(parts[0]) && isStorageKindValue(parts[1])
+      ? parts[1]
+      : parts.length >= 2 && isStorageKindValue(parts[0]) && isCompanyId(parts[1])
+        ? parts[0]
+        : null;
   const base = (publicBaseUrl ?? "").replace(/\/+$/, "");
-  if (base) return `${base}/${objectKey}`;
+  if (base && kind === "company-assets") return `${base}/${objectKey}`;
   return storageProxyPath(objectKey);
 }
 

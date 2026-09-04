@@ -131,6 +131,19 @@ export function companyIdFromObjectKey(path: string): string | null {
   return null;
 }
 
+/** Kind segment for a canonical or legacy object key. */
+export function storageKindFromObjectKey(path: string): StorageKind | null {
+  const clean = path.replace(/^\/+/, "");
+  const parts = clean.split("/");
+  if (parts.length >= 2 && isCompanyId(parts[0]) && isStorageKind(parts[1])) {
+    return parts[1];
+  }
+  if (parts.length >= 2 && isStorageKind(parts[0]) && isCompanyId(parts[1])) {
+    return parts[0];
+  }
+  return null;
+}
+
 export async function signedObjectUrl(path: string, expiresIn = 60 * 60 * 24 * 7) {
   const client = getB2Client();
   const { bucket } = b2Config();

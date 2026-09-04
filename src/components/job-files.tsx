@@ -7,6 +7,8 @@ import {
   FileText,
   Film,
   ImageIcon,
+  Link2,
+  Link2Off,
   Paperclip,
   Trash2,
 } from "lucide-react";
@@ -27,6 +29,7 @@ export function JobFilesPanel({
   const crm = useCrm();
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [sharingId, setSharingId] = useState<string | null>(null);
   const files = (crm.jobFiles ?? []).filter((file) => file.jobId === jobId);
 
   async function attach(list: FileList | null) {
@@ -54,6 +57,33 @@ export function JobFilesPanel({
     if (ok) toast.success(`${file.name} removed.`);
   }
 
+  async function copyShareLink(file: JobFile) {
+    if (disabled) return;
+    setSharingId(file.id);
+    try {
+      const url = await crm.shareJobFile(file.id);
+      if (!url) return;
+      await navigator.clipboard.writeText(url);
+      toast.success("Share link copied. Anyone with the link can open this file.");
+    } catch {
+      toast.error("Could not copy that share link.");
+    } finally {
+      setSharingId(null);
+    }
+  }
+
+  async function revokeShare(file: JobFile) {
+    if (disabled) return;
+    if (!window.confirm(`Revoke the public link for ${file.name}?`)) return;
+    setSharingId(file.id);
+    try {
+      const ok = await crm.revokeJobFileShare(file.id);
+      if (ok) toast.success("Share link revoked.");
+    } finally {
+      setSharingId(null);
+    }
+  }
+
   return (
     <section>
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -62,7 +92,7 @@ export function JobFilesPanel({
           <p className="mt-0.5 text-sm text-muted-foreground">
             {files.length === 0
               ? "No files on this job."
-              : `${files.length} file${files.length === 1 ? "" : "s"}`}
+              : `${files.length} file${files.length === 1 ? "" : "s"} · private unless you share a link`}
           </p>
         </div>
         <input
@@ -86,44 +116,74 @@ export function JobFilesPanel({
       </div>
       {files.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Attach PDFs, insurance docs, contracts, or photos from the field. On a phone, Attach
-          opens the camera, the photo library, or Browse.
+          Attach PDFs, insurance docs, contracts, or photos from the field. Files stay private to
+          signed-in teammates; create a share link only when someone outside needs that one file.
         </p>
       ) : (
         <ul className="space-y-1.5">
-          {files.map((file) => (
-            <li key={file.id} className="flex items-center gap-2 rounded-md border px-3 py-2">
-              <FileThumb file={file} />
-              <a
-                href={file.url}
-                target="_blank"
-                rel="noreferrer"
-                className="min-w-0 flex-1 text-left"
-              >
-                <span className="block truncate text-sm font-medium">{file.name}</span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">
-                  {[
-                    formatFileSize(file.sizeBytes),
-                    file.createdBy.trim() || null,
-                    formatDate(file.createdAt),
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </span>
-              </a>
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                className="shrink-0"
-                disabled={disabled}
-                onClick={() => void remove(file)}
-                aria-label={`Remove ${file.name}`}
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-            </li>
-          ))}
+          {files.map((file) => {
+            const shared = Boolean(file.shareToken?.trim());
+            return (
+              <li key={file.id} className="flex items-center gap-2 rounded-md border px-3 py-2">
+                <FileThumb file={file} />
+                <a
+                  href={file.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <span className="block truncate text-sm font-medium">{file.name}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {[
+                      formatFileSize(file.sizeBytes),
+                      file.createdBy.trim() || null,
+                      formatDate(file.createdAt),
+                      shared ? "shared" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                </a>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  className="shrink-0"
+                  disabled={disabled || sharingId === file.id}
+                  onClick={() => void copyShareLink(file)}
+                  aria-label={shared ? `Copy share link for ${file.name}` : `Share ${file.name}`}
+                  title={shared ? "Copy share link" : "Create share link"}
+                >
+                  <Link2 className="size-3.5" />
+                </Button>
+                {shared ? (
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    className="shrink-0"
+                    disabled={disabled || sharingId === file.id}
+                    onClick={() => void revokeShare(file)}
+                    aria-label={`Revoke share link for ${file.name}`}
+                    title="Revoke share link"
+                  >
+                    <Link2Off className="size-3.5" />
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  className="shrink-0"
+                  disabled={disabled}
+                  onClick={() => void remove(file)}
+                  aria-label={`Remove ${file.name}`}
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </section>

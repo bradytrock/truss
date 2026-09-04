@@ -2,6 +2,7 @@ import { parseEstimateSignature } from "@/lib/estimate-signature";
 import { normalizeShareToken } from "@/lib/share";
 import { recordShareEvent } from "@/lib/share-estimate-audit";
 import { shareJson, shareNotFoundJson } from "@/lib/share-server";
+import { withStorageShareAccessDeep } from "@/lib/storage/share-access";
 import { createAnonClient } from "@/lib/supabase/anon";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import {
@@ -46,7 +47,7 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
       return shareNotFoundJson(trimmed);
     }
     await recordShareEvent(trimmed, request.headers, { kind: "opened" });
-    return shareJson(data);
+    return shareJson(withStorageShareAccessDeep(data, trimmed));
   } catch (error) {
     console.error("[share] shared_estimate threw", error);
     return shareNotFoundJson(trimmed);
@@ -86,7 +87,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ token
       if (data == null) {
         return shareNotFoundJson(trimmed);
       }
-      return shareJson(data);
+      return shareJson(withStorageShareAccessDeep(data, trimmed));
     }
     const { data, error } = await supabase.rpc("select_shared_estimate_line", {
       p_token: trimmed,
@@ -102,7 +103,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ token
     if (data == null) {
       return shareNotFoundJson(trimmed);
     }
-    return shareJson(data);
+    return shareJson(withStorageShareAccessDeep(data, trimmed));
   } catch {
     return shareNotFoundJson(trimmed);
   }
@@ -181,7 +182,7 @@ export async function POST(request: Request, context: { params: Promise<{ token:
       documentSnapshot: snapshot ?? undefined,
       timeZone: typeof body.timeZone === "string" ? body.timeZone : "",
     });
-    return shareJson(data);
+    return shareJson(withStorageShareAccessDeep(data, trimmed));
   } catch {
     return shareNotFoundJson(trimmed);
   }

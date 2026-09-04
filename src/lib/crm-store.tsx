@@ -19,7 +19,7 @@ import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/reti
 import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
-import { newShareToken } from "@/lib/share";
+import { newShareToken, shareUrl } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId, jobInsertPayload, jobsFilledFromLeads, jobPatchFromLead, leadOverviewBackfill } from "@/lib/job-record";
 import {
   amountForEstimate,
@@ -1080,6 +1080,9 @@ type CrmContextValue = CrmState & {
   }) => Promise<void>;
   addJobFiles: (jobId: string, files: File[]) => Promise<JobFile[]>;
   deleteJobFile: (id: string) => Promise<boolean>;
+  /** Mint or return an existing public share link for one job file. */
+  shareJobFile: (id: string) => Promise<string | null>;
+  revokeJobFileShare: (id: string) => Promise<boolean>;
   addPhotoReport: (report: PhotoReport) => Promise<PhotoReport>;
   updatePhotoReport: (id: string, patch: Partial<Omit<PhotoReport, "id" | "jobId" | "createdAt">>) => Promise<boolean>;
   deletePhotoReport: (id: string) => Promise<boolean>;
@@ -7476,6 +7479,82 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [state.jobFiles, state.jobs, updateJob],
   );
 
+  const shareJobFile = useCallback(
+    async (id: string) => {
+      const current = state.jobFiles.find((file) => file.id === id);
+      if (!current) return null;
+      const existing = current.shareToken?.trim() || "";
+      if (existing) return shareUrl("f", existing);
+      const token = newShareToken();
+      const supabase = maybeClient();
+      if (supabase) {
+        const { error } = await supabase
+          .from("job_files")
+          .update({
+            share_token: token,
+            share_token_created_at: new Date().toISOString(),
+          })
+          .eq("id", id);
+        if (error) {
+          const message = (error.message ?? "").toLowerCase();
+          if (message.includes("share_token_created_at")) {
+            const retry = await supabase.from("job_files").update({ share_token: token }).eq("id", id);
+            if (retry.error) {
+              toast.error(retry.error.message);
+              return null;
+            }
+          } else {
+            toast.error(error.message);
+            return null;
+          }
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        jobFiles: prev.jobFiles.map((file) =>
+          file.id === id ? { ...file, shareToken: token } : file,
+        ),
+      }));
+      return shareUrl("f", token);
+    },
+    [state.jobFiles],
+  );
+
+  const revokeJobFileShare = useCallback(
+    async (id: string) => {
+      const current = state.jobFiles.find((file) => file.id === id);
+      if (!current) return false;
+      const supabase = maybeClient();
+      if (supabase) {
+        const { error } = await supabase
+          .from("job_files")
+          .update({ share_token: null, share_token_created_at: null })
+          .eq("id", id);
+        if (error) {
+          const message = (error.message ?? "").toLowerCase();
+          if (message.includes("share_token_created_at")) {
+            const retry = await supabase.from("job_files").update({ share_token: null }).eq("id", id);
+            if (retry.error) {
+              toast.error(retry.error.message);
+              return false;
+            }
+          } else {
+            toast.error(error.message);
+            return false;
+          }
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        jobFiles: prev.jobFiles.map((file) =>
+          file.id === id ? { ...file, shareToken: "" } : file,
+        ),
+      }));
+      return true;
+    },
+    [state.jobFiles],
+  );
+
   const addPhotoReport = useCallback(
     async (report: PhotoReport) => {
       const next: PhotoReport = {
@@ -8894,6 +8973,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addJobPhoto,
       addJobFiles,
       deleteJobFile,
+      shareJobFile,
+      revokeJobFileShare,
       addPhotoReport,
       updatePhotoReport,
       deletePhotoReport,
@@ -9042,6 +9123,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addJobPhoto,
       addJobFiles,
       deleteJobFile,
+      shareJobFile,
+      revokeJobFileShare,
       addPhotoReport,
       updatePhotoReport,
       deletePhotoReport,
