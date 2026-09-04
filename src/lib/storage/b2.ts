@@ -7,26 +7,21 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { STORAGE_KINDS, isStorageKind, type StorageKind } from "@/lib/storage/kinds";
+import {
+  isAllowedObjectKey,
+  isCompanyId,
+  publicObjectUrl,
+} from "@/lib/storage/urls";
 
-export const STORAGE_KINDS = [
-  "job-files",
-  "job-photos",
-  "receipts",
-  "company-assets",
-] as const;
-
-export type StorageKind = (typeof STORAGE_KINDS)[number];
-
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-export function isStorageKind(value: string): value is StorageKind {
-  return (STORAGE_KINDS as readonly string[]).includes(value);
-}
-
-export function isCompanyId(value: string) {
-  return UUID_RE.test(value.trim());
-}
+export { STORAGE_KINDS, isStorageKind, type StorageKind };
+export {
+  isAllowedObjectKey,
+  isCompanyId,
+  publicObjectUrl,
+  resolveStoredFileUrl,
+  storageProxyPath,
+} from "@/lib/storage/urls";
 
 export function b2Config() {
   const keyId = process.env.B2_KEY_ID?.trim() || "";
@@ -97,23 +92,19 @@ export function storageObjectKey(companyId: string, kind: StorageKind, path: str
     throw new Error("Invalid storage path.");
   }
 
-  // Already canonical.
   if (clean.startsWith(`${companyId}/${kind}/`)) return clean;
 
-  // Legacy kind-first: kind/companyId/…
   const legacyPrefix = `${kind}/${companyId}/`;
   if (clean.startsWith(legacyPrefix)) {
     return `${companyId}/${kind}/${clean.slice(legacyPrefix.length)}`;
   }
 
-  // Company-relative without kind: companyId/payments/… → companyId/kind/payments/…
   if (clean.startsWith(`${companyId}/`)) {
     const rest = clean.slice(`${companyId}/`.length);
     if (rest.startsWith(`${kind}/`)) return `${companyId}/${rest}`;
     return `${companyId}/${kind}/${rest}`;
   }
 
-  // Kind-relative: payments/… or jobId/file.pdf
   if (clean.startsWith(`${kind}/`)) {
     return `${companyId}/${clean}`;
   }
@@ -133,40 +124,11 @@ export function companyIdFromObjectKey(path: string): string | null {
   const clean = path.replace(/^\/+/, "");
   const first = clean.split("/")[0] || "";
   if (isCompanyId(first)) return first;
-  // Legacy kind-first: kind/companyId/…
   const parts = clean.split("/");
   if (parts.length >= 2 && isStorageKind(parts[0]) && isCompanyId(parts[1])) {
     return parts[1];
   }
   return null;
-}
-
-/** True when the key is under a known company layout (canonical or legacy). */
-export function isAllowedObjectKey(path: string) {
-  const clean = path.replace(/^\/+/, "");
-  if (!clean || clean.includes("..")) return false;
-  const parts = clean.split("/");
-  if (parts.length < 3) return false;
-  // Canonical: companyId/kind/…
-  if (isCompanyId(parts[0]) && isStorageKind(parts[1])) return true;
-  // Legacy: kind/companyId/…
-  if (isStorageKind(parts[0]) && isCompanyId(parts[1])) return true;
-  return false;
-}
-
-/**
- * Browser/email URL for an object.
- * Prefer B2_PUBLIC_BASE_URL when the bucket is public; otherwise use the app proxy.
- */
-export function publicObjectUrl(key: string, appOrigin?: string) {
-  const objectKey = key.replace(/^\/+/, "");
-  const { publicBaseUrl } = b2Config();
-  if (publicBaseUrl) {
-    return `${publicBaseUrl}/${objectKey}`;
-  }
-  const origin = (appOrigin || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, "");
-  const proxy = `/api/storage/object?path=${encodeURIComponent(objectKey)}`;
-  return origin ? `${origin}${proxy}` : proxy;
 }
 
 export async function signedObjectUrl(path: string, expiresIn = 60 * 60 * 24 * 7) {
@@ -208,11 +170,9 @@ export async function uploadToB2(input: {
   path: string;
   body: Buffer | Uint8Array;
   contentType: string;
-  /** App origin for durable proxy URLs when the bucket is private. */
-  appOrigin?: string;
 }) {
   const client = getB2Client();
-  const { bucket } = b2Config();
+  const { bucket, publicBaseUrl } = b2Config();
   const key = storageObjectKey(input.companyId, input.kind, input.path);
   const body =
     input.body instanceof Buffer
@@ -233,7 +193,7 @@ export async function uploadToB2(input: {
     kind: input.kind,
     bucket: `b2:${bucket}`,
     storagePath: key,
-    url: publicObjectUrl(key, input.appOrigin),
+    url: publicObjectUrl(key, publicBaseUrl),
   };
 }
 

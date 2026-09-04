@@ -14,6 +14,7 @@ import { fillEstimateTemplate, fillEstimateTemplateLine } from "@/lib/estimate-t
 import { parsePageTemplate, parsePhotoReportPages } from "@/lib/photo-report";
 import { customFieldsJson, fillJobRecord, parseCustomFields } from "@/lib/job-record";
 import { parseMarket } from "@/lib/market";
+import { resolveStoredFileUrl } from "@/lib/storage/urls";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { parseQbStatus } from "@/lib/types";
 import { parseReturningClientStatus } from "@/lib/returning-client";
@@ -143,9 +144,15 @@ export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>):
     state: row.state ?? "",
     postalCode: row.postal_code ?? "",
     licenseNumber: row.license_number ?? "",
-    logoUrl: row.logo_url ?? "",
+    logoUrl: resolveStoredFileUrl({
+      storagePath: row.logo_storage_path,
+      url: row.logo_url,
+    }),
     logoStoragePath: row.logo_storage_path ?? "",
-    cardLogoUrl: "card_logo_url" in row ? String(row.card_logo_url ?? "") : "",
+    cardLogoUrl: resolveStoredFileUrl({
+      storagePath: "card_logo_storage_path" in row ? row.card_logo_storage_path : "",
+      url: "card_logo_url" in row ? row.card_logo_url : "",
+    }),
     cardLogoStoragePath:
       "card_logo_storage_path" in row ? String(row.card_logo_storage_path ?? "") : "",
     paymentVenmo: "payment_venmo" in row ? String(row.payment_venmo ?? "") : "",
@@ -177,7 +184,10 @@ export function mapStaff(row: StaffRow): StaffMember {
     email: row.email ?? "",
     phone: row.phone ?? "",
     cardSlug: "card_slug" in row ? String(row.card_slug ?? "") : "",
-    photoUrl: "photo_url" in row ? String(row.photo_url ?? "") : "",
+    photoUrl: resolveStoredFileUrl({
+      storagePath: "photo_storage_path" in row ? row.photo_storage_path : "",
+      url: "photo_url" in row ? row.photo_url : "",
+    }),
     photoStoragePath: "photo_storage_path" in row ? String(row.photo_storage_path ?? "") : "",
     googleLocationId:
       "google_location_id" in row ? ((row.google_location_id as string | null) ?? null) : null,
@@ -740,7 +750,10 @@ export function mapPayment(row: PaymentRow): Payment {
     method: row.method,
     paidAt: row.paid_at,
     reference: row.reference,
-    receiptUrl: row.receipt_url ?? "",
+    receiptUrl: resolveStoredFileUrl({
+      storagePath: row.receipt_storage_path,
+      url: row.receipt_url,
+    }),
     receiptStoragePath: row.receipt_storage_path ?? null,
     qbStatus: parseQbStatus(row.qb_status),
     createdBy: row.created_by ?? "",
@@ -779,7 +792,10 @@ export function mapExpense(row: Database["public"]["Tables"]["expenses"]["Row"])
         ? method
         : "credit_card",
     memo: row.memo,
-    receiptUrl: row.receipt_url,
+    receiptUrl: resolveStoredFileUrl({
+      storagePath: row.receipt_storage_path,
+      url: row.receipt_url,
+    }),
     receiptStoragePath: row.receipt_storage_path,
     qbStatus: parseQbStatus(row.qb_status),
     extractedByAi: Boolean(row.extracted_by_ai),
@@ -873,7 +889,10 @@ export function mapJobPhoto(row: PhotoRow): JobPhoto {
     caption: row.caption,
     category: row.category,
     takenAt: row.taken_at,
-    imageUrl: row.image_url,
+    imageUrl: resolveStoredFileUrl({
+      storagePath: row.storage_path,
+      url: row.image_url,
+    }),
     storagePath: row.storage_path,
     createdBy: "created_by" in row ? String(row.created_by ?? "") : "",
   };
@@ -898,7 +917,10 @@ export function mapJobFile(row: JobFileRow): JobFile {
     name: row.name,
     mimeType,
     sizeBytes: Number(row.size_bytes) || 0,
-    url: row.url,
+    url: resolveStoredFileUrl({
+      storagePath: row.storage_path,
+      url: row.url,
+    }),
     storagePath: row.storage_path,
     createdBy,
     createdAt: row.created_at,
