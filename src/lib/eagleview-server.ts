@@ -5,6 +5,7 @@ import {
   type EagleviewProductId,
 } from "@/lib/eagleview";
 import { mapEagleviewConnection } from "@/lib/supabase/mappers";
+import { uploadToB2 } from "@/lib/storage/b2";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -92,26 +93,24 @@ export async function attachEagleviewPdf(input: {
   const storagePath = `${input.companyId}/${input.jobId}/${fileId}.pdf`;
   const contentType = "application/pdf";
 
-  async function tryUpload(bucket: string, path: string) {
-    const { error } = await input.supabase.storage.from(bucket).upload(path, input.pdf, {
+  let uploaded: { bucket: string; storagePath: string; url: string };
+  try {
+    const result = await uploadToB2({
+      kind: "job-files",
+      path: storagePath,
+      body: input.pdf,
       contentType,
-      upsert: false,
     });
-    if (error) return { ok: false as const, error };
-    return {
-      ok: true as const,
-      bucket,
-      storagePath: path,
-      url: input.supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl,
+    uploaded = {
+      bucket: result.bucket,
+      storagePath: result.storagePath,
+      url: result.url,
     };
-  }
-
-  let uploaded = await tryUpload("job-files", storagePath);
-  if (!uploaded.ok) {
-    uploaded = await tryUpload("receipts", `${input.companyId}/job-files/${input.jobId}/${fileId}.pdf`);
-  }
-  if (!uploaded.ok) {
-    return { ok: false as const, error: uploaded.error.message || "Could not upload the report PDF." };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : "Could not upload the report PDF.",
+    };
   }
 
   const base = {

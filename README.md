@@ -1,6 +1,6 @@
 # Truss
 
-A contractor operating system for restoration and home improvement: jobs, estimates, invoices, calendar, training, texts and Gmail in one inbox, and job photos. Auth, Postgres, Row Level Security, Realtime, and Storage all run on Supabase.
+A contractor operating system for restoration and home improvement: jobs, estimates, invoices, calendar, training, texts and Gmail in one inbox, and job photos. Auth, Postgres, Row Level Security, and Realtime run on Supabase. File blobs (job files, photos, receipts, logos) upload to Backblaze B2.
 
 Northline Construction’s sample book is Denver residential work — hail roofs, water and fire restoration, kitchens, windows — plus a thin commercial leftover. Homeowners do not need a company on file.
 
@@ -91,7 +91,7 @@ Who took a job photo needs [`20260821230000_job_photo_created_by.sql`](https://r
 
 Pages (job documents you send out) need [`20260821240000_page_share_tokens.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821240000_page_share_tokens.sql) (or a fresh bootstrap) so a client share link stays on the Page. Until that runs, you can still build Pages and download a PDF in this browser.
 
-Job file attachments need [`20260825170000_job_files.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825170000_job_files.sql) (or a fresh bootstrap) so PDFs and other documents live in the `job-files` bucket. If that table already exists but uploads still fail, run [`20260825181000_job_files_grants.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825181000_job_files_grants.sql). Until the bucket is there, Attach still saves the file on the job using existing storage.
+Job file attachments need [`20260825170000_job_files.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825170000_job_files.sql) (or a fresh bootstrap) so the `job_files` table exists. Uploads go to Backblaze B2 (see env vars below), not Supabase Storage. If that table already exists but inserts fail, run [`20260825181000_job_files_grants.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825181000_job_files_grants.sql).
 
 Two-way texts need [`20260825120000_messages.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825120000_messages.sql) (or a fresh bootstrap) so Messages persist and inbound replies log on the job. Safe to re-run: it adds activity type **text**, upgrades an older Sendblue `messages` table (`to_number` / uuid `created_by`) to `phone` / `handle` / `job_id`, and creates `ingest_inbound_text`. Until that runs, you can still send from this browser; the thread stays local.
 
@@ -134,7 +134,7 @@ Signup creates your seat only — no sample roster. Existing companies drop Nort
 - **Postgres** — contacts, homeowners, pursuits, jobs, catalog, estimates, estimate templates, invoices, payments, expenses, material orders, material order templates, schedule, calendar accounts, Gmail accounts, tagged Gmail messages, photos, job files, pages, teams, seats, account invites, training progress, training bulletins, messages, returning-client lead notices, company card slugs, per-person card slugs
 - **RLS** — every query is limited to `current_company_id()`
 - **Realtime** — the board and records refresh when anyone in the company writes
-- **Storage** — `job-photos` bucket (`{companyId}/{jobId}/{uuid}`), `job-files` bucket (`{companyId}/{jobId}/{uuid}`), `receipts` bucket (`{companyId}/expenses|payments/{uuid}`), and `company-assets` bucket (`{companyId}/logo/{uuid}`) for the letterhead logo
+- **Storage (Backblaze B2)** — one bucket with kind prefixes: `job-files/`, `job-photos/`, `receipts/`, `company-assets/` (paths under `{kind}/{companyId}/…`). Set `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET`, and `B2_REGION` on the host. Optional `B2_ENDPOINT` and `B2_PUBLIC_BASE_URL` (CDN or friendly public base). Uploads go through `/api/storage/upload`. Supabase Storage is no longer used for new files.
 - **Google Calendar** — refresh tokens stay in `calendar_tokens` (RPC only). Metadata and shares are company-visible; company admins can read every linked calendar.
 - **Gmail** — refresh tokens stay in `gmail_tokens` (RPC only). Message metadata is company-visible so tagged mail can show on the job. The inbox lists the current seat’s mailbox.
 

@@ -86,11 +86,9 @@ import {
 } from "@/lib/accounts";
 import { isPublicAppPath } from "@/lib/auth-paths";
 import { defaultTaxRateForMarket, isResidentialMarket, marketForEstimate, parseMarket, projectTypeForMarket, workMarket } from "@/lib/market";
-import { COMPANY_ASSETS_BUCKET, logoExtension, validateLogoFile } from "@/lib/company-logo";
+import { logoExtension, validateLogoFile } from "@/lib/company-logo";
+import { deleteViaApi, uploadViaApi } from "@/lib/storage/client-upload";
 import {
-  isImageFile,
-  isMissingStorageBucket,
-  isPdfFile,
   readFileDataUrl,
   withJobFileField,
   withoutJobFileId,
@@ -5408,17 +5406,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       let receiptStoragePath: string | null = null;
       const supabase = maybeClient();
       if (input.file) {
-        if (supabase) {
+        if (supabase && user.companyId && user.companyId !== "local") {
           const ext = input.file.name.split(".").pop()?.toLowerCase() || "jpg";
-          receiptStoragePath = `${user.companyId}/payments/${crypto.randomUUID()}.${ext}`;
-          const { error: uploadError } = await supabase.storage
-            .from("receipts")
-            .upload(receiptStoragePath, input.file, { contentType: input.file.type, upsert: false });
-          if (uploadError) {
-            toast.error(uploadError.message);
+          const relativePath = `${user.companyId}/payments/${crypto.randomUUID()}.${ext}`;
+          try {
+            const uploaded = await uploadViaApi("receipts", input.file, relativePath);
+            receiptStoragePath = uploaded.path;
+            receiptUrl = uploaded.publicUrl;
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Could not upload the receipt.");
             return;
           }
-          receiptUrl = supabase.storage.from("receipts").getPublicUrl(receiptStoragePath).data.publicUrl;
         } else {
           receiptUrl = await fileToDataUrl(input.file);
         }
@@ -5583,17 +5581,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       let receiptStoragePath: string | null = null;
       const supabase = maybeClient();
       if (input.file) {
-        if (supabase) {
+        if (supabase && user.companyId && user.companyId !== "local") {
           const ext = input.file.name.split(".").pop()?.toLowerCase() || "jpg";
-          receiptStoragePath = `${user.companyId}/expenses/${crypto.randomUUID()}.${ext}`;
-          const { error: uploadError } = await supabase.storage
-            .from("receipts")
-            .upload(receiptStoragePath, input.file, { contentType: input.file.type, upsert: false });
-          if (uploadError) {
-            toast.error(uploadError.message);
+          const relativePath = `${user.companyId}/expenses/${crypto.randomUUID()}.${ext}`;
+          try {
+            const uploaded = await uploadViaApi("receipts", input.file, relativePath);
+            receiptStoragePath = uploaded.path;
+            receiptUrl = uploaded.publicUrl;
+          } catch (error) {
+            toast.error(error instanceof Error ? error.message : "Could not upload the receipt.");
             return null;
           }
-          receiptUrl = supabase.storage.from("receipts").getPublicUrl(receiptStoragePath).data.publicUrl;
         } else {
           receiptUrl = await fileToDataUrl(input.file);
         }
@@ -7274,15 +7272,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       let storagePath: string | null = null;
       if (input.file) {
         const ext = input.file.name.split(".").pop()?.toLowerCase() || "jpg";
-        storagePath = `${user.companyId}/${input.jobId}/${crypto.randomUUID()}.${ext}`;
-        const { error: uploadError } = await supabase.storage
-          .from("job-photos")
-          .upload(storagePath, input.file, { contentType: input.file.type, upsert: false });
-        if (uploadError) {
-          toast.error(uploadError.message);
+        const relativePath = `${user.companyId}/${input.jobId}/${crypto.randomUUID()}.${ext}`;
+        try {
+          const uploaded = await uploadViaApi("job-photos", input.file, relativePath);
+          storagePath = uploaded.path;
+          imageUrl = uploaded.publicUrl;
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Could not upload the photo.");
           return;
         }
-        imageUrl = supabase.storage.from("job-photos").getPublicUrl(storagePath).data.publicUrl;
       }
       if (!imageUrl) {
         toast.error("Add a photo file or an image URL.");
@@ -7333,7 +7331,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error("Connect a Supabase project to attach files.");
         return [];
       }
-      const client = supabase;
       const author = (effectiveStaff?.name || user.name).trim();
       const saved: JobFile[] = [];
       const job = state.jobs.find((item) => item.id === jobId);
@@ -7347,71 +7344,32 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         const rawExt = file.name.split(".").pop()?.toLowerCase() ?? "";
         const ext = rawExt && rawExt.length <= 8 && /^[a-z0-9]+$/.test(rawExt) ? rawExt : "bin";
         const fileId = crypto.randomUUID();
-        const storagePath = `${user.companyId}/${jobId}/${fileId}.${ext}`;
-        const contentType = file.type || "application/octet-stream";
-
-        async function tryUpload(bucket: string, path: string) {
-          const { error } = await client.storage.from(bucket).upload(path, file, {
-            contentType,
-            upsert: false,
-          });
-          if (error) return { ok: false as const, error };
-          return {
-            ok: true as const,
-            bucket,
-            storagePath: path,
-            url: client.storage.from(bucket).getPublicUrl(path).data.publicUrl,
-          };
-        }
+        const relativePath = `${user.companyId}/${jobId}/${fileId}.${ext}`;
 
         let uploaded: { bucket: string; storagePath: string; url: string } | null = null;
-        let lastError: { message?: string; code?: string } | null = null;
-
-        const primary = await tryUpload("job-files", storagePath);
-        if (primary.ok) {
-          uploaded = primary;
-        } else {
-          lastError = primary.error;
-          if (isMissingStorageBucket(primary.error)) {
-            await client.storage.createBucket("job-files", {
-              public: true,
-              fileSizeLimit: 25 * 1024 * 1024,
-            });
-            const retry = await tryUpload("job-files", storagePath);
-            if (retry.ok) uploaded = retry;
-            else lastError = retry.error;
-          }
-        }
-
-        const fallbackPath = `${user.companyId}/job-files/${jobId}/${fileId}.${ext}`;
-        if (!uploaded && file.size <= 10 * 1024 * 1024) {
-          if (isPdfFile(file) || isImageFile(file)) {
-            const receipts = await tryUpload("receipts", fallbackPath);
-            if (receipts.ok) uploaded = receipts;
-            else lastError = receipts.error;
-          }
-          if (!uploaded && isImageFile(file)) {
-            const photos = await tryUpload("job-photos", storagePath);
-            if (photos.ok) uploaded = photos;
-            else lastError = photos.error;
-          }
-          if (!uploaded) {
-            const anyReceipts = await tryUpload("receipts", fallbackPath);
-            if (anyReceipts.ok) uploaded = anyReceipts;
-            else lastError = anyReceipts.error;
-          }
-        }
-
-        if (!uploaded && file.size <= 1_000_000) {
-          try {
-            uploaded = { bucket: "inline", storagePath: "", url: await readFileDataUrl(file) };
-          } catch {
-            /* keep lastError */
+        try {
+          const result = await uploadViaApi("job-files", file, relativePath);
+          uploaded = {
+            bucket: result.bucket,
+            storagePath: result.path,
+            url: result.publicUrl,
+          };
+        } catch (error) {
+          if (file.size <= 1_000_000) {
+            try {
+              uploaded = { bucket: "inline", storagePath: "", url: await readFileDataUrl(file) };
+            } catch {
+              toast.error(error instanceof Error ? error.message : `Could not attach ${file.name}.`);
+              continue;
+            }
+          } else {
+            toast.error(error instanceof Error ? error.message : `Could not attach ${file.name}.`);
+            continue;
           }
         }
 
         if (!uploaded) {
-          toast.error(lastError?.message ?? `Could not attach ${file.name}.`);
+          toast.error(`Could not attach ${file.name}.`);
           continue;
         }
 
@@ -7483,7 +7441,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       return saved;
     },
-    [effectiveStaff?.name, state.jobs, updateJob, user.companyId, user.name],
+    [effectiveStaff?.name, state.jobs, updateJob, user.companyId, user.id, user.name],
   );
 
   const deleteJobFile = useCallback(
@@ -7493,14 +7451,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const supabase = maybeClient();
       if (supabase) {
         if (current.storagePath && current.bucket !== "inline") {
-          const buckets = current.bucket
-            ? [current.bucket]
-            : ["job-files", "receipts", "job-photos"];
-          for (const bucket of buckets) {
-            const { error: removeError } = await supabase.storage.from(bucket).remove([current.storagePath]);
-            if (!removeError || isMissingStorageBucket(removeError) || isMissingJobFiles(removeError)) {
-              break;
-            }
+          try {
+            await deleteViaApi(current.storagePath, "job-files");
+          } catch {
+            // Row delete still proceeds; orphaned B2 objects are harmless.
           }
         }
         const { error } = await supabase.from("job_files").delete().eq("id", id);
@@ -7911,23 +7865,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (!supabase || !user.companyId || user.companyId === "local") {
         return { url: await fileToDataUrl(file), path: "" };
       }
-      const path = `${user.companyId}/${folder}/${crypto.randomUUID()}.${logoExtension(file)}`;
-      const { error } = await supabase.storage
-        .from(COMPANY_ASSETS_BUCKET)
-        .upload(path, file, { contentType: file.type, upsert: false });
-      if (error) {
-        const missingBucket =
-          /bucket/i.test(error.message) || /not found/i.test(error.message) || error.message.includes("404");
-        toast.error(missingBucket ? missingLogoMessage() : error.message);
+      const relativePath = `${user.companyId}/${folder}/${crypto.randomUUID()}.${logoExtension(file)}`;
+      try {
+        const uploaded = await uploadViaApi("company-assets", file, relativePath);
+        if (previousPath && previousPath !== uploaded.path) {
+          void deleteViaApi(previousPath, "company-assets").catch(() => undefined);
+        }
+        return { url: uploaded.publicUrl, path: uploaded.path };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Upload failed";
+        const missingBucket = /not configured|b2|backblaze/i.test(message);
+        toast.error(missingBucket ? missingLogoMessage() : message);
         return null;
       }
-      if (previousPath && previousPath !== path) {
-        void supabase.storage.from(COMPANY_ASSETS_BUCKET).remove([previousPath]);
-      }
-      return {
-        url: supabase.storage.from(COMPANY_ASSETS_BUCKET).getPublicUrl(path).data.publicUrl,
-        path,
-      };
     },
     [user.companyId],
   );
@@ -7973,9 +7923,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const card = slot === "card";
       const previousPath =
         (card ? companySettings.cardLogoStoragePath : companySettings.logoStoragePath)?.trim() ?? "";
-      const supabase = maybeClient();
-      if (previousPath && supabase) {
-        void supabase.storage.from(COMPANY_ASSETS_BUCKET).remove([previousPath]);
+      if (previousPath) {
+        void deleteViaApi(previousPath, "company-assets").catch(() => undefined);
       }
       const saved = await persistCompany(
         card
@@ -8400,9 +8349,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const current = state.staff.find((member) => member.id === staffId);
       if (!current) return false;
       const previousPath = current.photoStoragePath?.trim() ?? "";
-      const supabase = maybeClient();
-      if (previousPath && supabase) {
-        void supabase.storage.from(COMPANY_ASSETS_BUCKET).remove([previousPath]);
+      if (previousPath) {
+        void deleteViaApi(previousPath, "company-assets").catch(() => undefined);
       }
       return persistStaffPhoto(staffId, "", "", "Photo removed. The card falls back to initials.");
     },
