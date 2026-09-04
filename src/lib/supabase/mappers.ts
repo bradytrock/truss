@@ -936,6 +936,50 @@ export function mapJobFile(row: JobFileRow): JobFile {
       "share_token" in row && typeof (row as { share_token?: string | null }).share_token === "string"
         ? String((row as { share_token?: string | null }).share_token ?? "").trim()
         : "",
+    sourceCompanyFileId:
+      "source_company_file_id" in row
+        ? ((row as { source_company_file_id?: string | null }).source_company_file_id ?? null)
+        : null,
+  };
+}
+
+function parseCompanyFileCategory(value: unknown): import("@/lib/types").CompanyFileCategory {
+  const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (
+    raw === "warranty" ||
+    raw === "product" ||
+    raw === "template" ||
+    raw === "insurance" ||
+    raw === "other"
+  ) {
+    return raw;
+  }
+  return "other";
+}
+
+export function mapCompanyFile(
+  row: Database["public"]["Tables"]["company_files"]["Row"],
+): import("@/lib/types").CompanyFile {
+  const mimeType =
+    typeof row.content_type === "string" && row.content_type.trim()
+      ? row.content_type
+      : "application/octet-stream";
+  return {
+    id: row.id,
+    name: row.name,
+    category: parseCompanyFileCategory(row.category),
+    mimeType,
+    sizeBytes: Number(row.size_bytes) || 0,
+    url: resolveStoredFileUrl({
+      storagePath: row.storage_path,
+      url: row.url,
+      kind: "company-files",
+    }),
+    storagePath: normalizeObjectKey(row.storage_path, "company-files") || row.storage_path,
+    notes: row.notes ?? "",
+    createdBy: row.uploaded_by ? String(row.uploaded_by) : "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? row.created_at,
   };
 }
 

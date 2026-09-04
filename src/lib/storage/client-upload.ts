@@ -4,7 +4,8 @@ export type StorageKind =
   | "job-files"
   | "job-photos"
   | "receipts"
-  | "company-assets";
+  | "company-assets"
+  | "company-files";
 
 export type UploadedObject = {
   path: string;

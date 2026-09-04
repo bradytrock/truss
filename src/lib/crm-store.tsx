@@ -16,7 +16,7 @@ import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken, shareUrl } from "@/lib/share";
@@ -120,6 +120,7 @@ import {
   mapJob,
   mapJobPhoto,
   mapJobFile,
+  mapCompanyFile,
   mapPhotoReport,
   mapOpportunity,
   mapPayment,
@@ -171,6 +172,8 @@ import {
   type Invoice,
   type Job,
   type JobFile,
+  type CompanyFile,
+  type CompanyFileCategory,
   type Opportunity,
   type PhotoCategory,
   type PhotoReport,
@@ -304,6 +307,7 @@ const emptyState: CrmState = {
   events: [],
   photos: [],
   jobFiles: [],
+  companyFiles: [],
   photoReports: [],
   expenses: [],
   materialOrders: [],
@@ -1083,6 +1087,17 @@ type CrmContextValue = CrmState & {
   /** Mint or return an existing public share link for one job file. */
   shareJobFile: (id: string) => Promise<string | null>;
   revokeJobFileShare: (id: string) => Promise<boolean>;
+  addCompanyFiles: (
+    files: File[],
+    options?: { category?: CompanyFileCategory; notes?: string },
+  ) => Promise<CompanyFile[]>;
+  updateCompanyFile: (
+    id: string,
+    patch: { name?: string; category?: CompanyFileCategory; notes?: string },
+  ) => Promise<boolean>;
+  deleteCompanyFile: (id: string) => Promise<boolean>;
+  /** Copy a company directory file onto a job as a new job_file. */
+  attachCompanyFileToJob: (jobId: string, companyFileId: string) => Promise<JobFile | null>;
   addPhotoReport: (report: PhotoReport) => Promise<PhotoReport>;
   updatePhotoReport: (id: string, patch: Partial<Omit<PhotoReport, "id" | "jobId" | "createdAt">>) => Promise<boolean>;
   deletePhotoReport: (id: string) => Promise<boolean>;
@@ -7555,6 +7570,243 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [state.jobFiles],
   );
 
+  const addCompanyFiles = useCallback(
+    async (files: File[], options?: { category?: CompanyFileCategory; notes?: string }) => {
+      const supabase = requireClient();
+      if (!supabase) throw new Error("Connect a Supabase project to save.");
+      if (!user.companyId || user.companyId === "local") {
+        toast.error("Connect a Supabase project to upload directory files.");
+        return [];
+      }
+      const category = options?.category ?? "other";
+      const notes = options?.notes?.trim() ?? "";
+      const saved: CompanyFile[] = [];
+
+      for (const file of files) {
+        if (file.size > 25 * 1024 * 1024) {
+          toast.error(`${file.name} is over 25 MB.`);
+          continue;
+        }
+        const rawExt = file.name.split(".").pop()?.toLowerCase() ?? "";
+        const ext = rawExt && rawExt.length <= 8 && /^[a-z0-9]+$/.test(rawExt) ? rawExt : "bin";
+        const fileId = crypto.randomUUID();
+        const relativePath = `${fileId}.${ext}`;
+        let uploaded: { bucket: string; storagePath: string; url: string } | null = null;
+        try {
+          const result = await uploadViaApi("company-files", file, relativePath);
+          uploaded = {
+            bucket: result.bucket,
+            storagePath: result.path,
+            url: result.publicUrl,
+          };
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : `Could not upload ${file.name}.`);
+          continue;
+        }
+        if (!uploaded) continue;
+
+        const now = new Date().toISOString();
+        const payload = {
+          id: fileId,
+          company_id: user.companyId,
+          name: file.name.replace(/^.*[/\\]/, "").trim() || "Untitled",
+          category,
+          content_type: file.type || "application/octet-stream",
+          size_bytes: file.size,
+          storage_path: uploaded.storagePath,
+          url: uploaded.url,
+          notes,
+          uploaded_by: looksLikeUuid(user.id) ? user.id : null,
+          created_at: now,
+          updated_at: now,
+        };
+        const { data, error } = await supabase.from("company_files").insert(payload).select("*").single();
+        if (error || !data) {
+          if (isMissingCompanyFiles(error)) toast.error(missingCompanyFilesMessage());
+          else toast.error(error?.message ?? `Could not save ${file.name}.`);
+          try {
+            await deleteViaApi(uploaded.storagePath, "company-files");
+          } catch {
+            /* orphan ok */
+          }
+          continue;
+        }
+        saved.push({ ...mapCompanyFile(data), bucket: uploaded.bucket });
+      }
+
+      if (saved.length > 0) {
+        setState((prev) => ({
+          ...prev,
+          companyFiles: [...saved, ...(prev.companyFiles ?? [])],
+        }));
+      }
+      return saved;
+    },
+    [user.companyId, user.id],
+  );
+
+  const updateCompanyFile = useCallback(
+    async (id: string, patch: { name?: string; category?: CompanyFileCategory; notes?: string }) => {
+      const current = (state.companyFiles ?? []).find((file) => file.id === id);
+      if (!current) return false;
+      const next = {
+        name: patch.name !== undefined ? patch.name.trim() || current.name : current.name,
+        category: patch.category ?? current.category,
+        notes: patch.notes !== undefined ? patch.notes : current.notes,
+        updated_at: new Date().toISOString(),
+      };
+      const supabase = maybeClient();
+      if (supabase) {
+        const { error } = await supabase.from("company_files").update(next).eq("id", id);
+        if (error) {
+          if (isMissingCompanyFiles(error)) toast.error(missingCompanyFilesMessage());
+          else toast.error(error.message);
+          return false;
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        companyFiles: (prev.companyFiles ?? []).map((file) =>
+          file.id === id
+            ? {
+                ...file,
+                name: next.name,
+                category: next.category,
+                notes: next.notes,
+                updatedAt: next.updated_at,
+              }
+            : file,
+        ),
+      }));
+      return true;
+    },
+    [state.companyFiles],
+  );
+
+  const deleteCompanyFile = useCallback(
+    async (id: string) => {
+      const current = (state.companyFiles ?? []).find((file) => file.id === id);
+      if (!current) return false;
+      const supabase = maybeClient();
+      if (supabase) {
+        if (current.storagePath) {
+          try {
+            await deleteViaApi(current.storagePath, "company-files");
+          } catch {
+            /* continue */
+          }
+        }
+        const { error } = await supabase.from("company_files").delete().eq("id", id);
+        if (error && !isMissingCompanyFiles(error)) {
+          toast.error(error.message);
+          return false;
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        companyFiles: (prev.companyFiles ?? []).filter((file) => file.id !== id),
+      }));
+      return true;
+    },
+    [state.companyFiles],
+  );
+
+  const attachCompanyFileToJob = useCallback(
+    async (jobId: string, companyFileId: string) => {
+      const source = (state.companyFiles ?? []).find((file) => file.id === companyFileId);
+      if (!source) {
+        toast.error("That directory file was not found.");
+        return null;
+      }
+      const supabase = requireClient();
+      if (!supabase) throw new Error("Connect a Supabase project to save.");
+      if (!user.companyId || user.companyId === "local") {
+        toast.error("Connect a Supabase project to attach files.");
+        return null;
+      }
+
+      const rawExt = source.name.split(".").pop()?.toLowerCase() ?? "";
+      const ext = rawExt && rawExt.length <= 8 && /^[a-z0-9]+$/.test(rawExt) ? rawExt : "bin";
+      const fileId = crypto.randomUUID();
+      const relativePath = `${jobId}/${fileId}.${ext}`;
+
+      const response = await fetch("/api/storage/copy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromPath: source.storagePath,
+          kind: "job-files",
+          path: relativePath,
+          contentType: source.mimeType,
+        }),
+      });
+      const json = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        storagePath?: string;
+        path?: string;
+        url?: string;
+        publicUrl?: string;
+        bucket?: string;
+      };
+      if (!response.ok || !(json.storagePath || json.path)) {
+        toast.error(json.error || "Could not copy that file onto the job.");
+        return null;
+      }
+
+      const author = (effectiveStaff?.name || user.name).trim();
+      const payload = {
+        id: fileId,
+        company_id: user.companyId,
+        job_id: jobId,
+        name: source.name,
+        content_type: source.mimeType || "application/octet-stream",
+        category: source.category === "other" ? "other" : source.category,
+        size_bytes: source.sizeBytes,
+        storage_path: json.storagePath || json.path || "",
+        url: json.url || json.publicUrl || "",
+        uploaded_by: looksLikeUuid(user.id) ? user.id : null,
+      };
+      let { data, error } = await supabase.from("job_files").insert(payload).select("*").single();
+      if (error) {
+        const message = (error.message ?? "").toLowerCase();
+        if (
+          message.includes("content_type") ||
+          message.includes("uploaded_by") ||
+          message.includes("category") ||
+          message.includes("schema cache") ||
+          message.includes("could not find the")
+        ) {
+          ({ data, error } = await supabase
+            .from("job_files")
+            .insert({
+              id: fileId,
+              company_id: user.companyId,
+              job_id: jobId,
+              name: source.name,
+              mime_type: source.mimeType,
+              size_bytes: source.sizeBytes,
+              storage_path: payload.storage_path,
+              url: payload.url,
+              created_by: author,
+            })
+            .select("*")
+            .single());
+        }
+      }
+      if (error || !data) {
+        toast.error(error?.message ?? "Could not attach that file to the job.");
+        return null;
+      }
+      const mapped = { ...mapJobFile(data), bucket: json.bucket, sourceCompanyFileId: source.id };
+      setState((prev) => ({
+        ...prev,
+        jobFiles: [mapped, ...(prev.jobFiles ?? [])],
+      }));
+      return mapped;
+    },
+    [effectiveStaff?.name, state.companyFiles, user.companyId, user.id, user.name],
+  );
+
   const addPhotoReport = useCallback(
     async (report: PhotoReport) => {
       const next: PhotoReport = {
@@ -8975,6 +9227,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       deleteJobFile,
       shareJobFile,
       revokeJobFileShare,
+      addCompanyFiles,
+      updateCompanyFile,
+      deleteCompanyFile,
+      attachCompanyFileToJob,
       addPhotoReport,
       updatePhotoReport,
       deletePhotoReport,
@@ -9125,6 +9381,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       deleteJobFile,
       shareJobFile,
       revokeJobFileShare,
+      addCompanyFiles,
+      updateCompanyFile,
+      deleteCompanyFile,
+      attachCompanyFileToJob,
       addPhotoReport,
       updatePhotoReport,
       deletePhotoReport,

@@ -1134,6 +1134,51 @@ export type Database = {
         };
         Relationships: [];
       };
+      company_files: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          category: string;
+          content_type: string;
+          size_bytes: number;
+          storage_path: string;
+          url: string;
+          notes: string;
+          uploaded_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          category?: string;
+          content_type?: string;
+          size_bytes?: number;
+          storage_path: string;
+          url: string;
+          notes?: string;
+          uploaded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          name?: string;
+          category?: string;
+          content_type?: string;
+          size_bytes?: number;
+          storage_path?: string;
+          url?: string;
+          notes?: string;
+          uploaded_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       eagleview_connections: {
         Row: {
           company_id: string;

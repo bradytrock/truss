@@ -784,6 +784,41 @@ export interface JobFile {
   bucket?: string;
   /** Unguessable public share token; blank means no public link. */
   shareToken?: string;
+  /** When this job file was copied from the company file directory. */
+  sourceCompanyFileId?: string | null;
+}
+
+export const COMPANY_FILE_CATEGORIES = [
+  "warranty",
+  "product",
+  "template",
+  "insurance",
+  "other",
+] as const;
+
+export type CompanyFileCategory = (typeof COMPANY_FILE_CATEGORIES)[number];
+
+export const COMPANY_FILE_CATEGORY_LABELS: Record<CompanyFileCategory, string> = {
+  warranty: "Warranty",
+  product: "Product info",
+  template: "Template",
+  insurance: "Insurance",
+  other: "Other",
+};
+
+export interface CompanyFile {
+  id: string;
+  name: string;
+  category: CompanyFileCategory;
+  mimeType: string;
+  sizeBytes: number;
+  url: string;
+  storagePath: string;
+  notes: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  bucket?: string;
 }
 
 export const PHOTO_PAGE_LAYOUTS = ["one", "two", "four"] as const;
@@ -979,6 +1014,7 @@ export interface CrmState {
   events: ScheduleEvent[];
   photos: JobPhoto[];
   jobFiles: JobFile[];
+  companyFiles: CompanyFile[];
   photoReports: PhotoReport[];
   calendarAccounts: CalendarAccount[];
   calendarShares: CalendarShare[];

@@ -409,6 +409,7 @@ export function scopeBook(
     events,
     photos,
     jobFiles,
+    companyFiles: state.companyFiles ?? [],
     photoReports,
     estimateLines: state.estimateLines.filter((line) => estimateIds.has(line.estimateId)),
     estimateSignatureEvents: (state.estimateSignatureEvents ?? []).filter((event) =>

@@ -6,6 +6,7 @@ import {
   FileSpreadsheet,
   FileText,
   Film,
+  FolderOpen,
   ImageIcon,
   Link2,
   Link2Off,
@@ -13,10 +14,18 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { CompanyFilePickerList } from "@/components/company-files";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useCrm } from "@/lib/crm-store";
 import { formatDate, formatFileSize } from "@/lib/format";
-import type { JobFile } from "@/lib/types";
+import type { CompanyFile, JobFile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function JobFilesPanel({
@@ -30,6 +39,8 @@ export function JobFilesPanel({
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [sharingId, setSharingId] = useState<string | null>(null);
+  const [directoryOpen, setDirectoryOpen] = useState(false);
+  const [attachingFromDirectory, setAttachingFromDirectory] = useState(false);
   const files = (crm.jobFiles ?? []).filter((file) => file.jobId === jobId);
 
   async function attach(list: FileList | null) {
@@ -47,6 +58,22 @@ export function JobFilesPanel({
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function attachFromDirectory(file: CompanyFile) {
+    if (disabled) return;
+    setAttachingFromDirectory(true);
+    try {
+      const saved = await crm.attachCompanyFileToJob(jobId, file.id);
+      if (saved) {
+        toast.success(`Copied “${saved.name}” onto this job.`);
+        setDirectoryOpen(false);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not attach from directory.");
+    } finally {
+      setAttachingFromDirectory(false);
     }
   }
 
@@ -104,19 +131,46 @@ export function JobFilesPanel({
           tabIndex={-1}
           onChange={(event) => void attach(event.target.files)}
         />
-        <Button
-          type="button"
-          size="sm"
-          disabled={disabled || uploading}
-          onClick={() => inputRef.current?.click()}
-        >
-          <Paperclip data-icon="inline-start" />
-          {uploading ? "Uploading…" : "Attach"}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={disabled || uploading || attachingFromDirectory}
+            onClick={() => setDirectoryOpen(true)}
+          >
+            <FolderOpen data-icon="inline-start" />
+            From directory
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            disabled={disabled || uploading || attachingFromDirectory}
+            onClick={() => inputRef.current?.click()}
+          >
+            <Paperclip data-icon="inline-start" />
+            {uploading ? "Uploading…" : "Attach"}
+          </Button>
+        </div>
       </div>
+      <Dialog open={directoryOpen} onOpenChange={setDirectoryOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Company file directory</DialogTitle>
+            <DialogDescription>
+              Copy a warranty, product sheet, or template onto this job. The original stays in
+              Settings → File directory.
+            </DialogDescription>
+          </DialogHeader>
+          <CompanyFilePickerList
+            disabled={disabled || attachingFromDirectory}
+            onPick={(file) => attachFromDirectory(file)}
+          />
+        </DialogContent>
+      </Dialog>
       {files.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Attach PDFs, insurance docs, contracts, or photos from the field. Files stay private to
+          Attach from your device or copy from the company file directory. Files stay private to
           signed-in teammates; create a share link only when someone outside needs that one file.
         </p>
       ) : (

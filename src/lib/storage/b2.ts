@@ -177,6 +177,28 @@ export async function getObjectFromB2(path: string) {
   };
 }
 
+/** Copy bytes from one company object key to another (same bucket). */
+export async function copyObjectInB2(input: {
+  fromPath: string;
+  companyId: string;
+  kind: StorageKind;
+  path: string;
+  contentType?: string;
+}) {
+  const source = await getObjectFromB2(input.fromPath);
+  if (!source.body) {
+    throw new Error("Source file not found.");
+  }
+  const bytes = await source.body.transformToByteArray();
+  return uploadToB2({
+    companyId: input.companyId,
+    kind: input.kind,
+    path: input.path,
+    body: Buffer.from(bytes),
+    contentType: input.contentType || source.contentType,
+  });
+}
+
 export async function uploadToB2(input: {
   companyId: string;
   kind: StorageKind;
@@ -185,7 +207,7 @@ export async function uploadToB2(input: {
   contentType: string;
 }) {
   const client = getB2Client();
-  const { bucket, publicBaseUrl } = b2Config();
+  const { bucket } = b2Config();
   const key = storageObjectKey(input.companyId, input.kind, input.path);
   const body =
     input.body instanceof Buffer
