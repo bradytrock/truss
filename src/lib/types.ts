@@ -792,6 +792,44 @@ export interface PhotoAuditEvent {
   createdAt: string;
 }
 
+export type CompanyAuditEntityType =
+  | "job"
+  | "contact"
+  | "opportunity"
+  | "photo"
+  | "job_file"
+  | "estimate"
+  | "invoice"
+  | "company_file";
+
+export type CompanyAuditAction =
+  | "created"
+  | "updated"
+  | "deleted"
+  | "restored"
+  | "status_changed"
+  | "reverted";
+
+/** Company-wide before/after audit trail for CRM mutations. */
+export interface CompanyAuditEvent {
+  id: string;
+  entityType: CompanyAuditEntityType;
+  entityId: string;
+  action: CompanyAuditAction;
+  actor: string;
+  actorStaffId: string | null;
+  summary: string;
+  beforeState: Record<string, unknown>;
+  afterState: Record<string, unknown>;
+  changedFields: string[];
+  relatedJobId: string | null;
+  relatedOpportunityId: string | null;
+  revertedAt: string | null;
+  revertedBy: string;
+  revertOfEventId: string | null;
+  createdAt: string;
+}
+
 export interface JobFile {
   id: string;
   jobId: string;
@@ -1035,6 +1073,7 @@ export interface CrmState {
   events: ScheduleEvent[];
   photos: JobPhoto[];
   photoAuditEvents: PhotoAuditEvent[];
+  companyAuditEvents: CompanyAuditEvent[];
   jobFiles: JobFile[];
   companyFiles: CompanyFile[];
   photoReports: PhotoReport[];

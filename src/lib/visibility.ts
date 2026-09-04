@@ -369,6 +369,7 @@ export function scopeBook(
   const photoAuditEvents = (state.photoAuditEvents ?? []).filter(
     (event) => !event.jobId || jobIds.has(event.jobId),
   );
+  const companyAuditEvents = state.companyAuditEvents ?? [];
   const jobFiles = (state.jobFiles ?? []).filter((file) => jobIds.has(file.jobId));
   const photoReports = state.photoReports.filter((report) => jobIds.has(report.jobId));
   const events = state.events.filter((event) => {
@@ -412,6 +413,7 @@ export function scopeBook(
     events,
     photos,
     photoAuditEvents,
+    companyAuditEvents,
     jobFiles,
     companyFiles: state.companyFiles ?? [],
     photoReports,

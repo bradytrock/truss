@@ -14,9 +14,17 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
+import {
+  asAuditState,
+  canRevertCompanyAudit,
+  changedAuditFields,
+  mapCompanyAuditEvent,
+  pickAuditFields,
+  summarizeAuditChange,
+} from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken, shareUrl } from "@/lib/share";
@@ -174,6 +182,9 @@ import {
   type JobFile,
   type CompanyFile,
   type CompanyFileCategory,
+  type CompanyAuditAction,
+  type CompanyAuditEntityType,
+  type CompanyAuditEvent,
   type Opportunity,
   type PhotoCategory,
   type PhotoReport,
@@ -307,6 +318,7 @@ const emptyState: CrmState = {
   events: [],
   photos: [],
   photoAuditEvents: [],
+  companyAuditEvents: [],
   jobFiles: [],
   companyFiles: [],
   photoReports: [],
@@ -1087,6 +1099,8 @@ type CrmContextValue = CrmState & {
   deleteJobPhoto: (id: string) => Promise<boolean>;
   /** Restore a soft-deleted job photo from the Project Trashcan. */
   restoreJobPhoto: (id: string) => Promise<boolean>;
+  /** Undo a company audit event when the change is reversible. */
+  revertCompanyAudit: (eventId: string) => Promise<boolean>;
   addJobFiles: (jobId: string, files: File[]) => Promise<JobFile[]>;
   deleteJobFile: (id: string) => Promise<boolean>;
   /** Mint or return an existing public share link for one job file. */
@@ -1666,6 +1680,110 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [user.companyId, user.name]
   );
 
+  const recordCompanyAudit = useCallback(
+    async (input: {
+      entityType: CompanyAuditEntityType;
+      entityId: string;
+      action: CompanyAuditAction;
+      before?: unknown;
+      after?: unknown;
+      summary?: string;
+      label?: string;
+      detail?: string;
+      relatedJobId?: string | null;
+      relatedOpportunityId?: string | null;
+      revertOfEventId?: string | null;
+    }) => {
+      const beforeState = asAuditState(input.before);
+      const afterState = asAuditState(input.after);
+      const changedFields =
+        input.action === "updated" || input.action === "status_changed"
+          ? changedAuditFields(beforeState, afterState)
+          : input.action === "reverted"
+            ? Object.keys(afterState).sort()
+            : [];
+      if (
+        (input.action === "updated" || input.action === "status_changed") &&
+        changedFields.length === 0
+      ) {
+        return null;
+      }
+      const actor = (effectiveStaff?.name || user.name).trim();
+      const summary =
+        input.summary?.trim() ||
+        summarizeAuditChange({
+          entityType: input.entityType,
+          action: input.action,
+          label: input.label,
+          changedFields,
+          detail: input.detail,
+        });
+      const event: CompanyAuditEvent = {
+        id: crypto.randomUUID(),
+        entityType: input.entityType,
+        entityId: input.entityId,
+        action: input.action,
+        actor,
+        actorStaffId: looksLikeUuid(effectiveStaff?.id || user.staffId)
+          ? (effectiveStaff?.id || user.staffId)
+          : null,
+        summary,
+        beforeState,
+        afterState,
+        changedFields,
+        relatedJobId: input.relatedJobId ?? null,
+        relatedOpportunityId: input.relatedOpportunityId ?? null,
+        revertedAt: null,
+        revertedBy: "",
+        revertOfEventId: input.revertOfEventId ?? null,
+        createdAt: new Date().toISOString(),
+      };
+
+      const supabase = maybeClient();
+      if (supabase && user.companyId && user.companyId !== "local") {
+        const { data, error } = await supabase
+          .from("company_audit_events")
+          .insert({
+            id: event.id,
+            company_id: user.companyId,
+            entity_type: event.entityType,
+            entity_id: event.entityId,
+            action: event.action,
+            actor: event.actor,
+            actor_staff_id: event.actorStaffId,
+            summary: event.summary,
+            before_state: event.beforeState as Json,
+            after_state: event.afterState as Json,
+            changed_fields: event.changedFields,
+            related_job_id: event.relatedJobId,
+            related_opportunity_id: event.relatedOpportunityId,
+            revert_of_event_id: event.revertOfEventId,
+            created_at: event.createdAt,
+          })
+          .select("*")
+          .single();
+        if (error) {
+          if (isMissingCompanyAudit(error)) toast.message(missingCompanyAuditMessage());
+          else console.error("[company-audit]", error.message);
+        } else if (data) {
+          const mapped = mapCompanyAuditEvent(data);
+          setState((prev) => ({
+            ...prev,
+            companyAuditEvents: [mapped, ...(prev.companyAuditEvents ?? [])],
+          }));
+          return mapped;
+        }
+      }
+
+      setState((prev) => ({
+        ...prev,
+        companyAuditEvents: [event, ...(prev.companyAuditEvents ?? [])],
+      }));
+      return event;
+    },
+    [effectiveStaff?.id, effectiveStaff?.name, user.companyId, user.name, user.staffId],
+  );
+
   const recordEstimateSignatureEvent = useCallback(
     async (input: {
       estimateId: string;
@@ -2200,7 +2318,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const updateOpportunity = useCallback(
-    async (id: string, patch: Partial<Opportunity>) => {
+    async (id: string, patch: Partial<Opportunity>, options?: { skipAudit?: boolean }) => {
+      const before = state.opportunities.find((opportunity) => opportunity.id === id);
       const linked = state.jobs.find((job) => job.opportunityId === id);
       const jobUpdates = jobPatchFromLead(patch, linked);
       const apply = () =>
@@ -2219,6 +2338,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const supabase = requireClient();
       if (!supabase) {
         apply();
+        if (!options?.skipAudit && before) {
+          await recordCompanyAudit({
+            entityType: "opportunity",
+            entityId: id,
+            action: "updated",
+            before,
+            after: { ...before, ...patch },
+            label: before.name || before.code,
+            relatedJobId: linked?.id ?? null,
+            relatedOpportunityId: id,
+          });
+        }
         return true;
       }
       const { error } = await supabase.from("opportunities").update(opportunityPatch(patch)).eq("id", id);
@@ -2238,53 +2369,81 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
       apply();
+      if (!options?.skipAudit && before) {
+        await recordCompanyAudit({
+          entityType: "opportunity",
+          entityId: id,
+          action: "updated",
+          before,
+          after: { ...before, ...patch },
+          label: before.name || before.code,
+          relatedJobId: linked?.id ?? null,
+          relatedOpportunityId: id,
+        });
+      }
       return true;
     },
-    [state.jobs]
+    [recordCompanyAudit, state.jobs, state.opportunities]
   );
 
-  const updateJob = useCallback(async (id: string, patch: Partial<Job>) => {
+  const updateJob = useCallback(async (id: string, patch: Partial<Job>, options?: { skipAudit?: boolean }) => {
+    const before = state.jobs.find((job) => job.id === id);
     const apply = () =>
       setState((prev) => ({
         ...prev,
         jobs: prev.jobs.map((job) => (job.id === id ? fillJobRecord({ ...job, ...patch }) : job)),
       }));
+    const finish = async (ok: boolean) => {
+      if (ok && !options?.skipAudit && before) {
+        await recordCompanyAudit({
+          entityType: "job",
+          entityId: id,
+          action: "updated",
+          before,
+          after: fillJobRecord({ ...before, ...patch }),
+          label: before.name || before.code,
+          relatedJobId: id,
+          relatedOpportunityId: before.opportunityId,
+        });
+      }
+      return ok;
+    };
     const supabase = requireClient();
     if (!supabase) {
       apply();
-      return true;
+      return finish(true);
     }
     let { error } = await supabase.from("jobs").update(jobPatch(patch)).eq("id", id);
     if (error && isMissingDeletedColumn(error)) {
       apply();
       toast.message(missingDeletedColumnMessage());
-      return true;
+      return finish(true);
     }
     if (error && isMissingMarketColumn(error)) {
       apply();
       toast.message(missingMarketMessage());
-      return true;
+      return finish(true);
     }
     if (error && isMissingPrimaryContactColumn(error)) {
       error = (await supabase.from("jobs").update(omitPrimaryContact(jobPatch(patch)) as never).eq("id", id)).error;
       if (!error) {
         apply();
         toast.message(missingPrimaryContactMessage());
-        return true;
+        return finish(true);
       }
     }
     if (error) {
       if (isMissingJobOverview(error)) {
         apply();
         toast.message(missingJobOverviewMessage());
-        return true;
+        return finish(true);
       }
       toast.error(error.message);
       return false;
     }
     apply();
-    return true;
-  }, []);
+    return finish(true);
+  }, [recordCompanyAudit, state.jobs]);
 
   const deleteJob = useCallback(
     async (id: string, reason: string) => {
@@ -2303,12 +2462,33 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.message("This job is already in Deleted.");
         return false;
       }
-      const ok = await updateJob(id, {
+      const after = {
+        ...job,
         deletedAt: new Date().toISOString(),
         deletedReason: trimmed,
         deletedBy: user.name,
-      });
+      };
+      const ok = await updateJob(
+        id,
+        {
+          deletedAt: after.deletedAt,
+          deletedReason: trimmed,
+          deletedBy: user.name,
+        },
+        { skipAudit: true },
+      );
       if (!ok) return false;
+      await recordCompanyAudit({
+        entityType: "job",
+        entityId: id,
+        action: "deleted",
+        before: job,
+        after,
+        label: job.name || job.code,
+        detail: trimmed,
+        relatedJobId: id,
+        relatedOpportunityId: job.opportunityId,
+      });
       await addActivity({
         entityType: "job",
         entityId: id,
@@ -2317,23 +2497,39 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [addActivity, impersonatedStaff, state.jobs, updateJob, user.name, viewer],
+    [addActivity, impersonatedStaff, recordCompanyAudit, state.jobs, updateJob, user.name, viewer],
   );
 
   const restoreJob = useCallback(
-    async (id: string) => {
+    async (id: string, options?: { skipAudit?: boolean }) => {
       if (!canDeleteJobs(viewer) || impersonatedStaff) {
         toast.error("Only a company admin can restore a job.");
         return false;
       }
       const job = state.jobs.find((item) => item.id === id);
       if (!job?.deletedAt) return false;
-      const ok = await updateJob(id, {
-        deletedAt: null,
-        deletedReason: "",
-        deletedBy: "",
-      });
+      const ok = await updateJob(
+        id,
+        {
+          deletedAt: null,
+          deletedReason: "",
+          deletedBy: "",
+        },
+        { skipAudit: true },
+      );
       if (!ok) return false;
+      if (!options?.skipAudit) {
+        await recordCompanyAudit({
+          entityType: "job",
+          entityId: id,
+          action: "restored",
+          before: job,
+          after: { ...job, deletedAt: null, deletedReason: "", deletedBy: "" },
+          label: job.name || job.code,
+          relatedJobId: id,
+          relatedOpportunityId: job.opportunityId,
+        });
+      }
       await addActivity({
         entityType: "job",
         entityId: id,
@@ -2342,7 +2538,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [addActivity, impersonatedStaff, state.jobs, updateJob, viewer],
+    [addActivity, impersonatedStaff, recordCompanyAudit, state.jobs, updateJob, viewer],
   );
 
   const moveWork = useCallback(
@@ -2797,7 +2993,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const updateContact = useCallback(
-    async (id: string, patch: Partial<Omit<Contact, "id">>) => {
+    async (id: string, patch: Partial<Omit<Contact, "id">>, options?: { skipAudit?: boolean }) => {
+      const before = state.contacts.find((contact) => contact.id === id);
       const apply = () =>
         setState((prev) => ({
           ...prev,
@@ -2805,10 +3002,23 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             contact.id === id ? { ...contact, ...patch } : contact
           ),
         }));
+      const finish = async (ok: boolean) => {
+        if (ok && !options?.skipAudit && before) {
+          await recordCompanyAudit({
+            entityType: "contact",
+            entityId: id,
+            action: "updated",
+            before,
+            after: { ...before, ...patch },
+            label: before.name,
+          });
+        }
+        return ok;
+      };
       const supabase = requireClient();
       if (!supabase) {
         apply();
-        return true;
+        return finish(true);
       }
       const { error } = await supabase.from("contacts").update(contactPatch(patch)).eq("id", id);
       if (error) {
@@ -2818,9 +3028,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         return false;
       }
       apply();
-      return true;
+      return finish(true);
     },
-    []
+    [recordCompanyAudit, state.contacts]
   );
 
   const assignOpportunityOwner = useCallback(
@@ -3466,7 +3676,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     ]
   );
 
-  const updateEstimate = useCallback(async (id: string, patch: Partial<Estimate>) => {
+  const updateEstimate = useCallback(async (id: string, patch: Partial<Estimate>, options?: { skipAudit?: boolean }) => {
     const current = state.estimates.find((estimate) => estimate.id === id);
     const allowed = applyPaymentOnlyTerms(patch, current?.terms);
     if (!allowed) return;
@@ -3482,9 +3692,26 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         bookRef.current = next;
         return next;
       });
+    const finish = async () => {
+      if (!options?.skipAudit && current) {
+        const action = patch.status !== undefined && patch.status !== current.status ? "status_changed" : "updated";
+        await recordCompanyAudit({
+          entityType: "estimate",
+          entityId: id,
+          action,
+          before: current,
+          after: fillEstimate({ ...current, ...patch }),
+          label: current.number || "Estimate",
+          detail: action === "status_changed" ? `${current.status} → ${patch.status}` : undefined,
+          relatedJobId: current.jobId,
+          relatedOpportunityId: current.opportunityId,
+        });
+      }
+    };
     const supabase = maybeClient();
     if (!supabase) {
       apply();
+      await finish();
       return;
     }
     const { error } = await supabase.from("estimates").update(estimatePatch(patch)).eq("id", id);
@@ -3492,28 +3719,33 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (isMissingEstimatePackages(error)) {
         apply();
         toast.message(missingEstimatePackagesMessage());
+        await finish();
         return;
       }
       if (isMissingSignerLinks(error)) {
         apply();
         toast.message(missingSignerLinksMessage());
+        await finish();
         return;
       }
       if (isMissingSignatureColumn(error) && (patch.signatureName !== undefined || patch.signatureImage !== undefined)) {
         apply();
         toast.message(missingSignatureMessage());
+        await finish();
         return;
       }
       if (isMissingEstimateWriter(error)) {
         apply();
         toast.message(missingEstimateWriterMessage());
+        await finish();
         return;
       }
       toast.error(error.message);
       return;
     }
     apply();
-  }, [state.estimates]);
+    await finish();
+  }, [recordCompanyAudit, state.estimates]);
 
   const sendEstimate = useCallback(
     async (id: string) => {
@@ -5301,7 +5533,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [state.invoices, user.companyId, companySettings.defaultInvoiceTerms]
   );
 
-  const updateInvoice = useCallback(async (id: string, patch: Partial<Invoice>) => {
+  const updateInvoice = useCallback(async (id: string, patch: Partial<Invoice>, options?: { skipAudit?: boolean }) => {
     const current = state.invoices.find((invoice) => invoice.id === id);
     const allowed = applyPaymentOnlyTerms(patch, current?.terms);
     if (!allowed) return;
@@ -5311,9 +5543,25 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ...prev,
         invoices: prev.invoices.map((invoice) => (invoice.id === id ? { ...invoice, ...patch } : invoice)),
       }));
+    const finish = async () => {
+      if (!options?.skipAudit && current) {
+        const action = patch.status !== undefined && patch.status !== current.status ? "status_changed" : "updated";
+        await recordCompanyAudit({
+          entityType: "invoice",
+          entityId: id,
+          action,
+          before: current,
+          after: { ...current, ...patch },
+          label: current.number || "Invoice",
+          detail: action === "status_changed" ? `${current.status} → ${patch.status}` : undefined,
+          relatedJobId: current.jobId,
+        });
+      }
+    };
     const supabase = maybeClient();
     if (!supabase) {
       apply();
+      await finish();
       return;
     }
     const { error } = await supabase.from("invoices").update(invoicePatch(patch)).eq("id", id);
@@ -5321,13 +5569,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (isMissingInvoiceTermsColumn(error) && patch.terms !== undefined) {
         apply();
         toast.message(missingDocumentTermsMessage());
+        await finish();
         return;
       }
       toast.error(error.message);
       return;
     }
     apply();
-  }, [state.invoices]);
+    await finish();
+  }, [recordCompanyAudit, state.invoices]);
 
   const sendInvoice = useCallback(async (id: string) => {
     const current = state.invoices.find((invoice) => invoice.id === id);
@@ -7466,6 +7716,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         storagePath: current.storagePath ?? "",
         detail: "Moved to Project Trashcan. Backblaze object kept.",
       });
+      await recordCompanyAudit({
+        entityType: "photo",
+        entityId: current.id,
+        action: "deleted",
+        before: current,
+        after: { ...current, deletedAt, deletedBy: actor },
+        label: current.caption.trim() || "Untitled",
+        detail: "Moved to Project Trashcan. Backblaze object kept.",
+        relatedJobId: current.jobId,
+      });
       await addActivity({
         entityType: "job",
         entityId: current.jobId,
@@ -7474,11 +7734,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [addActivity, effectiveStaff?.name, recordPhotoAudit, state.photos, user.name],
+    [addActivity, effectiveStaff?.name, recordCompanyAudit, recordPhotoAudit, state.photos, user.name],
   );
 
   const restoreJobPhoto = useCallback(
-    async (id: string) => {
+    async (id: string, options?: { skipAudit?: boolean }) => {
       const current = state.photos.find((photo) => photo.id === id);
       if (!current?.deletedAt) return false;
       const supabase = maybeClient();
@@ -7509,6 +7769,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         storagePath: current.storagePath ?? "",
         detail: "Restored from Project Trashcan.",
       });
+      if (!options?.skipAudit) {
+        await recordCompanyAudit({
+          entityType: "photo",
+          entityId: current.id,
+          action: "restored",
+          before: current,
+          after: { ...current, deletedAt: null, deletedBy: "" },
+          label: current.caption.trim() || "Untitled",
+          detail: "Restored from Project Trashcan.",
+          relatedJobId: current.jobId,
+        });
+      }
       await addActivity({
         entityType: "job",
         entityId: current.jobId,
@@ -7517,7 +7789,132 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       return true;
     },
-    [addActivity, recordPhotoAudit, state.photos],
+    [addActivity, recordCompanyAudit, recordPhotoAudit, state.photos],
+  );
+
+
+  const revertCompanyAudit = useCallback(
+    async (eventId: string) => {
+      const event = (state.companyAuditEvents ?? []).find((item) => item.id === eventId);
+      if (!event) {
+        toast.error("That audit event was not found.");
+        return false;
+      }
+      if (!canRevertCompanyAudit(event)) {
+        toast.error("That change cannot be reverted from the audit trail.");
+        return false;
+      }
+
+      const actor = (effectiveStaff?.name || user.name).trim();
+      let ok = false;
+
+      if (event.entityType === "job" && event.action === "deleted") {
+        ok = await restoreJob(event.entityId, { skipAudit: true });
+      } else if (event.entityType === "job" && event.action === "restored") {
+        const reason = String(event.beforeState.deletedReason ?? "Reverted restore from audit trail");
+        ok = await deleteJob(event.entityId, reason);
+        // deleteJob writes its own audit; mark original below anyway
+      } else if (event.entityType === "job" && (event.action === "updated" || event.action === "status_changed")) {
+        const fields = event.changedFields.length
+          ? event.changedFields
+          : Object.keys(event.beforeState);
+        ok = await updateJob(event.entityId, pickAuditFields(event.beforeState, fields) as Partial<Job>, {
+          skipAudit: true,
+        });
+      } else if (event.entityType === "contact" && event.action === "updated") {
+        const fields = event.changedFields.length
+          ? event.changedFields
+          : Object.keys(event.beforeState);
+        ok = await updateContact(
+          event.entityId,
+          pickAuditFields(event.beforeState, fields) as Partial<Omit<Contact, "id">>,
+          { skipAudit: true },
+        );
+      } else if (event.entityType === "opportunity" && (event.action === "updated" || event.action === "status_changed")) {
+        const fields = event.changedFields.length
+          ? event.changedFields
+          : Object.keys(event.beforeState);
+        ok = await updateOpportunity(
+          event.entityId,
+          pickAuditFields(event.beforeState, fields) as Partial<Opportunity>,
+          { skipAudit: true },
+        );
+      } else if (event.entityType === "photo" && event.action === "deleted") {
+        ok = await restoreJobPhoto(event.entityId, { skipAudit: true });
+      } else if (event.entityType === "photo" && event.action === "restored") {
+        ok = await deleteJobPhoto(event.entityId);
+      } else if (event.entityType === "estimate" && (event.action === "updated" || event.action === "status_changed")) {
+        const fields = event.changedFields.length
+          ? event.changedFields
+          : Object.keys(event.beforeState);
+        await updateEstimate(
+          event.entityId,
+          pickAuditFields(event.beforeState, fields) as Partial<Estimate>,
+          { skipAudit: true },
+        );
+        ok = true;
+      } else if (event.entityType === "invoice" && (event.action === "updated" || event.action === "status_changed")) {
+        const fields = event.changedFields.length
+          ? event.changedFields
+          : Object.keys(event.beforeState);
+        await updateInvoice(
+          event.entityId,
+          pickAuditFields(event.beforeState, fields) as Partial<Invoice>,
+          { skipAudit: true },
+        );
+        ok = true;
+      }
+
+      if (!ok) return false;
+
+      const revertedAt = new Date().toISOString();
+      const supabase = maybeClient();
+      if (supabase) {
+        const { error } = await supabase
+          .from("company_audit_events")
+          .update({ reverted_at: revertedAt, reverted_by: actor })
+          .eq("id", event.id);
+        if (error && !isMissingCompanyAudit(error)) {
+          toast.error(error.message);
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        companyAuditEvents: (prev.companyAuditEvents ?? []).map((item) =>
+          item.id === event.id ? { ...item, revertedAt, revertedBy: actor } : item,
+        ),
+      }));
+
+      await recordCompanyAudit({
+        entityType: event.entityType,
+        entityId: event.entityId,
+        action: "reverted",
+        before: event.afterState,
+        after: event.beforeState,
+        label: event.summary,
+        detail: `Reverted: ${event.summary}`,
+        relatedJobId: event.relatedJobId,
+        relatedOpportunityId: event.relatedOpportunityId,
+        revertOfEventId: event.id,
+      });
+      toast.success("Change reverted.");
+      return true;
+    },
+    [
+      deleteJob,
+      deleteJobPhoto,
+      effectiveStaff?.name,
+      recordCompanyAudit,
+      restoreJob,
+      restoreJobPhoto,
+      state.companyAuditEvents,
+      updateContact,
+      updateEstimate,
+      updateInvoice,
+      updateJob,
+      updateOpportunity,
+      user.name,
+    ],
   );
 
   const addJobFiles = useCallback(
@@ -9404,6 +9801,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addJobPhoto,
       deleteJobPhoto,
       restoreJobPhoto,
+      revertCompanyAudit,
       addJobFiles,
       deleteJobFile,
       shareJobFile,
@@ -9560,6 +9958,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addJobPhoto,
       deleteJobPhoto,
       restoreJobPhoto,
+      revertCompanyAudit,
       addJobFiles,
       deleteJobFile,
       shareJobFile,

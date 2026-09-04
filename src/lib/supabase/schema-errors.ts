@@ -376,6 +376,22 @@ export function missingPhotoTrashcanMessage() {
   return `Saved in this browser. Run ${PHOTO_TRASHCAN_SQL} in the SQL editor so the Project Trashcan and photo audit log persist.`;
 }
 
+export const COMPANY_AUDIT_SQL = "supabase/migrations/20260904200000_company_audit_events.sql";
+
+export function isMissingCompanyAudit(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("company_audit_events") ||
+    ((error.code === "PGRST205" || message.includes("could not find the table")) &&
+      message.includes("company_audit"))
+  );
+}
+
+export function missingCompanyAuditMessage() {
+  return `Saved in this browser. Run ${COMPANY_AUDIT_SQL} in the SQL editor so the company audit trail and revert history persist.`;
+}
+
 export const MESSAGES_SQL = "supabase/migrations/20260825120000_messages.sql";
 
 export function isMissingMessages(error: { message?: string; code?: string } | null | undefined) {

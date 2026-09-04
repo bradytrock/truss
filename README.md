@@ -91,6 +91,8 @@ Who took a job photo needs [`20260821230000_job_photo_created_by.sql`](https://r
 
 The **Project Trashcan** for job photos needs [`20260904190000_photo_trashcan.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260904190000_photo_trashcan.sql). Trashing a photo only hides it from the gallery / feed / pages / estimates and writes an audit row — Backblaze objects are never deleted from the app. Restore from the job’s Photos → Trashcan.
 
+The company **Audit trail** (Settings → Audit trail) needs [`20260904200000_company_audit_events.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260904200000_company_audit_events.sql). It stores before/after snapshots for job, contact, opportunity, photo, estimate, and invoice changes, and can revert reversible actions.
+
 Pages (job documents you send out) need [`20260821240000_page_share_tokens.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821240000_page_share_tokens.sql) (or a fresh bootstrap) so a client share link stays on the Page. Until that runs, you can still build Pages and download a PDF in this browser.
 
 Job file attachments need [`20260825170000_job_files.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825170000_job_files.sql) (or a fresh bootstrap) so the `job_files` table exists. Uploads go to Backblaze B2 (see env vars below), not Supabase Storage. If that table already exists but inserts fail, run [`20260825181000_job_files_grants.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825181000_job_files_grants.sql).

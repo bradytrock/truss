@@ -1115,6 +1115,48 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["photo_audit_events"]["Insert"]>;
         Relationships: [];
       };
+      company_audit_events: {
+        Row: {
+          id: string;
+          company_id: string;
+          entity_type: string;
+          entity_id: string;
+          action: string;
+          actor: string;
+          actor_staff_id: string | null;
+          summary: string;
+          before_state: Json;
+          after_state: Json;
+          changed_fields: string[];
+          related_job_id: string | null;
+          related_opportunity_id: string | null;
+          reverted_at: string | null;
+          reverted_by: string;
+          revert_of_event_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          entity_type: string;
+          entity_id: string;
+          action: string;
+          actor?: string;
+          actor_staff_id?: string | null;
+          summary?: string;
+          before_state?: Json;
+          after_state?: Json;
+          changed_fields?: string[];
+          related_job_id?: string | null;
+          related_opportunity_id?: string | null;
+          reverted_at?: string | null;
+          reverted_by?: string;
+          revert_of_event_id?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["company_audit_events"]["Insert"]>;
+        Relationships: [];
+      };
       job_files: {
         Row: {
           id: string;

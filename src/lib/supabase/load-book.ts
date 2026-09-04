@@ -1,4 +1,5 @@
 import { mapPhotoAuditEvent } from "@/lib/photo-trash";
+import { mapCompanyAuditEvent } from "@/lib/company-audit";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   mapActivity,
@@ -103,6 +104,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     eventsRes,
     photosRes,
     photoAuditRes,
+    companyAuditRes,
     expensesRes,
     qbVendorsRes,
     qbReviewCommentsRes,
@@ -158,6 +160,12 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     supabase.from("job_photos").select("*").eq("company_id", companyId).order("taken_at", { ascending: false }),
     supabase
       .from("photo_audit_events")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("created_at", { ascending: false })
+      .limit(2000),
+    supabase
+      .from("company_audit_events")
       .select("*")
       .eq("company_id", companyId)
       .order("created_at", { ascending: false })
@@ -279,6 +287,9 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     photoAuditEvents: photoAuditRes.error
       ? []
       : (photoAuditRes.data ?? []).map(mapPhotoAuditEvent),
+    companyAuditEvents: companyAuditRes.error
+      ? []
+      : (companyAuditRes.data ?? []).map(mapCompanyAuditEvent),
     jobFiles: mergeJobFiles(
       jobFilesRes.error ? [] : (jobFilesRes.data ?? []).map(mapJobFile),
       jobFilesFromJobs(jobs),

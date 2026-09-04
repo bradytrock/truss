@@ -12,6 +12,7 @@ const SECTIONS = [
   { href: "/settings", label: "Company", hint: "Name, logo, office", admin: true, accounting: false },
   { href: "/settings/documents", label: "Documents", hint: "Terms and margin", admin: true, accounting: false },
   { href: "/settings/files", label: "File directory", hint: "Warranties and PDFs", admin: true, accounting: false },
+  { href: "/settings/audit", label: "Audit trail", hint: "History and revert", admin: true, accounting: false },
   { href: "/settings/teams", label: "Teams", hint: "Crews and leads", admin: true, accounting: false },
   { href: "/settings/locations", label: "Locations", hint: "Google reviews", admin: true, accounting: false },
   { href: "/settings/people", label: "People", hint: "Seats and invites", admin: true, accounting: false },
