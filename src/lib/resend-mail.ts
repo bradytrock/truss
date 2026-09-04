@@ -20,7 +20,7 @@ export function resendApiKey() {
 }
 
 /**
- * From always uses no-reply@updates.theroofingcrm.com (required for Resend delivery).
+ * From always uses no-reply@trockroofer.com (required for Resend delivery).
  * Optional RESEND_FROM_EMAIL may set the display name only.
  */
 export function resendFromEmail() {
@@ -74,7 +74,7 @@ export async function sendResendEmail(input: {
   subject: string;
   html: string;
   text: string;
-  /** Project manager display name; mailbox is always no-reply@updates… */
+  /** Project manager display name; mailbox is always no-reply@trockroofer.com */
   from?: string;
   /** Always the project manager’s real inbox. */
   replyTo?: string;

@@ -1,9 +1,9 @@
 import { firstName } from "@/lib/phone";
 
 /** Verified sending domain in Resend for estimates, invoices, and pages. */
-export const RESEND_FROM_DOMAIN = "updates.theroofingcrm.com";
+export const RESEND_FROM_DOMAIN = "trockroofer.com";
 
-/** Only verified mailbox on the updates domain — required for Resend delivery. */
+/** Only verified mailbox on the sending domain — required for Resend delivery. */
 export const RESEND_FROM_ADDRESS = `no-reply@${RESEND_FROM_DOMAIN}`;
 
 /** Fallback From when no project manager is on the send. */
@@ -22,8 +22,8 @@ export function formatResendFromDisplay(senderName: string, companyName: string)
 
 /**
  * Resend From header for a project manager send.
- * Display name is the PM; mailbox is always no-reply@updates.theroofingcrm.com.
- * Example: `Brady at T-Rock Roofing <no-reply@updates.theroofingcrm.com>`
+ * Display name is the PM; mailbox is always no-reply@trockroofer.com.
+ * Example: `Brady at T-Rock Roofing <no-reply@trockroofer.com>`
  */
 export function formatResendFrom(input: { senderName: string; companyName: string }) {
   const display = formatResendFromDisplay(input.senderName, input.companyName);

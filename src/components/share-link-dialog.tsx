@@ -380,7 +380,7 @@ export function ShareLinkDialog({
       }
       if (mocked) {
         toast.message(
-          "Resend is not connected on this host. Add RESEND_API_KEY on the host (and verify updates.theroofingcrm.com in Resend) and redeploy.",
+          "Resend is not connected on this host. Add RESEND_API_KEY on the host (and verify trockroofer.com in Resend) and redeploy.",
         );
       } else {
         toast.success(
