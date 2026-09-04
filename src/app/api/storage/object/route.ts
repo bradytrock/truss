@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
-import { getObjectFromB2, isB2Configured } from "@/lib/storage/b2";
+import {
+  isAllowedObjectKey,
+  getObjectFromB2,
+  isB2Configured,
+} from "@/lib/storage/b2";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
  * Streams a B2 object. Used when the bucket is private (Backblaze requires a
- * payment history before public buckets). Object keys include company UUIDs so
- * they are not guessable; prefer making the bucket public + B2_PUBLIC_BASE_URL
- * once the Backblaze account can enable public reads.
+ * payment history before public buckets). Keys are `{companyId}/{kind}/…`
+ * (unguessable company UUID). Prefer a public bucket + B2_PUBLIC_BASE_URL when
+ * the Backblaze account can enable public reads.
  */
 export async function GET(request: Request) {
   try {
@@ -22,9 +26,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Missing file path." }, { status: 400 });
     }
 
-    // Only serve known kind prefixes.
-    const allowed = ["job-files/", "job-photos/", "receipts/", "company-assets/"];
-    if (!allowed.some((prefix) => path.startsWith(prefix))) {
+    if (!isAllowedObjectKey(path)) {
       return NextResponse.json({ error: "Unknown storage path." }, { status: 404 });
     }
 

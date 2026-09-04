@@ -90,12 +90,13 @@ export async function attachEagleviewPdf(input: {
   uploadedBy?: string | null;
 }) {
   const fileId = crypto.randomUUID();
-  const storagePath = `${input.companyId}/${input.jobId}/${fileId}.pdf`;
+  const storagePath = `${input.jobId}/${fileId}.pdf`;
   const contentType = "application/pdf";
 
   let uploaded: { bucket: string; storagePath: string; url: string };
   try {
     const result = await uploadToB2({
+      companyId: input.companyId,
       kind: "job-files",
       path: storagePath,
       body: input.pdf,

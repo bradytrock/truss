@@ -1,6 +1,8 @@
 import {
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -15,8 +17,15 @@ export const STORAGE_KINDS = [
 
 export type StorageKind = (typeof STORAGE_KINDS)[number];
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export function isStorageKind(value: string): value is StorageKind {
   return (STORAGE_KINDS as readonly string[]).includes(value);
+}
+
+export function isCompanyId(value: string) {
+  return UUID_RE.test(value.trim());
 }
 
 export function b2Config() {
@@ -46,6 +55,8 @@ export function b2Status() {
     publicBaseUrl: cfg.publicBaseUrl || null,
     /** True when URLs go through /api/storage/object (needed for private buckets). */
     proxied: !cfg.publicBaseUrl,
+    /** All company blobs live under `{companyId}/…` for easy offboarding. */
+    layout: "company-first" as const,
   };
 }
 
@@ -71,36 +82,97 @@ export function getB2Client() {
   return cachedClient;
 }
 
-/** Object key inside the single B2 bucket. Kind becomes the first path segment. */
-export function storageObjectKey(kind: StorageKind, path: string) {
+/**
+ * Canonical object key: `{companyId}/{kind}/…`
+ *
+ * Company id is always the first segment so offboarding is one prefix delete.
+ * Accepts relative paths, company-relative paths, and legacy kind-first keys.
+ */
+export function storageObjectKey(companyId: string, kind: StorageKind, path: string) {
+  if (!isCompanyId(companyId)) {
+    throw new Error("Upload path needs a valid company id.");
+  }
   const clean = path.replace(/^\/+/, "").replace(/\\/g, "/");
-  if (clean.startsWith(`${kind}/`)) return clean;
-  return `${kind}/${clean}`;
+  if (!clean || clean.includes("..")) {
+    throw new Error("Invalid storage path.");
+  }
+
+  // Already canonical.
+  if (clean.startsWith(`${companyId}/${kind}/`)) return clean;
+
+  // Legacy kind-first: kind/companyId/…
+  const legacyPrefix = `${kind}/${companyId}/`;
+  if (clean.startsWith(legacyPrefix)) {
+    return `${companyId}/${kind}/${clean.slice(legacyPrefix.length)}`;
+  }
+
+  // Company-relative without kind: companyId/payments/… → companyId/kind/payments/…
+  if (clean.startsWith(`${companyId}/`)) {
+    const rest = clean.slice(`${companyId}/`.length);
+    if (rest.startsWith(`${kind}/`)) return `${companyId}/${rest}`;
+    return `${companyId}/${kind}/${rest}`;
+  }
+
+  // Kind-relative: payments/… or jobId/file.pdf
+  if (clean.startsWith(`${kind}/`)) {
+    return `${companyId}/${clean}`;
+  }
+
+  return `${companyId}/${kind}/${clean}`;
+}
+
+/** Prefix that owns every blob for a company (trailing slash). */
+export function companyStoragePrefix(companyId: string) {
+  if (!isCompanyId(companyId)) {
+    throw new Error("Company id is not a UUID.");
+  }
+  return `${companyId}/`;
+}
+
+export function companyIdFromObjectKey(path: string): string | null {
+  const clean = path.replace(/^\/+/, "");
+  const first = clean.split("/")[0] || "";
+  if (isCompanyId(first)) return first;
+  // Legacy kind-first: kind/companyId/…
+  const parts = clean.split("/");
+  if (parts.length >= 2 && isStorageKind(parts[0]) && isCompanyId(parts[1])) {
+    return parts[1];
+  }
+  return null;
+}
+
+/** True when the key is under a known company layout (canonical or legacy). */
+export function isAllowedObjectKey(path: string) {
+  const clean = path.replace(/^\/+/, "");
+  if (!clean || clean.includes("..")) return false;
+  const parts = clean.split("/");
+  if (parts.length < 3) return false;
+  // Canonical: companyId/kind/…
+  if (isCompanyId(parts[0]) && isStorageKind(parts[1])) return true;
+  // Legacy: kind/companyId/…
+  if (isStorageKind(parts[0]) && isCompanyId(parts[1])) return true;
+  return false;
 }
 
 /**
  * Browser/email URL for an object.
- * Prefer B2_PUBLIC_BASE_URL when the bucket is public; otherwise use the app proxy
- * (private buckets cannot be made public on unpaid Backblaze accounts).
+ * Prefer B2_PUBLIC_BASE_URL when the bucket is public; otherwise use the app proxy.
  */
-export function publicObjectUrl(kind: StorageKind, path: string, appOrigin?: string) {
-  const key = storageObjectKey(kind, path);
+export function publicObjectUrl(key: string, appOrigin?: string) {
+  const objectKey = key.replace(/^\/+/, "");
   const { publicBaseUrl } = b2Config();
   if (publicBaseUrl) {
-    return `${publicBaseUrl}/${key}`;
+    return `${publicBaseUrl}/${objectKey}`;
   }
   const origin = (appOrigin || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, "");
-  const proxy = `/api/storage/object?path=${encodeURIComponent(key)}`;
+  const proxy = `/api/storage/object?path=${encodeURIComponent(objectKey)}`;
   return origin ? `${origin}${proxy}` : proxy;
 }
 
-export async function signedObjectUrl(kind: StorageKind | string, path: string, expiresIn = 60 * 60 * 24 * 7) {
+export async function signedObjectUrl(path: string, expiresIn = 60 * 60 * 24 * 7) {
   const client = getB2Client();
   const { bucket } = b2Config();
-  let key = path.replace(/^\/+/, "");
-  if (isStorageKind(kind) && !key.startsWith(`${kind}/`)) {
-    key = storageObjectKey(kind, key);
-  }
+  const key = path.replace(/^\/+/, "");
   return getSignedUrl(
     client,
     new GetObjectCommand({
@@ -131,6 +203,7 @@ export async function getObjectFromB2(path: string) {
 }
 
 export async function uploadToB2(input: {
+  companyId: string;
   kind: StorageKind;
   path: string;
   body: Buffer | Uint8Array;
@@ -140,7 +213,7 @@ export async function uploadToB2(input: {
 }) {
   const client = getB2Client();
   const { bucket } = b2Config();
-  const key = storageObjectKey(input.kind, input.path);
+  const key = storageObjectKey(input.companyId, input.kind, input.path);
   const body =
     input.body instanceof Buffer
       ? new Uint8Array(input.body.buffer, input.body.byteOffset, input.body.byteLength)
@@ -160,19 +233,15 @@ export async function uploadToB2(input: {
     kind: input.kind,
     bucket: `b2:${bucket}`,
     storagePath: key,
-    url: publicObjectUrl(input.kind, key, input.appOrigin),
+    url: publicObjectUrl(key, input.appOrigin),
   };
 }
 
-export async function removeFromB2(input: { kind?: StorageKind | string; path: string }) {
+export async function removeFromB2(input: { path: string }) {
   if (!input.path.trim()) return { ok: true as const };
   const client = getB2Client();
   const { bucket } = b2Config();
   let key = input.path.replace(/^\/+/, "");
-  if (input.kind && isStorageKind(input.kind) && !key.startsWith(`${input.kind}/`)) {
-    key = storageObjectKey(input.kind, key);
-  }
-  // Strip legacy "b2:bucket/" prefixes if ever stored that way.
   if (key.startsWith(`b2:${bucket}/`)) key = key.slice(`b2:${bucket}/`.length);
 
   await client.send(
@@ -182,4 +251,60 @@ export async function removeFromB2(input: { kind?: StorageKind | string; path: s
     }),
   );
   return { ok: true as const };
+}
+
+/**
+ * Delete every object under `{companyId}/` (and any leftover legacy
+ * `{kind}/{companyId}/` keys). Use when a company asks to leave the platform.
+ */
+export async function purgeCompanyFromB2(companyId: string) {
+  if (!isCompanyId(companyId)) {
+    throw new Error("Company id is not a UUID.");
+  }
+  const client = getB2Client();
+  const { bucket } = b2Config();
+  const prefixes = [
+    companyStoragePrefix(companyId),
+    ...STORAGE_KINDS.map((kind) => `${kind}/${companyId}/`),
+  ];
+
+  let deleted = 0;
+  for (const prefix of prefixes) {
+    let token: string | undefined;
+    do {
+      const listed = await client.send(
+        new ListObjectsV2Command({
+          Bucket: bucket,
+          Prefix: prefix,
+          ContinuationToken: token,
+        }),
+      );
+      const keys = (listed.Contents || [])
+        .map((item) => item.Key)
+        .filter((key): key is string => Boolean(key));
+      for (let i = 0; i < keys.length; i += 1000) {
+        const chunk = keys.slice(i, i + 1000);
+        if (!chunk.length) continue;
+        const result = await client.send(
+          new DeleteObjectsCommand({
+            Bucket: bucket,
+            Delete: {
+              Objects: chunk.map((Key) => ({ Key })),
+              Quiet: true,
+            },
+          }),
+        );
+        deleted += chunk.length - (result.Errors?.length ?? 0);
+        if (result.Errors?.length) {
+          const first = result.Errors[0];
+          throw new Error(
+            first?.Message || `Failed to delete some objects under ${prefix}`,
+          );
+        }
+      }
+      token = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+    } while (token);
+  }
+
+  return { ok: true as const, deleted, prefix: companyStoragePrefix(companyId) };
 }

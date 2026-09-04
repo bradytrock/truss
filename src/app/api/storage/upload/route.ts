@@ -5,6 +5,8 @@ import {
   removeFromB2,
   uploadToB2,
   b2Status,
+  companyIdFromObjectKey,
+  storageObjectKey,
   type StorageKind,
 } from "@/lib/storage/b2";
 import { loadProfileCompany } from "@/lib/eagleview-server";
@@ -16,14 +18,6 @@ export const maxDuration = 60;
 
 export async function GET() {
   return NextResponse.json(b2Status());
-}
-
-function companyScopedPath(companyId: string, path: string) {
-  const clean = path.replace(/^\/+/, "");
-  if (!clean.startsWith(`${companyId}/`)) {
-    return null;
-  }
-  return clean;
 }
 
 export async function POST(request: Request) {
@@ -53,13 +47,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unknown storage kind." }, { status: 400 });
     }
     const kind: StorageKind = kindRaw;
-    const path = companyScopedPath(profile.company_id, pathRaw);
-    if (!path) {
+    if (!pathRaw) {
+      return NextResponse.json({ error: "Missing upload path." }, { status: 400 });
+    }
+
+    let key: string;
+    try {
+      key = storageObjectKey(profile.company_id, kind, pathRaw);
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Invalid upload path." },
+        { status: 400 },
+      );
+    }
+    if (companyIdFromObjectKey(key) !== profile.company_id) {
       return NextResponse.json(
         { error: "Upload path must be under your company folder." },
         { status: 400 },
       );
     }
+
     if (!(file instanceof File) || file.size <= 0) {
       return NextResponse.json({ error: "Choose a file to upload." }, { status: 400 });
     }
@@ -70,8 +77,9 @@ export async function POST(request: Request) {
     const origin = new URL(request.url).origin;
     const buffer = Buffer.from(await file.arrayBuffer());
     const uploaded = await uploadToB2({
+      companyId: profile.company_id,
       kind,
-      path,
+      path: key,
       body: buffer,
       contentType: file.type || "application/octet-stream",
       appOrigin: origin,
@@ -119,22 +127,20 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Missing file path." }, { status: 400 });
     }
 
-    // Accept either full object key (kind/companyId/...) or legacy company-relative path.
-    const allowed =
-      pathRaw.includes(`/${profile.company_id}/`) ||
-      pathRaw.startsWith(`${profile.company_id}/`) ||
-      (body?.kind &&
-        isStorageKind(body.kind) &&
-        pathRaw.startsWith(`${body.kind}/${profile.company_id}/`));
+    let key = pathRaw.replace(/^\/+/, "");
+    if (body?.kind && isStorageKind(body.kind) && companyIdFromObjectKey(key) !== profile.company_id) {
+      try {
+        key = storageObjectKey(profile.company_id, body.kind, key);
+      } catch {
+        // keep raw key for ownership check below
+      }
+    }
 
-    if (!allowed) {
+    if (companyIdFromObjectKey(key) !== profile.company_id) {
       return NextResponse.json({ error: "That file is outside your company." }, { status: 403 });
     }
 
-    await removeFromB2({
-      kind: typeof body?.kind === "string" ? body.kind : undefined,
-      path: pathRaw,
-    });
+    await removeFromB2({ path: key });
 
     return NextResponse.json({ ok: true });
   } catch (error) {

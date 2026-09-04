@@ -14,7 +14,10 @@ export type UploadedObject = {
   bucket: string;
 };
 
-/** Upload a file through the authenticated B2 proxy. `path` is company-relative (no kind prefix). */
+/** Upload a file through the authenticated B2 proxy.
+ * `path` is relative under the kind folder (e.g. `payments/uuid.jpg` or `{jobId}/{fileId}.pdf`).
+ * The server stores objects as `{companyId}/{kind}/{path}`.
+ */
 export async function uploadViaApi(
   kind: StorageKind,
   file: File | Blob,

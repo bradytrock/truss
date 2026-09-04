@@ -5408,7 +5408,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (input.file) {
         if (supabase && user.companyId && user.companyId !== "local") {
           const ext = input.file.name.split(".").pop()?.toLowerCase() || "jpg";
-          const relativePath = `${user.companyId}/payments/${crypto.randomUUID()}.${ext}`;
+          const relativePath = `payments/${crypto.randomUUID()}.${ext}`;
           try {
             const uploaded = await uploadViaApi("receipts", input.file, relativePath);
             receiptStoragePath = uploaded.path;
@@ -5583,7 +5583,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (input.file) {
         if (supabase && user.companyId && user.companyId !== "local") {
           const ext = input.file.name.split(".").pop()?.toLowerCase() || "jpg";
-          const relativePath = `${user.companyId}/expenses/${crypto.randomUUID()}.${ext}`;
+          const relativePath = `expenses/${crypto.randomUUID()}.${ext}`;
           try {
             const uploaded = await uploadViaApi("receipts", input.file, relativePath);
             receiptStoragePath = uploaded.path;
@@ -7272,7 +7272,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       let storagePath: string | null = null;
       if (input.file) {
         const ext = input.file.name.split(".").pop()?.toLowerCase() || "jpg";
-        const relativePath = `${user.companyId}/${input.jobId}/${crypto.randomUUID()}.${ext}`;
+        const relativePath = `${input.jobId}/${crypto.randomUUID()}.${ext}`;
         try {
           const uploaded = await uploadViaApi("job-photos", input.file, relativePath);
           storagePath = uploaded.path;
@@ -7344,7 +7344,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         const rawExt = file.name.split(".").pop()?.toLowerCase() ?? "";
         const ext = rawExt && rawExt.length <= 8 && /^[a-z0-9]+$/.test(rawExt) ? rawExt : "bin";
         const fileId = crypto.randomUUID();
-        const relativePath = `${user.companyId}/${jobId}/${fileId}.${ext}`;
+        const relativePath = `${jobId}/${fileId}.${ext}`;
 
         let uploaded: { bucket: string; storagePath: string; url: string } | null = null;
         try {
@@ -7865,7 +7865,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (!supabase || !user.companyId || user.companyId === "local") {
         return { url: await fileToDataUrl(file), path: "" };
       }
-      const relativePath = `${user.companyId}/${folder}/${crypto.randomUUID()}.${logoExtension(file)}`;
+      const relativePath = `${folder}/${crypto.randomUUID()}.${logoExtension(file)}`;
       try {
         const uploaded = await uploadViaApi("company-assets", file, relativePath);
         if (previousPath && previousPath !== uploaded.path) {
