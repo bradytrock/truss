@@ -516,7 +516,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       : undefined
     : "Attach this proposal to a job to use that job’s photo gallery.";
   const jobRelatedKey = job
-    ? `${job.primaryContactId}:${job.relatedContactIds.join(",")}:${job.street}:${job.city}:${job.state}:${job.postalCode}:${job.location}`
+    ? `${job.primaryContactId}:${(job.relatedContactIds ?? []).join(",")}:${job.street}:${job.city}:${job.state}:${job.postalCode}:${job.location}`
     : "";
   useEffect(() => {
     if (!job) return;
@@ -792,7 +792,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
             onClick={() => {
               void crm.duplicateEstimate(estimate.id).then((copy) => {
                 toast.success(`${copy.number} drafted as a copy.`);
-                router.push(`/estimates/${copy.id}`);
+                window.location.assign(`/estimates/${copy.id}`);
               });
             }}
           >

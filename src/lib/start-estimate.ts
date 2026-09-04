@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { siteFieldsFromRecord } from "@/lib/contacts";
 import { useCrm } from "@/lib/crm-store";
 import { formatJobSite } from "@/lib/leads";
@@ -20,9 +19,17 @@ function asUuid(value: string | null | undefined) {
   return id && id !== "none" ? id : null;
 }
 
+/** Full document navigation — soft router.push often fails in Cursor's preview iframe. */
+export function openEstimatePage(estimateId: string) {
+  const path = `/estimates/${estimateId}`;
+  if (typeof window !== "undefined") {
+    window.location.assign(path);
+    return;
+  }
+}
+
 export function useStartEstimate() {
   const crm = useCrm();
-  const router = useRouter();
   const [pending, setPending] = useState(false);
   const inflight = useRef(false);
 
@@ -57,15 +64,15 @@ export function useStartEstimate() {
           templateId: asUuid(input.templateId),
           notes: template?.notes ?? "",
         });
-        router.push(`/estimates/${estimate.id}`);
+        openEstimatePage(estimate.id);
       } catch {
         // Store already toasted.
-      } finally {
         inflight.current = false;
         setPending(false);
       }
+      // Keep pending true on success — full navigation unloads this page.
     },
-    [crm, router],
+    [crm],
   );
 
   return { start, pending };

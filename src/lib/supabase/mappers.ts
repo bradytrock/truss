@@ -302,7 +302,9 @@ export function mapJob(row: JobRow): Job {
     salesRep: row.sales_rep ?? "",
     assigned: row.assigned ?? [],
     subcontractorIds: row.subcontractor_ids ?? [],
-    relatedContactIds: row.related_contact_ids ?? [],
+    relatedContactIds: Array.isArray(row.related_contact_ids)
+      ? row.related_contact_ids.filter((id): id is string => typeof id === "string")
+      : [],
     customFields: parseCustomFields(row.custom_fields),
     projectType: row.project_type ?? "",
     market: parseMarket(row.market, row.project_type),

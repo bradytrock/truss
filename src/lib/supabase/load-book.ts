@@ -306,7 +306,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       : (materialOrderTemplateLinesRes.data ?? []).map(mapMaterialOrderTemplateLine),
     eagleviewOrders: eagleviewOrdersRes.error
       ? []
-      : (eagleviewOrdersRes.data ?? []).map(mapEagleviewOrder),
+      : mapRows(eagleviewOrdersRes.data, mapEagleviewOrder),
   };
 
   return {
