@@ -185,6 +185,16 @@ export function JobFilesPanel({
                   target="_blank"
                   rel="noreferrer"
                   className="min-w-0 flex-1 text-left"
+                  onClick={() => {
+                    void crm.logAudit({
+                      entityType: "job_file",
+                      entityId: file.id,
+                      action: "opened",
+                      after: { name: file.name, url: file.url },
+                      label: file.name,
+                      relatedJobId: file.jobId,
+                    });
+                  }}
                 >
                   <span className="block truncate text-sm font-medium">{file.name}</span>
                   <span className="mt-0.5 block text-xs text-muted-foreground">

@@ -800,7 +800,17 @@ export type CompanyAuditEntityType =
   | "job_file"
   | "estimate"
   | "invoice"
-  | "company_file";
+  | "company_file"
+  | "payment"
+  | "expense"
+  | "task"
+  | "schedule_event"
+  | "message"
+  | "company_settings"
+  | "staff"
+  | "team"
+  | "session"
+  | "photo_report";
 
 export type CompanyAuditAction =
   | "created"
@@ -808,7 +818,18 @@ export type CompanyAuditAction =
   | "deleted"
   | "restored"
   | "status_changed"
-  | "reverted";
+  | "reverted"
+  | "moved"
+  | "viewed"
+  | "opened"
+  | "uploaded"
+  | "downloaded"
+  | "shared"
+  | "assigned"
+  | "login"
+  | "logout"
+  | "seat_switched"
+  | "impersonated";
 
 /** Company-wide before/after audit trail for CRM mutations. */
 export interface CompanyAuditEvent {

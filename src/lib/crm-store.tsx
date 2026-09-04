@@ -1101,6 +1101,20 @@ type CrmContextValue = CrmState & {
   restoreJobPhoto: (id: string) => Promise<boolean>;
   /** Undo a company audit event when the change is reversible. */
   revertCompanyAudit: (eventId: string) => Promise<boolean>;
+  /** Record a company audit event (mutations, opens, views, uploads, shares, auth). */
+  logAudit: (input: {
+    entityType: CompanyAuditEntityType;
+    entityId: string;
+    action: CompanyAuditAction;
+    before?: unknown;
+    after?: unknown;
+    summary?: string;
+    label?: string;
+    detail?: string;
+    relatedJobId?: string | null;
+    relatedOpportunityId?: string | null;
+    revertOfEventId?: string | null;
+  }) => Promise<CompanyAuditEvent | null>;
   addJobFiles: (jobId: string, files: File[]) => Promise<JobFile[]>;
   deleteJobFile: (id: string) => Promise<boolean>;
   /** Mint or return an existing public share link for one job file. */
@@ -1141,6 +1155,22 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const bookEpoch = useRef(0);
   const bookRef = useRef(state);
   bookRef.current = state;
+  const auditRef = useRef<
+    | ((input: {
+        entityType: CompanyAuditEntityType;
+        entityId: string;
+        action: CompanyAuditAction;
+        before?: unknown;
+        after?: unknown;
+        summary?: string;
+        label?: string;
+        detail?: string;
+        relatedJobId?: string | null;
+        relatedOpportunityId?: string | null;
+        revertOfEventId?: string | null;
+      }) => Promise<CompanyAuditEvent | null>)
+    | null
+  >(null);
 
   const load = useCallback(async () => {
     if (!isSupabaseConfigured()) {
@@ -1541,6 +1571,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       } catch {
         // ignore
       }
+      void auditRef.current?.({
+        entityType: "session",
+        entityId: member.id,
+        action: "seat_switched",
+        after: { staffId: member.id, staffName: member.name },
+        label: member.name,
+        detail: `Switched seat to ${member.name}`,
+      });
       toast.success(`Viewing as ${member.name}`);
     },
     [state.staff, user]
@@ -1560,14 +1598,33 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const member = state.staff.find((item) => item.id === staffId);
       if (!member) return;
       setImpersonatedStaffId(member.id);
+      void auditRef.current?.({
+        entityType: "session",
+        entityId: member.id,
+        action: "impersonated",
+        after: { staffId: member.id, staffName: member.name },
+        label: member.name,
+        detail: `Logged in as ${member.name}`,
+      });
       toast.success(`Logged in as ${member.name}`);
     },
     [state.staff, viewer]
   );
 
   const stopLoginAs = useCallback(() => {
+    const previousId = impersonatedStaffId;
     setImpersonatedStaffId(null);
-  }, []);
+    if (previousId) {
+      void auditRef.current?.({
+        entityType: "session",
+        entityId: previousId,
+        action: "impersonated",
+        before: { staffId: previousId },
+        after: { staffId: null },
+        detail: "Stopped login-as session",
+      });
+    }
+  }, [impersonatedStaffId]);
 
   const getClient = useCallback(
     (id: string | null | undefined) =>
@@ -1697,14 +1754,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const beforeState = asAuditState(input.before);
       const afterState = asAuditState(input.after);
       const changedFields =
-        input.action === "updated" || input.action === "status_changed"
+        input.action === "updated" ||
+        input.action === "status_changed" ||
+        input.action === "moved" ||
+        input.action === "assigned"
           ? changedAuditFields(beforeState, afterState)
           : input.action === "reverted"
             ? Object.keys(afterState).sort()
             : [];
       if (
         (input.action === "updated" || input.action === "status_changed") &&
-        changedFields.length === 0
+        changedFields.length === 0 &&
+        !input.summary?.trim() &&
+        !input.detail?.trim()
       ) {
         return null;
       }
@@ -1783,6 +1845,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     },
     [effectiveStaff?.id, effectiveStaff?.name, user.companyId, user.name, user.staffId],
   );
+
+  /** Public audit logger for UI events (opens, views, downloads) and store mutations. */
+  const logAudit = recordCompanyAudit;
+  auditRef.current = recordCompanyAudit;
 
   const recordEstimateSignatureEvent = useCallback(
     async (input: {
@@ -1955,8 +2021,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           });
         }
       }
+      void recordCompanyAudit({
+        entityType: "message",
+        entityId: message.id,
+        action: "created",
+        after: message,
+        label: who,
+        detail: `Text to ${phone}`,
+        relatedJobId: message.jobId,
+        relatedOpportunityId: message.opportunityId,
+      });
     },
-    [addActivity, recordEstimateSignatureEvent, state.contacts, state.estimates, state.jobs, state.opportunities, user.companyId, user.name],
+    [addActivity, recordCompanyAudit, recordEstimateSignatureEvent, state.contacts, state.estimates, state.jobs, state.opportunities, user.companyId, user.name],
   );
 
   const logOutboundEmail = useCallback(
@@ -2018,8 +2094,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           });
         }
       }
+      void recordCompanyAudit({
+        entityType: "message",
+        entityId: crypto.randomUUID(),
+        action: "created",
+        after: { to: email, subject, url, contactId: contact?.id ?? null, jobId: job?.id ?? null, opportunityId },
+        label: subject,
+        detail: `Email to ${email}`,
+        relatedJobId: job?.id ?? null,
+        relatedOpportunityId: opportunityId,
+      });
     },
-    [addActivity, recordEstimateSignatureEvent, state.contacts, state.estimates, state.jobs, state.opportunities],
+    [addActivity, recordCompanyAudit, recordEstimateSignatureEvent, state.contacts, state.estimates, state.jobs, state.opportunities],
   );
 
   const sendTextMessage = useCallback(
@@ -2205,6 +2291,22 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             ],
           };
         });
+        void recordCompanyAudit({
+          entityType: "opportunity",
+          entityId: id,
+          action: "moved",
+          before: current,
+          after: {
+            ...current,
+            stage,
+            lostReason: stage === "lost" ? (lostReason ?? current.lostReason) : current.lostReason,
+            value: stage === "awarded" ? contractValue : current.value,
+          },
+          label: current.name || current.code,
+          detail: `Moved opportunity from ${STAGE_LABELS[current.stage]} to ${STAGE_LABELS[stage]}${stage === "lost" && lostReason ? ` (${lostReason})` : ""}`,
+          relatedOpportunityId: id,
+          relatedJobId: state.jobs.find((job) => job.opportunityId === id)?.id ?? null,
+        });
         return createdJob;
       }
       const { error } = await supabase
@@ -2228,6 +2330,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         body: `Moved from ${STAGE_LABELS[current.stage]} to ${STAGE_LABELS[stage]}.${
           stage === "lost" && lostReason ? ` ${lostReason}` : ""
         }`,
+      });
+      await recordCompanyAudit({
+        entityType: "opportunity",
+        entityId: id,
+        action: "moved",
+        before: current,
+        after: { ...current, stage, lostReason: stage === "lost" ? (lostReason ?? current.lostReason) : current.lostReason, value: contractValue },
+        label: current.name || current.code,
+        detail: `Moved opportunity from ${STAGE_LABELS[current.stage]} to ${STAGE_LABELS[stage]}${stage === "lost" && lostReason ? ` (${lostReason})` : ""}`,
+        relatedOpportunityId: id,
+        relatedJobId: state.jobs.find((job) => job.opportunityId === id)?.id ?? null,
       });
 
       if (stage !== "lost") {
@@ -2314,7 +2427,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       await load();
       return createdJob;
     },
-    [addActivity, load, state.estimateLines, state.estimates, state.jobs, state.opportunities, user.companyId, user.name, user.staffId]
+    [addActivity, load, recordCompanyAudit, state.estimateLines, state.estimates, state.jobs, state.opportunities, user.companyId, user.name, user.staffId]
   );
 
   const updateOpportunity = useCallback(
@@ -2612,6 +2725,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           opportunities: [opportunity, ...prev.opportunities],
           jobs: pipelineJob ? dedupeJobsByOpportunity([pipelineJob, ...prev.jobs]) : prev.jobs,
         }));
+        void recordCompanyAudit({
+          entityType: "opportunity",
+          entityId: opportunity.id,
+          action: "created",
+          after: opportunity,
+          label: opportunity.name || opportunity.code,
+          relatedOpportunityId: opportunity.id,
+          relatedJobId: pipelineJob?.id ?? null,
+        });
         return Object.assign(opportunity, { costingJob: pipelineJob });
       }
       const base = {
@@ -2805,9 +2927,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         type: "note",
         body: `Opened pursuit. Next step: ${opportunity.nextStep || "qualify the bid."}`,
       });
+      void recordCompanyAudit({
+        entityType: "opportunity",
+        entityId: opportunity.id,
+        action: "created",
+        after: opportunity,
+        label: opportunity.name || opportunity.code,
+        relatedOpportunityId: opportunity.id,
+        relatedJobId: pipelineJob?.id ?? null,
+      });
       return Object.assign(opportunity, { costingJob: pipelineJob });
     },
-    [addActivity, state.jobs, state.opportunities, state.staff, user.companyId, user.name, user.staffId]
+    [addActivity, recordCompanyAudit, state.jobs, state.opportunities, state.staff, user.companyId, user.name, user.staffId]
   );
 
   const ensureLeadForEstimate = useCallback(
@@ -2963,6 +3094,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (!supabase) {
         const created = { ...contact, id: crypto.randomUUID() };
         setState((prev) => ({ ...prev, contacts: [created, ...prev.contacts] }));
+        void recordCompanyAudit({
+          entityType: "contact",
+          entityId: created.id,
+          action: "created",
+          after: created,
+          label: created.name,
+        });
         return created;
       }
       const { data, error } = await supabase
@@ -2987,9 +3125,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       const mapped = mapContact(data);
       setState((prev) => ({ ...prev, contacts: [mapped, ...prev.contacts] }));
+      void recordCompanyAudit({
+        entityType: "contact",
+        entityId: mapped.id,
+        action: "created",
+        after: mapped,
+        label: mapped.name,
+      });
       return mapped;
     },
-    [user.companyId, user.staffId]
+    [recordCompanyAudit, user.companyId, user.staffId]
   );
 
   const updateContact = useCallback(
@@ -3043,8 +3188,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const opportunity = state.opportunities.find((item) => item.id === id);
       if (!opportunity) return false;
       const previousOwnerId = opportunity.ownerStaffId;
-      const ok = await updateOpportunity(id, { ownerStaffId: staffId, estimator: member.name });
+      const ok = await updateOpportunity(id, { ownerStaffId: staffId, estimator: member.name }, { skipAudit: true });
       if (!ok) return false;
+      void recordCompanyAudit({
+        entityType: "opportunity",
+        entityId: id,
+        action: "assigned",
+        before: opportunity,
+        after: { ...opportunity, ownerStaffId: staffId, estimator: member.name },
+        label: opportunity.name || opportunity.code,
+        detail: `Assigned opportunity to ${member.name}`,
+        relatedOpportunityId: id,
+        relatedJobId: state.jobs.find((item) => item.opportunityId === id)?.id ?? null,
+      });
       const job = state.jobs.find((item) => item.opportunityId === id);
       if (job) {
         await updateJob(job.id, { ownerStaffId: staffId, projectManager: member.name });
@@ -3061,7 +3217,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       return true;
     },
-    [state.contacts, state.jobs, state.opportunities, state.staff, updateContact, updateJob, updateOpportunity]
+    [state.contacts, state.jobs, state.opportunities, state.staff, updateContact, updateJob, updateOpportunity, recordCompanyAudit]
   );
 
   const addJob = useCallback(
@@ -3078,6 +3234,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const supabase = requireClient();
       if (!supabase) {
         setState((prev) => ({ ...prev, jobs: [job, ...prev.jobs] }));
+        void recordCompanyAudit({
+          entityType: "job",
+          entityId: job.id,
+          action: "created",
+          after: job,
+          label: job.name || job.code,
+          relatedJobId: job.id,
+          relatedOpportunityId: job.opportunityId,
+        });
         return job;
       }
       const payload = jobInsertPayload(job, user.companyId, { code });
@@ -3100,22 +3265,41 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         type: "note",
         body: "Job logged. Set the field team and confirm contract value.",
       });
+      void recordCompanyAudit({
+        entityType: "job",
+        entityId: mapped.id,
+        action: "created",
+        after: mapped,
+        label: mapped.name || mapped.code,
+        relatedJobId: mapped.id,
+        relatedOpportunityId: mapped.opportunityId,
+      });
       return mapped;
     },
-    [addActivity, state.jobs, state.opportunities, state.staff, user.companyId, user.name, user.staffId]
+    [addActivity, recordCompanyAudit, state.jobs, state.opportunities, state.staff, user.companyId, user.name, user.staffId]
   );
 
   const toggleTask = useCallback(async (id: string) => {
     const current = state.tasks.find((task) => task.id === id);
     if (!current) return;
+    const after = { ...current, completed: !current.completed };
     const supabase = requireClient();
     if (!supabase) {
       setState((prev) => ({
         ...prev,
         tasks: prev.tasks.map((task) =>
-          task.id === id ? { ...task, completed: !task.completed } : task
+          task.id === id ? after : task
         ),
       }));
+      void recordCompanyAudit({
+        entityType: "task",
+        entityId: id,
+        action: "status_changed",
+        before: current,
+        after,
+        label: current.title,
+        detail: after.completed ? "Marked task complete" : "Reopened task",
+      });
       return;
     }
     const { error } = await supabase.from("tasks").update({ completed: !current.completed }).eq("id", id);
@@ -3126,10 +3310,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({
       ...prev,
       tasks: prev.tasks.map((task) =>
-        task.id === id ? { ...task, completed: !task.completed } : task
+        task.id === id ? after : task
       ),
     }));
-  }, [state.tasks]);
+    void recordCompanyAudit({
+      entityType: "task",
+      entityId: id,
+      action: "status_changed",
+      before: current,
+      after,
+      label: current.title,
+      detail: after.completed ? "Marked task complete" : "Reopened task",
+    });
+  }, [recordCompanyAudit, state.tasks]);
 
   const addTask = useCallback(
     async (input: {
@@ -3157,7 +3350,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error(error?.message ?? "Could not add the task.");
         return;
       }
-      setState((prev) => ({ ...prev, tasks: [mapTask(data), ...prev.tasks] }));
+      const mappedTask = mapTask(data);
+      setState((prev) => ({ ...prev, tasks: [mappedTask, ...prev.tasks] }));
+      void recordCompanyAudit({
+        entityType: "task",
+        entityId: mappedTask.id,
+        action: "created",
+        after: mappedTask,
+        label: mappedTask.title,
+      });
     },
     [user.companyId]
   );
@@ -3547,6 +3748,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           estimates: [estimate, ...prev.estimates],
           estimateLines: [...prev.estimateLines, ...copiedLines],
         }));
+        void recordCompanyAudit({
+          entityType: "estimate",
+          entityId: estimate.id,
+          action: "created",
+          after: estimate,
+          label: estimate.number || estimate.name,
+          relatedJobId: estimate.jobId,
+          relatedOpportunityId: estimate.opportunityId,
+        });
         return estimate;
       }
       const payload = {
@@ -3661,10 +3871,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         estimates: [mapped, ...prev.estimates],
         estimateLines: [...prev.estimateLines, ...lines],
       }));
+      void recordCompanyAudit({
+        entityType: "estimate",
+        entityId: mapped.id,
+        action: "created",
+        after: mapped,
+        label: mapped.number || mapped.name,
+        relatedJobId: mapped.jobId,
+        relatedOpportunityId: mapped.opportunityId,
+      });
       return mapped;
     },
     [
       ensureLeadForEstimate,
+      recordCompanyAudit,
       state.contacts,
       state.estimateTemplateLines,
       state.estimateTemplates,
@@ -3840,6 +4060,26 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
       apply();
+      void recordCompanyAudit({
+        entityType: "estimate",
+        entityId: id,
+        action: "status_changed",
+        before: current,
+        after: {
+          ...current,
+          status: "sent",
+          sentAt,
+          secondContactId: signing.secondContactId,
+          shareToken: tokens.shareToken,
+          secondShareToken: tokens.secondShareToken,
+          ownerSignedAt,
+          ownerSignedName,
+        },
+        label: current.number || current.name,
+        detail: `${current.status} → sent`,
+        relatedJobId: current.jobId,
+        relatedOpportunityId: current.opportunityId,
+      });
       void recordEstimateSignatureEvent({
         estimateId: id,
         kind: "sent",
@@ -3883,6 +4123,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       companySettings.name,
       ensureLeadForEstimate,
       moveOpportunity,
+      recordCompanyAudit,
       updateEstimate,
       user,
       recordEstimateSignatureEvent,
@@ -3947,6 +4188,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
       apply();
+      void recordCompanyAudit({
+        entityType: "estimate",
+        entityId: id,
+        action: "status_changed",
+        before: current,
+        after: fillEstimate({ ...current, ...patch }),
+        label: current.number || current.name,
+        detail: `${current.status} → ${patch.status ?? current.status}`,
+        relatedJobId: current.jobId,
+        relatedOpportunityId: current.opportunityId,
+      });
       if (signature?.name) {
         void recordEstimateSignatureEvent({
           estimateId: id,
@@ -4042,6 +4294,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     if (!supabase) {
       apply();
       if (current) {
+        void recordCompanyAudit({
+          entityType: "estimate",
+          entityId: id,
+          action: "status_changed",
+          before: current,
+          after: { ...current, status: "declined" },
+          label: current.number || current.name,
+          detail: `${current.status} → declined`,
+          relatedJobId: current.jobId,
+          relatedOpportunityId: current.opportunityId,
+        });
         void recordEstimateSignatureEvent({ estimateId: id, kind: "declined" });
       }
       return;
@@ -4052,8 +4315,21 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return;
     }
     apply();
-    if (current) void recordEstimateSignatureEvent({ estimateId: id, kind: "declined" });
-  }, [recordEstimateSignatureEvent, state.estimates]);
+    if (current) {
+      void recordCompanyAudit({
+        entityType: "estimate",
+        entityId: id,
+        action: "status_changed",
+        before: current,
+        after: { ...current, status: "declined" },
+        label: current.number || current.name,
+        detail: `${current.status} → declined`,
+        relatedJobId: current.jobId,
+        relatedOpportunityId: current.opportunityId,
+      });
+      void recordEstimateSignatureEvent({ estimateId: id, kind: "declined" });
+    }
+  }, [recordCompanyAudit, recordEstimateSignatureEvent, state.estimates]);
 
   const reopenEstimate = useCallback(
     async (id: string) => {
@@ -4132,6 +4408,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
       apply();
+      void recordCompanyAudit({
+        entityType: "estimate",
+        entityId: id,
+        action: "status_changed",
+        before: current,
+        after: fillEstimate({ ...current, ...patch }),
+        label: current.number || current.name,
+        detail: `${current.status} → draft`,
+        relatedJobId: current.jobId,
+        relatedOpportunityId: current.opportunityId,
+      });
       if (current.opportunityId) {
         await addActivity({
           entityType: "opportunity",
@@ -4141,7 +4428,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [addActivity, state.estimates, state.invoices]
+    [addActivity, recordCompanyAudit, state.estimates, state.invoices]
   );
 
   const markEstimateViewed = useCallback(async (id: string) => {
@@ -4154,15 +4441,29 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           estimate.id === id ? { ...estimate, status: "viewed" as const } : estimate
         ),
       }));
+    const finish = () => {
+      void recordCompanyAudit({
+        entityType: "estimate",
+        entityId: id,
+        action: "viewed",
+        before: current,
+        after: { ...current, status: "viewed" },
+        label: current.number || current.name,
+        relatedJobId: current.jobId,
+        relatedOpportunityId: current.opportunityId,
+      });
+    };
     const supabase = maybeClient();
     if (!supabase) {
       apply();
+      finish();
       return;
     }
     const { error } = await supabase.from("estimates").update({ status: "viewed" }).eq("id", id);
     if (error) return;
     apply();
-  }, [state.estimates]);
+    finish();
+  }, [recordCompanyAudit, state.estimates]);
 
   const ensureEstimateShareToken = useCallback(
     async (id: string) => {
@@ -5469,10 +5770,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         invoices: [invoice, ...prev.invoices],
         invoiceLines: [...prev.invoiceLines, ...mappedLines],
       }));
+      void recordCompanyAudit({
+        entityType: "invoice",
+        entityId: invoice.id,
+        action: "created",
+        after: invoice,
+        label: invoice.number || invoice.name,
+        detail: `Converted from estimate ${estimate.number}`,
+        relatedJobId: invoice.jobId,
+        relatedOpportunityId: estimate.opportunityId,
+      });
       await load();
       return invoice;
     },
-    [load, state.estimateLines, state.estimates, state.invoices, user.companyId, companySettings.defaultInvoiceTerms]
+    [companySettings.defaultInvoiceTerms, load, recordCompanyAudit, state.estimateLines, state.estimates, state.invoices, user.companyId]
   );
 
   const addInvoice = useCallback(
@@ -5506,6 +5817,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const supabase = maybeClient();
       if (!supabase) {
         setState((prev) => ({ ...prev, invoices: [invoice, ...prev.invoices] }));
+        void recordCompanyAudit({
+          entityType: "invoice",
+          entityId: invoice.id,
+          action: "created",
+          after: invoice,
+          label: invoice.number || invoice.name,
+          relatedJobId: invoice.jobId,
+        });
         return invoice;
       }
       const payload = {
@@ -5528,9 +5847,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const mapped = { ...invoice, ...mapInvoice(data), id: data.id, number: data.number || number };
       if (!Object.prototype.hasOwnProperty.call(data, "terms")) mapped.terms = invoice.terms;
       setState((prev) => ({ ...prev, invoices: [mapped, ...prev.invoices] }));
+      void recordCompanyAudit({
+        entityType: "invoice",
+        entityId: mapped.id,
+        action: "created",
+        after: mapped,
+        label: mapped.number || mapped.name,
+        relatedJobId: mapped.jobId,
+      });
       return mapped;
     },
-    [state.invoices, user.companyId, companySettings.defaultInvoiceTerms]
+    [companySettings.defaultInvoiceTerms, recordCompanyAudit, state.invoices, user.companyId]
   );
 
   const updateInvoice = useCallback(async (id: string, patch: Partial<Invoice>, options?: { skipAudit?: boolean }) => {
@@ -5590,9 +5917,22 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           invoice.id === id ? { ...invoice, status: "sent" as const, shareToken } : invoice
         ),
       }));
+    const finish = () => {
+      void recordCompanyAudit({
+        entityType: "invoice",
+        entityId: id,
+        action: "status_changed",
+        before: current,
+        after: { ...current, status: "sent", shareToken },
+        label: current.number || current.name,
+        detail: `${current.status} → sent`,
+        relatedJobId: current.jobId,
+      });
+    };
     const supabase = maybeClient();
     if (!supabase) {
       apply();
+      finish();
       return;
     }
     let { error } = await supabase
@@ -5608,7 +5948,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return;
     }
     apply();
-  }, [state.invoices]);
+    finish();
+  }, [recordCompanyAudit, state.invoices]);
 
   const ensureInvoiceShareToken = useCallback(async (id: string) => {
     const current = state.invoices.find((invoice) => invoice.id === id);
@@ -5641,6 +5982,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   }, [state.invoices]);
 
   const voidInvoice = useCallback(async (id: string) => {
+    const current = state.invoices.find((invoice) => invoice.id === id);
     const supabase = requireClient();
     if (!supabase) throw new Error("Connect a Supabase project to save.");
     const { error } = await supabase.from("invoices").update({ status: "void" }).eq("id", id);
@@ -5654,7 +5996,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         invoice.id === id ? { ...invoice, status: "void" } : invoice
       ),
     }));
-  }, []);
+    if (current) {
+      void recordCompanyAudit({
+        entityType: "invoice",
+        entityId: id,
+        action: "status_changed",
+        before: current,
+        after: { ...current, status: "void" },
+        label: current.number || current.name,
+        detail: `${current.status} → void`,
+        relatedJobId: current.jobId,
+      });
+    }
+  }, [recordCompanyAudit, state.invoices]);
 
   const recordPayment = useCallback(
     async (input: {
@@ -5736,6 +6090,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           return { ...prev, payments: [payment, ...prev.payments], invoices };
         });
         toast.success("Payment recorded with the receipt.");
+        void recordCompanyAudit({
+          entityType: "payment",
+          entityId: payment.id,
+          action: "created",
+          after: payment,
+          label: payment.reference || `$${payment.amount}`,
+          detail: `Payment of ${payment.amount} recorded`,
+          relatedJobId: payment.jobId,
+        });
         return;
       }
       const payload = {
@@ -5821,8 +6184,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         });
       }
       toast.success("Payment recorded with the receipt.");
+      void recordCompanyAudit({
+        entityType: "payment",
+        entityId: saved.id,
+        action: "created",
+        after: saved,
+        label: saved.reference || `$${saved.amount}`,
+        detail: `Payment of ${saved.amount} recorded`,
+        relatedJobId: saved.jobId,
+      });
     },
-    [addActivity, state.invoiceLines, state.invoices, state.payments, user.companyId, user.id, user.name, user.staffId]
+    [addActivity, recordCompanyAudit, state.invoiceLines, state.invoices, state.payments, user.companyId, user.id, user.name, user.staffId]
   );
 
   const addExpense = useCallback(
@@ -5951,9 +6323,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         });
       }
       toast.success(`${saved.number} saved with the receipt.`);
+      void recordCompanyAudit({
+        entityType: "expense",
+        entityId: saved.id,
+        action: "created",
+        after: saved,
+        label: saved.number || saved.vendor,
+        detail: `${saved.number} · ${saved.vendor}`,
+        relatedJobId: saved.jobId,
+      });
       return saved;
     },
-    [addActivity, state.expenses, user.companyId, user.id, user.name, user.staffId],
+    [addActivity, recordCompanyAudit, state.expenses, user.companyId, user.id, user.name, user.staffId],
   );
 
   const addMaterialOrder = useCallback(
@@ -6860,6 +7241,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (!supabase) {
         const event: ScheduleEvent = { ...input, id: crypto.randomUUID() };
         setState((prev) => ({ ...prev, events: [...prev.events, event] }));
+        void recordCompanyAudit({
+          entityType: "schedule_event",
+          entityId: event.id,
+          action: "created",
+          after: event,
+          label: event.title,
+          relatedJobId: event.jobId,
+          relatedOpportunityId: event.opportunityId,
+        });
         return event;
       }
       const { data, error } = await supabase
@@ -6885,9 +7275,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       const event = mapScheduleEvent(data);
       setState((prev) => ({ ...prev, events: [...prev.events, event] }));
+      void recordCompanyAudit({
+        entityType: "schedule_event",
+        entityId: event.id,
+        action: "created",
+        after: event,
+        label: event.title,
+        relatedJobId: event.jobId,
+        relatedOpportunityId: event.opportunityId,
+      });
       return event;
     },
-    [user.companyId]
+    [recordCompanyAudit, user.companyId]
   );
 
   const upsertAccount = useCallback(
@@ -7588,12 +7987,21 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         return;
       }
       const mapped = mapJobPhoto(data);
+      const photo = { ...mapped, createdBy: mapped.createdBy?.trim() || photographer };
       setState((prev) => ({
         ...prev,
-        photos: [{ ...mapped, createdBy: mapped.createdBy?.trim() || photographer }, ...prev.photos],
+        photos: [photo, ...prev.photos],
       }));
+      void recordCompanyAudit({
+        entityType: "photo",
+        entityId: photo.id,
+        action: "uploaded",
+        after: photo,
+        label: photo.caption?.trim() || "Photo",
+        relatedJobId: photo.jobId,
+      });
     },
-    [effectiveStaff?.name, user.companyId, user.name]
+    [effectiveStaff?.name, recordCompanyAudit, user.companyId, user.name]
   );
 
   const recordPhotoAudit = useCallback(
@@ -8032,10 +8440,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       if (saved.length > 0) {
         setState((prev) => ({ ...prev, jobFiles: [...saved, ...(prev.jobFiles ?? [])] }));
+        for (const file of saved) {
+          void recordCompanyAudit({
+            entityType: "job_file",
+            entityId: file.id,
+            action: "uploaded",
+            after: file,
+            label: file.name,
+            relatedJobId: file.jobId,
+          });
+        }
       }
       return saved;
     },
-    [effectiveStaff?.name, state.jobs, updateJob, user.companyId, user.id, user.name],
+    [effectiveStaff?.name, recordCompanyAudit, state.jobs, updateJob, user.companyId, user.id, user.name],
   );
 
   const deleteJobFile = useCallback(
@@ -8065,9 +8483,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ...prev,
         jobFiles: prev.jobFiles.filter((file) => file.id !== id),
       }));
+      void recordCompanyAudit({
+        entityType: "job_file",
+        entityId: id,
+        action: "deleted",
+        before: current,
+        label: current.name,
+        relatedJobId: current.jobId,
+      });
       return true;
     },
-    [state.jobFiles, state.jobs, updateJob],
+    [recordCompanyAudit, state.jobFiles, state.jobs, updateJob],
   );
 
   const shareJobFile = useCallback(
@@ -8106,9 +8532,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           file.id === id ? { ...file, shareToken: token } : file,
         ),
       }));
+      void recordCompanyAudit({
+        entityType: "job_file",
+        entityId: id,
+        action: "shared",
+        before: current,
+        after: { ...current, shareToken: token },
+        label: current.name,
+        relatedJobId: current.jobId,
+      });
       return shareUrl("f", token);
     },
-    [state.jobFiles],
+    [recordCompanyAudit, state.jobFiles],
   );
 
   const revokeJobFileShare = useCallback(
@@ -8141,9 +8576,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           file.id === id ? { ...file, shareToken: "" } : file,
         ),
       }));
+      void recordCompanyAudit({
+        entityType: "job_file",
+        entityId: id,
+        action: "updated",
+        before: current,
+        after: { ...current, shareToken: "" },
+        label: current.name,
+        detail: "Revoked file share link",
+        relatedJobId: current.jobId,
+      });
       return true;
     },
-    [state.jobFiles],
+    [recordCompanyAudit, state.jobFiles],
   );
 
   const addCompanyFiles = useCallback(
@@ -8215,10 +8660,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           ...prev,
           companyFiles: [...saved, ...(prev.companyFiles ?? [])],
         }));
+        for (const file of saved) {
+          void recordCompanyAudit({
+            entityType: "company_file",
+            entityId: file.id,
+            action: "uploaded",
+            after: file,
+            label: file.name,
+          });
+        }
       }
       return saved;
     },
-    [user.companyId, user.id],
+    [user.companyId, user.id, recordCompanyAudit],
   );
 
   const updateCompanyFile = useCallback(
@@ -8240,23 +8694,30 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           return false;
         }
       }
+      const after = {
+        ...current,
+        name: next.name,
+        category: next.category,
+        notes: next.notes,
+        updatedAt: next.updated_at,
+      };
       setState((prev) => ({
         ...prev,
         companyFiles: (prev.companyFiles ?? []).map((file) =>
-          file.id === id
-            ? {
-                ...file,
-                name: next.name,
-                category: next.category,
-                notes: next.notes,
-                updatedAt: next.updated_at,
-              }
-            : file,
+          file.id === id ? after : file,
         ),
       }));
+      void recordCompanyAudit({
+        entityType: "company_file",
+        entityId: id,
+        action: "updated",
+        before: current,
+        after,
+        label: after.name,
+      });
       return true;
     },
-    [state.companyFiles],
+    [recordCompanyAudit, state.companyFiles],
   );
 
   const deleteCompanyFile = useCallback(
@@ -8282,9 +8743,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ...prev,
         companyFiles: (prev.companyFiles ?? []).filter((file) => file.id !== id),
       }));
+      void recordCompanyAudit({
+        entityType: "company_file",
+        entityId: id,
+        action: "deleted",
+        before: current,
+        label: current.name,
+      });
       return true;
     },
-    [state.companyFiles],
+    [recordCompanyAudit, state.companyFiles],
   );
 
   const attachCompanyFileToJob = useCallback(
@@ -8378,9 +8846,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ...prev,
         jobFiles: [mapped, ...(prev.jobFiles ?? [])],
       }));
+      void recordCompanyAudit({
+        entityType: "job_file",
+        entityId: mapped.id,
+        action: "created",
+        after: mapped,
+        label: mapped.name,
+        detail: `Attached company file “${source.name}” to job`,
+        relatedJobId: mapped.jobId,
+      });
       return mapped;
     },
-    [effectiveStaff?.name, state.companyFiles, user.companyId, user.id, user.name],
+    [effectiveStaff?.name, recordCompanyAudit, state.companyFiles, user.companyId, user.id, user.name],
   );
 
   const addPhotoReport = useCallback(
@@ -8392,6 +8869,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         updatedAt: new Date().toISOString(),
       };
       setState((prev) => ({ ...prev, photoReports: [next, ...prev.photoReports] }));
+      void recordCompanyAudit({
+        entityType: "photo_report",
+        entityId: next.id,
+        action: "created",
+        after: next,
+        label: next.title,
+        relatedJobId: next.jobId,
+      });
       const supabase = maybeClient();
       if (!supabase || !user.companyId || user.companyId === "local") return next;
       const payload = {
@@ -8436,7 +8921,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }));
       return merged;
     },
-    [user.companyId],
+    [recordCompanyAudit, user.companyId],
   );
 
   const updatePhotoReport = useCallback(
@@ -8755,10 +9240,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       };
       setCompanySettings(saved);
       setUser((current) => ({ ...current, company: saved.name }));
+      void recordCompanyAudit({
+        entityType: "company_settings",
+        entityId: user.companyId || "company",
+        action: "updated",
+        before: companySettings,
+        after: saved,
+        label: saved.name,
+      });
       if (!quiet) toast.success("Business settings saved.");
       return saved;
     },
-    [canEditCompany, user.companyId]
+    [canEditCompany, companySettings, recordCompanyAudit, user.companyId]
   );
 
   const updateCompany = useCallback(
@@ -9648,13 +10141,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   }, [load]);
 
   const signOut = useCallback(async () => {
+    void recordCompanyAudit({
+      entityType: "session",
+      entityId: user.id || user.staffId || "session",
+      action: "logout",
+      label: user.name,
+      detail: "Signed out",
+    });
     if (isSupabaseConfigured()) {
       const supabase = createClient();
       await supabase.auth.signOut();
     }
     router.replace("/login");
     router.refresh();
-  }, [router]);
+  }, [recordCompanyAudit, router, user.id, user.name, user.staffId]);
 
   const value = useMemo<CrmContextValue>(
     () => ({
@@ -9802,6 +10302,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       deleteJobPhoto,
       restoreJobPhoto,
       revertCompanyAudit,
+      logAudit,
       addJobFiles,
       deleteJobFile,
       shareJobFile,
@@ -9959,6 +10460,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       deleteJobPhoto,
       restoreJobPhoto,
       revertCompanyAudit,
+      logAudit,
       addJobFiles,
       deleteJobFile,
       shareJobFile,

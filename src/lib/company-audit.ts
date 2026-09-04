@@ -9,6 +9,16 @@ export const COMPANY_AUDIT_ENTITY_LABELS: Record<CompanyAuditEntityType, string>
   estimate: "Estimate",
   invoice: "Invoice",
   company_file: "Company file",
+  payment: "Payment",
+  expense: "Expense",
+  task: "Task",
+  schedule_event: "Calendar event",
+  message: "Message",
+  company_settings: "Company settings",
+  staff: "Staff",
+  team: "Team",
+  session: "Session",
+  photo_report: "Photo report",
 };
 
 export const COMPANY_AUDIT_ACTION_LABELS: Record<CompanyAuditAction, string> = {
@@ -18,7 +28,32 @@ export const COMPANY_AUDIT_ACTION_LABELS: Record<CompanyAuditAction, string> = {
   restored: "Restored",
   status_changed: "Status changed",
   reverted: "Reverted",
+  moved: "Moved",
+  viewed: "Viewed",
+  opened: "Opened",
+  uploaded: "Uploaded",
+  downloaded: "Downloaded",
+  shared: "Shared",
+  assigned: "Assigned",
+  login: "Signed in",
+  logout: "Signed out",
+  seat_switched: "Switched seat",
+  impersonated: "Impersonated",
 };
+
+const NON_REVERTIBLE = new Set<CompanyAuditAction>([
+  "viewed",
+  "opened",
+  "downloaded",
+  "uploaded",
+  "shared",
+  "login",
+  "logout",
+  "seat_switched",
+  "impersonated",
+  "created",
+  "reverted",
+]);
 
 export function asAuditState(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
@@ -60,16 +95,56 @@ export function summarizeAuditChange(input: {
   const entity = COMPANY_AUDIT_ENTITY_LABELS[input.entityType];
   const label = input.label?.trim();
   const subject = label ? `${entity} “${label}”` : entity;
-  if (input.action === "created") return `Created ${subject}`;
-  if (input.action === "deleted") return `Deleted ${subject}`;
-  if (input.action === "restored") return `Restored ${subject}`;
-  if (input.action === "reverted") return input.detail?.trim() || `Reverted a change to ${subject}`;
-  if (input.action === "status_changed") {
-    return input.detail?.trim() || `Changed status on ${subject}`;
+  if (
+    input.detail?.trim() &&
+    (input.action === "moved" ||
+      input.action === "assigned" ||
+      input.action === "status_changed" ||
+      input.action === "reverted" ||
+      input.action === "impersonated" ||
+      input.action === "seat_switched")
+  ) {
+    return input.detail.trim();
   }
-  const fields = (input.changedFields ?? []).slice(0, 6);
-  if (fields.length === 0) return `Updated ${subject}`;
-  return `Updated ${subject}: ${fields.join(", ")}`;
+  switch (input.action) {
+    case "created":
+      return `Created ${subject}`;
+    case "deleted":
+      return `Deleted ${subject}`;
+    case "restored":
+      return `Restored ${subject}`;
+    case "reverted":
+      return input.detail?.trim() || `Reverted a change to ${subject}`;
+    case "status_changed":
+      return input.detail?.trim() || `Changed status on ${subject}`;
+    case "moved":
+      return input.detail?.trim() || `Moved ${subject}`;
+    case "viewed":
+      return `Viewed ${subject}`;
+    case "opened":
+      return `Opened ${subject}`;
+    case "uploaded":
+      return `Uploaded ${subject}`;
+    case "downloaded":
+      return `Downloaded ${subject}`;
+    case "shared":
+      return `Shared ${subject}`;
+    case "assigned":
+      return input.detail?.trim() || `Assigned ${subject}`;
+    case "login":
+      return "Signed in";
+    case "logout":
+      return "Signed out";
+    case "seat_switched":
+      return input.detail?.trim() || "Switched seat";
+    case "impersonated":
+      return input.detail?.trim() || "Started impersonation";
+    default: {
+      const fields = (input.changedFields ?? []).slice(0, 6);
+      if (fields.length === 0) return `Updated ${subject}`;
+      return `Updated ${subject}: ${fields.join(", ")}`;
+    }
+  }
 }
 
 export function parseCompanyAuditAction(value: unknown): CompanyAuditAction {
@@ -80,6 +155,17 @@ export function parseCompanyAuditAction(value: unknown): CompanyAuditAction {
     case "restored":
     case "status_changed":
     case "reverted":
+    case "moved":
+    case "viewed":
+    case "opened":
+    case "uploaded":
+    case "downloaded":
+    case "shared":
+    case "assigned":
+    case "login":
+    case "logout":
+    case "seat_switched":
+    case "impersonated":
       return value;
     default:
       return "updated";
@@ -96,6 +182,16 @@ export function parseCompanyAuditEntityType(value: unknown): CompanyAuditEntityT
     case "estimate":
     case "invoice":
     case "company_file":
+    case "payment":
+    case "expense":
+    case "task":
+    case "schedule_event":
+    case "message":
+    case "company_settings":
+    case "staff":
+    case "team":
+    case "session":
+    case "photo_report":
       return value;
     default:
       return "job";
@@ -142,14 +238,15 @@ export function mapCompanyAuditEvent(row: {
 
 export function canRevertCompanyAudit(event: CompanyAuditEvent) {
   if (event.revertedAt) return false;
-  if (event.action === "reverted") return false;
-  if (event.action === "created") return false;
+  if (NON_REVERTIBLE.has(event.action)) return false;
   if (event.entityType === "job_file" && event.action === "deleted") return false;
   if (event.entityType === "company_file" && event.action === "deleted") return false;
   return (
     event.action === "updated" ||
     event.action === "deleted" ||
     event.action === "restored" ||
-    event.action === "status_changed"
+    event.action === "status_changed" ||
+    event.action === "moved" ||
+    event.action === "assigned"
   );
 }

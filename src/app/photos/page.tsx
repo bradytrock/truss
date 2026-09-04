@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,20 @@ export default function PhotosPage() {
   const [userName, setUserName] = useState("all");
   const [tag, setTag] = useState<"all" | PhotoCategory>("all");
   const [openId, setOpenId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!openId) return;
+    const photo = crm.photos.find((item) => item.id === openId);
+    if (!photo) return;
+    void crm.logAudit({
+      entityType: "photo",
+      entityId: photo.id,
+      action: "opened",
+      after: { caption: photo.caption, jobId: photo.jobId, imageUrl: photo.imageUrl },
+      label: photo.caption?.trim() || "Photo",
+      relatedJobId: photo.jobId,
+    });
+  }, [crm, openId]);
 
   const jobsById = useMemo(() => {
     const map = new Map(crm.book.jobs.map((job) => [job.id, job]));

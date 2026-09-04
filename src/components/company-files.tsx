@@ -227,6 +227,15 @@ export function CompanyFilesPanel() {
                       target="_blank"
                       rel="noreferrer"
                       className="block truncate text-sm font-medium hover:underline"
+                      onClick={() => {
+                        void crm.logAudit({
+                          entityType: "company_file",
+                          entityId: file.id,
+                          action: "opened",
+                          after: { name: file.name, url: file.url, category: file.category },
+                          label: file.name,
+                        });
+                      }}
                     >
                       {file.name}
                     </a>
