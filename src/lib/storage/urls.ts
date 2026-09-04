@@ -24,9 +24,13 @@ export function isAllowedObjectKey(path: string) {
   return false;
 }
 
+const COMPANY_ASSET_FOLDERS = new Set(["seat-photo", "logo", "card-logo"]);
+
 /**
  * Repair keys that lost the kind segment: `{companyId}/{uuid}/file.pdf`
  * → `{companyId}/job-files/{uuid}/file.pdf` (or the provided kind).
+ * Also repairs company assets saved as `{companyId}/seat-photo|logo|card-logo/…`
+ * without the `company-assets` segment.
  */
 export function normalizeObjectKey(path: string, fallbackKind: StorageKind = "job-files") {
   const clean = path.replace(/^\/+/, "");
@@ -35,6 +39,14 @@ export function normalizeObjectKey(path: string, fallbackKind: StorageKind = "jo
   const parts = clean.split("/");
   if (parts.length >= 3 && isCompanyId(parts[0]) && isCompanyId(parts[1])) {
     return [parts[0], fallbackKind, ...parts.slice(1)].join("/");
+  }
+  if (
+    parts.length >= 3 &&
+    isCompanyId(parts[0]) &&
+    COMPANY_ASSET_FOLDERS.has(parts[1]) &&
+    !isStorageKindValue(parts[1])
+  ) {
+    return [parts[0], "company-assets", ...parts.slice(1)].join("/");
   }
   return clean;
 }

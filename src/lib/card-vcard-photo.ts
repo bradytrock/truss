@@ -96,7 +96,7 @@ export async function embedVcardPhoto(photoUrl: string): Promise<VcardPhotoEmbed
     }
   }
 
-  if (!/^https?:\/\//i.test(url)) return null;
+  if (!/^https?:\/\//i.test(url) && !url.startsWith("/")) return null;
   const blob = await fetchPhotoBlob(url);
   if (!blob) return null;
   return blobToVcardPhoto(blob);

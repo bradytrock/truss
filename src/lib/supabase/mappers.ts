@@ -189,8 +189,12 @@ export function mapStaff(row: StaffRow): StaffMember {
     photoUrl: resolveStoredFileUrl({
       storagePath: "photo_storage_path" in row ? row.photo_storage_path : "",
       url: "photo_url" in row ? row.photo_url : "",
+      kind: "company-assets",
     }),
-    photoStoragePath: "photo_storage_path" in row ? String(row.photo_storage_path ?? "") : "",
+    photoStoragePath: normalizeObjectKey(
+      "photo_storage_path" in row ? String(row.photo_storage_path ?? "") : "",
+      "company-assets",
+    ),
     googleLocationId:
       "google_location_id" in row ? ((row.google_location_id as string | null) ?? null) : null,
     emailSignature: "email_signature" in row ? String(row.email_signature ?? "") : "",

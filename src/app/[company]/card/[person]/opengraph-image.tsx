@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { appOrigin } from "@/lib/app-origin";
 import { cardHeaderLogo } from "@/lib/card";
 import { formatPhone } from "@/lib/format";
 import { loadSharedCard } from "@/lib/share-server";
@@ -13,16 +14,26 @@ const INK = "#1c1917";
 const MUTED = "#6b7280";
 const PAPER = "#ffffff";
 
+function absolutize(url: string, origin: string) {
+  const trimmed = url.trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith("data:")) return trimmed;
+  if (trimmed.startsWith("/")) return `${origin}${trimmed}`;
+  return trimmed;
+}
+
 export default async function CardPreviewImage({
   params,
 }: {
   params: Promise<{ company: string; person: string }>;
 }) {
   const { company: companySlug, person: personSlug } = await params;
+  const origin = await appOrigin();
   const card = await loadSharedCard(companySlug, personSlug);
   const company = card?.company;
   const person = card?.available ? card.person : null;
-  const logo = company ? cardHeaderLogo(company) : "";
+  const logo = company ? absolutize(cardHeaderLogo(company), origin) : "";
+  const photo = person?.photoUrl ? absolutize(person.photoUrl, origin) : "";
   const companyName = company?.name?.trim() ?? "";
   const phone = person?.phone?.trim() ? formatPhone(person.phone) : formatPhone(company?.phone ?? "");
   const website = company?.website?.trim().replace(/^https?:\/\//i, "") ?? "";
@@ -61,9 +72,9 @@ export default async function CardPreviewImage({
 
         {person ? (
           <div style={{ display: "flex", alignItems: "center", gap: 36 }}>
-            {person.photoUrl ? (
+            {photo ? (
               <img
-                src={person.photoUrl}
+                src={photo}
                 alt=""
                 width={168}
                 height={168}

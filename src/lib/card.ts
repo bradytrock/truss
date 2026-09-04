@@ -1,5 +1,6 @@
 import { digitsOnly, toE164 } from "@/lib/phone";
 import { socialLinks } from "@/lib/social";
+import { resolveStoredFileUrl } from "@/lib/storage/urls";
 import type { CompanySettings, StaffMember } from "@/lib/types";
 
 export type SharedCardCompany = {
@@ -202,8 +203,16 @@ export function parseSharedCard(raw: unknown): SharedCardPayload | null {
     city: asString(companyRaw.city).trim(),
     state: asString(companyRaw.state).trim(),
     postalCode: asString(companyRaw.postalCode).trim(),
-    logoUrl: asString(companyRaw.logoUrl).trim(),
-    cardLogoUrl: asString(companyRaw.cardLogoUrl).trim(),
+    logoUrl: resolveStoredFileUrl({
+      storagePath: asString(companyRaw.logoStoragePath),
+      url: asString(companyRaw.logoUrl).trim(),
+      kind: "company-assets",
+    }),
+    cardLogoUrl: resolveStoredFileUrl({
+      storagePath: asString(companyRaw.cardLogoStoragePath),
+      url: asString(companyRaw.cardLogoUrl).trim(),
+      kind: "company-assets",
+    }),
     googleReviewUrl: asString(companyRaw.googleReviewUrl).trim(),
     paymentVenmo: asString(companyRaw.paymentVenmo).trim(),
     paymentZelle: asString(companyRaw.paymentZelle).trim(),
@@ -229,7 +238,11 @@ export function parseSharedCard(raw: unknown): SharedCardPayload | null {
     initials: asString(personRaw.initials).trim() || asString(personRaw.name).slice(0, 2).toUpperCase(),
     email: asString(personRaw.email).trim(),
     phone: asString(personRaw.phone).trim(),
-    photoUrl: asString(personRaw.photoUrl).trim(),
+    photoUrl: resolveStoredFileUrl({
+      storagePath: asString(personRaw.photoStoragePath),
+      url: asString(personRaw.photoUrl).trim(),
+      kind: "company-assets",
+    }),
     googleReviewUrl: asString(personRaw.googleReviewUrl).trim(),
     cardSlug: asString(personRaw.cardSlug).trim(),
   };
