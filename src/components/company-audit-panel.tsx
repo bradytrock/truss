@@ -98,7 +98,7 @@ export function CompanyAuditPanel() {
 
       {events.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          No audit events yet. Edit a job, contact, estimate, invoice, or trash a photo to start the trail.
+          No audit events yet. Opening a file, moving a stage, changing a contact, sending an estimate, or trashing a photo will show up here.
         </p>
       ) : (
         <ul className="space-y-2">
