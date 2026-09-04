@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { StartEstimateButton } from "@/components/start-estimate-button";
+import { StartEstimateButton, StartEstimateDialogHost } from "@/components/start-estimate-button";
 import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { EstimateStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
@@ -49,14 +49,15 @@ function EstimatesList() {
   const fromTemplate = searchParams.get("from") ?? "";
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<EstimateStatus | "all">("all");
-  const { start } = useStartEstimate();
+  const startEstimateFlow = useStartEstimate();
+  const { prompt } = startEstimateFlow;
   const startedFrom = useRef("");
 
   useEffect(() => {
     if (!fromTemplate || !crm.hydrated || startedFrom.current === fromTemplate) return;
     startedFrom.current = fromTemplate;
-    void start({ templateId: fromTemplate });
-  }, [crm.hydrated, fromTemplate, start]);
+    prompt({ templateId: fromTemplate });
+  }, [crm.hydrated, fromTemplate, prompt]);
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -76,6 +77,7 @@ function EstimatesList() {
 
   return (
     <div className="space-y-5">
+      <StartEstimateDialogHost flow={startEstimateFlow} />
       {crm.hydrateError ? (
         <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
       ) : null}

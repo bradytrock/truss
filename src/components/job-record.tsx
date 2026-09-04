@@ -30,7 +30,7 @@ import {
 import { toast } from "sonner";
 import { ActivityComposer, ActivityList } from "@/components/activity";
 import { AddPhotoDialog, CreateInvoiceDialog } from "@/components/create-ops-dialogs";
-import { StartEstimateButton } from "@/components/start-estimate-button";
+import { StartEstimateButton, StartEstimateDialogHost } from "@/components/start-estimate-button";
 import { LogExpenseDialog } from "@/components/log-financial-dialogs";
 import { CreatePageDialog } from "@/components/create-page-dialog";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
@@ -241,7 +241,8 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
   const crm = useCrm();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { start: startEstimate, pending: estimatePending } = useStartEstimate();
+  const startEstimateFlow = useStartEstimate();
+  const { prompt: startEstimate, pending: estimatePending } = startEstimateFlow;
   const { start: startMaterialOrder, pending: materialPending } = useStartMaterialOrder();
   const requestedTab = parseJobTab(searchParams.get("tab"));
   const [tab, setTab] = useState<JobTab>(requestedTab);
@@ -285,7 +286,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
     if (deleted) return;
     if (kind === "estimate") {
       setJobTab("paper");
-      void startEstimate({
+      startEstimate({
         jobId: job.id,
         opportunityId: job.opportunityId,
         contactId: job.primaryContactId,
@@ -1598,6 +1599,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
         open={materialTemplateOpen}
         onOpenChange={setMaterialTemplateOpen}
       />
+      <StartEstimateDialogHost flow={startEstimateFlow} />
       {openReport ? (
         <PhotoReportBuilder job={job} report={openReport} onClose={() => setReportId(null)} />
       ) : null}

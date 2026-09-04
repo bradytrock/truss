@@ -53,6 +53,7 @@ import { BrandMark } from "@/components/brand";
 import { SettingsMobileBar } from "@/components/settings-nav";
 import { AssistantPanel } from "@/components/assistant-panel";
 import { useStartEstimate } from "@/lib/start-estimate";
+import { StartEstimateDialogHost } from "@/components/start-estimate-button";
 
 function navItems(options: { showReports: boolean; showAccounting: boolean; bdOnly: boolean }) {
   if (options.bdOnly) {
@@ -83,7 +84,8 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { effectiveStaff } = useCrm();
-  const { start: startEstimate } = useStartEstimate();
+  const startEstimateFlow = useStartEstimate();
+  const startEstimate = startEstimateFlow.prompt;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [create, setCreate] = useState<
     "opportunity" | "client" | "job" | "invoice" | "event" | "expense" | "payment" | null
@@ -161,7 +163,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <DropdownMenuItem onClick={() => setCreate("opportunity")}>
                   New lead
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => void startEstimate()}>
+                <DropdownMenuItem onClick={() => startEstimate()}>
                   New estimate
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setCreate("invoice")}>
@@ -217,6 +219,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         open={create === "payment"}
         onOpenChange={(open) => setCreate(open ? "payment" : null)}
       />
+      <StartEstimateDialogHost flow={startEstimateFlow} />
     </div>
   );
 }
