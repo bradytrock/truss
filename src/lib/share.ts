@@ -193,6 +193,8 @@ export type SharedEstimatePayload = {
     secondSignatureImage: string;
     packageMode: "" | "gbb";
     selectedPackage: "good" | "better" | "best";
+    subtotalOverride: number | null;
+    hideLinePrices: boolean;
   };
   lines: Array<{
     id: string;
@@ -341,6 +343,11 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
       secondSignatureImage: asString(estimate.secondSignatureImage),
       packageMode: parseEstimatePackageMode(asString(estimate.packageMode)),
       selectedPackage: parseEstimatePackage(asString(estimate.selectedPackage)),
+      subtotalOverride:
+        estimate.subtotalOverride == null || estimate.subtotalOverride === undefined
+          ? null
+          : asNumber(estimate.subtotalOverride),
+      hideLinePrices: asBool(estimate.hideLinePrices),
     },
     lines: linesRaw.filter(isRecord).map((line, index) => {
       const photos = Array.isArray(line.photos)

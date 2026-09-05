@@ -672,6 +672,8 @@ export type Database = {
           second_signature_image: string;
           package_mode: string;
           selected_package: string;
+          subtotal_override: number | null;
+          hide_line_prices: boolean;
         };
         Insert: {
           id?: string;
@@ -711,6 +713,8 @@ export type Database = {
           second_signature_image?: string;
           package_mode?: string;
           selected_package?: string;
+          subtotal_override?: number | null;
+          hide_line_prices?: boolean;
         };
         Update: Partial<Database["public"]["Tables"]["estimates"]["Insert"]>;
         Relationships: [];

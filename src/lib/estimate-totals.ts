@@ -31,25 +31,38 @@ export function includedLines<T extends Pick<EstimateLine, "optional" | "selecte
 
 export function estimateTotals(
   estimate: Pick<Estimate, "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue"> &
-    Partial<Pick<Estimate, "packageMode" | "selectedPackage">>,
+    Partial<Pick<Estimate, "packageMode" | "selectedPackage" | "subtotalOverride">>,
   lines: Array<
     Pick<EstimateLine, "quantity" | "unitCost" | "optional" | "selected" | "taxable"> &
       Partial<Pick<EstimateLine, "package">>
   >,
+  options?: { ignoreSubtotalOverride?: boolean },
 ) {
   const scoped = scopedEstimateLines(estimate, lines);
   const included = includedLines(scoped);
   const optionalOpen = scoped.filter((line) => line.optional && !line.selected);
-  const subtotal = roundMoney(included.reduce((sum, line) => sum + lineAmount(line), 0));
+  const lineSubtotal = roundMoney(included.reduce((sum, line) => sum + lineAmount(line), 0));
   const optionalTotal = roundMoney(optionalOpen.reduce((sum, line) => sum + lineAmount(line), 0));
+  const overrideRaw = estimate.subtotalOverride;
+  const hasOverride =
+    !options?.ignoreSubtotalOverride &&
+    overrideRaw != null &&
+    Number.isFinite(Number(overrideRaw));
+  const subtotal = hasOverride ? roundMoney(Number(overrideRaw)) : lineSubtotal;
   const discount =
     estimate.discountKind === "percent"
       ? roundMoney(subtotal * (Number(estimate.discountValue) || 0) / 100)
       : roundMoney(Math.min(subtotal, Number(estimate.discountValue) || 0));
   const afterDiscount = Math.max(0, roundMoney(subtotal - discount));
-  const taxableSubtotal = roundMoney(
+  const taxableLineSubtotal = roundMoney(
     included.filter((line) => line.taxable).reduce((sum, line) => sum + lineAmount(line), 0),
   );
+  const taxableSubtotal =
+    hasOverride && lineSubtotal > 0
+      ? roundMoney(subtotal * (taxableLineSubtotal / lineSubtotal))
+      : hasOverride
+        ? subtotal
+        : taxableLineSubtotal;
   const taxableShare = subtotal > 0 ? taxableSubtotal / subtotal : 0;
   const taxableAfterDiscount = Math.max(0, roundMoney(taxableSubtotal - discount * taxableShare));
   const tax = roundMoney(taxableAfterDiscount * (Number(estimate.taxRate) || 0) / 100);
@@ -61,7 +74,9 @@ export function estimateTotals(
   return {
     includedCount: included.length,
     optionalCount: optionalOpen.length,
+    lineSubtotal,
     subtotal,
+    subtotalOverridden: hasOverride,
     discount,
     afterDiscount,
     tax,
@@ -141,16 +156,21 @@ export function lineLabel(line: Pick<EstimateLine, "title" | "description">) {
 
 export function totalsForPackage(
   estimate: Pick<Estimate, "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue"> &
-    Partial<Pick<Estimate, "packageMode" | "selectedPackage">>,
+    Partial<Pick<Estimate, "packageMode" | "selectedPackage" | "subtotalOverride">>,
   lines: EstimateLine[],
   pkg: EstimatePackage,
 ) {
-  return estimateTotals({ ...estimate, packageMode: "gbb", selectedPackage: pkg }, lines);
+  const selected = parseEstimatePackage(estimate.selectedPackage);
+  return estimateTotals(
+    { ...estimate, packageMode: "gbb", selectedPackage: pkg },
+    lines,
+    { ignoreSubtotalOverride: pkg !== selected },
+  );
 }
 
 export function allPackageTotals(
   estimate: Pick<Estimate, "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue"> &
-    Partial<Pick<Estimate, "packageMode" | "selectedPackage">>,
+    Partial<Pick<Estimate, "packageMode" | "selectedPackage" | "subtotalOverride">>,
   lines: EstimateLine[],
 ) {
   return Object.fromEntries(
@@ -166,13 +186,25 @@ export function invoiceLinesFromEstimate(
   const billedEstimate = billingEstimate(estimate, market);
   const billed = includedLines(scopedEstimateLines(estimate, linesForEstimate(lines, estimate.id)));
   const totals = estimateTotals(billedEstimate, billed);
-  const out = billed.map((line, index) => ({
-    description: lineLabel(line),
-    quantity: line.quantity,
-    unit: line.unit,
-    unitCost: line.unitCost,
-    sortOrder: index,
-  }));
+  const lump =
+    estimate.subtotalOverride != null || estimate.hideLinePrices;
+  const out = lump
+    ? [
+        {
+          description: estimate.name.trim() || "Contract work",
+          quantity: 1,
+          unit: "LS",
+          unitCost: totals.subtotal,
+          sortOrder: 0,
+        },
+      ]
+    : billed.map((line, index) => ({
+        description: lineLabel(line),
+        quantity: line.quantity,
+        unit: line.unit,
+        unitCost: line.unitCost,
+        sortOrder: index,
+      }));
   if (totals.discount > 0) {
     out.push({
       description:
@@ -240,6 +272,8 @@ export type EstimateDraft = Omit<
   | "secondSignatureImage"
   | "packageMode"
   | "selectedPackage"
+  | "subtotalOverride"
+  | "hideLinePrices"
 > &
   Partial<
     Pick<
@@ -268,6 +302,8 @@ export type EstimateDraft = Omit<
       | "secondSignatureImage"
       | "packageMode"
       | "selectedPackage"
+      | "subtotalOverride"
+      | "hideLinePrices"
     >
   >;
 
@@ -317,6 +353,11 @@ export function fillEstimate(estimate: EstimateDraft): Estimate {
     secondSignatureImage: secondContactId ? (estimate.secondSignatureImage ?? "") : "",
     packageMode: parseEstimatePackageMode(estimate.packageMode),
     selectedPackage: parseEstimatePackage(estimate.selectedPackage),
+    subtotalOverride:
+      estimate.subtotalOverride == null || estimate.subtotalOverride === undefined
+        ? null
+        : roundMoney(Math.max(0, Number(estimate.subtotalOverride) || 0)),
+    hideLinePrices: Boolean(estimate.hideLinePrices),
   };
 }
 

@@ -1102,7 +1102,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
 
       <Card>
         <CardHeader className="border-b">
-          <CardTitle>Tax, discount & deposit</CardTitle>
+          <CardTitle>Tax, discount, deposit & pricing</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -1148,6 +1148,55 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
               void crm.updateEstimate(estimate.id, { depositKind, depositValue })
             }
           />
+          <div className="sm:col-span-2">
+            <Label>Customer subtotal</Label>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <CommitInput
+                type="number"
+                min={0}
+                step="0.01"
+                disabled={!editable}
+                className="max-w-[12rem]"
+                value={estimate.subtotalOverride ?? totals.lineSubtotal}
+                onCommit={(value) => {
+                  const amount = Math.max(0, Number(value) || 0);
+                  void crm.updateEstimate(estimate.id, { subtotalOverride: amount });
+                }}
+              />
+              {estimate.subtotalOverride != null ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={!editable}
+                  onClick={() => void crm.updateEstimate(estimate.id, { subtotalOverride: null })}
+                >
+                  Use line sum
+                </Button>
+              ) : null}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {estimate.subtotalOverride != null
+                ? `Lump-sum override on. Line items still total ${formatMoney(totals.lineSubtotal)} for bidding.`
+                : "Matches included line items. Edit to set a lump-sum contract price while keeping itemized costs internal."}
+            </p>
+          </div>
+          <label className="flex items-start gap-2 sm:col-span-2">
+            <Checkbox
+              className="mt-0.5"
+              checked={estimate.hideLinePrices}
+              disabled={!editable}
+              onCheckedChange={(value) =>
+                void crm.updateEstimate(estimate.id, { hideLinePrices: Boolean(value) })
+              }
+            />
+            <span>
+              <span className="text-sm font-medium">Hide line prices on the proposal</span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                Customers still see the itemized scope, but not unit prices or line amounts. Totals stay visible.
+              </span>
+            </span>
+          </label>
           <p className="text-xs text-muted-foreground sm:col-span-2">
             Type the Payment 1, 2, and 3 amounts on the terms lines. They stay blank until you enter them.
           </p>

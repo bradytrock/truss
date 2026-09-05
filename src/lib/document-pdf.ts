@@ -462,11 +462,19 @@ export async function downloadEstimatePdf(input: {
       doc.setFontSize(10);
       doc.setTextColor(included ? 28 : 140, included ? 28 : 140, included ? 28 : 140);
       doc.text(label, 54, y);
-      doc.text(formatMoney(lineAmount(line)), right, y, { align: "right" });
+      if (!input.estimate.hideLinePrices) {
+        doc.text(formatMoney(lineAmount(line)), right, y, { align: "right" });
+      }
       y += 13;
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
-      doc.text(`${line.quantity} ${line.unit} × ${formatMoney(line.unitCost)}`, 54, y);
+      doc.text(
+        input.estimate.hideLinePrices
+          ? `${line.quantity} ${line.unit}`
+          : `${line.quantity} ${line.unit} × ${formatMoney(line.unitCost)}`,
+        54,
+        y,
+      );
       y += 12;
       if (detail) {
         const wrapped = doc.splitTextToSize(detail, 360);
@@ -549,7 +557,9 @@ export async function downloadEstimatePdf(input: {
     y += 6;
     y = writeParagraph(
       doc,
-      `${formatMoney(totals.optionalTotal)} in optional work is not in this total.`,
+      input.estimate.hideLinePrices
+        ? `${totals.optionalCount} optional item${totals.optionalCount === 1 ? "" : "s"} not in this total.`
+        : `${formatMoney(totals.optionalTotal)} in optional work is not in this total.`,
       y,
     );
   }

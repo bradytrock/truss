@@ -27,6 +27,8 @@ export type EstimateDocumentSnapshot = {
   depositValue: number;
   packageMode: string;
   selectedPackage: string;
+  subtotalOverride: number | null;
+  hideLinePrices: boolean;
   totals: { subtotal: number; discount: number; tax: number; total: number; deposit: number };
   lines: Array<{
     id: string;
@@ -90,6 +92,8 @@ export function estimateDocumentSnapshot(
     | "depositValue"
     | "packageMode"
     | "selectedPackage"
+    | "subtotalOverride"
+    | "hideLinePrices"
   >,
   lines: EstimateLine[],
 ): EstimateDocumentSnapshot {
@@ -114,6 +118,8 @@ export function estimateDocumentSnapshot(
     depositValue: estimate.depositValue,
     packageMode: estimate.packageMode ?? "",
     selectedPackage: estimate.selectedPackage ?? "better",
+    subtotalOverride: estimate.subtotalOverride ?? null,
+    hideLinePrices: Boolean(estimate.hideLinePrices),
     totals: {
       subtotal: totals.subtotal,
       discount: totals.discount,

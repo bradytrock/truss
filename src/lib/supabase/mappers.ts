@@ -513,6 +513,11 @@ export function mapEstimate(row: EstimateRow): Estimate {
     selectedPackage: parseEstimatePackage(
       "selected_package" in row ? String(row.selected_package ?? "") : "",
     ),
+    subtotalOverride:
+      "subtotal_override" in row && row.subtotal_override != null
+        ? Number(row.subtotal_override)
+        : null,
+    hideLinePrices: "hide_line_prices" in row ? Boolean(row.hide_line_prices) : false,
   });
 }
 
@@ -672,6 +677,8 @@ export function estimatePatch(patch: Partial<Estimate>) {
   if (patch.secondSignatureImage !== undefined) row.second_signature_image = patch.secondSignatureImage;
   if (patch.packageMode !== undefined) row.package_mode = patch.packageMode;
   if (patch.selectedPackage !== undefined) row.selected_package = patch.selectedPackage;
+  if (patch.subtotalOverride !== undefined) row.subtotal_override = patch.subtotalOverride;
+  if (patch.hideLinePrices !== undefined) row.hide_line_prices = patch.hideLinePrices;
   return row;
 }
 

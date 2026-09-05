@@ -485,6 +485,10 @@ export interface Estimate {
   packageMode: "" | "gbb";
   /** Which package is selected for preview, signing, and convert-to-invoice. */
   selectedPackage: "good" | "better" | "best";
+  /** When set, customer/contract subtotal before discount and tax. Null uses the line sum. */
+  subtotalOverride: number | null;
+  /** Hide unit prices and line amounts on customer-facing proposals, share links, and PDFs. */
+  hideLinePrices: boolean;
 }
 
 export const SIGNATURE_EVENT_KINDS = ["sent", "opened", "signed", "declined"] as const;

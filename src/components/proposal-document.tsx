@@ -74,7 +74,9 @@ export function EstimateTotals({
       ) : null}
       {totals.optionalCount > 0 ? (
         <p className="pt-1 text-xs text-muted-foreground">
-          {formatMoney(totals.optionalTotal)} in optional work is not in this total.
+          {estimate.hideLinePrices
+            ? `${totals.optionalCount} optional item${totals.optionalCount === 1 ? "" : "s"} not in this total.`
+            : `${formatMoney(totals.optionalTotal)} in optional work is not in this total.`}
         </p>
       ) : null}
     </dl>
@@ -226,12 +228,16 @@ export function ProposalDocument({
                         ) : null}
                         <ProposalLinePhotos line={line} gallery={crm?.photos ?? []} />
                         <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                          {line.quantity} {line.unit} × {formatMoney(line.unitCost)}
+                          {estimate.hideLinePrices
+                            ? `${line.quantity} ${line.unit}`
+                            : `${line.quantity} ${line.unit} × ${formatMoney(line.unitCost)}`}
                         </p>
                       </div>
-                      <p className={cn("shrink-0 tabular-nums", !included && "line-through")}>
-                        {formatMoney(lineAmount(line))}
-                      </p>
+                      {estimate.hideLinePrices ? null : (
+                        <p className={cn("shrink-0 tabular-nums", !included && "line-through")}>
+                          {formatMoney(lineAmount(line))}
+                        </p>
+                      )}
                     </li>
                   );
                 })}

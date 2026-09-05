@@ -95,6 +95,8 @@ The company **Audit trail** (Settings → Audit trail) needs [`20260904200000_co
 
 **Estimate attachments** need [`20260905220000_estimate_files.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260905220000_estimate_files.sql). On an estimate’s Write tab, the Attachments card uploads PDFs and other files to Backblaze (private) and lists them for the crew; openings and uploads land in the company audit trail.
 
+**Lump-sum proposals** (edit the customer subtotal while keeping itemized line costs for bidding, and hide unit/line prices on the client proposal, share link, and PDF) need [`20260906010000_estimate_lump_sum_pricing.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260906010000_estimate_lump_sum_pricing.sql). Controls live on the estimate Write tab under Tax, discount & deposit.
+
 Pages (job documents you send out) need [`20260821240000_page_share_tokens.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260821240000_page_share_tokens.sql) (or a fresh bootstrap) so a client share link stays on the Page. Until that runs, you can still build Pages and download a PDF in this browser.
 
 Job file attachments need [`20260825170000_job_files.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825170000_job_files.sql) (or a fresh bootstrap) so the `job_files` table exists. Uploads go to Backblaze B2 (see env vars below), not Supabase Storage. If that table already exists but inserts fail, run [`20260825181000_job_files_grants.sql`](https://raw.githubusercontent.com/bradytrock/truss/main/supabase/migrations/20260825181000_job_files_grants.sql).

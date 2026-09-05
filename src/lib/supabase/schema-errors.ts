@@ -83,6 +83,21 @@ export function missingEstimatePackagesMessage() {
   return `Saved in this browser. Run ${ESTIMATE_PACKAGES_SQL} in the SQL editor so Good / Better / Best packages stay on the proposal.`;
 }
 
+export const ESTIMATE_LUMP_SUM_SQL = "supabase/migrations/20260906010000_estimate_lump_sum_pricing.sql";
+
+export function isMissingEstimateLumpSum(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("subtotal_override") ||
+    message.includes("hide_line_prices")
+  );
+}
+
+export function missingEstimateLumpSumMessage() {
+  return `Saved in this browser. Run ${ESTIMATE_LUMP_SUM_SQL} in the SQL editor so lump-sum subtotals and hidden line prices persist.`;
+}
+
 export const SHARE_TOKEN_SQL = "supabase/migrations/20260819300000_share_tokens.sql";
 export const PROJECT_FINANCIALS_SQL = "supabase/migrations/20260819340000_project_financials.sql";
 export const ORIGINATOR_SQL = "supabase/migrations/20260820120000_opportunity_originator.sql";
