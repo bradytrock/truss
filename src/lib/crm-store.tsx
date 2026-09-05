@@ -24,7 +24,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newShareToken, shareUrl } from "@/lib/share";
@@ -128,6 +128,7 @@ import {
   mapJob,
   mapJobPhoto,
   mapJobFile,
+  mapEstimateFile,
   mapCompanyFile,
   mapPhotoReport,
   mapOpportunity,
@@ -180,6 +181,7 @@ import {
   type Invoice,
   type Job,
   type JobFile,
+  type EstimateFile,
   type CompanyFile,
   type CompanyFileCategory,
   type CompanyAuditAction,
@@ -320,6 +322,7 @@ const emptyState: CrmState = {
   photoAuditEvents: [],
   companyAuditEvents: [],
   jobFiles: [],
+  estimateFiles: [],
   companyFiles: [],
   photoReports: [],
   expenses: [],
@@ -1120,6 +1123,8 @@ type CrmContextValue = CrmState & {
   /** Mint or return an existing public share link for one job file. */
   shareJobFile: (id: string) => Promise<string | null>;
   revokeJobFileShare: (id: string) => Promise<boolean>;
+  addEstimateFiles: (estimateId: string, files: File[]) => Promise<EstimateFile[]>;
+  deleteEstimateFile: (id: string) => Promise<boolean>;
   addCompanyFiles: (
     files: File[],
     options?: { category?: CompanyFileCategory; notes?: string },
@@ -8591,6 +8596,170 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [recordCompanyAudit, state.jobFiles],
   );
 
+  const addEstimateFiles = useCallback(
+    async (estimateId: string, files: File[]) => {
+      const supabase = requireClient();
+      if (!supabase) throw new Error("Connect a Supabase project to save.");
+      if (!user.companyId || user.companyId === "local") {
+        toast.error("Connect a Supabase project to attach files.");
+        return [];
+      }
+      const estimate = state.estimates.find((item) => item.id === estimateId);
+      if (!estimate) {
+        toast.error("Estimate not found.");
+        return [];
+      }
+      const author = (effectiveStaff?.name || user.name).trim();
+      const saved: EstimateFile[] = [];
+
+      for (const file of files) {
+        if (file.size > 25 * 1024 * 1024) {
+          toast.error(`${file.name} is over 25 MB.`);
+          continue;
+        }
+        const rawExt = file.name.split(".").pop()?.toLowerCase() ?? "";
+        const ext = rawExt && rawExt.length <= 8 && /^[a-z0-9]+$/.test(rawExt) ? rawExt : "bin";
+        const fileId = crypto.randomUUID();
+        const relativePath = `${estimateId}/${fileId}.${ext}`;
+
+        let uploaded: { bucket: string; storagePath: string; url: string } | null = null;
+        try {
+          const result = await uploadViaApi("estimate-files", file, relativePath);
+          uploaded = {
+            bucket: result.bucket,
+            storagePath: result.path,
+            url: result.publicUrl,
+          };
+        } catch (error) {
+          if (file.size <= 1_000_000) {
+            try {
+              uploaded = { bucket: "inline", storagePath: "", url: await readFileDataUrl(file) };
+            } catch {
+              toast.error(error instanceof Error ? error.message : `Could not attach ${file.name}.`);
+              continue;
+            }
+          } else {
+            toast.error(error instanceof Error ? error.message : `Could not attach ${file.name}.`);
+            continue;
+          }
+        }
+
+        if (!uploaded) {
+          toast.error(`Could not attach ${file.name}.`);
+          continue;
+        }
+
+        const record: EstimateFile = {
+          id: fileId,
+          estimateId,
+          name: file.name.replace(/^.*[/\\]/, "").trim() || "Untitled",
+          mimeType: file.type || "",
+          sizeBytes: file.size,
+          url: uploaded.url,
+          storagePath: uploaded.storagePath,
+          createdBy: author,
+          createdAt: new Date().toISOString(),
+          bucket: uploaded.bucket,
+        };
+
+        const { data, error } = await supabase
+          .from("estimate_files")
+          .insert({
+            id: record.id,
+            company_id: user.companyId,
+            estimate_id: record.estimateId,
+            name: record.name,
+            mime_type: record.mimeType || "application/octet-stream",
+            size_bytes: record.sizeBytes,
+            storage_path: record.storagePath,
+            url: record.url,
+            created_by: record.createdBy,
+          })
+          .select("*")
+          .single();
+
+        if (error || !data) {
+          if (isMissingEstimateFiles(error)) toast.error(missingEstimateFilesMessage());
+          else toast.error(error?.message ?? `Could not save ${file.name}.`);
+          if (uploaded.storagePath && uploaded.bucket !== "inline") {
+            try {
+              await deleteViaApi(uploaded.storagePath, "estimate-files");
+            } catch {
+              /* orphan ok */
+            }
+          }
+          continue;
+        }
+
+        saved.push({ ...mapEstimateFile(data), bucket: uploaded.bucket });
+      }
+
+      if (saved.length > 0) {
+        setState((prev) => ({
+          ...prev,
+          estimateFiles: [...saved, ...(prev.estimateFiles ?? [])],
+        }));
+        for (const file of saved) {
+          void recordCompanyAudit({
+            entityType: "estimate_file",
+            entityId: file.id,
+            action: "uploaded",
+            after: file,
+            label: file.name,
+            relatedJobId: estimate.jobId,
+            relatedOpportunityId: estimate.opportunityId,
+          });
+        }
+      }
+      return saved;
+    },
+    [
+      effectiveStaff?.name,
+      recordCompanyAudit,
+      state.estimates,
+      user.companyId,
+      user.name,
+    ],
+  );
+
+  const deleteEstimateFile = useCallback(
+    async (id: string) => {
+      const current = (state.estimateFiles ?? []).find((file) => file.id === id);
+      if (!current) return false;
+      const estimate = state.estimates.find((item) => item.id === current.estimateId);
+      const supabase = maybeClient();
+      if (supabase) {
+        if (current.storagePath && current.bucket !== "inline") {
+          try {
+            await deleteViaApi(current.storagePath, "estimate-files");
+          } catch {
+            // Row delete still proceeds; orphaned B2 objects are harmless.
+          }
+        }
+        const { error } = await supabase.from("estimate_files").delete().eq("id", id);
+        if (error && !isMissingEstimateFiles(error)) {
+          toast.error(error.message);
+          return false;
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        estimateFiles: (prev.estimateFiles ?? []).filter((file) => file.id !== id),
+      }));
+      void recordCompanyAudit({
+        entityType: "estimate_file",
+        entityId: id,
+        action: "deleted",
+        before: current,
+        label: current.name,
+        relatedJobId: estimate?.jobId ?? null,
+        relatedOpportunityId: estimate?.opportunityId ?? null,
+      });
+      return true;
+    },
+    [recordCompanyAudit, state.estimateFiles, state.estimates],
+  );
+
   const addCompanyFiles = useCallback(
     async (files: File[], options?: { category?: CompanyFileCategory; notes?: string }) => {
       const supabase = requireClient();
@@ -10307,6 +10476,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       deleteJobFile,
       shareJobFile,
       revokeJobFileShare,
+      addEstimateFiles,
+      deleteEstimateFile,
       addCompanyFiles,
       updateCompanyFile,
       deleteCompanyFile,
@@ -10465,6 +10636,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       deleteJobFile,
       shareJobFile,
       revokeJobFileShare,
+      addEstimateFiles,
+      deleteEstimateFile,
       addCompanyFiles,
       updateCompanyFile,
       deleteCompanyFile,

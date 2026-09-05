@@ -1,6 +1,7 @@
 export const STORAGE_KINDS = [
   "job-files",
   "job-photos",
+  "estimate-files",
   "receipts",
   "company-assets",
   "company-files",

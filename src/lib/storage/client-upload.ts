@@ -3,6 +3,7 @@
 export type StorageKind =
   | "job-files"
   | "job-photos"
+  | "estimate-files"
   | "receipts"
   | "company-assets"
   | "company-files";

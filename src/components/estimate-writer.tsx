@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { EstimateLinePhotos } from "@/components/estimate-line-photos";
+import { EstimateFilesPanel } from "@/components/estimate-files";
 import { BackToJobButton } from "@/components/back-to-job";
 import { ProposalDocument } from "@/components/proposal-document";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
@@ -1168,6 +1169,18 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           <p className="text-xs text-muted-foreground">
             Prints after the total on the proposal, the client link, and the PDF. Long notes continue onto a second page.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Attachments</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <EstimateFilesPanel
+            estimateId={estimate.id}
+            disabled={estimate.status === "declined"}
+          />
         </CardContent>
       </Card>
     </div>

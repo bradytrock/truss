@@ -313,6 +313,23 @@ export function missingJobFilesMessage() {
   return `Could not save that file to the job. Run ${JOB_FILES_SQL} in the SQL editor if this keeps happening.`;
 }
 
+export const ESTIMATE_FILES_SQL = "supabase/migrations/20260905220000_estimate_files.sql";
+
+export function isMissingEstimateFiles(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentionsTable = message.includes("estimate_files") || message.includes("estimate_file");
+  return (
+    (code === "pgrst205" && mentionsTable) ||
+    ((message.includes("schema cache") || message.includes("could not find the")) && mentionsTable)
+  );
+}
+
+export function missingEstimateFilesMessage() {
+  return `Could not save that file to the estimate. Run ${ESTIMATE_FILES_SQL} in the SQL editor if this keeps happening.`;
+}
+
 export const COMPANY_FILES_SQL = "supabase/migrations/20260904170000_company_files.sql";
 
 export function isMissingCompanyFiles(error: { message?: string; code?: string } | null | undefined) {

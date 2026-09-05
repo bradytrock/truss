@@ -799,6 +799,7 @@ export type CompanyAuditEntityType =
   | "photo"
   | "job_file"
   | "estimate"
+  | "estimate_file"
   | "invoice"
   | "company_file"
   | "payment"
@@ -866,6 +867,20 @@ export interface JobFile {
   shareToken?: string;
   /** When this job file was copied from the company file directory. */
   sourceCompanyFileId?: string | null;
+}
+
+/** File attached to an estimate (specs, insurance docs, sketches, etc.). */
+export interface EstimateFile {
+  id: string;
+  estimateId: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  url: string;
+  storagePath: string;
+  createdBy: string;
+  createdAt: string;
+  bucket?: string;
 }
 
 export const COMPANY_FILE_CATEGORIES = [
@@ -1096,6 +1111,7 @@ export interface CrmState {
   photoAuditEvents: PhotoAuditEvent[];
   companyAuditEvents: CompanyAuditEvent[];
   jobFiles: JobFile[];
+  estimateFiles: EstimateFile[];
   companyFiles: CompanyFile[];
   photoReports: PhotoReport[];
   calendarAccounts: CalendarAccount[];

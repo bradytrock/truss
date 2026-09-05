@@ -949,6 +949,34 @@ export function mapJobFile(row: JobFileRow): JobFile {
   };
 }
 
+export function mapEstimateFile(row: {
+  id: string;
+  estimate_id: string;
+  name: string;
+  mime_type?: string | null;
+  size_bytes?: number | null;
+  storage_path: string;
+  url: string;
+  created_by?: string | null;
+  created_at: string;
+}): import("@/lib/types").EstimateFile {
+  return {
+    id: row.id,
+    estimateId: row.estimate_id,
+    name: row.name,
+    mimeType: row.mime_type ?? "",
+    sizeBytes: Number(row.size_bytes) || 0,
+    url: resolveStoredFileUrl({
+      storagePath: row.storage_path,
+      url: row.url,
+      kind: "estimate-files",
+    }),
+    storagePath: normalizeObjectKey(row.storage_path, "estimate-files") || row.storage_path,
+    createdBy: row.created_by ?? "",
+    createdAt: row.created_at,
+  };
+}
+
 function parseCompanyFileCategory(value: unknown): import("@/lib/types").CompanyFileCategory {
   const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (

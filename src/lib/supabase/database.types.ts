@@ -1214,6 +1214,45 @@ export type Database = {
         };
         Relationships: [];
       };
+      estimate_files: {
+        Row: {
+          id: string;
+          company_id: string;
+          estimate_id: string;
+          name: string;
+          mime_type: string;
+          size_bytes: number;
+          storage_path: string;
+          url: string;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          estimate_id: string;
+          name: string;
+          mime_type?: string;
+          size_bytes?: number;
+          storage_path: string;
+          url: string;
+          created_by?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          estimate_id?: string;
+          name?: string;
+          mime_type?: string;
+          size_bytes?: number;
+          storage_path?: string;
+          url?: string;
+          created_by?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       company_files: {
         Row: {
           id: string;
