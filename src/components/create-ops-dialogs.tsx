@@ -32,6 +32,7 @@ import {
   PHOTO_CATEGORY_LABELS,
   type EventKind,
   type PhotoCategory,
+  type ScheduleEvent,
 } from "@/lib/types";
 
 export function CreateInvoiceDialog({
@@ -167,54 +168,126 @@ export function CreateInvoiceDialog({
   );
 }
 
+function timeFromIso(iso: string) {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 export function CreateEventDialog({
   open,
   onOpenChange,
   defaultDay,
+  defaultStart,
+  defaultEnd,
+  defaultTitle,
+  event,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultDay?: string;
+  defaultStart?: string;
+  defaultEnd?: string;
+  defaultTitle?: string;
+  event?: ScheduleEvent | null;
 }) {
-  const { jobs, opportunities, teamMembers, user, addScheduleEvent } = useCrm();
+  const {
+    jobs,
+    opportunities,
+    teamMembers,
+    user,
+    addScheduleEvent,
+    updateScheduleEvent,
+    deleteScheduleEvent,
+  } = useCrm();
   const people = teamMembers.length > 0 ? teamMembers : [user.name].filter(Boolean);
-  const day = defaultDay || localYmd(new Date());
+  const defaultAssignee = user.name || people[0] || "";
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState<EventKind>("meeting");
-  const [date, setDate] = useState(day);
+  const [date, setDate] = useState(localYmd(new Date()));
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
   const [location, setLocation] = useState("");
-  const [assignee, setAssignee] = useState(user.name || people[0] || "");
+  const [assignee, setAssignee] = useState(defaultAssignee);
   const [jobId, setJobId] = useState("");
   const [opportunityId, setOpportunityId] = useState("");
   const [notes, setNotes] = useState("");
+  const editing = Boolean(event);
 
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault();
+  useEffect(() => {
+    if (!open) return;
+    if (event) {
+      setTitle(event.title);
+      setKind(event.kind);
+      setDate(localYmd(new Date(event.startsAt)));
+      setStartTime(timeFromIso(event.startsAt));
+      setEndTime(timeFromIso(event.endsAt));
+      setLocation(event.location);
+      setAssignee(event.assignee || defaultAssignee);
+      setJobId(event.jobId ?? "");
+      setOpportunityId(event.opportunityId ?? "");
+      setNotes(event.notes);
+      return;
+    }
+    setTitle(defaultTitle ?? "");
+    setKind("meeting");
+    setDate(defaultDay || localYmd(new Date()));
+    setStartTime(defaultStart || "09:00");
+    setEndTime(defaultEnd || "10:00");
+    setLocation("");
+    setAssignee(defaultAssignee);
+    setJobId("");
+    setOpportunityId("");
+    setNotes("");
+  }, [
+    open,
+    event,
+    defaultDay,
+    defaultStart,
+    defaultEnd,
+    defaultTitle,
+    defaultAssignee,
+  ]);
+
+  async function handleSubmit(formEvent: FormEvent) {
+    formEvent.preventDefault();
     if (!title.trim()) {
       toast.error("Give the event a title.");
       return;
     }
     const job = jobs.find((item) => item.id === jobId);
     const opportunity = opportunities.find((item) => item.id === opportunityId);
+    const payload = {
+      title: title.trim(),
+      kind,
+      startsAt: new Date(`${date}T${startTime}:00`).toISOString(),
+      endsAt: new Date(`${date}T${endTime}:00`).toISOString(),
+      location,
+      assignee,
+      opportunityId: opportunityId || null,
+      jobId: jobId || null,
+      clientId: job?.clientId ?? opportunity?.clientId ?? null,
+      notes,
+    };
     try {
-      await addScheduleEvent({
-        title: title.trim(),
-        kind,
-        startsAt: new Date(`${date}T${startTime}:00`).toISOString(),
-        endsAt: new Date(`${date}T${endTime}:00`).toISOString(),
-        location,
-        assignee,
-        opportunityId: opportunityId || null,
-        jobId: jobId || null,
-        clientId: job?.clientId ?? opportunity?.clientId ?? null,
-        notes,
-      });
-      toast.success("Event added to the week.");
+      if (event) {
+        await updateScheduleEvent(event.id, payload);
+        toast.success("Event updated.");
+      } else {
+        await addScheduleEvent(payload);
+        toast.success("Event added to the week.");
+      }
       onOpenChange(false);
-      setTitle("");
-      setNotes("");
+    } catch {
+      // Store already toasted.
+    }
+  }
+
+  async function handleDelete() {
+    if (!event) return;
+    try {
+      await deleteScheduleEvent(event.id);
+      toast.success("Event deleted.");
+      onOpenChange(false);
     } catch {
       // Store already toasted.
     }
@@ -224,7 +297,7 @@ export function CreateEventDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Schedule an event</DialogTitle>
+          <DialogTitle>{editing ? "Edit event" : "Schedule an event"}</DialogTitle>
           <DialogDescription>
             Site walks, inspections, production, and owner meetings for the week.
           </DialogDescription>
@@ -234,8 +307,9 @@ export function CreateEventDialog({
             <Input
               id="evt-title"
               value={title}
-              onChange={(event) => setTitle(event.target.value)}
+              onChange={(formEvent) => setTitle(formEvent.target.value)}
               placeholder="e.g. Pre-bid walk"
+              autoFocus
             />
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -285,7 +359,7 @@ export function CreateEventDialog({
                 id="evt-date"
                 type="date"
                 value={date}
-                onChange={(event) => setDate(event.target.value)}
+                onChange={(formEvent) => setDate(formEvent.target.value)}
               />
             </Field>
             <Field label="Start" htmlFor="evt-start">
@@ -293,7 +367,7 @@ export function CreateEventDialog({
                 id="evt-start"
                 type="time"
                 value={startTime}
-                onChange={(event) => setStartTime(event.target.value)}
+                onChange={(formEvent) => setStartTime(formEvent.target.value)}
               />
             </Field>
             <Field label="End" htmlFor="evt-end">
@@ -301,7 +375,7 @@ export function CreateEventDialog({
                 id="evt-end"
                 type="time"
                 value={endTime}
-                onChange={(event) => setEndTime(event.target.value)}
+                onChange={(formEvent) => setEndTime(formEvent.target.value)}
               />
             </Field>
           </div>
@@ -309,7 +383,7 @@ export function CreateEventDialog({
             <Input
               id="evt-loc"
               value={location}
-              onChange={(event) => setLocation(event.target.value)}
+              onChange={(formEvent) => setLocation(formEvent.target.value)}
               placeholder="Jobsite, trailer, or Teams"
             />
           </Field>
@@ -368,15 +442,24 @@ export function CreateEventDialog({
             <Textarea
               id="evt-notes"
               value={notes}
-              onChange={(event) => setNotes(event.target.value)}
+              onChange={(formEvent) => setNotes(formEvent.target.value)}
               rows={2}
             />
           </Field>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit">Add event</Button>
+          <DialogFooter className="sm:justify-between">
+            {editing ? (
+              <Button type="button" variant="outline" className="text-destructive" onClick={() => void handleDelete()}>
+                Delete
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+              <Button type="submit">{editing ? "Save changes" : "Add event"}</Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -1,15 +1,14 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CalendarWeekGrid } from "@/components/calendar-week-grid";
 import { CreateEventDialog } from "@/components/create-ops-dialogs";
-import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
-import { EventKindBadge } from "@/components/status-badge";
+import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { Badge } from "@/components/ui/badge";
 import { useCrm } from "@/lib/crm-store";
 import {
@@ -19,13 +18,21 @@ import {
   visibleCalendarStaff,
 } from "@/lib/calendar";
 import { demoGoogleEvents, type GoogleOverlayEvent } from "@/lib/google-calendar-demo";
-import { formatDate, formatTime, localYmd, startOfWeek } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { formatDate, localYmd, startOfWeek } from "@/lib/format";
+import type { EventKind, ScheduleEvent } from "@/lib/types";
+
+type CreateDraft = {
+  day: string;
+  start?: string;
+  end?: string;
+  title?: string;
+};
 
 export default function CalendarPage() {
   const crm = useCrm();
   const [anchor, setAnchor] = useState(() => startOfWeek(new Date()));
-  const [createDay, setCreateDay] = useState<string | null>(null);
+  const [createDraft, setCreateDraft] = useState<CreateDraft | null>(null);
+  const [editingEvent, setEditingEvent] = useState<ScheduleEvent | null>(null);
   const [hidden, setHidden] = useState<string[]>([]);
   const [oauthReady, setOauthReady] = useState(false);
   const [remoteGoogle, setRemoteGoogle] = useState<GoogleOverlayEvent[]>([]);
@@ -140,6 +147,40 @@ export default function CalendarPage() {
     );
   }
 
+  async function quickCreate(input: {
+    title: string;
+    startsAt: string;
+    endsAt: string;
+    kind: EventKind;
+  }) {
+    try {
+      await crm.addScheduleEvent({
+        title: input.title,
+        kind: input.kind,
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+        location: "",
+        assignee: crm.user.name || viewer?.name || "",
+        opportunityId: null,
+        jobId: null,
+        clientId: null,
+        notes: "",
+      });
+      toast.success("Event added.");
+    } catch {
+      // Store already toasted.
+    }
+  }
+
+  async function quickDelete(eventId: string) {
+    try {
+      await crm.deleteScheduleEvent(eventId);
+      toast.success("Event deleted.");
+    } catch {
+      // Store already toasted.
+    }
+  }
+
   return (
     <div className="space-y-5">
       {crm.hydrateError ? (
@@ -148,7 +189,7 @@ export default function CalendarPage() {
       <PageHeader
         eyebrow="Field"
         title="Calendar"
-        description="Each person links their own Google Calendar. Share it with your team. Company admins see every calendar, including who is linked."
+        description="Click or drag on the week grid to add an event — same flow as Google Calendar. Linked Google calendars overlay as read-only."
         actions={
           <div className="flex items-center gap-2">
             <Button
@@ -164,7 +205,7 @@ export default function CalendarPage() {
               <ChevronLeft />
             </Button>
             <Button variant="outline" size="sm" onClick={() => setAnchor(startOfWeek(new Date()))}>
-              This week
+              Today
             </Button>
             <Button
               variant="outline"
@@ -178,13 +219,24 @@ export default function CalendarPage() {
             >
               <ChevronRight />
             </Button>
-            <Button onClick={() => setCreateDay(today)}>New event</Button>
+            <Button
+              onClick={() =>
+                setCreateDraft({
+                  day: today,
+                  start: "09:00",
+                  end: "10:00",
+                })
+              }
+            >
+              New event
+            </Button>
           </div>
         }
       />
 
       <p className="text-sm text-muted-foreground">
-        Week of {formatDate(localYmd(days[0]))} · {weekEvents.length} TheRoofingCRM · {overlayEvents.length} Google
+        Week of {formatDate(localYmd(days[0]))} · {weekEvents.length} TheRoofingCRM ·{" "}
+        {overlayEvents.length} Google
       </p>
 
       <div className="grid gap-4 xl:grid-cols-[18.5rem_minmax(0,1fr)]">
@@ -324,142 +376,42 @@ export default function CalendarPage() {
           </Card>
         </div>
 
-        <div>
-          {weekEvents.length === 0 && overlayEvents.length === 0 ? (
-            <EmptyState
-              title="Nothing on this week"
-              description="Turn on a linked calendar at left, or add an event in TheRoofingCRM for a walk, inspection, or production day."
-              action={<Button onClick={() => setCreateDay(today)}>New event</Button>}
-            />
-          ) : (
-            <div className="grid gap-2 md:grid-cols-7">
-              {days.map((date) => {
-                const key = localYmd(date);
-                const crmItems = weekEvents
-                  .filter((event) => localYmd(new Date(event.startsAt)) === key)
-                  .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-                const googleItems = overlayEvents
-                  .filter((event) => localYmd(new Date(event.startsAt)) === key)
-                  .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-                const isToday = key === today;
-                return (
-                  <div key={key} className="min-w-0">
-                    <button
-                      type="button"
-                      onClick={() => setCreateDay(key)}
-                      className={cn(
-                        "mb-2 flex w-full items-baseline justify-between px-1.5 py-1 text-left text-sm hover:bg-muted",
-                        isToday && "bg-primary/10 hover:bg-primary/15",
-                      )}
-                    >
-                      <span className="font-medium">
-                        {date.toLocaleDateString("en-US", { weekday: "short" })}
-                      </span>
-                      <span className="text-xs text-muted-foreground">{date.getDate()}</span>
-                    </button>
-                    <div className="space-y-2">
-                      {crmItems.length === 0 && googleItems.length === 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => setCreateDay(key)}
-                          className="w-full border border-dashed px-2 py-6 text-xs text-muted-foreground hover:bg-muted/50"
-                        >
-                          Add
-                        </button>
-                      ) : (
-                        <>
-                          {crmItems.map((event) => {
-                            const job = event.jobId ? crm.getJob(event.jobId) : undefined;
-                            const opportunity = event.opportunityId
-                              ? crm.getOpportunity(event.opportunityId)
-                              : undefined;
-                            const owner = crm.book.staff.find((member) => member.name === event.assignee);
-                            return (
-                              <Card key={event.id} size="sm" className="shadow-none">
-                                <CardContent
-                                  className="space-y-1.5 border-l-2 p-2.5"
-                                  style={{ borderLeftColor: owner ? calendarColor(owner.id) : undefined }}
-                                >
-                                  <div className="flex items-center justify-between gap-1">
-                                    <EventKindBadge kind={event.kind} />
-                                    <span className="text-[10px] tracking-wide text-muted-foreground uppercase">
-                                      TheRoofingCRM
-                                    </span>
-                                  </div>
-                                  <p className="text-sm leading-snug font-medium">{event.title}</p>
-                                  <p className="text-xs tabular-nums text-muted-foreground">
-                                    {formatTime(event.startsAt)}–{formatTime(event.endsAt)}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">{event.assignee}</p>
-                                  {job ? (
-                                    <Link
-                                      href={`/jobs/${job.id}`}
-                                      className="block truncate text-xs text-primary hover:underline"
-                                    >
-                                      {job.code ? `${job.code} · ` : ""}
-                                      {job.name}
-                                    </Link>
-                                  ) : opportunity ? (
-                                    <Link
-                                      href={`/opportunities/${opportunity.id}`}
-                                      className="block truncate text-xs text-primary hover:underline"
-                                    >
-                                      {opportunity.code ? `${opportunity.code} · ` : ""}
-                                      {opportunity.name}
-                                    </Link>
-                                  ) : null}
-                                </CardContent>
-                              </Card>
-                            );
-                          })}
-                          {googleItems.map((event) => (
-                            <Card key={event.id} size="sm" className="shadow-none">
-                              <CardContent
-                                className="space-y-1.5 border-l-2 p-2.5"
-                                style={{ borderLeftColor: calendarColor(event.staffId) }}
-                              >
-                                <div className="flex items-center justify-between gap-1">
-                                  <Badge variant="outline">Google</Badge>
-                                </div>
-                                {event.htmlLink ? (
-                                  <a
-                                    href={event.htmlLink}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-sm leading-snug font-medium hover:underline"
-                                  >
-                                    {event.title}
-                                  </a>
-                                ) : (
-                                  <p className="text-sm leading-snug font-medium">{event.title}</p>
-                                )}
-                                <p className="text-xs tabular-nums text-muted-foreground">
-                                  {event.allDay
-                                    ? "All day"
-                                    : `${formatTime(event.startsAt)}–${formatTime(event.endsAt)}`}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {crm.book.staff.find((member) => member.id === event.staffId)?.name}
-                                  {event.location ? ` · ${event.location}` : ""}
-                                </p>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        <CalendarWeekGrid
+          days={days}
+          crmEvents={weekEvents}
+          googleEvents={overlayEvents}
+          todayKey={today}
+          onQuickCreate={(input) => void quickCreate(input)}
+          onQuickDelete={(id) => void quickDelete(id)}
+          onEditEvent={(event) => setEditingEvent(event)}
+          onCreateEvent={(draft) =>
+            setCreateDraft({
+              day: localYmd(draft.day),
+              start: draft.start,
+              end: draft.end,
+              title: draft.title,
+            })
+          }
+        />
       </div>
 
       <CreateEventDialog
-        open={createDay !== null}
-        onOpenChange={(open) => setCreateDay(open ? createDay ?? today : null)}
-        defaultDay={createDay ?? undefined}
+        open={createDraft !== null}
+        onOpenChange={(open) => {
+          if (!open) setCreateDraft(null);
+        }}
+        defaultDay={createDraft?.day}
+        defaultStart={createDraft?.start}
+        defaultEnd={createDraft?.end}
+        defaultTitle={createDraft?.title}
+      />
+
+      <CreateEventDialog
+        open={editingEvent !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditingEvent(null);
+        }}
+        event={editingEvent}
       />
     </div>
   );

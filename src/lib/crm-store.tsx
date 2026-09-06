@@ -1072,6 +1072,8 @@ type CrmContextValue = CrmState & {
     mentionedStaffIds?: string[];
   }) => Promise<QbReviewComment | null>;
   addScheduleEvent: (input: Omit<ScheduleEvent, "id">) => Promise<ScheduleEvent>;
+  updateScheduleEvent: (id: string, patch: Partial<Omit<ScheduleEvent, "id">>) => Promise<ScheduleEvent>;
+  deleteScheduleEvent: (id: string) => Promise<void>;
   linkDemoCalendar: () => Promise<void>;
   markCalendarLinked: (staffId: string, googleEmail: string, source: "google" | "demo") => Promise<void>;
   disconnectCalendar: () => Promise<void>;
@@ -7484,6 +7486,113 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [recordCompanyAudit, user.companyId]
   );
 
+  const updateScheduleEvent = useCallback(
+    async (id: string, patch: Partial<Omit<ScheduleEvent, "id">>) => {
+      const current = state.events.find((event) => event.id === id);
+      if (!current) throw new Error("Event not found.");
+      const next: ScheduleEvent = { ...current, ...patch, id };
+      const supabase = requireClient();
+      if (!supabase) {
+        setState((prev) => ({
+          ...prev,
+          events: prev.events.map((event) => (event.id === id ? next : event)),
+        }));
+        void recordCompanyAudit({
+          entityType: "schedule_event",
+          entityId: id,
+          action: "updated",
+          before: current,
+          after: next,
+          label: next.title,
+          relatedJobId: next.jobId,
+          relatedOpportunityId: next.opportunityId,
+        });
+        return next;
+      }
+      const { data, error } = await supabase
+        .from("schedule_events")
+        .update({
+          title: next.title,
+          kind: next.kind,
+          starts_at: next.startsAt,
+          ends_at: next.endsAt,
+          location: next.location,
+          assignee: next.assignee,
+          opportunity_id: next.opportunityId,
+          job_id: next.jobId,
+          client_id: next.clientId,
+          notes: next.notes,
+        })
+        .eq("id", id)
+        .select("*")
+        .single();
+      if (error || !data) {
+        toast.error(error?.message ?? "Could not update the event.");
+        throw error ?? new Error("Could not update the event.");
+      }
+      const event = mapScheduleEvent(data);
+      setState((prev) => ({
+        ...prev,
+        events: prev.events.map((item) => (item.id === id ? event : item)),
+      }));
+      void recordCompanyAudit({
+        entityType: "schedule_event",
+        entityId: id,
+        action: "updated",
+        before: current,
+        after: event,
+        label: event.title,
+        relatedJobId: event.jobId,
+        relatedOpportunityId: event.opportunityId,
+      });
+      return event;
+    },
+    [recordCompanyAudit, state.events],
+  );
+
+  const deleteScheduleEvent = useCallback(
+    async (id: string) => {
+      const current = state.events.find((event) => event.id === id);
+      if (!current) return;
+      const supabase = requireClient();
+      if (!supabase) {
+        setState((prev) => ({
+          ...prev,
+          events: prev.events.filter((event) => event.id !== id),
+        }));
+        void recordCompanyAudit({
+          entityType: "schedule_event",
+          entityId: id,
+          action: "deleted",
+          before: current,
+          label: current.title,
+          relatedJobId: current.jobId,
+          relatedOpportunityId: current.opportunityId,
+        });
+        return;
+      }
+      const { error } = await supabase.from("schedule_events").delete().eq("id", id);
+      if (error) {
+        toast.error(error.message);
+        throw error;
+      }
+      setState((prev) => ({
+        ...prev,
+        events: prev.events.filter((event) => event.id !== id),
+      }));
+      void recordCompanyAudit({
+        entityType: "schedule_event",
+        entityId: id,
+        action: "deleted",
+        before: current,
+        label: current.title,
+        relatedJobId: current.jobId,
+        relatedOpportunityId: current.opportunityId,
+      });
+    },
+    [recordCompanyAudit, state.events],
+  );
+
   const upsertAccount = useCallback(
     async (account: CalendarAccount) => {
       setState((prev) => {
@@ -10643,6 +10752,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       setQbStatus,
       addQbReviewComment,
       addScheduleEvent,
+      updateScheduleEvent,
+      deleteScheduleEvent,
       linkDemoCalendar,
       markCalendarLinked,
       disconnectCalendar,
@@ -10805,6 +10916,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       setQbStatus,
       addQbReviewComment,
       addScheduleEvent,
+      updateScheduleEvent,
+      deleteScheduleEvent,
       linkDemoCalendar,
       markCalendarLinked,
       disconnectCalendar,
