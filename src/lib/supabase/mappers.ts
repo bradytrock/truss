@@ -540,6 +540,7 @@ export function mapEstimateLine(row: EstimateLineRow): EstimateLine {
     optional: Boolean(row.optional),
     selected: row.selected ?? true,
     taxable: row.taxable ?? true,
+    quantityFormula: "quantity_formula" in row && row.quantity_formula != null ? String(row.quantity_formula) : "",
     package: parseLinePackage("package" in row ? String(row.package ?? "") : ""),
     photoIds: Array.isArray(row.photo_ids) ? row.photo_ids.map(String) : [],
   });
@@ -610,6 +611,7 @@ export function mapEstimateTemplateLine(row: EstimateTemplateLineRow): EstimateT
     optional: Boolean(row.optional),
     selected: row.selected ?? true,
     taxable: row.taxable ?? true,
+    quantityFormula: "quantity_formula" in row && row.quantity_formula != null ? String(row.quantity_formula) : "",
   });
 }
 
@@ -643,6 +645,7 @@ export function estimateTemplateLinePatch(patch: Partial<EstimateTemplateLine>) 
   if (patch.optional !== undefined) row.optional = patch.optional;
   if (patch.selected !== undefined) row.selected = patch.selected;
   if (patch.taxable !== undefined) row.taxable = patch.taxable;
+  if (patch.quantityFormula !== undefined) row.quantity_formula = patch.quantityFormula;
   return row;
 }
 
@@ -701,6 +704,7 @@ export function estimateLinePatch(patch: Partial<EstimateLine>) {
   if (patch.taxable !== undefined) row.taxable = patch.taxable;
   if (patch.photoIds !== undefined) row.photo_ids = patch.photoIds;
   if (patch.package !== undefined) row.package = patch.package;
+  if (patch.quantityFormula !== undefined) row.quantity_formula = patch.quantityFormula;
   return row;
 }
 

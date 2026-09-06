@@ -739,6 +739,7 @@ export type Database = {
           optional: boolean;
           selected: boolean;
           taxable: boolean;
+          quantity_formula: string;
           photo_ids: string[];
           package: string;
         };
@@ -757,6 +758,7 @@ export type Database = {
           optional?: boolean;
           selected?: boolean;
           taxable?: boolean;
+          quantity_formula?: string;
           photo_ids?: string[];
           package?: string;
         };
@@ -817,6 +819,7 @@ export type Database = {
           optional: boolean;
           selected: boolean;
           taxable: boolean;
+          quantity_formula: string;
         };
         Insert: {
           id?: string;
@@ -833,6 +836,7 @@ export type Database = {
           optional?: boolean;
           selected?: boolean;
           taxable?: boolean;
+          quantity_formula?: string;
         };
         Update: Partial<Database["public"]["Tables"]["estimate_template_lines"]["Insert"]>;
         Relationships: [];

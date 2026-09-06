@@ -309,12 +309,12 @@ export type EstimateDraft = Omit<
 
 export type EstimateLineDraft = Omit<
   EstimateLine,
-  "title" | "groupName" | "optional" | "selected" | "taxable" | "photoIds" | "photos" | "package"
+  "title" | "groupName" | "optional" | "selected" | "taxable" | "photoIds" | "photos" | "package" | "quantityFormula"
 > &
   Partial<
     Pick<
       EstimateLine,
-      "title" | "groupName" | "optional" | "selected" | "taxable" | "photoIds" | "photos" | "package"
+      "title" | "groupName" | "optional" | "selected" | "taxable" | "photoIds" | "photos" | "package" | "quantityFormula"
     >
   >;
 
@@ -371,6 +371,7 @@ export function fillEstimateLine(line: EstimateLineDraft): EstimateLine {
     selected: line.selected ?? true,
     taxable: line.taxable ?? true,
     package: parseLinePackage(line.package),
+    quantityFormula: line.quantityFormula?.trim() ?? "",
     photoIds,
     photos: line.photos,
   };

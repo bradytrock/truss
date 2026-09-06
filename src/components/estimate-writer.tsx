@@ -77,6 +77,10 @@ import {
   linePackageSelectValue,
   parseEstimatePackage,
 } from "@/lib/estimate-packages";
+import {
+  EAGLEVIEW_FORMULA_TOKENS,
+  previewQuantityFormula,
+} from "@/lib/eagleview-formulas";
 import { PackagePicker } from "@/components/package-picker";
 import { downloadEstimatePdf, downloadSignatureCertificatePdf } from "@/lib/document-pdf";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
@@ -262,6 +266,8 @@ export type PricedLine = {
   selected: boolean;
   taxable: boolean;
   package?: "" | "good" | "better" | "best";
+  /** EagleView qty formula used when applying measurements. */
+  quantityFormula?: string;
 };
 
 export function LineCard({
@@ -269,6 +275,7 @@ export function LineCard({
   editable,
   showTax,
   showPackage,
+  showQuantityFormula,
   onPatch,
   onMove,
   onRemove,
@@ -280,6 +287,8 @@ export function LineCard({
   editable: boolean;
   showTax: boolean;
   showPackage?: boolean;
+  /** Template editor: bind qty to EagleView measurements. */
+  showQuantityFormula?: boolean;
   onPatch: (patch: Partial<PricedLine>) => void;
   onMove: (direction: "up" | "down") => void;
   onRemove: () => void;
@@ -288,6 +297,9 @@ export function LineCard({
   onPhotosChange?: (photoIds: string[]) => void;
 }) {
   const units = COMMON_UNITS.includes(line.unit) ? COMMON_UNITS : [line.unit, ...COMMON_UNITS];
+  const formula = line.quantityFormula ?? "";
+  const formulaPreview =
+    showQuantityFormula && formula.trim() ? previewQuantityFormula(formula) : null;
   return (
     <div
       className={cn(
@@ -448,6 +460,52 @@ export function LineCard({
           </div>
         ) : null}
       </div>
+
+      {showQuantityFormula ? (
+        <div className="mt-3 space-y-2 border-t pt-3">
+          <div className="flex items-baseline justify-between gap-2">
+            <Label className="text-xs text-muted-foreground">EagleView formula</Label>
+            {formulaPreview?.ok ? (
+              <p className="text-xs text-muted-foreground">
+                Sample qty{" "}
+                <span className="font-medium text-foreground tabular-nums">{formulaPreview.value}</span>
+              </p>
+            ) : formula.trim() ? (
+              <p className="text-xs text-red-600">
+                {formulaPreview && !formulaPreview.ok ? formulaPreview.error : "Invalid formula"}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">Leave blank to match by title</p>
+            )}
+          </div>
+          <CommitInput
+            value={formula}
+            disabled={!editable}
+            placeholder="e.g. squares · ridges · eaves * 1.1 · ceil(valleys / 10)"
+            className="font-mono text-sm"
+            onCommit={(value) => onPatch({ quantityFormula: value.trim() })}
+          />
+          {editable ? (
+            <div className="flex flex-wrap gap-1">
+              {EAGLEVIEW_FORMULA_TOKENS.slice(0, 8).map((token) => (
+                <button
+                  key={token.token}
+                  type="button"
+                  title={token.hint}
+                  className="rounded border bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => {
+                    const next = formula.trim() ? `${formula.trim()} ${token.token}` : token.token;
+                    onPatch({ quantityFormula: next });
+                  }}
+                >
+                  {token.token}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {onPhotosChange || (line.photoIds && line.photoIds.length > 0) || line.photos?.length ? (
         <EstimateLinePhotos
           line={{

@@ -188,7 +188,15 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="font-heading text-lg font-medium">Line items</h2>
+          <div>
+            <h2 className="font-heading text-lg font-medium">Line items</h2>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              Set an EagleView formula on a line to calculate quantity when measurements are applied
+              (for example <span className="font-mono text-foreground">squares</span>,{" "}
+              <span className="font-mono text-foreground">ridges + hips</span>, or{" "}
+              <span className="font-mono text-foreground">ceil(eaves / 10)</span>).
+            </p>
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
@@ -269,6 +277,7 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
                     line={line}
                     editable
                     showTax={!residential}
+                    showQuantityFormula
                     onPatch={(patch) => void crm.updateTemplateLine(line.id, patch)}
                     onMove={(direction) => void crm.reorderTemplateLine(line.id, direction)}
                     onRemove={() => void crm.removeTemplateLine(line.id)}

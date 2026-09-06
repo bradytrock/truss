@@ -1,3 +1,7 @@
+import {
+  eagleviewFormulaVars,
+  evaluateQuantityFormula,
+} from "@/lib/eagleview-formulas";
 import { firstName } from "@/lib/phone";
 
 /** Regular delivery id for most Measurement Orders products. */
@@ -518,7 +522,7 @@ export function buildEagleviewReportPdf(input: {
  * Squares → field coverage lines; LF lengths → ridge/hip/valley/eave/etc. lines by title.
  */
 export function applySquaresToEstimateLines<
-  T extends { id: string; title: string; unit: string; quantity: number },
+  T extends { id: string; title: string; unit: string; quantity: number; quantityFormula?: string },
 >(
   lines: T[],
   totalSquares: number,
@@ -535,6 +539,16 @@ export function applySquaresToEstimateLines<
 
   const updated: Array<{ id: string; quantity: number }> = [];
   const used = new Set<string>();
+  const formulaVars = eagleviewFormulaVars(measurements, totalSquares, wastePercent);
+
+  for (const line of lines) {
+    const formula = line.quantityFormula?.trim() ?? "";
+    if (!formula) continue;
+    const result = evaluateQuantityFormula(formula, formulaVars);
+    if (!result.ok) continue;
+    used.add(line.id);
+    updated.push({ id: line.id, quantity: result.value });
+  }
 
   const titleHas = (line: T, ...words: string[]) => {
     const title = line.title.trim().toLowerCase();
@@ -549,7 +563,7 @@ export function applySquaresToEstimateLines<
     updated.push({ id: target.id, quantity });
   };
 
-  // Field coverage / squares
+  // Field coverage / squares (heuristic fallback when no formula)
   const squareLine = lines.find((line) => {
     if (used.has(line.id)) return false;
     const unit = line.unit.trim().toLowerCase();

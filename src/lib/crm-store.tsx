@@ -3881,6 +3881,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           taxable: line.taxable,
           photo_ids: line.photoIds,
           package: line.package,
+          quantity_formula: line.quantityFormula || "",
         }));
         const inserted = await supabase.from("estimate_lines").insert(linePayload);
         if (inserted.error && isMissingEstimatePackages(inserted.error)) {
@@ -4604,6 +4605,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           taxable: line.taxable,
           photo_ids: line.photoIds,
           package: line.package,
+          quantity_formula: line.quantityFormula || "",
         }));
         let { error } = await supabase.from("estimate_lines").insert(payload);
         if (error && isMissingEstimatePackages(error)) {
@@ -4931,6 +4933,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       optional: line.optional,
       selected: line.selected,
       taxable: line.taxable,
+      quantity_formula: line.quantityFormula || "",
     });
     if (error) {
       if (isMissingEstimateTemplates(error)) {
@@ -5509,6 +5512,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         selected: line.selected,
         taxable: line.taxable,
         package: line.package,
+        quantity_formula: line.quantityFormula || "",
       };
       let { data, error } = await supabase.from("estimate_lines").insert(payload).select("*").single();
       if (error && isMissingEstimatePackages(error)) {
@@ -5591,6 +5595,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         selected: line.selected,
         taxable: line.taxable,
         package: line.package,
+        quantity_formula: line.quantityFormula || "",
       };
       let { data, error } = await supabase.from("estimate_lines").insert(payload).select("*").single();
       if (error && isMissingEstimatePackages(error)) {

@@ -103,7 +103,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         error:
-          "No estimate line matches EagleView measurements yet. Add a field-coverage line (SQ / shingles) and/or length lines named ridge, hip, valley, rake, eave, drip, flashing, etc.",
+          "No estimate line matched EagleView measurements. On the template, set an EagleView formula (e.g. squares, ridges) or name lines for field coverage / ridge / hip / valley / rake / eave / drip / flashing.",
       },
       { status: 400 },
     );

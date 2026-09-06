@@ -51,7 +51,7 @@ export function fillEstimateTemplate(
 }
 
 export function fillEstimateTemplateLine(
-  line: Omit<EstimateTemplateLine, "title" | "groupName" | "optional" | "selected" | "taxable"> &
+  line: Omit<EstimateTemplateLine, "title" | "groupName" | "optional" | "selected" | "taxable" | "quantityFormula"> &
     Partial<EstimateTemplateLine>,
 ): EstimateTemplateLine {
   const filled = fillEstimateLine({ ...line, estimateId: line.templateId });
