@@ -2137,6 +2137,14 @@ export type Database = {
         Args: { p_token: string };
         Returns: Json;
       };
+      shared_marketing_material: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      record_marketing_event: {
+        Args: { p_token: string; p_kind: string };
+        Returns: undefined;
+      };
       shared_job_file: {
         Args: { p_token: string };
         Returns: Json;

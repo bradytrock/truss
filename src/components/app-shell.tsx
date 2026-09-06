@@ -105,6 +105,7 @@ function appLauncherItems(options: {
   const extras = options.bdOnly
     ? [
         { href: "/pipeline", label: "Pipeline" },
+        { href: "/marketing", label: "Marketing" },
         { href: "/profile", label: "Profile" },
       ]
     : [
@@ -112,6 +113,7 @@ function appLauncherItems(options: {
         { href: "/clients", label: "Clients" },
         { href: "/catalog", label: "Catalog" },
         { href: "/material-orders", label: "Material orders" },
+        { href: "/marketing", label: "Marketing" },
         { href: "/profile", label: "Profile" },
       ];
   const seen = new Set(primary.map((item) => item.href));
