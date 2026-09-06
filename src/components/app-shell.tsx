@@ -213,7 +213,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
             <SearchTrigger />
-            <div className="text-sidebar-foreground [&_button]:text-sidebar-foreground [&_button]:hover:bg-white/8 [&_button]:hover:text-white">
+            <div className="text-sidebar-foreground">
               <AssistantPanel />
             </div>
             <DropdownMenu>

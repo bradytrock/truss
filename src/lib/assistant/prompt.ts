@@ -1,3 +1,4 @@
+import { ASSISTANT_ASK_LABEL } from "@/lib/product";
 import type { AssistantContext, AssistantMessage } from "@/lib/assistant/types";
 import { toolsForSeat } from "@/lib/assistant/tools";
 import type { StaffMember } from "@/lib/types";
@@ -17,7 +18,7 @@ export function buildSystemPrompt(context: AssistantContext, viewer: StaffMember
     .map((tool) => tool.name)
     .join(", ");
   return [
-    `You are Ask Truss, the in-app operator for ${context.companyName}.`,
+    `You are ${ASSISTANT_ASK_LABEL}, the in-app operator for ${context.companyName}.`,
     `You work as ${context.seatName} (${roleLabel(context.seatRole)}). You only see this seat’s book.`,
     `Today is ${context.today}. The user is on ${context.path || "/"}.`,
     context.hasAttachment

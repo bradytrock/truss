@@ -1,8 +1,13 @@
-export const TRUSS_ASK_EVENT = "truss-ask";
+export const CASSIO_ASK_EVENT = "cassio-ask";
+/** @deprecated Prefer CASSIO_ASK_EVENT */
+export const TRUSS_ASK_EVENT = CASSIO_ASK_EVENT;
 
-export function askTruss(prompt: string) {
+export function askCassio(prompt: string) {
   if (typeof window === "undefined") return;
   const text = prompt.trim();
   if (!text) return;
-  window.dispatchEvent(new CustomEvent(TRUSS_ASK_EVENT, { detail: { prompt: text } }));
+  window.dispatchEvent(new CustomEvent(CASSIO_ASK_EVENT, { detail: { prompt: text } }));
 }
+
+/** @deprecated Prefer askCassio */
+export const askTruss = askCassio;

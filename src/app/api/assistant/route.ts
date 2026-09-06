@@ -7,6 +7,7 @@ import { toolsForSeat } from "@/lib/assistant/tools";
 import type { AssistantContext, AssistantMessage, AssistantResponse } from "@/lib/assistant/types";
 import type { SeatRole, StaffMember } from "@/lib/types";
 import { SEAT_ROLES } from "@/lib/types";
+import { ASSISTANT_ASK_LABEL, ASSISTANT_NAME } from "@/lib/product";
 
 export const runtime = "nodejs";
 
@@ -53,9 +54,12 @@ async function requireUser() {
 export async function GET() {
   const user = await requireUser();
   if (!user) {
-    return NextResponse.json({ ok: false, code: "unauthorized", message: "Sign in to ask Truss." } satisfies AssistantResponse, {
-      status: 401,
-    });
+    return NextResponse.json(
+      { ok: false, code: "unauthorized", message: `Sign in to ask ${ASSISTANT_NAME}.` } satisfies AssistantResponse,
+      {
+        status: 401,
+      },
+    );
   }
   return NextResponse.json({ configured: assistantKeysConfigured() });
 }
@@ -63,9 +67,12 @@ export async function GET() {
 export async function POST(request: Request) {
   const user = await requireUser();
   if (!user) {
-    return NextResponse.json({ ok: false, code: "unauthorized", message: "Sign in to ask Truss." } satisfies AssistantResponse, {
-      status: 401,
-    });
+    return NextResponse.json(
+      { ok: false, code: "unauthorized", message: `Sign in to ask ${ASSISTANT_NAME}.` } satisfies AssistantResponse,
+      {
+        status: 401,
+      },
+    );
   }
 
   const body = (await request.json().catch(() => null)) as
@@ -94,8 +101,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         code: "no_key",
-        message:
-          "Ask Truss needs OPENAI_API_KEY on the server. Add it to .env.local and restart.",
+        message: `${ASSISTANT_ASK_LABEL} needs OPENAI_API_KEY on the server. Add it to .env.local and restart.`,
       } satisfies AssistantResponse,
       { status: 503 },
     );
@@ -105,7 +111,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         code: "provider",
-        message: "Ask Truss could not reach OpenAI. Check OPENAI_API_KEY and try again in a moment.",
+        message: `${ASSISTANT_ASK_LABEL} could not reach OpenAI. Check OPENAI_API_KEY and try again in a moment.`,
       } satisfies AssistantResponse,
       { status: 502 },
     );

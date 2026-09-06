@@ -16,7 +16,8 @@ import {
 import { useCrm } from "@/lib/crm-store";
 import { compressReceipt } from "@/lib/job-financials";
 import { buildAssistantContext } from "@/lib/assistant/context";
-import { TRUSS_ASK_EVENT } from "@/lib/assistant/ask";
+import { ASSISTANT_ASK_LABEL, ASSISTANT_NAME } from "@/lib/product";
+import { CASSIO_ASK_EVENT } from "@/lib/assistant/ask";
 import {
   describeToolCall,
   executeToolCall,
@@ -226,7 +227,7 @@ export function AssistantPanel() {
     const content = text.trim();
     if (!content || busy || pending) return;
     if (configured === false) {
-      setError("Ask Truss needs OPENAI_API_KEY on the server.");
+      setError(`${ASSISTANT_ASK_LABEL} needs OPENAI_API_KEY on the server.`);
       return;
     }
     const userText = attachment ? `${content}\n\n[Photo attached: ${attachment.name}]` : content;
@@ -245,8 +246,8 @@ export function AssistantPanel() {
       setOpen(true);
       void sendRef.current(prompt);
     }
-    window.addEventListener(TRUSS_ASK_EVENT, onAsk);
-    return () => window.removeEventListener(TRUSS_ASK_EVENT, onAsk);
+    window.addEventListener(CASSIO_ASK_EVENT, onAsk);
+    return () => window.removeEventListener(CASSIO_ASK_EVENT, onAsk);
   }, []);
 
   function onSubmit(event: FormEvent) {
@@ -265,9 +266,16 @@ export function AssistantPanel() {
 
   return (
     <>
-      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)} aria-label="Ask Truss">
+      <Button
+        type="button"
+        size="sm"
+        className="border-0 bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+        onClick={() => setOpen(true)}
+        aria-label={ASSISTANT_ASK_LABEL}
+        title={`${ASSISTANT_ASK_LABEL} (⌘.)`}
+      >
         <Sparkles data-icon="inline-start" />
-        <span className="hidden sm:inline">Ask Truss</span>
+        <span className="hidden sm:inline">{ASSISTANT_ASK_LABEL}</span>
       </Button>
       <Sheet open={open} onOpenChange={handleOpenChange}>
         <SheetContent
@@ -278,8 +286,10 @@ export function AssistantPanel() {
           <SheetHeader className="border-b pr-12">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <SheetTitle>Ask Truss</SheetTitle>
-                <SheetDescription>Say what needs doing. Truss will do it on this seat’s book.</SheetDescription>
+                <SheetTitle>{ASSISTANT_ASK_LABEL}</SheetTitle>
+                <SheetDescription>
+                  Say what needs doing. {ASSISTANT_NAME} will do it on this seat’s book.
+                </SheetDescription>
               </div>
               <Button type="button" variant="ghost" size="icon-sm" onClick={() => handleOpenChange(false)} aria-label="Close">
                 <XIcon />
@@ -290,7 +300,7 @@ export function AssistantPanel() {
             <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
               {configured === false ? (
                 <p className="text-sm text-muted-foreground">
-                  Ask Truss uses OpenAI. Add <code className="font-mono text-xs">OPENAI_API_KEY</code> to{" "}
+                  {ASSISTANT_ASK_LABEL} uses OpenAI. Add <code className="font-mono text-xs">OPENAI_API_KEY</code> to{" "}
                   <code className="font-mono text-xs">.env.local</code> and restart. It will not invent jobs or numbers without a key.
                 </p>
               ) : shown.length === 0 ? (
@@ -396,7 +406,7 @@ export function AssistantPanel() {
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   onKeyDown={onComposerKey}
-                  placeholder="Tell Truss what to do"
+                  placeholder={`Tell ${ASSISTANT_NAME} what to do`}
                   className="min-h-10 max-h-32 flex-1 resize-none"
                   disabled={busy || Boolean(pending) || configured === false}
                 />

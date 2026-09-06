@@ -332,7 +332,7 @@ function CompanySettingsForm() {
           />
           <p className="text-xs text-muted-foreground">
             Plain text. New and reply compose start with this unless the sender has their own
-            signature. Ask Truss uses the same rule when it sends mail.
+            signature. Ask Cassio uses the same rule when it sends mail.
           </p>
         </CardContent>
       </Card>

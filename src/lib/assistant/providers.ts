@@ -80,7 +80,7 @@ export async function completeWithOpenAi(
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    console.error("Ask Truss OpenAI error", response.status, detail.slice(0, 400));
+    console.error("Ask Cassio OpenAI error", response.status, detail.slice(0, 400));
     return null;
   }
   const body = (await response.json()) as {

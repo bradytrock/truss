@@ -22,7 +22,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, ErrorBanner, LoadingScreen } from "@/components/page-chrome";
 import { InboxChannelSwitch } from "@/components/inbox-channel-switch";
-import { askTruss } from "@/lib/assistant/ask";
+import { askCassio } from "@/lib/assistant/ask";
+import { ASSISTANT_ASK_LABEL } from "@/lib/product";
 import { useCrm } from "@/lib/crm-store";
 import { appendEmailSignature, resolveEmailSignature } from "@/lib/email-signature";
 import {
@@ -347,13 +348,13 @@ export function MailInbox() {
                   size="sm"
                   variant="outline"
                   onClick={() =>
-                    askTruss(
+                    askCassio(
                       "Review this inbox. Compare everyone on each chain to homeowners and referral partners, suggest the matching job, and tag the threads.",
                     )
                   }
                 >
                   <Sparkles />
-                  Ask Truss to tag
+                  {ASSISTANT_ASK_LABEL} to tag
                 </Button>
               ) : null}
             </div>
@@ -647,13 +648,13 @@ export function MailInbox() {
                   variant="ghost"
                   className="ml-auto h-7"
                   onClick={() =>
-                    askTruss(
+                    askCassio(
                       `Review this email thread and tag it. Thread id ${selected.key}. Subject: ${selected.subject}. Compare everyone on the chain to homeowners and referral partners, then tag the homeowner, partners, and the matching job.`,
                     )
                   }
                 >
                   <Sparkles />
-                  Ask Truss
+                  {ASSISTANT_ASK_LABEL}
                 </Button>
                 <Button type="button" size="sm" variant="ghost" className="h-7" onClick={() => void applySuggestedTags()}>
                   Match people
