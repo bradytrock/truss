@@ -74,13 +74,12 @@ function navItems(options: { bdOnly: boolean }) {
   return [
     { href: "/", label: "Home" },
     { href: "/jobs", label: "Jobs" },
-    { href: "/messages", label: "Inbox" },
-    { href: "/photos", label: "Photos" },
+    { href: "/contacts", label: "Contacts" },
+    { href: "/calendar", label: "Calendar" },
     { href: "/estimates", label: "Estimates" },
     { href: "/invoices", label: "Invoices" },
-    { href: "/calendar", label: "Calendar" },
     { href: "/training", label: "Training" },
-    { href: "/contacts", label: "Contacts" },
+    { href: "/photos", label: "Photos" },
   ];
 }
 
