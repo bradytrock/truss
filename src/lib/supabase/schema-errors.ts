@@ -101,12 +101,32 @@ export function missingEstimateLumpSumMessage() {
 export const SHARE_TOKEN_SQL = "supabase/migrations/20260819300000_share_tokens.sql";
 export const PROJECT_FINANCIALS_SQL = "supabase/migrations/20260819340000_project_financials.sql";
 export const ORIGINATOR_SQL = "supabase/migrations/20260820120000_opportunity_originator.sql";
+export const CLIENT_PORTAL_SQL = "supabase/migrations/20260906020000_client_portal.sql";
 
 export function isMissingShareToken(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
   const message = (error.message ?? "").toLowerCase();
   if (message.includes("second_share_token")) return false;
   return message.includes("share_token");
+}
+
+export function isMissingClientPortal(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("schema cache") ||
+    message.includes("Could not find the") ||
+    message.includes("portal_invites") ||
+    message.includes("portal_referrals") ||
+    message.includes("shared_portal") ||
+    message.includes("submit_portal_referral")
+  );
+}
+
+export function missingClientPortalMessage() {
+  return `Saved in this browser. Run ${CLIENT_PORTAL_SQL} in the SQL editor so client portal invites and referrals persist.`;
 }
 
 export function isMissingFinancials(error: { message?: string; code?: string } | null | undefined) {

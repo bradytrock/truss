@@ -13,6 +13,7 @@ import {
   ExternalLink,
   FileText,
   ImageIcon,
+  Link2,
   Mail,
   MapPin,
   MessageSquare,
@@ -878,6 +879,37 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                   ))}
                 </SelectContent>
               </Select>
+            </FieldRow>
+            <FieldRow icon={Link2} label="Client portal">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7"
+                disabled={deleted || !job.primaryContactId}
+                onClick={() => {
+                  if (!job.primaryContactId) {
+                    toast.error("Choose a primary homeowner first.");
+                    return;
+                  }
+                  void (async () => {
+                    const invite = await crm.createPortalInvite({
+                      contactId: job.primaryContactId!,
+                      jobId: job.id,
+                    });
+                    if (!invite) return;
+                    try {
+                      await navigator.clipboard.writeText(invite.url);
+                      toast.success("Portal link copied.");
+                    } catch {
+                      toast.message("Portal link ready", { description: invite.url });
+                    }
+                  })();
+                }}
+              >
+                <Copy className="size-3.5" />
+                Copy invite link
+              </Button>
             </FieldRow>
             <FieldRow icon={User} label="Assigned">
               <PeopleChips

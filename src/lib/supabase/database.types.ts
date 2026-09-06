@@ -1852,6 +1852,66 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["qbwc_sessions"]["Insert"]>;
         Relationships: [];
       };
+      portal_invites: {
+        Row: {
+          id: string;
+          company_id: string;
+          contact_id: string;
+          job_id: string | null;
+          token: string;
+          expires_at: string;
+          created_by: string | null;
+          created_at: string;
+          last_opened_at: string | null;
+          revoked_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          contact_id: string;
+          job_id?: string | null;
+          token: string;
+          expires_at: string;
+          created_by?: string | null;
+          created_at?: string;
+          last_opened_at?: string | null;
+          revoked_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["portal_invites"]["Insert"]>;
+        Relationships: [];
+      };
+      portal_referrals: {
+        Row: {
+          id: string;
+          company_id: string;
+          portal_invite_id: string | null;
+          contact_id: string;
+          job_id: string | null;
+          referred_name: string;
+          referred_phone: string;
+          referred_email: string;
+          notes: string;
+          status: string;
+          points_awarded: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          portal_invite_id?: string | null;
+          contact_id: string;
+          job_id?: string | null;
+          referred_name?: string;
+          referred_phone?: string;
+          referred_email?: string;
+          notes?: string;
+          status?: string;
+          points_awarded?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["portal_referrals"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -1924,6 +1984,21 @@ export type Database = {
       };
       shared_estimate: {
         Args: { p_token: string };
+        Returns: Json;
+      };
+      shared_portal: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      submit_portal_referral: {
+        Args: {
+          p_token: string;
+          p_referred_name: string;
+          p_referred_phone?: string;
+          p_referred_email?: string;
+          p_notes?: string;
+          p_job_id?: string | null;
+        };
         Returns: Json;
       };
       shared_invoice: {

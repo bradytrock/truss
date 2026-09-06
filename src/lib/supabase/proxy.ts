@@ -20,7 +20,9 @@ function redirectToLogin(request: NextRequest) {
 function isSharePath(path: string) {
   return (
     path.startsWith("/share") ||
+    path.startsWith("/portal") ||
     path.startsWith("/api/share") ||
+    path.startsWith("/api/portal") ||
     path.startsWith("/api/qbwc") ||
     isPublicCardPath(path)
   );
