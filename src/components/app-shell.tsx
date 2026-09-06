@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { Menu, Plus, Search } from "lucide-react";
+import { LayoutGrid, Menu, Plus, Search } from "lucide-react";
 import { useCrm } from "@/lib/crm-store";
 import { phoneSearchText } from "@/lib/phone";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -81,9 +81,45 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
   ];
 }
 
+function appLauncherItems(options: {
+  showReports: boolean;
+  showAccounting: boolean;
+  showSettings: boolean;
+  bdOnly: boolean;
+}) {
+  const primary = navItems(options);
+  const extras = options.bdOnly
+    ? [
+        { href: "/pipeline", label: "Pipeline" },
+        { href: "/profile", label: "Profile" },
+      ]
+    : [
+        { href: "/pipeline", label: "Pipeline" },
+        { href: "/clients", label: "Clients" },
+        { href: "/catalog", label: "Catalog" },
+        { href: "/material-orders", label: "Material orders" },
+        { href: "/profile", label: "Profile" },
+        ...(options.showSettings ? [{ href: "/settings", label: "Setup" }] : []),
+      ];
+  const seen = new Set(primary.map((item) => item.href));
+  return {
+    primary,
+    more: extras.filter((item) => !seen.has(item.href)),
+  };
+}
+
+function itemIsActive(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  if (href === "/accounting") return pathname === "/accounting" || pathname.startsWith("/accounting/");
+  if (href === "/jobs") return pathname.startsWith("/jobs") || pathname.startsWith("/material-orders");
+  if (href === "/messages") return isInboxPath(pathname);
+  if (href === "/settings") return pathname.startsWith("/settings");
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { effectiveStaff } = useCrm();
+  const { effectiveStaff, user } = useCrm();
   const startEstimateFlow = useStartEstimate();
   const startEstimate = startEstimateFlow.prompt;
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -91,51 +127,89 @@ export function AppShell({ children }: { children: ReactNode }) {
     "opportunity" | "client" | "job" | "invoice" | "event" | "expense" | "payment" | null
   >(null);
 
+  const navOptions = {
+    showReports: Boolean(effectiveStaff && canViewReports(effectiveStaff.role)),
+    showAccounting: Boolean(effectiveStaff && canViewAccounting(effectiveStaff.role)),
+    bdOnly: Boolean(effectiveStaff && isBusinessDevelopment(effectiveStaff.role)),
+  };
+  const items = navItems(navOptions);
+  const launcher = appLauncherItems({
+    ...navOptions,
+    showSettings: Boolean(effectiveStaff && canManageSettings(effectiveStaff.role, effectiveStaff)),
+  });
+
   return (
-    <div className="flex min-h-full">
-      <aside className="hidden w-52 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
-        <Brand />
-        <Nav pathname={pathname} />
-        <div className="mt-auto border-t border-sidebar-border px-4 py-3">
-          <LivePulse />
-          <p className="mt-1 text-[10px] tracking-[0.14em] text-sidebar-foreground/35 uppercase">
-            Restoration · remodel
-          </p>
-        </div>
-      </aside>
+    <div className="flex min-h-full flex-col">
+      <header className="sticky top-0 z-30">
+        <div className="flex h-11 items-center gap-1.5 border-b border-sidebar-border bg-sidebar px-2 text-sidebar-foreground sm:gap-2 sm:px-3">
+          <AppLauncher
+            primary={launcher.primary}
+            more={launcher.more}
+            pathname={pathname}
+          />
 
-      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="flex h-full w-72 flex-col bg-sidebar p-0 text-sidebar-foreground sm:max-w-72">
-          <SheetHeader className="sr-only">
-            <SheetTitle>Navigation</SheetTitle>
-          </SheetHeader>
-          <Brand />
-          <Nav pathname={pathname} onNavigate={() => setMobileOpen(false)} />
-          <div className="mt-auto border-t border-sidebar-border px-4 py-3">
-            <LivePulse />
-          </div>
-        </SheetContent>
-      </Sheet>
+          <Link
+            href="/"
+            className="flex min-w-0 items-center gap-2 rounded-sm px-1.5 py-1 hover:bg-white/6"
+          >
+            <BrandMark
+              className="inline-flex items-center gap-2 text-sidebar-foreground"
+              markClassName="size-4 text-primary"
+            />
+            <span className="hidden max-w-[9rem] truncate text-[11px] text-sidebar-foreground/55 lg:inline">
+              {user.company}
+            </span>
+          </Link>
 
-      <div className="flex min-w-0 flex-1 flex-col bg-background">
-        <header className="sticky top-0 z-30 border-b bg-background">
-          <div className="flex h-12 items-center gap-2 px-3 sm:px-5">
+          <nav className="hidden min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto md:flex">
+            {items.map((item) => {
+              const active = itemIsActive(pathname, item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "relative shrink-0 px-2.5 py-2 text-[13px] tracking-tight transition-colors",
+                    active
+                      ? "font-medium text-white"
+                      : "text-sidebar-foreground/60 hover:bg-white/5 hover:text-white",
+                  )}
+                >
+                  {item.label}
+                  {active ? (
+                    <span className="absolute inset-x-1.5 bottom-0 h-0.5 rounded-full bg-primary" />
+                  ) : null}
+                </Link>
+              );
+            })}
+          </nav>
+
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden"
+            className="text-sidebar-foreground hover:bg-white/8 hover:text-white md:hidden"
             onClick={() => setMobileOpen(true)}
             aria-label="Open navigation"
           >
             <Menu />
           </Button>
-          <SearchTrigger />
-          <div className="ml-auto flex items-center gap-1.5">
-            <AssistantPanel />
+
+          <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
+            <SearchTrigger />
+            <div className="text-sidebar-foreground [&_button]:text-sidebar-foreground [&_button]:hover:bg-white/8 [&_button]:hover:text-white">
+              <AssistantPanel />
+            </div>
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button size="sm" />}>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    size="sm"
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  />
+                }
+              >
                 <Plus data-icon="inline-start" />
-                Create
+                <span className="hidden sm:inline">Create</span>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-44">
                 {effectiveStaff && isBusinessDevelopment(effectiveStaff.role) ? (
@@ -153,43 +227,65 @@ export function AppShell({ children }: { children: ReactNode }) {
                   </>
                 ) : (
                   <>
-                <DropdownMenuItem onClick={() => setCreate("expense")}>
-                  Log expense
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setCreate("payment")}>
-                  Log payment
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setCreate("opportunity")}>
-                  New lead
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => startEstimate()}>
-                  New estimate
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setCreate("invoice")}>
-                  New invoice
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setCreate("event")}>
-                  Calendar event
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setCreate("client")}>
-                  New contact
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setCreate("job")}>
-                  Log a job
-                </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setCreate("expense")}>
+                      Log expense
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setCreate("payment")}>
+                      Log payment
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setCreate("opportunity")}>
+                      New lead
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => startEstimate()}>
+                      New estimate
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setCreate("invoice")}>
+                      New invoice
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setCreate("event")}>
+                      Calendar event
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setCreate("client")}>
+                      New contact
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setCreate("job")}>
+                      Log a job
+                    </DropdownMenuItem>
                   </>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
             <UserMenu />
           </div>
+        </div>
+        <SettingsMobileBar />
+      </header>
+
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent
+          side="left"
+          className="flex h-full w-72 flex-col bg-sidebar p-0 text-sidebar-foreground sm:max-w-72"
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>Navigation</SheetTitle>
+          </SheetHeader>
+          <div className="border-b border-sidebar-border px-4 py-4">
+            <BrandMark
+              className="inline-flex items-center gap-2 text-sidebar-foreground"
+              markClassName="size-4 text-primary"
+            />
+            <p className="mt-2 truncate pl-6 text-[11px] text-sidebar-foreground/45">{user.company}</p>
           </div>
-          <SettingsMobileBar />
-        </header>
-        <ScopeBanners />
-        <main className="flex-1 p-5 sm:p-7">{children}</main>
-      </div>
+          <Nav pathname={pathname} onNavigate={() => setMobileOpen(false)} />
+          <div className="mt-auto border-t border-sidebar-border px-4 py-3">
+            <LivePulse tone="dark" />
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <ScopeBanners />
+      <main className="flex-1 bg-background p-5 sm:p-7">{children}</main>
 
       <CreateOpportunityDialog
         open={create === "opportunity"}
@@ -224,32 +320,86 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-function Brand() {
-  const { user } = useCrm();
+function AppLauncher({
+  primary,
+  more,
+  pathname,
+}: {
+  primary: Array<{ href: string; label: string }>;
+  more: Array<{ href: string; label: string }>;
+  pathname: string;
+}) {
   return (
-    <div className="border-b border-sidebar-border px-4 py-4">
-      <BrandMark
-        className="inline-flex items-center gap-2 text-sidebar-foreground"
-        markClassName="size-4 text-primary"
-      />
-      <p className="mt-2 truncate pl-6 text-[11px] text-sidebar-foreground/45">{user.company}</p>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            className="shrink-0 text-sidebar-foreground hover:bg-white/8 hover:text-white"
+            aria-label="App launcher"
+          />
+        }
+      >
+        <LayoutGrid className="size-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64 p-2">
+        <DropdownMenuLabel className="text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+          Objects
+        </DropdownMenuLabel>
+        <div className="grid grid-cols-2 gap-1 p-1">
+          {primary.map((item) => (
+            <DropdownMenuItem
+              key={item.href}
+              render={<Link href={item.href} />}
+              className={cn(
+                "justify-start rounded-sm px-2 py-2 text-xs",
+                itemIsActive(pathname, item.href) && "bg-accent font-medium",
+              )}
+            >
+              {item.label}
+            </DropdownMenuItem>
+          ))}
+        </div>
+        {more.length > 0 ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+              More
+            </DropdownMenuLabel>
+            {more.map((item) => (
+              <DropdownMenuItem key={item.href} render={<Link href={item.href} />}>
+                {item.label}
+              </DropdownMenuItem>
+            ))}
+          </>
+        ) : null}
+        <DropdownMenuSeparator />
+        <div className="px-2 py-1.5">
+          <LivePulse />
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
-function LivePulse() {
+function LivePulse({ tone = "light" }: { tone?: "light" | "dark" }) {
   const { configured, liveStatus } = useCrm();
-  if (!configured) return null;
-  const label = liveStatus === "live" ? "Live" : liveStatus === "connecting" ? "Connecting" : "Reconnecting";
+  const muted = tone === "dark" ? "text-sidebar-foreground/45" : "text-muted-foreground";
+  if (!configured) {
+    return <span className={cn("text-[10px] tracking-[0.14em] uppercase", muted)}>Local book</span>;
+  }
+  const label =
+    liveStatus === "live" ? "Live" : liveStatus === "connecting" ? "Connecting" : "Reconnecting";
   return (
     <p
-      className="flex items-center gap-2 text-[10px] tracking-[0.14em] text-sidebar-foreground/35 uppercase"
+      className={cn("flex items-center gap-2 text-[10px] tracking-[0.14em] uppercase", muted)}
       title="This book updates when someone saves in the field app."
     >
       <span
         className={cn(
           "size-1.5 rounded-full",
-          liveStatus === "live" ? "bg-emerald-400" : "bg-sidebar-foreground/30",
+          liveStatus === "live" ? "bg-emerald-500" : "bg-current/40",
           liveStatus === "connecting" && "animate-pulse",
         )}
       />
@@ -269,16 +419,7 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
   return (
     <nav className="flex flex-col px-2 py-3">
       {items.map((item) => {
-        const active =
-          item.href === "/"
-            ? pathname === "/"
-            : item.href === "/accounting"
-              ? pathname === "/accounting" || pathname.startsWith("/accounting/")
-              : item.href === "/jobs"
-                ? pathname.startsWith("/jobs") || pathname.startsWith("/material-orders")
-                : item.href === "/messages"
-                  ? isInboxPath(pathname)
-                : pathname.startsWith(item.href);
+        const active = itemIsActive(pathname, item.href);
         return (
           <Link
             key={item.href}
@@ -288,7 +429,7 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
               "flex items-center border-l-2 px-3 py-[7px] text-[13px] tracking-tight transition-colors",
               active
                 ? "border-primary bg-white/6 font-medium text-white"
-                : "border-transparent text-sidebar-foreground/58 hover:bg-white/4 hover:text-white"
+                : "border-transparent text-sidebar-foreground/58 hover:bg-white/4 hover:text-white",
             )}
           >
             {item.label}
@@ -303,6 +444,7 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
     </nav>
   );
 }
+
 
 function SearchTrigger() {
   const [open, setOpen] = useState(false);
@@ -323,13 +465,14 @@ function SearchTrigger() {
   return (
     <>
       <Button
-        variant="outline"
-        className="h-8 w-full max-w-sm justify-start rounded-md font-normal text-muted-foreground"
+        variant="ghost"
+        className="h-8 w-8 justify-center rounded-sm px-0 font-normal text-sidebar-foreground hover:bg-white/8 hover:text-white sm:w-auto sm:max-w-xs sm:justify-start sm:bg-white/8 sm:px-3 sm:hover:bg-white/12"
         onClick={() => setOpen(true)}
+        aria-label="Search"
       >
-        <Search data-icon="inline-start" />
-        Search jobs, people, estimates
-        <kbd className="ml-auto hidden rounded border bg-muted px-1.5 py-0.5 font-sans text-[10px] sm:inline">
+        <Search data-icon="inline-start" className="size-4" />
+        <span className="hidden truncate sm:inline">Search…</span>
+        <kbd className="ml-auto hidden rounded border border-white/15 bg-white/5 px-1.5 py-0.5 font-sans text-[10px] text-sidebar-foreground/55 lg:inline">
           ⌘K
         </kbd>
       </Button>
@@ -566,7 +709,12 @@ function UserMenu() {
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
-          <Button variant="ghost" size="icon" className="rounded-full" aria-label="Account" />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="rounded-full text-sidebar-foreground hover:bg-white/8 hover:text-white"
+            aria-label="Account"
+          />
         }
       >
         <Avatar size="sm">
