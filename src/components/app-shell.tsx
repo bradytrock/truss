@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { LayoutGrid, Menu, Plus, Search } from "lucide-react";
+import { ChevronDown, LayoutGrid, Menu, Plus, Search } from "lucide-react";
 import { useCrm } from "@/lib/crm-store";
 import { phoneSearchText } from "@/lib/phone";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -56,7 +56,7 @@ import { AssistantPanel } from "@/components/assistant-panel";
 import { useStartEstimate } from "@/lib/start-estimate";
 import { StartEstimateDialogHost } from "@/components/start-estimate-button";
 
-function navItems(options: { showReports: boolean; showAccounting: boolean; bdOnly: boolean }) {
+function navItems(options: { bdOnly: boolean }) {
   if (options.bdOnly) {
     return [
       { href: "/", label: "Home" },
@@ -64,7 +64,6 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
       { href: "/messages", label: "Inbox" },
       { href: "/photos", label: "Photos" },
       { href: "/contacts", label: "Agents & contacts" },
-      { href: "/reports", label: "ROI" },
     ];
   }
   return [
@@ -74,11 +73,24 @@ function navItems(options: { showReports: boolean; showAccounting: boolean; bdOn
     { href: "/photos", label: "Photos" },
     { href: "/estimates", label: "Estimates" },
     { href: "/invoices", label: "Invoices" },
-    ...(options.showAccounting ? [{ href: "/accounting", label: "Accounting" }] : []),
     { href: "/calendar", label: "Calendar" },
     { href: "/training", label: "Training" },
     { href: "/contacts", label: "Contacts" },
-    ...(options.showReports ? [{ href: "/reports", label: "Reports" }] : []),
+  ];
+}
+
+function adminNavItems(options: {
+  showReports: boolean;
+  showAccounting: boolean;
+  showSettings: boolean;
+  bdOnly: boolean;
+}) {
+  return [
+    ...(options.showAccounting ? [{ href: "/accounting", label: "Accounting" }] : []),
+    ...(options.showReports
+      ? [{ href: "/reports", label: options.bdOnly ? "ROI" : "Reports" }]
+      : []),
+    ...(options.showSettings ? [{ href: "/settings", label: "Settings" }] : []),
   ];
 }
 
@@ -89,6 +101,7 @@ function appLauncherItems(options: {
   bdOnly: boolean;
 }) {
   const primary = navItems(options);
+  const admin = adminNavItems(options);
   const extras = options.bdOnly
     ? [
         { href: "/pipeline", label: "Pipeline" },
@@ -100,12 +113,11 @@ function appLauncherItems(options: {
         { href: "/catalog", label: "Catalog" },
         { href: "/material-orders", label: "Material orders" },
         { href: "/profile", label: "Profile" },
-        ...(options.showSettings ? [{ href: "/settings", label: "Setup" }] : []),
       ];
   const seen = new Set(primary.map((item) => item.href));
   return {
     primary,
-    more: extras.filter((item) => !seen.has(item.href)),
+    more: [...extras, ...admin].filter((item) => !seen.has(item.href)),
   };
 }
 
@@ -131,13 +143,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   const navOptions = {
     showReports: Boolean(effectiveStaff && canViewReports(effectiveStaff.role)),
     showAccounting: Boolean(effectiveStaff && canViewAccounting(effectiveStaff.role)),
+    showSettings: Boolean(effectiveStaff && canManageSettings(effectiveStaff.role, effectiveStaff)),
     bdOnly: Boolean(effectiveStaff && isBusinessDevelopment(effectiveStaff.role)),
   };
   const items = navItems(navOptions);
-  const launcher = appLauncherItems({
-    ...navOptions,
-    showSettings: Boolean(effectiveStaff && canManageSettings(effectiveStaff.role, effectiveStaff)),
-  });
+  const adminItems = adminNavItems(navOptions);
+  const launcher = appLauncherItems(navOptions);
 
   return (
     <div className="flex min-h-full flex-col">
@@ -185,6 +196,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </Link>
               );
             })}
+            {adminItems.length > 0 ? (
+              <AdminNavMenu items={adminItems} pathname={pathname} />
+            ) : null}
           </nav>
 
           <Button
@@ -386,6 +400,45 @@ function AppLauncher({
   );
 }
 
+function AdminNavMenu({
+  items,
+  pathname,
+}: {
+  items: Array<{ href: string; label: string }>;
+  pathname: string;
+}) {
+  const active = items.some((item) => itemIsActive(pathname, item.href));
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className={cn(
+          "relative inline-flex shrink-0 items-center gap-1 px-2.5 py-2 text-[13px] tracking-tight transition-colors outline-none",
+          active
+            ? "font-medium text-white"
+            : "text-sidebar-foreground/60 hover:bg-white/5 hover:text-white",
+        )}
+      >
+        Admin
+        <ChevronDown className="size-3.5 opacity-70" />
+        {active ? (
+          <span className="absolute inset-x-1.5 bottom-0 h-0.5 rounded-full bg-primary" />
+        ) : null}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="min-w-44">
+        {items.map((item) => (
+          <DropdownMenuItem
+            key={item.href}
+            render={<Link href={item.href} />}
+            className={cn(itemIsActive(pathname, item.href) && "bg-accent font-medium")}
+          >
+            {item.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function LivePulse({ tone = "light" }: { tone?: "light" | "dark" }) {
   const { configured, liveStatus } = useCrm();
   const muted = tone === "dark" ? "text-sidebar-foreground/45" : "text-muted-foreground";
@@ -414,11 +467,14 @@ function LivePulse({ tone = "light" }: { tone?: "light" | "dark" }) {
 function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   const { effectiveStaff, returningClientLeads } = useCrm();
   const homeBadge = actionableReturningClientNotices(returningClientLeads, effectiveStaff).length;
-  const items = navItems({
+  const navOptions = {
     showReports: Boolean(effectiveStaff && canViewReports(effectiveStaff.role)),
     showAccounting: Boolean(effectiveStaff && canViewAccounting(effectiveStaff.role)),
+    showSettings: Boolean(effectiveStaff && canManageSettings(effectiveStaff.role, effectiveStaff)),
     bdOnly: Boolean(effectiveStaff && isBusinessDevelopment(effectiveStaff.role)),
-  });
+  };
+  const items = navItems(navOptions);
+  const adminItems = adminNavItems(navOptions);
   return (
     <nav className="flex flex-col px-2 py-3">
       {items.map((item) => {
@@ -444,6 +500,31 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
           </Link>
         );
       })}
+      {adminItems.length > 0 ? (
+        <div className="mt-3 border-t border-sidebar-border pt-3">
+          <p className="px-3 pb-1 text-[10px] tracking-[0.14em] text-sidebar-foreground/45 uppercase">
+            Admin
+          </p>
+          {adminItems.map((item) => {
+            const active = itemIsActive(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onNavigate}
+                className={cn(
+                  "flex items-center border-l-2 px-3 py-[7px] text-[13px] tracking-tight transition-colors",
+                  active
+                    ? "border-primary bg-white/6 font-medium text-white"
+                    : "border-transparent text-sidebar-foreground/58 hover:bg-white/4 hover:text-white",
+                )}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+      ) : null}
     </nav>
   );
 }
@@ -469,15 +550,13 @@ function SearchTrigger() {
     <>
       <Button
         variant="ghost"
-        className="h-8 w-8 justify-center rounded-sm px-0 font-normal text-sidebar-foreground hover:bg-white/8 hover:text-white sm:w-auto sm:max-w-xs sm:justify-start sm:bg-white/8 sm:px-3 sm:hover:bg-white/12"
+        size="icon"
+        className="text-sidebar-foreground hover:bg-white/8 hover:text-white"
         onClick={() => setOpen(true)}
         aria-label="Search"
+        title="Search (⌘K)"
       >
-        <Search data-icon="inline-start" className="size-4" />
-        <span className="hidden truncate sm:inline">Search…</span>
-        <kbd className="ml-auto hidden rounded border border-white/15 bg-white/5 px-1.5 py-0.5 font-sans text-[10px] text-sidebar-foreground/55 lg:inline">
-          ⌘K
-        </kbd>
+        <Search className="size-4" />
       </Button>
       <CommandDialog
         open={open}
