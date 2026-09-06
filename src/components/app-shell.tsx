@@ -49,7 +49,8 @@ import { isBusinessDevelopment } from "@/lib/bd";
 import { COURSE } from "@/lib/training/engine";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { BrandMark } from "@/components/brand";
+import { BrandMark, TheRoofingCrmMark } from "@/components/brand";
+import { PRODUCT_NAME } from "@/lib/product";
 import { SettingsMobileBar } from "@/components/settings-nav";
 import { AssistantPanel } from "@/components/assistant-panel";
 import { useStartEstimate } from "@/lib/start-estimate";
@@ -150,14 +151,16 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <Link
             href="/"
-            className="flex min-w-0 items-center gap-2 rounded-sm px-1.5 py-1 hover:bg-white/6"
+            className="flex min-w-0 items-center gap-2 rounded-sm px-1.5 py-0.5 hover:bg-white/6"
           >
-            <BrandMark
-              className="inline-flex items-center gap-2 text-sidebar-foreground"
-              markClassName="size-4 text-primary"
-            />
-            <span className="hidden max-w-[9rem] truncate text-[11px] text-sidebar-foreground/55 lg:inline">
-              {user.company}
+            <TheRoofingCrmMark className="size-4 shrink-0 text-primary" />
+            <span className="min-w-0 leading-tight">
+              <span className="font-heading block truncate text-[0.95rem] font-medium tracking-tight text-sidebar-foreground">
+                {PRODUCT_NAME}
+              </span>
+              <span className="block max-w-[10rem] truncate text-[10px] text-sidebar-foreground/55">
+                {user.company}
+              </span>
             </span>
           </Link>
 
