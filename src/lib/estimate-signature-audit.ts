@@ -27,9 +27,18 @@ export type EstimateDocumentSnapshot = {
   depositValue: number;
   packageMode: string;
   selectedPackage: string;
+  marginPercent: number;
   subtotalOverride: number | null;
   hideLinePrices: boolean;
-  totals: { subtotal: number; discount: number; tax: number; total: number; deposit: number };
+  totals: {
+    lineSubtotal: number;
+    marginAmount: number;
+    subtotal: number;
+    discount: number;
+    tax: number;
+    total: number;
+    deposit: number;
+  };
   lines: Array<{
     id: string;
     title: string;
@@ -92,6 +101,7 @@ export function estimateDocumentSnapshot(
     | "depositValue"
     | "packageMode"
     | "selectedPackage"
+    | "marginPercent"
     | "subtotalOverride"
     | "hideLinePrices"
   >,
@@ -118,9 +128,12 @@ export function estimateDocumentSnapshot(
     depositValue: estimate.depositValue,
     packageMode: estimate.packageMode ?? "",
     selectedPackage: estimate.selectedPackage ?? "better",
+    marginPercent: Math.max(0, Number(estimate.marginPercent) || 0),
     subtotalOverride: estimate.subtotalOverride ?? null,
     hideLinePrices: Boolean(estimate.hideLinePrices),
     totals: {
+      lineSubtotal: totals.lineSubtotal,
+      marginAmount: totals.marginAmount,
       subtotal: totals.subtotal,
       discount: totals.discount,
       tax: totals.tax,

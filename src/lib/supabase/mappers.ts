@@ -521,6 +521,7 @@ export function mapEstimate(row: EstimateRow): Estimate {
     selectedPackage: parseEstimatePackage(
       "selected_package" in row ? String(row.selected_package ?? "") : "",
     ),
+    marginPercent: "margin_percent" in row && row.margin_percent != null ? Number(row.margin_percent) : 0,
     subtotalOverride:
       "subtotal_override" in row && row.subtotal_override != null
         ? Number(row.subtotal_override)
@@ -701,6 +702,7 @@ export function estimatePatch(patch: Partial<Estimate>) {
   if (patch.secondSignatureImage !== undefined) row.second_signature_image = patch.secondSignatureImage;
   if (patch.packageMode !== undefined) row.package_mode = patch.packageMode;
   if (patch.selectedPackage !== undefined) row.selected_package = patch.selectedPackage;
+  if (patch.marginPercent !== undefined) row.margin_percent = patch.marginPercent;
   if (patch.subtotalOverride !== undefined) row.subtotal_override = patch.subtotalOverride;
   if (patch.hideLinePrices !== undefined) row.hide_line_prices = patch.hideLinePrices;
   return row;

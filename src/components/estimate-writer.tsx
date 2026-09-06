@@ -1313,7 +1313,31 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
               void crm.updateEstimate(estimate.id, { depositKind, depositValue })
             }
           />
-          <div className="sm:col-span-2">
+          <div>
+            <Label>Margin (%)</Label>
+            <CommitInput
+              type="number"
+              min={0}
+              step="0.01"
+              disabled={!editable}
+              value={estimate.marginPercent}
+              onCommit={(value) => {
+                const marginPercent = Math.max(0, Number(value) || 0);
+                void crm.updateEstimate(estimate.id, {
+                  marginPercent,
+                  ...(marginPercent > 0 && estimate.subtotalOverride != null
+                    ? { subtotalOverride: null }
+                    : {}),
+                });
+              }}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              {totals.marginAmount > 0
+                ? `Adds ${formatMoney(totals.marginAmount)} on the ${formatMoney(totals.lineSubtotal)} line sum before discount and tax.`
+                : "Markup on the included line sum after you finish items. Cleared by a lump-sum customer subtotal."}
+            </p>
+          </div>
+          <div>
             <Label>Customer subtotal</Label>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <CommitInput
@@ -1322,7 +1346,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                 step="0.01"
                 disabled={!editable}
                 className="max-w-[12rem]"
-                value={estimate.subtotalOverride ?? totals.lineSubtotal}
+                value={estimate.subtotalOverride ?? totals.subtotal}
                 onCommit={(value) => {
                   const amount = Math.max(0, Number(value) || 0);
                   void crm.updateEstimate(estimate.id, { subtotalOverride: amount });
@@ -1343,7 +1367,9 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
             <p className="mt-1 text-xs text-muted-foreground">
               {estimate.subtotalOverride != null
                 ? `Lump-sum override on. Line items still total ${formatMoney(totals.lineSubtotal)} for bidding.`
-                : "Matches included line items. Edit to set a lump-sum contract price while keeping itemized costs internal."}
+                : totals.marginAmount > 0
+                  ? `Line sum ${formatMoney(totals.lineSubtotal)} + margin = ${formatMoney(totals.subtotal)}. Edit to set a lump-sum contract price instead.`
+                  : "Matches included line items. Edit to set a lump-sum contract price while keeping itemized costs internal."}
             </p>
           </div>
           <label className="flex items-start gap-2 sm:col-span-2">

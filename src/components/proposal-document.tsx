@@ -40,6 +40,18 @@ export function EstimateTotals({
   const totals = estimateTotals(estimate, lines);
   return (
     <dl className={cn("space-y-1.5 text-sm", className)}>
+      {totals.marginAmount > 0 ? (
+        <>
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted-foreground">Line items</dt>
+            <dd className="tabular-nums">{formatMoney(totals.lineSubtotal)}</dd>
+          </div>
+          <div className="flex justify-between gap-4">
+            <dt className="text-muted-foreground">Margin ({totals.marginPercent}%)</dt>
+            <dd className="tabular-nums">{formatMoney(totals.marginAmount)}</dd>
+          </div>
+        </>
+      ) : null}
       <div className="flex justify-between gap-4">
         <dt className="text-muted-foreground">Subtotal</dt>
         <dd className="tabular-nums">{formatMoney(totals.subtotal)}</dd>

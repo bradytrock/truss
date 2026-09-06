@@ -98,6 +98,18 @@ export function missingEstimateLumpSumMessage() {
   return `Saved in this browser. Run ${ESTIMATE_LUMP_SUM_SQL} in the SQL editor so lump-sum subtotals and hidden line prices persist.`;
 }
 
+export const ESTIMATE_MARGIN_SQL = "supabase/migrations/20260906180000_estimate_margin_percent.sql";
+
+export function isMissingEstimateMargin(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return message.includes("margin_percent") && message.includes("estimates");
+}
+
+export function missingEstimateMarginMessage() {
+  return `Saved in this browser. Run ${ESTIMATE_MARGIN_SQL} in the SQL editor so whole-estimate margin persists.`;
+}
+
 export const SHARE_TOKEN_SQL = "supabase/migrations/20260819300000_share_tokens.sql";
 export const PROJECT_FINANCIALS_SQL = "supabase/migrations/20260819340000_project_financials.sql";
 export const ORIGINATOR_SQL = "supabase/migrations/20260820120000_opportunity_originator.sql";
@@ -627,6 +639,7 @@ export const CATALOG_MARGIN_SQL = "supabase/migrations/20260828140000_catalog_ma
 export function isMissingCatalogMargin(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
   const message = (error.message ?? "").toLowerCase();
+  if (message.includes("estimates")) return false;
   return message.includes("margin_percent") || message.includes("minimum_margin_percent");
 }
 

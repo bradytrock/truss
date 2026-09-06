@@ -676,6 +676,7 @@ export type Database = {
           second_signature_image: string;
           package_mode: string;
           selected_package: string;
+          margin_percent: number;
           subtotal_override: number | null;
           hide_line_prices: boolean;
         };
@@ -717,6 +718,7 @@ export type Database = {
           second_signature_image?: string;
           package_mode?: string;
           selected_package?: string;
+          margin_percent?: number;
           subtotal_override?: number | null;
           hide_line_prices?: boolean;
         };

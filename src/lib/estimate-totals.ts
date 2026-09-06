@@ -32,7 +32,7 @@ export function includedLines<T extends Pick<EstimateLine, "optional" | "selecte
 
 export function estimateTotals(
   estimate: Pick<Estimate, "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue"> &
-    Partial<Pick<Estimate, "packageMode" | "selectedPackage" | "subtotalOverride">>,
+    Partial<Pick<Estimate, "packageMode" | "selectedPackage" | "subtotalOverride" | "marginPercent">>,
   lines: Array<
     Pick<EstimateLine, "quantity" | "unitCost" | "optional" | "selected" | "taxable"> &
       Partial<Pick<EstimateLine, "package">>
@@ -49,7 +49,14 @@ export function estimateTotals(
     !options?.ignoreSubtotalOverride &&
     overrideRaw != null &&
     Number.isFinite(Number(overrideRaw));
-  const subtotal = hasOverride ? roundMoney(Number(overrideRaw)) : lineSubtotal;
+  const marginPercent = Math.max(0, Number(estimate.marginPercent) || 0);
+  const marginAmount =
+    !hasOverride && marginPercent > 0
+      ? roundMoney(lineSubtotal * (marginPercent / 100))
+      : 0;
+  const subtotal = hasOverride
+    ? roundMoney(Number(overrideRaw))
+    : roundMoney(lineSubtotal + marginAmount);
   const discount =
     estimate.discountKind === "percent"
       ? roundMoney(subtotal * (Number(estimate.discountValue) || 0) / 100)
@@ -58,10 +65,11 @@ export function estimateTotals(
   const taxableLineSubtotal = roundMoney(
     included.filter((line) => line.taxable).reduce((sum, line) => sum + lineAmount(line), 0),
   );
+  const pricedFromLines = hasOverride || marginAmount > 0;
   const taxableSubtotal =
-    hasOverride && lineSubtotal > 0
+    pricedFromLines && lineSubtotal > 0
       ? roundMoney(subtotal * (taxableLineSubtotal / lineSubtotal))
-      : hasOverride
+      : pricedFromLines
         ? subtotal
         : taxableLineSubtotal;
   const taxableShare = subtotal > 0 ? taxableSubtotal / subtotal : 0;
@@ -76,6 +84,8 @@ export function estimateTotals(
     includedCount: included.length,
     optionalCount: optionalOpen.length,
     lineSubtotal,
+    marginPercent,
+    marginAmount,
     subtotal,
     subtotalOverridden: hasOverride,
     discount,
@@ -157,7 +167,7 @@ export function lineLabel(line: Pick<EstimateLine, "title" | "description">) {
 
 export function totalsForPackage(
   estimate: Pick<Estimate, "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue"> &
-    Partial<Pick<Estimate, "packageMode" | "selectedPackage" | "subtotalOverride">>,
+    Partial<Pick<Estimate, "packageMode" | "selectedPackage" | "subtotalOverride" | "marginPercent">>,
   lines: EstimateLine[],
   pkg: EstimatePackage,
 ) {
@@ -171,7 +181,7 @@ export function totalsForPackage(
 
 export function allPackageTotals(
   estimate: Pick<Estimate, "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue"> &
-    Partial<Pick<Estimate, "packageMode" | "selectedPackage" | "subtotalOverride">>,
+    Partial<Pick<Estimate, "packageMode" | "selectedPackage" | "subtotalOverride" | "marginPercent">>,
   lines: EstimateLine[],
 ) {
   return Object.fromEntries(
@@ -273,6 +283,7 @@ export type EstimateDraft = Omit<
   | "secondSignatureImage"
   | "packageMode"
   | "selectedPackage"
+  | "marginPercent"
   | "subtotalOverride"
   | "hideLinePrices"
 > &
@@ -303,6 +314,7 @@ export type EstimateDraft = Omit<
       | "secondSignatureImage"
       | "packageMode"
       | "selectedPackage"
+      | "marginPercent"
       | "subtotalOverride"
       | "hideLinePrices"
     >
@@ -354,6 +366,7 @@ export function fillEstimate(estimate: EstimateDraft): Estimate {
     secondSignatureImage: secondContactId ? (estimate.secondSignatureImage ?? "") : "",
     packageMode: parseEstimatePackageMode(estimate.packageMode),
     selectedPackage: parseEstimatePackage(estimate.selectedPackage),
+    marginPercent: Math.max(0, Number(estimate.marginPercent) || 0),
     subtotalOverride:
       estimate.subtotalOverride == null || estimate.subtotalOverride === undefined
         ? null

@@ -487,7 +487,9 @@ export interface Estimate {
   packageMode: "" | "gbb";
   /** Which package is selected for preview, signing, and convert-to-invoice. */
   selectedPackage: "good" | "better" | "best";
-  /** When set, customer/contract subtotal before discount and tax. Null uses the line sum. */
+  /** Markup % on the included line sum before discount and tax. Ignored when subtotalOverride is set. */
+  marginPercent: number;
+  /** When set, customer/contract subtotal before discount and tax. Null uses the line sum (plus margin). */
   subtotalOverride: number | null;
   /** Hide unit prices and line amounts on customer-facing proposals, share links, and PDFs. */
   hideLinePrices: boolean;

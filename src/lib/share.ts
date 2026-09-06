@@ -193,6 +193,7 @@ export type SharedEstimatePayload = {
     secondSignatureImage: string;
     packageMode: "" | "gbb";
     selectedPackage: "good" | "better" | "best";
+    marginPercent: number;
     subtotalOverride: number | null;
     hideLinePrices: boolean;
   };
@@ -343,6 +344,7 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
       secondSignatureImage: asString(estimate.secondSignatureImage),
       packageMode: parseEstimatePackageMode(asString(estimate.packageMode)),
       selectedPackage: parseEstimatePackage(asString(estimate.selectedPackage)),
+      marginPercent: Math.max(0, asNumber(estimate.marginPercent) || 0),
       subtotalOverride:
         estimate.subtotalOverride == null || estimate.subtotalOverride === undefined
           ? null
