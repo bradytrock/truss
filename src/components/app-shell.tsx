@@ -27,6 +27,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -61,6 +66,7 @@ function navItems(options: { bdOnly: boolean }) {
     return [
       { href: "/", label: "Home" },
       { href: "/jobs", label: "Jobs" },
+      { href: "/marketing", label: "Marketing" },
       { href: "/messages", label: "Inbox" },
       { href: "/photos", label: "Photos" },
       { href: "/contacts", label: "Agents & contacts" },
@@ -69,6 +75,7 @@ function navItems(options: { bdOnly: boolean }) {
   return [
     { href: "/", label: "Home" },
     { href: "/jobs", label: "Jobs" },
+    { href: "/marketing", label: "Marketing" },
     { href: "/messages", label: "Inbox" },
     { href: "/photos", label: "Photos" },
     { href: "/estimates", label: "Estimates" },
@@ -348,57 +355,68 @@ function AppLauncher({
   more: Array<{ href: string; label: string }>;
   pathname: string;
 }) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon"
-            className="shrink-0 text-sidebar-foreground hover:bg-white/8 hover:text-white"
-            aria-label="App launcher"
-          />
-        }
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        nativeButton
+        aria-label="App launcher"
+        className={cn(
+          "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-sidebar-foreground transition-colors",
+          "hover:bg-white/8 hover:text-white outline-none",
+        )}
       >
         <LayoutGrid className="size-4" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-64 p-2">
-        <DropdownMenuLabel className="text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+      </PopoverTrigger>
+      <PopoverContent align="start" sideOffset={6} className="w-72 gap-0 p-2">
+        <p className="px-2 py-1 text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
           Objects
-        </DropdownMenuLabel>
+        </p>
         <div className="grid grid-cols-2 gap-1 p-1">
           {primary.map((item) => (
-            <DropdownMenuItem
+            <Link
               key={item.href}
-              render={<Link href={item.href} />}
+              href={item.href}
+              onClick={() => setOpen(false)}
               className={cn(
-                "justify-start rounded-sm px-2 py-2 text-xs",
+                "rounded-sm px-2 py-2 text-xs hover:bg-accent hover:text-accent-foreground",
                 itemIsActive(pathname, item.href) && "bg-accent font-medium",
               )}
             >
               {item.label}
-            </DropdownMenuItem>
+            </Link>
           ))}
         </div>
         {more.length > 0 ? (
           <>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
+            <div className="my-1 h-px bg-border" />
+            <p className="px-2 py-1 text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
               More
-            </DropdownMenuLabel>
-            {more.map((item) => (
-              <DropdownMenuItem key={item.href} render={<Link href={item.href} />}>
-                {item.label}
-              </DropdownMenuItem>
-            ))}
+            </p>
+            <div className="flex flex-col gap-0.5 p-1">
+              {more.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  className={cn(
+                    "rounded-sm px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground",
+                    itemIsActive(pathname, item.href) && "bg-accent font-medium",
+                  )}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </div>
           </>
         ) : null}
-        <DropdownMenuSeparator />
-        <div className="px-2 py-1.5">
-          <LivePulse />
-        </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </PopoverContent>
+    </Popover>
   );
 }
 
