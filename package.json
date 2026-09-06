@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3847",
+    "dev": "node scripts/allow-dev-origins.mjs && next dev --port 3847",
     "build": "next build --webpack",
     "start": "next start --port ${PORT:-3847}",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "node scripts/allow-dev-origins.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1126.0",
