@@ -48,6 +48,7 @@ function LoginForm() {
     <AuthFrame
       title="Sign in to Truss"
       description="Use the email and password for your company account. New companies create an account first."
+      tagline="Where Legacy Gets Built"
     >
       <form onSubmit={onSubmit} className="grid gap-3">
         {formError ? (
