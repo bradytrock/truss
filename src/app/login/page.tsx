@@ -4,10 +4,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, type FormEvent } from "react";
 import { toast } from "sonner";
+import { BrandMark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { AuthFrame } from "@/components/auth-frame";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { createClient } from "@/lib/supabase/client";
 
@@ -45,50 +44,65 @@ function LoginForm() {
   }
 
   return (
-    <AuthFrame
-      title="Sign in to Truss"
-      description="Use the email and password for your company account. New companies create an account first."
-      tagline="Where Legacy Gets Built"
-    >
-      <form onSubmit={onSubmit} className="grid gap-3">
-        {formError ? (
-          <p className="border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-            {formError}
-          </p>
-        ) : null}
-        <div className="grid gap-1.5">
-          <Label htmlFor="email">Email</Label>
+    <div className="relative flex min-h-full flex-1 flex-col items-center justify-center bg-[#12151c] px-6 py-12 text-white">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.06),transparent_55%)]"
+      />
+      <div className="relative z-10 flex w-full max-w-[22rem] flex-col items-center">
+        <BrandMark
+          className="inline-flex items-center gap-2 text-white"
+          markClassName="size-5 text-[#c8102e]"
+        />
+        <p className="font-script mt-5 text-center text-[2.4rem] leading-none text-white">
+          Where Legacy Gets Built
+        </p>
+        <h1 className="mt-8 text-xl font-medium tracking-tight">Sign In</h1>
+
+        <form onSubmit={onSubmit} className="mt-6 w-full space-y-3">
+          {formError ? (
+            <p className="rounded-md border border-red-400/30 bg-red-500/10 px-3 py-2 text-center text-sm text-red-200">
+              {formError}
+            </p>
+          ) : null}
           <Input
             id="email"
             type="email"
             autoComplete="email"
+            placeholder="Email"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
             required
+            className="h-11 rounded-md border-0 bg-white text-base text-neutral-900 placeholder:text-neutral-400 focus-visible:ring-2 focus-visible:ring-white/40"
           />
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="password">Password</Label>
           <Input
             id="password"
             type="password"
             autoComplete="current-password"
+            placeholder="Password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required
+            className="h-11 rounded-md border-0 bg-white text-base text-neutral-900 placeholder:text-neutral-400 focus-visible:ring-2 focus-visible:ring-white/40"
           />
-        </div>
-        <Button type="submit" nativeButton disabled={pending}>
-          {pending ? "Signing in…" : "Sign in"}
-        </Button>
-      </form>
-      <p className="mt-4 text-center text-sm text-muted-foreground">
-        New company?{" "}
-        <Link href="/signup" className="font-medium text-primary hover:underline">
+          <Button
+            type="submit"
+            nativeButton
+            disabled={pending}
+            className="h-11 w-full rounded-full bg-[#2f4f6f] text-base text-white hover:bg-[#3a5f84]"
+          >
+            {pending ? "Signing in…" : "Sign In"}
+          </Button>
+        </form>
+
+        <Link
+          href="/signup"
+          className="mt-5 text-sm text-white/85 transition-colors hover:text-white"
+        >
           Create an account
         </Link>
-      </p>
-    </AuthFrame>
+      </div>
+    </div>
   );
 }
 

@@ -2,31 +2,23 @@ import type { ReactNode } from "react";
 import { BrandMark } from "@/components/brand";
 import { cn } from "@/lib/utils";
 
+/** Split marketing panel used by signup and other longer auth flows. */
 export function AuthFrame({
   title,
   description,
-  tagline,
   children,
 }: {
   title: string;
   description: string;
-  tagline?: string;
   children: ReactNode;
 }) {
   return (
     <div className="flex min-h-full flex-1">
       <div className="relative hidden w-[40%] shrink-0 flex-col justify-between bg-sidebar px-10 py-10 text-sidebar-foreground lg:flex">
-        <div className="space-y-4">
-          <BrandMark
-            className="inline-flex items-center gap-2 text-sidebar-foreground"
-            markClassName="size-[18px] text-primary"
-          />
-          {tagline ? (
-            <p className="font-script text-[2.35rem] leading-none text-sidebar-foreground/90">
-              {tagline}
-            </p>
-          ) : null}
-        </div>
+        <BrandMark
+          className="inline-flex items-center gap-2 text-sidebar-foreground"
+          markClassName="size-[18px] text-primary"
+        />
         <div>
           <p className="font-heading text-[2.15rem] leading-[1.15] font-medium text-balance">
             Work that starts at someone’s front door.
@@ -43,13 +35,8 @@ export function AuthFrame({
       </div>
       <div className="flex flex-1 items-center justify-center px-6 py-12">
         <div className="w-full max-w-[22rem]">
-          <div className="mb-8 space-y-3">
+          <div className="mb-8 lg:hidden">
             <BrandMark />
-            {tagline ? (
-              <p className="font-script text-[2.15rem] leading-[1.05] text-foreground/90">
-                {tagline}
-              </p>
-            ) : null}
           </div>
           <h1 className="font-heading text-2xl font-medium">{title}</h1>
           <p className="mt-1.5 mb-8 text-sm leading-relaxed text-muted-foreground">{description}</p>
