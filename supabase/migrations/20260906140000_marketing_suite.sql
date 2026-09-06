@@ -1,7 +1,8 @@
 -- Marketing Suite: templates stay in app code; materials/campaigns/assets/events persist per company.
+-- Material ids are text to match client-generated ids (mat_…).
 
 create table if not exists public.marketing_materials (
-  id uuid primary key default gen_random_uuid(),
+  id text primary key,
   company_id uuid not null references public.companies (id) on delete cascade,
   template_id text not null,
   kind text not null,
@@ -13,12 +14,12 @@ create table if not exists public.marketing_materials (
   cta text not null default '',
   badge text not null default '',
   accent text not null default '#b45309',
-  job_id uuid,
-  contact_id uuid,
-  partner_contact_id uuid,
+  job_id text,
+  contact_id text,
+  partner_contact_id text,
   photo_urls jsonb not null default '[]'::jsonb,
   share_token text not null,
-  created_by_staff_id uuid,
+  created_by_staff_id text,
   created_by_name text not null default '',
   vanity_slug text not null default '',
   views integer not null default 0,
@@ -48,7 +49,7 @@ create policy "company isolation" on public.marketing_materials
 create table if not exists public.marketing_events (
   id uuid primary key default gen_random_uuid(),
   company_id uuid references public.companies (id) on delete cascade,
-  material_id uuid not null references public.marketing_materials (id) on delete cascade,
+  material_id text not null references public.marketing_materials (id) on delete cascade,
   kind text not null,
   created_at timestamptz not null default now()
 );
@@ -65,7 +66,7 @@ create policy "company isolation" on public.marketing_events
   with check (company_id = public.current_company_id());
 
 create table if not exists public.marketing_campaigns (
-  id uuid primary key default gen_random_uuid(),
+  id text primary key,
   company_id uuid not null references public.companies (id) on delete cascade,
   name text not null,
   kind text not null default 'custom',
@@ -91,14 +92,14 @@ create policy "company isolation" on public.marketing_campaigns
   with check (company_id = public.current_company_id());
 
 create table if not exists public.marketing_assets (
-  id uuid primary key default gen_random_uuid(),
+  id text primary key,
   company_id uuid not null references public.companies (id) on delete cascade,
   name text not null,
   source text not null,
   url text not null,
   notes text not null default '',
-  job_id uuid,
-  company_file_id uuid,
+  job_id text,
+  company_file_id text,
   approved boolean not null default true,
   created_at timestamptz not null default now()
 );

@@ -58,6 +58,18 @@ type MarketingContextValue = MarketingState & {
 
 const MarketingContext = createContext<MarketingContextValue | null>(null);
 
+function syncMaterialToServer(material: MarketingMaterial) {
+  if (typeof window === "undefined") return;
+  void fetch("/api/marketing/material", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ material }),
+    keepalive: true,
+  }).catch(() => {
+    // Local materials still work offline; share links sync when online.
+  });
+}
+
 export function MarketingProvider({ children }: { children: ReactNode }) {
   const crm = useCrm();
   const companyId = crm.user.companyId || "local";
@@ -83,6 +95,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
           : [material, ...prev.materials],
       };
     });
+    syncMaterialToServer(material);
   }, []);
 
   const createFromTemplate = useCallback(
@@ -107,6 +120,7 @@ export function MarketingProvider({ children }: { children: ReactNode }) {
         const base = prev ?? loadMarketingState(companyId);
         return { ...base, materials: [material, ...base.materials] };
       });
+      syncMaterialToServer(material);
       return material;
     },
     [companyId, crm.effectiveStaff?.id, crm.effectiveStaff?.name, crm.user.name, crm.user.staffId],

@@ -2022,6 +2022,144 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["portal_referrals"]["Insert"]>;
         Relationships: [];
       };
+      marketing_materials: {
+        Row: {
+          id: string;
+          company_id: string;
+          template_id: string;
+          kind: string;
+          name: string;
+          status: string;
+          headline: string;
+          subhead: string;
+          body: string;
+          cta: string;
+          badge: string;
+          accent: string;
+          job_id: string | null;
+          contact_id: string | null;
+          partner_contact_id: string | null;
+          photo_urls: Json;
+          share_token: string;
+          created_by_staff_id: string | null;
+          created_by_name: string;
+          vanity_slug: string;
+          views: number;
+          downloads: number;
+          shares: number;
+          ctas: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          company_id: string;
+          template_id: string;
+          kind: string;
+          name?: string;
+          status?: string;
+          headline?: string;
+          subhead?: string;
+          body?: string;
+          cta?: string;
+          badge?: string;
+          accent?: string;
+          job_id?: string | null;
+          contact_id?: string | null;
+          partner_contact_id?: string | null;
+          photo_urls?: Json;
+          share_token: string;
+          created_by_staff_id?: string | null;
+          created_by_name?: string;
+          vanity_slug?: string;
+          views?: number;
+          downloads?: number;
+          shares?: number;
+          ctas?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["marketing_materials"]["Insert"]>;
+        Relationships: [];
+      };
+      marketing_events: {
+        Row: {
+          id: string;
+          company_id: string | null;
+          material_id: string;
+          kind: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id?: string | null;
+          material_id: string;
+          kind: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["marketing_events"]["Insert"]>;
+        Relationships: [];
+      };
+      marketing_campaigns: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          kind: string;
+          summary: string;
+          neighborhood: string;
+          radius_miles: number;
+          storm_name: string;
+          status: string;
+          material_ids: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id: string;
+          company_id: string;
+          name: string;
+          kind?: string;
+          summary?: string;
+          neighborhood?: string;
+          radius_miles?: number;
+          storm_name?: string;
+          status?: string;
+          material_ids?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["marketing_campaigns"]["Insert"]>;
+        Relationships: [];
+      };
+      marketing_assets: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          source: string;
+          url: string;
+          notes: string;
+          job_id: string | null;
+          company_file_id: string | null;
+          approved: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          company_id: string;
+          name: string;
+          source: string;
+          url: string;
+          notes?: string;
+          job_id?: string | null;
+          company_file_id?: string | null;
+          approved?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["marketing_assets"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
