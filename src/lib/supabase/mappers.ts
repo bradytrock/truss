@@ -1,3 +1,7 @@
+import {
+  parseMeasurementKeys,
+  serializeMeasurementKeys,
+} from "@/lib/eagleview-formulas";
 import { fillCatalogItem } from "@/lib/catalog-margin";
 import {
   isEagleviewProductId,
@@ -541,7 +545,9 @@ export function mapEstimateLine(row: EstimateLineRow): EstimateLine {
     selected: row.selected ?? true,
     taxable: row.taxable ?? true,
     quantityFormula: "quantity_formula" in row && row.quantity_formula != null ? String(row.quantity_formula) : "",
-    measurementKey: "measurement_key" in row && row.measurement_key != null ? String(row.measurement_key) : "",
+    measurementKeys: parseMeasurementKeys(
+      "measurement_key" in row && row.measurement_key != null ? String(row.measurement_key) : "",
+    ),
     coverageAmount: "coverage_amount" in row && row.coverage_amount != null ? Number(row.coverage_amount) : 1,
     coverageUnit: "coverage_unit" in row && row.coverage_unit != null ? String(row.coverage_unit) : "squares",
     package: parseLinePackage("package" in row ? String(row.package ?? "") : ""),
@@ -615,7 +621,9 @@ export function mapEstimateTemplateLine(row: EstimateTemplateLineRow): EstimateT
     selected: row.selected ?? true,
     taxable: row.taxable ?? true,
     quantityFormula: "quantity_formula" in row && row.quantity_formula != null ? String(row.quantity_formula) : "",
-    measurementKey: "measurement_key" in row && row.measurement_key != null ? String(row.measurement_key) : "",
+    measurementKeys: parseMeasurementKeys(
+      "measurement_key" in row && row.measurement_key != null ? String(row.measurement_key) : "",
+    ),
     coverageAmount: "coverage_amount" in row && row.coverage_amount != null ? Number(row.coverage_amount) : 1,
     coverageUnit: "coverage_unit" in row && row.coverage_unit != null ? String(row.coverage_unit) : "squares",
   });
@@ -652,7 +660,7 @@ export function estimateTemplateLinePatch(patch: Partial<EstimateTemplateLine>) 
   if (patch.selected !== undefined) row.selected = patch.selected;
   if (patch.taxable !== undefined) row.taxable = patch.taxable;
   if (patch.quantityFormula !== undefined) row.quantity_formula = patch.quantityFormula;
-  if (patch.measurementKey !== undefined) row.measurement_key = patch.measurementKey;
+  if (patch.measurementKeys !== undefined) row.measurement_key = serializeMeasurementKeys(patch.measurementKeys);
   if (patch.coverageAmount !== undefined) row.coverage_amount = patch.coverageAmount;
   if (patch.coverageUnit !== undefined) row.coverage_unit = patch.coverageUnit;
   return row;
@@ -714,7 +722,7 @@ export function estimateLinePatch(patch: Partial<EstimateLine>) {
   if (patch.photoIds !== undefined) row.photo_ids = patch.photoIds;
   if (patch.package !== undefined) row.package = patch.package;
   if (patch.quantityFormula !== undefined) row.quantity_formula = patch.quantityFormula;
-  if (patch.measurementKey !== undefined) row.measurement_key = patch.measurementKey;
+  if (patch.measurementKeys !== undefined) row.measurement_key = serializeMeasurementKeys(patch.measurementKeys);
   if (patch.coverageAmount !== undefined) row.coverage_amount = patch.coverageAmount;
   if (patch.coverageUnit !== undefined) row.coverage_unit = patch.coverageUnit;
   return row;

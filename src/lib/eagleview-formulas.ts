@@ -425,22 +425,58 @@ export function measurementInCoverageUnit(
   return null;
 }
 
+
+export function parseMeasurementKeys(value: string | string[] | null | undefined): string[] {
+  if (Array.isArray(value)) {
+    return [...new Set(value.map((key) => key.trim()).filter(Boolean))];
+  }
+  const raw = (value ?? "").trim();
+  if (!raw) return [];
+  return [...new Set(raw.split(/[,|]/).map((key) => key.trim()).filter(Boolean))];
+}
+
+export function serializeMeasurementKeys(keys: string[] | null | undefined): string {
+  return parseMeasurementKeys(keys).join(",");
+}
+
+export function formatMeasurementMappingLabel(keys: string[] | null | undefined): string {
+  const list = parseMeasurementKeys(keys);
+  if (list.length === 0) return "None";
+  if (list.length === 1) {
+    return eagleviewMeasurementOption(list[0]).label || "1 Item";
+  }
+  return `${list.length} Items`;
+}
+
+export function defaultCoverageUnitForMeasurements(keys: string[] | null | undefined): EagleviewCoverageUnit {
+  const list = parseMeasurementKeys(keys);
+  if (list.length === 0) return "squares";
+  return defaultCoverageUnitForMeasurement(list[0]);
+}
+
 export function quantityFromCoverage(input: {
   measurementKey?: string | null;
+  measurementKeys?: string[] | string | null;
   coverageAmount?: number | null;
   coverageUnit?: string | null;
   vars: EagleviewFormulaVars;
 }): { ok: true; value: number } | { ok: false; error: string } {
-  const key = input.measurementKey?.trim() ?? "";
-  if (!key) return { ok: false, error: "No measurement mapped." };
+  const keys = parseMeasurementKeys(input.measurementKeys ?? input.measurementKey);
+  if (keys.length === 0) return { ok: false, error: "No measurement mapped." };
   const amount = Number(input.coverageAmount);
   if (!Number.isFinite(amount) || amount <= 0) {
     return { ok: false, error: "Coverage must be greater than zero." };
   }
-  const unit = (input.coverageUnit ?? defaultCoverageUnitForMeasurement(key)).trim() || "squares";
-  const measure = measurementInCoverageUnit(key, unit, input.vars);
-  if (measure == null || !Number.isFinite(measure)) {
-    return { ok: false, error: `Cannot convert ${key} to ${unit}.` };
+  const unit =
+    (input.coverageUnit ?? defaultCoverageUnitForMeasurements(keys)).trim() || "squares";
+  let measure = 0;
+  for (const key of keys) {
+    const part = measurementInCoverageUnit(key, unit, input.vars);
+    if (part == null || !Number.isFinite(part)) {
+      const label = eagleviewMeasurementOption(key).label || key;
+      return { ok: false, error: `Cannot convert ${label} to ${unit}.` };
+    }
+    measure += part;
   }
   const value = Math.round(Math.max(0, measure / amount) * 100) / 100;
   return { ok: true, value };
@@ -448,6 +484,7 @@ export function quantityFromCoverage(input: {
 
 export function previewCoverageQuantity(input: {
   measurementKey?: string | null;
+  measurementKeys?: string[] | string | null;
   coverageAmount?: number | null;
   coverageUnit?: string | null;
 }) {

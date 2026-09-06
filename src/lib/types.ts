@@ -546,8 +546,8 @@ export interface EstimateLine {
   taxable: boolean;
   /** EagleView quantity formula, e.g. `squares` or `ridges + hips`. Empty = title heuristic. */
   quantityFormula?: string;
-  /** EagleView measurement to map, e.g. `squares`, `ridges`. Empty = none. */
-  measurementKey?: string;
+  /** EagleView measurements to map (e.g. ridges + hips). Empty = none. */
+  measurementKeys?: string[];
   /** How much one unit of this line covers of the mapped measurement. */
   coverageAmount?: number;
   /** Unit for coverageAmount: squares | sqft | ft | each. */
@@ -591,8 +591,8 @@ export interface EstimateTemplateLine {
   taxable: boolean;
   /** EagleView quantity formula, e.g. `squares` or `ceil(eaves / 10)`. Empty = title heuristic. */
   quantityFormula?: string;
-  /** EagleView measurement to map, e.g. `squares`, `ridges`. Empty = none. */
-  measurementKey?: string;
+  /** EagleView measurements to map (e.g. ridges + hips). Empty = none. */
+  measurementKeys?: string[];
   /** How much one unit of this line covers of the mapped measurement. */
   coverageAmount?: number;
   /** Unit for coverageAmount: squares | sqft | ft | each. */

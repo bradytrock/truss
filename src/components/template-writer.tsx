@@ -191,7 +191,7 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
           <div>
             <h2 className="font-heading text-lg font-medium">Line items</h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Map each line to an EagleView measurement and say how much one unit covers
+              Map each line to one or more EagleView measurements and say how much one unit covers
               (for example <span className="text-foreground">1 squares</span>,{" "}
               <span className="text-foreground">32.8 sqft</span>, or{" "}
               <span className="text-foreground">30 ft</span>). Quantity fills in when measurements are applied.

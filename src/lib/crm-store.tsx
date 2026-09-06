@@ -87,6 +87,7 @@ import {
   missingEstimateTemplatesMessage,
   templateFromEstimate,
 } from "@/lib/estimate-templates";
+import { serializeMeasurementKeys } from "@/lib/eagleview-formulas";
 import {
   defaultTitleForRole,
   inviteExpiry,
@@ -3882,7 +3883,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           photo_ids: line.photoIds,
           package: line.package,
           quantity_formula: line.quantityFormula || "",
-          measurement_key: line.measurementKey || "",
+          measurement_key: serializeMeasurementKeys(line.measurementKeys),
           coverage_amount: line.coverageAmount ?? 1,
           coverage_unit: line.coverageUnit || "squares",
         }));
@@ -4609,7 +4610,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           photo_ids: line.photoIds,
           package: line.package,
           quantity_formula: line.quantityFormula || "",
-          measurement_key: line.measurementKey || "",
+          measurement_key: serializeMeasurementKeys(line.measurementKeys),
           coverage_amount: line.coverageAmount ?? 1,
           coverage_unit: line.coverageUnit || "squares",
         }));
@@ -4940,7 +4941,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       selected: line.selected,
       taxable: line.taxable,
       quantity_formula: line.quantityFormula || "",
-      measurement_key: line.measurementKey || "",
+      measurement_key: serializeMeasurementKeys(line.measurementKeys),
       coverage_amount: line.coverageAmount ?? 1,
       coverage_unit: line.coverageUnit || "squares",
     });
@@ -5522,7 +5523,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         taxable: line.taxable,
         package: line.package,
         quantity_formula: line.quantityFormula || "",
-        measurement_key: line.measurementKey || "",
+        measurement_key: serializeMeasurementKeys(line.measurementKeys),
         coverage_amount: line.coverageAmount ?? 1,
         coverage_unit: line.coverageUnit || "squares",
       };
@@ -5608,7 +5609,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         taxable: line.taxable,
         package: line.package,
         quantity_formula: line.quantityFormula || "",
-        measurement_key: line.measurementKey || "",
+        measurement_key: serializeMeasurementKeys(line.measurementKeys),
         coverage_amount: line.coverageAmount ?? 1,
         coverage_unit: line.coverageUnit || "squares",
       };

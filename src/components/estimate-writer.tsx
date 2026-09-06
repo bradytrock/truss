@@ -80,10 +80,13 @@ import {
 import {
   EAGLEVIEW_COVERAGE_UNITS,
   EAGLEVIEW_MEASUREMENT_OPTIONS,
-  defaultCoverageUnitForMeasurement,
+  defaultCoverageUnitForMeasurements,
   formatCoverageLabel,
+  formatMeasurementMappingLabel,
+  parseMeasurementKeys,
   previewCoverageQuantity,
 } from "@/lib/eagleview-formulas";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PackagePicker } from "@/components/package-picker";
 import { downloadEstimatePdf, downloadSignatureCertificatePdf } from "@/lib/document-pdf";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
@@ -271,7 +274,7 @@ export type PricedLine = {
   package?: "" | "good" | "better" | "best";
   /** EagleView qty formula used when applying measurements (advanced). */
   quantityFormula?: string;
-  measurementKey?: string;
+  measurementKeys?: string[];
   coverageAmount?: number;
   coverageUnit?: string;
 };
@@ -303,13 +306,28 @@ export function LineCard({
   onPhotosChange?: (photoIds: string[]) => void;
 }) {
   const units = COMMON_UNITS.includes(line.unit) ? COMMON_UNITS : [line.unit, ...COMMON_UNITS];
-  const measurementKey = line.measurementKey ?? "";
-  const coverageAmount = line.coverageAmount != null && Number.isFinite(line.coverageAmount) ? line.coverageAmount : 1;
-  const coverageUnit = line.coverageUnit || defaultCoverageUnitForMeasurement(measurementKey);
+  const measurementKeys = parseMeasurementKeys(line.measurementKeys);
+  const coverageAmount =
+    line.coverageAmount != null && Number.isFinite(line.coverageAmount) ? line.coverageAmount : 1;
+  const coverageUnit = line.coverageUnit || defaultCoverageUnitForMeasurements(measurementKeys);
   const coveragePreview =
-    showQuantityFormula && measurementKey
-      ? previewCoverageQuantity({ measurementKey, coverageAmount, coverageUnit })
+    showQuantityFormula && measurementKeys.length > 0
+      ? previewCoverageQuantity({ measurementKeys, coverageAmount, coverageUnit })
       : null;
+
+  function toggleMeasurementKey(key: string, checked: boolean) {
+    const next = checked
+      ? parseMeasurementKeys([...measurementKeys, key])
+      : measurementKeys.filter((item) => item !== key);
+    onPatch({
+      measurementKeys: next,
+      coverageUnit: next.length
+        ? defaultCoverageUnitForMeasurements(next)
+        : line.coverageUnit || "squares",
+      coverageAmount: line.coverageAmount ?? 1,
+    });
+  }
+
   return (
     <div
       className={cn(
@@ -477,38 +495,61 @@ export function LineCard({
             <div>
               <Label className="text-xs text-muted-foreground">Mapping</Label>
               {editable ? (
-                <Select
-                  value={measurementKey || "none"}
-                  onValueChange={(value) => {
-                    const key = String(value ?? "none") === "none" ? "" : String(value);
-                    onPatch({
-                      measurementKey: key,
-                      coverageUnit: key
-                        ? defaultCoverageUnitForMeasurement(key)
-                        : line.coverageUnit || "squares",
-                      coverageAmount: line.coverageAmount ?? 1,
-                    });
-                  }}
-                  items={EAGLEVIEW_MEASUREMENT_OPTIONS.map((option) => ({
-                    value: option.key || "none",
-                    label: option.label,
-                  }))}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="None" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {EAGLEVIEW_MEASUREMENT_OPTIONS.map((option) => (
-                      <SelectItem key={option.key || "none"} value={option.key || "none"}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover>
+                  <PopoverTrigger
+                    type="button"
+                    className="border-input bg-background hover:bg-accent hover:text-accent-foreground mt-1 flex h-8 w-full items-center justify-between gap-2 rounded-md border px-2.5 text-left text-sm"
+                  >
+                    <span className="truncate">{formatMeasurementMappingLabel(measurementKeys)}</span>
+                    <ChevronDown className="size-4 shrink-0 opacity-60" />
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="w-72 p-2">
+                    <p className="text-muted-foreground px-1 pb-2 text-xs">
+                      Check one or more EagleView measurements. Quantity uses their sum ÷ coverage.
+                    </p>
+                    <div className="max-h-64 space-y-0.5 overflow-y-auto">
+                      {EAGLEVIEW_MEASUREMENT_OPTIONS.filter((option) => option.key).map((option) => {
+                        const checked = measurementKeys.includes(option.key);
+                        return (
+                          <label
+                            key={option.key}
+                            className="hover:bg-muted/60 flex cursor-pointer items-start gap-2 rounded-md px-2 py-1.5"
+                          >
+                            <Checkbox
+                              checked={checked}
+                              onCheckedChange={(value) =>
+                                toggleMeasurementKey(option.key, Boolean(value))
+                              }
+                              className="mt-0.5"
+                            />
+                            <span className="min-w-0">
+                              <span className="block text-sm leading-tight">{option.label}</span>
+                              <span className="text-muted-foreground block text-[11px] leading-tight">
+                                {option.hint}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {measurementKeys.length > 0 ? (
+                      <button
+                        type="button"
+                        className="text-muted-foreground hover:text-foreground mt-2 w-full px-1 text-left text-xs underline-offset-2 hover:underline"
+                        onClick={() =>
+                          onPatch({
+                            measurementKeys: [],
+                            coverageAmount: line.coverageAmount ?? 1,
+                          })
+                        }
+                      >
+                        Clear mapping
+                      </button>
+                    ) : null}
+                  </PopoverContent>
+                </Popover>
               ) : (
-                <p className="mt-1 text-sm">
-                  {EAGLEVIEW_MEASUREMENT_OPTIONS.find((option) => option.key === measurementKey)?.label || "None"}
-                </p>
+                <p className="mt-1 text-sm">{formatMeasurementMappingLabel(measurementKeys)}</p>
               )}
             </div>
             <div>
@@ -519,7 +560,7 @@ export function LineCard({
                     Sample qty{" "}
                     <span className="font-medium text-foreground tabular-nums">{coveragePreview.value}</span>
                   </p>
-                ) : measurementKey ? (
+                ) : measurementKeys.length > 0 ? (
                   <p className="text-xs text-red-600">
                     {coveragePreview && !coveragePreview.ok ? coveragePreview.error : "Check coverage"}
                   </p>
@@ -532,7 +573,7 @@ export function LineCard({
                   type="number"
                   min={0}
                   step="0.01"
-                  disabled={!editable || !measurementKey}
+                  disabled={!editable || measurementKeys.length === 0}
                   value={coverageAmount}
                   className="flex-1"
                   onCommit={(value) => onPatch({ coverageAmount: Number(value) || 1 })}
@@ -540,7 +581,7 @@ export function LineCard({
                 {editable ? (
                   <Select
                     value={coverageUnit}
-                    disabled={!measurementKey}
+                    disabled={measurementKeys.length === 0}
                     onValueChange={(value) => onPatch({ coverageUnit: String(value ?? coverageUnit) })}
                     items={EAGLEVIEW_COVERAGE_UNITS.map((unit) => ({
                       value: unit.value,
@@ -562,7 +603,7 @@ export function LineCard({
                   <p className="mt-1 w-[7.5rem] text-sm">{formatCoverageLabel(coverageAmount, coverageUnit)}</p>
                 )}
               </div>
-              {measurementKey ? (
+              {measurementKeys.length > 0 ? (
                 <p className="mt-1 text-[11px] text-muted-foreground">
                   Qty = mapped measurement ÷ {formatCoverageLabel(coverageAmount, coverageUnit)}
                 </p>

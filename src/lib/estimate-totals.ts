@@ -1,3 +1,4 @@
+import { parseMeasurementKeys } from "@/lib/eagleview-formulas";
 import { seedShareToken } from "@/lib/share";
 import { billingEstimate } from "@/lib/market";
 import { normalizeLinePhotoIds } from "@/lib/estimate-line-photos";
@@ -309,12 +310,12 @@ export type EstimateDraft = Omit<
 
 export type EstimateLineDraft = Omit<
   EstimateLine,
-  "title" | "groupName" | "optional" | "selected" | "taxable" | "photoIds" | "photos" | "package" | "quantityFormula" | "measurementKey" | "coverageAmount" | "coverageUnit"
+  "title" | "groupName" | "optional" | "selected" | "taxable" | "photoIds" | "photos" | "package" | "quantityFormula" | "measurementKeys" | "coverageAmount" | "coverageUnit"
 > &
   Partial<
     Pick<
       EstimateLine,
-      "title" | "groupName" | "optional" | "selected" | "taxable" | "photoIds" | "photos" | "package" | "quantityFormula" | "measurementKey" | "coverageAmount" | "coverageUnit"
+      "title" | "groupName" | "optional" | "selected" | "taxable" | "photoIds" | "photos" | "package" | "quantityFormula" | "measurementKeys" | "coverageAmount" | "coverageUnit"
     >
   >;
 
@@ -372,7 +373,7 @@ export function fillEstimateLine(line: EstimateLineDraft): EstimateLine {
     taxable: line.taxable ?? true,
     package: parseLinePackage(line.package),
     quantityFormula: line.quantityFormula?.trim() ?? "",
-    measurementKey: line.measurementKey?.trim() ?? "",
+    measurementKeys: parseMeasurementKeys(line.measurementKeys),
     coverageAmount: line.coverageAmount != null && Number.isFinite(Number(line.coverageAmount)) ? Number(line.coverageAmount) : 1,
     coverageUnit: line.coverageUnit?.trim() || "squares",
     photoIds,

@@ -523,7 +523,7 @@ export function buildEagleviewReportPdf(input: {
  * Squares → field coverage lines; LF lengths → ridge/hip/valley/eave/etc. lines by title.
  */
 export function applySquaresToEstimateLines<
-  T extends { id: string; title: string; unit: string; quantity: number; quantityFormula?: string; measurementKey?: string; coverageAmount?: number; coverageUnit?: string },
+  T extends { id: string; title: string; unit: string; quantity: number; quantityFormula?: string; measurementKeys?: string[]; coverageAmount?: number; coverageUnit?: string },
 >(
   lines: T[],
   totalSquares: number,
@@ -543,10 +543,10 @@ export function applySquaresToEstimateLines<
   const formulaVars = eagleviewFormulaVars(measurements, totalSquares, wastePercent);
 
   for (const line of lines) {
-    const measurementKey = line.measurementKey?.trim() ?? "";
-    if (measurementKey) {
+    const measurementKeys = line.measurementKeys ?? [];
+    if (measurementKeys.length > 0) {
       const covered = quantityFromCoverage({
-        measurementKey,
+        measurementKeys,
         coverageAmount: line.coverageAmount,
         coverageUnit: line.coverageUnit,
         vars: formulaVars,
