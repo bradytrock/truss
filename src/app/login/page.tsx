@@ -70,8 +70,7 @@ function LoginForm() {
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-40"
         style={{
-          backgroundImage:
-            "url(https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=1600&q=60)",
+          backgroundImage: "url(/login-bg.jpg)",
           filter: "blur(2px) grayscale(0.35) brightness(0.45)",
         }}
       />
