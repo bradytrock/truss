@@ -102,6 +102,7 @@ export const SHARE_TOKEN_SQL = "supabase/migrations/20260819300000_share_tokens.
 export const PROJECT_FINANCIALS_SQL = "supabase/migrations/20260819340000_project_financials.sql";
 export const ORIGINATOR_SQL = "supabase/migrations/20260820120000_opportunity_originator.sql";
 export const CLIENT_PORTAL_SQL = "supabase/migrations/20260906020000_client_portal.sql";
+export const REALTOR_PORTAL_SQL = "supabase/migrations/20260906030000_realtor_portal.sql";
 
 export function isMissingShareToken(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -127,6 +128,26 @@ export function isMissingClientPortal(error: { message?: string; code?: string }
 
 export function missingClientPortalMessage() {
   return `Saved in this browser. Run ${CLIENT_PORTAL_SQL} in the SQL editor so client portal invites and referrals persist.`;
+}
+
+export function isMissingRealtorPortal(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("schema cache") ||
+    message.includes("Could not find the") ||
+    message.includes("realtor_portal_invites") ||
+    message.includes("realtor_listings") ||
+    message.includes("listing_watch_url") ||
+    message.includes("listing_watch_enabled") ||
+    message.includes("shared_realtor_portal")
+  );
+}
+
+export function missingRealtorPortalMessage() {
+  return `Saved in this browser. Run ${REALTOR_PORTAL_SQL} in the SQL editor so realtor portal invites, listing watches, and PM alerts persist.`;
 }
 
 export function isMissingFinancials(error: { message?: string; code?: string } | null | undefined) {

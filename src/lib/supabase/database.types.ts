@@ -283,6 +283,8 @@ export type Database = {
           phone: string;
           owner_staff_id: string | null;
           is_referral_partner: boolean;
+          listing_watch_url: string;
+          listing_watch_enabled: boolean;
         };
         Insert: {
           id?: string;
@@ -294,6 +296,8 @@ export type Database = {
           phone?: string;
           owner_staff_id?: string | null;
           is_referral_partner?: boolean;
+          listing_watch_url?: string;
+          listing_watch_enabled?: boolean;
         };
         Update: Partial<Database["public"]["Tables"]["contacts"]["Insert"]>;
         Relationships: [];
@@ -1880,6 +1884,112 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["portal_invites"]["Insert"]>;
         Relationships: [];
       };
+      realtor_portal_invites: {
+        Row: {
+          id: string;
+          company_id: string;
+          contact_id: string;
+          token: string;
+          expires_at: string;
+          created_by: string | null;
+          created_at: string;
+          last_opened_at: string | null;
+          revoked_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          contact_id: string;
+          token: string;
+          expires_at: string;
+          created_by?: string | null;
+          created_at?: string;
+          last_opened_at?: string | null;
+          revoked_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["realtor_portal_invites"]["Insert"]>;
+        Relationships: [];
+      };
+      realtor_listings: {
+        Row: {
+          id: string;
+          company_id: string;
+          contact_id: string;
+          external_key: string;
+          title: string;
+          address: string;
+          city: string;
+          state: string;
+          postal_code: string;
+          price: number | null;
+          status: string;
+          beds: number | null;
+          baths: number | null;
+          sqft: number | null;
+          listed_at: string | null;
+          source: string;
+          source_url: string;
+          summary: string;
+          first_seen_at: string;
+          last_seen_at: string;
+          notified_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          contact_id: string;
+          external_key?: string;
+          title?: string;
+          address?: string;
+          city?: string;
+          state?: string;
+          postal_code?: string;
+          price?: number | null;
+          status?: string;
+          beds?: number | null;
+          baths?: number | null;
+          sqft?: number | null;
+          listed_at?: string | null;
+          source?: string;
+          source_url?: string;
+          summary?: string;
+          first_seen_at?: string;
+          last_seen_at?: string;
+          notified_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["realtor_listings"]["Insert"]>;
+        Relationships: [];
+      };
+      realtor_listing_browse_runs: {
+        Row: {
+          id: string;
+          company_id: string;
+          contact_id: string;
+          started_at: string;
+          finished_at: string | null;
+          status: string;
+          listings_found: number;
+          new_listings: number;
+          error: string;
+          source_url: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          contact_id: string;
+          started_at?: string;
+          finished_at?: string | null;
+          status?: string;
+          listings_found?: number;
+          new_listings?: number;
+          error?: string;
+          source_url?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["realtor_listing_browse_runs"]["Insert"]>;
+        Relationships: [];
+      };
       portal_referrals: {
         Row: {
           id: string;
@@ -1988,6 +2098,24 @@ export type Database = {
       };
       shared_portal: {
         Args: { p_token: string };
+        Returns: Json;
+      };
+      shared_realtor_portal: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      realtor_listing_watches: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      ingest_realtor_listing_browse: {
+        Args: {
+          p_company_id: string;
+          p_contact_id: string;
+          p_source_url?: string;
+          p_listings?: Json;
+          p_error?: string;
+        };
         Returns: Json;
       };
       submit_portal_referral: {

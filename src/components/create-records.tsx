@@ -192,6 +192,8 @@ export function CreateOpportunityDialog({
           phone: phone.trim(),
           ownerStaffId: owner?.id || crm.user.staffId,
           isReferralPartner: false,
+          listingWatchUrl: "",
+          listingWatchEnabled: false,
         });
       } else {
         await crm.updateContact(contact.id, {
@@ -671,6 +673,8 @@ export function CreateClientDialog({
           phone: phone.trim(),
           ownerStaffId: user.staffId,
           isReferralPartner: referral,
+          listingWatchUrl: "",
+          listingWatchEnabled: false,
         });
       }
       toast.success(`Contact added: ${contactName.trim()}`);
@@ -871,6 +875,8 @@ export function EditContactDialog({
   const [existingClientId, setExistingClientId] = useState(contact.clientId ?? clients[0]?.id ?? "");
   const [ownerStaffId, setOwnerStaffId] = useState(contact.ownerStaffId);
   const [referral, setReferral] = useState(contact.isReferralPartner);
+  const [listingWatchUrl, setListingWatchUrl] = useState(contact.listingWatchUrl ?? "");
+  const [listingWatchEnabled, setListingWatchEnabled] = useState(Boolean(contact.listingWatchEnabled));
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -883,6 +889,8 @@ export function EditContactDialog({
     setExistingClientId(contact.clientId ?? clients[0]?.id ?? "");
     setOwnerStaffId(contact.ownerStaffId);
     setReferral(contact.isReferralPartner);
+    setListingWatchUrl(contact.listingWatchUrl ?? "");
+    setListingWatchEnabled(Boolean(contact.listingWatchEnabled));
   }, [open, contact, clients]);
 
   async function handleSubmit(event: FormEvent) {
@@ -906,6 +914,8 @@ export function EditContactDialog({
         clientId: companyMode === "existing" ? existingClientId || null : null,
         ownerStaffId: ownerStaffId || contact.ownerStaffId,
         isReferralPartner: referral,
+        listingWatchUrl: referral ? listingWatchUrl.trim() : "",
+        listingWatchEnabled: referral ? listingWatchEnabled : false,
       });
       if (!ok) return;
       toast.success(`Saved ${nextName}`);
@@ -1020,6 +1030,25 @@ export function EditContactDialog({
             />
             Referral partner — realtor, adjuster, or specifier in this seat’s book
           </label>
+          {referral ? (
+            <>
+              <Field label="Listing watch URL" htmlFor="edit-contact-listing-watch-url">
+                <Input
+                  id="edit-contact-listing-watch-url"
+                  value={listingWatchUrl}
+                  onChange={(event) => setListingWatchUrl(event.target.value)}
+                  placeholder="https://www.zillow.com/..."
+                />
+              </Field>
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={listingWatchEnabled}
+                  onCheckedChange={(value) => setListingWatchEnabled(Boolean(value))}
+                />
+                Watch listings daily
+              </label>
+            </>
+          ) : null}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
               Cancel

@@ -21,8 +21,11 @@ function isSharePath(path: string) {
   return (
     path.startsWith("/share") ||
     path.startsWith("/portal") ||
+    path.startsWith("/realtor-portal") ||
     path.startsWith("/api/share") ||
     path.startsWith("/api/portal") ||
+    path.startsWith("/api/realtor-portal") ||
+    path.startsWith("/api/cron/realtor-listings") ||
     path.startsWith("/api/qbwc") ||
     isPublicCardPath(path)
   );

@@ -53,6 +53,8 @@ function homeowner(
     phone,
     ownerStaffId,
     isReferralPartner: false,
+    listingWatchUrl: "",
+    listingWatchEnabled: false,
   };
 }
 
@@ -85,6 +87,8 @@ export const extraContacts: Contact[] = [
     phone: "(303) 555-3309",
     ownerStaffId: "staff_maya",
     isReferralPartner: true,
+    listingWatchUrl: "",
+    listingWatchEnabled: false,
   },
   {
     id: "con_copper_helen",
@@ -95,6 +99,8 @@ export const extraContacts: Contact[] = [
     phone: "(303) 555-0914",
     ownerStaffId: "staff_jordan",
     isReferralPartner: false,
+    listingWatchUrl: "",
+    listingWatchEnabled: false,
   },
   {
     id: "con_summit_al",
@@ -105,6 +111,8 @@ export const extraContacts: Contact[] = [
     phone: "(720) 555-8801",
     ownerStaffId: "staff_priya",
     isReferralPartner: true,
+    listingWatchUrl: "",
+    listingWatchEnabled: false,
   },
   {
     id: "con_summit_nina",
@@ -115,6 +123,8 @@ export const extraContacts: Contact[] = [
     phone: "(720) 555-8808",
     ownerStaffId: "staff_elena",
     isReferralPartner: true,
+    listingWatchUrl: "",
+    listingWatchEnabled: false,
   },
   {
     id: "con_re_brook",
@@ -125,6 +135,8 @@ export const extraContacts: Contact[] = [
     phone: "(303) 555-0194",
     ownerStaffId: "staff_priya",
     isReferralPartner: true,
+    listingWatchUrl: "",
+    listingWatchEnabled: false,
   },
   {
     id: "con_re_kate",
@@ -135,6 +147,8 @@ export const extraContacts: Contact[] = [
     phone: "(303) 555-0198",
     ownerStaffId: "staff_claire",
     isReferralPartner: true,
+    listingWatchUrl: "",
+    listingWatchEnabled: false,
   },
   {
     id: "con_trade_ruiz",
@@ -145,6 +159,8 @@ export const extraContacts: Contact[] = [
     phone: "(720) 555-2210",
     ownerStaffId: "staff_tom",
     isReferralPartner: false,
+    listingWatchUrl: "",
+    listingWatchEnabled: false,
   },
   {
     id: "con_trade_vale",
@@ -155,6 +171,8 @@ export const extraContacts: Contact[] = [
     phone: "(303) 555-7720",
     ownerStaffId: "staff_elena",
     isReferralPartner: false,
+    listingWatchUrl: "",
+    listingWatchEnabled: false,
   },
 ];
 

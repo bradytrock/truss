@@ -521,6 +521,8 @@ async function runTool(
           phone,
           ownerStaffId: ownerId,
           isReferralPartner: false,
+          listingWatchUrl: "",
+          listingWatchEnabled: false,
         }));
       if (existing) {
         await crm.updateContact(existing.id, {
@@ -616,6 +618,8 @@ async function runTool(
       const created = await crm.addContact({
         clientId: null,
         ownerStaffId: crm.effectiveStaff?.id || crm.user.staffId,
+        listingWatchUrl: "",
+        listingWatchEnabled: false,
         ...patch,
       });
       return ok({ id: created.id, updated: false, name: created.name }, { href: `/contacts?contact=${created.id}`, label: `Open ${created.name}` });

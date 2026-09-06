@@ -24,10 +24,15 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newPortalToken, portalInviteExpiry, portalUrl } from "@/lib/portal";
+import {
+  newRealtorPortalToken,
+  realtorPortalInviteExpiry,
+  realtorPortalUrl,
+} from "@/lib/realtor-portal";
 import { newShareToken, shareUrl } from "@/lib/share";
 import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId, jobInsertPayload, jobsFilledFromLeads, jobPatchFromLead, leadOverviewBackfill } from "@/lib/job-record";
 import {
@@ -949,6 +954,9 @@ type CrmContextValue = CrmState & {
   createPortalInvite: (input: {
     contactId: string;
     jobId?: string | null;
+  }) => Promise<{ url: string; token: string } | null>;
+  createRealtorPortalInvite: (input: {
+    contactId: string;
   }) => Promise<{ url: string; token: string } | null>;
   duplicateEstimate: (id: string) => Promise<Estimate>;
   addEstimateTemplate: (input?: { name?: string; market?: EstimateTemplate["market"] }) => Promise<EstimateTemplate>;
@@ -3046,6 +3054,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
                 phone: "",
                 ownerStaffId: user.staffId,
                 isReferralPartner: Boolean(isReferralPartner),
+                listingWatchUrl: "",
+                listingWatchEnabled: false,
               } satisfies Contact,
             ]
           : [];
@@ -3098,6 +3108,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const contact: Contact = {
         id: "",
         ...input,
+        listingWatchUrl: input.listingWatchUrl ?? "",
+        listingWatchEnabled: Boolean(input.listingWatchEnabled),
         ownerStaffId: input.ownerStaffId || user.staffId,
       };
       const supabase = requireClient();
@@ -3124,6 +3136,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           phone: contact.phone,
           owner_staff_id: contact.ownerStaffId || null,
           is_referral_partner: contact.isReferralPartner,
+          listing_watch_url: contact.listingWatchUrl || "",
+          listing_watch_enabled: Boolean(contact.listingWatchEnabled),
         })
         .select("*")
         .single();
@@ -6079,6 +6093,52 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       user.companyId,
       user.staffId,
     ],
+  );
+
+  const createRealtorPortalInvite = useCallback(
+    async (input: { contactId: string }) => {
+      const contactId = input.contactId.trim();
+      if (!contactId) {
+        toast.error("Choose a referral partner before sending a realtor portal link.");
+        return null;
+      }
+      const contact = state.contacts.find((item) => item.id === contactId);
+      if (!contact) {
+        toast.error("That contact isn’t in this book anymore.");
+        return null;
+      }
+      if (!contact.isReferralPartner) {
+        toast.error("Realtor portal invites are for referral partners only.");
+        return null;
+      }
+
+      const token = newRealtorPortalToken();
+      const expiresAt = realtorPortalInviteExpiry();
+      const url = realtorPortalUrl(token, typeof window !== "undefined" ? window.location.origin : "");
+      const supabase = maybeClient();
+      if (!supabase) {
+        toast.message("Realtor portal link ready locally. Connect Supabase to save invites.");
+        return { url, token };
+      }
+      const { error } = await supabase.from("realtor_portal_invites").insert({
+        company_id: user.companyId,
+        contact_id: contactId,
+        token,
+        expires_at: expiresAt,
+        created_by: user.staffId || null,
+      });
+      if (error) {
+        if (isMissingRealtorPortal(error)) {
+          toast.message(missingRealtorPortalMessage());
+          return { url, token };
+        }
+        toast.error(error.message);
+        return null;
+      }
+      toast.success(`Realtor portal link ready for ${contact.name}`);
+      return { url, token };
+    },
+    [state.contacts, user.companyId, user.staffId],
   );
 
   const voidInvoice = useCallback(async (id: string) => {
@@ -10524,6 +10584,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       sendInvoice,
       ensureInvoiceShareToken,
       createPortalInvite,
+      createRealtorPortalInvite,
       voidInvoice,
       recordPayment,
       addExpense,
@@ -10685,6 +10746,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       sendInvoice,
       ensureInvoiceShareToken,
       createPortalInvite,
+      createRealtorPortalInvite,
       voidInvoice,
       recordPayment,
       addExpense,

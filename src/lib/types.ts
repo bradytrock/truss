@@ -257,6 +257,8 @@ export interface Contact {
   phone: string;
   ownerStaffId: string;
   isReferralPartner: boolean;
+  listingWatchUrl: string;
+  listingWatchEnabled: boolean;
 }
 
 export interface Opportunity {

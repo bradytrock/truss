@@ -2,7 +2,7 @@
 -- Safe to re-run if objects already exist. Individual files remain in supabase/migrations/.
 
 -- ========== 20260819170000_truss_crm.sql ==========
--- Truss CRM: companies, profiles, pipeline, jobs, activity.
+-- TheRoofingCRM: companies, profiles, pipeline, jobs, activity.
 -- RLS isolates every row to the signed-in user's company.
 
 create extension if not exists "pgcrypto";
@@ -432,10 +432,6 @@ create table if not exists public.estimates (
   created_at timestamptz not null default now()
 );
 
-alter table public.estimates
-  add column if not exists owner_signed_at timestamptz,
-  add column if not exists owner_signed_name text not null default '';
-
 create index if not exists estimates_company_status_idx on public.estimates (company_id, status);
 create unique index if not exists estimates_company_number_idx on public.estimates (company_id, number);
 
@@ -450,9 +446,6 @@ create table if not exists public.estimate_lines (
   unit_cost numeric(14, 2) not null default 0,
   sort_order integer not null default 0
 );
-
-alter table public.estimate_lines
-  add column if not exists photo_ids uuid[] not null default '{}';
 
 create index if not exists estimate_lines_estimate_id_idx on public.estimate_lines (estimate_id);
 
@@ -1797,6 +1790,467 @@ with check (
   bucket_id = 'receipts'
   and (storage.foldername(name))[1] = public.current_company_id()::text
 );
+
+-- ========== 20260819350000_estimate_second_signer.sql ==========
+-- Optional second homeowner on an estimate. Both must sign before the
+-- proposal is accepted, the lead is awarded, and a job is opened.
+
+alter table public.estimates
+  add column if not exists second_contact_id uuid references public.contacts (id) on delete set null;
+
+alter table public.estimates
+  add column if not exists second_accepted_at timestamptz;
+
+alter table public.estimates
+  drop constraint if exists estimates_second_contact_distinct;
+
+alter table public.estimates
+  add constraint estimates_second_contact_distinct
+  check (second_contact_id is null or second_contact_id is distinct from contact_id);
+
+create or replace function public.shared_estimate(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  est public.estimates%rowtype;
+  company public.companies%rowtype;
+  contact_name text;
+  second_name text;
+  customer_name text;
+begin
+  if p_token is null or length(trim(p_token)) < 6 then
+    return null;
+  end if;
+  select * into est
+  from public.estimates
+  where share_token = trim(p_token)
+  limit 1;
+  if not found then
+    return null;
+  end if;
+  if est.status = 'sent' then
+    update public.estimates set status = 'viewed' where id = est.id;
+    est.status := 'viewed';
+  end if;
+  select * into company from public.companies where id = est.company_id;
+  select name into contact_name from public.contacts where id = est.contact_id;
+  select name into second_name from public.contacts where id = est.second_contact_id;
+  customer_name := coalesce(contact_name, 'Homeowner');
+  if second_name is not null and second_name <> '' and second_name is distinct from contact_name then
+    customer_name := customer_name || ' and ' || second_name;
+  end if;
+  return jsonb_build_object(
+    'customer', customer_name,
+    'primaryCustomer', coalesce(contact_name, 'Homeowner'),
+    'secondCustomer', second_name,
+    'company', jsonb_build_object(
+      'name', coalesce(company.name, ''),
+      'phone', coalesce(company.phone, ''),
+      'email', coalesce(company.email, ''),
+      'website', coalesce(company.website, ''),
+      'street', coalesce(company.street, ''),
+      'city', coalesce(company.city, ''),
+      'state', coalesce(company.state, ''),
+      'postalCode', coalesce(company.postal_code, ''),
+      'licenseNumber', coalesce(company.license_number, '')
+    ),
+    'estimate', jsonb_build_object(
+      'id', est.id,
+      'number', est.number,
+      'name', est.name,
+      'clientId', est.client_id,
+      'opportunityId', est.opportunity_id,
+      'jobId', est.job_id,
+      'contactId', est.contact_id,
+      'secondContactId', est.second_contact_id,
+      'status', est.status,
+      'notes', '',
+      'validUntil', est.valid_until,
+      'sentAt', est.sent_at,
+      'acceptedAt', est.accepted_at,
+      'secondAcceptedAt', est.second_accepted_at,
+      'createdAt', est.created_at,
+      'taxRate', est.tax_rate,
+      'discountKind', est.discount_kind,
+      'discountValue', est.discount_value,
+      'depositKind', est.deposit_kind,
+      'depositValue', est.deposit_value,
+      'intro', est.intro,
+      'terms', est.terms,
+      'street', est.street,
+      'city', est.city,
+      'state', est.state,
+      'postalCode', est.postal_code,
+      'shareToken', est.share_token
+    ),
+    'lines', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', line.id,
+        'estimateId', line.estimate_id,
+        'catalogItemId', line.catalog_item_id,
+        'title', line.title,
+        'description', line.description,
+        'quantity', line.quantity,
+        'unit', line.unit,
+        'unitCost', line.unit_cost,
+        'sortOrder', line.sort_order,
+        'groupName', line.group_name,
+        'optional', line.optional,
+        'selected', line.selected,
+        'taxable', line.taxable
+      ) order by line.sort_order)
+      from public.estimate_lines line
+      where line.estimate_id = est.id
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+drop function if exists public.sign_shared_estimate(text);
+drop function if exists public.sign_shared_estimate(text, text);
+
+create function public.sign_shared_estimate(p_token text, p_signer text default 'primary')
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  est public.estimates%rowtype;
+  opp public.opportunities%rowtype;
+  job_id uuid;
+  v_total numeric(14, 2);
+  v_subtotal numeric(14, 2);
+  v_discount numeric(14, 2);
+  v_taxable numeric(14, 2);
+  v_code text;
+  v_signer text;
+  v_needs_second boolean;
+  v_fully_signed boolean;
+begin
+  if p_token is null or length(trim(p_token)) < 6 then
+    return null;
+  end if;
+
+  v_signer := lower(coalesce(nullif(trim(p_signer), ''), 'primary'));
+  if v_signer not in ('primary', 'second') then
+    raise exception 'Invalid signer';
+  end if;
+
+  select * into est
+  from public.estimates
+  where share_token = trim(p_token)
+  limit 1;
+  if not found then
+    return null;
+  end if;
+
+  if est.status = 'declined' then
+    raise exception 'This proposal was declined.';
+  end if;
+
+  if est.status = 'accepted' then
+    return public.shared_estimate(trim(p_token));
+  end if;
+
+  v_needs_second := est.second_contact_id is not null;
+
+  if v_signer = 'second' and not v_needs_second then
+    raise exception 'This proposal does not have a second homeowner.';
+  end if;
+
+  if v_signer = 'primary' then
+    if est.accepted_at is null then
+      update public.estimates
+      set accepted_at = now()
+      where id = est.id
+      returning * into est;
+    end if;
+  else
+    if est.second_accepted_at is null then
+      update public.estimates
+      set second_accepted_at = now()
+      where id = est.id
+      returning * into est;
+    end if;
+  end if;
+
+  v_fully_signed := est.accepted_at is not null
+    and (not v_needs_second or est.second_accepted_at is not null);
+
+  if not v_fully_signed then
+    return public.shared_estimate(trim(p_token));
+  end if;
+
+  select coalesce(sum(line.quantity * line.unit_cost), 0) into v_subtotal
+  from public.estimate_lines line
+  where line.estimate_id = est.id
+    and (coalesce(line.optional, false) = false or coalesce(line.selected, true) = true);
+
+  if coalesce(est.discount_kind, 'percent') = 'percent' then
+    v_discount := round(v_subtotal * coalesce(est.discount_value, 0) / 100, 2);
+  else
+    v_discount := least(v_subtotal, coalesce(est.discount_value, 0));
+  end if;
+  v_discount := coalesce(v_discount, 0);
+
+  select coalesce(sum(line.quantity * line.unit_cost), 0) into v_taxable
+  from public.estimate_lines line
+  where line.estimate_id = est.id
+    and coalesce(line.taxable, true) = true
+    and (coalesce(line.optional, false) = false or coalesce(line.selected, true) = true);
+
+  v_total := greatest(0, v_subtotal - v_discount);
+  if v_subtotal > 0 then
+    v_total := v_total + round(
+      greatest(0, v_taxable - v_discount * (v_taxable / v_subtotal)) * coalesce(est.tax_rate, 0) / 100,
+      2
+    );
+  end if;
+
+  update public.estimates
+  set status = 'accepted', accepted_at = coalesce(accepted_at, now())
+  where id = est.id
+  returning * into est;
+
+  if est.opportunity_id is null then
+    insert into public.opportunities (
+      company_id,
+      name,
+      client_id,
+      primary_contact_id,
+      stage,
+      value,
+      location,
+      project_type,
+      delivery_method,
+      estimator,
+      win_probability,
+      next_step,
+      code
+    ) values (
+      est.company_id,
+      est.name,
+      est.client_id,
+      est.contact_id,
+      'awarded',
+      v_total,
+      trim(both ', ' from concat_ws(', ', nullif(est.street, ''), nullif(est.city, ''))),
+      'restoration',
+      'fixed_price',
+      '',
+      100,
+      'Job sold. Start precon.',
+      est.number
+    )
+    returning * into opp;
+
+    update public.estimates
+    set opportunity_id = opp.id
+    where id = est.id
+    returning * into est;
+  else
+    update public.opportunities
+    set
+      stage = 'awarded',
+      win_probability = 100,
+      value = v_total,
+      next_step = 'Job sold. Start precon.'
+    where id = est.opportunity_id
+    returning * into opp;
+  end if;
+
+  select j.id into job_id
+  from public.jobs j
+  where j.opportunity_id = opp.id
+  limit 1;
+
+  if job_id is null then
+    v_code := coalesce(nullif(opp.code, ''), est.number);
+    insert into public.jobs (
+      company_id,
+      opportunity_id,
+      name,
+      client_id,
+      primary_contact_id,
+      status,
+      contract_value,
+      start_date,
+      location,
+      project_manager,
+      superintendent,
+      owner_staff_id,
+      code
+    ) values (
+      est.company_id,
+      opp.id,
+      opp.name,
+      opp.client_id,
+      opp.primary_contact_id,
+      'precon',
+      v_total,
+      current_date,
+      opp.location,
+      coalesce(opp.estimator, ''),
+      '',
+      opp.owner_staff_id,
+      v_code
+    )
+    returning id into job_id;
+  end if;
+
+  if job_id is not null then
+    update public.estimates set job_id = job_id where id = est.id;
+  end if;
+
+  return public.shared_estimate(trim(p_token));
+end;
+$$;
+
+revoke all on function public.sign_shared_estimate(text, text) from public;
+grant execute on function public.sign_shared_estimate(text, text) to anon, authenticated;
+grant execute on function public.shared_estimate(text) to anon, authenticated;
+
+-- ========== 20260819360000_estimate_owner_signature.sql ==========
+-- When a proposal is sent, the project owner's signature is applied so
+-- the homeowner's signature makes a two-party agreement.
+
+alter table public.estimates
+  add column if not exists owner_signed_at timestamptz;
+
+alter table public.estimates
+  add column if not exists owner_signed_name text not null default '';
+
+update public.estimates e
+set
+  owner_signed_at = coalesce(e.owner_signed_at, e.sent_at),
+  owner_signed_name = coalesce(nullif(e.owner_signed_name, ''), (
+    select tm.name
+    from public.jobs j
+    join public.team_members tm on tm.id = j.owner_staff_id
+    where j.id = e.job_id
+    limit 1
+  ), (
+    select tm.name
+    from public.opportunities o
+    join public.team_members tm on tm.id = o.owner_staff_id
+    where o.id = e.opportunity_id
+    limit 1
+  ), (
+    select c.name
+    from public.companies c
+    where c.id = e.company_id
+  ), '')
+where e.status in ('sent', 'viewed', 'accepted')
+  and e.sent_at is not null;
+
+create or replace function public.shared_estimate(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  est public.estimates%rowtype;
+  company public.companies%rowtype;
+  contact_name text;
+  second_name text;
+  customer_name text;
+begin
+  if p_token is null or length(trim(p_token)) < 6 then
+    return null;
+  end if;
+  select * into est
+  from public.estimates
+  where share_token = trim(p_token)
+  limit 1;
+  if not found then
+    return null;
+  end if;
+  if est.status = 'sent' then
+    update public.estimates set status = 'viewed' where id = est.id;
+    est.status := 'viewed';
+  end if;
+  select * into company from public.companies where id = est.company_id;
+  select name into contact_name from public.contacts where id = est.contact_id;
+  select name into second_name from public.contacts where id = est.second_contact_id;
+  customer_name := coalesce(contact_name, 'Homeowner');
+  if second_name is not null and second_name <> '' and second_name is distinct from contact_name then
+    customer_name := customer_name || ' and ' || second_name;
+  end if;
+  return jsonb_build_object(
+    'customer', customer_name,
+    'primaryCustomer', coalesce(contact_name, 'Homeowner'),
+    'secondCustomer', second_name,
+    'company', jsonb_build_object(
+      'name', coalesce(company.name, ''),
+      'phone', coalesce(company.phone, ''),
+      'email', coalesce(company.email, ''),
+      'website', coalesce(company.website, ''),
+      'street', coalesce(company.street, ''),
+      'city', coalesce(company.city, ''),
+      'state', coalesce(company.state, ''),
+      'postalCode', coalesce(company.postal_code, ''),
+      'licenseNumber', coalesce(company.license_number, '')
+    ),
+    'estimate', jsonb_build_object(
+      'id', est.id,
+      'number', est.number,
+      'name', est.name,
+      'clientId', est.client_id,
+      'opportunityId', est.opportunity_id,
+      'jobId', est.job_id,
+      'contactId', est.contact_id,
+      'secondContactId', est.second_contact_id,
+      'status', est.status,
+      'notes', '',
+      'validUntil', est.valid_until,
+      'sentAt', est.sent_at,
+      'acceptedAt', est.accepted_at,
+      'secondAcceptedAt', est.second_accepted_at,
+      'ownerSignedAt', est.owner_signed_at,
+      'ownerSignedName', est.owner_signed_name,
+      'createdAt', est.created_at,
+      'taxRate', est.tax_rate,
+      'discountKind', est.discount_kind,
+      'discountValue', est.discount_value,
+      'depositKind', est.deposit_kind,
+      'depositValue', est.deposit_value,
+      'intro', est.intro,
+      'terms', est.terms,
+      'street', est.street,
+      'city', est.city,
+      'state', est.state,
+      'postalCode', est.postal_code,
+      'shareToken', est.share_token
+    ),
+    'lines', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', line.id,
+        'estimateId', line.estimate_id,
+        'catalogItemId', line.catalog_item_id,
+        'title', line.title,
+        'description', line.description,
+        'quantity', line.quantity,
+        'unit', line.unit,
+        'unitCost', line.unit_cost,
+        'sortOrder', line.sort_order,
+        'groupName', line.group_name,
+        'optional', line.optional,
+        'selected', line.selected,
+        'taxable', line.taxable
+      ) order by line.sort_order)
+      from public.estimate_lines line
+      where line.estimate_id = est.id
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+grant execute on function public.shared_estimate(text) to anon, authenticated;
 
 -- ========== 20260820120000_opportunity_originator.sql ==========
 -- Who sourced the lead stays on the record when it is assigned to production.
@@ -3545,6 +3999,42 @@ $$;
 revoke all on function public.shared_page(text) from public;
 grant execute on function public.shared_page(text) to anon, authenticated;
 
+-- ========== 20260825010000_created_by_text.sql ==========
+-- Live projects sometimes typed payments.created_by / expenses.created_by as uuid.
+-- The app stores the recorder's display name (and retries with a uuid if Postgres still expects one).
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'payments'
+      and column_name = 'created_by'
+      and udt_name = 'uuid'
+  ) then
+    execute 'alter table public.payments alter column created_by drop default';
+    execute 'alter table public.payments alter column created_by type text using coalesce(created_by::text, '''')';
+    execute 'alter table public.payments alter column created_by set default ''''';
+    execute 'alter table public.payments alter column created_by set not null';
+  end if;
+
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'expenses'
+      and column_name = 'created_by'
+      and udt_name = 'uuid'
+  ) then
+    execute 'alter table public.expenses alter column created_by drop default';
+    execute 'alter table public.expenses alter column created_by type text using coalesce(created_by::text, '''')';
+    execute 'alter table public.expenses alter column created_by set default ''''';
+    execute 'alter table public.expenses alter column created_by set not null';
+  end if;
+end $$;
+
+-- ========== 20260825120000_messages.sql ==========
 -- Two-way texts (Sendblue) logged on the related job as communication.
 -- Safe to re-run. Adds activity_type 'text' and aligns older Sendblue `messages`
 -- tables (to_number / uuid created_by) with the app columns (phone, handle, job_id).
@@ -4624,41 +5114,6 @@ with check (
   and (storage.foldername(name))[1] = public.current_company_id()::text
 );
 
--- ========== 20260825181000_job_files_grants.sql ==========
-grant select, insert, update, delete on table public.job_files to authenticated;
-
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values (
-  'job-files',
-  'job-files',
-  true,
-  26214400,
-  null
-)
-on conflict (id) do update
-set
-  public = excluded.public,
-  file_size_limit = excluded.file_size_limit,
-  allowed_mime_types = excluded.allowed_mime_types;
-
-drop policy if exists "public read job files" on storage.objects;
-create policy "public read job files"
-on storage.objects for select
-to public
-using (bucket_id = 'job-files');
-
-drop policy if exists "company job files" on storage.objects;
-create policy "company job files"
-on storage.objects for all to authenticated
-using (
-  bucket_id = 'job-files'
-  and (storage.foldername(name))[1] = public.current_company_id()::text
-)
-with check (
-  bucket_id = 'job-files'
-  and (storage.foldername(name))[1] = public.current_company_id()::text
-);
-
 -- ========== 20260825180000_estimate_signer_links.sql ==========
 -- Unique signing links per homeowner, plus a second drawn signature.
 -- Opening either link only lets that person sign their own line.
@@ -5134,6 +5589,43 @@ grant execute on function public.sign_shared_estimate(text, text, text) to anon,
 revoke all on function public.select_shared_estimate_line(text, uuid, boolean) from public;
 grant execute on function public.select_shared_estimate_line(text, uuid, boolean) to anon, authenticated;
 
+-- ========== 20260825181000_job_files_grants.sql ==========
+-- Grants and the job-files bucket, in case the table already exists but uploads still fail.
+
+grant select, insert, update, delete on table public.job_files to authenticated;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'job-files',
+  'job-files',
+  true,
+  26214400,
+  null
+)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "public read job files" on storage.objects;
+create policy "public read job files"
+on storage.objects for select
+to public
+using (bucket_id = 'job-files');
+
+drop policy if exists "company job files" on storage.objects;
+create policy "company job files"
+on storage.objects for all to authenticated
+using (
+  bucket_id = 'job-files'
+  and (storage.foldername(name))[1] = public.current_company_id()::text
+)
+with check (
+  bucket_id = 'job-files'
+  and (storage.foldername(name))[1] = public.current_company_id()::text
+);
+
 -- ========== 20260825190000_share_link_sender.sql ==========
 -- When a homeowner opens an expired or broken share link, still name the
 -- contractor who sent it and give them a phone and email to reach.
@@ -5475,7 +5967,6 @@ $$;
 
 revoke all on function public.shared_estimate(text) from public;
 grant execute on function public.shared_estimate(text) to anon, authenticated;
-
 
 -- ========== 20260825210000_qbwc.sql ==========
 -- QuickBooks Web Connector: push approved (non-draft) invoices with line items
@@ -5868,7 +6359,6 @@ grant execute on function public.qbwc_get_last_error(uuid) to anon, authenticate
 revoke all on function public.qbwc_close(uuid) from public;
 grant execute on function public.qbwc_close(uuid) to anon, authenticated;
 
-
 -- ========== 20260825220000_qbwc_pgcrypto.sql ==========
 -- pgcrypto's crypt/gen_salt live in the extensions schema on hosted Supabase.
 -- qbwc_upsert_connector used search_path = public only, so gen_salt(unknown)
@@ -5969,7 +6459,6 @@ grant execute on function public.qbwc_upsert_connector(text, text) to authentica
 revoke all on function public.qbwc_authenticate(text, text) from public;
 grant execute on function public.qbwc_authenticate(text, text) to anon, authenticated;
 
-
 -- ========== 20260825230000_qbwc_queue.sql ==========
 -- Web Connector only posts invoices that accounting pushed onto the queue.
 -- qb_status = 'queued' (not every unentered invoice).
@@ -5997,7 +6486,6 @@ begin
   return v_id;
 end;
 $$;
-
 
 -- ========== 20260825240000_qbwc_expenses_payments.sql ==========
 -- Web Connector: queue expenses (check / credit card charge) and payments
@@ -6060,10 +6548,6 @@ begin
     and exp.qb_status = 'queued'
     and exp.amount > 0
     and coalesce(trim(exp.vendor), '') <> ''
-    and (
-      exp.job_id is not null
-      or exp.account in ('office', 'insurance')
-    )
   order by exp.incurred_at, exp.number
   limit 1;
   return v_id;
@@ -6188,8 +6672,6 @@ declare
   v_account text;
   v_pay text;
   v_pay_account text;
-  v_has_job boolean;
-  v_job_code text;
 begin
   select * into exp from public.expenses where id = p_expense;
   if not found then
@@ -6198,12 +6680,6 @@ begin
   select * into job from public.jobs where id = exp.job_id;
   select * into company from public.companies where id = exp.company_id;
   select * into conn from public.qbwc_connectors where company_id = exp.company_id;
-
-  v_has_job := job.id is not null;
-  v_job_code := case
-    when not v_has_job then ''
-    else coalesce(nullif(trim(job.code), ''), nullif(trim(job.name), ''), 'Job')
-  end;
 
   v_account := case exp.account
     when 'materials' then 'Job materials'
@@ -6223,21 +6699,17 @@ begin
     else coalesce(nullif(trim(conn.bank_account_name), ''), 'Checking')
   end;
 
-  if v_has_job then
-    v_customer := coalesce(
-      (select name from public.contacts where id = job.primary_contact_id),
-      (select c.name
-         from public.opportunities o
-         join public.contacts c on c.id = o.primary_contact_id
-        where o.id = job.opportunity_id),
-      (select name from public.clients where id = (
-        select client_id from public.opportunities where id = job.opportunity_id
-      )),
-      'Homeowner'
-    );
-  else
-    v_customer := '';
-  end if;
+  v_customer := coalesce(
+    (select name from public.contacts where id = job.primary_contact_id),
+    (select c.name
+       from public.opportunities o
+       join public.contacts c on c.id = o.primary_contact_id
+      where o.id = job.opportunity_id),
+    (select name from public.clients where id = (
+      select client_id from public.opportunities where id = job.opportunity_id
+    )),
+    'Homeowner'
+  );
   v_phone := coalesce(
     (select phone from public.contacts where id = job.primary_contact_id),
     company.phone,
@@ -6256,15 +6728,14 @@ begin
     'memo', coalesce(exp.memo, ''),
     'payAccount', v_pay_account,
     'customerName', v_customer,
-    'jobId', job.id,
-    'jobCode', v_job_code,
+    'jobCode', coalesce(job.code, ''),
     'jobName', coalesce(job.name, ''),
     'street', coalesce(job.street, ''),
     'city', coalesce(job.city, ''),
     'state', coalesce(job.state, ''),
     'postalCode', coalesce(job.postal_code, ''),
     'phone', coalesce(v_phone, ''),
-    'hasJob', v_has_job
+    'hasJob', job.id is not null
   );
 end;
 $$;
@@ -6487,7 +6958,6 @@ revoke all on function public.qbwc_apply_response(uuid, text, text, text, text) 
 grant execute on function public.qbwc_apply_response(uuid, text, text, text, text) to anon, authenticated;
 
 -- ========== 20260825250000_qbwc_customer_alias.sql ==========
-
 -- When the homeowner/client name already exists as a Vendor (or Other Name),
 -- CustomerAdd cannot reuse it. Remember the customer ListID / an aliased
 -- customer name on the session so the job hangs under a real Customer.
@@ -6700,6 +7170,7 @@ grant execute on function public.qbwc_next_work(uuid) to anon, authenticated;
 revoke all on function public.qbwc_apply_response(uuid, text, text, text, text, text, text, text) from public;
 grant execute on function public.qbwc_apply_response(uuid, text, text, text, text, text, text, text) to anon, authenticated;
 
+-- ========== 20260825260000_qb_vendors.sql ==========
 -- Pull QuickBooks Desktop vendors into Truss so expense payees are a dropdown
 -- of names that already exist in the company file.
 
@@ -6990,6 +7461,7 @@ grant execute on function public.qbwc_save_vendors(uuid, jsonb, text, boolean, b
 revoke all on function public.qbwc_next_work(uuid) from public;
 grant execute on function public.qbwc_next_work(uuid) to anon, authenticated;
 
+-- ========== 20260825270000_qb_review.sql ==========
 -- Review comments on invoices, expenses, and payments (Dropbox-style
 -- notes). Accounting uses these when returning a record to the PM.
 -- qb_status stays text; 'returned' means waiting on the project manager.
@@ -7008,14 +7480,8 @@ create table if not exists public.qb_review_comments (
   created_at timestamptz not null default now()
 );
 
-alter table public.qb_review_comments
-  add column if not exists mentioned_staff_ids text[] not null default '{}';
-
 create index if not exists qb_review_comments_record_idx
   on public.qb_review_comments (company_id, kind, record_id, created_at);
-
-create index if not exists qb_review_comments_mentions_idx
-  on public.qb_review_comments using gin (mentioned_staff_ids);
 
 alter table public.qb_review_comments enable row level security;
 
@@ -7025,8 +7491,20 @@ create policy "company isolation" on public.qb_review_comments
   using (company_id = public.current_company_id())
   with check (company_id = public.current_company_id());
 
+-- ========== 20260827010000_qb_review_mentions.sql ==========
+-- Who was @mentioned on an invoice / expense / payment review comment.
+-- Accounting tags the project manager; they get a home notification and
+-- reply on the file inside the job record.
+
+alter table public.qb_review_comments
+  add column if not exists mentioned_staff_ids text[] not null default '{}';
+
+create index if not exists qb_review_comments_mentions_idx
+  on public.qb_review_comments using gin (mentioned_staff_ids);
+
 -- ========== 20260827020000_qbwc_expense_job.sql ==========
 -- Job expenses must post onto Customer:Job, not the company overhead account.
+-- Office / insurance may still post without a job.
 
 create or replace function public.qbwc_pick_expense(p_company uuid)
 returns uuid
@@ -7150,7 +7628,6 @@ begin
   );
 end;
 $$;
-
 
 -- ========== 20260827180000_document_notes.sql ==========
 -- Customer-facing notes on shared estimates and invoices. Prints after the
@@ -7423,6 +7900,7 @@ $$;
 revoke all on function public.shared_invoice(text) from public;
 grant execute on function public.shared_invoice(text) to anon, authenticated;
 
+-- ========== 20260828120000_material_orders.sql ==========
 -- Job material orders. Built by hand from the price book (or custom lines),
 -- independent of the estimate or invoice. Unit costs copy from catalog_items.
 
@@ -7490,6 +7968,7 @@ exception
   when duplicate_object then null;
 end $$;
 
+-- ========== 20260828130000_material_order_templates.sql ==========
 -- Company material-order templates: reusable supplier lists and quantities.
 -- Independent of estimates. Unit costs copy from catalog_items when a line is added.
 
@@ -7554,7 +8033,9 @@ exception
   when duplicate_object then null;
 end $$;
 
--- Catalog item margin, plus a company floor when dropping a price-book item onto a proposal.
+-- ========== 20260828140000_catalog_margin.sql ==========
+-- Per-item catalog margin, plus a company floor applied when a catalog item
+-- is dropped onto a proposal. Material orders still copy unit cost.
 
 alter table public.companies
   add column if not exists minimum_margin_percent numeric(8, 2) not null default 0;
@@ -7562,6 +8043,7 @@ alter table public.companies
 alter table public.catalog_items
   add column if not exists margin_percent numeric(8, 2) not null default 0;
 
+-- ========== 20260828150000_price_lists.sql ==========
 -- Dated price lists. A new list becomes current; the previous list is
 -- outdated and kept for lookup. Catalog items belong to one list.
 -- Do not set catalog_items.price_list_id NOT NULL so a missing column
@@ -7620,6 +8102,223 @@ set price_list_id = (
 )
 where ci.price_list_id is null;
 
+-- ========== 20260828160000_share_estimate_owner_signed.sql ==========
+-- Share links call shared_estimate, which reads owner_signed_* and line
+-- photo_ids. Those columns were missing on some projects, so the RPC threw
+-- and the share page painted "isn't available" before anything else loaded.
+
+alter table public.estimates
+  add column if not exists owner_signed_at timestamptz;
+
+alter table public.estimates
+  add column if not exists owner_signed_name text not null default '';
+
+alter table public.estimate_lines
+  add column if not exists photo_ids uuid[] not null default '{}';
+
+update public.estimates e
+set
+  owner_signed_at = coalesce(e.owner_signed_at, e.sent_at),
+  owner_signed_name = coalesce(nullif(e.owner_signed_name, ''), (
+    select tm.name
+    from public.jobs j
+    join public.team_members tm on tm.id = j.owner_staff_id
+    where j.id = e.job_id
+    limit 1
+  ), (
+    select tm.name
+    from public.opportunities o
+    join public.team_members tm on tm.id = o.owner_staff_id
+    where o.id = e.opportunity_id
+    limit 1
+  ), (
+    select c.name
+    from public.companies c
+    where c.id = e.company_id
+  ), '')
+where e.status in ('sent', 'viewed', 'accepted')
+  and e.sent_at is not null
+  and (e.owner_signed_at is null or e.owner_signed_name = '');
+
+create or replace function public.shared_estimate(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  est public.estimates%rowtype;
+  company public.companies%rowtype;
+  contact_name text;
+  second_name text;
+  customer_name text;
+  work_market text;
+  v_token text;
+  v_role text;
+  v_owner text;
+begin
+  if p_token is null or length(trim(p_token)) < 6 then
+    return null;
+  end if;
+  v_token := trim(p_token);
+  select * into est
+  from public.estimates
+  where share_token = v_token
+     or (second_share_token <> '' and second_share_token = v_token)
+  limit 1;
+  if not found then
+    return null;
+  end if;
+
+  if est.second_contact_id is not null
+     and est.second_share_token <> ''
+     and est.second_share_token = v_token
+     and est.share_token is distinct from v_token then
+    v_role := 'second';
+  else
+    v_role := 'primary';
+  end if;
+
+  if est.status = 'sent' then
+    update public.estimates set status = 'viewed' where id = est.id;
+    est.status := 'viewed';
+  end if;
+
+  if est.status in ('sent', 'viewed', 'accepted')
+     and (est.owner_signed_at is null or coalesce(est.owner_signed_name, '') = '') then
+    v_owner := coalesce(
+      nullif(est.owner_signed_name, ''),
+      (
+        select tm.name
+        from public.jobs j
+        join public.team_members tm on tm.id = j.owner_staff_id
+        where j.id = est.job_id
+        limit 1
+      ),
+      (
+        select tm.name
+        from public.opportunities o
+        join public.team_members tm on tm.id = o.owner_staff_id
+        where o.id = est.opportunity_id
+        limit 1
+      ),
+      (select c.name from public.companies c where c.id = est.company_id),
+      'Contractor'
+    );
+    update public.estimates
+    set
+      owner_signed_at = coalesce(owner_signed_at, sent_at, now()),
+      owner_signed_name = coalesce(nullif(owner_signed_name, ''), v_owner)
+    where id = est.id
+    returning * into est;
+  end if;
+
+  select * into company from public.companies where id = est.company_id;
+  select name into contact_name from public.contacts where id = est.contact_id;
+  select name into second_name from public.contacts where id = est.second_contact_id;
+  customer_name := coalesce(contact_name, 'Homeowner');
+  if second_name is not null and second_name <> '' and second_name is distinct from contact_name then
+    customer_name := customer_name || ' and ' || second_name;
+  end if;
+  select coalesce(
+    (select nullif(j.market, '') from public.jobs j where j.id = est.job_id),
+    (select nullif(o.market, '') from public.opportunities o where o.id = est.opportunity_id),
+    'residential'
+  ) into work_market;
+  return jsonb_build_object(
+    'customer', customer_name,
+    'primaryCustomer', coalesce(contact_name, 'Homeowner'),
+    'secondCustomer', second_name,
+    'viewerSigner', v_role,
+    'market', work_market,
+    'company', jsonb_build_object(
+      'name', coalesce(company.name, ''),
+      'phone', coalesce(company.phone, ''),
+      'email', coalesce(company.email, ''),
+      'website', coalesce(company.website, ''),
+      'street', coalesce(company.street, ''),
+      'city', coalesce(company.city, ''),
+      'state', coalesce(company.state, ''),
+      'postalCode', coalesce(company.postal_code, ''),
+      'licenseNumber', coalesce(company.license_number, ''),
+      'logoUrl', coalesce(company.logo_url, '')
+    ),
+    'projectManager', public.document_project_manager(est.company_id, est.job_id, est.opportunity_id),
+    'estimate', jsonb_build_object(
+      'id', est.id,
+      'number', est.number,
+      'name', est.name,
+      'clientId', est.client_id,
+      'opportunityId', est.opportunity_id,
+      'jobId', est.job_id,
+      'contactId', est.contact_id,
+      'secondContactId', est.second_contact_id,
+      'status', est.status,
+      'notes', coalesce(est.notes, ''),
+      'validUntil', est.valid_until,
+      'sentAt', est.sent_at,
+      'acceptedAt', est.accepted_at,
+      'secondAcceptedAt', est.second_accepted_at,
+      'ownerSignedAt', est.owner_signed_at,
+      'ownerSignedName', est.owner_signed_name,
+      'createdAt', est.created_at,
+      'taxRate', case when work_market = 'commercial' then est.tax_rate else 0 end,
+      'discountKind', est.discount_kind,
+      'discountValue', est.discount_value,
+      'depositKind', est.deposit_kind,
+      'depositValue', est.deposit_value,
+      'intro', est.intro,
+      'terms', est.terms,
+      'street', est.street,
+      'city', est.city,
+      'state', est.state,
+      'postalCode', est.postal_code,
+      'shareToken', est.share_token,
+      'secondShareToken', est.second_share_token,
+      'signatureName', coalesce(est.signature_name, ''),
+      'signatureImage', coalesce(est.signature_image, ''),
+      'secondSignatureName', coalesce(est.second_signature_name, ''),
+      'secondSignatureImage', coalesce(est.second_signature_image, '')
+    ),
+    'lines', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', line.id,
+        'estimateId', line.estimate_id,
+        'catalogItemId', line.catalog_item_id,
+        'title', line.title,
+        'description', line.description,
+        'quantity', line.quantity,
+        'unit', line.unit,
+        'unitCost', line.unit_cost,
+        'sortOrder', line.sort_order,
+        'groupName', line.group_name,
+        'optional', line.optional,
+        'selected', line.selected,
+        'taxable', line.taxable,
+        'photoIds', coalesce(line.photo_ids, '{}'::uuid[]),
+        'photos', (
+          select coalesce(jsonb_agg(
+            jsonb_build_object(
+              'id', photo.id,
+              'imageUrl', photo.image_url,
+              'caption', coalesce(photo.caption, '')
+            ) order by ord.ord
+          ), '[]'::jsonb)
+          from unnest(coalesce(line.photo_ids, '{}'::uuid[])) with ordinality as ord(id, ord)
+          join public.job_photos photo on photo.id = ord.id
+        )
+      ) order by line.sort_order)
+      from public.estimate_lines line
+      where line.estimate_id = est.id
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+revoke all on function public.shared_estimate(text) from public;
+grant execute on function public.shared_estimate(text) to anon, authenticated;
+
+-- ========== 20260828170000_live_refresh.sql ==========
 -- Live refresh: the field app and this desk share one Postgres. Realtime only
 -- emits tables in supabase_realtime, and UPDATE/DELETE need replica identity
 -- FULL so RLS (and company filters) can see the old row. Skip connector
@@ -7650,7 +8349,6 @@ begin
     end;
   end loop;
 end $$;
-
 
 -- ========== 20260829120000_estimate_signature_audit.sql ==========
 -- Append-only signature audit: who signed, which link, IP, user agent,
@@ -7915,8 +8613,65 @@ grant execute on function public.record_estimate_share_event(
 ) to anon, authenticated;
 
 revoke all on function public.shared_estimate_audit(text) from public;
-revoke execute on function public.shared_estimate_audit(text) from anon;
-grant execute on function public.shared_estimate_audit(text) to authenticated;
+grant execute on function public.shared_estimate_audit(text) to anon, authenticated;
+
+-- ========== 20260829121000_estimate_signature_audit_estimate_id.sql ==========
+-- shared_estimate_audit must include estimateId so the client can parse rows.
+
+create or replace function public.shared_estimate_audit(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  est public.estimates%rowtype;
+  v_token text;
+begin
+  v_token := trim(coalesce(p_token, ''));
+  if length(v_token) < 6 then
+    return '[]'::jsonb;
+  end if;
+
+  select * into est
+  from public.estimates
+  where share_token = v_token
+     or (second_share_token <> '' and second_share_token = v_token)
+  limit 1;
+  if not found then
+    return '[]'::jsonb;
+  end if;
+
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', e.id,
+      'estimateId', e.estimate_id,
+      'kind', e.kind,
+      'signerRole', e.signer_role,
+      'signerName', e.signer_name,
+      'tokenSuffix', e.token_suffix,
+      'ipAddress', e.ip_address,
+      'forwardedFor', e.forwarded_for,
+      'userAgent', e.user_agent,
+      'acceptLanguage', e.accept_language,
+      'timeZone', e.time_zone,
+      'deliveryChannel', e.delivery_channel,
+      'deliveryTo', e.delivery_to,
+      'consentText', e.consent_text,
+      'consentVersion', e.consent_version,
+      'documentSha256', e.document_sha256,
+      'capturedInOffice', e.captured_in_office,
+      'createdAt', e.created_at
+    ) order by e.created_at)
+    from public.estimate_signature_events e
+    where e.estimate_id = est.id
+  ), '[]'::jsonb);
+end;
+$$;
+
+-- ========== 20260829140000_shared_invoice_notes.sql ==========
+-- Guest invoice links were sending an empty notes field, so PDF notes
+-- after the total never printed even when the invoice had them.
 
 create or replace function public.shared_invoice(p_token text)
 returns jsonb
@@ -8067,6 +8822,11 @@ notify pgrst, 'reload schema';
 -- ========== 20260830130000_returning_client_notice_flow.sql ==========
 -- Ask the previous project manager first when a returning client calls.
 -- Company admins decide only after that PM declines, or when the seat is locked.
+--
+-- assigned  — lead went to the previous PM (FYI, dismissible)
+-- offered   — waiting on that PM to take or decline
+-- pending   — waiting on a company admin
+-- reassigned / kept / dismissed — closed
 
 alter table public.returning_client_leads
   drop constraint if exists returning_client_leads_status_check;
@@ -8079,7 +8839,7 @@ notify pgrst, 'reload schema';
 
 -- ========== 20260830140000_calendar_shares_staff_columns.sql ==========
 -- Live calendar_shares was created as owner_id/viewer_id (profiles).
--- The app expects owner_staff_id/viewer_staff_id (team_members).
+-- The app expects owner_staff_id/viewer_staff_id (team_members). The table is empty.
 
 do $$
 begin
@@ -8471,7 +9231,6 @@ revoke all on function public.team_members_mint_card_slug() from public, anon, a
 
 notify pgrst, 'reload schema';
 
-
 -- ========== 20260831140000_estimate_packages.sql ==========
 -- Good / Better / Best packages on estimates.
 -- Packages replace items (3-tab vs architectural vs designer); they do not stack.
@@ -8774,6 +9533,9 @@ begin
   end if;
 end $$;
 
+notify pgrst, 'reload schema';
+
+-- ========== 20260901120000_gmail.sql ==========
 -- Per-seat Gmail links. Tokens stay RPC-only. Messages can be tagged to a job.
 -- Safe to re-run.
 
@@ -8931,6 +9693,7 @@ create policy "company isolation" on public.gmail_messages
   using (company_id = public.current_company_id())
   with check (company_id = public.current_company_id());
 
+-- Tokens never leave through the Data API. Access is RPC-only.
 revoke all on public.gmail_tokens from anon, authenticated, public;
 
 grant select, insert, update, delete on public.gmail_accounts to authenticated;
@@ -9074,6 +9837,12 @@ $$;
 revoke all on function public.disconnect_gmail(uuid) from public;
 grant execute on function public.disconnect_gmail(uuid) to authenticated;
 
+notify pgrst, 'reload schema';
+
+-- ========== 20260901140000_gmail_send.sql ==========
+-- CC addresses and extra people on a Gmail thread (homeowner + referral partner).
+-- Safe to re-run.
+
 alter table public.gmail_messages add column if not exists cc_email text;
 alter table public.gmail_messages add column if not exists related_contact_ids uuid[];
 
@@ -9087,6 +9856,7 @@ alter table public.gmail_messages alter column related_contact_ids set not null;
 
 notify pgrst, 'reload schema';
 
+-- ========== 20260901150000_email_signatures.sql ==========
 -- Company default email signature plus a per-seat override.
 -- Safe to re-run.
 
@@ -9098,6 +9868,7 @@ alter table public.team_members
 
 notify pgrst, 'reload schema';
 
+-- ========== 20260903150000_card_photos.sql ==========
 -- Seat profile photos plus a separate wide logo for the top of a digital card.
 -- The document logo (estimates, invoices, Pages) stays on logo_url.
 -- Safe to re-run.
@@ -9191,6 +9962,7 @@ grant execute on function public.shared_card(text, text) to anon, authenticated;
 
 notify pgrst, 'reload schema';
 
+-- ========== 20260903170000_payments_reviews.sql ==========
 -- Ways to get paid plus a Google review link on the digital card.
 -- The review link is per company, and each seat can point at their own office.
 -- Safe to re-run.
@@ -9294,6 +10066,7 @@ grant execute on function public.shared_card(text, text) to anon, authenticated;
 
 notify pgrst, 'reload schema';
 
+-- ========== 20260903190000_google_locations.sql ==========
 -- Google review listings as named offices. A company creates a location once,
 -- then each seat is pointed at the office their reviews should land on.
 -- Replaces the free-text review link that lived on companies and team_members.
@@ -9526,6 +10299,7 @@ grant execute on function public.shared_card(text, text) to anon, authenticated;
 
 notify pgrst, 'reload schema';
 
+-- ========== 20260903200000_social_links.sql ==========
 -- Social pages on the digital business card. The website already lives on
 -- companies.website; these are the profiles a homeowner might follow.
 -- Safe to re-run.
@@ -9646,6 +10420,7 @@ grant execute on function public.shared_card(text, text) to anon, authenticated;
 
 notify pgrst, 'reload schema';
 
+-- ========== 20260903210000_card_analytics.sql ==========
 -- Digital business card analytics: opens plus every tap on the card.
 -- Guests are anonymous, so writes go through one security-definer function that
 -- resolves the company and seat from the public slugs. Reads are company-scoped.
@@ -9756,9 +10531,457 @@ grant execute on function public.card_event_totals(timestamptz) to authenticated
 
 notify pgrst, 'reload schema';
 
--- =============================================================================
--- company_files (20260904170000_company_files.sql)
--- =============================================================================
+-- ========== 20260903220000_eagleview.sql ==========
+-- EagleView Measurement Orders: company connector + per-job orders.
+-- Safe to re-run.
+
+create table if not exists public.eagleview_connections (
+  company_id uuid primary key references public.companies (id) on delete cascade,
+  client_id text not null default '',
+  client_secret text not null default '',
+  sandbox boolean not null default true,
+  default_product text not null default 'premium_residential',
+  webhook_token text not null default '',
+  linked boolean not null default false,
+  linked_at timestamptz,
+  access_token text not null default '',
+  token_expires_at timestamptz,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+alter table public.eagleview_connections add column if not exists client_id text;
+alter table public.eagleview_connections add column if not exists client_secret text;
+alter table public.eagleview_connections add column if not exists sandbox boolean;
+alter table public.eagleview_connections add column if not exists default_product text;
+alter table public.eagleview_connections add column if not exists webhook_token text;
+alter table public.eagleview_connections add column if not exists linked boolean;
+alter table public.eagleview_connections add column if not exists linked_at timestamptz;
+alter table public.eagleview_connections add column if not exists access_token text;
+alter table public.eagleview_connections add column if not exists token_expires_at timestamptz;
+alter table public.eagleview_connections add column if not exists updated_at timestamptz;
+alter table public.eagleview_connections add column if not exists created_at timestamptz;
+
+update public.eagleview_connections set client_id = coalesce(client_id, '') where client_id is null;
+update public.eagleview_connections set client_secret = coalesce(client_secret, '') where client_secret is null;
+update public.eagleview_connections set sandbox = coalesce(sandbox, true) where sandbox is null;
+update public.eagleview_connections set default_product = coalesce(nullif(default_product, ''), 'premium_residential') where default_product is null or default_product = '';
+update public.eagleview_connections set webhook_token = coalesce(webhook_token, '') where webhook_token is null;
+update public.eagleview_connections set linked = coalesce(linked, false) where linked is null;
+update public.eagleview_connections set access_token = coalesce(access_token, '') where access_token is null;
+update public.eagleview_connections set updated_at = coalesce(updated_at, now()) where updated_at is null;
+update public.eagleview_connections set created_at = coalesce(created_at, now()) where created_at is null;
+
+alter table public.eagleview_connections alter column client_id set default '';
+alter table public.eagleview_connections alter column client_id set not null;
+alter table public.eagleview_connections alter column client_secret set default '';
+alter table public.eagleview_connections alter column client_secret set not null;
+alter table public.eagleview_connections alter column sandbox set default true;
+alter table public.eagleview_connections alter column sandbox set not null;
+alter table public.eagleview_connections alter column default_product set default 'premium_residential';
+alter table public.eagleview_connections alter column default_product set not null;
+alter table public.eagleview_connections alter column webhook_token set default '';
+alter table public.eagleview_connections alter column webhook_token set not null;
+alter table public.eagleview_connections alter column linked set default false;
+alter table public.eagleview_connections alter column linked set not null;
+alter table public.eagleview_connections alter column access_token set default '';
+alter table public.eagleview_connections alter column access_token set not null;
+alter table public.eagleview_connections alter column updated_at set default now();
+alter table public.eagleview_connections alter column updated_at set not null;
+alter table public.eagleview_connections alter column created_at set default now();
+alter table public.eagleview_connections alter column created_at set not null;
+
+alter table public.eagleview_connections enable row level security;
+
+drop policy if exists "company isolation" on public.eagleview_connections;
+create policy "company isolation" on public.eagleview_connections
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+grant select, insert, update, delete on table public.eagleview_connections to authenticated;
+
+create table if not exists public.eagleview_orders (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  job_id uuid not null references public.jobs (id) on delete cascade,
+  estimate_id uuid references public.estimates (id) on delete set null,
+  reference_id text not null default '',
+  eagleview_order_id text not null default '',
+  eagleview_report_id text not null default '',
+  product text not null default 'premium_residential',
+  status text not null default 'queued'
+    check (status in ('queued', 'in_progress', 'ready', 'failed', 'cancelled')),
+  status_detail text not null default '',
+  address_line text not null default '',
+  city text not null default '',
+  state text not null default '',
+  postal_code text not null default '',
+  claim_number text not null default '',
+  total_squares numeric,
+  waste_percent numeric,
+  pitch_summary text not null default '',
+  measurements jsonb not null default '{}'::jsonb,
+  report_file_id uuid references public.job_files (id) on delete set null,
+  report_url text not null default '',
+  applied_estimate_id uuid references public.estimates (id) on delete set null,
+  applied_at timestamptz,
+  mocked boolean not null default false,
+  ordered_by text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.eagleview_orders add column if not exists estimate_id uuid;
+alter table public.eagleview_orders add column if not exists reference_id text;
+alter table public.eagleview_orders add column if not exists eagleview_order_id text;
+alter table public.eagleview_orders add column if not exists eagleview_report_id text;
+alter table public.eagleview_orders add column if not exists product text;
+alter table public.eagleview_orders add column if not exists status text;
+alter table public.eagleview_orders add column if not exists status_detail text;
+alter table public.eagleview_orders add column if not exists address_line text;
+alter table public.eagleview_orders add column if not exists city text;
+alter table public.eagleview_orders add column if not exists state text;
+alter table public.eagleview_orders add column if not exists postal_code text;
+alter table public.eagleview_orders add column if not exists claim_number text;
+alter table public.eagleview_orders add column if not exists total_squares numeric;
+alter table public.eagleview_orders add column if not exists waste_percent numeric;
+alter table public.eagleview_orders add column if not exists pitch_summary text;
+alter table public.eagleview_orders add column if not exists measurements jsonb;
+alter table public.eagleview_orders add column if not exists report_file_id uuid;
+alter table public.eagleview_orders add column if not exists report_url text;
+alter table public.eagleview_orders add column if not exists applied_estimate_id uuid;
+alter table public.eagleview_orders add column if not exists applied_at timestamptz;
+alter table public.eagleview_orders add column if not exists mocked boolean;
+alter table public.eagleview_orders add column if not exists ordered_by text;
+alter table public.eagleview_orders add column if not exists created_at timestamptz;
+alter table public.eagleview_orders add column if not exists updated_at timestamptz;
+
+update public.eagleview_orders set reference_id = coalesce(reference_id, '') where reference_id is null;
+update public.eagleview_orders set eagleview_order_id = coalesce(eagleview_order_id, '') where eagleview_order_id is null;
+update public.eagleview_orders set eagleview_report_id = coalesce(eagleview_report_id, '') where eagleview_report_id is null;
+update public.eagleview_orders set product = coalesce(nullif(product, ''), 'premium_residential') where product is null or product = '';
+update public.eagleview_orders set status = coalesce(nullif(status, ''), 'queued') where status is null or status = '';
+update public.eagleview_orders set status_detail = coalesce(status_detail, '') where status_detail is null;
+update public.eagleview_orders set address_line = coalesce(address_line, '') where address_line is null;
+update public.eagleview_orders set city = coalesce(city, '') where city is null;
+update public.eagleview_orders set state = coalesce(state, '') where state is null;
+update public.eagleview_orders set postal_code = coalesce(postal_code, '') where postal_code is null;
+update public.eagleview_orders set claim_number = coalesce(claim_number, '') where claim_number is null;
+update public.eagleview_orders set pitch_summary = coalesce(pitch_summary, '') where pitch_summary is null;
+update public.eagleview_orders set measurements = coalesce(measurements, '{}'::jsonb) where measurements is null;
+update public.eagleview_orders set report_url = coalesce(report_url, '') where report_url is null;
+update public.eagleview_orders set mocked = coalesce(mocked, false) where mocked is null;
+update public.eagleview_orders set ordered_by = coalesce(ordered_by, '') where ordered_by is null;
+update public.eagleview_orders set created_at = coalesce(created_at, now()) where created_at is null;
+update public.eagleview_orders set updated_at = coalesce(updated_at, now()) where updated_at is null;
+
+alter table public.eagleview_orders alter column reference_id set default '';
+alter table public.eagleview_orders alter column reference_id set not null;
+alter table public.eagleview_orders alter column eagleview_order_id set default '';
+alter table public.eagleview_orders alter column eagleview_order_id set not null;
+alter table public.eagleview_orders alter column eagleview_report_id set default '';
+alter table public.eagleview_orders alter column eagleview_report_id set not null;
+alter table public.eagleview_orders alter column product set default 'premium_residential';
+alter table public.eagleview_orders alter column product set not null;
+alter table public.eagleview_orders alter column status set default 'queued';
+alter table public.eagleview_orders alter column status set not null;
+alter table public.eagleview_orders alter column status_detail set default '';
+alter table public.eagleview_orders alter column status_detail set not null;
+alter table public.eagleview_orders alter column address_line set default '';
+alter table public.eagleview_orders alter column address_line set not null;
+alter table public.eagleview_orders alter column city set default '';
+alter table public.eagleview_orders alter column city set not null;
+alter table public.eagleview_orders alter column state set default '';
+alter table public.eagleview_orders alter column state set not null;
+alter table public.eagleview_orders alter column postal_code set default '';
+alter table public.eagleview_orders alter column postal_code set not null;
+alter table public.eagleview_orders alter column claim_number set default '';
+alter table public.eagleview_orders alter column claim_number set not null;
+alter table public.eagleview_orders alter column pitch_summary set default '';
+alter table public.eagleview_orders alter column pitch_summary set not null;
+alter table public.eagleview_orders alter column measurements set default '{}'::jsonb;
+alter table public.eagleview_orders alter column measurements set not null;
+alter table public.eagleview_orders alter column report_url set default '';
+alter table public.eagleview_orders alter column report_url set not null;
+alter table public.eagleview_orders alter column mocked set default false;
+alter table public.eagleview_orders alter column mocked set not null;
+alter table public.eagleview_orders alter column ordered_by set default '';
+alter table public.eagleview_orders alter column ordered_by set not null;
+alter table public.eagleview_orders alter column created_at set default now();
+alter table public.eagleview_orders alter column created_at set not null;
+alter table public.eagleview_orders alter column updated_at set default now();
+alter table public.eagleview_orders alter column updated_at set not null;
+
+create index if not exists eagleview_orders_company_idx on public.eagleview_orders (company_id);
+create index if not exists eagleview_orders_job_idx on public.eagleview_orders (job_id);
+create index if not exists eagleview_orders_reference_idx on public.eagleview_orders (reference_id);
+create index if not exists eagleview_orders_report_idx on public.eagleview_orders (eagleview_report_id);
+
+alter table public.eagleview_orders enable row level security;
+
+drop policy if exists "company isolation" on public.eagleview_orders;
+create policy "company isolation" on public.eagleview_orders
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+grant select, insert, update, delete on table public.eagleview_orders to authenticated;
+
+do $$
+begin
+  execute 'alter publication supabase_realtime add table public.eagleview_orders';
+exception
+  when duplicate_object then null;
+end $$;
+
+-- Public webhook ingest (token-gated). EagleView often hits GET with query params.
+create or replace function public.eagleview_ingest_webhook(
+  p_token text,
+  p_reference_id text default '',
+  p_report_id text default '',
+  p_order_id text default '',
+  p_status_id integer default null,
+  p_status_detail text default ''
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_conn public.eagleview_connections%rowtype;
+  v_order public.eagleview_orders%rowtype;
+  v_status text;
+  v_detail text;
+begin
+  if coalesce(trim(p_token), '') = '' then
+    return jsonb_build_object('ok', false, 'error', 'missing_token');
+  end if;
+
+  select * into v_conn
+  from public.eagleview_connections
+  where webhook_token = trim(p_token)
+  limit 1;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'invalid_token');
+  end if;
+
+  select * into v_order
+  from public.eagleview_orders
+  where company_id = v_conn.company_id
+    and (
+      (coalesce(trim(p_reference_id), '') <> '' and reference_id = trim(p_reference_id))
+      or (coalesce(trim(p_report_id), '') <> '' and eagleview_report_id = trim(p_report_id))
+      or (coalesce(trim(p_order_id), '') <> '' and eagleview_order_id = trim(p_order_id))
+    )
+  order by created_at desc
+  limit 1;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'order_not_found');
+  end if;
+
+  v_status := v_order.status;
+  if p_status_id = 5 then
+    v_status := 'ready';
+  elsif p_status_id = 6 then
+    v_status := 'failed';
+  elsif p_status_id is not null then
+    v_status := 'in_progress';
+  end if;
+
+  v_detail := coalesce(nullif(trim(p_status_detail), ''), v_order.status_detail);
+  if p_status_id is not null and coalesce(nullif(trim(p_status_detail), ''), '') = '' then
+    v_detail := 'EagleView status ' || p_status_id::text;
+  end if;
+
+  update public.eagleview_orders
+  set
+    status = v_status,
+    status_detail = v_detail,
+    eagleview_report_id = case
+      when coalesce(trim(p_report_id), '') <> '' then trim(p_report_id)
+      else eagleview_report_id
+    end,
+    eagleview_order_id = case
+      when coalesce(trim(p_order_id), '') <> '' then trim(p_order_id)
+      else eagleview_order_id
+    end,
+    updated_at = now()
+  where id = v_order.id
+  returning * into v_order;
+
+  return jsonb_build_object(
+    'ok', true,
+    'orderId', v_order.id,
+    'status', v_order.status,
+    'reportId', v_order.eagleview_report_id
+  );
+end;
+$$;
+
+revoke all on function public.eagleview_ingest_webhook(text, text, text, text, integer, text) from public;
+grant execute on function public.eagleview_ingest_webhook(text, text, text, text, integer, text) to anon, authenticated, service_role;
+
+-- ========== 20260904160000_job_file_share_tokens.sql ==========
+-- Private job files: optional public share links (unguessable token).
+-- Signed-in company members read via /api/storage/object; anon needs a token.
+
+alter table public.job_files
+  add column if not exists share_token text;
+
+alter table public.job_files
+  add column if not exists share_token_created_at timestamptz;
+
+update public.job_files
+set share_token = null
+where share_token is not null and btrim(share_token) = '';
+
+create unique index if not exists job_files_share_token_idx
+  on public.job_files (share_token)
+  where share_token is not null and share_token <> '';
+
+-- Metadata for a file opened via /share/f/{token}.
+create or replace function public.shared_job_file(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  token text := trim(coalesce(p_token, ''));
+  payload jsonb;
+begin
+  if length(token) < 16 then
+    return null;
+  end if;
+
+  select jsonb_build_object(
+    'id', f.id,
+    'companyId', f.company_id,
+    'jobId', f.job_id,
+    'name', f.name,
+    'mimeType', coalesce(
+      nullif(trim(coalesce(to_jsonb(f)->>'content_type', '')), ''),
+      nullif(trim(coalesce(to_jsonb(f)->>'mime_type', '')), ''),
+      'application/octet-stream'
+    ),
+    'sizeBytes', f.size_bytes,
+    'storagePath', f.storage_path,
+    'shareToken', f.share_token
+  )
+  into payload
+  from public.job_files f
+  where f.share_token = token
+  limit 1;
+
+  return payload;
+end;
+$$;
+
+revoke all on function public.shared_job_file(text) from public;
+grant execute on function public.shared_job_file(text) to anon, authenticated;
+
+-- True when a share token (file, estimate, invoice, or page) may read this object key.
+create or replace function public.storage_share_access(p_token text, p_path text)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  token text := trim(coalesce(p_token, ''));
+  path text := trim(both '/' from coalesce(p_path, ''));
+  parts text[];
+  company_id uuid;
+  kind text;
+  job_id uuid;
+  path_job text;
+  ok boolean := false;
+begin
+  if length(token) < 6 or path = '' or position('..' in path) > 0 then
+    return false;
+  end if;
+
+  parts := string_to_array(path, '/');
+  if array_length(parts, 1) < 3 then
+    return false;
+  end if;
+
+  -- Canonical: {companyId}/{kind}/…
+  if parts[1] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' then
+    company_id := parts[1]::uuid;
+    kind := parts[2];
+    path_job := parts[3];
+  -- Legacy: {kind}/{companyId}/…
+  elsif parts[2] ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' then
+    kind := parts[1];
+    company_id := parts[2]::uuid;
+    path_job := parts[3];
+  else
+    return false;
+  end if;
+
+  if kind = 'company-assets' then
+    return true;
+  end if;
+
+  if kind not in ('job-files', 'job-photos') then
+    return false;
+  end if;
+
+  -- Explicit file share: exact storage path.
+  select true into ok
+  from public.job_files f
+  where f.share_token = token
+    and f.storage_path = path
+  limit 1;
+  if coalesce(ok, false) then
+    return true;
+  end if;
+
+  -- Document share: estimate / invoice / page token unlocks that job's photos & files.
+  select e.job_id into job_id
+  from public.estimates e
+  where e.company_id = company_id
+    and (
+      e.share_token = token
+      or coalesce(e.second_share_token, '') = token
+    )
+  limit 1;
+
+  if job_id is null then
+    select i.job_id into job_id
+    from public.invoices i
+    where i.company_id = company_id
+      and i.share_token = token
+    limit 1;
+  end if;
+
+  if job_id is null then
+    select r.job_id into job_id
+    from public.photo_reports r
+    where r.company_id = company_id
+      and r.share_token = token
+    limit 1;
+  end if;
+
+  if job_id is null then
+    return false;
+  end if;
+
+  return path_job = job_id::text;
+end;
+$$;
+
+revoke all on function public.storage_share_access(text, text) from public;
+grant execute on function public.storage_share_access(text, text) to anon, authenticated;
+
+-- ========== 20260904170000_company_files.sql ==========
+-- Company file directory: warranties, product sheets, and other office templates.
+-- Copies attach onto jobs as normal job_files (independent blobs).
 
 create table if not exists public.company_files (
   id uuid primary key default gen_random_uuid(),
@@ -9795,12 +11018,7 @@ exception
   when duplicate_object then null;
 end $$;
 
-notify pgrst, 'reload schema';
-
--- =============================================================================
--- shared_card photo storage paths (20260904180000_shared_card_photo_paths.sql)
--- =============================================================================
-
+-- ========== 20260904180000_shared_card_photo_paths.sql ==========
 -- Return storage paths from shared_card so guests can resolve private B2
 -- friendly URLs into the public /api/storage/object proxy for company-assets.
 -- Safe to re-run.
@@ -9916,6 +11134,8 @@ revoke all on function public.shared_card(text, text) from public;
 grant execute on function public.shared_card(text, text) to anon, authenticated;
 
 notify pgrst, 'reload schema';
+
+-- ========== 20260904190000_photo_trashcan.sql ==========
 -- Project photo trashcan: soft-delete only. Never remove B2 objects from the app.
 -- Safe to re-run.
 
@@ -9977,8 +11197,7 @@ end $$;
 
 notify pgrst, 'reload schema';
 
-
--- company audit trail
+-- ========== 20260904200000_company_audit_events.sql ==========
 -- Company-wide audit trail with before/after snapshots and revert markers.
 -- Append-only history; revert marks the original row and inserts a compensating event.
 -- Safe to re-run.
@@ -10050,3 +11269,1316 @@ exception
 end $$;
 
 notify pgrst, 'reload schema';
+
+-- ========== 20260904210000_company_audit_full_trail.sql ==========
+-- Widen company audit trail to cover views, opens, moves, uploads, shares, auth, and more entities.
+-- Safe to re-run.
+
+alter table public.company_audit_events
+  drop constraint if exists company_audit_events_action_check;
+
+alter table public.company_audit_events
+  drop constraint if exists company_audit_events_entity_type_check;
+
+alter table public.company_audit_events
+  add constraint company_audit_events_action_check
+  check (action in (
+    'created',
+    'updated',
+    'deleted',
+    'restored',
+    'status_changed',
+    'reverted',
+    'moved',
+    'viewed',
+    'opened',
+    'uploaded',
+    'downloaded',
+    'shared',
+    'assigned',
+    'login',
+    'logout',
+    'seat_switched',
+    'impersonated'
+  ));
+
+alter table public.company_audit_events
+  add constraint company_audit_events_entity_type_check
+  check (entity_type in (
+    'job',
+    'contact',
+    'opportunity',
+    'photo',
+    'job_file',
+    'estimate',
+    'invoice',
+    'company_file',
+    'payment',
+    'expense',
+    'task',
+    'schedule_event',
+    'message',
+    'company_settings',
+    'staff',
+    'team',
+    'session',
+    'photo_report'
+  ));
+
+notify pgrst, 'reload schema';
+
+-- ========== 20260905220000_estimate_files.sql ==========
+-- Attachments on an estimate: specs, insurance docs, sketches, and other files for the proposal.
+
+create table if not exists public.estimate_files (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  estimate_id uuid not null references public.estimates (id) on delete cascade,
+  name text not null,
+  mime_type text not null default '',
+  size_bytes bigint not null default 0,
+  storage_path text not null,
+  url text not null,
+  created_by text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists estimate_files_estimate_id_idx on public.estimate_files (estimate_id);
+create index if not exists estimate_files_company_id_idx on public.estimate_files (company_id);
+
+alter table public.estimate_files enable row level security;
+
+drop policy if exists "company isolation" on public.estimate_files;
+create policy "company isolation" on public.estimate_files
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+grant select, insert, update, delete on table public.estimate_files to authenticated;
+
+do $$
+begin
+  execute 'alter publication supabase_realtime add table public.estimate_files';
+exception
+  when duplicate_object then null;
+end $$;
+
+-- Allow estimate_file rows in the company audit trail.
+alter table public.company_audit_events
+  drop constraint if exists company_audit_events_entity_type_check;
+
+alter table public.company_audit_events
+  add constraint company_audit_events_entity_type_check
+  check (entity_type in (
+    'job',
+    'contact',
+    'opportunity',
+    'photo',
+    'job_file',
+    'estimate',
+    'estimate_file',
+    'invoice',
+    'company_file',
+    'payment',
+    'expense',
+    'task',
+    'schedule_event',
+    'message',
+    'company_settings',
+    'staff',
+    'team',
+    'session',
+    'photo_report'
+  ));
+
+notify pgrst, 'reload schema';
+
+-- ========== 20260906010000_estimate_lump_sum_pricing.sql ==========
+-- Lump-sum customer subtotal + hide per-line prices on customer-facing proposals.
+-- Internal line costs stay for bidding; override drives contract subtotal before discount/tax.
+
+alter table public.estimates
+  add column if not exists subtotal_override numeric(14, 2);
+
+alter table public.estimates
+  add column if not exists hide_line_prices boolean not null default false;
+
+alter table public.estimates drop constraint if exists estimates_subtotal_override_check;
+alter table public.estimates
+  add constraint estimates_subtotal_override_check
+  check (subtotal_override is null or subtotal_override >= 0);
+
+
+create or replace function public.shared_estimate(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  est public.estimates%rowtype;
+  company public.companies%rowtype;
+  contact_name text;
+  second_name text;
+  customer_name text;
+  work_market text;
+  v_token text;
+  v_role text;
+  v_owner text;
+begin
+  if p_token is null or length(trim(p_token)) < 6 then
+    return null;
+  end if;
+  v_token := trim(p_token);
+  select * into est
+  from public.estimates
+  where share_token = v_token
+     or (second_share_token <> '' and second_share_token = v_token)
+  limit 1;
+  if not found then
+    return null;
+  end if;
+
+  if est.second_contact_id is not null
+     and est.second_share_token <> ''
+     and est.second_share_token = v_token
+     and est.share_token is distinct from v_token then
+    v_role := 'second';
+  else
+    v_role := 'primary';
+  end if;
+
+  if est.status = 'sent' then
+    update public.estimates set status = 'viewed' where id = est.id;
+    est.status := 'viewed';
+  end if;
+
+  if est.status in ('sent', 'viewed', 'accepted')
+     and (est.owner_signed_at is null or coalesce(est.owner_signed_name, '') = '') then
+    v_owner := coalesce(
+      nullif(est.owner_signed_name, ''),
+      (
+        select tm.name
+        from public.jobs j
+        join public.team_members tm on tm.id = j.owner_staff_id
+        where j.id = est.job_id
+        limit 1
+      ),
+      (
+        select tm.name
+        from public.opportunities o
+        join public.team_members tm on tm.id = o.owner_staff_id
+        where o.id = est.opportunity_id
+        limit 1
+      ),
+      (select c.name from public.companies c where c.id = est.company_id),
+      'Contractor'
+    );
+    update public.estimates
+    set
+      owner_signed_at = coalesce(owner_signed_at, sent_at, now()),
+      owner_signed_name = coalesce(nullif(owner_signed_name, ''), v_owner)
+    where id = est.id
+    returning * into est;
+  end if;
+
+  select * into company from public.companies where id = est.company_id;
+  select name into contact_name from public.contacts where id = est.contact_id;
+  select name into second_name from public.contacts where id = est.second_contact_id;
+  customer_name := coalesce(contact_name, 'Homeowner');
+  if second_name is not null and second_name <> '' and second_name is distinct from contact_name then
+    customer_name := customer_name || ' and ' || second_name;
+  end if;
+  select coalesce(
+    (select nullif(j.market, '') from public.jobs j where j.id = est.job_id),
+    (select nullif(o.market, '') from public.opportunities o where o.id = est.opportunity_id),
+    'residential'
+  ) into work_market;
+  return jsonb_build_object(
+    'customer', customer_name,
+    'primaryCustomer', coalesce(contact_name, 'Homeowner'),
+    'secondCustomer', second_name,
+    'viewerSigner', v_role,
+    'market', work_market,
+    'company', jsonb_build_object(
+      'name', coalesce(company.name, ''),
+      'phone', coalesce(company.phone, ''),
+      'email', coalesce(company.email, ''),
+      'website', coalesce(company.website, ''),
+      'street', coalesce(company.street, ''),
+      'city', coalesce(company.city, ''),
+      'state', coalesce(company.state, ''),
+      'postalCode', coalesce(company.postal_code, ''),
+      'licenseNumber', coalesce(company.license_number, ''),
+      'logoUrl', coalesce(company.logo_url, '')
+    ),
+    'projectManager', public.document_project_manager(est.company_id, est.job_id, est.opportunity_id),
+    'estimate', jsonb_build_object(
+      'id', est.id,
+      'number', est.number,
+      'name', est.name,
+      'clientId', est.client_id,
+      'opportunityId', est.opportunity_id,
+      'jobId', est.job_id,
+      'contactId', est.contact_id,
+      'secondContactId', est.second_contact_id,
+      'status', est.status,
+      'notes', coalesce(est.notes, ''),
+      'validUntil', est.valid_until,
+      'sentAt', est.sent_at,
+      'acceptedAt', est.accepted_at,
+      'secondAcceptedAt', est.second_accepted_at,
+      'ownerSignedAt', est.owner_signed_at,
+      'ownerSignedName', est.owner_signed_name,
+      'createdAt', est.created_at,
+      'taxRate', case when work_market = 'commercial' then est.tax_rate else 0 end,
+      'discountKind', est.discount_kind,
+      'discountValue', est.discount_value,
+      'depositKind', est.deposit_kind,
+      'depositValue', est.deposit_value,
+      'intro', est.intro,
+      'terms', est.terms,
+      'street', est.street,
+      'city', est.city,
+      'state', est.state,
+      'postalCode', est.postal_code,
+      'shareToken', est.share_token,
+      'secondShareToken', est.second_share_token,
+      'signatureName', coalesce(est.signature_name, ''),
+      'signatureImage', coalesce(est.signature_image, ''),
+      'secondSignatureName', coalesce(est.second_signature_name, ''),
+      'secondSignatureImage', coalesce(est.second_signature_image, ''),
+      'subtotalOverride', est.subtotal_override,
+      'hideLinePrices', coalesce(est.hide_line_prices, false),
+      'packageMode', coalesce(est.package_mode, ''),
+      'selectedPackage', coalesce(est.selected_package, 'better')
+    ),
+    'lines', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', line.id,
+        'estimateId', line.estimate_id,
+        'catalogItemId', line.catalog_item_id,
+        'title', line.title,
+        'description', line.description,
+        'quantity', line.quantity,
+        'unit', line.unit,
+        'unitCost', line.unit_cost,
+        'sortOrder', line.sort_order,
+        'groupName', line.group_name,
+        'optional', line.optional,
+        'selected', line.selected,
+        'taxable', line.taxable,
+        'package', coalesce(line.package, ''),
+        'photoIds', coalesce(line.photo_ids, '{}'::uuid[]),
+        'photos', (
+          select coalesce(jsonb_agg(
+            jsonb_build_object(
+              'id', photo.id,
+              'imageUrl', photo.image_url,
+              'caption', coalesce(photo.caption, '')
+            ) order by ord.ord
+          ), '[]'::jsonb)
+          from unnest(coalesce(line.photo_ids, '{}'::uuid[])) with ordinality as ord(id, ord)
+          join public.job_photos photo on photo.id = ord.id
+        )
+      ) order by line.sort_order)
+      from public.estimate_lines line
+      where line.estimate_id = est.id
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
+create or replace function public.sign_shared_estimate(
+  p_token text,
+  p_signer_name text,
+  p_signature text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  est public.estimates%rowtype;
+  opp public.opportunities%rowtype;
+  v_job_id uuid;
+  v_total numeric(14, 2);
+  v_subtotal numeric(14, 2);
+  v_line_subtotal numeric(14, 2);
+  v_discount numeric(14, 2);
+  v_taxable numeric(14, 2);
+  v_code text;
+  v_name text;
+  v_token text;
+  v_role text;
+  v_needs_second boolean;
+  v_fully boolean;
+begin
+  if p_token is null or length(trim(p_token)) < 6 then
+    return null;
+  end if;
+  v_token := trim(p_token);
+
+  v_name := trim(coalesce(p_signer_name, ''));
+  if length(v_name) < 2 then
+    raise exception 'Signer name is required';
+  end if;
+  if p_signature is null
+     or p_signature not like 'data:image/png;base64,%'
+     or length(p_signature) < 100
+     or length(p_signature) > 200000 then
+    raise exception 'A drawn signature is required';
+  end if;
+
+  select * into est
+  from public.estimates
+  where share_token = v_token
+     or (second_share_token <> '' and second_share_token = v_token)
+  limit 1;
+  if not found then
+    return null;
+  end if;
+  if est.status = 'declined' then
+    return null;
+  end if;
+
+  if est.second_contact_id is not null
+     and est.second_share_token <> ''
+     and est.second_share_token = v_token
+     and est.share_token is distinct from v_token then
+    v_role := 'second';
+  else
+    v_role := 'primary';
+  end if;
+
+  v_needs_second := est.second_contact_id is not null;
+
+  if v_role = 'second' and not v_needs_second then
+    raise exception 'This proposal does not need a second signature';
+  end if;
+
+  if v_role = 'primary' and coalesce(est.signature_image, '') <> '' then
+    return public.shared_estimate(v_token);
+  end if;
+  if v_role = 'second' and coalesce(est.second_signature_image, '') <> '' then
+    return public.shared_estimate(v_token);
+  end if;
+
+  select coalesce(sum(line.quantity * line.unit_cost), 0) into v_line_subtotal
+  from public.estimate_lines line
+  where line.estimate_id = est.id
+    and (coalesce(line.optional, false) = false or coalesce(line.selected, true) = true)
+    and (
+      coalesce(est.package_mode, '') <> 'gbb'
+      or coalesce(line.package, '') = ''
+      or line.package = coalesce(est.selected_package, 'better')
+    );
+
+  if est.subtotal_override is not null then
+    v_subtotal := round(est.subtotal_override::numeric, 2);
+  else
+    v_subtotal := v_line_subtotal;
+  end if;
+
+  if coalesce(est.discount_kind, 'percent') = 'percent' then
+    v_discount := round(v_subtotal * coalesce(est.discount_value, 0) / 100, 2);
+  else
+    v_discount := least(v_subtotal, coalesce(est.discount_value, 0));
+  end if;
+  v_discount := coalesce(v_discount, 0);
+
+  select coalesce(sum(line.quantity * line.unit_cost), 0) into v_taxable
+  from public.estimate_lines line
+  where line.estimate_id = est.id
+    and coalesce(line.taxable, true) = true
+    and (coalesce(line.optional, false) = false or coalesce(line.selected, true) = true)
+    and (
+      coalesce(est.package_mode, '') <> 'gbb'
+      or coalesce(line.package, '') = ''
+      or line.package = coalesce(est.selected_package, 'better')
+    );
+
+  if v_line_subtotal > 0 and est.subtotal_override is not null then
+    v_taxable := round(v_subtotal * (v_taxable / v_line_subtotal), 2);
+  elsif est.subtotal_override is not null and v_line_subtotal = 0 then
+    v_taxable := v_subtotal;
+  end if;
+
+  v_total := greatest(0, v_subtotal - v_discount);
+  if v_subtotal > 0 then
+    v_total := v_total + round(
+      greatest(0, v_taxable - v_discount * (v_taxable / v_subtotal)) * coalesce(est.tax_rate, 0) / 100,
+      2
+    );
+  end if;
+
+  if v_role = 'second' then
+    update public.estimates
+    set
+      second_accepted_at = coalesce(second_accepted_at, now()),
+      second_signature_name = v_name,
+      second_signature_image = p_signature
+    where id = est.id
+    returning * into est;
+  else
+    update public.estimates
+    set
+      accepted_at = coalesce(accepted_at, now()),
+      signature_name = v_name,
+      signature_image = p_signature
+    where id = est.id
+    returning * into est;
+  end if;
+
+  v_fully := (coalesce(est.signature_image, '') <> '' or est.accepted_at is not null)
+    and (
+      not v_needs_second
+      or coalesce(est.second_signature_image, '') <> ''
+      or est.second_accepted_at is not null
+    );
+
+  if not v_fully then
+    return public.shared_estimate(v_token);
+  end if;
+
+  update public.estimates
+  set status = 'accepted'
+  where id = est.id
+  returning * into est;
+
+  if est.opportunity_id is null then
+    insert into public.opportunities (
+      company_id,
+      name,
+      client_id,
+      primary_contact_id,
+      stage,
+      value,
+      location,
+      project_type,
+      delivery_method,
+      estimator,
+      win_probability,
+      next_step,
+      code
+    ) values (
+      est.company_id,
+      est.name,
+      est.client_id,
+      est.contact_id,
+      'awarded',
+      v_total,
+      trim(both ', ' from concat_ws(', ', nullif(est.street, ''), nullif(est.city, ''))),
+      'restoration',
+      'fixed_price',
+      '',
+      100,
+      'Job sold. Start precon.',
+      est.number
+    )
+    returning * into opp;
+
+    update public.estimates
+    set opportunity_id = opp.id
+    where id = est.id
+    returning * into est;
+  else
+    update public.opportunities
+    set
+      stage = 'awarded',
+      win_probability = 100,
+      value = v_total,
+      next_step = 'Job sold. Start precon.'
+    where id = est.opportunity_id
+    returning * into opp;
+  end if;
+
+  select j.id into v_job_id
+  from public.jobs j
+  where j.opportunity_id = opp.id
+  limit 1;
+
+  if v_job_id is null then
+    v_code := coalesce(nullif(opp.code, ''), est.number);
+    insert into public.jobs (
+      company_id,
+      opportunity_id,
+      name,
+      client_id,
+      primary_contact_id,
+      status,
+      contract_value,
+      start_date,
+      location,
+      project_manager,
+      superintendent,
+      owner_staff_id,
+      code
+    ) values (
+      est.company_id,
+      opp.id,
+      opp.name,
+      opp.client_id,
+      opp.primary_contact_id,
+      'precon',
+      v_total,
+      current_date,
+      opp.location,
+      coalesce(opp.estimator, ''),
+      '',
+      opp.owner_staff_id,
+      v_code
+    )
+    returning id into v_job_id;
+  else
+    update public.jobs
+    set contract_value = v_total
+    where id = v_job_id;
+  end if;
+
+  if v_job_id is not null then
+    update public.estimates set job_id = v_job_id where id = est.id;
+  end if;
+
+  return public.shared_estimate(v_token);
+end;
+$$;
+
+revoke all on function public.shared_estimate(text) from public;
+grant execute on function public.shared_estimate(text) to anon, authenticated;
+revoke all on function public.sign_shared_estimate(text, text, text) from public;
+grant execute on function public.sign_shared_estimate(text, text, text) to anon, authenticated;
+
+-- ========== 20260906020000_client_portal.sql ==========
+-- Client portal: invite homeowners to see schedule, trades, estimates, invoices,
+-- and submit referrals for a future rewards program.
+
+create table if not exists public.portal_invites (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  contact_id uuid not null references public.contacts (id) on delete cascade,
+  job_id uuid references public.jobs (id) on delete set null,
+  token text not null,
+  expires_at timestamptz not null,
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  last_opened_at timestamptz,
+  revoked_at timestamptz
+);
+
+create unique index if not exists portal_invites_token_key on public.portal_invites (token);
+create index if not exists portal_invites_company_contact_idx
+  on public.portal_invites (company_id, contact_id)
+  where revoked_at is null;
+create index if not exists portal_invites_job_idx on public.portal_invites (job_id);
+
+alter table public.portal_invites enable row level security;
+
+drop policy if exists "company isolation" on public.portal_invites;
+create policy "company isolation" on public.portal_invites
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+-- Referral submissions. Points / rewards catalog comes later; we store the ask now.
+create table if not exists public.portal_referrals (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  portal_invite_id uuid references public.portal_invites (id) on delete set null,
+  contact_id uuid not null references public.contacts (id) on delete cascade,
+  job_id uuid references public.jobs (id) on delete set null,
+  referred_name text not null default '',
+  referred_phone text not null default '',
+  referred_email text not null default '',
+  notes text not null default '',
+  status text not null default 'submitted'
+    check (status in ('submitted', 'reviewed', 'qualified', 'declined')),
+  points_awarded integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists portal_referrals_company_idx on public.portal_referrals (company_id, created_at desc);
+create index if not exists portal_referrals_contact_idx on public.portal_referrals (contact_id);
+
+alter table public.portal_referrals enable row level security;
+
+drop policy if exists "company isolation" on public.portal_referrals;
+create policy "company isolation" on public.portal_referrals
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+create or replace function public.portal_invite_is_active(inv public.portal_invites)
+returns boolean
+language sql
+stable
+as $$
+  select inv.revoked_at is null and inv.expires_at > now();
+$$;
+
+create or replace function public.portal_jobs_for_contact(p_company_id uuid, p_contact_id uuid)
+returns uuid[]
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(array_agg(j.id order by j.start_date desc nulls last, j.created_at desc), '{}'::uuid[])
+  from public.jobs j
+  where j.company_id = p_company_id
+    and j.deleted_at is null
+    and (
+      j.primary_contact_id = p_contact_id
+      or p_contact_id = any (coalesce(j.related_contact_ids, '{}'::uuid[]))
+      or exists (
+        select 1 from public.contacts c
+        where c.id = p_contact_id
+          and c.client_id is not null
+          and c.client_id = j.client_id
+      )
+    );
+$$;
+
+create or replace function public.shared_portal(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  inv public.portal_invites%rowtype;
+  company public.companies%rowtype;
+  contact public.contacts%rowtype;
+  v_token text;
+  v_job_ids uuid[];
+begin
+  if p_token is null or length(trim(p_token)) < 6 then
+    return null;
+  end if;
+  v_token := trim(p_token);
+
+  select * into inv
+  from public.portal_invites
+  where token = v_token
+  limit 1;
+  if not found then
+    return null;
+  end if;
+  if not public.portal_invite_is_active(inv) then
+    return null;
+  end if;
+
+  update public.portal_invites
+  set last_opened_at = now()
+  where id = inv.id;
+
+  select * into company from public.companies where id = inv.company_id;
+  select * into contact from public.contacts where id = inv.contact_id;
+  if company.id is null or contact.id is null then
+    return null;
+  end if;
+
+  v_job_ids := public.portal_jobs_for_contact(inv.company_id, inv.contact_id);
+  if inv.job_id is not null and not (inv.job_id = any (v_job_ids)) then
+    v_job_ids := array_prepend(inv.job_id, v_job_ids);
+  end if;
+
+  return jsonb_build_object(
+    'token', inv.token,
+    'expiresAt', inv.expires_at,
+    'company', jsonb_build_object(
+      'name', coalesce(company.name, ''),
+      'phone', coalesce(company.phone, ''),
+      'email', coalesce(company.email, ''),
+      'website', coalesce(company.website, ''),
+      'logoUrl', coalesce(company.logo_url, '')
+    ),
+    'contact', jsonb_build_object(
+      'id', contact.id,
+      'name', coalesce(contact.name, 'Homeowner'),
+      'email', coalesce(contact.email, ''),
+      'phone', coalesce(contact.phone, '')
+    ),
+    'jobs', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', j.id,
+        'code', j.code,
+        'name', j.name,
+        'status', j.status,
+        'location', coalesce(nullif(trim(both ', ' from concat_ws(', ',
+          nullif(j.street, ''), nullif(j.city, ''), nullif(j.state, '')
+        )), ''), j.location),
+        'startDate', j.start_date,
+        'projectManager', coalesce(j.project_manager, ''),
+        'superintendent', coalesce(j.superintendent, ''),
+        'salesRep', coalesce(j.sales_rep, ''),
+        'assigned', to_jsonb(coalesce(j.assigned, '{}'::text[])),
+        'trades', coalesce((
+          select jsonb_agg(jsonb_build_object(
+            'id', t.id,
+            'name', t.name,
+            'title', coalesce(t.title, ''),
+            'phone', coalesce(t.phone, ''),
+            'email', coalesce(t.email, '')
+          ) order by t.name)
+          from public.contacts t
+          where t.id = any (coalesce(j.subcontractor_ids, '{}'::uuid[]))
+        ), '[]'::jsonb),
+        'schedule', coalesce((
+          select jsonb_agg(jsonb_build_object(
+            'id', e.id,
+            'title', e.title,
+            'kind', e.kind,
+            'startsAt', e.starts_at,
+            'endsAt', e.ends_at,
+            'location', coalesce(e.location, ''),
+            'assignee', coalesce(e.assignee, ''),
+            'notes', coalesce(e.notes, '')
+          ) order by e.starts_at)
+          from public.schedule_events e
+          where e.job_id = j.id
+            and e.company_id = inv.company_id
+            and e.starts_at >= (now() - interval '14 days')
+        ), '[]'::jsonb)
+      ) order by j.start_date desc nulls last, j.created_at desc)
+      from public.jobs j
+      where j.id = any (v_job_ids)
+        and j.company_id = inv.company_id
+        and j.deleted_at is null
+    ), '[]'::jsonb),
+    'estimates', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', est.id,
+        'number', est.number,
+        'name', est.name,
+        'status', est.status,
+        'jobId', est.job_id,
+        'validUntil', est.valid_until,
+        'shareToken', coalesce(est.share_token, ''),
+        'sharePath', case
+          when coalesce(est.share_token, '') <> '' then '/share/e/' || est.share_token
+          else null
+        end
+      ) order by est.created_at desc)
+      from public.estimates est
+      where est.company_id = inv.company_id
+        and est.status in ('sent', 'viewed', 'accepted')
+        and (
+          est.contact_id = inv.contact_id
+          or est.second_contact_id = inv.contact_id
+          or est.job_id = any (v_job_ids)
+        )
+    ), '[]'::jsonb),
+    'invoices', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', invc.id,
+        'number', invc.number,
+        'name', invc.name,
+        'status', invc.status,
+        'jobId', invc.job_id,
+        'issuedAt', invc.issued_at,
+        'dueAt', invc.due_at,
+        'shareToken', coalesce(invc.share_token, ''),
+        'sharePath', case
+          when coalesce(invc.share_token, '') <> '' then '/share/i/' || invc.share_token
+          else null
+        end
+      ) order by invc.issued_at desc)
+      from public.invoices invc
+      where invc.company_id = inv.company_id
+        and invc.status in ('sent', 'partial', 'paid', 'overdue')
+        and invc.job_id = any (v_job_ids)
+    ), '[]'::jsonb),
+    'referrals', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', r.id,
+        'referredName', r.referred_name,
+        'status', r.status,
+        'pointsAwarded', r.points_awarded,
+        'createdAt', r.created_at
+      ) order by r.created_at desc)
+      from public.portal_referrals r
+      where r.contact_id = inv.contact_id
+        and r.company_id = inv.company_id
+    ), '[]'::jsonb),
+    'rewards', jsonb_build_object(
+      'enabled', false,
+      'pointsBalance', coalesce((
+        select sum(r.points_awarded)::int
+        from public.portal_referrals r
+        where r.contact_id = inv.contact_id
+          and r.company_id = inv.company_id
+      ), 0),
+      'comingSoon', jsonb_build_array(
+        'Roof maintenance visit',
+        'Complimentary home soft wash',
+        'Gift card'
+      )
+    )
+  );
+end;
+$$;
+
+create or replace function public.submit_portal_referral(
+  p_token text,
+  p_referred_name text,
+  p_referred_phone text default '',
+  p_referred_email text default '',
+  p_notes text default '',
+  p_job_id uuid default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  inv public.portal_invites%rowtype;
+  v_token text;
+  v_name text;
+  v_job_id uuid;
+  v_job_ids uuid[];
+  v_contact_name text;
+begin
+  if p_token is null or length(trim(p_token)) < 6 then
+    return null;
+  end if;
+  v_token := trim(p_token);
+  v_name := trim(coalesce(p_referred_name, ''));
+  if length(v_name) < 2 then
+    raise exception 'Referral name is required';
+  end if;
+
+  select * into inv
+  from public.portal_invites
+  where token = v_token
+  limit 1;
+  if not found or not public.portal_invite_is_active(inv) then
+    return null;
+  end if;
+
+  v_job_ids := public.portal_jobs_for_contact(inv.company_id, inv.contact_id);
+  v_job_id := coalesce(p_job_id, inv.job_id);
+  if v_job_id is not null
+     and not (v_job_id = any (v_job_ids))
+     and (inv.job_id is distinct from v_job_id) then
+    v_job_id := inv.job_id;
+  end if;
+
+  insert into public.portal_referrals (
+    company_id,
+    portal_invite_id,
+    contact_id,
+    job_id,
+    referred_name,
+    referred_phone,
+    referred_email,
+    notes
+  ) values (
+    inv.company_id,
+    inv.id,
+    inv.contact_id,
+    v_job_id,
+    v_name,
+    trim(coalesce(p_referred_phone, '')),
+    trim(coalesce(p_referred_email, '')),
+    trim(coalesce(p_notes, ''))
+  );
+
+  select coalesce(name, 'Homeowner') into v_contact_name
+  from public.contacts
+  where id = inv.contact_id;
+
+  if v_job_id is not null then
+    insert into public.activities (
+      company_id,
+      entity_type,
+      entity_id,
+      type,
+      body,
+      author
+    ) values (
+      inv.company_id,
+      'job',
+      v_job_id,
+      'note',
+      format(
+        'Client portal referral from %s: %s%s%s',
+        v_contact_name,
+        v_name,
+        case when trim(coalesce(p_referred_phone, '')) <> '' then ' · ' || trim(p_referred_phone) else '' end,
+        case when trim(coalesce(p_notes, '')) <> '' then ' — ' || trim(p_notes) else '' end
+      ),
+      'Client portal'
+    );
+  end if;
+
+  return public.shared_portal(v_token);
+end;
+$$;
+
+revoke all on function public.portal_invite_is_active(public.portal_invites) from public;
+revoke all on function public.portal_jobs_for_contact(uuid, uuid) from public;
+revoke all on function public.shared_portal(text) from public;
+grant execute on function public.shared_portal(text) to anon, authenticated;
+revoke all on function public.submit_portal_referral(text, text, text, text, text, uuid) from public;
+grant execute on function public.submit_portal_referral(text, text, text, text, text, uuid) to anon, authenticated;
+
+-- ========== 20260906030000_realtor_portal.sql ==========
+-- Realtor portal: invite referral partners to see jobs they sent, schedules,
+-- and listings we track for their pipeline. Daily browse finds new listings
+-- and notifies the staff owner (project manager) who owns that realtor.
+
+alter table public.contacts
+  add column if not exists listing_watch_url text not null default '',
+  add column if not exists listing_watch_enabled boolean not null default false;
+
+create table if not exists public.realtor_portal_invites (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  contact_id uuid not null references public.contacts (id) on delete cascade,
+  token text not null,
+  expires_at timestamptz not null,
+  created_by uuid,
+  created_at timestamptz not null default now(),
+  last_opened_at timestamptz,
+  revoked_at timestamptz
+);
+
+create unique index if not exists realtor_portal_invites_token_key
+  on public.realtor_portal_invites (token);
+create index if not exists realtor_portal_invites_company_contact_idx
+  on public.realtor_portal_invites (company_id, contact_id)
+  where revoked_at is null;
+
+alter table public.realtor_portal_invites enable row level security;
+
+drop policy if exists "company isolation" on public.realtor_portal_invites;
+create policy "company isolation" on public.realtor_portal_invites
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+create table if not exists public.realtor_listings (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  contact_id uuid not null references public.contacts (id) on delete cascade,
+  external_key text not null default '',
+  title text not null default '',
+  address text not null default '',
+  city text not null default '',
+  state text not null default '',
+  postal_code text not null default '',
+  price numeric,
+  status text not null default 'active'
+    check (status in ('active', 'pending', 'sold', 'off_market', 'unknown')),
+  beds numeric,
+  baths numeric,
+  sqft integer,
+  listed_at date,
+  source text not null default 'browse',
+  source_url text not null default '',
+  summary text not null default '',
+  first_seen_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now(),
+  notified_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists realtor_listings_company_contact_key
+  on public.realtor_listings (company_id, contact_id, external_key);
+create index if not exists realtor_listings_contact_idx
+  on public.realtor_listings (contact_id, last_seen_at desc);
+create index if not exists realtor_listings_notify_idx
+  on public.realtor_listings (company_id, notified_at)
+  where notified_at is null;
+
+alter table public.realtor_listings enable row level security;
+
+drop policy if exists "company isolation" on public.realtor_listings;
+create policy "company isolation" on public.realtor_listings
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+create table if not exists public.realtor_listing_browse_runs (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies (id) on delete cascade,
+  contact_id uuid not null references public.contacts (id) on delete cascade,
+  started_at timestamptz not null default now(),
+  finished_at timestamptz,
+  status text not null default 'running'
+    check (status in ('running', 'ok', 'error', 'skipped')),
+  listings_found integer not null default 0,
+  new_listings integer not null default 0,
+  error text not null default '',
+  source_url text not null default ''
+);
+
+create index if not exists realtor_listing_browse_runs_contact_idx
+  on public.realtor_listing_browse_runs (contact_id, started_at desc);
+
+alter table public.realtor_listing_browse_runs enable row level security;
+
+drop policy if exists "company isolation" on public.realtor_listing_browse_runs;
+create policy "company isolation" on public.realtor_listing_browse_runs
+  for all to authenticated
+  using (company_id = public.current_company_id())
+  with check (company_id = public.current_company_id());
+
+create or replace function public.realtor_portal_invite_is_active(inv public.realtor_portal_invites)
+returns boolean
+language sql
+stable
+as $$
+  select inv.revoked_at is null and inv.expires_at > now();
+$$;
+
+create or replace function public.realtor_jobs_for_contact(p_company_id uuid, p_contact_id uuid)
+returns uuid[]
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (
+      select array_agg(x.id order by x.start_date desc nulls last, x.created_at desc)
+      from (
+        select distinct j.id, j.start_date, j.created_at
+        from public.jobs j
+        where j.company_id = p_company_id
+          and j.deleted_at is null
+          and (
+            p_contact_id = any (coalesce(j.related_contact_ids, '{}'::uuid[]))
+            or exists (
+              select 1
+              from public.opportunities o
+              where o.company_id = p_company_id
+                and o.referral_contact_id = p_contact_id
+                and (
+                  o.id = j.opportunity_id
+                  or (j.opportunity_id is null and o.primary_contact_id = j.primary_contact_id)
+                )
+            )
+          )
+      ) x
+    ),
+    '{}'::uuid[]
+  );
+$$;
+
+create or replace function public.shared_realtor_portal(p_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  inv public.realtor_portal_invites%rowtype;
+  company public.companies%rowtype;
+  contact public.contacts%rowtype;
+  v_token text;
+  v_job_ids uuid[];
+  v_owner_name text := '';
+begin
+  if p_token is null or length(trim(p_token)) < 6 then
+    return null;
+  end if;
+  v_token := trim(p_token);
+
+  select * into inv
+  from public.realtor_portal_invites
+  where token = v_token
+  limit 1;
+  if not found then
+    return null;
+  end if;
+  if not public.realtor_portal_invite_is_active(inv) then
+    return null;
+  end if;
+
+  update public.realtor_portal_invites
+  set last_opened_at = now()
+  where id = inv.id;
+
+  select * into company from public.companies where id = inv.company_id;
+  select * into contact from public.contacts where id = inv.contact_id;
+  if company.id is null or contact.id is null then
+    return null;
+  end if;
+  if not coalesce(contact.is_referral_partner, false) then
+    return null;
+  end if;
+
+  select coalesce(s.name, '') into v_owner_name
+  from public.team_members s
+  where s.id = contact.owner_staff_id
+  limit 1;
+
+  v_job_ids := public.realtor_jobs_for_contact(inv.company_id, inv.contact_id);
+
+  return jsonb_build_object(
+    'token', inv.token,
+    'expiresAt', inv.expires_at,
+    'company', jsonb_build_object(
+      'name', coalesce(company.name, ''),
+      'phone', coalesce(company.phone, ''),
+      'email', coalesce(company.email, ''),
+      'website', coalesce(company.website, ''),
+      'logoUrl', coalesce(company.logo_url, '')
+    ),
+    'contact', jsonb_build_object(
+      'id', contact.id,
+      'name', coalesce(contact.name, 'Partner'),
+      'email', coalesce(contact.email, ''),
+      'phone', coalesce(contact.phone, ''),
+      'title', coalesce(contact.title, ''),
+      'ownerName', v_owner_name,
+      'listingWatchUrl', coalesce(contact.listing_watch_url, ''),
+      'listingWatchEnabled', coalesce(contact.listing_watch_enabled, false)
+    ),
+    'referrals', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', o.id,
+        'code', coalesce(o.code, ''),
+        'name', coalesce(o.name, 'Referral'),
+        'stage', coalesce(o.stage::text, ''),
+        'value', coalesce(o.value, 0),
+        'leadSource', coalesce(o.lead_source, ''),
+        'createdAt', o.created_at,
+        'location', coalesce(nullif(trim(both ', ' from concat_ws(', ',
+          nullif(o.street, ''), nullif(o.city, ''), nullif(o.state, '')
+        )), ''), coalesce(o.location, '')),
+        'jobId', (
+          select j.id
+          from public.jobs j
+          where j.company_id = inv.company_id
+            and j.deleted_at is null
+            and j.opportunity_id = o.id
+          order by j.created_at desc
+          limit 1
+        )
+      ) order by o.created_at desc)
+      from public.opportunities o
+      where o.company_id = inv.company_id
+        and o.referral_contact_id = inv.contact_id
+    ), '[]'::jsonb),
+    'jobs', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', j.id,
+        'code', j.code,
+        'name', j.name,
+        'status', j.status,
+        'location', coalesce(nullif(trim(both ', ' from concat_ws(', ',
+          nullif(j.street, ''), nullif(j.city, ''), nullif(j.state, '')
+        )), ''), j.location),
+        'startDate', j.start_date,
+        'projectManager', coalesce(j.project_manager, ''),
+        'superintendent', coalesce(j.superintendent, ''),
+        'salesRep', coalesce(j.sales_rep, ''),
+        'assigned', to_jsonb(coalesce(j.assigned, '{}'::text[])),
+        'schedule', coalesce((
+          select jsonb_agg(jsonb_build_object(
+            'id', e.id,
+            'title', e.title,
+            'kind', e.kind,
+            'startsAt', e.starts_at,
+            'endsAt', e.ends_at,
+            'location', coalesce(e.location, ''),
+            'assignee', coalesce(e.assignee, ''),
+            'notes', coalesce(e.notes, '')
+          ) order by e.starts_at)
+          from public.schedule_events e
+          where e.job_id = j.id
+            and e.company_id = inv.company_id
+            and e.starts_at >= (now() - interval '14 days')
+        ), '[]'::jsonb)
+      ) order by j.start_date desc nulls last, j.created_at desc)
+      from public.jobs j
+      where j.id = any (v_job_ids)
+        and j.company_id = inv.company_id
+        and j.deleted_at is null
+    ), '[]'::jsonb),
+    'listings', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', l.id,
+        'title', l.title,
+        'address', l.address,
+        'city', l.city,
+        'state', l.state,
+        'postalCode', l.postal_code,
+        'price', l.price,
+        'status', l.status,
+        'beds', l.beds,
+        'baths', l.baths,
+        'sqft', l.sqft,
+        'listedAt', l.listed_at,
+        'source', l.source,
+        'sourceUrl', l.source_url,
+        'summary', l.summary,
+        'firstSeenAt', l.first_seen_at,
+        'lastSeenAt', l.last_seen_at
+      ) order by l.last_seen_at desc)
+      from public.realtor_listings l
+      where l.company_id = inv.company_id
+        and l.contact_id = inv.contact_id
+    ), '[]'::jsonb),
+    'pipeline', jsonb_build_object(
+      'watchEnabled', coalesce(contact.listing_watch_enabled, false),
+      'watchUrl', coalesce(contact.listing_watch_url, ''),
+      'activeListings', coalesce((
+        select count(*)::int
+        from public.realtor_listings l
+        where l.contact_id = inv.contact_id
+          and l.company_id = inv.company_id
+          and l.status in ('active', 'pending', 'unknown')
+      ), 0),
+      'openReferrals', coalesce((
+        select count(*)::int
+        from public.opportunities o
+        where o.referral_contact_id = inv.contact_id
+          and o.company_id = inv.company_id
+          and o.stage::text not in ('lost', 'awarded')
+      ), 0)
+    )
+  );
+end;
+$$;
+
+revoke all on function public.realtor_portal_invite_is_active(public.realtor_portal_invites) from public;
+revoke all on function public.realtor_jobs_for_contact(uuid, uuid) from public;
+revoke all on function public.shared_realtor_portal(text) from public;
+grant execute on function public.shared_realtor_portal(text) to anon, authenticated;
+
+-- Daily listing browse helpers (security definer; cron route authorizes with CRON_SECRET).
+
+create or replace function public.realtor_listing_watches()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'companyId', c.company_id,
+      'contactId', c.id,
+      'contactName', coalesce(c.name, 'Partner'),
+      'watchUrl', coalesce(c.listing_watch_url, ''),
+      'ownerStaffId', c.owner_staff_id,
+      'ownerName', coalesce(s.name, ''),
+      'ownerPhone', coalesce(s.phone, '')
+    ) order by c.name)
+    from public.contacts c
+    left join public.team_members s on s.id = c.owner_staff_id
+    where coalesce(c.is_referral_partner, false)
+      and coalesce(c.listing_watch_enabled, false)
+      and length(trim(coalesce(c.listing_watch_url, ''))) > 8
+  ), '[]'::jsonb);
+$$;
+
+-- ingest_realtor_listing_browse is managed in the database; keep grant surface here.
+revoke all on function public.realtor_listing_watches() from public;
+grant execute on function public.realtor_listing_watches() to anon, authenticated;

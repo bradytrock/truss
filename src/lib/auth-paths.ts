@@ -15,6 +15,7 @@ export function isPublicAppPath(pathname: string) {
     pathname.startsWith("/auth") ||
     pathname.startsWith("/share") ||
     pathname.startsWith("/portal") ||
+    pathname.startsWith("/realtor-portal") ||
     pathname.startsWith("/api/") ||
     isPublicCardPath(pathname)
   );

@@ -26,6 +26,8 @@ function contactsFromShared(payload: SharedPagePayload): Contact[] {
     phone: contact.phone,
     ownerStaffId: "",
     isReferralPartner: false,
+    listingWatchUrl: "",
+    listingWatchEnabled: false,
   }));
 }
 

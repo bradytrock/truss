@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Mail, MessageSquare, Phone } from "lucide-react";
+import { Copy, Link2, Mail, MessageSquare, Phone, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +25,7 @@ export function ContactRecord({ contact }: { contact: Contact }) {
     () => mailForContact(crm.gmailMessages ?? [], contact),
     [contact, crm.gmailMessages],
   );
+  const [syncingListings, setSyncingListings] = useState(false);
 
   return (
     <div className="space-y-5">
@@ -79,6 +81,69 @@ export function ContactRecord({ contact }: { contact: Contact }) {
                 <MessageSquare />
                 Text
               </Button>
+            ) : null}
+            {contact.isReferralPartner ? (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    void (async () => {
+                      const invite = await crm.createRealtorPortalInvite({ contactId: contact.id });
+                      if (!invite) return;
+                      try {
+                        await navigator.clipboard.writeText(invite.url);
+                        toast.success("Realtor portal link copied.");
+                      } catch {
+                        toast.message("Realtor portal link ready", { description: invite.url });
+                      }
+                    })();
+                  }}
+                >
+                  <Copy />
+                  Copy realtor portal link
+                </Button>
+                {contact.listingWatchEnabled && contact.listingWatchUrl ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={syncingListings}
+                    onClick={() => {
+                      void (async () => {
+                        setSyncingListings(true);
+                        try {
+                          const response = await fetch(
+                            `/api/cron/realtor-listings?contactId=${encodeURIComponent(contact.id)}`,
+                            { method: "POST" },
+                          );
+                          const payload = (await response.json().catch(() => null)) as
+                            | { ok?: boolean; error?: string; newListings?: number; watchesRun?: number }
+                            | null;
+                          if (!response.ok || !payload?.ok) {
+                            toast.error(payload?.error || "Could not sync listings.");
+                            return;
+                          }
+                          const found = typeof payload.newListings === "number" ? payload.newListings : 0;
+                          toast.success(
+                            found > 0
+                              ? `Synced listings — ${found} new.`
+                              : "Synced listings — nothing new.",
+                          );
+                        } catch (error) {
+                          toast.error(error instanceof Error ? error.message : "Could not sync listings.");
+                        } finally {
+                          setSyncingListings(false);
+                        }
+                      })();
+                    }}
+                  >
+                    <RefreshCw className={syncingListings ? "animate-spin" : undefined} />
+                    {syncingListings ? "Syncing…" : "Sync listings now"}
+                  </Button>
+                ) : null}
+              </>
             ) : null}
           </div>
         </div>
@@ -228,6 +293,28 @@ export function ContactRecord({ contact }: { contact: Contact }) {
                   "Unassigned"
                 )}
               </RecordProperty>
+              {contact.isReferralPartner ? (
+                <>
+                  <RecordProperty label="Listing watch">
+                    {contact.listingWatchEnabled ? "Daily watch on" : "Off"}
+                  </RecordProperty>
+                  <RecordProperty label="Watch URL">
+                    {contact.listingWatchUrl ? (
+                      <a
+                        href={contact.listingWatchUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-start gap-1 break-all hover:underline"
+                      >
+                        <Link2 className="mt-0.5 size-3.5 shrink-0" />
+                        {contact.listingWatchUrl}
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </RecordProperty>
+                </>
+              ) : null}
             </CardContent>
           </Card>
         </div>
