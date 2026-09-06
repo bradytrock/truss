@@ -546,6 +546,12 @@ export interface EstimateLine {
   taxable: boolean;
   /** EagleView quantity formula, e.g. `squares` or `ridges + hips`. Empty = title heuristic. */
   quantityFormula?: string;
+  /** EagleView measurement to map, e.g. `squares`, `ridges`. Empty = none. */
+  measurementKey?: string;
+  /** How much one unit of this line covers of the mapped measurement. */
+  coverageAmount?: number;
+  /** Unit for coverageAmount: squares | sqft | ft | each. */
+  coverageUnit?: string;
   /** Empty = in every package. `good` / `better` / `best` = only that package. */
   package: "" | "good" | "better" | "best";
   photoIds: string[];
@@ -585,6 +591,12 @@ export interface EstimateTemplateLine {
   taxable: boolean;
   /** EagleView quantity formula, e.g. `squares` or `ceil(eaves / 10)`. Empty = title heuristic. */
   quantityFormula?: string;
+  /** EagleView measurement to map, e.g. `squares`, `ridges`. Empty = none. */
+  measurementKey?: string;
+  /** How much one unit of this line covers of the mapped measurement. */
+  coverageAmount?: number;
+  /** Unit for coverageAmount: squares | sqft | ft | each. */
+  coverageUnit?: string;
 }
 
 export interface Invoice {

@@ -1,6 +1,7 @@
 import {
   eagleviewFormulaVars,
   evaluateQuantityFormula,
+  quantityFromCoverage,
 } from "@/lib/eagleview-formulas";
 import { firstName } from "@/lib/phone";
 
@@ -522,7 +523,7 @@ export function buildEagleviewReportPdf(input: {
  * Squares → field coverage lines; LF lengths → ridge/hip/valley/eave/etc. lines by title.
  */
 export function applySquaresToEstimateLines<
-  T extends { id: string; title: string; unit: string; quantity: number; quantityFormula?: string },
+  T extends { id: string; title: string; unit: string; quantity: number; quantityFormula?: string; measurementKey?: string; coverageAmount?: number; coverageUnit?: string },
 >(
   lines: T[],
   totalSquares: number,
@@ -542,6 +543,20 @@ export function applySquaresToEstimateLines<
   const formulaVars = eagleviewFormulaVars(measurements, totalSquares, wastePercent);
 
   for (const line of lines) {
+    const measurementKey = line.measurementKey?.trim() ?? "";
+    if (measurementKey) {
+      const covered = quantityFromCoverage({
+        measurementKey,
+        coverageAmount: line.coverageAmount,
+        coverageUnit: line.coverageUnit,
+        vars: formulaVars,
+      });
+      if (covered.ok) {
+        used.add(line.id);
+        updated.push({ id: line.id, quantity: covered.value });
+        continue;
+      }
+    }
     const formula = line.quantityFormula?.trim() ?? "";
     if (!formula) continue;
     const result = evaluateQuantityFormula(formula, formulaVars);

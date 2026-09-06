@@ -78,8 +78,11 @@ import {
   parseEstimatePackage,
 } from "@/lib/estimate-packages";
 import {
-  EAGLEVIEW_FORMULA_TOKENS,
-  previewQuantityFormula,
+  EAGLEVIEW_COVERAGE_UNITS,
+  EAGLEVIEW_MEASUREMENT_OPTIONS,
+  defaultCoverageUnitForMeasurement,
+  formatCoverageLabel,
+  previewCoverageQuantity,
 } from "@/lib/eagleview-formulas";
 import { PackagePicker } from "@/components/package-picker";
 import { downloadEstimatePdf, downloadSignatureCertificatePdf } from "@/lib/document-pdf";
@@ -266,8 +269,11 @@ export type PricedLine = {
   selected: boolean;
   taxable: boolean;
   package?: "" | "good" | "better" | "best";
-  /** EagleView qty formula used when applying measurements. */
+  /** EagleView qty formula used when applying measurements (advanced). */
   quantityFormula?: string;
+  measurementKey?: string;
+  coverageAmount?: number;
+  coverageUnit?: string;
 };
 
 export function LineCard({
@@ -297,9 +303,13 @@ export function LineCard({
   onPhotosChange?: (photoIds: string[]) => void;
 }) {
   const units = COMMON_UNITS.includes(line.unit) ? COMMON_UNITS : [line.unit, ...COMMON_UNITS];
-  const formula = line.quantityFormula ?? "";
-  const formulaPreview =
-    showQuantityFormula && formula.trim() ? previewQuantityFormula(formula) : null;
+  const measurementKey = line.measurementKey ?? "";
+  const coverageAmount = line.coverageAmount != null && Number.isFinite(line.coverageAmount) ? line.coverageAmount : 1;
+  const coverageUnit = line.coverageUnit || defaultCoverageUnitForMeasurement(measurementKey);
+  const coveragePreview =
+    showQuantityFormula && measurementKey
+      ? previewCoverageQuantity({ measurementKey, coverageAmount, coverageUnit })
+      : null;
   return (
     <div
       className={cn(
@@ -463,46 +473,102 @@ export function LineCard({
 
       {showQuantityFormula ? (
         <div className="mt-3 space-y-2 border-t pt-3">
-          <div className="flex items-baseline justify-between gap-2">
-            <Label className="text-xs text-muted-foreground">EagleView formula</Label>
-            {formulaPreview?.ok ? (
-              <p className="text-xs text-muted-foreground">
-                Sample qty{" "}
-                <span className="font-medium text-foreground tabular-nums">{formulaPreview.value}</span>
-              </p>
-            ) : formula.trim() ? (
-              <p className="text-xs text-red-600">
-                {formulaPreview && !formulaPreview.ok ? formulaPreview.error : "Invalid formula"}
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">Leave blank to match by title</p>
-            )}
-          </div>
-          <CommitInput
-            value={formula}
-            disabled={!editable}
-            placeholder="e.g. squares · ridges · eaves * 1.1 · ceil(valleys / 10)"
-            className="font-mono text-sm"
-            onCommit={(value) => onPatch({ quantityFormula: value.trim() })}
-          />
-          {editable ? (
-            <div className="flex flex-wrap gap-1">
-              {EAGLEVIEW_FORMULA_TOKENS.slice(0, 8).map((token) => (
-                <button
-                  key={token.token}
-                  type="button"
-                  title={token.hint}
-                  className="rounded border bg-muted/40 px-1.5 py-0.5 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
-                  onClick={() => {
-                    const next = formula.trim() ? `${formula.trim()} ${token.token}` : token.token;
-                    onPatch({ quantityFormula: next });
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div>
+              <Label className="text-xs text-muted-foreground">Mapping</Label>
+              {editable ? (
+                <Select
+                  value={measurementKey || "none"}
+                  onValueChange={(value) => {
+                    const key = String(value ?? "none") === "none" ? "" : String(value);
+                    onPatch({
+                      measurementKey: key,
+                      coverageUnit: key
+                        ? defaultCoverageUnitForMeasurement(key)
+                        : line.coverageUnit || "squares",
+                      coverageAmount: line.coverageAmount ?? 1,
+                    });
                   }}
+                  items={EAGLEVIEW_MEASUREMENT_OPTIONS.map((option) => ({
+                    value: option.key || "none",
+                    label: option.label,
+                  }))}
                 >
-                  {token.token}
-                </button>
-              ))}
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="None" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EAGLEVIEW_MEASUREMENT_OPTIONS.map((option) => (
+                      <SelectItem key={option.key || "none"} value={option.key || "none"}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="mt-1 text-sm">
+                  {EAGLEVIEW_MEASUREMENT_OPTIONS.find((option) => option.key === measurementKey)?.label || "None"}
+                </p>
+              )}
             </div>
-          ) : null}
+            <div>
+              <div className="flex items-baseline justify-between gap-2">
+                <Label className="text-xs text-muted-foreground">Coverage</Label>
+                {coveragePreview?.ok ? (
+                  <p className="text-xs text-muted-foreground">
+                    Sample qty{" "}
+                    <span className="font-medium text-foreground tabular-nums">{coveragePreview.value}</span>
+                  </p>
+                ) : measurementKey ? (
+                  <p className="text-xs text-red-600">
+                    {coveragePreview && !coveragePreview.ok ? coveragePreview.error : "Check coverage"}
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">How much one unit covers</p>
+                )}
+              </div>
+              <div className="mt-1 flex gap-2">
+                <CommitInput
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  disabled={!editable || !measurementKey}
+                  value={coverageAmount}
+                  className="flex-1"
+                  onCommit={(value) => onPatch({ coverageAmount: Number(value) || 1 })}
+                />
+                {editable ? (
+                  <Select
+                    value={coverageUnit}
+                    disabled={!measurementKey}
+                    onValueChange={(value) => onPatch({ coverageUnit: String(value ?? coverageUnit) })}
+                    items={EAGLEVIEW_COVERAGE_UNITS.map((unit) => ({
+                      value: unit.value,
+                      label: unit.label,
+                    }))}
+                  >
+                    <SelectTrigger className="w-[7.5rem]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EAGLEVIEW_COVERAGE_UNITS.map((unit) => (
+                        <SelectItem key={unit.value} value={unit.value}>
+                          {unit.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="mt-1 w-[7.5rem] text-sm">{formatCoverageLabel(coverageAmount, coverageUnit)}</p>
+                )}
+              </div>
+              {measurementKey ? (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Qty = mapped measurement ÷ {formatCoverageLabel(coverageAmount, coverageUnit)}
+                </p>
+              ) : null}
+            </div>
+          </div>
         </div>
       ) : null}
 

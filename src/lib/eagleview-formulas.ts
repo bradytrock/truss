@@ -329,3 +329,155 @@ export function previewQuantityFormula(
     ),
   });
 }
+
+export const EAGLEVIEW_COVERAGE_UNITS = [
+  { value: "squares", label: "squares" },
+  { value: "sqft", label: "sqft" },
+  { value: "ft", label: "ft" },
+  { value: "each", label: "each" },
+] as const;
+
+export type EagleviewCoverageUnit = (typeof EAGLEVIEW_COVERAGE_UNITS)[number]["value"];
+
+export const EAGLEVIEW_MEASUREMENT_OPTIONS: Array<{
+  key: string;
+  label: string;
+  /** Native unit of the measurement. */
+  unit: EagleviewCoverageUnit;
+  hint: string;
+}> = [
+  { key: "", label: "None", unit: "squares", hint: "No EagleView mapping — quantity stays as entered (or title match)." },
+  { key: "squares", label: "Total squares (w/ waste)", unit: "squares", hint: "Suggested / waste-adjusted squares" },
+  { key: "totalSquares", label: "Total squares (no waste)", unit: "squares", hint: "Report squares before waste" },
+  { key: "areaSqFt", label: "Roof area", unit: "sqft", hint: "Total roof area in square feet" },
+  { key: "ridges", label: "Ridges", unit: "ft", hint: "Ridge length (LF)" },
+  { key: "hips", label: "Hips", unit: "ft", hint: "Hip length (LF)" },
+  { key: "valleys", label: "Valleys", unit: "ft", hint: "Valley length (LF)" },
+  { key: "eaves", label: "Eaves / starter", unit: "ft", hint: "Eave length (LF)" },
+  { key: "rakes", label: "Rakes", unit: "ft", hint: "Rake length (LF)" },
+  { key: "dripEdge", label: "Drip edge", unit: "ft", hint: "Drip edge length (LF)" },
+  { key: "flashing", label: "Flashing", unit: "ft", hint: "Flashing length (LF)" },
+  { key: "stepFlashing", label: "Step flashing", unit: "ft", hint: "Step flashing (LF)" },
+  { key: "parapet", label: "Parapet", unit: "ft", hint: "Parapet walls (LF)" },
+  { key: "facets", label: "Facets", unit: "each", hint: "Facet count" },
+];
+
+export function eagleviewMeasurementOption(key: string | null | undefined) {
+  const normalized = (key ?? "").trim();
+  return EAGLEVIEW_MEASUREMENT_OPTIONS.find((option) => option.key === normalized) ?? EAGLEVIEW_MEASUREMENT_OPTIONS[0];
+}
+
+export function defaultCoverageUnitForMeasurement(key: string | null | undefined): EagleviewCoverageUnit {
+  return eagleviewMeasurementOption(key).unit;
+}
+
+/** Convert a measurement into the coverage unit so qty = measure / coverage. */
+export function measurementInCoverageUnit(
+  measurementKey: string,
+  coverageUnit: string,
+  vars: EagleviewFormulaVars,
+): number | null {
+  const key = measurementKey.trim();
+  if (!key) return null;
+
+  const squares = vars.squares ?? 0;
+  const totalSquares = vars.totalSquares ?? 0;
+  const areaSqFt = vars.areaSqFt ?? (vars.totalSquares ? vars.totalSquares * 100 : 0);
+  const unit = coverageUnit.trim().toLowerCase();
+
+  const lengthKeys: Record<string, number> = {
+    ridges: vars.ridges ?? 0,
+    hips: vars.hips ?? 0,
+    valleys: vars.valleys ?? 0,
+    eaves: vars.eaves ?? 0,
+    rakes: vars.rakes ?? 0,
+    dripEdge: vars.dripEdge ?? 0,
+    flashing: vars.flashing ?? 0,
+    stepFlashing: vars.stepFlashing ?? 0,
+    parapet: vars.parapet ?? 0,
+  };
+
+  if (key === "squares" || key === "suggestedSquares") {
+    if (unit === "squares") return squares;
+    if (unit === "sqft") return squares * 100;
+    return null;
+  }
+  if (key === "totalSquares") {
+    if (unit === "squares") return totalSquares;
+    if (unit === "sqft") return totalSquares * 100;
+    return null;
+  }
+  if (key === "areaSqFt" || key === "area") {
+    if (unit === "sqft") return areaSqFt;
+    if (unit === "squares") return areaSqFt / 100;
+    return null;
+  }
+  if (key in lengthKeys) {
+    if (unit === "ft") return lengthKeys[key];
+    return null;
+  }
+  if (key === "facets") {
+    if (unit === "each") return vars.facets ?? 0;
+    return null;
+  }
+  // Unknown key — try direct var lookup in same unit.
+  if (key in vars) return vars[key];
+  return null;
+}
+
+export function quantityFromCoverage(input: {
+  measurementKey?: string | null;
+  coverageAmount?: number | null;
+  coverageUnit?: string | null;
+  vars: EagleviewFormulaVars;
+}): { ok: true; value: number } | { ok: false; error: string } {
+  const key = input.measurementKey?.trim() ?? "";
+  if (!key) return { ok: false, error: "No measurement mapped." };
+  const amount = Number(input.coverageAmount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    return { ok: false, error: "Coverage must be greater than zero." };
+  }
+  const unit = (input.coverageUnit ?? defaultCoverageUnitForMeasurement(key)).trim() || "squares";
+  const measure = measurementInCoverageUnit(key, unit, input.vars);
+  if (measure == null || !Number.isFinite(measure)) {
+    return { ok: false, error: `Cannot convert ${key} to ${unit}.` };
+  }
+  const value = Math.round(Math.max(0, measure / amount) * 100) / 100;
+  return { ok: true, value };
+}
+
+export function previewCoverageQuantity(input: {
+  measurementKey?: string | null;
+  coverageAmount?: number | null;
+  coverageUnit?: string | null;
+}) {
+  const base = eagleviewFormulaVars(
+    {
+      totalSquares: 36.86,
+      suggestedSquares: 36.86,
+      wastePercent: 0,
+      totalAreaSqFt: 3686,
+      ridgesLf: 105,
+      hipsLf: 50,
+      valleysLf: 84.6,
+      eavesLf: 120,
+      rakesLf: 64,
+      dripEdgeLf: 180,
+      parapetWallsLf: 0,
+      flashingLf: 18,
+      stepFlashingLf: 24,
+      facets: 8,
+    },
+    36.86,
+    0,
+  );
+  return quantityFromCoverage({ ...input, vars: base });
+}
+
+export function formatCoverageLabel(amount: number | null | undefined, unit: string | null | undefined) {
+  const qty = Number(amount);
+  const safe = Number.isFinite(qty) ? qty : 1;
+  const label = (unit ?? "squares").trim() || "squares";
+  return `${safe} ${label}`;
+}
+

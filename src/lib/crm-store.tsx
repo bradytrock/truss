@@ -3882,6 +3882,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           photo_ids: line.photoIds,
           package: line.package,
           quantity_formula: line.quantityFormula || "",
+          measurement_key: line.measurementKey || "",
+          coverage_amount: line.coverageAmount ?? 1,
+          coverage_unit: line.coverageUnit || "squares",
         }));
         const inserted = await supabase.from("estimate_lines").insert(linePayload);
         if (inserted.error && isMissingEstimatePackages(inserted.error)) {
@@ -4606,6 +4609,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           photo_ids: line.photoIds,
           package: line.package,
           quantity_formula: line.quantityFormula || "",
+          measurement_key: line.measurementKey || "",
+          coverage_amount: line.coverageAmount ?? 1,
+          coverage_unit: line.coverageUnit || "squares",
         }));
         let { error } = await supabase.from("estimate_lines").insert(payload);
         if (error && isMissingEstimatePackages(error)) {
@@ -4934,6 +4940,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       selected: line.selected,
       taxable: line.taxable,
       quantity_formula: line.quantityFormula || "",
+      measurement_key: line.measurementKey || "",
+      coverage_amount: line.coverageAmount ?? 1,
+      coverage_unit: line.coverageUnit || "squares",
     });
     if (error) {
       if (isMissingEstimateTemplates(error)) {
@@ -5513,6 +5522,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         taxable: line.taxable,
         package: line.package,
         quantity_formula: line.quantityFormula || "",
+        measurement_key: line.measurementKey || "",
+        coverage_amount: line.coverageAmount ?? 1,
+        coverage_unit: line.coverageUnit || "squares",
       };
       let { data, error } = await supabase.from("estimate_lines").insert(payload).select("*").single();
       if (error && isMissingEstimatePackages(error)) {
@@ -5596,6 +5608,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         taxable: line.taxable,
         package: line.package,
         quantity_formula: line.quantityFormula || "",
+        measurement_key: line.measurementKey || "",
+        coverage_amount: line.coverageAmount ?? 1,
+        coverage_unit: line.coverageUnit || "squares",
       };
       let { data, error } = await supabase.from("estimate_lines").insert(payload).select("*").single();
       if (error && isMissingEstimatePackages(error)) {
