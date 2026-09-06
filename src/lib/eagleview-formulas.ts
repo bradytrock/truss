@@ -478,9 +478,15 @@ export function quantityFromCoverage(input: {
     }
     measure += part;
   }
-  const value = Math.round(Math.max(0, measure / amount) * 100) / 100;
+  // Whole packages only — e.g. 33 squares ÷ 10 sq/roll → 4 rolls, not 3.3.
+  const raw = Math.max(0, measure / amount);
+  if (raw === 0) return { ok: true, value: 0 };
+  const value = Math.ceil(raw - 1e-9);
   return { ok: true, value };
 }
+
+/** Sample roof used in template Mapping/Coverage previews (~33 squares). */
+export const COVERAGE_PREVIEW_SQUARES = 33;
 
 export function previewCoverageQuantity(input: {
   measurementKey?: string | null;
@@ -488,24 +494,25 @@ export function previewCoverageQuantity(input: {
   coverageAmount?: number | null;
   coverageUnit?: string | null;
 }) {
+  const squares = COVERAGE_PREVIEW_SQUARES;
   const base = eagleviewFormulaVars(
     {
-      totalSquares: 36.86,
-      suggestedSquares: 36.86,
+      totalSquares: squares,
+      suggestedSquares: squares,
       wastePercent: 0,
-      totalAreaSqFt: 3686,
-      ridgesLf: 105,
-      hipsLf: 50,
-      valleysLf: 84.6,
-      eavesLf: 120,
-      rakesLf: 64,
-      dripEdgeLf: 180,
+      totalAreaSqFt: squares * 100,
+      ridgesLf: 96,
+      hipsLf: 48,
+      valleysLf: 72,
+      eavesLf: 110,
+      rakesLf: 58,
+      dripEdgeLf: 168,
       parapetWallsLf: 0,
-      flashingLf: 18,
-      stepFlashingLf: 24,
+      flashingLf: 16,
+      stepFlashingLf: 22,
       facets: 8,
     },
-    36.86,
+    squares,
     0,
   );
   return quantityFromCoverage({ ...input, vars: base });

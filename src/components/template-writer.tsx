@@ -191,10 +191,11 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
           <div>
             <h2 className="font-heading text-lg font-medium">Line items</h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Map each line to one or more EagleView measurements and say how much one unit covers
-              (for example <span className="text-foreground">1 squares</span>,{" "}
-              <span className="text-foreground">32.8 sqft</span>, or{" "}
-              <span className="text-foreground">30 ft</span>). Quantity fills in when measurements are applied.
+              On each line, set <span className="text-foreground">Mapping</span> (which EagleView
+              measurement) and <span className="text-foreground">Coverage</span> (how much one unit
+              covers). Example: synthetic underlayment mapped to Squares with coverage{" "}
+              <span className="text-foreground">10 squares</span> — a 33-square roof becomes{" "}
+              <span className="text-foreground">4 rolls</span> when measurements are applied.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

@@ -78,6 +78,7 @@ import {
   parseEstimatePackage,
 } from "@/lib/estimate-packages";
 import {
+  COVERAGE_PREVIEW_SQUARES,
   EAGLEVIEW_COVERAGE_UNITS,
   EAGLEVIEW_MEASUREMENT_OPTIONS,
   defaultCoverageUnitForMeasurements,
@@ -505,7 +506,8 @@ export function LineCard({
                   </PopoverTrigger>
                   <PopoverContent align="start" className="w-72 p-2">
                     <p className="text-muted-foreground px-1 pb-2 text-xs">
-                      Check one or more EagleView measurements. Quantity uses their sum ÷ coverage.
+                      Check the EagleView measurement(s) this material uses. Quantity = sum ÷
+                      coverage, rounded up to whole units.
                     </p>
                     <div className="max-h-64 space-y-0.5 overflow-y-auto">
                       {EAGLEVIEW_MEASUREMENT_OPTIONS.filter((option) => option.key).map((option) => {
@@ -557,7 +559,7 @@ export function LineCard({
                 <Label className="text-xs text-muted-foreground">Coverage</Label>
                 {coveragePreview?.ok ? (
                   <p className="text-xs text-muted-foreground">
-                    Sample qty{" "}
+                    On a {COVERAGE_PREVIEW_SQUARES}-square roof →{" "}
                     <span className="font-medium text-foreground tabular-nums">{coveragePreview.value}</span>
                   </p>
                 ) : measurementKeys.length > 0 ? (
@@ -565,7 +567,7 @@ export function LineCard({
                     {coveragePreview && !coveragePreview.ok ? coveragePreview.error : "Check coverage"}
                   </p>
                 ) : (
-                  <p className="text-xs text-muted-foreground">How much one unit covers</p>
+                  <p className="text-xs text-muted-foreground">How much one roll/bundle covers</p>
                 )}
               </div>
               <div className="mt-1 flex gap-2">
@@ -605,7 +607,9 @@ export function LineCard({
               </div>
               {measurementKeys.length > 0 ? (
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  Qty = mapped measurement ÷ {formatCoverageLabel(coverageAmount, coverageUnit)}
+                  Qty = measurement ÷ {formatCoverageLabel(coverageAmount, coverageUnit)}, rounded
+                  up (e.g. underlayment at 10 squares → 4 rolls on a {COVERAGE_PREVIEW_SQUARES}-square
+                  roof).
                 </p>
               ) : null}
             </div>
