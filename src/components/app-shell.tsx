@@ -84,9 +84,12 @@ function navItems(options: { bdOnly: boolean }) {
   ];
 }
 
-/** Suite apps live in the App Launcher only — never in the top tab bar. */
-function appSuiteItems() {
-  return [{ href: "/marketing", label: "Marketing" }];
+/** Suite apps in the App Launcher only — never duplicate top-nav objects here. */
+function appLauncherItems() {
+  return [
+    { href: "/", label: "TheRoofingCRM" },
+    { href: "/marketing", label: "Marketing Suite" },
+  ];
 }
 
 function adminNavItems(options: {
@@ -102,35 +105,6 @@ function adminNavItems(options: {
       : []),
     ...(options.showSettings ? [{ href: "/settings", label: "Settings" }] : []),
   ];
-}
-
-function appLauncherItems(options: {
-  showReports: boolean;
-  showAccounting: boolean;
-  showSettings: boolean;
-  bdOnly: boolean;
-}) {
-  const objects = navItems(options);
-  const apps = appSuiteItems();
-  const admin = adminNavItems(options);
-  const extras = options.bdOnly
-    ? [
-        { href: "/pipeline", label: "Pipeline" },
-        { href: "/profile", label: "Profile" },
-      ]
-    : [
-        { href: "/pipeline", label: "Pipeline" },
-        { href: "/clients", label: "Clients" },
-        { href: "/catalog", label: "Catalog" },
-        { href: "/material-orders", label: "Material orders" },
-        { href: "/profile", label: "Profile" },
-      ];
-  const seen = new Set([...objects, ...apps].map((item) => item.href));
-  return {
-    objects,
-    apps,
-    more: [...extras, ...admin].filter((item) => !seen.has(item.href)),
-  };
 }
 
 function itemIsActive(pathname: string, href: string) {
@@ -160,18 +134,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   };
   const items = navItems(navOptions);
   const adminItems = adminNavItems(navOptions);
-  const launcher = appLauncherItems(navOptions);
+  const launcherApps = appLauncherItems();
 
   return (
     <div className="flex min-h-full flex-col">
       <header className="sticky top-0 z-30">
         <div className="flex h-11 items-center gap-1.5 border-b border-sidebar-border bg-sidebar px-2 text-sidebar-foreground sm:gap-2 sm:px-3">
-          <AppLauncher
-            objects={launcher.objects}
-            apps={launcher.apps}
-            more={launcher.more}
-            pathname={pathname}
-          />
+          <AppLauncher apps={launcherApps} pathname={pathname} />
 
           <Link
             href="/"
@@ -351,14 +320,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 }
 
 function AppLauncher({
-  objects,
   apps,
-  more,
   pathname,
 }: {
-  objects: Array<{ href: string; label: string }>;
   apps: Array<{ href: string; label: string }>;
-  more: Array<{ href: string; label: string }>;
   pathname: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -379,71 +344,31 @@ function AppLauncher({
       >
         <LayoutGrid className="size-4" />
       </PopoverTrigger>
-      <PopoverContent align="start" sideOffset={6} className="w-72 gap-0 p-2">
+      <PopoverContent align="start" sideOffset={6} className="w-64 gap-0 p-2">
         <p className="px-2 py-1 text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
-          Objects
+          Apps
         </p>
-        <div className="grid grid-cols-2 gap-1 p-1">
-          {objects.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setOpen(false)}
-              className={cn(
-                "rounded-sm px-2 py-2 text-xs hover:bg-accent hover:text-accent-foreground",
-                itemIsActive(pathname, item.href) && "bg-accent font-medium",
-              )}
-            >
-              {item.label}
-            </Link>
-          ))}
+        <div className="flex flex-col gap-0.5 p-1">
+          {apps.map((item) => {
+            const active =
+              item.href === "/"
+                ? !pathname.startsWith("/marketing")
+                : itemIsActive(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                className={cn(
+                  "rounded-sm px-2.5 py-2 text-sm hover:bg-accent hover:text-accent-foreground",
+                  active && "bg-accent font-medium",
+                )}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </div>
-        {apps.length > 0 ? (
-          <>
-            <div className="my-1 h-px bg-border" />
-            <p className="px-2 py-1 text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
-              Apps
-            </p>
-            <div className="grid grid-cols-2 gap-1 p-1">
-              {apps.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className={cn(
-                    "rounded-sm px-2 py-2 text-xs hover:bg-accent hover:text-accent-foreground",
-                    itemIsActive(pathname, item.href) && "bg-accent font-medium",
-                  )}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
-          </>
-        ) : null}
-        {more.length > 0 ? (
-          <>
-            <div className="my-1 h-px bg-border" />
-            <p className="px-2 py-1 text-[10px] tracking-[0.14em] text-muted-foreground uppercase">
-              More
-            </p>
-            <div className="flex flex-col gap-0.5 p-1">
-              {more.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className={cn(
-                    "rounded-sm px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground",
-                    itemIsActive(pathname, item.href) && "bg-accent font-medium",
-                  )}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
-          </>
-        ) : null}
       </PopoverContent>
     </Popover>
   );
