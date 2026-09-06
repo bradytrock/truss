@@ -66,9 +66,9 @@ function navItems(options: { bdOnly: boolean }) {
     return [
       { href: "/", label: "Home" },
       { href: "/jobs", label: "Jobs" },
+      { href: "/contacts", label: "Agents & contacts" },
       { href: "/messages", label: "Inbox" },
       { href: "/photos", label: "Photos" },
-      { href: "/contacts", label: "Agents & contacts" },
     ];
   }
   return [
