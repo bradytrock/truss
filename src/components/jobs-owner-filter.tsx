@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -51,46 +52,44 @@ export function JobsOwnerFilter({
         <ChevronDown />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-64">
-        <DropdownMenuLabel>Whose jobs</DropdownMenuLabel>
-        <DropdownMenuItem
-          disabled={allSelected}
-          onClick={() => onChange(null)}
-        >
-          Select all
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          disabled={noneSelected}
-          onClick={() => onChange(new Set())}
-        >
-          Clear
-        </DropdownMenuItem>
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Whose jobs</DropdownMenuLabel>
+          <DropdownMenuItem disabled={allSelected} onClick={() => onChange(null)}>
+            Select all
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={noneSelected} onClick={() => onChange(new Set())}>
+            Clear
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuCheckboxItem
-          checked={checked.has(JOBS_UNASSIGNED_OWNER)}
-          closeOnClick={false}
-          onCheckedChange={() =>
-            onChange(toggleJobsOwnerFilter(JOBS_UNASSIGNED_OWNER, selectedIds, allowedIds))
-          }
-        >
-          Unassigned
-        </DropdownMenuCheckboxItem>
-        {people.map((member) => (
+        <DropdownMenuGroup>
           <DropdownMenuCheckboxItem
-            key={member.id}
-            checked={checked.has(member.id)}
+            checked={checked.has(JOBS_UNASSIGNED_OWNER)}
             closeOnClick={false}
             onCheckedChange={() =>
-              onChange(toggleJobsOwnerFilter(member.id, selectedIds, allowedIds))
+              onChange(toggleJobsOwnerFilter(JOBS_UNASSIGNED_OWNER, selectedIds, allowedIds))
             }
           >
-            <span className="flex min-w-0 flex-col">
-              <span className="truncate">{member.name}</span>
-              <span className="truncate text-xs text-muted-foreground">
-                {SEAT_ROLE_LABELS[member.role]}
-              </span>
-            </span>
+            Unassigned
           </DropdownMenuCheckboxItem>
-        ))}
+          {people.map((member) => (
+            <DropdownMenuCheckboxItem
+              key={member.id}
+              checked={checked.has(member.id)}
+              closeOnClick={false}
+              onCheckedChange={() =>
+                onChange(toggleJobsOwnerFilter(member.id, selectedIds, allowedIds))
+              }
+            >
+              <span className="flex min-w-0 flex-col">
+                <span className="truncate">{member.name}</span>
+                <span className="truncate text-xs text-muted-foreground">
+                  {SEAT_ROLE_LABELS[member.role] ?? member.role}
+                </span>
+              </span>
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );

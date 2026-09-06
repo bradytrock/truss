@@ -65,14 +65,15 @@ function navItems(options: { bdOnly: boolean }) {
   if (options.bdOnly) {
     return [
       { href: "/", label: "Home" },
+      { href: "/messages", label: "Inbox" },
       { href: "/jobs", label: "Jobs" },
       { href: "/contacts", label: "Agents & contacts" },
-      { href: "/messages", label: "Inbox" },
       { href: "/photos", label: "Photos" },
     ];
   }
   return [
     { href: "/", label: "Home" },
+    { href: "/messages", label: "Inbox" },
     { href: "/jobs", label: "Jobs" },
     { href: "/contacts", label: "Contacts" },
     { href: "/calendar", label: "Calendar" },
