@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { ChevronDown, LayoutGrid, Menu, Plus, Search } from "lucide-react";
+import { LayoutGrid, Menu, Plus, Search } from "lucide-react";
 import { useCrm } from "@/lib/crm-store";
 import { phoneSearchText } from "@/lib/phone";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -61,30 +61,55 @@ import { AssistantPanel } from "@/components/assistant-panel";
 import { useStartEstimate } from "@/lib/start-estimate";
 import { StartEstimateDialogHost } from "@/components/start-estimate-button";
 
-function navItems(options: { bdOnly: boolean }) {
+type NavItem = { href: string; label: string };
+type NavSection = { id: string; label?: string; items: NavItem[] };
+
+function navSections(options: { bdOnly: boolean }): NavSection[] {
   if (options.bdOnly) {
     return [
-      { href: "/", label: "Home" },
-      { href: "/messages", label: "Inbox" },
-      { href: "/jobs", label: "Jobs" },
-      { href: "/contacts", label: "Agents & contacts" },
-      { href: "/photos", label: "Photos" },
+      {
+        id: "main",
+        items: [
+          { href: "/", label: "Home" },
+          { href: "/messages", label: "Inbox" },
+          { href: "/jobs", label: "Jobs" },
+          { href: "/contacts", label: "Agents & contacts" },
+          { href: "/photos", label: "Photos" },
+        ],
+      },
     ];
   }
   return [
-    { href: "/", label: "Home" },
-    { href: "/messages", label: "Inbox" },
-    { href: "/jobs", label: "Jobs" },
-    { href: "/contacts", label: "Contacts" },
-    { href: "/calendar", label: "Calendar" },
-    { href: "/estimates", label: "Estimates" },
-    { href: "/invoices", label: "Invoices" },
-    { href: "/training", label: "Training" },
-    { href: "/photos", label: "Photos" },
+    {
+      id: "work",
+      items: [
+        { href: "/", label: "Home" },
+        { href: "/messages", label: "Inbox" },
+        { href: "/jobs", label: "Jobs" },
+        { href: "/contacts", label: "Contacts" },
+        { href: "/calendar", label: "Calendar" },
+      ],
+    },
+    {
+      id: "money",
+      label: "Money",
+      items: [
+        { href: "/estimates", label: "Estimates" },
+        { href: "/invoices", label: "Invoices" },
+      ],
+    },
+    {
+      id: "library",
+      label: "Library",
+      items: [
+        { href: "/training", label: "Training" },
+        { href: "/photos", label: "Photos" },
+      ],
+    },
   ];
 }
 
-/** Suite apps in the App Launcher only — never duplicate top-nav objects here. */
+/** Suite apps in the App Launcher only — never duplicate sidebar destinations here. */
 function appLauncherItems() {
   return [
     { href: "/", label: "TheRoofingCRM" },
@@ -126,140 +151,51 @@ export function AppShell({ children }: { children: ReactNode }) {
     "opportunity" | "client" | "job" | "invoice" | "event" | "expense" | "payment" | null
   >(null);
 
-  const navOptions = {
-    showReports: Boolean(effectiveStaff && canViewReports(effectiveStaff.role)),
-    showAccounting: Boolean(effectiveStaff && canViewAccounting(effectiveStaff.role)),
-    showSettings: Boolean(effectiveStaff && canManageSettings(effectiveStaff.role, effectiveStaff)),
-    bdOnly: Boolean(effectiveStaff && isBusinessDevelopment(effectiveStaff.role)),
-  };
-  const items = navItems(navOptions);
-  const adminItems = adminNavItems(navOptions);
   const launcherApps = appLauncherItems();
 
-  return (
-    <div className="flex min-h-full flex-col">
-      <header className="sticky top-0 z-30">
-        <div className="flex h-11 items-center gap-1.5 border-b border-sidebar-border bg-sidebar px-2 text-sidebar-foreground sm:gap-2 sm:px-3">
-          <AppLauncher apps={launcherApps} pathname={pathname} />
+  const createMenu =
+    effectiveStaff && isBusinessDevelopment(effectiveStaff.role) ? (
+      <>
+        <DropdownMenuItem onClick={() => setCreate("opportunity")}>New lead</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setCreate("client")}>New contact</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => setCreate("expense")}>Log expense</DropdownMenuItem>
+      </>
+    ) : (
+      <>
+        <DropdownMenuItem onClick={() => setCreate("expense")}>Log expense</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setCreate("payment")}>Log payment</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => setCreate("opportunity")}>New lead</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => startEstimate()}>New estimate</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setCreate("invoice")}>New invoice</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setCreate("event")}>Calendar event</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setCreate("client")}>New contact</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setCreate("job")}>Log a job</DropdownMenuItem>
+      </>
+    );
 
-          <Link
-            href="/"
-            className="flex min-w-0 items-center gap-2 rounded-sm px-1.5 py-0.5 hover:bg-white/6"
-          >
-            <TheRoofingCrmMark className="size-4 shrink-0 text-primary" />
-            <span className="min-w-0 leading-tight">
-              <span className="font-heading block truncate text-[0.95rem] font-medium tracking-tight text-sidebar-foreground">
-                {PRODUCT_NAME}
-              </span>
-              <span className="block max-w-[10rem] truncate text-[10px] text-sidebar-foreground/55">
-                {user.company}
-              </span>
+  return (
+    <div className="flex min-h-full">
+      <aside className="hidden w-[13.5rem] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
+        <div className="flex items-start gap-1 border-b border-sidebar-border px-3 py-3.5">
+          <AppLauncher apps={launcherApps} pathname={pathname} />
+          <Link href="/" className="min-w-0 flex-1 rounded-sm px-1.5 py-0.5 hover:bg-white/6">
+            <span className="font-heading block truncate text-[0.95rem] font-medium tracking-tight">
+              {PRODUCT_NAME}
+            </span>
+            <span className="mt-0.5 block truncate text-[10px] text-sidebar-foreground/50">
+              {user.company}
             </span>
           </Link>
-
-          <nav className="hidden min-w-0 flex-1 items-stretch gap-0.5 overflow-x-auto md:flex">
-            {items.map((item) => {
-              const active = itemIsActive(pathname, item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "relative shrink-0 px-2.5 py-2 text-[13px] tracking-tight transition-colors",
-                    active
-                      ? "font-medium text-white"
-                      : "text-sidebar-foreground/60 hover:bg-white/5 hover:text-white",
-                  )}
-                >
-                  {item.label}
-                  {active ? (
-                    <span className="absolute inset-x-1.5 bottom-0 h-0.5 rounded-full bg-primary" />
-                  ) : null}
-                </Link>
-              );
-            })}
-            {adminItems.length > 0 ? (
-              <AdminNavMenu items={adminItems} pathname={pathname} />
-            ) : null}
-          </nav>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-sidebar-foreground hover:bg-white/8 hover:text-white md:hidden"
-            onClick={() => setMobileOpen(true)}
-            aria-label="Open navigation"
-          >
-            <Menu />
-          </Button>
-
-          <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
-            <SearchTrigger />
-            <div className="text-sidebar-foreground">
-              <AssistantPanel />
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    size="sm"
-                    className="bg-primary text-primary-foreground hover:bg-primary/90"
-                  />
-                }
-              >
-                <Plus data-icon="inline-start" />
-                <span className="hidden sm:inline">Create</span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-44">
-                {effectiveStaff && isBusinessDevelopment(effectiveStaff.role) ? (
-                  <>
-                    <DropdownMenuItem onClick={() => setCreate("opportunity")}>
-                      New lead
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setCreate("client")}>
-                      New contact
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setCreate("expense")}>
-                      Log expense
-                    </DropdownMenuItem>
-                  </>
-                ) : (
-                  <>
-                    <DropdownMenuItem onClick={() => setCreate("expense")}>
-                      Log expense
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setCreate("payment")}>
-                      Log payment
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setCreate("opportunity")}>
-                      New lead
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => startEstimate()}>
-                      New estimate
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setCreate("invoice")}>
-                      New invoice
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setCreate("event")}>
-                      Calendar event
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setCreate("client")}>
-                      New contact
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setCreate("job")}>
-                      Log a job
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <UserMenu />
-          </div>
         </div>
-        <SettingsMobileBar />
-      </header>
+        <div className="flex-1 overflow-y-auto py-1">
+          <Nav pathname={pathname} />
+        </div>
+        <div className="border-t border-sidebar-border px-4 py-3">
+          <LivePulse tone="dark" />
+        </div>
+      </aside>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent
@@ -269,22 +205,65 @@ export function AppShell({ children }: { children: ReactNode }) {
           <SheetHeader className="sr-only">
             <SheetTitle>Navigation</SheetTitle>
           </SheetHeader>
-          <div className="border-b border-sidebar-border px-4 py-4">
-            <BrandMark
-              className="inline-flex items-center gap-2 text-sidebar-foreground"
-              markClassName="size-4 text-primary"
-            />
-            <p className="mt-2 truncate pl-6 text-[11px] text-sidebar-foreground/45">{user.company}</p>
+          <div className="flex items-start gap-1 border-b border-sidebar-border px-3 py-4">
+            <AppLauncher apps={launcherApps} pathname={pathname} />
+            <div className="min-w-0 flex-1 px-1.5">
+              <BrandMark
+                className="inline-flex items-center gap-2 text-sidebar-foreground"
+                markClassName="size-4 text-primary"
+              />
+              <p className="mt-1.5 truncate text-[11px] text-sidebar-foreground/45">{user.company}</p>
+            </div>
           </div>
-          <Nav pathname={pathname} onNavigate={() => setMobileOpen(false)} />
+          <div className="flex-1 overflow-y-auto py-1">
+            <Nav pathname={pathname} onNavigate={() => setMobileOpen(false)} />
+          </div>
           <div className="mt-auto border-t border-sidebar-border px-4 py-3">
             <LivePulse tone="dark" />
           </div>
         </SheetContent>
       </Sheet>
 
-      <ScopeBanners />
-      <main className="flex-1 bg-background p-5 sm:p-7">{children}</main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-30 border-b bg-background">
+          <div className="flex h-12 items-center gap-2 px-3 sm:px-5">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="md:hidden"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Open navigation"
+            >
+              <Menu />
+            </Button>
+            <SearchTrigger />
+            <div className="ml-auto flex items-center gap-1.5">
+              <AssistantPanel />
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      size="sm"
+                      className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    />
+                  }
+                >
+                  <Plus data-icon="inline-start" />
+                  <span className="hidden sm:inline">Create</span>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-44">
+                  {createMenu}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <UserMenu />
+            </div>
+          </div>
+          <SettingsMobileBar />
+        </header>
+
+        <ScopeBanners />
+        <main className="flex-1 bg-background p-5 sm:p-7">{children}</main>
+      </div>
 
       <CreateOpportunityDialog
         open={create === "opportunity"}
@@ -318,6 +297,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     </div>
   );
 }
+
 
 function AppLauncher({
   apps,
@@ -374,44 +354,6 @@ function AppLauncher({
   );
 }
 
-function AdminNavMenu({
-  items,
-  pathname,
-}: {
-  items: Array<{ href: string; label: string }>;
-  pathname: string;
-}) {
-  const active = items.some((item) => itemIsActive(pathname, item.href));
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        className={cn(
-          "relative inline-flex shrink-0 items-center gap-1 px-2.5 py-2 text-[13px] tracking-tight transition-colors outline-none",
-          active
-            ? "font-medium text-white"
-            : "text-sidebar-foreground/60 hover:bg-white/5 hover:text-white",
-        )}
-      >
-        Admin
-        <ChevronDown className="size-3.5 opacity-70" />
-        {active ? (
-          <span className="absolute inset-x-1.5 bottom-0 h-0.5 rounded-full bg-primary" />
-        ) : null}
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-44">
-        {items.map((item) => (
-          <DropdownMenuItem
-            key={item.href}
-            render={<Link href={item.href} />}
-            className={cn(itemIsActive(pathname, item.href) && "bg-accent font-medium")}
-          >
-            {item.label}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
 
 function LivePulse({ tone = "light" }: { tone?: "light" | "dark" }) {
   const { configured, liveStatus } = useCrm();
@@ -447,36 +389,50 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
     showSettings: Boolean(effectiveStaff && canManageSettings(effectiveStaff.role, effectiveStaff)),
     bdOnly: Boolean(effectiveStaff && isBusinessDevelopment(effectiveStaff.role)),
   };
-  const items = navItems(navOptions);
+  const sections = navSections({ bdOnly: navOptions.bdOnly });
   const adminItems = adminNavItems(navOptions);
+
+  function linkClass(active: boolean) {
+    return cn(
+      "flex items-center rounded-md px-2.5 py-1.5 text-[13px] tracking-tight transition-colors",
+      active
+        ? "bg-white/8 font-medium text-white"
+        : "text-sidebar-foreground/58 hover:bg-white/4 hover:text-white",
+    );
+  }
+
   return (
-    <nav className="flex flex-col px-2 py-3">
-      {items.map((item) => {
-        const active = itemIsActive(pathname, item.href);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={onNavigate}
-            className={cn(
-              "flex items-center border-l-2 px-3 py-[7px] text-[13px] tracking-tight transition-colors",
-              active
-                ? "border-primary bg-white/6 font-medium text-white"
-                : "border-transparent text-sidebar-foreground/58 hover:bg-white/4 hover:text-white",
-            )}
-          >
-            {item.label}
-            {item.href === "/" && homeBadge > 0 ? (
-              <span className="ml-auto min-w-4 rounded-full bg-primary px-1.5 text-center text-[10px] font-medium text-primary-foreground">
-                {homeBadge}
-              </span>
-            ) : null}
-          </Link>
-        );
-      })}
+    <nav className="flex flex-col gap-3 px-2 py-2">
+      {sections.map((section) => (
+        <div key={section.id} className="flex flex-col gap-0.5">
+          {section.label ? (
+            <p className="px-2.5 pb-1 text-[10px] tracking-[0.14em] text-sidebar-foreground/40 uppercase">
+              {section.label}
+            </p>
+          ) : null}
+          {section.items.map((item) => {
+            const active = itemIsActive(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={onNavigate}
+                className={linkClass(active)}
+              >
+                {item.label}
+                {item.href === "/" && homeBadge > 0 ? (
+                  <span className="ml-auto min-w-4 rounded-full bg-primary px-1.5 text-center text-[10px] font-medium text-primary-foreground">
+                    {homeBadge}
+                  </span>
+                ) : null}
+              </Link>
+            );
+          })}
+        </div>
+      ))}
       {adminItems.length > 0 ? (
-        <div className="mt-3 border-t border-sidebar-border pt-3">
-          <p className="px-3 pb-1 text-[10px] tracking-[0.14em] text-sidebar-foreground/45 uppercase">
+        <div className="flex flex-col gap-0.5 border-t border-sidebar-border pt-3">
+          <p className="px-2.5 pb-1 text-[10px] tracking-[0.14em] text-sidebar-foreground/40 uppercase">
             Admin
           </p>
           {adminItems.map((item) => {
@@ -486,12 +442,7 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
                 key={item.href}
                 href={item.href}
                 onClick={onNavigate}
-                className={cn(
-                  "flex items-center border-l-2 px-3 py-[7px] text-[13px] tracking-tight transition-colors",
-                  active
-                    ? "border-primary bg-white/6 font-medium text-white"
-                    : "border-transparent text-sidebar-foreground/58 hover:bg-white/4 hover:text-white",
-                )}
+                className={linkClass(active)}
               >
                 {item.label}
               </Link>
@@ -502,7 +453,6 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
     </nav>
   );
 }
-
 
 function SearchTrigger() {
   const [open, setOpen] = useState(false);
@@ -525,7 +475,7 @@ function SearchTrigger() {
       <Button
         variant="ghost"
         size="icon"
-        className="text-sidebar-foreground hover:bg-white/8 hover:text-white"
+        className="text-muted-foreground hover:text-foreground"
         onClick={() => setOpen(true)}
         aria-label="Search"
         title="Search (⌘K)"
@@ -768,7 +718,7 @@ function UserMenu() {
           <Button
             variant="ghost"
             size="icon"
-            className="rounded-full text-sidebar-foreground hover:bg-white/8 hover:text-white"
+            className="rounded-full"
             aria-label="Account"
           />
         }
