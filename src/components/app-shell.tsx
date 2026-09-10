@@ -176,8 +176,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     );
 
   return (
-    <div className="flex min-h-full">
-      <aside className="hidden w-[13.5rem] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
+    <div className="flex min-h-dvh bg-sidebar">
+      <aside className="sticky top-0 hidden h-dvh w-[13.5rem] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
         <div className="flex items-start gap-1 border-b border-sidebar-border px-3 py-3.5">
           <AppLauncher apps={launcherApps} pathname={pathname} />
           <Link href="/" className="min-w-0 flex-1 rounded-sm px-1.5 py-0.5 hover:bg-white/6">
@@ -189,7 +189,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </span>
           </Link>
         </div>
-        <div className="flex-1 overflow-y-auto py-1">
+        <div className="min-h-0 flex-1 overflow-y-auto py-1">
           <Nav pathname={pathname} />
         </div>
         <div className="border-t border-sidebar-border px-4 py-3">
@@ -215,7 +215,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <p className="mt-1.5 truncate text-[11px] text-sidebar-foreground/45">{user.company}</p>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto py-1">
+          <div className="min-h-0 flex-1 overflow-y-auto py-1">
             <Nav pathname={pathname} onNavigate={() => setMobileOpen(false)} />
           </div>
           <div className="mt-auto border-t border-sidebar-border px-4 py-3">
@@ -224,7 +224,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </SheetContent>
       </Sheet>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col bg-background">
         <header className="sticky top-0 z-30 border-b bg-background">
           <div className="flex h-12 items-center gap-2 px-3 sm:px-5">
             <Button

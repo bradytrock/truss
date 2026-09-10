@@ -47,7 +47,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       suppressHydrationWarning
       className={`${plexSans.variable} ${newsreader.variable} ${plexMono.variable} ${greatVibes.variable} h-full antialiased`}
     >
-      <body className="flex min-h-full flex-col">
+      <body className="flex min-h-dvh flex-col">
         <Providers>{children}</Providers>
       </body>
     </html>
