@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -86,91 +85,132 @@ export function GoalHeader() {
     year: "numeric",
   });
   const admin = canManageSettings(viewer.role, viewer);
-  const wholeLabel = viewer.role === "company_admin" ? "Whole company" : "Whole team";
+  const wholeLabel = viewer.role === "company_admin" ? "Entire company" : "Entire team";
   const title =
     teamMode && selectedId === TEAM_KEY
       ? viewer.role === "company_admin"
-        ? "Company goal"
-        : "Team goal"
-      : `${(selectedMember ?? viewer).name.split(" ")[0] || "Rep"}'s goal`;
-
-  const paceLine =
-    quota <= 0
-      ? "Set a monthly quota to track pacing."
-      : pace.hit
-        ? `Goal hit · ${formatCurrencyFull(sold)} signed this month`
-        : daysLeft === 0
-          ? `${formatCurrencyFull(sold)} of ${formatCurrencyFull(quota)} · month ended`
-          : `${formatCurrencyFull(sold)} of ${formatCurrencyFull(quota)} · ${daysLeft} selling day${
-              daysLeft === 1 ? "" : "s"
-            } left · need ${formatCurrencyFull(pace.perDay)}/day to hit goal`;
+        ? "Company quota"
+        : "Team quota"
+      : `${(selectedMember ?? viewer).name.split(" ")[0] || "Rep"} quota`;
 
   return (
-    <Card className="overflow-hidden border-primary/20 bg-gradient-to-br from-primary/[0.06] via-background to-background shadow-sm">
-      <CardContent className="space-y-4 p-5 sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 space-y-1">
-            <p className="text-[11px] font-medium tracking-[0.16em] text-muted-foreground uppercase">
-              Goal · {monthLabel}
-            </p>
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h2 className="font-heading text-2xl font-semibold tracking-tight sm:text-[1.75rem]">
-                {title}
-              </h2>
-              {quota > 0 ? (
-                <span className="text-sm text-muted-foreground">{pct}% of quota</span>
-              ) : null}
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {teamMode && roster.length > 0 ? (
-              <Select
-                value={selectedId}
-                onValueChange={(value) => setFocusId(String(value ?? TEAM_KEY))}
-                items={[
-                  { value: TEAM_KEY, label: wholeLabel },
-                  ...roster.map((member) => ({ value: member.id, label: member.name })),
-                ]}
-              >
-                <SelectTrigger className="h-9 w-[12.5rem] bg-background">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={TEAM_KEY}>{wholeLabel}</SelectItem>
-                  {roster.map((member) => (
-                    <SelectItem key={member.id} value={member.id}>
-                      {member.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
-            {admin ? (
-              <Button nativeButton={false} size="sm" variant="outline" render={<Link href="/settings" />}>
-                Edit quotas
-              </Button>
-            ) : null}
-          </div>
+    <section className="overflow-hidden rounded-sm border border-[#c9c9c9] bg-white shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#c9c9c9] bg-[#f3f3f3] px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
+            Highlights · {monthLabel}
+          </p>
+          <h2 className="truncate text-base font-semibold text-[#181818]">{title}</h2>
         </div>
-
-        <div className="space-y-2">
-          <div className="h-3 overflow-hidden rounded-full bg-muted">
-            <div
-              className={cn(
-                "h-full rounded-full transition-[width] duration-500",
-                pace.hit ? "bg-emerald-600" : "bg-primary",
-              )}
-              style={{ width: `${quota > 0 ? pct : 0}%` }}
-            />
-          </div>
-          <p className="text-sm text-muted-foreground">{paceLine}</p>
-          {quota <= 0 && admin ? (
-            <p className="text-xs text-muted-foreground">
-              Set the company default under Settings → Company, or override a seat under People.
-            </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {teamMode && roster.length > 0 ? (
+            <Select
+              value={selectedId}
+              onValueChange={(value) => setFocusId(String(value ?? TEAM_KEY))}
+              items={[
+                { value: TEAM_KEY, label: wholeLabel },
+                ...roster.map((member) => ({ value: member.id, label: member.name })),
+              ]}
+            >
+              <SelectTrigger className="h-8 w-[11.5rem] rounded-sm border-[#c9c9c9] bg-white text-xs shadow-none">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={TEAM_KEY}>{wholeLabel}</SelectItem>
+                {roster.map((member) => (
+                  <SelectItem key={member.id} value={member.id}>
+                    {member.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+          {admin ? (
+            <Button
+              nativeButton={false}
+              size="sm"
+              variant="outline"
+              className="h-8 rounded-sm border-[#c9c9c9] bg-white text-xs shadow-none"
+              render={<Link href="/settings" />}
+            >
+              Edit quotas
+            </Button>
           ) : null}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <div className="grid gap-0 sm:grid-cols-4">
+        <HighlightField label="Closed won" value={formatCurrencyFull(sold)} />
+        <HighlightField
+          label="Monthly quota"
+          value={quota > 0 ? formatCurrencyFull(quota) : "Not set"}
+        />
+        <HighlightField
+          label="Remaining"
+          value={quota > 0 ? formatCurrencyFull(pace.remaining) : "—"}
+        />
+        <HighlightField
+          label="Required / day"
+          value={
+            quota > 0 && !pace.hit && daysLeft > 0
+              ? formatCurrencyFull(pace.perDay)
+              : pace.hit
+                ? "Quota hit"
+                : "—"
+          }
+          last
+        />
+      </div>
+
+      <div className="space-y-1.5 border-t border-[#c9c9c9] px-3 py-2.5">
+        <div className="flex items-center justify-between text-[11px] font-semibold text-[#706e6b]">
+          <span>Quota attainment</span>
+          <span className="tabular-nums text-[#181818]">{quota > 0 ? `${pct}%` : "—"}</span>
+        </div>
+        <div className="h-2 overflow-hidden rounded-sm bg-[#e5e5e5]">
+          <div
+            className={cn(
+              "h-full rounded-sm transition-[width] duration-500",
+              pace.hit ? "bg-[#45c65a]" : "bg-[#0176d3]",
+            )}
+            style={{ width: `${quota > 0 ? pct : 0}%` }}
+          />
+        </div>
+        <p className="text-xs text-[#706e6b]">
+          {quota <= 0
+            ? admin
+              ? "Set a company default under Settings → Company, or override a seat under People."
+              : "Ask an admin to set a monthly quota."
+            : pace.hit
+              ? `Quota hit · ${formatCurrencyFull(sold)} signed this month`
+              : daysLeft === 0
+                ? `${formatCurrencyFull(sold)} of ${formatCurrencyFull(quota)} · month ended`
+                : `${daysLeft} selling day${daysLeft === 1 ? "" : "s"} left this month`}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function HighlightField({
+  label,
+  value,
+  last = false,
+}: {
+  label: string;
+  value: string;
+  last?: boolean;
+}) {
+  return (
+    <div
+      className={cn(
+        "px-3 py-2.5",
+        !last && "sm:border-r sm:border-[#c9c9c9]",
+        "border-b border-[#c9c9c9] sm:border-b-0",
+      )}
+    >
+      <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">{label}</p>
+      <p className="mt-1 text-lg font-semibold tabular-nums text-[#181818]">{value}</p>
+    </div>
   );
 }

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateOpportunityDialog } from "@/components/create-records";
 import type { SeatRole, StaffMember } from "@/lib/types";
 
@@ -10,45 +10,45 @@ function onboardingCopy(role: SeatRole | undefined) {
   switch (role) {
     case "company_admin":
       return {
-        title: "Bring in your book of work",
+        title: "Get started with your first leads",
         description:
-          "This home fills in once the company has leads. Start the first one — sold dollars, pipeline, and the desk list all follow from there.",
+          "Your home shows pipeline, quota pacing, and today’s work once records exist. Import a list or create the first lead to populate this page.",
         action: "Import leads" as const,
       };
     case "team_lead":
     case "team_admin":
       return {
-        title: "Your team’s book is empty",
+        title: "No leads in your team yet",
         description:
-          "When someone on the team opens a lead, pipeline and pacing show up here. Start the first one so the desk has something to chase.",
+          "Team pipeline, quota, and desk lists appear here after the first lead is created. Add one to start tracking the book.",
         action: "Add your first lead" as const,
       };
     case "business_development":
       return {
         title: "No sourced leads yet",
         description:
-          "Your home tracks the agents you brought in and the jobs that followed. Open the first lead so ROI and pipeline have a place to land.",
+          "ROI and agent activity need at least one lead in your book. Create the first record to open this dashboard.",
         action: "Add your first lead" as const,
       };
     case "accountant":
       return {
-        title: "Nothing to post yet",
+        title: "No jobs to post against yet",
         description:
-          "Invoices and expenses show up after the field opens jobs. Ask a project manager to add the first lead, or wait for work to land in Accounting.",
+          "Accounting tiles stay hidden until the field opens work. Ask a project manager to create the first lead.",
         action: null,
       };
     case "superintendent":
       return {
-        title: "No jobs on your board",
+        title: "No production jobs yet",
         description:
-          "Field work appears here once a lead is opened and handed to production. Add the first lead if you take calls, or wait for the office to assign you.",
+          "Field work shows here after a lead is opened and handed to production. Create a lead if you take intake calls.",
         action: "Add your first lead" as const,
       };
     default:
       return {
-        title: "Your book is empty",
+        title: "No leads to work yet",
         description:
-          "Pipeline, proposals, and today's desk all stay quiet until you have at least one lead. Open the first one and this page starts working.",
+          "Pipeline, proposals, and today’s tasks stay hidden until you have at least one lead. Create the first record to unlock this home.",
         action: "Add your first lead" as const,
       };
   }
@@ -60,21 +60,24 @@ export function HomeOnboarding({ viewer }: { viewer: StaffMember | undefined }) 
 
   return (
     <>
-      <Card className="border-primary/20 bg-gradient-to-br from-primary/[0.05] via-background to-background">
-        <CardHeader className="border-b">
-          <CardTitle className="font-heading text-xl">{copy.title}</CardTitle>
-          <CardDescription className="max-w-xl text-sm leading-relaxed">
-            {copy.description}
-          </CardDescription>
-        </CardHeader>
+      <section className="flex flex-col items-start gap-4 rounded-sm border border-[#c9c9c9] bg-white px-5 py-8 shadow-[0_2px_2px_rgba(0,0,0,0.05)] sm:flex-row sm:items-center sm:px-6">
+        <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-[#eef4ff] text-[#0176d3]">
+          <UserPlus className="size-6" aria-hidden />
+        </div>
+        <div className="min-w-0 flex-1 space-y-1">
+          <h2 className="text-base font-semibold text-[#181818]">{copy.title}</h2>
+          <p className="max-w-2xl text-sm leading-relaxed text-[#706e6b]">{copy.description}</p>
+        </div>
         {copy.action ? (
-          <CardContent className="pt-4">
-            <Button type="button" onClick={() => setCreateOpen(true)}>
-              {copy.action}
-            </Button>
-          </CardContent>
+          <Button
+            type="button"
+            className="h-9 shrink-0 rounded-sm bg-[#0176d3] px-4 text-sm font-semibold text-white hover:bg-[#014486]"
+            onClick={() => setCreateOpen(true)}
+          >
+            {copy.action}
+          </Button>
         ) : null}
-      </Card>
+      </section>
       <CreateOpportunityDialog open={createOpen} onOpenChange={setCreateOpen} />
     </>
   );

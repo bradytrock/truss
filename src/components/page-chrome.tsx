@@ -32,20 +32,18 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="flex flex-col gap-2 border-b border-[#c9c9c9] pb-3 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
         {eyebrow ? (
-          <p className="mb-1.5 text-[11px] font-medium tracking-[0.16em] text-muted-foreground uppercase">
+          <p className="mb-1 text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="font-heading text-[1.85rem] leading-[1.1] font-medium text-balance">
+        <h1 className="text-[1.35rem] leading-tight font-semibold text-[#181818] text-balance">
           {title}
         </h1>
         {description ? (
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            {description}
-          </p>
+          <p className="mt-1 max-w-2xl text-sm leading-snug text-[#706e6b]">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
@@ -61,7 +59,12 @@ export function MetricStrip({
   className?: string;
 }) {
   return (
-    <section className={cn("grid gap-px overflow-hidden border bg-border", className)}>
+    <section
+      className={cn(
+        "grid gap-px overflow-hidden rounded-sm border border-[#c9c9c9] bg-[#c9c9c9] shadow-[0_2px_2px_rgba(0,0,0,0.05)]",
+        className,
+      )}
+    >
       {children}
     </section>
   );
@@ -77,12 +80,12 @@ export function Metric({
   hint?: string;
 }) {
   return (
-    <div className="bg-card px-4 py-4">
-      <p className="text-[11px] tracking-[0.14em] text-muted-foreground uppercase">{label}</p>
-      <p className="font-heading mt-2 text-[1.7rem] leading-none font-medium tabular-nums">
+    <div className="bg-white px-3 py-3">
+      <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">{label}</p>
+      <p className="mt-1.5 text-[1.45rem] leading-none font-semibold tabular-nums text-[#181818]">
         {value}
       </p>
-      {hint ? <p className="mt-2 text-xs leading-snug text-muted-foreground">{hint}</p> : null}
+      {hint ? <p className="mt-1.5 text-xs leading-snug text-[#706e6b]">{hint}</p> : null}
     </div>
   );
 }

@@ -34,6 +34,7 @@ import { isBusinessDevelopment } from "@/lib/bd";
 import { BdRoiPanel } from "@/components/bd-roi";
 import { GoalHeader } from "@/components/goal-header";
 import { HomeOnboarding } from "@/components/home-onboarding";
+import { PipelinePath, RelatedList, RelatedListLink } from "@/components/home-panels";
 
 export default function HomePage() {
   const crm = useCrm();
@@ -170,11 +171,12 @@ export default function HomePage() {
   const hasLeads = crm.opportunities.length > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {crm.hydrateError ? (
         <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
       ) : null}
       <PageHeader
+        eyebrow="Home"
         title={`${greeting()}, ${crm.user.name.split(" ")[0] || "there"}`}
         description={
           crm.effectiveStaff?.role === "accountant"
@@ -190,6 +192,18 @@ export default function HomePage() {
                   : crm.effectiveStaff?.role === "estimator"
                     ? "Bids due, proposals out, and the jobs you’re pricing."
                     : "Open pipeline, proposals out, AR, and today's field calendar — restoration and remodel from lead to job photo."
+        }
+        actions={
+          hasLeads ? (
+            <Button
+              nativeButton={false}
+              size="sm"
+              className="h-8 rounded-sm bg-[#0176d3] text-xs font-semibold text-white hover:bg-[#014486]"
+              render={<Link href="/pipeline" />}
+            >
+              View pipeline
+            </Button>
+          ) : null
         }
       />
 
@@ -257,31 +271,23 @@ export default function HomePage() {
       </MetricStrip>
 
       {crm.effectiveStaff && canViewAccounting(crm.effectiveStaff.role) ? (
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>Approve for QuickBooks</CardTitle>
-            <CardDescription>
-              Open from Accounting. Approve queues the Web Connector, or tag the project manager so they
-              can fix the file on the job and send it back.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm">
-              {stats.qb.invoiceCount + stats.qb.expenseCount + stats.qb.paymentCount} items waiting ·{" "}
-              {stats.qb.invoiceCount} invoices, {stats.qb.expenseCount} expenses, {stats.qb.paymentCount}{" "}
-              payments
-            </p>
-            <Button nativeButton={false} render={<Link href="/accounting/approve" />}>
-              Open Approve
-            </Button>
-          </CardContent>
-        </Card>
+        <RelatedList
+          title="Approve for QuickBooks"
+          description="Approve queues the Web Connector, or tag the PM to fix the file on the job."
+          action={<RelatedListLink href="/accounting/approve">Open Approve</RelatedListLink>}
+        >
+          <p className="px-3 py-3 text-sm text-[#181818]">
+            {stats.qb.invoiceCount + stats.qb.expenseCount + stats.qb.paymentCount} items waiting ·{" "}
+            {stats.qb.invoiceCount} invoices, {stats.qb.expenseCount} expenses, {stats.qb.paymentCount}{" "}
+            payments
+          </p>
+        </RelatedList>
       ) : null}
 
       {reviewNotices.length > 0 ? (
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>Accounting needs you</CardTitle>
+        <Card className="rounded-sm border-[#c9c9c9] shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
+          <CardHeader className="border-b border-[#c9c9c9] bg-[#f3f3f3]">
+            <CardTitle className="font-sans text-sm font-semibold text-[#181818]">Accounting needs you</CardTitle>
             <CardDescription>
               Open the file on the job, make the change, leave a comment, and send it back. Replies
               happen on that file — not on Approve.
@@ -293,7 +299,7 @@ export default function HomePage() {
                 <li key={`${notice.item.kind}-${notice.item.id}`} className="py-3 first:pt-1">
                   <Link
                     href={jobDocumentHref(notice.jobId, notice.item.kind, notice.item.id)}
-                    className="text-sm font-medium hover:underline"
+                    className="text-sm font-semibold text-[#0176d3] hover:underline"
                   >
                     {itemTitle(notice.item)}
                   </Link>
@@ -309,9 +315,9 @@ export default function HomePage() {
       ) : null}
 
       {returningNotices.length > 0 ? (
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>Returning clients</CardTitle>
+        <Card className="rounded-sm border-[#c9c9c9] shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
+          <CardHeader className="border-b border-[#c9c9c9] bg-[#f3f3f3]">
+            <CardTitle className="font-sans text-sm font-semibold text-[#181818]">Returning clients</CardTitle>
             <CardDescription>
               Past clients called back. The previous project manager is asked first. Company admins
               decide only after they decline, or when that seat is locked.
@@ -328,7 +334,7 @@ export default function HomePage() {
                 const jobBit = notice.previousJobCode ? ` on ${notice.previousJobCode}` : "";
                 return (
                   <li key={notice.id} className="py-3 first:pt-1">
-                    <Link href={href} className="text-sm font-medium hover:underline">
+                    <Link href={href} className="text-sm font-semibold text-[#0176d3] hover:underline">
                       {opportunity?.code || opportunity?.name || "Lead"}
                       {opportunity?.name && opportunity.code ? ` · ${opportunity.name}` : ""}
                     </Link>
@@ -397,222 +403,203 @@ export default function HomePage() {
         </Card>
       ) : null}
 
-      <section className="grid gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
-          <CardHeader className="border-b">
-            <CardTitle>Pipeline by stage</CardTitle>
-            <CardDescription>
-              Unweighted contract value sitting in front of award. Drag cards on the pipeline board
-              to move work.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-1">
-            {stats.byStage.map((item) => (
-              <div key={item.stage} className="grid gap-1">
-                <div className="flex items-center justify-between text-sm">
-                  <span>{STAGE_LABELS[item.stage]}</span>
-                  <span className="tabular-nums text-muted-foreground">
-                    {formatCurrency(item.value)}
-                  </span>
-                </div>
-                <div className="h-1.5 overflow-hidden bg-muted">
-                  <div
-                    className="h-full bg-foreground"
-                    style={{ width: `${Math.max(4, (item.value / stats.maxStage) * 100)}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-            <Link href="/pipeline" className="text-sm font-medium text-primary hover:underline">
-              Open pipeline board →
-            </Link>
-          </CardContent>
-        </Card>
+      <RelatedList
+        title="Pipeline path"
+        description="Unweighted contract value by stage. Open the board to move records."
+        action={<RelatedListLink href="/pipeline">Open board</RelatedListLink>}
+      >
+        <div className="p-3">
+          <PipelinePath
+            stages={stats.byStage.map((item) => ({
+              key: item.stage,
+              label: STAGE_LABELS[item.stage],
+              value: formatCurrency(item.value),
+              active: item.value > 0 && item.value === Math.max(...stats.byStage.map((s) => s.value)),
+            }))}
+          />
+        </div>
+      </RelatedList>
 
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>Proposals due</CardTitle>
-            <CardDescription>Dates the estimating desk cannot miss.</CardDescription>
-          </CardHeader>
-          <CardContent className="pt-1">
-            {stats.bidsThisWeek.length === 0 ? (
-              <p className="py-6 text-sm text-muted-foreground">
-                Nothing due in the next seven days. Check the board for later submissions.
-              </p>
-            ) : (
-              <ul className="divide-y">
-                {stats.bidsThisWeek
-                  .slice()
-                  .sort((a, b) => (a.bidDueAt ?? "").localeCompare(b.bidDueAt ?? ""))
-                  .map((opportunity) => {
-                    const due = daysUntil(opportunity.bidDueAt);
-                    return (
-                      <li key={opportunity.id} className="py-2.5 first:pt-0">
-                        <Link
-                          href={`/opportunities/${opportunity.id}`}
-                          className="block hover:underline"
-                        >
-                          <p className="text-sm font-medium">{opportunity.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {crm.customerName(opportunity)} ·{" "}
-                            {formatCurrency(opportunity.value)}
-                          </p>
-                        </Link>
-                        <p
-                          className={cn(
-                            "mt-1 text-xs tabular-nums",
-                            due !== null && due <= 2 ? "font-medium text-destructive" : "text-muted-foreground"
-                          )}
-                        >
-                          {due === 0
-                            ? "Due today"
-                            : due === 1
-                              ? "Due tomorrow"
-                              : `Due ${formatDateShort(opportunity.bidDueAt)}`}
-                        </p>
-                      </li>
-                    );
-                  })}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>This week on the desk</CardTitle>
-            <CardDescription>Walks, follow-ups, and closeout that still sit with preconstruction.</CardDescription>
-          </CardHeader>
-          <CardContent className="pt-1">
-            {upcomingTasks.length === 0 ? (
-              <p className="py-6 text-sm text-muted-foreground">All caught up. Nothing open.</p>
-            ) : (
-              <ul className="space-y-2">
-                {upcomingTasks.map((task) => {
-                  const overdue = (daysUntil(task.dueAt) ?? 0) < 0;
+      <div className="grid gap-3 xl:grid-cols-3">
+        <RelatedList
+          className="xl:col-span-1"
+          title="Proposals due"
+          description="Estimating dates that cannot slip."
+          action={<RelatedListLink href="/pipeline">View all</RelatedListLink>}
+        >
+          {stats.bidsThisWeek.length === 0 ? (
+            <p className="px-3 py-6 text-sm text-[#706e6b]">
+              Nothing due in the next seven days.
+            </p>
+          ) : (
+            <ul className="divide-y divide-[#e5e5e5]">
+              {stats.bidsThisWeek
+                .slice()
+                .sort((a, b) => (a.bidDueAt ?? "").localeCompare(b.bidDueAt ?? ""))
+                .map((opportunity) => {
+                  const due = daysUntil(opportunity.bidDueAt);
                   return (
-                    <li key={task.id} className="flex items-start gap-2.5">
-                      <Checkbox
-                        checked={task.completed}
-                        onCheckedChange={() => crm.toggleTask(task.id)}
-                        className="mt-0.5"
-                        aria-label={`Complete ${task.title}`}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm leading-snug">{task.title}</p>
-                        <p
-                          className={cn(
-                            "text-xs",
-                            overdue ? "text-destructive" : "text-muted-foreground"
-                          )}
-                        >
-                          {task.assignee} · {formatDateShort(task.dueAt)}
-                          {overdue ? " · overdue" : ""}
+                    <li key={opportunity.id} className="px-3 py-2.5 hover:bg-[#f3f3f3]">
+                      <Link href={`/opportunities/${opportunity.id}`} className="block">
+                        <p className="text-sm font-semibold text-[#0176d3] hover:underline">
+                          {opportunity.name}
                         </p>
-                      </div>
+                        <p className="text-xs text-[#706e6b]">
+                          {crm.customerName(opportunity)} · {formatCurrency(opportunity.value)}
+                        </p>
+                      </Link>
+                      <p
+                        className={cn(
+                          "mt-1 text-xs tabular-nums",
+                          due !== null && due <= 2 ? "font-semibold text-destructive" : "text-[#706e6b]",
+                        )}
+                      >
+                        {due === 0
+                          ? "Due today"
+                          : due === 1
+                            ? "Due tomorrow"
+                            : `Due ${formatDateShort(opportunity.bidDueAt)}`}
+                      </p>
                     </li>
                   );
                 })}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+            </ul>
+          )}
+        </RelatedList>
 
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>Training</CardTitle>
-            <CardDescription>
-              Roofing certification pack. Chapter tests at {COURSE.passScore}%, exam at {COURSE.finalPassScore}%.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-3">
+        <RelatedList
+          className="xl:col-span-2"
+          title="Today’s work"
+          description="Open tasks on your desk."
+        >
+          {upcomingTasks.length === 0 ? (
+            <p className="px-3 py-6 text-sm text-[#706e6b]">All caught up. No open tasks.</p>
+          ) : (
+            <ul className="divide-y divide-[#e5e5e5]">
+              {upcomingTasks.map((task) => {
+                const overdue = (daysUntil(task.dueAt) ?? 0) < 0;
+                return (
+                  <li key={task.id} className="flex items-start gap-2.5 px-3 py-2.5 hover:bg-[#f3f3f3]">
+                    <Checkbox
+                      checked={task.completed}
+                      onCheckedChange={() => crm.toggleTask(task.id)}
+                      className="mt-0.5"
+                      aria-label={`Complete ${task.title}`}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm leading-snug text-[#181818]">{task.title}</p>
+                      <p className={cn("text-xs", overdue ? "text-destructive" : "text-[#706e6b]")}>
+                        {task.assignee} · {formatDateShort(task.dueAt)}
+                        {overdue ? " · overdue" : ""}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </RelatedList>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-3">
+        <RelatedList
+          title="Training"
+          description={`Chapter tests ${COURSE.passScore}% · exam ${COURSE.finalPassScore}%.`}
+          action={<RelatedListLink href="/training">Open</RelatedListLink>}
+        >
+          <div className="px-3 py-3 text-sm text-[#181818]">
             {(() => {
               const training = overallProgress(staffProgress(crm.trainingProgress, crm.user.staffId));
               return (
                 <>
-                  <p className="text-sm">
+                  <p>
                     {training.read} of {training.totalLessons} lessons · {training.passedChapters} of{" "}
                     {training.chapterCount} chapter tests
                     {training.certified ? " · certified" : ""}
                   </p>
-                  {crm.trainingBulletins[0] ? (
-                    <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                      Bulletin: {crm.trainingBulletins[0].title}
-                    </p>
-                  ) : (
-                    <p className="mt-2 text-xs text-muted-foreground">No company training notes this week.</p>
-                  )}
-                  <Link href="/training" className="mt-3 inline-block text-sm font-medium text-primary hover:underline">
-                    Open training
-                  </Link>
+                  <p className="mt-2 text-xs text-[#706e6b]">
+                    {crm.trainingBulletins[0]
+                      ? `Bulletin: ${crm.trainingBulletins[0].title}`
+                      : "No company training notes this week."}
+                  </p>
                 </>
               );
             })()}
-          </CardContent>
-        </Card>
+          </div>
+        </RelatedList>
 
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>Recent activity</CardTitle>
-            <CardDescription>Calls, walks, and stage moves across the book of work.</CardDescription>
-          </CardHeader>
-          <CardContent className="pt-1">
-            {feed.length === 0 ? (
-              <p className="py-6 text-sm text-muted-foreground">
-                Nothing logged yet. Open a record and capture the last owner conversation.
-              </p>
-            ) : (
-              <ul className="space-y-3">
-                {feed.map((activity) => (
-                  <li key={activity.id}>
-                    <p className="text-sm leading-snug">{activity.body}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {activity.author} · {formatRelative(activity.createdAt)}
-                    </p>
-                  </li>
+        <RelatedList
+          className="lg:col-span-2"
+          title="Recent activity"
+          description="Calls, walks, and stage moves across the book."
+        >
+          {feed.length === 0 ? (
+            <p className="px-3 py-6 text-sm text-[#706e6b]">
+              Nothing logged yet. Open a record and capture the last owner conversation.
+            </p>
+          ) : (
+            <ul className="divide-y divide-[#e5e5e5]">
+              {feed.map((activity) => (
+                <li key={activity.id} className="px-3 py-2.5 hover:bg-[#f3f3f3]">
+                  <p className="text-sm leading-snug text-[#181818]">{activity.body}</p>
+                  <p className="mt-0.5 text-xs text-[#706e6b]">
+                    {activity.author} · {formatRelative(activity.createdAt)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </RelatedList>
+      </div>
+
+      <RelatedList
+        title="Active jobs"
+        description="Jobs in precon, production, or punch."
+        action={<RelatedListLink href="/jobs">View all</RelatedListLink>}
+      >
+        {stats.activeJobs.length === 0 ? (
+          <p className="px-3 py-6 text-sm text-[#706e6b]">No active jobs in your book.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[40rem] text-left text-sm">
+              <thead className="border-b border-[#c9c9c9] bg-[#f3f3f3] text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
+                <tr>
+                  <th className="px-3 py-2">Job</th>
+                  <th className="px-3 py-2">Customer</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">PM</th>
+                  <th className="px-3 py-2 text-right">Contract</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#e5e5e5]">
+                {stats.activeJobs.map((job) => (
+                  <tr key={job.id} className="hover:bg-[#f3f3f3]">
+                    <td className="px-3 py-2">
+                      <Link href={`/jobs/${job.id}`} className="font-semibold text-[#0176d3] hover:underline">
+                        {job.name}
+                      </Link>
+                      <div className="mt-0.5">
+                        <RecordCode code={job.code} />
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-[#706e6b]">
+                      {crm.customerName(job)}
+                      <div className="text-xs">{job.location}</div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <JobStatusBadge status={job.status} />
+                    </td>
+                    <td className="px-3 py-2 text-[#706e6b]">{job.projectManager}</td>
+                    <td className="px-3 py-2 text-right font-semibold tabular-nums text-[#181818]">
+                      {formatCurrencyFull(job.contractValue)}
+                    </td>
+                  </tr>
                 ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
-      </section>
-
-      <section>
-        <div className="mb-3 flex items-end justify-between">
-          <h2 className="font-heading text-lg font-medium tracking-tight">Active jobs</h2>
-          <Link href="/jobs" className="text-sm text-primary hover:underline">
-            All jobs
-          </Link>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {stats.activeJobs.map((job) => (
-            <Link key={job.id} href={`/jobs/${job.id}`}>
-              <Card className="h-full transition-colors hover:bg-muted/40">
-                <CardHeader>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <RecordCode code={job.code} />
-                      <CardTitle className="mt-0.5 text-sm">{job.name}</CardTitle>
-                    </div>
-                    <JobStatusBadge status={job.status} />
-                  </div>
-                  <CardDescription>
-                    {crm.customerName(job)} · {job.location}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex items-center justify-between text-sm">
-                  <span className="font-heading text-base font-medium tabular-nums">
-                    {formatCurrencyFull(job.contractValue)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">{job.projectManager}</span>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      </section>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </RelatedList>
       </>
       ) : null}
     </div>
