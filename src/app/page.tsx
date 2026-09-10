@@ -33,6 +33,7 @@ import { actionableReturningClientNotices } from "@/lib/returning-client";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { BdRoiPanel } from "@/components/bd-roi";
 import { GoalHeader } from "@/components/goal-header";
+import { HomeOnboarding } from "@/components/home-onboarding";
 
 export default function HomePage() {
   const crm = useCrm();
@@ -166,6 +167,8 @@ export default function HomePage() {
 
   if (!crm.hydrated) return <LoadingScreen />;
 
+  const hasLeads = crm.opportunities.length > 0;
+
   return (
     <div className="space-y-6">
       {crm.hydrateError ? (
@@ -182,12 +185,20 @@ export default function HomePage() {
               ? "Your jobs, your contact book, and the work assigned to you."
               : crm.effectiveStaff?.role === "team_lead" || crm.effectiveStaff?.role === "team_admin"
                 ? "Jobs and contacts for your team. Login As a teammate to inspect their book, or open Reports for team activity."
-                : "Open pipeline, proposals out, AR, and today's field calendar — restoration and remodel from lead to job photo."
+                : crm.effectiveStaff?.role === "company_admin"
+                  ? "Company pipeline, sold pacing, and what’s on the desk — every seat’s work in one place."
+                  : crm.effectiveStaff?.role === "estimator"
+                    ? "Bids due, proposals out, and the jobs you’re pricing."
+                    : "Open pipeline, proposals out, AR, and today's field calendar — restoration and remodel from lead to job photo."
         }
       />
 
       {crm.effectiveStaff?.role === "accountant" ? null : <GoalHeader />}
 
+      {!hasLeads ? <HomeOnboarding viewer={crm.effectiveStaff} /> : null}
+
+      {hasLeads ? (
+      <>
       <MetricStrip className="sm:grid-cols-2 xl:grid-cols-4">
         <Metric
           label="Open pipeline"
@@ -602,6 +613,8 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+      </>
+      ) : null}
     </div>
   );
 }
