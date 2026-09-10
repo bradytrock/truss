@@ -817,7 +817,8 @@ type CrmContextValue = CrmState & {
         | "email"
         | "phone"
         | "emailSignature"
-        | "photoUrl"
+        | "monthlySalesQuota"
+          | "photoUrl"
         | "photoStoragePath"
         | "googleLocationId"
         | "locked"
@@ -9516,6 +9517,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         defaultInvoiceTerms: next.defaultInvoiceTerms ?? null,
         minimumMarginPercent: clampMarginPercent(next.minimumMarginPercent),
         defaultEmailSignature: next.defaultEmailSignature?.trim() ?? "",
+        defaultMonthlySalesQuota: Math.max(0, Number(next.defaultMonthlySalesQuota) || 0),
       };
       if (!isSupabaseConfigured() || !user.companyId || user.companyId === "local") {
         setCompanySettings(settings);
@@ -9554,6 +9556,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         default_invoice_terms: settings.defaultInvoiceTerms,
         minimum_margin_percent: settings.minimumMarginPercent,
         default_email_signature: settings.defaultEmailSignature ?? "",
+        default_monthly_sales_quota: settings.defaultMonthlySalesQuota ?? 0,
         updated_at: new Date().toISOString(),
       };
       let { data, error } = await supabase
@@ -9614,6 +9617,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         data = retry.data;
         error = retry.error;
         if (!error) toast.message(missingEmailSignatureMessage());
+      }
+      if (error && /default_monthly_sales_quota/i.test(String(error.message ?? ""))) {
+        const { default_monthly_sales_quota: _quota, ...rest } = attempted;
+        attempted = rest;
+        const retry = await supabase
+          .from("companies")
+          .update(rest as typeof payload)
+          .eq("id", user.companyId)
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
       }
       if (error && isMissingCardPhotoColumns(error)) {
         const { card_logo_url: _cardLogo, card_logo_storage_path: _cardLogoPath, ...rest } = attempted;
@@ -9830,6 +9845,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         photo_storage_path: member.photoStoragePath ?? "",
         google_location_id: looksLikeUuid(member.googleLocationId) ? member.googleLocationId : null,
         email_signature: member.emailSignature ?? "",
+        monthly_sales_quota: member.monthlySalesQuota ?? null,
         locked: member.locked,
         restricted: member.restricted,
         invite_expires_at: inviteExpiresAt,
@@ -9852,6 +9868,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         const retry = await supabase.from("team_members").upsert(withoutSig);
         error = retry.error;
         if (!retry.error) toast.message(missingEmailSignatureMessage());
+      }
+      if (error && /monthly_sales_quota/i.test(error.message ?? "")) {
+        const { monthly_sales_quota: _quota, ...withoutQuota } = payload;
+        const retry = await supabase.from("team_members").upsert(withoutQuota);
+        error = retry.error;
       }
       if (error && isMissingCardPhotoColumns(error)) {
         const { photo_url: _photo, photo_storage_path: _photoPath, ...withoutPhoto } = payload;
@@ -10037,6 +10058,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           | "email"
           | "phone"
           | "emailSignature"
+          | "monthlySalesQuota"
           | "photoUrl"
           | "photoStoragePath"
           | "googleLocationId"

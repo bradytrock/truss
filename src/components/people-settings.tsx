@@ -714,6 +714,7 @@ type ProfilePatch = Partial<
     | "cardSlug"
     | "googleLocationId"
     | "emailSignature"
+    | "monthlySalesQuota"
   >
 >;
 
@@ -741,6 +742,7 @@ function EditProfileDialog({
   const [teamId, setTeamId] = useState(NO_TEAM);
   const [locationId, setLocationId] = useState<string | null>(null);
   const [signature, setSignature] = useState("");
+  const [quota, setQuota] = useState("");
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -754,6 +756,9 @@ function EditProfileDialog({
     setTeamId(member.teamId || NO_TEAM);
     setLocationId(member.googleLocationId ?? null);
     setSignature(member.emailSignature ?? "");
+    setQuota(
+      member.monthlySalesQuota == null ? "" : String(member.monthlySalesQuota),
+    );
   }, [member]);
 
   async function onSubmit(event: FormEvent) {
@@ -771,6 +776,7 @@ function EditProfileDialog({
         teamId: parseTeamSelect(teamId),
         googleLocationId: locationId,
         emailSignature: signature,
+        monthlySalesQuota: quota.trim() === "" ? null : Math.max(0, Number(quota) || 0),
       });
     } finally {
       setPending(false);
@@ -874,6 +880,29 @@ function EditProfileDialog({
                 {googleLocations.length === 0
                   ? "No locations yet. Add one under Settings → Locations to turn on the review button."
                   : "Which listing the review button on their card opens. Manage the list under Settings → Locations."}
+              </p>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="profile-edit-quota">Monthly sales quota</Label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground">
+                  $
+                </span>
+                <Input
+                  id="profile-edit-quota"
+                  type="number"
+                  min={0}
+                  step="1000"
+                  className="pl-7"
+                  value={quota}
+                  onChange={(event) => setQuota(event.target.value)}
+                  placeholder="Company default"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {quota.trim()
+                  ? "Overrides the company default on the home Goal bar."
+                  : "Blank inherits the company default from Settings → Company."}
               </p>
             </div>
             <div className="grid gap-1.5">

@@ -1,5 +1,6 @@
 "use client";
 
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -193,6 +194,49 @@ function CompanySettingsForm() {
                 onChange={(value) => patch("postalCode", value)}
               />
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Monthly sales goal</CardTitle>
+          <CardDescription>
+            Default signed-contract quota for the month. The home Goal bar uses this for anyone
+            without a personal override. Team leads and company admins see a combined team goal.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 pt-4">
+          <div className="grid gap-1.5 sm:max-w-xs">
+            <Label htmlFor="company-default-quota">Company default quota</Label>
+            <div className="relative">
+              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground">
+                $
+              </span>
+              <Input
+                id="company-default-quota"
+                type="number"
+                min={0}
+                step="1000"
+                className="pl-7"
+                value={
+                  Number.isFinite(form.defaultMonthlySalesQuota)
+                    ? String(form.defaultMonthlySalesQuota)
+                    : "0"
+                }
+                onChange={(event) => {
+                  const next = Number(event.target.value);
+                  patch(
+                    "defaultMonthlySalesQuota",
+                    Number.isFinite(next) && next >= 0 ? next : 0,
+                  );
+                }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Sold this month is signed contract value (accepted proposals), not invoices. Override
+              a seat under Settings → People when someone carries a different number.
+            </p>
           </div>
         </CardContent>
       </Card>

@@ -176,6 +176,9 @@ export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>):
     minimumMarginPercent: Number(row.minimum_margin_percent ?? 0),
     defaultEmailSignature:
       "default_email_signature" in row ? String(row.default_email_signature ?? "") : "",
+    defaultMonthlySalesQuota: Number(
+      "default_monthly_sales_quota" in row ? (row.default_monthly_sales_quota ?? 0) : 0,
+    ),
   };
 }
 
@@ -202,6 +205,10 @@ export function mapStaff(row: StaffRow): StaffMember {
     googleLocationId:
       "google_location_id" in row ? ((row.google_location_id as string | null) ?? null) : null,
     emailSignature: "email_signature" in row ? String(row.email_signature ?? "") : "",
+    monthlySalesQuota:
+      "monthly_sales_quota" in row && row.monthly_sales_quota != null
+        ? Number(row.monthly_sales_quota)
+        : null,
     locked: Boolean(row.locked),
     restricted: Boolean(row.restricted),
     inviteExpiresAt: row.invite_expires_at ?? null,

@@ -35,6 +35,7 @@ export type Database = {
           default_invoice_terms: string | null;
           minimum_margin_percent: number;
           default_email_signature: string;
+          default_monthly_sales_quota: number;
           created_at: string;
           updated_at: string;
         };
@@ -69,6 +70,7 @@ export type Database = {
           default_invoice_terms?: string | null;
           minimum_margin_percent?: number;
           default_email_signature?: string;
+          default_monthly_sales_quota?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -103,6 +105,7 @@ export type Database = {
           default_invoice_terms?: string | null;
           minimum_margin_percent?: number;
           default_email_signature?: string;
+          default_monthly_sales_quota?: number;
           created_at?: string;
           updated_at?: string;
         };
@@ -195,6 +198,7 @@ export type Database = {
           google_review_url: string;
           google_location_id: string | null;
           email_signature: string;
+          monthly_sales_quota: number | null;
           locked: boolean;
           restricted: boolean;
           invite_expires_at: string | null;
@@ -216,6 +220,7 @@ export type Database = {
           google_review_url?: string;
           google_location_id?: string | null;
           email_signature?: string;
+          monthly_sales_quota?: number | null;
           locked?: boolean;
           restricted?: boolean;
           invite_expires_at?: string | null;

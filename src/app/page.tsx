@@ -32,6 +32,7 @@ import { canViewAccounting } from "@/lib/visibility";
 import { actionableReturningClientNotices } from "@/lib/returning-client";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { BdRoiPanel } from "@/components/bd-roi";
+import { GoalHeader } from "@/components/goal-header";
 
 export default function HomePage() {
   const crm = useCrm();
@@ -184,6 +185,8 @@ export default function HomePage() {
                 : "Open pipeline, proposals out, AR, and today's field calendar — restoration and remodel from lead to job photo."
         }
       />
+
+      {crm.effectiveStaff?.role === "accountant" ? null : <GoalHeader />}
 
       <MetricStrip className="sm:grid-cols-2 xl:grid-cols-4">
         <Metric

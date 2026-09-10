@@ -169,6 +169,8 @@ export interface CompanySettings {
   minimumMarginPercent?: number;
   /** Plain-text email sign-off used when a seat has no signature of their own. */
   defaultEmailSignature?: string;
+  /** Default monthly signed-contract goal (USD) for seats without their own quota. */
+  defaultMonthlySalesQuota?: number;
 }
 
 export const NORTHLINE_COMPANY: CompanySettings = {
@@ -198,6 +200,7 @@ export const NORTHLINE_COMPANY: CompanySettings = {
   defaultInvoiceTerms: null,
   minimumMarginPercent: 0,
   defaultEmailSignature: "",
+  defaultMonthlySalesQuota: 80000,
 };
 
 export interface StaffMember {
@@ -218,6 +221,8 @@ export interface StaffMember {
   googleLocationId?: string | null;
   /** Own sign-off. Empty means use the company default. */
   emailSignature: string;
+  /** Monthly signed-contract goal (USD). Null/undefined inherits the company default. */
+  monthlySalesQuota?: number | null;
   locked: boolean;
   restricted: boolean;
   inviteExpiresAt: string | null;
