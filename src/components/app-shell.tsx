@@ -176,12 +176,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     );
 
   return (
-    <div className="flex min-h-dvh w-full flex-1 bg-sidebar">
-      {/*
-        Stretch the aside to the full page column height (not just the viewport).
-        Shell bg-sidebar keeps the left rail painted even if content layout shifts.
-      */}
-      <aside className="hidden min-h-dvh w-[13.5rem] shrink-0 flex-col self-stretch border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
+    <div className="grid min-h-dvh w-full flex-1 bg-sidebar md:grid-cols-[13.5rem_minmax(0,1fr)]">
+      <aside className="hidden h-full min-h-dvh flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
         <div className="flex items-start gap-1 border-b border-sidebar-border px-3 py-3.5">
           <AppLauncher apps={launcherApps} pathname={pathname} />
           <Link href="/" className="min-w-0 flex-1 rounded-sm px-1.5 py-0.5 hover:bg-white/6">
@@ -228,7 +224,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </SheetContent>
       </Sheet>
 
-      <div className="flex min-w-0 flex-1 flex-col bg-background">
+      <div className="flex min-h-dvh min-w-0 flex-col bg-background">
         <header className="sticky top-0 z-30 border-b bg-background">
           <div className="flex h-12 items-center gap-2 px-3 sm:px-5">
             <Button

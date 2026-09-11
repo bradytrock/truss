@@ -13,8 +13,10 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
       <TooltipProvider delay={200}>
-        <Shell>{children}</Shell>
-        <Toaster />
+        <div className="flex min-h-dvh flex-1 flex-col">
+          <Shell>{children}</Shell>
+          <Toaster />
+        </div>
       </TooltipProvider>
     </ThemeProvider>
   );
