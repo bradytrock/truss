@@ -1,11 +1,13 @@
-import type { NextConfig } from "next";
-
+/** @type {import('next').NextConfig} */
 const TRUSS_SUPABASE_URL = "https://cxrgdjvkmvnuztubxldh.supabase.co";
 const TRUSS_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Fs_dTxYT2nBFYVjLLG6vpg_n5b_NSa1";
 
-const nextConfig: NextConfig = {
+const nextConfig = {
+  // Hostinger and similar PaaS start from .next/standalone. Keep this explicit so
+  // deploys do not fail with "no standalone server" if a TypeScript config wrapper fails.
+  output: "standalone",
   // Cloud Agent / Cursor preview proxies rewrite the browser host away from localhost.
-  // Use ** so multi-label hosts like p-3847-pod-….agent.cvm.dev are allowed.
+  // Use ** so multi-label hosts like p-3847-pod-....agent.cvm.dev are allowed.
   // "null" covers sandboxed preview iframes that send Origin: null (opaque origin).
   allowedDevOrigins: [
     "127.0.0.1",
