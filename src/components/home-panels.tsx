@@ -37,6 +37,113 @@ export function RelatedList({
   );
 }
 
+/** Dashboard chart panel — same Lightning chrome as related lists. */
+export function DashboardChart({
+  title,
+  description,
+  action,
+  children,
+  className,
+}: {
+  title: string;
+  description?: string;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <RelatedList title={title} description={description} action={action} className={className}>
+      <div className="px-3 py-3">{children}</div>
+    </RelatedList>
+  );
+}
+
+/** Vertical bars for homepage pipeline / desk charts. */
+export function HomeBars({
+  items,
+  format,
+  empty = "Nothing to chart yet.",
+}: {
+  items: { key?: string; label: string; value: number }[];
+  format: (value: number) => string;
+  empty?: string;
+}) {
+  if (items.length === 0 || items.every((item) => item.value <= 0)) {
+    return <p className="py-8 text-center text-sm text-[#706e6b]">{empty}</p>;
+  }
+  const peak = Math.max(...items.map((item) => item.value), 1);
+  return (
+    <div className="flex h-44 items-stretch gap-2 sm:h-52">
+      {items.map((item, index) => {
+        const height = item.value > 0 ? Math.max(10, (item.value / peak) * 100) : 0;
+        return (
+          <div
+            key={item.key ?? `${item.label}-${index}`}
+            className="flex min-w-0 flex-1 flex-col items-center gap-1"
+          >
+            <p className="h-4 w-full truncate text-center text-[10px] font-semibold tabular-nums text-[#181818]">
+              {item.value ? format(item.value) : ""}
+            </p>
+            <div className="flex w-full flex-1 items-end justify-center rounded-sm bg-[#f3f3f3]">
+              <div
+                className={cn("w-full max-w-14 rounded-t-sm", item.value > 0 ? "bg-[#0176d3]" : "bg-transparent")}
+                style={{ height: `${height}%` }}
+                title={`${item.label}: ${format(item.value)}`}
+              />
+            </div>
+            <p className="w-full truncate text-center text-[10px] font-medium text-[#706e6b]">
+              {item.label}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Horizontal share bars for mix charts (win rate, desk mix). */
+export function HomeShareRows({
+  items,
+  empty = "Nothing to chart yet.",
+}: {
+  items: { label: string; value: number; hint?: string; tone?: "brand" | "success" | "warn" | "muted" }[];
+  empty?: string;
+}) {
+  if (items.length === 0 || items.every((item) => item.value <= 0)) {
+    return <p className="py-8 text-center text-sm text-[#706e6b]">{empty}</p>;
+  }
+  const peak = Math.max(...items.map((item) => item.value), 1);
+  return (
+    <ul className="space-y-3">
+      {items.map((item) => (
+        <li key={item.label}>
+          <div className="mb-1 flex items-baseline justify-between gap-2">
+            <span className="text-xs font-semibold text-[#181818]">{item.label}</span>
+            <span className="text-[11px] tabular-nums text-[#706e6b]">
+              {item.hint ?? String(item.value)}
+            </span>
+          </div>
+          <div className="h-2.5 overflow-hidden rounded-sm bg-[#e5e5e5]">
+            <div
+              className={cn(
+                "h-full rounded-sm",
+                item.tone === "success"
+                  ? "bg-[#45c65a]"
+                  : item.tone === "warn"
+                    ? "bg-[#fe9339]"
+                    : item.tone === "muted"
+                      ? "bg-[#706e6b]"
+                      : "bg-[#0176d3]",
+              )}
+              style={{ width: `${Math.max(item.value > 0 ? 4 : 0, (item.value / peak) * 100)}%` }}
+            />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function RelatedListLink({ href, children }: { href: string; children: ReactNode }) {
   return (
     <Link

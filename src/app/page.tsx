@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ErrorBanner, LoadingScreen, Metric, MetricStrip, PageHeader, RecordCode } from "@/components/page-chrome";
+import { ErrorBanner, LoadingScreen, PageHeader, RecordCode } from "@/components/page-chrome";
 import { JobStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import {
@@ -34,7 +34,14 @@ import { isBusinessDevelopment } from "@/lib/bd";
 import { BdRoiPanel } from "@/components/bd-roi";
 import { GoalHeader } from "@/components/goal-header";
 import { HomeOnboarding } from "@/components/home-onboarding";
-import { PipelinePath, RelatedList, RelatedListLink } from "@/components/home-panels";
+import {
+  DashboardChart,
+  HomeBars,
+  HomeShareRows,
+  PipelinePath,
+  RelatedList,
+  RelatedListLink,
+} from "@/components/home-panels";
 
 export default function HomePage() {
   const crm = useCrm();
@@ -180,18 +187,18 @@ export default function HomePage() {
         title={`${greeting()}, ${crm.user.name.split(" ")[0] || "there"}`}
         description={
           crm.effectiveStaff?.role === "accountant"
-            ? "Books for every job: expenses, receipts, and what still needs to be typed into QuickBooks."
+            ? "Charts and queues for expenses, receipts, and what still needs QuickBooks."
             : crm.effectiveStaff?.role === "business_development"
-            ? "Your pipeline, the agents you brought in, and ROI. Assign the work — you still keep the numbers."
+            ? "Pipeline charts, agent ROI, and the desk — assign the work, keep the numbers."
             : crm.effectiveStaff?.role === "project_manager" || crm.effectiveStaff?.role === "superintendent"
-              ? "Your jobs, your contact book, and the work assigned to you."
+              ? "Your jobs and today’s desk, with pipeline paced as charts instead of a number wall."
               : crm.effectiveStaff?.role === "team_lead" || crm.effectiveStaff?.role === "team_admin"
-                ? "Jobs and contacts for your team. Login As a teammate to inspect their book, or open Reports for team activity."
+                ? "Team pipeline and desk lists. Login As a teammate, or open Reports for deeper cuts."
                 : crm.effectiveStaff?.role === "company_admin"
-                  ? "Company pipeline, sold pacing, and what’s on the desk — every seat’s work in one place."
+                  ? "Company quota, pipeline charts, and what’s on the desk — Salesforce-style, not a KPI dump."
                   : crm.effectiveStaff?.role === "estimator"
-                    ? "Bids due, proposals out, and the jobs you’re pricing."
-                    : "Open pipeline, proposals out, AR, and today's field calendar — restoration and remodel from lead to job photo."
+                    ? "Bid timing, proposal charts, and the jobs you’re pricing."
+                    : "Quota, pipeline charts, and today’s lists — restoration and remodel from lead to job photo."
         }
         actions={
           hasLeads ? (
@@ -213,62 +220,88 @@ export default function HomePage() {
 
       {hasLeads ? (
       <>
-      <MetricStrip className="sm:grid-cols-2 xl:grid-cols-4">
-        <Metric
-          label="Open pipeline"
-          value={formatCurrency(stats.pipelineValue)}
-          hint={`${stats.openCount} open leads · ${formatCurrency(stats.weighted)} weighted`}
-        />
-        <Metric
-          label="Proposals due this week"
-          value={String(stats.bidsThisWeek.length)}
-          hint={
-            stats.bidsThisWeek[0]
-              ? `Next: ${[...stats.bidsThisWeek].sort((a, b) => (a.bidDueAt ?? "").localeCompare(b.bidDueAt ?? ""))[0]?.name}`
-              : "None in the next seven days"
-          }
-        />
-        <Metric
-          label="Work in the field"
-          value={formatCurrency(stats.activeValue)}
-          hint={`${stats.activeJobs.length} jobs in precon, production, or punch`}
-        />
-        <Metric
-          label="Win rate"
-          value={`${stats.winRate}%`}
-          hint={`${stats.awardedCount} sold / ${stats.closedCount} closed`}
-        />
-      </MetricStrip>
+      <div className="grid gap-3 xl:grid-cols-5">
+        <DashboardChart
+          className="xl:col-span-3"
+          title="Pipeline by stage"
+          description={`${stats.openCount} open · ${formatCurrency(stats.pipelineValue)} unweighted · ${formatCurrency(stats.weighted)} weighted`}
+          action={<RelatedListLink href="/pipeline">Open board</RelatedListLink>}
+        >
+          <HomeBars
+            items={stats.byStage.map((item) => ({
+              key: item.stage,
+              label: STAGE_LABELS[item.stage],
+              value: item.value,
+            }))}
+            format={formatCurrency}
+            empty="No open pipeline value yet."
+          />
+        </DashboardChart>
+
+        <DashboardChart
+          className="xl:col-span-2"
+          title="Desk mix"
+          description="What is waiting on a homeowner, the books, or the calendar."
+          action={<RelatedListLink href="/reports">Reports</RelatedListLink>}
+        >
+          <HomeShareRows
+            items={[
+              {
+                label: "Proposals out",
+                value: Math.max(stats.proposalValue, stats.proposals.length),
+                hint:
+                  stats.proposals.length > 0
+                    ? `${stats.proposals.length} · ${formatCurrency(stats.proposalValue)}`
+                    : "None out",
+                tone: "brand",
+              },
+              {
+                label: "AR outstanding",
+                value: stats.ar,
+                hint: formatCurrency(stats.ar),
+                tone: "warn",
+              },
+              {
+                label: "Active field work",
+                value: Math.max(stats.activeValue, stats.activeJobs.length),
+                hint: `${stats.activeJobs.length} jobs · ${formatCurrency(stats.activeValue)}`,
+                tone: "success",
+              },
+              {
+                label: "Win rate",
+                value: stats.winRate,
+                hint:
+                  stats.closedCount > 0
+                    ? `${stats.winRate}% · ${stats.awardedCount}/${stats.closedCount} closed`
+                    : "No closed leads yet",
+                tone: "muted",
+              },
+              {
+                label: "Today’s calendar",
+                value: stats.todayEvents.length,
+                hint:
+                  stats.todayEvents[0]
+                    ? `${stats.todayEvents.length} · next ${formatTime(stats.todayEvents[0].startsAt)}`
+                    : "Nothing today",
+                tone: "brand",
+              },
+              {
+                label: "Bids due this week",
+                value: stats.bidsThisWeek.length,
+                hint:
+                  stats.bidsThisWeek.length > 0
+                    ? `${stats.bidsThisWeek.length} due in 7 days`
+                    : "Clear this week",
+                tone: "warn",
+              },
+            ]}
+          />
+        </DashboardChart>
+      </div>
 
       {crm.viewer && isBusinessDevelopment(crm.viewer.role) ? (
         <BdRoiPanel state={crm.book} viewer={crm.viewer} />
       ) : null}
-
-      <MetricStrip className="sm:grid-cols-3">
-        <Metric
-          label="Proposals out"
-          value={String(stats.proposals.length)}
-          hint={
-            stats.proposals.length
-              ? `${formatCurrency(stats.proposalValue)} with homeowners`
-              : "Nothing waiting on a signature"
-          }
-        />
-        <Metric
-          label="AR outstanding"
-          value={formatCurrency(stats.ar)}
-          hint="Sent, partial, and overdue"
-        />
-        <Metric
-          label="On today's calendar"
-          value={String(stats.todayEvents.length)}
-          hint={
-            stats.todayEvents[0]
-              ? `Next: ${formatTime(stats.todayEvents[0].startsAt)} ${stats.todayEvents[0].title}`
-              : "Nothing scheduled today"
-          }
-        />
-      </MetricStrip>
 
       {crm.effectiveStaff && canViewAccounting(crm.effectiveStaff.role) ? (
         <RelatedList
