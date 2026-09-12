@@ -15,7 +15,6 @@ import {
   formatDate,
   formatDateShort,
   formatRelative,
-  formatTime,
   greeting,
   localYmd,
 } from "@/lib/format";
@@ -32,16 +31,26 @@ import { canViewAccounting } from "@/lib/visibility";
 import { actionableReturningClientNotices } from "@/lib/returning-client";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { BdRoiPanel } from "@/components/bd-roi";
-import { GoalHeader } from "@/components/goal-header";
 import { HomeOnboarding } from "@/components/home-onboarding";
 import {
   DashboardChart,
-  HomeBars,
-  HomeShareRows,
+  HomeAreaChart,
+  HomeDonut,
+  HomeGauge,
+  HomeKpiTile,
   PipelinePath,
   RelatedList,
   RelatedListLink,
 } from "@/components/home-panels";
+import {
+  amountClosedBySource,
+  closedWonThisMonth,
+  dealsByCloseDate,
+  formatCompactCurrency,
+  homeGoalScope,
+  homeQuota,
+  wonDeals,
+} from "@/lib/home-dashboard";
 
 export default function HomePage() {
   const crm = useCrm();
@@ -125,6 +134,39 @@ export default function HomePage() {
     };
   }, [crm.estimateLines, crm.estimates, crm.events, crm.expenses, crm.invoiceLines, crm.invoices, crm.jobs, crm.opportunities, crm.payments]);
 
+  const salesDashboard = useMemo(() => {
+    const viewer = crm.effectiveStaff;
+    const { ownerIds, roster } = homeGoalScope(viewer, crm.staff);
+    const deals = wonDeals({
+      jobs: crm.jobs,
+      estimates: crm.estimates,
+      estimateLines: crm.estimateLines,
+      opportunities: crm.opportunities,
+      staff: crm.staff,
+      ownerIds,
+    });
+    const closed = closedWonThisMonth(deals);
+    const quota = homeQuota(viewer, crm.company, roster);
+    return {
+      openPipeline: stats.pipelineValue,
+      closedCount: closed.count,
+      closedAmount: closed.amount,
+      avgDeal: closed.avg,
+      quota,
+      byCloseDate: dealsByCloseDate(deals, 14),
+      bySource: amountClosedBySource(deals),
+    };
+  }, [
+    crm.company,
+    crm.effectiveStaff,
+    crm.estimateLines,
+    crm.estimates,
+    crm.jobs,
+    crm.opportunities,
+    crm.staff,
+    stats.pipelineValue,
+  ]);
+
   const upcomingTasks = crm.tasks
     .filter((task) => !task.completed)
     .sort((a, b) => a.dueAt.localeCompare(b.dueAt))
@@ -187,18 +229,18 @@ export default function HomePage() {
         title={`${greeting()}, ${crm.user.name.split(" ")[0] || "there"}`}
         description={
           crm.effectiveStaff?.role === "accountant"
-            ? "Charts and queues for expenses, receipts, and what still needs QuickBooks."
+            ? "Accounting queues for expenses, receipts, and QuickBooks — sales charts stay with the field seats."
             : crm.effectiveStaff?.role === "business_development"
-            ? "Pipeline charts, agent ROI, and the desk — assign the work, keep the numbers."
+            ? "Executive sales view: open pipeline, closed-won gauge, source mix, and your agent ROI."
             : crm.effectiveStaff?.role === "project_manager" || crm.effectiveStaff?.role === "superintendent"
-              ? "Your jobs and today’s desk, with pipeline paced as charts instead of a number wall."
+              ? "Your sales dashboard and today’s desk — charts first, lists below."
               : crm.effectiveStaff?.role === "team_lead" || crm.effectiveStaff?.role === "team_admin"
-                ? "Team pipeline and desk lists. Login As a teammate, or open Reports for deeper cuts."
+                ? "Team sales dashboard and desk lists. Login As a teammate, or open Reports."
                 : crm.effectiveStaff?.role === "company_admin"
-                  ? "Company quota, pipeline charts, and what’s on the desk — Salesforce-style, not a KPI dump."
+                  ? "Executive sales dashboard: open pipeline, closed-won gauge, and source mix."
                   : crm.effectiveStaff?.role === "estimator"
-                    ? "Bid timing, proposal charts, and the jobs you’re pricing."
-                    : "Quota, pipeline charts, and today’s lists — restoration and remodel from lead to job photo."
+                    ? "Sales dashboard for bids and signed work, with the jobs you’re pricing below."
+                    : "Sales executive dashboard for pipeline and closed-won — restoration and remodel from lead to job photo."
         }
         actions={
           hasLeads ? (
@@ -214,90 +256,91 @@ export default function HomePage() {
         }
       />
 
-      {crm.effectiveStaff?.role === "accountant" ? null : <GoalHeader />}
-
       {!hasLeads ? <HomeOnboarding viewer={crm.effectiveStaff} /> : null}
+
+      {hasLeads && crm.effectiveStaff?.role !== "accountant" ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
+                Sales executive dashboard
+              </p>
+              <p className="text-xs text-[#706e6b]">
+                Pipeline and closed-won for{" "}
+                {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+              </p>
+            </div>
+            <RelatedListLink href="/reports">Open reports</RelatedListLink>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-5">
+            <div className="grid gap-3 sm:grid-cols-3 lg:col-span-3 lg:grid-cols-3">
+              <HomeKpiTile
+                label="Amount open"
+                value={formatCompactCurrency(salesDashboard.openPipeline)}
+                hint={`${stats.openCount} open leads`}
+              />
+              <HomeKpiTile
+                label="Closed won"
+                value={String(salesDashboard.closedCount)}
+                hint={formatCurrency(salesDashboard.closedAmount)}
+              />
+              <HomeKpiTile
+                label="Average deal"
+                value={
+                  salesDashboard.closedCount > 0
+                    ? formatCompactCurrency(salesDashboard.avgDeal)
+                    : "—"
+                }
+                hint="Signed this month"
+              />
+            </div>
+
+            <DashboardChart
+              className="lg:col-span-2"
+              title="Closed won sales"
+              description="Month-to-date signed contracts vs quota"
+            >
+              <HomeGauge
+                value={salesDashboard.closedAmount}
+                target={salesDashboard.quota}
+                format={formatCompactCurrency}
+              />
+            </DashboardChart>
+          </div>
+
+          <div className="grid gap-3 xl:grid-cols-5">
+            <DashboardChart
+              className="xl:col-span-3"
+              title="Deals by close date"
+              description="Signed contract value over the last 14 days"
+              action={<RelatedListLink href="/pipeline">Pipeline</RelatedListLink>}
+            >
+              <HomeAreaChart
+                items={salesDashboard.byCloseDate}
+                format={formatCompactCurrency}
+                empty="No signed deals in the last two weeks."
+              />
+            </DashboardChart>
+
+            <DashboardChart
+              className="xl:col-span-2"
+              title="Amount closed by lead source"
+              description="This month’s signed work by source"
+              action={<RelatedListLink href="/reports">Sources</RelatedListLink>}
+            >
+              <HomeDonut
+                items={salesDashboard.bySource}
+                format={formatCompactCurrency}
+                empty="No sourced closed-won this month."
+              />
+            </DashboardChart>
+          </div>
+        </div>
+      ) : null}
 
       {hasLeads ? (
       <>
-      <div className="grid gap-3 xl:grid-cols-5">
-        <DashboardChart
-          className="xl:col-span-3"
-          title="Pipeline by stage"
-          description={`${stats.openCount} open · ${formatCurrency(stats.pipelineValue)} unweighted · ${formatCurrency(stats.weighted)} weighted`}
-          action={<RelatedListLink href="/pipeline">Open board</RelatedListLink>}
-        >
-          <HomeBars
-            items={stats.byStage.map((item) => ({
-              key: item.stage,
-              label: STAGE_LABELS[item.stage],
-              value: item.value,
-            }))}
-            format={formatCurrency}
-            empty="No open pipeline value yet."
-          />
-        </DashboardChart>
-
-        <DashboardChart
-          className="xl:col-span-2"
-          title="Desk mix"
-          description="What is waiting on a homeowner, the books, or the calendar."
-          action={<RelatedListLink href="/reports">Reports</RelatedListLink>}
-        >
-          <HomeShareRows
-            items={[
-              {
-                label: "Proposals out",
-                value: Math.max(stats.proposalValue, stats.proposals.length),
-                hint:
-                  stats.proposals.length > 0
-                    ? `${stats.proposals.length} · ${formatCurrency(stats.proposalValue)}`
-                    : "None out",
-                tone: "brand",
-              },
-              {
-                label: "AR outstanding",
-                value: stats.ar,
-                hint: formatCurrency(stats.ar),
-                tone: "warn",
-              },
-              {
-                label: "Active field work",
-                value: Math.max(stats.activeValue, stats.activeJobs.length),
-                hint: `${stats.activeJobs.length} jobs · ${formatCurrency(stats.activeValue)}`,
-                tone: "success",
-              },
-              {
-                label: "Win rate",
-                value: stats.winRate,
-                hint:
-                  stats.closedCount > 0
-                    ? `${stats.winRate}% · ${stats.awardedCount}/${stats.closedCount} closed`
-                    : "No closed leads yet",
-                tone: "muted",
-              },
-              {
-                label: "Today’s calendar",
-                value: stats.todayEvents.length,
-                hint:
-                  stats.todayEvents[0]
-                    ? `${stats.todayEvents.length} · next ${formatTime(stats.todayEvents[0].startsAt)}`
-                    : "Nothing today",
-                tone: "brand",
-              },
-              {
-                label: "Bids due this week",
-                value: stats.bidsThisWeek.length,
-                hint:
-                  stats.bidsThisWeek.length > 0
-                    ? `${stats.bidsThisWeek.length} due in 7 days`
-                    : "Clear this week",
-                tone: "warn",
-              },
-            ]}
-          />
-        </DashboardChart>
-      </div>
 
       {crm.viewer && isBusinessDevelopment(crm.viewer.role) ? (
         <BdRoiPanel state={crm.book} viewer={crm.viewer} />
