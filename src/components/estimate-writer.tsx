@@ -102,6 +102,7 @@ import {
 import { currentCatalog } from "@/lib/price-lists";
 import { billingEstimate, defaultTaxRateForMarket, isResidentialMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { formatJobSite } from "@/lib/leads";
+import { proposalScopeSummary } from "@/lib/proposal-email";
 import { jobPaperHref } from "@/lib/job-record";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine, type JobPhoto } from "@/lib/types";
 import { canGenerateSignatureCertificate, canManageSettings } from "@/lib/visibility";
@@ -1558,6 +1559,23 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         propertyAddress={site}
         companyName={crm.company.name}
         companyLogoUrl={cardHeaderLogo(crm.company)}
+        companyWebsite={crm.company.website}
+        companyPhone={letterhead.phone || crm.company.phone}
+        companyStreet={crm.company.street}
+        companyCity={crm.company.city}
+        companyState={crm.company.state}
+        companyPostalCode={crm.company.postalCode}
+        jobStreet={estimate.street}
+        jobCity={estimate.city}
+        jobState={estimate.state}
+        jobPostalCode={estimate.postalCode}
+        validUntil={estimate.validUntil}
+        scopeSummary={proposalScopeSummary({
+          projectType: job?.projectType || opportunity?.projectType,
+          packageMode: estimate.packageMode,
+          name: estimate.name,
+          street: estimate.street,
+        })}
         sender={emailOwner}
         recipients={shareContactsForEstimate(shareEstimate, crm)}
         onDownloadPdf={downloadPdf}
