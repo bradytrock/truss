@@ -57,7 +57,7 @@ export function prepareStandalone() {
     "const hostname = process.env.HOST || '0.0.0.0'",
   );
   writeFileSync(serverJs, serverSource);
-  console.log("[prepare-standalone] Confirmed server.js listens on process.env.PORT || 3000");
+  console.log("[prepare-standalone] Confirmed server.js listens on process.env.PORT || 3000 at 0.0.0.0");
 
   return true;
 }
