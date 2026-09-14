@@ -8,6 +8,7 @@ type StaffContact = {
   email: string;
   phone?: string;
   emailSignature?: string;
+  photoUrl?: string;
 };
 
 export type ProjectManagerContact = {
@@ -101,6 +102,7 @@ export function shareEmailOwnerFromBook(input: {
   email: string;
   phone: string;
   signature: string;
+  photoUrl: string;
 } | null {
   const pm = documentProjectManager(input);
   const owner = documentOwnerStaff(input);
@@ -145,6 +147,12 @@ export function shareEmailOwnerFromBook(input: {
     fallback?.emailSignature,
     input.companySignature,
   );
+  const photoUrl = firstNonEmpty(
+    owner?.photoUrl,
+    sameAsSender ? sender?.photoUrl : "",
+    sender?.photoUrl,
+    fallback?.photoUrl,
+  );
 
   return {
     name: displayName,
@@ -152,6 +160,7 @@ export function shareEmailOwnerFromBook(input: {
     email,
     phone,
     signature,
+    photoUrl,
   };
 }
 

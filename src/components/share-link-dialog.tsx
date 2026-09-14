@@ -48,6 +48,18 @@ export function ShareLinkDialog({
   /** Project manager on the job — From name, Reply-To, sign-off, and contact block. */
   sender,
   recipients = [],
+  jobStreet,
+  jobCity,
+  jobState,
+  jobPostalCode,
+  validUntil,
+  scopeSummary,
+  companyWebsite,
+  companyPhone,
+  companyStreet,
+  companyCity,
+  companyState,
+  companyPostalCode,
   onDownloadPdf,
   onTexted,
   onEmailed,
@@ -67,6 +79,18 @@ export function ShareLinkDialog({
   propertyAddress?: string;
   sender?: ShareEmailOwner | null;
   recipients?: ShareRecipient[];
+  jobStreet?: string;
+  jobCity?: string;
+  jobState?: string;
+  jobPostalCode?: string;
+  validUntil?: string | null;
+  scopeSummary?: string;
+  companyWebsite?: string;
+  companyPhone?: string;
+  companyStreet?: string;
+  companyCity?: string;
+  companyState?: string;
+  companyPostalCode?: string;
   onDownloadPdf?: () => Promise<void> | void;
   onTexted?: (sent: {
     to: string;
@@ -338,12 +362,26 @@ export function ShareLinkDialog({
           name: documentName || "",
           url: theirUrl,
           logoUrl: companyLogoUrl || "",
+          origin: typeof window !== "undefined" ? window.location.origin : "",
+          street: jobStreet || "",
+          city: jobCity || "",
+          state: jobState || "",
+          postalCode: jobPostalCode || "",
+          validUntil: validUntil || null,
+          scope: scopeSummary || "",
+          companyWebsite: companyWebsite || "",
+          companyPhone: companyPhone || "",
+          companyStreet: companyStreet || "",
+          companyCity: companyCity || "",
+          companyState: companyState || "",
+          companyPostalCode: companyPostalCode || "",
           owner: {
             name: senderName,
             title: sender?.title || "",
             email: replyTo,
             phone: sender?.phone || "",
             signature: sender?.signature || "",
+            photoUrl: sender?.photoUrl || "",
           },
         };
         const html = defaultShareEmailHtml(payload);

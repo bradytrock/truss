@@ -1,4 +1,5 @@
 import { firstName } from "@/lib/phone";
+import { renderProposalEmailHtml, renderProposalEmailText } from "@/lib/proposal-email";
 
 export type ShareDocumentKind = "estimate" | "invoice" | "page";
 
@@ -7,6 +8,8 @@ export type ShareEmailOwner = {
   title?: string;
   email?: string;
   phone?: string;
+  /** Seat headshot for the proposal email. */
+  photoUrl?: string;
   /** Plain-text sign-off (seat signature or company default). */
   signature?: string;
 };
@@ -157,7 +160,22 @@ export function defaultShareEmailHtml(input: {
   logoUrl?: string;
   owner?: ShareEmailOwner | null;
   origin?: string;
+  street?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  validUntil?: string | null;
+  scope?: string;
+  companyWebsite?: string;
+  companyPhone?: string;
+  companyStreet?: string;
+  companyCity?: string;
+  companyState?: string;
+  companyPostalCode?: string;
 }) {
+  if (input.kind === "estimate") {
+    return renderProposalEmailHtml(input);
+  }
   const who = escapeHtml(firstName(input.customer));
   const company = escapeHtml(input.company.trim() || "the contractor");
   const url = escapeHtml(input.url);
@@ -320,7 +338,22 @@ export function defaultShareEmailText(input: {
   name: string;
   url: string;
   owner?: ShareEmailOwner | null;
+  street?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  validUntil?: string | null;
+  scope?: string;
+  companyWebsite?: string;
+  companyPhone?: string;
+  companyStreet?: string;
+  companyCity?: string;
+  companyState?: string;
+  companyPostalCode?: string;
 }) {
+  if (input.kind === "estimate") {
+    return renderProposalEmailText(input);
+  }
   const who = firstName(input.customer);
   const lead = documentLead(input);
   const support = supportingLine(input.kind);
