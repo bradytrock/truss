@@ -265,6 +265,24 @@ export function missingMarketMessage() {
   return `Saved in this browser. Run ${JOB_MARKET_SQL} in the SQL editor so residential vs commercial persists.`;
 }
 
+export const JOB_PRIMARY_PHOTO_SQL = "supabase/migrations/20260914140000_job_primary_photo.sql";
+
+export function isMissingPrimaryPhotoColumn(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    (error.code === "PGRST204" ||
+      error.code === "PGRST205" ||
+      message.includes("schema cache") ||
+      message.includes("Could not find the")) &&
+    message.toLowerCase().includes("primary_photo_id")
+  );
+}
+
+export function missingPrimaryPhotoMessage() {
+  return `Saved in this browser. Run ${JOB_PRIMARY_PHOTO_SQL} in the SQL editor so the primary project photo stays in Postgres.`;
+}
+
 export const COMPANY_LOGO_SQL = "supabase/migrations/20260821180000_company_logo.sql";
 
 export function isMissingLogoColumn(error: { message?: string; code?: string } | null | undefined) {

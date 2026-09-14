@@ -28,6 +28,7 @@ export type JobDraft = Omit<
   | "projectType"
   | "leadSource"
   | "market"
+  | "primaryPhotoId"
   | "deletedAt"
   | "deletedReason"
   | "deletedBy"
@@ -50,6 +51,7 @@ export type JobDraft = Omit<
       | "projectType"
       | "leadSource"
       | "market"
+      | "primaryPhotoId"
       | "deletedAt"
       | "deletedReason"
       | "deletedBy"
@@ -215,6 +217,7 @@ export function fillJobRecord(job: JobDraft, opportunity?: Opportunity | null): 
     projectType: (job.projectType || opportunity?.projectType || "") as ProjectType | "",
     market: workMarket(job, opportunity),
     leadSource: (job.leadSource || opportunity?.leadSource || "") as LeadSource | "",
+    primaryPhotoId: job.primaryPhotoId ?? null,
     deletedAt: job.deletedAt ?? null,
     deletedReason: job.deletedReason ?? "",
     deletedBy: job.deletedBy ?? "",

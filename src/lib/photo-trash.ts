@@ -1,4 +1,4 @@
-import type { JobPhoto, PhotoAuditAction, PhotoAuditEvent } from "@/lib/types";
+import type { Job, JobPhoto, PhotoAuditAction, PhotoAuditEvent } from "@/lib/types";
 
 export function isTrashedPhoto(photo: Pick<JobPhoto, "deletedAt">) {
   return Boolean(photo.deletedAt?.trim());
@@ -10,6 +10,19 @@ export function livePhotos(photos: JobPhoto[], jobId?: string) {
     if (jobId && photo.jobId !== jobId) return false;
     return true;
   });
+}
+
+/** Cover photo for the job header / front of the project page. */
+export function primaryJobPhoto(
+  photos: JobPhoto[],
+  job: Pick<Job, "id" | "primaryPhotoId">,
+) {
+  const live = livePhotos(photos, job.id);
+  if (job.primaryPhotoId) {
+    const match = live.find((photo) => photo.id === job.primaryPhotoId);
+    if (match) return match;
+  }
+  return live[0] ?? null;
 }
 
 export function trashedPhotos(photos: JobPhoto[], jobId?: string) {

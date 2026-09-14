@@ -242,10 +242,13 @@ export function createPhotoReport(input: {
   const now = new Date().toISOString();
   const template = parsePageTemplate(input.template);
   const photos = photosForTemplate(template, input.photos);
+  const preferred = input.job.primaryPhotoId
+    ? photos.find((photo) => photo.id === input.job.primaryPhotoId)
+    : undefined;
   const cover = emptyCoverPage({
     title: input.job.name,
     subtitle: input.customer,
-    heroPhotoId: photos[0]?.id ?? input.photos[0]?.id ?? null,
+    heroPhotoId: preferred?.id ?? photos[0]?.id ?? input.photos[0]?.id ?? null,
   });
   const pages: PhotoReportPage[] =
     template === "blank"

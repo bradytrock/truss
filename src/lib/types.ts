@@ -331,6 +331,8 @@ export interface Job {
   projectType: ProjectType | "";
   market: JobMarket;
   leadSource: LeadSource | "";
+  /** Stable cover photo for the job header / front of the project page. */
+  primaryPhotoId: string | null;
   deletedAt: string | null;
   deletedReason: string;
   deletedBy: string;

@@ -43,6 +43,7 @@ import {
   jobMatchesOwnerFilter,
 } from "@/lib/visibility";
 import { dedupeJobsByOpportunity, isDeletedJob } from "@/lib/job-record";
+import { primaryJobPhoto } from "@/lib/photo-trash";
 import type { Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -307,6 +308,7 @@ function JobCard({
       people.some((member) => member.id !== ownerId));
   const ownerName =
     crm.book.staff.find((member) => member.id === ownerId)?.name ?? job.projectManager;
+  const cover = primaryJobPhoto(crm.photos, job);
 
   return (
     <Card
@@ -320,6 +322,23 @@ function JobCard({
       )}
     >
       <CardContent className="space-y-2">
+        {cover ? (
+          <button
+            type="button"
+            className="block w-full overflow-hidden border"
+            onClick={() => {
+              if (!overlay) onSelectJob(job.id);
+            }}
+            aria-label={`Open ${job.name}`}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={cover.imageUrl}
+              alt=""
+              className="aspect-[16/9] w-full object-cover"
+            />
+          </button>
+        ) : null}
         <div className="flex items-start gap-1">
           <button
             type="button"

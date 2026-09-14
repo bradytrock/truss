@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { RotateCcw, Trash2 } from "lucide-react";
+import { RotateCcw, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { PhotoCategoryBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatDate, formatDateTimeUtc } from "@/lib/format";
-import { livePhotos, trashedPhotos } from "@/lib/photo-trash";
+import { livePhotos, primaryJobPhoto, trashedPhotos } from "@/lib/photo-trash";
 import type { JobPhoto, PhotoAuditEvent } from "@/lib/types";
 
 export function JobPhotosPanel({
@@ -23,8 +23,10 @@ export function JobPhotosPanel({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [trashOpen, setTrashOpen] = useState(false);
 
+  const job = crm.getJob(jobId);
   const photos = useMemo(() => livePhotos(crm.photos, jobId), [crm.photos, jobId]);
   const trashed = useMemo(() => trashedPhotos(crm.photos, jobId), [crm.photos, jobId]);
+  const primary = job ? primaryJobPhoto(crm.photos, job) : null;
   const audit = useMemo(
     () =>
       [...(crm.photoAuditEvents ?? [])]
@@ -65,12 +67,26 @@ export function JobPhotosPanel({
     }
   }
 
+  async function setPrimary(photo: JobPhoto) {
+    if (disabled || !job) return;
+    if (job.primaryPhotoId === photo.id) return;
+    setBusyId(photo.id);
+    try {
+      const ok = await crm.updateJob(job.id, { primaryPhotoId: photo.id });
+      if (ok) toast.success("Primary project photo updated.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <div className="space-y-8">
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">
-            {photos.length === 0 ? "No photos on this job." : `${photos.length} photos`}
+            {photos.length === 0
+              ? "No photos on this job."
+              : `${photos.length} photos · primary shows on the job header`}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -90,41 +106,69 @@ export function JobPhotosPanel({
         </div>
         {photos.length > 0 ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            {photos.map((photo) => (
-              <figure key={photo.id} className="overflow-hidden border">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={photo.imageUrl}
-                  alt={photo.caption || "Job photo"}
-                  className="aspect-[4/3] w-full object-cover"
-                />
-                <figcaption className="space-y-2 p-2.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 space-y-1">
-                      <PhotoCategoryBadge category={photo.category} />
-                      <p className="text-sm leading-snug">{photo.caption || "Untitled"}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {photo.createdBy?.trim()
-                          ? `Taken by ${photo.createdBy.trim()} · ${formatDate(photo.takenAt)}`
-                          : formatDate(photo.takenAt)}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="ghost"
-                      className="shrink-0"
-                      disabled={disabled || busyId === photo.id}
-                      aria-label={`Move ${photo.caption || "photo"} to trashcan`}
-                      title="Move to Project Trashcan"
-                      onClick={() => void trash(photo)}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
+            {photos.map((photo) => {
+              const isPrimary = primary?.id === photo.id;
+              return (
+                <figure key={photo.id} className="overflow-hidden border">
+                  <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={photo.imageUrl}
+                      alt={photo.caption || "Job photo"}
+                      className="aspect-[4/3] w-full object-cover"
+                    />
+                    {isPrimary ? (
+                      <span className="absolute top-2 left-2 bg-background/90 px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase">
+                        Primary
+                      </span>
+                    ) : null}
                   </div>
-                </figcaption>
-              </figure>
-            ))}
+                  <figcaption className="space-y-2 p-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 space-y-1">
+                        <PhotoCategoryBadge category={photo.category} />
+                        <p className="text-sm leading-snug">{photo.caption || "Untitled"}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {photo.createdBy?.trim()
+                            ? `Taken by ${photo.createdBy.trim()} · ${formatDate(photo.takenAt)}`
+                            : formatDate(photo.takenAt)}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-0.5">
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          disabled={disabled || busyId === photo.id || isPrimary}
+                          aria-label={
+                            isPrimary
+                              ? `${photo.caption || "Photo"} is the primary project photo`
+                              : `Set ${photo.caption || "photo"} as primary`
+                          }
+                          title={isPrimary ? "Primary project photo" : "Set as primary"}
+                          onClick={() => void setPrimary(photo)}
+                        >
+                          <Star
+                            className={`size-3.5 ${isPrimary ? "fill-current text-foreground" : ""}`}
+                          />
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          disabled={disabled || busyId === photo.id}
+                          aria-label={`Move ${photo.caption || "photo"} to trashcan`}
+                          title="Move to Project Trashcan"
+                          onClick={() => void trash(photo)}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  </figcaption>
+                </figure>
+              );
+            })}
           </div>
         ) : null}
       </section>

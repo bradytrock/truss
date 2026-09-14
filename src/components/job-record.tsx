@@ -82,7 +82,7 @@ import {
   reviewItemStatus,
 } from "@/lib/qb-review";
 import { createPhotoReport, PAGE_TEMPLATE_OPTIONS } from "@/lib/photo-report";
-import { livePhotos } from "@/lib/photo-trash";
+import { livePhotos, primaryJobPhoto } from "@/lib/photo-trash";
 import { shareUrl } from "@/lib/share";
 import { leadSourceChoices, leadSourceLabel } from "@/lib/leads";
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
@@ -322,7 +322,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
   const photos = livePhotos(crm.photos, job.id);
   const reports = crm.photoReports.filter((report) => report.jobId === job.id);
   const openReport = reportId ? reports.find((report) => report.id === reportId) : undefined;
-  const hero = photos[0];
+  const hero = primaryJobPhoto(crm.photos, job);
   const address = jobAddress(job);
   const estimates = crm.estimates.filter((estimate) => estimate.jobId === job.id);
   const invoices = crm.invoices.filter((invoice) => invoice.jobId === job.id);
@@ -579,6 +579,11 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
               <span className="text-sm">Add a job-site photo</span>
             </button>
           )}
+          {hero && job.primaryPhotoId === hero.id ? (
+            <span className="absolute bottom-3 left-3 bg-background/90 px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase">
+              Primary
+            </span>
+          ) : null}
           <Button
             variant="secondary"
             size="icon"
