@@ -1,25 +1,33 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Settings2 } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { CalendarWeekGrid } from "@/components/calendar-week-grid";
 import { CreateEventDialog } from "@/components/create-ops-dialogs";
 import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { Badge } from "@/components/ui/badge";
-import { useCrm } from "@/lib/crm-store";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   accountForStaff,
   calendarColor,
   calendarShareSummary,
   visibleCalendarStaff,
 } from "@/lib/calendar";
-import { demoGoogleEvents, type GoogleOverlayEvent } from "@/lib/google-calendar-demo";
+import { useCrm } from "@/lib/crm-store";
 import { formatDate, localYmd, startOfWeek } from "@/lib/format";
+import { demoGoogleEvents, type GoogleOverlayEvent } from "@/lib/google-calendar-demo";
 import type { EventKind, ScheduleEvent } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 type CreateDraft = {
   day: string;
@@ -28,14 +36,36 @@ type CreateDraft = {
   title?: string;
 };
 
+type ViewMode = "day" | "week";
+
+function preferDayView() {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(max-width: 900px)").matches;
+}
+
 export default function CalendarPage() {
   const crm = useCrm();
+  const [view, setView] = useState<ViewMode>("week");
+  const [viewReady, setViewReady] = useState(false);
   const [anchor, setAnchor] = useState(() => startOfWeek(new Date()));
+  const [dayAnchor, setDayAnchor] = useState(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return now;
+  });
   const [createDraft, setCreateDraft] = useState<CreateDraft | null>(null);
   const [editingEvent, setEditingEvent] = useState<ScheduleEvent | null>(null);
   const [hidden, setHidden] = useState<string[]>([]);
   const [oauthReady, setOauthReady] = useState(false);
   const [remoteGoogle, setRemoteGoogle] = useState<GoogleOverlayEvent[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [showDemoGoogle, setShowDemoGoogle] = useState(false);
+
+  useEffect(() => {
+    if (viewReady) return;
+    if (preferDayView()) setView("day");
+    setViewReady(true);
+  }, [viewReady]);
 
   const viewer = crm.impersonatedStaff ? crm.effectiveStaff : crm.viewer;
   const mine = viewer ? accountForStaff(crm.calendarAccounts, viewer.id) : undefined;
@@ -56,17 +86,18 @@ export default function CalendarPage() {
   );
 
   const days = useMemo(() => {
+    if (view === "day") return [dayAnchor];
     return Array.from({ length: 7 }, (_, index) => {
       const date = new Date(anchor);
       date.setDate(anchor.getDate() + index);
       return date;
     });
-  }, [anchor]);
+  }, [anchor, dayAnchor, view]);
 
   const today = localYmd(new Date());
   const rangeStart = days[0];
   const rangeEnd = useMemo(() => {
-    const end = new Date(days[6] ?? days[0]);
+    const end = new Date(days[days.length - 1] ?? days[0]);
     end.setHours(23, 59, 59, 999);
     return end;
   }, [days]);
@@ -95,7 +126,10 @@ export default function CalendarPage() {
       const account = accountForStaff(crm.calendarAccounts, person.id);
       return selected.includes(person.id) && account.linked && account.source === "google";
     });
-    if (googleStaff.length === 0 || !rangeStart) return;
+    if (googleStaff.length === 0 || !rangeStart) {
+      setRemoteGoogle([]);
+      return;
+    }
     let cancelled = false;
     void Promise.all(
       googleStaff.map((person) =>
@@ -115,22 +149,39 @@ export default function CalendarPage() {
   }, [crm.calendarAccounts, rangeEnd, rangeStart, selected, visiblePeople]);
 
   const overlayEvents = useMemo(() => {
-    const demo = visiblePeople.flatMap((person) => {
-      if (!selected.includes(person.id)) return [];
-      const account = accountForStaff(crm.calendarAccounts, person.id);
-      if (!account.linked || account.source === "google") return [];
-      return demoGoogleEvents(person, rangeStart, rangeEnd);
-    });
-    return [...demo, ...remoteGoogle.filter((event) => selected.includes(event.staffId))];
-  }, [crm.calendarAccounts, rangeEnd, rangeStart, remoteGoogle, selected, visiblePeople]);
+    const demo = showDemoGoogle
+      ? visiblePeople.flatMap((person) => {
+          if (!selected.includes(person.id)) return [];
+          const account = accountForStaff(crm.calendarAccounts, person.id);
+          if (!account.linked || account.source === "google") return [];
+          return demoGoogleEvents(person, rangeStart, rangeEnd);
+        })
+      : [];
+    return [
+      ...demo,
+      ...remoteGoogle.filter((event) => selected.includes(event.staffId)),
+    ];
+  }, [
+    crm.calendarAccounts,
+    rangeEnd,
+    rangeStart,
+    remoteGoogle,
+    selected,
+    showDemoGoogle,
+    visiblePeople,
+  ]);
 
   const selectedNames = new Set(
-    visiblePeople.filter((person) => selected.includes(person.id)).map((person) => person.name),
+    visiblePeople
+      .filter((person) => selected.includes(person.id))
+      .map((person) => person.name),
   );
 
   const weekEvents = crm.events.filter((event) => {
     const day = localYmd(new Date(event.startsAt));
-    if (day < localYmd(days[0]) || day > localYmd(days[6])) return false;
+    if (day < localYmd(days[0]) || day > localYmd(days[days.length - 1])) {
+      return false;
+    }
     if (selectedNames.size === 0) return true;
     return selectedNames.has(event.assignee);
   });
@@ -145,6 +196,25 @@ export default function CalendarPage() {
     setHidden((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
     );
+  }
+
+  function shift(delta: number) {
+    if (view === "day") {
+      const next = new Date(dayAnchor);
+      next.setDate(dayAnchor.getDate() + delta);
+      setDayAnchor(next);
+      return;
+    }
+    const next = new Date(anchor);
+    next.setDate(anchor.getDate() + delta * 7);
+    setAnchor(next);
+  }
+
+  function goToday() {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    setDayAnchor(now);
+    setAnchor(startOfWeek(now));
   }
 
   async function quickCreate(input: {
@@ -181,43 +251,68 @@ export default function CalendarPage() {
     }
   }
 
+  async function reschedule(input: {
+    eventId: string;
+    startsAt: string;
+    endsAt: string;
+  }) {
+    try {
+      await crm.updateScheduleEvent(input.eventId, {
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+      });
+    } catch {
+      // Store already toasted.
+    }
+  }
+
+  const rangeLabel =
+    view === "day"
+      ? formatDate(localYmd(dayAnchor))
+      : `Week of ${formatDate(localYmd(days[0]))}`;
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {crm.hydrateError ? (
         <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
       ) : null}
+
       <PageHeader
         eyebrow="Field"
         title="Calendar"
-        description="Click or drag on the week grid to add an event — same flow as Google Calendar. Linked Google calendars overlay as read-only."
+        description="Click an empty slot to schedule. Drag events to move them, or pull the bottom edge to resize."
         actions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon-sm"
-              aria-label="Previous week"
-              onClick={() => {
-                const next = new Date(anchor);
-                next.setDate(anchor.getDate() - 7);
-                setAnchor(next);
-              }}
-            >
-              <ChevronLeft />
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setAnchor(startOfWeek(new Date()))}>
-              Today
-            </Button>
-            <Button
-              variant="outline"
-              size="icon-sm"
-              aria-label="Next week"
-              onClick={() => {
-                const next = new Date(anchor);
-                next.setDate(anchor.getDate() + 7);
-                setAnchor(next);
-              }}
-            >
-              <ChevronRight />
+          <div className="flex flex-wrap items-center gap-2">
+            <Tabs value={view} onValueChange={(value) => setView(value as ViewMode)}>
+              <TabsList>
+                <TabsTrigger value="day">Day</TabsTrigger>
+                <TabsTrigger value="week">Week</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label={view === "day" ? "Previous day" : "Previous week"}
+                onClick={() => shift(-1)}
+              >
+                <ChevronLeft />
+              </Button>
+              <Button variant="outline" size="sm" onClick={goToday}>
+                Today
+              </Button>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label={view === "day" ? "Next day" : "Next week"}
+                onClick={() => shift(1)}
+              >
+                <ChevronRight />
+              </Button>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}>
+              <Settings2 className="size-4" />
+              Calendars
             </Button>
             <Button
               onClick={() =>
@@ -234,18 +329,76 @@ export default function CalendarPage() {
         }
       />
 
-      <p className="text-sm text-muted-foreground">
-        Week of {formatDate(localYmd(days[0]))} · {weekEvents.length} TheRoofingCRM ·{" "}
-        {overlayEvents.length} Google
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <CalendarDays className="size-4" />
+          <span>
+            {rangeLabel} · {weekEvents.length} scheduled
+            {overlayEvents.length > 0 ? ` · ${overlayEvents.length} Google` : ""}
+          </span>
+          {mine?.linked ? (
+            <Badge variant="outline">
+              {mine.source === "google" ? "Google linked" : "Demo Google linked"}
+            </Badge>
+          ) : null}
+        </div>
+        <div className="flex max-w-full flex-wrap gap-1.5">
+          {visiblePeople.map((person) => {
+            const on = selected.includes(person.id);
+            return (
+              <button
+                key={person.id}
+                type="button"
+                onClick={() => togglePerson(person.id)}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition",
+                  on
+                    ? "border-border bg-background text-foreground"
+                    : "border-transparent bg-muted/60 text-muted-foreground line-through opacity-60",
+                )}
+              >
+                <span
+                  className="size-2 rounded-full"
+                  style={{ background: calendarColor(person.id) }}
+                />
+                {person.name.split(" ")[0]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
-      <div className="grid gap-4 xl:grid-cols-[18.5rem_minmax(0,1fr)]">
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="border-b">
-              <CardTitle>Your Google Calendar</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
+      <CalendarWeekGrid
+        days={days}
+        crmEvents={weekEvents}
+        googleEvents={overlayEvents}
+        todayKey={today}
+        onQuickCreate={(input) => void quickCreate(input)}
+        onQuickDelete={(id) => void quickDelete(id)}
+        onReschedule={(input) => void reschedule(input)}
+        onEditEvent={(event) => setEditingEvent(event)}
+        onCreateEvent={(draft) =>
+          setCreateDraft({
+            day: localYmd(draft.day),
+            start: draft.start,
+            end: draft.end,
+            title: draft.title,
+          })
+        }
+      />
+
+      <Sheet open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Calendars & sharing</SheetTitle>
+            <SheetDescription>
+              Connect Google, choose who can see your calendar, and toggle people on the grid.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="space-y-6 px-4 pb-6">
+            <section className="space-y-3">
+              <h3 className="text-sm font-medium">Your Google Calendar</h3>
               {mine?.linked ? (
                 <>
                   <p className="text-sm">
@@ -254,7 +407,11 @@ export default function CalendarPage() {
                       <span className="text-muted-foreground"> · demo</span>
                     ) : null}
                   </p>
-                  <Button variant="outline" size="sm" onClick={() => void crm.disconnectCalendar()}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void crm.disconnectCalendar()}
+                  >
                     Disconnect
                   </Button>
                 </>
@@ -268,7 +425,9 @@ export default function CalendarPage() {
                       size="sm"
                       nativeButton={false}
                       render={
-                        <a href={`/api/google/calendar/connect?staffId=${encodeURIComponent(crm.user.staffId)}`} />
+                        <a
+                          href={`/api/google/calendar/connect?staffId=${encodeURIComponent(crm.user.staffId)}`}
+                        />
                       }
                     >
                       Connect Google Calendar
@@ -285,6 +444,21 @@ export default function CalendarPage() {
                   ) : null}
                 </>
               )}
+
+              {mine?.linked && mine.source === "demo" ? (
+                <label className="flex items-start gap-2 text-sm">
+                  <Checkbox
+                    checked={showDemoGoogle}
+                    onCheckedChange={(checked) => setShowDemoGoogle(Boolean(checked))}
+                  />
+                  <span>
+                    Show demo Google events on the grid
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      Off by default so sample personal events do not clutter the schedule.
+                    </span>
+                  </span>
+                </label>
+              ) : null}
 
               {viewer?.teamId ? (
                 <label className="flex items-start gap-2 text-sm">
@@ -316,14 +490,17 @@ export default function CalendarPage() {
                   shareCandidates.map((member) => {
                     const checked = crm.calendarShares.some(
                       (share) =>
-                        share.ownerStaffId === viewer?.id && share.viewerStaffId === member.id,
+                        share.ownerStaffId === viewer?.id &&
+                        share.viewerStaffId === member.id,
                     );
                     return (
                       <label key={member.id} className="flex items-center gap-2 text-sm">
                         <Checkbox
                           checked={checked}
                           disabled={!mine?.linked}
-                          onCheckedChange={(value) => void crm.setCalendarShare(member.id, Boolean(value))}
+                          onCheckedChange={(value) =>
+                            void crm.setCalendarShare(member.id, Boolean(value))
+                          }
                         />
                         <span>{member.name}</span>
                       </label>
@@ -331,19 +508,20 @@ export default function CalendarPage() {
                   })
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </section>
 
-          <Card>
-            <CardHeader className="border-b">
-              <CardTitle>{isAdmin ? "Everyone’s calendars" : "Calendars you can see"}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
+            <section className="space-y-2">
+              <h3 className="text-sm font-medium">
+                {isAdmin ? "Everyone’s calendars" : "Calendars you can see"}
+              </h3>
               {visiblePeople.map((person) => {
                 const account = accountForStaff(crm.calendarAccounts, person.id);
                 const on = selected.includes(person.id);
                 return (
-                  <label key={person.id} className="flex items-start gap-2 rounded-sm px-1 py-1.5 hover:bg-muted/60">
+                  <label
+                    key={person.id}
+                    className="flex items-start gap-2 rounded-sm px-1 py-1.5 hover:bg-muted/60"
+                  >
                     <Checkbox checked={on} onCheckedChange={() => togglePerson(person.id)} />
                     <span
                       className="mt-1 size-2.5 shrink-0 rounded-full"
@@ -359,7 +537,9 @@ export default function CalendarPage() {
                         )}
                       </span>
                       <span className="block text-xs text-muted-foreground">
-                        {account.linked && account.googleEmail ? `${account.googleEmail} · ` : ""}
+                        {account.linked && account.googleEmail
+                          ? `${account.googleEmail} · `
+                          : ""}
                         {calendarShareSummary(
                           person,
                           account,
@@ -372,28 +552,10 @@ export default function CalendarPage() {
                   </label>
                 );
               })}
-            </CardContent>
-          </Card>
-        </div>
-
-        <CalendarWeekGrid
-          days={days}
-          crmEvents={weekEvents}
-          googleEvents={overlayEvents}
-          todayKey={today}
-          onQuickCreate={(input) => void quickCreate(input)}
-          onQuickDelete={(id) => void quickDelete(id)}
-          onEditEvent={(event) => setEditingEvent(event)}
-          onCreateEvent={(draft) =>
-            setCreateDraft({
-              day: localYmd(draft.day),
-              start: draft.start,
-              end: draft.end,
-              title: draft.title,
-            })
-          }
-        />
-      </div>
+            </section>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <CreateEventDialog
         open={createDraft !== null}

@@ -6,17 +6,29 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { GoogleOverlayEvent } from "@/lib/google-calendar-demo";
 import {
+  applyMinutesToDay,
+  columnStyle,
+  DAY_END_MIN,
+  DAY_START_MIN,
+  dayKeyOf,
+  DRAG_THRESHOLD_PX,
+  formatHourLabel,
+  GRID_HEIGHT,
+  HOUR_HEIGHT,
+  layoutOverlaps,
+  minutesToLabel,
+  nowMinutes,
+  parseDayKey,
+  SNAP_MIN,
+  toTimeValue,
+  yToMinutes,
+} from "@/lib/calendar-layout";
+import {
   EVENT_KIND_LABELS,
   type EventKind,
   type ScheduleEvent,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-const HOUR_HEIGHT = 56;
-const DAY_START_MIN = 6 * 60;
-const DAY_END_MIN = 21 * 60;
-const SNAP_MIN = 15;
-const GRID_HEIGHT = ((DAY_END_MIN - DAY_START_MIN) / 60) * HOUR_HEIGHT;
 
 const HOURS = Array.from(
   { length: (DAY_END_MIN - DAY_START_MIN) / 60 + 1 },
@@ -27,6 +39,23 @@ type Selection = {
   dayKey: string;
   startMin: number;
   endMin: number;
+};
+
+type MoveState = {
+  eventId: string;
+  dayKey: string;
+  durationMin: number;
+  startMin: number;
+  originClientY: number;
+  moved: boolean;
+};
+
+type ResizeState = {
+  eventId: string;
+  dayKey: string;
+  startMin: number;
+  endMin: number;
+  moved: boolean;
 };
 
 type Props = {
@@ -48,49 +77,12 @@ type Props = {
     kind: EventKind;
   }) => void;
   onQuickDelete: (eventId: string) => void;
+  onReschedule: (input: {
+    eventId: string;
+    startsAt: string;
+    endsAt: string;
+  }) => void;
 };
-
-function dayKeyOf(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function parseDayKey(key: string) {
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
-function minutesOf(iso: string) {
-  const d = new Date(iso);
-  return d.getHours() * 60 + d.getMinutes();
-}
-
-function clamp(n: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, n));
-}
-
-function snap(min: number) {
-  return Math.round(min / SNAP_MIN) * SNAP_MIN;
-}
-
-function yToMinutes(clientY: number, top: number) {
-  const raw = ((clientY - top) / HOUR_HEIGHT) * 60 + DAY_START_MIN;
-  return clamp(snap(raw), DAY_START_MIN, DAY_END_MIN);
-}
-
-function minutesToLabel(total: number) {
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  const suffix = h >= 12 ? "PM" : "AM";
-  const hour12 = ((h + 11) % 12) + 1;
-  return `${hour12}:${String(m).padStart(2, "0")} ${suffix}`;
-}
-
-function formatHourLabel(hour: number) {
-  if (hour === 0) return "12 AM";
-  if (hour < 12) return `${hour} AM`;
-  if (hour === 12) return "12 PM";
-  return `${hour - 12} PM`;
-}
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], {
@@ -99,32 +91,13 @@ function formatTime(iso: string) {
   });
 }
 
-function toTimeValue(totalMin: number) {
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
-
-function positionForRange(startsAt: string, endsAt: string) {
-  const start = clamp(minutesOf(startsAt), DAY_START_MIN, DAY_END_MIN);
-  const end = clamp(
-    Math.max(minutesOf(endsAt), start + SNAP_MIN),
-    DAY_START_MIN,
-    DAY_END_MIN,
-  );
-  const top = ((start - DAY_START_MIN) / 60) * HOUR_HEIGHT;
-  const height = Math.max(((end - start) / 60) * HOUR_HEIGHT, 22);
-  return { top, height };
-}
-
 function calendarColor(seed: string) {
   let hash = 0;
   for (let i = 0; i < seed.length; i += 1) {
     hash = (hash << 5) - hash + seed.charCodeAt(i);
     hash |= 0;
   }
-  const hue = Math.abs(hash) % 360;
-  return `hsl(${hue} 58% 42%)`;
+  return `hsl(${Math.abs(hash) % 360} 58% 42%)`;
 }
 
 export function CalendarWeekGrid({
@@ -136,52 +109,90 @@ export function CalendarWeekGrid({
   onEditEvent,
   onQuickCreate,
   onQuickDelete,
+  onReschedule,
 }: Props) {
   const [selection, setSelection] = useState<Selection | null>(null);
-  const [dragging, setDragging] = useState(false);
+  const [draggingCreate, setDraggingCreate] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickTitle, setQuickTitle] = useState("");
   const [quickStart, setQuickStart] = useState("09:00");
   const [quickEnd, setQuickEnd] = useState("10:00");
   const [selectedCrmId, setSelectedCrmId] = useState<string | null>(null);
-  const dragOrigin = useRef<{ dayKey: string; startMin: number } | null>(null);
+  const [movePreview, setMovePreview] = useState<MoveState | null>(null);
+  const [resizePreview, setResizePreview] = useState<ResizeState | null>(null);
+  const [nowMin, setNowMin] = useState(() => nowMinutes());
+
+  const dragOrigin = useRef<{
+    dayKey: string;
+    startMin: number;
+    clientY: number;
+    activated: boolean;
+  } | null>(null);
+  const moveRef = useRef<MoveState | null>(null);
+  const resizeRef = useRef<ResizeState | null>(null);
   const titleRef = useRef<HTMLInputElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const didScrollToNow = useRef(false);
 
-  const crmByDay = useMemo(() => {
-    const map = new Map<string, ScheduleEvent[]>();
+  const dayCount = Math.max(days.length, 1);
+  const isDayView = dayCount === 1;
+
+  const laidOutCrm = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof layoutOverlaps<ScheduleEvent>>>();
+    const byDay = new Map<string, ScheduleEvent[]>();
     for (const event of crmEvents) {
       const key = dayKeyOf(new Date(event.startsAt));
-      const list = map.get(key) ?? [];
+      const list = byDay.get(key) ?? [];
       list.push(event);
-      map.set(key, list);
+      byDay.set(key, list);
     }
-    for (const list of map.values()) {
-      list.sort(
-        (a, b) =>
-          new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
-      );
+    for (const [key, list] of byDay) {
+      map.set(key, layoutOverlaps(list));
     }
     return map;
   }, [crmEvents]);
 
-  const googleByDay = useMemo(() => {
-    const map = new Map<string, GoogleOverlayEvent[]>();
+  const laidOutGoogle = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof layoutOverlaps<GoogleOverlayEvent>>>();
+    const byDay = new Map<string, GoogleOverlayEvent[]>();
     for (const event of googleEvents) {
       const key = dayKeyOf(new Date(event.startsAt));
-      const list = map.get(key) ?? [];
+      const list = byDay.get(key) ?? [];
       list.push(event);
-      map.set(key, list);
+      byDay.set(key, list);
+    }
+    for (const [key, list] of byDay) {
+      map.set(key, layoutOverlaps(list));
     }
     return map;
   }, [googleEvents]);
 
   useEffect(() => {
-    if (!dragging) return;
+    const id = window.setInterval(() => setNowMin(nowMinutes()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (didScrollToNow.current || !scrollRef.current) return;
+    if (nowMin < DAY_START_MIN || nowMin > DAY_END_MIN) return;
+    scrollRef.current.scrollTop = Math.max(
+      0,
+      ((nowMin - DAY_START_MIN) / 60) * HOUR_HEIGHT - 120,
+    );
+    didScrollToNow.current = true;
+  }, [nowMin]);
+
+  useEffect(() => {
+    if (!draggingCreate) return;
 
     function onMove(e: PointerEvent) {
       const origin = dragOrigin.current;
       if (!origin) return;
+      if (!origin.activated) {
+        if (Math.abs(e.clientY - origin.clientY) < DRAG_THRESHOLD_PX) return;
+        origin.activated = true;
+      }
       const column = document.querySelector<HTMLElement>(
         `[data-day-column="${origin.dayKey}"]`,
       );
@@ -198,17 +209,25 @@ export function CalendarWeekGrid({
     }
 
     function onUp() {
-      setDragging(false);
+      const origin = dragOrigin.current;
+      setDraggingCreate(false);
       dragOrigin.current = null;
       setSelection((prev) => {
-        if (!prev) return null;
-        setQuickStart(toTimeValue(prev.startMin));
-        setQuickEnd(
-          toTimeValue(Math.max(prev.endMin, prev.startMin + SNAP_MIN)),
-        );
+        const base =
+          prev ??
+          (origin
+            ? {
+                dayKey: origin.dayKey,
+                startMin: origin.startMin,
+                endMin: Math.min(origin.startMin + 60, DAY_END_MIN),
+              }
+            : null);
+        if (!base) return null;
+        setQuickStart(toTimeValue(base.startMin));
+        setQuickEnd(toTimeValue(Math.max(base.endMin, base.startMin + SNAP_MIN)));
         setQuickTitle("");
         setQuickOpen(true);
-        return prev;
+        return base;
       });
     }
 
@@ -218,7 +237,95 @@ export function CalendarWeekGrid({
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, [dragging]);
+  }, [draggingCreate]);
+
+  useEffect(() => {
+    if (!movePreview && !resizePreview) return;
+
+    function onMove(e: PointerEvent) {
+      const moving = moveRef.current;
+      if (moving) {
+        const columns = Array.from(
+          document.querySelectorAll<HTMLElement>("[data-day-column]"),
+        );
+        for (const column of columns) {
+          const rect = column.getBoundingClientRect();
+          if (e.clientX >= rect.left && e.clientX <= rect.right) {
+            const dayKey = column.dataset.dayColumn ?? moving.dayKey;
+            const startMin = yToMinutes(e.clientY, rect.top);
+            const next: MoveState = {
+              ...moving,
+              dayKey,
+              startMin,
+              moved:
+                moving.moved ||
+                Math.abs(e.clientY - moving.originClientY) > DRAG_THRESHOLD_PX ||
+                dayKey !== moving.dayKey,
+            };
+            moveRef.current = next;
+            setMovePreview(next);
+            return;
+          }
+        }
+        return;
+      }
+
+      const resizing = resizeRef.current;
+      if (!resizing) return;
+      const column = document.querySelector<HTMLElement>(
+        `[data-day-column="${resizing.dayKey}"]`,
+      );
+      if (!column) return;
+      const rect = column.getBoundingClientRect();
+      const endMin = Math.max(yToMinutes(e.clientY, rect.top), resizing.startMin + SNAP_MIN);
+      const next: ResizeState = { ...resizing, endMin, moved: true };
+      resizeRef.current = next;
+      setResizePreview(next);
+    }
+
+    function onUp() {
+      const moving = moveRef.current;
+      if (moving) {
+        moveRef.current = null;
+        setMovePreview(null);
+        if (moving.moved) {
+          const start = applyMinutesToDay(moving.dayKey, moving.startMin);
+          const end = new Date(start);
+          end.setMinutes(end.getMinutes() + moving.durationMin);
+          onReschedule({
+            eventId: moving.eventId,
+            startsAt: start.toISOString(),
+            endsAt: end.toISOString(),
+          });
+        } else {
+          setSelectedCrmId(moving.eventId);
+          setQuickOpen(false);
+          setSelection(null);
+        }
+        return;
+      }
+
+      const resizing = resizeRef.current;
+      if (resizing) {
+        resizeRef.current = null;
+        setResizePreview(null);
+        if (resizing.moved) {
+          onReschedule({
+            eventId: resizing.eventId,
+            startsAt: applyMinutesToDay(resizing.dayKey, resizing.startMin).toISOString(),
+            endsAt: applyMinutesToDay(resizing.dayKey, resizing.endMin).toISOString(),
+          });
+        }
+      }
+    }
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+  }, [movePreview, onReschedule, resizePreview]);
 
   useEffect(() => {
     if (!quickOpen) return;
@@ -255,16 +362,57 @@ export function CalendarWeekGrid({
     };
   }, [quickOpen, selectedCrmId]);
 
-  function beginDrag(dayKey: string, clientY: number, top: number) {
+  function beginCreate(dayKey: string, clientY: number, top: number) {
     const startMin = yToMinutes(clientY, top);
-    dragOrigin.current = { dayKey, startMin };
+    dragOrigin.current = { dayKey, startMin, clientY, activated: false };
     setSelectedCrmId(null);
     setSelection({
       dayKey,
       startMin,
       endMin: Math.min(startMin + 60, DAY_END_MIN),
     });
-    setDragging(true);
+    setDraggingCreate(true);
+  }
+
+  function beginMove(event: ScheduleEvent, clientY: number) {
+    const dayKey = dayKeyOf(new Date(event.startsAt));
+    const start = new Date(event.startsAt);
+    const end = new Date(event.endsAt);
+    const startMin = start.getHours() * 60 + start.getMinutes();
+    const endMin = Math.max(end.getHours() * 60 + end.getMinutes(), startMin + SNAP_MIN);
+    const state: MoveState = {
+      eventId: event.id,
+      dayKey,
+      durationMin: endMin - startMin,
+      startMin,
+      originClientY: clientY,
+      moved: false,
+    };
+    moveRef.current = state;
+    setMovePreview(state);
+    setSelectedCrmId(null);
+    setQuickOpen(false);
+    setSelection(null);
+  }
+
+  function beginResize(event: ScheduleEvent) {
+    const dayKey = dayKeyOf(new Date(event.startsAt));
+    const start = new Date(event.startsAt);
+    const end = new Date(event.endsAt);
+    const startMin = start.getHours() * 60 + start.getMinutes();
+    const endMin = Math.max(end.getHours() * 60 + end.getMinutes(), startMin + SNAP_MIN);
+    const state: ResizeState = {
+      eventId: event.id,
+      dayKey,
+      startMin,
+      endMin,
+      moved: false,
+    };
+    resizeRef.current = state;
+    setResizePreview(state);
+    setSelectedCrmId(null);
+    setQuickOpen(false);
+    setSelection(null);
   }
 
   function closeQuick() {
@@ -282,9 +430,7 @@ export function CalendarWeekGrid({
     start.setHours(sh, sm, 0, 0);
     const end = new Date(day);
     end.setHours(eh, em, 0, 0);
-    if (end <= start) {
-      end.setTime(start.getTime() + 60 * 60 * 1000);
-    }
+    if (end <= start) end.setTime(start.getTime() + 60 * 60 * 1000);
     onQuickCreate({
       title: quickTitle.trim(),
       startsAt: start.toISOString(),
@@ -296,9 +442,8 @@ export function CalendarWeekGrid({
 
   function openFullEditor() {
     if (!selection) return;
-    const day = parseDayKey(selection.dayKey);
     onCreateEvent({
-      day,
+      day: parseDayKey(selection.dayKey),
       start: quickStart,
       end: quickEnd,
       title: quickTitle.trim(),
@@ -306,14 +451,21 @@ export function CalendarWeekGrid({
     closeQuick();
   }
 
-  const selectedCrm = crmEvents.find((e) => e.id === selectedCrmId) ?? null;
+  const selectedCrm = crmEvents.find((event) => event.id === selectedCrmId) ?? null;
   const dayIndex = selection
-    ? days.findIndex((d) => dayKeyOf(d) === selection.dayKey)
+    ? days.findIndex((day) => dayKeyOf(day) === selection.dayKey)
     : -1;
+  const showNow =
+    days.some((day) => dayKeyOf(day) === todayKey) &&
+    nowMin >= DAY_START_MIN &&
+    nowMin <= DAY_END_MIN;
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
-      <div className="grid grid-cols-[4.5rem_repeat(7,minmax(0,1fr))] border-b border-border/70">
+      <div
+        className="grid border-b border-border/70"
+        style={{ gridTemplateColumns: `4.5rem repeat(${dayCount}, minmax(0, 1fr))` }}
+      >
         <div className="border-r border-border/60 bg-muted/20" />
         {days.map((day) => {
           const key = dayKeyOf(day);
@@ -327,7 +479,9 @@ export function CalendarWeekGrid({
               )}
             >
               <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                {day.toLocaleDateString(undefined, { weekday: "short" })}
+                {day.toLocaleDateString(undefined, {
+                  weekday: isDayView ? "long" : "short",
+                })}
               </p>
               <p
                 className={cn(
@@ -342,17 +496,21 @@ export function CalendarWeekGrid({
         })}
       </div>
 
-      <div className="max-h-[min(70vh,44rem)] overflow-auto">
-        <div className="grid grid-cols-[4.5rem_repeat(7,minmax(0,1fr))]">
+      <div
+        ref={scrollRef}
+        className="max-h-[min(72vh,46rem)] overflow-auto overscroll-contain"
+      >
+        <div
+          className="grid"
+          style={{ gridTemplateColumns: `4.5rem repeat(${dayCount}, minmax(0, 1fr))` }}
+        >
           <div className="relative border-r border-border/60 bg-muted/10">
             <div style={{ height: GRID_HEIGHT }} className="relative">
               {HOURS.map((hour) => (
                 <div
                   key={hour}
                   className="absolute right-2 -translate-y-1/2 text-[11px] tabular-nums text-muted-foreground"
-                  style={{
-                    top: ((hour * 60 - DAY_START_MIN) / 60) * HOUR_HEIGHT,
-                  }}
+                  style={{ top: ((hour * 60 - DAY_START_MIN) / 60) * HOUR_HEIGHT }}
                 >
                   {formatHourLabel(hour)}
                 </div>
@@ -362,27 +520,25 @@ export function CalendarWeekGrid({
 
           {days.map((day) => {
             const key = dayKeyOf(day);
-            const dayCrm = crmByDay.get(key) ?? [];
-            const dayGoogle = googleByDay.get(key) ?? [];
+            const dayCrm = laidOutCrm.get(key) ?? [];
+            const dayGoogle = laidOutGoogle.get(key) ?? [];
             const isToday = key === todayKey;
-            const sel =
-              selection && selection.dayKey === key ? selection : null;
+            const sel = selection && selection.dayKey === key ? selection : null;
 
             return (
               <div
                 key={key}
                 data-day-column={key}
                 className={cn(
-                  "relative cursor-crosshair border-r border-border/60 last:border-r-0",
+                  "relative cursor-crosshair touch-none border-r border-border/60 last:border-r-0",
                   isToday && "bg-primary/[0.03]",
                 )}
                 style={{ height: GRID_HEIGHT }}
                 onPointerDown={(e) => {
                   if ((e.target as HTMLElement).closest("[data-event]")) return;
-                  if ((e.target as HTMLElement).closest("[data-quick-panel]"))
-                    return;
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  beginDrag(key, e.clientY, rect.top);
+                  if ((e.target as HTMLElement).closest("[data-quick-panel]")) return;
+                  e.preventDefault();
+                  beginCreate(key, e.clientY, e.currentTarget.getBoundingClientRect().top);
                 }}
               >
                 {HOURS.slice(0, -1).map((hour) => (
@@ -396,51 +552,72 @@ export function CalendarWeekGrid({
                   />
                 ))}
 
-                {dayGoogle.map((event) => {
-                  const pos = positionForRange(event.startsAt, event.endsAt);
-                  return (
-                    <div
-                      key={event.id}
-                      data-event
-                      className="absolute inset-x-1 z-[1] overflow-hidden rounded-md border border-dashed border-sky-400/50 bg-sky-500/10 px-1.5 py-1 text-[11px] text-sky-950 dark:text-sky-50"
-                      style={{ top: pos.top, height: pos.height }}
-                      title={`${event.title} · Google`}
-                    >
-                      <p className="truncate font-medium">{event.title}</p>
-                      <p className="truncate opacity-70">
-                        {event.allDay
-                          ? "All day"
-                          : `${formatTime(event.startsAt)} · Google`}
-                      </p>
-                    </div>
-                  );
-                })}
+                {showNow && isToday ? (
+                  <div
+                    className="pointer-events-none absolute inset-x-0 z-[4] flex items-center"
+                    style={{ top: ((nowMin - DAY_START_MIN) / 60) * HOUR_HEIGHT }}
+                  >
+                    <span className="-ml-1 size-2 rounded-full bg-rose-500" />
+                    <span className="h-px flex-1 bg-rose-500" />
+                  </div>
+                ) : null}
+
+                {dayGoogle.map((event) => (
+                  <div
+                    key={event.id}
+                    data-event
+                    className="absolute z-[1] overflow-hidden rounded-md border border-dashed border-sky-400/50 bg-sky-500/10 px-1.5 py-1 text-[11px] text-sky-950 dark:text-sky-50"
+                    style={{
+                      top: event.top,
+                      height: event.height,
+                      ...columnStyle(event.column, event.columnCount),
+                    }}
+                    title={`${event.title} · Google`}
+                  >
+                    <p className="truncate font-medium">{event.title}</p>
+                    <p className="truncate opacity-70">
+                      {event.allDay ? "All day" : `${formatTime(event.startsAt)} · Google`}
+                    </p>
+                  </div>
+                ))}
 
                 {dayCrm.map((event) => {
-                  const pos = positionForRange(event.startsAt, event.endsAt);
-                  const color = calendarColor(event.assignee);
-                  const active = selectedCrmId === event.id;
+                  const moving = movePreview?.eventId === event.id ? movePreview : null;
+                  const resizing = resizePreview?.eventId === event.id ? resizePreview : null;
+                  const previewDay = moving?.dayKey ?? resizing?.dayKey ?? key;
+                  if (previewDay !== key && (moving || resizing)) return null;
+
+                  let top = event.top;
+                  let height = event.height;
+                  if (moving && moving.dayKey === key) {
+                    top = ((moving.startMin - DAY_START_MIN) / 60) * HOUR_HEIGHT;
+                    height = Math.max((moving.durationMin / 60) * HOUR_HEIGHT, 22);
+                  } else if (resizing && resizing.dayKey === key) {
+                    top = ((resizing.startMin - DAY_START_MIN) / 60) * HOUR_HEIGHT;
+                    height = Math.max(((resizing.endMin - resizing.startMin) / 60) * HOUR_HEIGHT, 22);
+                  }
+
                   return (
                     <button
                       key={event.id}
                       type="button"
                       data-event
                       className={cn(
-                        "absolute inset-x-1 z-[2] overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] text-white shadow-sm transition",
-                        active && "ring-2 ring-foreground/40 ring-offset-1",
+                        "absolute z-[2] select-none overflow-hidden rounded-md border px-1.5 py-1 text-left text-[11px] text-white shadow-sm transition",
+                        selectedCrmId === event.id && "ring-2 ring-foreground/40 ring-offset-1",
+                        (moving || resizing) && "opacity-90 shadow-lg",
                       )}
                       style={{
-                        top: pos.top,
-                        height: pos.height,
-                        backgroundColor: color,
+                        top,
+                        height,
+                        backgroundColor: calendarColor(event.assignee),
                         borderColor: "transparent",
+                        ...columnStyle(event.column, event.columnCount),
                       }}
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => {
+                      onPointerDown={(e) => {
                         e.stopPropagation();
-                        setSelectedCrmId(event.id);
-                        setQuickOpen(false);
-                        setSelection(null);
+                        e.preventDefault();
+                        beginMove(event, e.clientY);
                       }}
                       onDoubleClick={(e) => {
                         e.stopPropagation();
@@ -448,24 +625,42 @@ export function CalendarWeekGrid({
                       }}
                     >
                       <p className="truncate font-semibold">{event.title}</p>
-                      <p className="truncate opacity-90">
-                        {formatTime(event.startsAt)} ·{" "}
-                        {EVENT_KIND_LABELS[event.kind]}
-                      </p>
+                      {height > 28 ? (
+                        <p className="truncate opacity-90">
+                          {formatTime(event.startsAt)} · {EVENT_KIND_LABELS[event.kind]}
+                        </p>
+                      ) : null}
+                      <span
+                        data-resize-handle
+                        className="absolute inset-x-0 bottom-0 h-2 cursor-ns-resize"
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          beginResize(event);
+                        }}
+                      />
                     </button>
                   );
                 })}
+
+                {movePreview &&
+                movePreview.dayKey === key &&
+                !dayCrm.some((event) => event.id === movePreview.eventId) ? (
+                  <div
+                    className="pointer-events-none absolute inset-x-1 z-[3] rounded-md border border-dashed border-primary/60 bg-primary/20"
+                    style={{
+                      top: ((movePreview.startMin - DAY_START_MIN) / 60) * HOUR_HEIGHT,
+                      height: Math.max((movePreview.durationMin / 60) * HOUR_HEIGHT, 22),
+                    }}
+                  />
+                ) : null}
 
                 {sel ? (
                   <div
                     className="pointer-events-none absolute inset-x-1 z-[3] rounded-md border border-primary/50 bg-primary/15"
                     style={{
-                      top:
-                        ((sel.startMin - DAY_START_MIN) / 60) * HOUR_HEIGHT,
-                      height: Math.max(
-                        ((sel.endMin - sel.startMin) / 60) * HOUR_HEIGHT,
-                        22,
-                      ),
+                      top: ((sel.startMin - DAY_START_MIN) / 60) * HOUR_HEIGHT,
+                      height: Math.max(((sel.endMin - sel.startMin) / 60) * HOUR_HEIGHT, 22),
                     }}
                   />
                 ) : null}
@@ -479,10 +674,12 @@ export function CalendarWeekGrid({
         <div
           ref={panelRef}
           data-quick-panel
-          className="absolute z-20 w-[min(22rem,calc(100%-1.5rem))] rounded-xl border border-border bg-popover p-0 shadow-xl"
+          className="absolute z-20 w-[min(22rem,calc(100%-1.5rem))] rounded-xl border border-border bg-popover shadow-xl"
           style={{
-            top: 88,
-            left: `clamp(0.75rem, calc(4.5rem + ${(Math.max(dayIndex, 0) / 7) * 100}% * 0.86), calc(100% - 22.5rem))`,
+            top: 72,
+            left: isDayView
+              ? "1rem"
+              : `clamp(0.75rem, calc(4.5rem + ${(Math.max(dayIndex, 0) / dayCount) * 100}% * 0.86), calc(100% - 22.5rem))`,
           }}
           onPointerDown={(e) => e.stopPropagation()}
         >
@@ -495,17 +692,10 @@ export function CalendarWeekGrid({
                   month: "short",
                   day: "numeric",
                 })}{" "}
-                · {minutesToLabel(selection.startMin)} –{" "}
-                {minutesToLabel(selection.endMin)}
+                · {minutesToLabel(selection.startMin)} – {minutesToLabel(selection.endMin)}
               </p>
             </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Close"
-              onClick={closeQuick}
-            >
+            <Button type="button" variant="ghost" size="icon-sm" aria-label="Close" onClick={closeQuick}>
               <X className="size-4" />
             </Button>
           </div>
@@ -527,45 +717,22 @@ export function CalendarWeekGrid({
             <div className="grid grid-cols-2 gap-2">
               <label className="space-y-1 text-xs text-muted-foreground">
                 Start
-                <Input
-                  type="time"
-                  value={quickStart}
-                  onChange={(e) => setQuickStart(e.target.value)}
-                />
+                <Input type="time" value={quickStart} onChange={(e) => setQuickStart(e.target.value)} />
               </label>
               <label className="space-y-1 text-xs text-muted-foreground">
                 End
-                <Input
-                  type="time"
-                  value={quickEnd}
-                  onChange={(e) => setQuickEnd(e.target.value)}
-                />
+                <Input type="time" value={quickEnd} onChange={(e) => setQuickEnd(e.target.value)} />
               </label>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={openFullEditor}
-              >
+              <Button type="button" variant="ghost" size="sm" onClick={openFullEditor}>
                 More options
               </Button>
               <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={closeQuick}
-                >
+                <Button type="button" variant="outline" size="sm" onClick={closeQuick}>
                   Cancel
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={!quickTitle.trim()}
-                  onClick={saveQuick}
-                >
+                <Button type="button" size="sm" disabled={!quickTitle.trim()} onClick={saveQuick}>
                   Save
                 </Button>
               </div>
@@ -581,16 +748,11 @@ export function CalendarWeekGrid({
           className="absolute top-20 right-4 z-20 w-[min(22rem,calc(100%-2rem))] overflow-hidden rounded-xl border border-border bg-popover shadow-xl"
           onPointerDown={(e) => e.stopPropagation()}
         >
-          <div
-            className="h-2"
-            style={{ backgroundColor: calendarColor(selectedCrm.assignee) }}
-          />
+          <div className="h-2" style={{ backgroundColor: calendarColor(selectedCrm.assignee) }} />
           <div className="space-y-3 p-4">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <p className="text-lg font-semibold leading-tight">
-                  {selectedCrm.title}
-                </p>
+                <p className="text-lg font-semibold leading-tight">{selectedCrm.title}</p>
                 <p className="mt-1 text-sm text-muted-foreground">
                   {new Date(selectedCrm.startsAt).toLocaleString(undefined, {
                     weekday: "short",
@@ -616,13 +778,14 @@ export function CalendarWeekGrid({
               {EVENT_KIND_LABELS[selectedCrm.kind]} · {selectedCrm.assignee}
             </p>
             {selectedCrm.location ? (
-              <p className="text-sm text-muted-foreground">
-                {selectedCrm.location}
-              </p>
+              <p className="text-sm text-muted-foreground">{selectedCrm.location}</p>
             ) : null}
             {selectedCrm.notes ? (
               <p className="text-sm text-muted-foreground">{selectedCrm.notes}</p>
             ) : null}
+            <p className="text-xs text-muted-foreground">
+              Drag to move · pull the bottom edge to resize · double-click to edit
+            </p>
             <div className="flex gap-2 pt-1">
               <Button
                 type="button"
