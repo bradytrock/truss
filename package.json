@@ -2,6 +2,10 @@
   "name": "theroofingcrm",
   "version": "0.1.0",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://origin.cursor.com/git/brady-jones/MyRoofingTools.git"
+  },
   "engines": {
     "node": ">=20"
   },

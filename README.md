@@ -4,11 +4,18 @@ A contractor operating system for restoration and home improvement: jobs, estima
 
 Northline Construction’s sample book is Denver residential work — hail roofs, water and fire restoration, kitchens, windows — plus a thin commercial leftover. Homeowners do not need a company on file.
 
-The source of truth is [github.com/bradytrock/truss](https://github.com/bradytrock/truss).
+The source of truth is [github.com/bradytrock/truss](https://github.com/bradytrock/truss). This Cursor checkout is **MyRoofingTools** (`brady-jones/MyRoofingTools.git`).
 
 ```bash
 git clone https://github.com/bradytrock/truss.git
 cd truss
+npm install
+npm run dev
+```
+
+```bash
+git clone https://origin.cursor.com/git/brady-jones/MyRoofingTools.git
+cd MyRoofingTools
 npm install
 npm run dev
 ```
