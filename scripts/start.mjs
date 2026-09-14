@@ -6,10 +6,16 @@ import { prepareStandalone } from "./prepare-standalone.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-// PaaS (Hostinger, Railway, Render, etc.) inject PORT — always prefer it.
+// PaaS (GoDaddy, Hostinger, Railway, Render, etc.) inject PORT — always prefer it.
 const port = Number(process.env.PORT) || 3000;
 process.env.PORT = String(port);
-process.env.HOSTNAME = process.env.HOSTNAME || "0.0.0.0";
+// Linux/Docker always sets HOSTNAME to the machine name (e.g. d9d482be7bcf).
+// Next.js standalone treats HOSTNAME as the listen address, so keeping that
+// value binds off 0.0.0.0 and the platform health check cannot reach us.
+// HOST is the real bind override some PaaS use; otherwise listen on all interfaces.
+const bindHost = process.env.HOST?.trim();
+process.env.HOSTNAME =
+  bindHost && bindHost !== "localhost" ? bindHost : "0.0.0.0";
 
 function run(command, args, cwd) {
   const child = spawn(command, args, {
@@ -27,7 +33,9 @@ const rootServer = path.join(root, "server.js");
 const standaloneServer = path.join(root, ".next", "standalone", "server.js");
 const nextBin = path.join(root, "node_modules", "next", "dist", "bin", "next");
 
-console.log(`[start] Listening on port ${port} (process.env.PORT=${process.env.PORT})`);
+console.log(
+  `[start] Listening on ${process.env.HOSTNAME}:${port} (process.env.PORT=${process.env.PORT})`,
+);
 
 // PaaS may extract the standalone bundle as the app root (/app/server.js).
 if (existsSync(rootServer) && existsSync(path.join(root, ".next"))) {

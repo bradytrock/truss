@@ -50,9 +50,11 @@ export function prepareStandalone() {
     /const currentPort = parseInt\(process\.env\.PORT, 10\) \|\| \d+/,
     "const currentPort = parseInt(process.env.PORT, 10) || 3000",
   );
+  // Do not read process.env.HOSTNAME — Linux sets that to the container name.
+  // Bind all interfaces unless HOST is an explicit listen address.
   serverSource = serverSource.replace(
     /const hostname = process\.env\.HOSTNAME \|\| ['"][^'"]+['"]/,
-    "const hostname = process.env.HOSTNAME || '0.0.0.0'",
+    "const hostname = process.env.HOST || '0.0.0.0'",
   );
   writeFileSync(serverJs, serverSource);
   console.log("[prepare-standalone] Confirmed server.js listens on process.env.PORT || 3000");
