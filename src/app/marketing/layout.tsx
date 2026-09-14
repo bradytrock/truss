@@ -12,7 +12,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
         <PageHeader
           eyebrow="Suite"
           title="Marketing"
-          description="Templates, job-backed materials, partner kits, campaigns, reviews, and share links — ready for PMs and BD."
+          description="Email a list from the book, then print flyers and partner kits when you need them."
         />
         <MarketingNav />
         {children}

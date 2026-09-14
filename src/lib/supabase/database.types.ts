@@ -2185,6 +2185,100 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["marketing_assets"]["Insert"]>;
         Relationships: [];
       };
+      email_campaigns: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          audience_kind: string;
+          audience_city: string;
+          audience_zip: string;
+          include_punch: boolean;
+          subject: string;
+          body_text: string;
+          status: string;
+          created_by_staff_id: string | null;
+          created_by_name: string;
+          sent_count: number;
+          failed_count: number;
+          skipped_count: number;
+          created_at: string;
+          sent_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name?: string;
+          audience_kind: string;
+          audience_city?: string;
+          audience_zip?: string;
+          include_punch?: boolean;
+          subject: string;
+          body_text: string;
+          status?: string;
+          created_by_staff_id?: string | null;
+          created_by_name?: string;
+          sent_count?: number;
+          failed_count?: number;
+          skipped_count?: number;
+          created_at?: string;
+          sent_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["email_campaigns"]["Insert"]>;
+        Relationships: [];
+      };
+      email_campaign_sends: {
+        Row: {
+          id: string;
+          company_id: string;
+          campaign_id: string;
+          contact_id: string | null;
+          job_id: string | null;
+          email: string;
+          recipient_name: string;
+          subject: string;
+          status: string;
+          error: string;
+          resend_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          campaign_id: string;
+          contact_id?: string | null;
+          job_id?: string | null;
+          email: string;
+          recipient_name?: string;
+          subject?: string;
+          status: string;
+          error?: string;
+          resend_id?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["email_campaign_sends"]["Insert"]>;
+        Relationships: [];
+      };
+      email_unsubscribes: {
+        Row: {
+          id: string;
+          company_id: string;
+          email: string;
+          token: string;
+          unsubscribed_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          email: string;
+          token: string;
+          unsubscribed_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["email_unsubscribes"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -2307,6 +2401,14 @@ export type Database = {
       record_marketing_event: {
         Args: { p_token: string; p_kind: string };
         Returns: undefined;
+      };
+      email_unsubscribe_info: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      unsubscribe_email_campaign: {
+        Args: { p_token: string };
+        Returns: Json;
       };
       shared_job_file: {
         Args: { p_token: string };

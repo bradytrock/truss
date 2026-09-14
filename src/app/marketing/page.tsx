@@ -19,8 +19,22 @@ export default function MarketingHomePage() {
 
   return (
     <div className="space-y-8">
+      <section className="space-y-3 rounded-lg border p-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-heading text-xl font-medium">Email a list</h2>
+            <p className="text-sm text-muted-foreground">
+              Realtors, current jobs, past clients, or a city/ZIP after a storm. Compose, merge, send.
+            </p>
+          </div>
+          <Button nativeButton={false} render={<Link href="/marketing/campaigns" />} size="sm">
+            Open email
+          </Button>
+        </div>
+      </section>
+
       <MetricStrip className="sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Templates" value={String(MARKETING_TEMPLATES.length)} hint="Company-approved starter kits" />
+        <Metric label="Templates" value={String(MARKETING_TEMPLATES.length)} hint="Print and flyer kits" />
         <Metric label="My materials" value={String(marketing.materials.length)} hint="Generated for jobs and partners" />
         <Metric label="Opens" value={String(views)} hint="Public share-link views" />
         <Metric label="Shares" value={String(shares)} hint="Copied or sent links" />
@@ -29,7 +43,7 @@ export default function MarketingHomePage() {
       <section className="space-y-3">
         <div className="flex items-end justify-between gap-3">
           <div>
-            <h2 className="font-heading text-xl font-medium">Start from a template</h2>
+            <h2 className="font-heading text-xl font-medium">Print from a template</h2>
             <p className="text-sm text-muted-foreground">
               Pick a kit, merge a job or realtor, then export or share.
             </p>
@@ -102,12 +116,10 @@ export default function MarketingHomePage() {
           <h2 className="font-heading text-lg font-medium">Quick actions</h2>
           <div className="grid gap-2 sm:grid-cols-2">
             {[
-              { href: "/marketing/campaigns", label: "Storm / neighborhood campaign" },
+              { href: "/marketing/campaigns", label: "Email a list from the book" },
               { href: "/marketing/partners", label: "Realtor co-brand kit" },
               { href: "/marketing/reviews", label: "Review ask pack" },
               { href: "/marketing/assets", label: "Asset library" },
-              { href: "/marketing/social", label: "Social calendar" },
-              { href: "/marketing/drips", label: "Email & SMS drips" },
               { href: "/marketing/leave-behinds", label: "Leave-behinds" },
               { href: "/marketing/create?template=tpl-case-study", label: "Case study from a job" },
             ].map((action) => (

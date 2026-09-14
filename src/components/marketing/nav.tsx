@@ -6,15 +6,13 @@ import { cn } from "@/lib/utils";
 
 const LINKS = [
   { href: "/marketing", label: "Overview", exact: true },
+  { href: "/marketing/campaigns", label: "Email" },
   { href: "/marketing/templates", label: "Templates" },
-  { href: "/marketing/materials", label: "My materials" },
-  { href: "/marketing/assets", label: "Assets" },
-  { href: "/marketing/campaigns", label: "Campaigns" },
+  { href: "/marketing/materials", label: "Print" },
   { href: "/marketing/partners", label: "Partners" },
   { href: "/marketing/reviews", label: "Reviews" },
-  { href: "/marketing/social", label: "Social" },
-  { href: "/marketing/drips", label: "Drips" },
   { href: "/marketing/leave-behinds", label: "Leave-behinds" },
+  { href: "/marketing/assets", label: "Assets" },
 ] as const;
 
 export function MarketingNav() {
