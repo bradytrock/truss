@@ -227,7 +227,6 @@ export function renderProposalEmailHtml(input: ProposalEmailInput) {
       .hero-title { font-size:28px !important; line-height:34px !important; }
       .stack { display:block !important; width:100% !important; }
       .stack-gap { padding-top:12px !important; padding-left:0 !important; }
-      .hide-mobile { display:none !important; }
     }
   </style>
 </head>
@@ -253,7 +252,7 @@ export function renderProposalEmailHtml(input: ProposalEmailInput) {
                     ${logoLinked}
                   </td>
                   <td align="right" valign="middle" style="font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:16px;color:#6b6763;letter-spacing:0.04em;">
-                    <span class="hide-mobile">Family-owned in DFW since 1958${headerPhone ? " &nbsp;·&nbsp; " : ""}</span>${headerPhone}
+                    ${headerPhone}
                   </td>
                 </tr>
               </table>
