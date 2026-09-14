@@ -20,7 +20,6 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { EmptyState, RecordCode } from "@/components/page-chrome";
 import { MarketBadge } from "@/components/status-badge";
-import { LeadAssigneeSelect } from "@/components/lead-assignee";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency } from "@/lib/format";
@@ -31,17 +30,13 @@ import { acceptedAmountForJob } from "@/lib/estimate-totals";
 import {
   WORK_COLUMNS,
   WORK_COLUMN_LABELS,
+  boardCardDetails,
   boardValue,
   isWorkColumn,
   workColumnFor,
   type WorkColumn,
 } from "@/lib/work-board";
-import {
-  assignmentOptions,
-  canAssignLeadsToAnyone,
-  canDeleteJobs,
-  jobMatchesOwnerFilter,
-} from "@/lib/visibility";
+import { canDeleteJobs, jobMatchesOwnerFilter } from "@/lib/visibility";
 import { dedupeJobsByOpportunity, isDeletedJob } from "@/lib/job-record";
 import { primaryJobPhoto } from "@/lib/photo-trash";
 import type { Job } from "@/lib/types";
@@ -294,20 +289,12 @@ function JobCard({
   });
   const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
   const market = workMarket(job, opportunity);
-  const people = assignmentOptions(
-    crm.viewer,
-    crm.book.staff,
-    opportunity?.ownerStaffId || job.ownerStaffId,
-    crm.user.role,
-  );
-  const ownerId = opportunity?.ownerStaffId || job.ownerStaffId;
-  const canReassign =
-    Boolean(opportunity) &&
-    (canAssignLeadsToAnyone(crm.viewer, crm.user.role) ||
-      people.length > 1 ||
-      people.some((member) => member.id !== ownerId));
-  const ownerName =
-    crm.book.staff.find((member) => member.id === ownerId)?.name ?? job.projectManager;
+  const details = boardCardDetails({
+    title: job.name,
+    customerName,
+    location: job.location,
+    street: job.street,
+  });
   const cover = primaryJobPhoto(crm.photos, job);
 
   return (
@@ -358,9 +345,11 @@ function JobCard({
           >
             <RecordCode code={job.code} />
             <span className="mt-0.5 block text-sm font-medium leading-snug hover:underline">
-              {job.name}
+              {details.title}
             </span>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{customerName}</p>
+            {details.showCustomer ? (
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">{details.customer}</p>
+            ) : null}
             {job.leadSource ? (
               <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                 {leadSourceLabel(job.leadSource)}
@@ -386,32 +375,16 @@ function JobCard({
           </span>
           <MarketBadge market={parseMarket(market)} />
         </button>
-        <div
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => event.stopPropagation()}
-        >
-          {canReassign && !overlay && opportunity ? (
-            <LeadAssigneeSelect
-              size="sm"
-              value={opportunity.ownerStaffId}
-              people={people}
-              onChange={(staffId) => {
-                void crm.assignOpportunityOwner(opportunity.id, staffId).then((ok) => {
-                  if (!ok) return;
-                  const name = people.find((member) => member.id === staffId)?.name ?? "teammate";
-                  toast.success(`Assigned to ${name}.`);
-                });
-              }}
-            />
-          ) : (
-            <p className="truncate text-[11px] text-muted-foreground">{ownerName}</p>
-          )}
-          {canTrash && deleted && !overlay ? (
+        {canTrash && deleted && !overlay ? (
+          <div
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
             <Button
               type="button"
               variant="outline"
               size="xs"
-              className="mt-1 w-full"
+              className="w-full"
               onClick={() => {
                 void crm.restoreJob(job.id).then((ok) => {
                   if (ok) toast.success(`${job.code || job.name} is back on the board.`);
@@ -421,22 +394,26 @@ function JobCard({
               <RotateCcw className="size-3" />
               Restore
             </Button>
-          ) : null}
-          {deleted && job.deletedReason ? (
-            <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
-              {job.deletedReason}
-            </p>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          className="flex w-full items-center justify-between gap-2 text-left text-xs text-muted-foreground"
-          onClick={() => {
-            if (!overlay) onSelectJob(job.id);
-          }}
-        >
-          <span className="min-w-0 truncate">{job.location}</span>
-        </button>
+            {job.deletedReason ? (
+              <p className="mt-1 line-clamp-2 text-[11px] text-muted-foreground">
+                {job.deletedReason}
+              </p>
+            ) : null}
+          </div>
+        ) : deleted && job.deletedReason ? (
+          <p className="line-clamp-2 text-[11px] text-muted-foreground">{job.deletedReason}</p>
+        ) : null}
+        {details.showLocation ? (
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-2 text-left text-xs text-muted-foreground"
+            onClick={() => {
+              if (!overlay) onSelectJob(job.id);
+            }}
+          >
+            <span className="min-w-0 truncate">{details.location}</span>
+          </button>
+        ) : null}
       </CardContent>
     </Card>
   );
