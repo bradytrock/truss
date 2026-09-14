@@ -80,3 +80,33 @@ export function patchForWorkColumn(column: WorkColumn): {
 export function isWorkColumn(value: string): value is WorkColumn {
   return WORK_COLUMNS.includes(value as WorkColumn);
 }
+
+/** What to show on a board card after the title — skip lines already in the name. */
+export function boardCardDetails(input: {
+  title: string;
+  customerName: string;
+  location: string;
+  street?: string;
+}) {
+  const title = input.title.trim();
+  const customer = input.customerName.trim();
+  const location = input.location.trim();
+  const haystack = title.toLowerCase();
+  const last = customer.split(/\s+/).filter(Boolean).at(-1) ?? "";
+  const showCustomer =
+    Boolean(customer) &&
+    !haystack.includes(customer.toLowerCase()) &&
+    !(last.length > 1 && haystack.includes(last.toLowerCase()));
+  const street = input.street?.trim() ?? "";
+  const showLocation =
+    Boolean(location) &&
+    !haystack.includes(location.toLowerCase()) &&
+    !(street.length > 3 && haystack.includes(street.toLowerCase()));
+  return {
+    title: title || location,
+    showCustomer,
+    customer,
+    showLocation,
+    location,
+  };
+}

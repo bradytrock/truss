@@ -20,7 +20,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { MarketBadge, TypeBadge } from "@/components/status-badge";
 import { EmptyState, RecordCode } from "@/components/page-chrome";
-import { LeadAssigneeSelect } from "@/components/lead-assignee";
 import { useCrm } from "@/lib/crm-store";
 import { daysUntil, formatCurrency, formatDateShort } from "@/lib/format";
 import { leadSourceLabel } from "@/lib/leads";
@@ -31,7 +30,7 @@ import {
   type Opportunity,
   type PipelineStage,
 } from "@/lib/types";
-import { assignmentOptions, canAssignLeadsToAnyone } from "@/lib/visibility";
+import { boardCardDetails } from "@/lib/work-board";
 import { cn } from "@/lib/utils";
 
 const columnAccent: Record<PipelineStage, string> = {
@@ -206,25 +205,17 @@ function OpportunityCard({
   customerName: string;
   overlay?: boolean;
 }) {
-  const crm = useCrm();
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: opportunity.id,
     disabled: overlay,
   });
   const dueIn = daysUntil(opportunity.bidDueAt);
-  const people = assignmentOptions(
-    crm.viewer,
-    crm.book.staff,
-    opportunity.ownerStaffId,
-    crm.user.role,
-  );
-  const canReassign =
-    canAssignLeadsToAnyone(crm.viewer, crm.user.role) ||
-    people.length > 1 ||
-    people.some((member) => member.id !== opportunity.ownerStaffId);
-  const ownerName =
-    crm.book.staff.find((member) => member.id === opportunity.ownerStaffId)?.name ??
-    opportunity.estimator;
+  const details = boardCardDetails({
+    title: opportunity.name,
+    customerName,
+    location: opportunity.location,
+    street: opportunity.street,
+  });
 
   return (
     <Card
@@ -253,9 +244,11 @@ function OpportunityCard({
               href={`/opportunities/${opportunity.id}`}
               className="mt-0.5 block text-sm font-medium leading-snug hover:underline"
             >
-              {opportunity.name}
+              {details.title}
             </Link>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">{customerName}</p>
+            {details.showCustomer ? (
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">{details.customer}</p>
+            ) : null}
             {opportunity.leadSource ? (
               <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                 {leadSourceLabel(opportunity.leadSource)}
@@ -270,29 +263,9 @@ function OpportunityCard({
           <MarketBadge market={parseMarket(opportunity.market, opportunity.projectType)} />
           <TypeBadge type={opportunity.projectType} />
         </div>
-        <div
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={(event) => event.stopPropagation()}
-        >
-          {canReassign && !overlay ? (
-            <LeadAssigneeSelect
-              size="sm"
-              value={opportunity.ownerStaffId}
-              people={people}
-              onChange={(staffId) => {
-                void crm.assignOpportunityOwner(opportunity.id, staffId).then((ok) => {
-                  if (!ok) return;
-                  const name = people.find((member) => member.id === staffId)?.name ?? "teammate";
-                  toast.success(`Assigned to ${name}.`);
-                });
-              }}
-            />
-          ) : (
-            <p className="truncate text-[11px] text-muted-foreground">{ownerName}</p>
-          )}
-        </div>
+        {details.showLocation || opportunity.bidDueAt ? (
         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span className="min-w-0 truncate">{opportunity.location}</span>
+          <span className="min-w-0 truncate">{details.showLocation ? details.location : ""}</span>
           {opportunity.bidDueAt ? (
             <span
               className={cn(
@@ -310,6 +283,7 @@ function OpportunityCard({
             </span>
           ) : null}
         </div>
+        ) : null}
       </CardContent>
     </Card>
   );
