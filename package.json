@@ -6,7 +6,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "node scripts/allow-dev-origins.mjs && next dev --port 3847",
+    "dev": "node scripts/dev.mjs",
     "build": "next build --webpack && node scripts/prepare-standalone.mjs",
     "start": "node scripts/start.mjs",
     "lint": "eslint",

@@ -39,6 +39,24 @@ export function prepareStandalone() {
     console.log("[prepare-standalone] Patched standalone package.json start → node server.js");
   }
 
+  // PaaS scanners expect an explicit process.env.PORT listen. Next's standalone
+  // server already does `parseInt(process.env.PORT, 10) || 3000` — verify and
+  // normalize the fallback so deploys bind to the injected PORT.
+  let serverSource = readFileSync(serverJs, "utf8");
+  if (!serverSource.includes("process.env.PORT")) {
+    throw new Error("[prepare-standalone] standalone server.js is missing process.env.PORT");
+  }
+  serverSource = serverSource.replace(
+    /const currentPort = parseInt\(process\.env\.PORT, 10\) \|\| \d+/,
+    "const currentPort = parseInt(process.env.PORT, 10) || 3000",
+  );
+  serverSource = serverSource.replace(
+    /const hostname = process\.env\.HOSTNAME \|\| ['"][^'"]+['"]/,
+    "const hostname = process.env.HOSTNAME || '0.0.0.0'",
+  );
+  writeFileSync(serverJs, serverSource);
+  console.log("[prepare-standalone] Confirmed server.js listens on process.env.PORT || 3000");
+
   return true;
 }
 

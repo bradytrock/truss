@@ -5,8 +5,10 @@ import { fileURLToPath } from "node:url";
 import { prepareStandalone } from "./prepare-standalone.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const port = String(process.env.PORT || "3847");
-process.env.PORT = port;
+
+// PaaS (Hostinger, Railway, Render, etc.) inject PORT — always prefer it.
+const port = Number(process.env.PORT) || 3000;
+process.env.PORT = String(port);
 process.env.HOSTNAME = process.env.HOSTNAME || "0.0.0.0";
 
 function run(command, args, cwd) {
@@ -25,6 +27,8 @@ const rootServer = path.join(root, "server.js");
 const standaloneServer = path.join(root, ".next", "standalone", "server.js");
 const nextBin = path.join(root, "node_modules", "next", "dist", "bin", "next");
 
+console.log(`[start] Listening on port ${port} (process.env.PORT=${process.env.PORT})`);
+
 // PaaS may extract the standalone bundle as the app root (/app/server.js).
 if (existsSync(rootServer) && existsSync(path.join(root, ".next"))) {
   run(process.execPath, ["server.js"], root);
@@ -32,7 +36,7 @@ if (existsSync(rootServer) && existsSync(path.join(root, ".next"))) {
   prepareStandalone();
   run(process.execPath, ["server.js"], path.join(root, ".next", "standalone"));
 } else if (existsSync(nextBin)) {
-  run(process.execPath, [nextBin, "start", "--hostname", "0.0.0.0", "--port", port], root);
+  run(process.execPath, [nextBin, "start", "--hostname", "0.0.0.0", "--port", String(port)], root);
 } else {
   console.error(
     "No Next.js server found. Run `npm run build` (expects .next/standalone/server.js) or install dependencies.",
