@@ -238,8 +238,8 @@ export function QbwcPanel() {
               placeholder={DEFAULT_QB_BANK}
             />
             <p className="text-xs text-muted-foreground">
-              Checks, ACH, debit, and cash expenses, plus deposits, use this account. The name must match
-              QB exactly.
+              Checks that are not on a job, plus deposits, use this account. Job costs post as vendor
+              bills on Customer:Job. The name must match QB exactly.
             </p>
           </div>
           <div className="grid gap-1.5">

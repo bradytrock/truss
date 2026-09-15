@@ -293,6 +293,15 @@ export function checkAddXml(input: {
   );
 }
 
+export function txnVoidXml(input: { requestId: string; txnType: "Check" | "Bill"; txnId: string }) {
+  return wrapQbxml(
+    `    <TxnVoidRq requestID="${xmlEscape(input.requestId)}">\r\n` +
+      `      <TxnVoidType>${xmlEscape(input.txnType)}</TxnVoidType>\r\n` +
+      `      <TxnID>${xmlEscape(input.txnId)}</TxnID>\r\n` +
+      `    </TxnVoidRq>\r\n`,
+  );
+}
+
 export function billAddXml(input: {
   requestId: string;
   vendor: string;

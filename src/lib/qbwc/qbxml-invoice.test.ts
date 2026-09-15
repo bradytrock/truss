@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { billAddXml, invoiceAddXml, signedInvoiceQtyRate } from "./qbxml.ts";
-import { requestForStep } from "./steps.ts";
+import { billAddXml, invoiceAddXml, signedInvoiceQtyRate, txnVoidXml } from "./qbxml.ts";
+import { advanceFromResponse, requestForStep } from "./steps.ts";
 import type { QbExpenseWork, QbInvoiceWork } from "./work.ts";
 
 assert.deepEqual(signedInvoiceQtyRate(1, 7482.12), { quantity: 1, unitCost: 7482.12 });
@@ -68,7 +68,30 @@ const billXml = requestForStep("expense_add", expenseWork);
 assert.match(billXml, /<BillAddRq/);
 assert.match(billXml, /<VendorRef>[\s\S]*Silva&apos;s Sheet Metal LLC/);
 assert.match(billXml, /<CustomerRef>[\s\S]*Ojamaye:BJ091026-A/);
+assert.match(billXml, /<BillableStatus>NotBillable<\/BillableStatus>/);
 assert.doesNotMatch(billXml, /<CheckAddRq/);
+
+const replaceWork = { ...expenseWork, replaceTxnId: "43-1789510995" };
+const voidXml = requestForStep("txn_void", replaceWork);
+assert.match(voidXml, /<TxnVoidRq/);
+assert.match(voidXml, /<TxnVoidType>Check<\/TxnVoidType>/);
+assert.match(voidXml, /<TxnID>43-1789510995<\/TxnID>/);
+assert.equal(
+  advanceFromResponse("txn_void", "<TxnVoidRs statusCode=\"0\" />").action,
+  "next",
+);
+assert.equal(
+  advanceFromResponse("txn_void", "<TxnVoidRs statusCode=\"3120\" statusMessage=\"Object not found\" />").step,
+  "expense_add",
+);
+const jobOk = "<CustomerAddRs statusCode=\"0\"><CustomerRet><ListID>1</ListID></CustomerRet></CustomerAddRs>";
+assert.equal(advanceFromResponse("job_add", jobOk, "", replaceWork).step, "txn_void");
+assert.equal(advanceFromResponse("job_add", jobOk, "", expenseWork).step, "expense_add");
+
+assert.match(
+  txnVoidXml({ requestId: "e1-txn_void", txnType: "Check", txnId: "46-1789511000" }),
+  /<TxnID>46-1789511000<\/TxnID>/,
+);
 
 const checkXml = billAddXml({
   requestId: "e1",

@@ -980,6 +980,7 @@ export type Database = {
           receipt_storage_path: string | null;
           qb_status: string;
           qb_txn_id: string;
+          qb_txn_kind: string;
           extracted_by_ai: boolean;
           created_at: string;
           created_by: string;
@@ -999,6 +1000,7 @@ export type Database = {
           receipt_storage_path?: string | null;
           qb_status?: string;
           qb_txn_id?: string;
+          qb_txn_kind?: string;
           extracted_by_ai?: boolean;
           created_at?: string;
           created_by?: string;

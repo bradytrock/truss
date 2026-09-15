@@ -94,8 +94,12 @@ export function reviewableExpenses(expenses: Expense[]) {
   return expenses.filter((expense) => expense.qbStatus !== "entered");
 }
 
-export function expenseQbPayWith(method: ExpenseMethod): "credit_card" | "check" | "bill" {
+export function expenseQbPayWith(
+  method: ExpenseMethod,
+  hasJob = false,
+): "credit_card" | "check" | "bill" {
   if (method === "credit_card") return "credit_card";
+  if (hasJob) return "bill";
   if (method === "check") return "check";
   return "bill";
 }
@@ -106,7 +110,7 @@ export function expenseQbPreview(
   customerName = "",
   accounts?: { bankAccount?: string; ccAccount?: string },
 ) {
-  const payWith = expenseQbPayWith(expense.method);
+  const payWith = expenseQbPayWith(expense.method, Boolean(job));
   const hasJob = Boolean(job);
   const jobLabel = job
     ? `${customerName || "Customer"}:${job.code || job.name}`

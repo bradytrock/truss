@@ -121,7 +121,7 @@ export function JobDocumentReview({ job }: { job: Job }) {
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{itemTitle(item)}</p>
           <p className="text-[11px] text-muted-foreground">
-            {itemKindLabel(item.kind)} · {job.code || job.name}
+            {itemKindLabel(item.kind, item)} · {job.code || job.name}
           </p>
         </div>
         <QbStatusBadge status={status} />
@@ -195,7 +195,7 @@ function FileThread({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="border-b px-4 py-3">
         <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-          {itemKindLabel(item.kind)}
+          {itemKindLabel(item.kind, item)}
         </p>
         <h2 className="font-heading text-lg font-medium">{itemTitle(item)}</h2>
         <p className="mt-1 text-xs text-muted-foreground">

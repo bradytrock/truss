@@ -1292,7 +1292,7 @@ export function JobRecord({
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium">{itemTitle(item)}</span>
                           <span className="mt-0.5 block text-xs text-muted-foreground">
-                            {itemKindLabel(item.kind)}
+                            {itemKindLabel(item.kind, item)}
                           </span>
                         </span>
                         <QbStatusBadge status={status} />
