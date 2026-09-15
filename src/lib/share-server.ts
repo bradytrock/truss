@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import {
   normalizeShareToken,
   parseShareSender,
-  parseSharedEstimate,
   parseSharedInvoice,
   parseSharedPage,
   type ShareSender,
@@ -10,6 +9,7 @@ import {
   type SharedInvoicePayload,
   type SharedPagePayload,
 } from "@/lib/share";
+import { clientFacingSharePayload } from "@/lib/client-proposal";
 import { parseSharedCard, type SharedCardPayload } from "@/lib/card";
 import { createAnonClient } from "@/lib/supabase/anon";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -85,7 +85,7 @@ export async function loadSharedEstimate(token: string): Promise<{
   sender: ShareSender | null;
 }> {
   const { data, sender } = await rpcShare("shared_estimate", token);
-  const payload = parseSharedEstimate(data);
+  const payload = clientFacingSharePayload(data);
   if (data != null && !payload) {
     logShareRpc("shared_estimate", token, { message: "unparseable payload" });
     return { payload: null, sender: sender ?? (await lookupShareSender(token)) };

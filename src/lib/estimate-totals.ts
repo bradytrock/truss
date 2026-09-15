@@ -98,6 +98,26 @@ export function estimateTotals(
   };
 }
 
+/** Fold document margin into line prices so homeowners never see a margin line or percent. */
+export function toClientFacingProposal<
+  E extends Pick<Estimate, "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue"> &
+    Partial<Pick<Estimate, "packageMode" | "selectedPackage" | "subtotalOverride" | "marginPercent">>,
+  L extends Pick<EstimateLine, "quantity" | "unitCost" | "optional" | "selected" | "taxable"> &
+    Partial<Pick<EstimateLine, "package">>,
+>(estimate: E, lines: L[]): { estimate: E; lines: L[] } {
+  const totals = estimateTotals(estimate, lines);
+  const withoutMargin = { ...estimate, marginPercent: 0 } as E;
+  if (totals.marginAmount <= 0) return { estimate: withoutMargin, lines };
+  const factor = 1 + totals.marginPercent / 100;
+  return {
+    estimate: withoutMargin,
+    lines: lines.map((line) => ({
+      ...line,
+      unitCost: roundMoney(line.unitCost * factor),
+    })),
+  };
+}
+
 export function groupEstimateLines<T extends Pick<EstimateLine, "groupName" | "sortOrder">>(lines: T[]) {
   const order: string[] = [];
   const grouped = new Map<string, T[]>();
