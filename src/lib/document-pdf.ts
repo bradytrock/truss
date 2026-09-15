@@ -1,5 +1,5 @@
 import type { CompanySettings, Estimate, EstimateLine, EstimateSignatureEvent, Invoice, InvoiceLine, JobPhoto, Payment } from "@/lib/types";
-import { estimateTotals, groupEstimateLines, lineAmount, lineIncluded, totalsForPackage } from "@/lib/estimate-totals";
+import { estimateTotals, groupEstimateLines, lineAmount, lineIncluded, toClientFacingProposal, totalsForPackage } from "@/lib/estimate-totals";
 import {
   ESTIMATE_PACKAGES,
   PACKAGE_LABEL,
@@ -480,7 +480,7 @@ function writeProjectManager(doc: Doc, manager: ProjectManagerContact | null | u
   return y + 6;
 }
 
-export async function buildEstimatePdf(input: {
+export async function buildEstimatePdf(raw: {
   estimate: Estimate;
   lines: EstimateLine[];
   company: CompanySettings;
@@ -491,6 +491,8 @@ export async function buildEstimatePdf(input: {
   contractorName?: string;
   photos?: JobPhoto[];
 }) {
+  const clientFacing = toClientFacingProposal(raw.estimate, raw.lines);
+  const input = { ...raw, estimate: clientFacing.estimate, lines: clientFacing.lines };
   const doc = await createDoc();
   const width = doc.internal.pageSize.getWidth();
   const right = width - 54;

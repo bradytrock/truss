@@ -134,6 +134,18 @@ async function main() {
   assert.match(estimateText, /Tear-off to the decking/);
   assert.match(estimateText, /Synthetic underlayment/);
   assert.match(estimateText, /Hip and ridge shingles/);
+  assert.doesNotMatch(estimateText, /Margin/);
+
+  const markedUp = await textFromPdf(
+    await buildEstimatePdf({
+      estimate: { ...estimate, marginPercent: 20 },
+      lines: [{ ...lines[0]!, unitCost: 1000, title: "Tear-off" }],
+      company,
+      customer: "Shawn Gregory",
+    }),
+  );
+  assert.doesNotMatch(markedUp, /Margin/);
+  assert.match(markedUp, /\$1,200\.00/);
 
   const invoiceText = await textFromPdf(
     await buildInvoicePdf({

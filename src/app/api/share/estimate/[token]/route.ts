@@ -22,6 +22,7 @@ import {
   hashEstimateDocument,
 } from "@/lib/estimate-signature-audit";
 import { fillEstimateLine } from "@/lib/estimate-totals";
+import { clientFacingSharePayload } from "@/lib/client-proposal";
 import { parseSharedEstimate } from "@/lib/share";
 
 export const runtime = "nodejs";
@@ -47,7 +48,9 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
       return shareNotFoundJson(trimmed);
     }
     await recordShareEvent(trimmed, request.headers, { kind: "opened" });
-    return shareJson(withStorageShareAccessDeep(data, trimmed));
+    return shareJson(
+      withStorageShareAccessDeep(clientFacingSharePayload(data) ?? data, trimmed),
+    );
   } catch (error) {
     console.error("[share] shared_estimate threw", error);
     return shareNotFoundJson(trimmed);
@@ -87,7 +90,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ token
       if (data == null) {
         return shareNotFoundJson(trimmed);
       }
-      return shareJson(withStorageShareAccessDeep(data, trimmed));
+      return shareJson(
+        withStorageShareAccessDeep(clientFacingSharePayload(data) ?? data, trimmed),
+      );
     }
     const { data, error } = await supabase.rpc("select_shared_estimate_line", {
       p_token: trimmed,
@@ -103,7 +108,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ token
     if (data == null) {
       return shareNotFoundJson(trimmed);
     }
-    return shareJson(withStorageShareAccessDeep(data, trimmed));
+    return shareJson(
+      withStorageShareAccessDeep(clientFacingSharePayload(data) ?? data, trimmed),
+    );
   } catch {
     return shareNotFoundJson(trimmed);
   }

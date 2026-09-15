@@ -14,6 +14,7 @@ import {
   groupEstimateLines,
   lineAmount,
   lineIncluded,
+  toClientFacingProposal,
 } from "@/lib/estimate-totals";
 import { isGbbEstimate, scopedEstimateLines, type EstimatePackage } from "@/lib/estimate-packages";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -42,18 +43,6 @@ export function EstimateTotals({
   const totals = estimateTotals(estimate, lines);
   return (
     <dl className={cn("space-y-1.5 text-sm", className)}>
-      {totals.marginAmount > 0 ? (
-        <>
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Line items</dt>
-            <dd className="tabular-nums">{formatMoney(totals.lineSubtotal)}</dd>
-          </div>
-          <div className="flex justify-between gap-4">
-            <dt className="text-muted-foreground">Margin ({totals.marginPercent}%)</dt>
-            <dd className="tabular-nums">{formatMoney(totals.marginAmount)}</dd>
-          </div>
-        </>
-      ) : null}
       <div className="flex justify-between gap-4">
         <dt className="text-muted-foreground">Subtotal</dt>
         <dd className="tabular-nums">{formatMoney(totals.subtotal)}</dd>
@@ -128,8 +117,6 @@ export function ProposalDocument({
   onTermsChange?: (terms: string) => void;
   onSelectPackage?: (pkg: EstimatePackage) => void;
 }) {
-  const visibleLines = scopedEstimateLines(estimate, lines);
-  const groups = groupEstimateLines(visibleLines);
   const site = formatJobSite(estimate);
   const crm = useCrmOptional();
   const job = estimate.jobId && crm ? crm.jobs.find((item) => item.id === estimate.jobId) : undefined;
@@ -145,10 +132,15 @@ export function ProposalDocument({
     fallbackStaffId: crm?.user.staffId,
     inBook: Boolean(crm?.estimates.some((item) => item.id === estimate.id)),
   });
-  const billed = billingEstimate(
-    estimate,
-    market || (job || opportunity ? workMarket(job, opportunity) : undefined),
+  const billed = toClientFacingProposal(
+    billingEstimate(
+      estimate,
+      market || (job || opportunity ? workMarket(job, opportunity) : undefined),
+    ),
+    lines,
   );
+  const visibleLines = scopedEstimateLines(billed.estimate, billed.lines);
+  const groups = groupEstimateLines(visibleLines);
   const manager =
     projectManager ??
     documentProjectManager({
@@ -193,8 +185,8 @@ export function ProposalDocument({
         <div className="space-y-2">
           <h3 className="text-[11px] font-semibold tracking-[0.16em] uppercase">Choose a package</h3>
           <PackagePicker
-            estimate={estimate}
-            lines={lines}
+            estimate={billed.estimate}
+            lines={billed.lines}
             locked={!selectable || !onSelectPackage}
             onSelect={onSelectPackage}
           />
@@ -263,14 +255,14 @@ export function ProposalDocument({
           ))}
         </div>
       )}
-      <EstimateTotals estimate={billed} lines={visibleLines} className="ml-auto max-w-xs" />
+      <EstimateTotals estimate={billed.estimate} lines={visibleLines} className="ml-auto max-w-xs" />
       <DocumentNotesBlock notes={estimate.notes} />
       <div className="break-inside-auto">
         <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>
         <DocumentTermsFields
           value={terms}
           values={estimateTermsValues({
-            estimate: billed,
+            estimate: billed.estimate,
             lines: visibleLines,
             customer,
             company: letterhead,
