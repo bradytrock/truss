@@ -12,6 +12,12 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  canSearchVendors,
+  filterVendorNames,
+  VENDOR_SEARCH_MIN,
+  vendorSearchNeedle,
+} from "@/lib/vendor-search";
 import { cn } from "@/lib/utils";
 
 export function VendorPicker({
@@ -48,16 +54,20 @@ export function VendorPicker({
   }, [extraNames, names]);
 
   const typed = query.trim();
-  const needle = typed.toLowerCase();
-  const visible = needle
-    ? all.filter((item) => item.name.toLowerCase().includes(needle))
-    : all;
-  const hasExact = all.some((item) => item.name.toLowerCase() === needle);
+  const searching = canSearchVendors(query);
+  const visible = filterVendorNames(all, query);
+  const hasExact = all.some((item) => item.name.toLowerCase() === vendorSearchNeedle(query));
   const qbVisible = visible.filter((item) => item.source === "qb");
   const usedVisible = visible.filter((item) => item.source === "used");
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setQuery("");
+      }}
+    >
       <PopoverTrigger
         className={cn(
           buttonVariants({ variant: "outline" }),
@@ -72,15 +82,17 @@ export function VendorPicker({
       <PopoverContent align="start" className="w-[var(--anchor-width)] p-0" side="bottom">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Search vendors"
+            placeholder={`Type ${VENDOR_SEARCH_MIN} characters to search`}
             value={query}
             onValueChange={setQuery}
           />
           <CommandList>
             <CommandEmpty>
-              {emptyHint || "No matching vendor. Type the name QuickBooks should use."}
+              {searching
+                ? emptyHint || "No matching vendor. Type the name QuickBooks should use."
+                : `Type at least ${VENDOR_SEARCH_MIN} characters to search vendors.`}
             </CommandEmpty>
-            {typed && !hasExact ? (
+            {searching && typed && !hasExact ? (
               <CommandGroup>
                 <CommandItem
                   value={typed}
