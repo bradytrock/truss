@@ -92,7 +92,7 @@ export function AccountingSyncQueues() {
 
       <QueueCard
         title="Expenses"
-        description="Receipts still waiting to post as a check or credit card charge on Customer:Job."
+        description="Approve from Expense review so you can check the receipt against the QuickBooks fields."
         empty="No expenses waiting on QuickBooks."
       >
         {expenses.length === 0 ? null : (
@@ -139,7 +139,7 @@ export function AccountingSyncQueues() {
                         label={expense.number}
                         status={expense.qbStatus}
                         blocked={expensePushBlocked({ expense, job })}
-                        reviewHref={`/accounting/approve/expense/${expense.id}`}
+                        reviewHref={`/accounting?tab=expenses&expense=${expense.id}`}
                       />
                     </TableCell>
                   </TableRow>

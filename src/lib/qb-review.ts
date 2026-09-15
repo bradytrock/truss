@@ -134,6 +134,9 @@ export function reviewHref(kind: QbReviewKind, id: string, weekParam?: string) {
   if (kind === "invoice") {
     return `/accounting?tab=review&invoice=${encodeURIComponent(id)}`;
   }
+  if (kind === "expense") {
+    return `/accounting?tab=expenses&expense=${encodeURIComponent(id)}`;
+  }
   const path = `/accounting/approve/${kind}/${id}`;
   return weekParam ? `${path}?week=${weekParam}` : path;
 }

@@ -242,7 +242,7 @@ function InvoiceFields({ invoiceId, locked }: { invoiceId: string; locked: boole
   );
 }
 
-function ExpenseFields({ expenseId, locked }: { expenseId: string; locked: boolean }) {
+export function ExpenseFields({ expenseId, locked }: { expenseId: string; locked: boolean }) {
   const crm = useCrm();
   const expense = crm.expenses.find((item) => item.id === expenseId);
   if (!expense) return null;

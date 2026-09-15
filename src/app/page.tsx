@@ -291,7 +291,7 @@ export default function HomePage() {
         return (
           <RelatedList
             title="Invoice review"
-            description="Approve invoices here. Receipts and payments stay on QuickBooks sync."
+            description="Approve invoices here. Open Expense review for receipts next to the QuickBooks fields."
             action={<RelatedListLink href="/accounting?tab=review">Invoice review</RelatedListLink>}
           >
             <p className="px-3 py-3 text-sm text-[#181818]">

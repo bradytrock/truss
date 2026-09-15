@@ -1,10 +1,25 @@
 import { daysUntil } from "@/lib/format";
 import { jobProfitAndLoss, type JobBooksBasis } from "@/lib/job-financials";
 import { invoiceBalance, invoiceTotal } from "@/lib/money";
-import { invoicePushBlocked } from "@/lib/qbwc/work";
-import type { Expense, Invoice, InvoiceLine, Job, Payment } from "@/lib/types";
+import {
+  DEFAULT_QB_BANK,
+  DEFAULT_QB_CC,
+  expensePushBlocked,
+  expenseRequiresJob,
+  invoicePushBlocked,
+} from "@/lib/qbwc/work";
+import {
+  EXPENSE_ACCOUNT_LABELS,
+  EXPENSE_METHOD_LABELS,
+  type Expense,
+  type ExpenseMethod,
+  type Invoice,
+  type InvoiceLine,
+  type Job,
+  type Payment,
+} from "@/lib/types";
 
-export const ACCOUNTING_TABS = ["overview", "review", "sync", "reports", "tools"] as const;
+export const ACCOUNTING_TABS = ["overview", "review", "expenses", "sync", "reports", "tools"] as const;
 export type AccountingTab = (typeof ACCOUNTING_TABS)[number];
 
 export const INVOICE_REVIEW_FILTERS = ["all", "ready", "needs_review", "held"] as const;
@@ -56,6 +71,62 @@ export function invoiceBlockedReason(input: {
 
 export function reviewableInvoices(invoices: Invoice[]) {
   return invoices.filter((invoice) => isOpenInvoice(invoice) && invoice.qbStatus !== "entered");
+}
+
+export function expenseReviewStatus(
+  expense: Expense,
+  blocked: string | null,
+): InvoiceReviewStatus {
+  if (expense.qbStatus === "queued") return "queued";
+  if (expense.qbStatus === "returned") return "held";
+  if (expense.qbStatus === "error" || Boolean(blocked)) return "needs_review";
+  return "ready";
+}
+
+export function expenseBlockedReason(input: { expense: Expense; job?: Job | null }) {
+  if (input.expense.qbStatus === "error") {
+    return "QuickBooks rejected this last time. Fix the vendor, job, or account, then retry.";
+  }
+  return expensePushBlocked(input);
+}
+
+export function reviewableExpenses(expenses: Expense[]) {
+  return expenses.filter((expense) => expense.qbStatus !== "entered");
+}
+
+export function expenseQbPayWith(method: ExpenseMethod): "credit_card" | "check" {
+  return method === "credit_card" ? "credit_card" : "check";
+}
+
+export function expenseQbPreview(
+  expense: Expense,
+  job?: Job | null,
+  customerName = "",
+  accounts?: { bankAccount?: string; ccAccount?: string },
+) {
+  const payWith = expenseQbPayWith(expense.method);
+  const hasJob = Boolean(job);
+  const jobLabel = job
+    ? `${customerName || "Customer"}:${job.code || job.name}`
+    : expenseRequiresJob(expense.account)
+      ? "Needs a job"
+      : "Company overhead";
+  return {
+    txnType: payWith === "credit_card" ? "Credit card charge" : "Check",
+    vendor: expense.vendor.trim() || "Add a vendor",
+    amount: expense.amount,
+    txnDate: expense.incurredAt.slice(0, 10),
+    accountName: EXPENSE_ACCOUNT_LABELS[expense.account],
+    paidWith: EXPENSE_METHOD_LABELS[expense.method],
+    payAccount:
+      payWith === "credit_card"
+        ? accounts?.ccAccount?.trim() || DEFAULT_QB_CC
+        : accounts?.bankAccount?.trim() || DEFAULT_QB_BANK,
+    memo: expense.memo.trim() || expense.number,
+    refNumber: expense.number,
+    customerJob: jobLabel,
+    hasJob,
+  };
 }
 
 export function daysPastDue(invoice: Invoice, now = new Date()) {

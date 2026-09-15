@@ -120,8 +120,8 @@ export function AccountingInvoiceReview({
       <div>
         <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">Invoice review</p>
         <p className="text-sm text-[#706e6b]">
-          Approve invoices before they go to QuickBooks through the Web Connector. Expenses stay on
-          QuickBooks sync.
+          Approve invoices before they go to QuickBooks through the Web Connector. Receipts have their
+          own Expense review tab.
         </p>
       </div>
 

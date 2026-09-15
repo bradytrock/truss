@@ -6,12 +6,15 @@ import {
   commissionPayout,
   commissionRows,
   completedJobsWithoutInvoice,
+  expenseQbPreview,
+  expenseReviewStatus,
   expensesMissingJob,
   invoiceDueLabel,
   invoiceReviewStatus,
   jobProfitRows,
   parseAccountingTab,
   parseInvoiceReviewFilter,
+  reviewableExpenses,
   reviewableInvoices,
 } from "./accounting-books.ts";
 import { approveHref, reviewHref } from "./qb-review.ts";
@@ -83,10 +86,11 @@ function job(partial: Partial<Job> & Pick<Job, "id" | "name">): Job {
 }
 
 assert.equal(reviewHref("invoice", "inv_1"), "/accounting?tab=review&invoice=inv_1");
-assert.equal(reviewHref("expense", "ex_1"), "/accounting/approve/expense/ex_1");
+assert.equal(reviewHref("expense", "ex_1"), "/accounting?tab=expenses&expense=ex_1");
 assert.equal(approveHref(), "/accounting?tab=review");
 
 assert.equal(parseAccountingTab("review"), "review");
+assert.equal(parseAccountingTab("expenses"), "expenses");
 assert.equal(parseAccountingTab("nope"), "overview");
 assert.equal(parseInvoiceReviewFilter("held"), "held");
 assert.equal(parseInvoiceReviewFilter(null), "all");
@@ -165,5 +169,37 @@ const profits = jobProfitRows({
 assert.equal(profits.length, 1);
 assert.equal(profits[0]?.profit, 7440);
 assert.equal(commissionRows(profits)[0]?.payout, 744);
+
+const bill = {
+  id: "e-review",
+  number: "EX-104",
+  jobId: "job_1",
+  vendor: "ABC Supply",
+  account: "materials",
+  amount: 842.15,
+  incurredAt: "2026-09-12",
+  method: "credit_card",
+  memo: "Ridge vent",
+  receiptUrl: "https://files.example/receipt.pdf",
+  receiptStoragePath: null,
+  qbStatus: "not_in_qb",
+  extractedByAi: false,
+  createdAt: "2026-09-12",
+  createdBy: "",
+} as Expense;
+
+assert.equal(expenseReviewStatus(bill, null), "ready");
+assert.equal(expenseReviewStatus({ ...bill, qbStatus: "returned" }, null), "held");
+assert.equal(expenseReviewStatus({ ...bill, qbStatus: "error" }, null), "needs_review");
+assert.deepEqual(
+  reviewableExpenses([bill, { ...bill, id: "in", qbStatus: "entered" }]).map((item) => item.id),
+  ["e-review"],
+);
+const preview = expenseQbPreview(bill, job({ id: "job_1", name: "Martinez", code: "J-12" }), "Martinez");
+assert.equal(preview.txnType, "Credit card charge");
+assert.equal(preview.vendor, "ABC Supply");
+assert.equal(preview.accountName, "Job materials");
+assert.equal(preview.customerJob, "Martinez:J-12");
+assert.equal(preview.memo, "Ridge vent");
 
 console.log("accounting-books tests passed");

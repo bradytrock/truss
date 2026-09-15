@@ -8,5 +8,8 @@ export default async function ApproveItemPage({
   if (kind === "invoice") {
     redirect(`/accounting?tab=review&invoice=${encodeURIComponent(id)}`);
   }
+  if (kind === "expense") {
+    redirect(`/accounting?tab=expenses&expense=${encodeURIComponent(id)}`);
+  }
   return <QbApproveDesk kind={kind} id={id} />;
 }

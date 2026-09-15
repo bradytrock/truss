@@ -17,6 +17,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { ProfitAndLossReport } from "@/components/profit-and-loss";
+import { AccountingExpenseReview, ExpenseReviewCountBadge } from "@/components/accounting-expense-review";
 import { AccountingInvoiceReview, InvoiceReviewCountBadge } from "@/components/accounting-invoice-review";
 import { AccountingSyncQueues } from "@/components/accounting-qb-queue";
 import { QbwcPanel } from "@/components/qbwc-panel";
@@ -60,6 +61,7 @@ export function AccountingPortal() {
   const searchParams = useSearchParams();
   const tab = parseAccountingTab(searchParams.get("tab"));
   const selectedInvoice = searchParams.get("invoice");
+  const selectedExpense = searchParams.get("expense");
   const viewer = crm.effectiveStaff;
   const [basis, setBasis] = useState<JobBooksBasis>("accrual");
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -164,6 +166,7 @@ export function AccountingPortal() {
     if (next === "overview") params.delete("tab");
     else params.set("tab", next);
     if (next !== "review") params.delete("invoice");
+    if (next !== "expenses") params.delete("expense");
     const qs = params.toString();
     router.replace(qs ? `/accounting?${qs}` : "/accounting", { scroll: false });
   }
@@ -171,8 +174,18 @@ export function AccountingPortal() {
   function setInvoice(id: string | null) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", "review");
+    params.delete("expense");
     if (id) params.set("invoice", id);
     else params.delete("invoice");
+    router.replace(`/accounting?${params.toString()}`, { scroll: false });
+  }
+
+  function setExpense(id: string | null) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", "expenses");
+    params.delete("invoice");
+    if (id) params.set("expense", id);
+    else params.delete("expense");
     router.replace(`/accounting?${params.toString()}`, { scroll: false });
   }
 
@@ -227,6 +240,10 @@ export function AccountingPortal() {
           <TabsTrigger value="review">
             Invoice review
             <InvoiceReviewCountBadge />
+          </TabsTrigger>
+          <TabsTrigger value="expenses">
+            Expense review
+            <ExpenseReviewCountBadge />
           </TabsTrigger>
           <TabsTrigger value="sync">
             QuickBooks sync
@@ -348,8 +365,8 @@ export function AccountingPortal() {
                     {unassignedBills.length} supplier bill{unassignedBills.length === 1 ? "" : "s"} not tied
                     to a job.
                   </span>
-                  <Button size="sm" variant="outline" onClick={() => setTab("sync")}>
-                    Assign on sync
+                  <Button size="sm" variant="outline" onClick={() => setTab("expenses")}>
+                    Review expenses
                   </Button>
                 </li>
               ) : null}
@@ -364,6 +381,10 @@ export function AccountingPortal() {
           <AccountingInvoiceReview selectedId={selectedInvoice} onSelect={setInvoice} />
         </TabsContent>
 
+        <TabsContent value="expenses" className="mt-4">
+          <AccountingExpenseReview selectedId={selectedExpense} onSelect={setExpense} />
+        </TabsContent>
+
         <TabsContent value="sync" className="mt-4 space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
@@ -371,7 +392,7 @@ export function AccountingPortal() {
                 QuickBooks sync
               </p>
               <p className="text-sm text-[#706e6b]">
-                Desktop through the Web Connector. Invoice approval lives on Invoice review.
+                Desktop through the Web Connector. Invoice and expense approval live on their review tabs.
               </p>
             </div>
             <Button nativeButton={false} variant="outline" render={<Link href="/settings/quickbooks" />}>
@@ -642,7 +663,7 @@ export function AccountingPortal() {
             <section className="overflow-hidden rounded-sm border border-[#c9c9c9] bg-white shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
               <div className="border-b border-[#c9c9c9] bg-[#f3f3f3] px-4 py-3">
                 <h3 className="text-sm font-semibold text-[#181818]">More tools</h3>
-                <p className="mt-0.5 text-xs text-[#706e6b]">Receipts stay here — invoices review on their own tab</p>
+                <p className="mt-0.5 text-xs text-[#706e6b]">Receipts and invoices each have a review tab</p>
               </div>
               <ul className="divide-y divide-[#e5e5e5] text-sm">
                 <li className="flex items-center justify-between gap-3 px-4 py-3">
@@ -650,7 +671,7 @@ export function AccountingPortal() {
                     <p>Expense review</p>
                     <p className="text-xs text-[#706e6b]">Receipts and supplier bills</p>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => setTab("sync")}>
+                  <Button size="sm" variant="outline" onClick={() => setTab("expenses")}>
                     Open
                   </Button>
                 </li>
