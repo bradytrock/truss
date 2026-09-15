@@ -1066,14 +1066,16 @@ export function EditContactDialog({
 export function CreateJobDialog({
   open,
   onOpenChange,
+  defaultContactId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultContactId?: string;
 }) {
   const { contacts, addJob, teamMembers, user } = useCrm();
   const people = teamMembers.length > 0 ? teamMembers : [user.name].filter(Boolean);
   const [name, setName] = useState("");
-  const [contactId, setContactId] = useState(contacts[0]?.id ?? "");
+  const [pickedContactId, setPickedContactId] = useState("");
   const [value, setValue] = useState("28000");
   const [location, setLocation] = useState("Denver, CO");
   const [status, setStatus] = useState<JobStatus>("precon");
@@ -1082,6 +1084,7 @@ export function CreateJobDialog({
   const [superintendent, setSuperintendent] = useState("");
   const [market, setJobMarket] = useState<JobMarket>("residential");
 
+  const contactId = pickedContactId || defaultContactId || contacts[0]?.id || "";
   const contact = contacts.find((item) => item.id === contactId);
 
   async function handleSubmit(event: FormEvent) {
@@ -1109,13 +1112,20 @@ export function CreateJobDialog({
       toast.success(`Job logged: ${job.code}`);
       onOpenChange(false);
       setName("");
+      setPickedContactId("");
     } catch {
       // Store already toasted the error.
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) setPickedContactId("");
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Log a job</DialogTitle>
@@ -1136,7 +1146,7 @@ export function CreateJobDialog({
           <Field label="Homeowner / contact">
             <Select
               value={contactId}
-              onValueChange={(value) => setContactId(String(value ?? ""))}
+              onValueChange={(value) => setPickedContactId(String(value ?? ""))}
               items={contacts.map((item) => ({ value: item.id, label: item.name }))}
             >
               <SelectTrigger className="w-full">
@@ -1239,7 +1249,14 @@ export function CreateJobDialog({
             </Field>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setPickedContactId("");
+                onOpenChange(false);
+              }}
+            >
               Cancel
             </Button>
             <Button type="submit">Log job</Button>
