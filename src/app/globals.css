@@ -302,13 +302,31 @@
   animation: welcome-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both;
 }
 
+@keyframes confetti-fall {
+  0% {
+    transform: translate3d(0, -8vh, 0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--confetti-drift, 16px), 110vh, 0) rotate(540deg);
+    opacity: 0.9;
+  }
+}
+
+.confetti-piece {
+  animation-name: confetti-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .auth-rise,
   .auth-fade,
   .auth-orb,
   .auth-orb-delay,
   .welcome-rise,
-  .welcome-pop {
+  .welcome-pop,
+  .confetti-piece {
     animation: none !important;
   }
 }
