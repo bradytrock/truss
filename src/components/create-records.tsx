@@ -36,6 +36,7 @@ import { MarketField } from "@/components/market-field";
 import { useCrm } from "@/lib/crm-store";
 import { localYmd } from "@/lib/format";
 import {
+  DEFAULT_LEAD_STATE,
   defaultDeliveryForSource,
   formatJobSite,
   leadName,
@@ -87,7 +88,7 @@ export function CreateOpportunityDialog({
   const [email, setEmail] = useState("");
   const [street, setStreet] = useState("");
   const [city, setCity] = useState("");
-  const [region, setRegion] = useState("");
+  const [region, setRegion] = useState(DEFAULT_LEAD_STATE);
   const [postalCode, setPostalCode] = useState("");
   const [source, setSource] = useState<LeadSource | "">("");
   const [market, setMarket] = useState<JobMarket>("residential");
@@ -145,7 +146,7 @@ export function CreateOpportunityDialog({
     setEmail("");
     setStreet("");
     setCity("");
-    setRegion("");
+    setRegion(DEFAULT_LEAD_STATE);
     setPostalCode("");
     setSource("");
     setMarket("residential");
