@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { MapPin, Search, User, XIcon } from "lucide-react";
+import { Search, User, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,6 +32,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { AddressStreetField } from "@/components/address-street-field";
 import { MarketField } from "@/components/market-field";
 import { useCrm } from "@/lib/crm-store";
 import { localYmd } from "@/lib/format";
@@ -415,18 +416,20 @@ export function CreateOpportunityDialog({
             ) : null}
 
             <Field label="Address" htmlFor="lead-street">
-              <InputGroup>
-                <InputGroupAddon>
-                  <MapPin />
-                </InputGroupAddon>
-                <InputGroupInput
-                  id="lead-street"
-                  value={street}
-                  onChange={(event) => setStreet(event.target.value)}
-                  placeholder="Start typing an address..."
-                  autoComplete="street-address"
-                />
-              </InputGroup>
+              <AddressStreetField
+                id="lead-street"
+                street={street}
+                city={city}
+                state={region}
+                withPin
+                onStreetChange={setStreet}
+                onPick={(address) => {
+                  setStreet(address.street);
+                  setCity(address.city);
+                  setRegion(address.state || DEFAULT_LEAD_STATE);
+                  setPostalCode(address.postalCode);
+                }}
+              />
             </Field>
 
             <div className="grid grid-cols-[1fr_4.5rem_6rem] gap-3">
