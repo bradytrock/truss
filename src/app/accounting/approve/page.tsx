@@ -1,7 +1,5 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { QbApproveDesk } from "@/components/qb-approve-desk";
-
-export default function ApprovePage() {
-  return <QbApproveDesk />;
+export default function AccountingApprovePage() {
+  redirect("/accounting?tab=review");
 }

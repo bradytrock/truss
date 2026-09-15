@@ -1,9 +1,12 @@
-"use client";
-
-import { useParams } from "next/navigation";
+import { redirect } from "next/navigation";
 import { QbApproveDesk } from "@/components/qb-approve-desk";
 
-export default function ApproveItemPage() {
-  const { kind, id } = useParams<{ kind: string; id: string }>();
+export default async function ApproveItemPage({
+  params,
+}: PageProps<"/accounting/approve/[kind]/[id]">) {
+  const { kind, id } = await params;
+  if (kind === "invoice") {
+    redirect(`/accounting?tab=review&invoice=${encodeURIComponent(id)}`);
+  }
   return <QbApproveDesk kind={kind} id={id} />;
 }

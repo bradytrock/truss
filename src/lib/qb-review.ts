@@ -131,12 +131,16 @@ export function qbApproveInbox(input: {
 }
 
 export function reviewHref(kind: QbReviewKind, id: string, weekParam?: string) {
+  if (kind === "invoice") {
+    return `/accounting?tab=review&invoice=${encodeURIComponent(id)}`;
+  }
   const path = `/accounting/approve/${kind}/${id}`;
   return weekParam ? `${path}?week=${weekParam}` : path;
 }
 
 export function approveHref(weekParam?: string) {
-  return weekParam ? `/accounting/approve?week=${weekParam}` : "/accounting/approve";
+  void weekParam;
+  return "/accounting?tab=review";
 }
 
 export function jobDocumentHref(jobId: string, kind: QbReviewKind, id: string) {

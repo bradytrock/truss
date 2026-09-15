@@ -290,9 +290,9 @@ export default function HomePage() {
       case "qbApprove":
         return (
           <RelatedList
-            title="Approve for QuickBooks"
-            description="Approve queues the Web Connector, or tag the PM to fix the file on the job."
-            action={<RelatedListLink href="/accounting/approve">Open Approve</RelatedListLink>}
+            title="Invoice review"
+            description="Approve invoices here. Receipts and payments stay on QuickBooks sync."
+            action={<RelatedListLink href="/accounting?tab=review">Invoice review</RelatedListLink>}
           >
             <p className="px-3 py-3 text-sm text-[#181818]">
               {stats.qb.invoiceCount + stats.qb.expenseCount + stats.qb.paymentCount} items waiting ·{" "}

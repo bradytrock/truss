@@ -1,0 +1,169 @@
+import assert from "node:assert/strict";
+import {
+  agingBucket,
+  arAging,
+  collectedThisMonth,
+  commissionPayout,
+  commissionRows,
+  completedJobsWithoutInvoice,
+  expensesMissingJob,
+  invoiceDueLabel,
+  invoiceReviewStatus,
+  jobProfitRows,
+  parseAccountingTab,
+  parseInvoiceReviewFilter,
+  reviewableInvoices,
+} from "./accounting-books.ts";
+import { approveHref, reviewHref } from "./qb-review.ts";
+import type { Expense, Invoice, InvoiceLine, Job, Payment } from "./types.ts";
+
+function invoice(partial: Partial<Invoice> & Pick<Invoice, "id" | "number">): Invoice {
+  return {
+    name: partial.name ?? partial.number,
+    clientId: null,
+    jobId: partial.jobId ?? "job_1",
+    estimateId: null,
+    status: partial.status ?? "sent",
+    issuedAt: partial.issuedAt ?? "2026-09-01",
+    dueAt: partial.dueAt ?? null,
+    notes: "",
+    terms: "",
+    shareToken: "",
+    qbStatus: partial.qbStatus ?? "not_in_qb",
+    ...partial,
+  };
+}
+
+function line(invoiceId: string, unitCost: number): InvoiceLine {
+  return {
+    id: `line_${invoiceId}`,
+    invoiceId,
+    description: "Tear off",
+    quantity: 1,
+    unit: "LS",
+    unitCost,
+    sortOrder: 0,
+  };
+}
+
+function job(partial: Partial<Job> & Pick<Job, "id" | "name">): Job {
+  return {
+    code: "J-1",
+    opportunityId: null,
+    clientId: null,
+    primaryContactId: null,
+    status: "complete",
+    contractValue: 18640,
+    startDate: "2026-08-01",
+    substantialCompletion: null,
+    superintendent: "",
+    projectManager: "",
+    location: "",
+    ownerStaffId: "",
+    description: "",
+    tags: [],
+    street: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    salesRep: "Brady Jones",
+    assigned: [],
+    subcontractorIds: [],
+    relatedContactIds: [],
+    customFields: [],
+    projectType: "",
+    market: "residential",
+    leadSource: "",
+    primaryPhotoId: null,
+    deletedAt: null,
+    deletedReason: "",
+    deletedBy: "",
+    ...partial,
+  } as Job;
+}
+
+assert.equal(reviewHref("invoice", "inv_1"), "/accounting?tab=review&invoice=inv_1");
+assert.equal(reviewHref("expense", "ex_1"), "/accounting/approve/expense/ex_1");
+assert.equal(approveHref(), "/accounting?tab=review");
+
+assert.equal(parseAccountingTab("review"), "review");
+assert.equal(parseAccountingTab("nope"), "overview");
+assert.equal(parseInvoiceReviewFilter("held"), "held");
+assert.equal(parseInvoiceReviewFilter(null), "all");
+
+assert.equal(invoiceReviewStatus(invoice({ id: "a", number: "INV-1", qbStatus: "queued" }), null), "queued");
+assert.equal(invoiceReviewStatus(invoice({ id: "a", number: "INV-1", qbStatus: "returned" }), null), "held");
+assert.equal(invoiceReviewStatus(invoice({ id: "a", number: "INV-1", qbStatus: "error" }), null), "needs_review");
+assert.equal(invoiceReviewStatus(invoice({ id: "a", number: "INV-1" }), "Assign a job"), "needs_review");
+assert.equal(invoiceReviewStatus(invoice({ id: "a", number: "INV-1" }), null), "ready");
+
+assert.deepEqual(
+  reviewableInvoices([
+    invoice({ id: "draft", number: "INV-D", status: "draft" }),
+    invoice({ id: "void", number: "INV-V", status: "void" }),
+    invoice({ id: "in", number: "INV-E", qbStatus: "entered" }),
+    invoice({ id: "open", number: "INV-1" }),
+  ]).map((item) => item.id),
+  ["open"],
+);
+
+assert.equal(invoiceDueLabel(invoice({ id: "a", number: "INV-1", dueAt: null })), "Due on receipt");
+assert.equal(invoiceDueLabel(invoice({ id: "a", number: "INV-1", dueAt: "2026-09-15" })), "Due Sep 15, 2026");
+
+assert.equal(agingBucket(0), "current");
+assert.equal(agingBucket(12), "d1");
+assert.equal(agingBucket(45), "d31");
+assert.equal(agingBucket(80), "d61");
+assert.equal(agingBucket(120), "d90");
+
+const aging = arAging({
+  invoices: [invoice({ id: "open", number: "INV-1", dueAt: "2099-01-01" })],
+  invoiceLines: [line("open", 1000)],
+  payments: [],
+});
+assert.equal(aging.count, 1);
+assert.equal(aging.current, 1000);
+assert.equal(aging.total, 1000);
+
+const collected = collectedThisMonth(
+  [
+    { id: "p1", invoiceId: "open", jobId: "job_1", amount: 250, method: "check", paidAt: "2026-09-10", reference: "", receiptUrl: "", receiptStoragePath: null, qbStatus: "not_in_qb", createdBy: "" },
+    { id: "p2", invoiceId: "open", jobId: "job_1", amount: 50, method: "check", paidAt: "2026-08-01", reference: "", receiptUrl: "", receiptStoragePath: null, qbStatus: "not_in_qb", createdBy: "" },
+  ] satisfies Payment[],
+  new Date("2026-09-15T12:00:00"),
+);
+assert.equal(collected.count, 1);
+assert.equal(collected.amount, 250);
+
+const missing = completedJobsWithoutInvoice(
+  [job({ id: "job_1", name: "Martinez" }), job({ id: "job_2", name: "Ramirez" })],
+  [invoice({ id: "open", number: "INV-1", jobId: "job_1" })],
+);
+assert.deepEqual(missing.map((item) => item.id), ["job_2"]);
+
+assert.equal(
+  expensesMissingJob([
+    { jobId: null, qbStatus: "not_in_qb" },
+    { jobId: "job_1", qbStatus: "not_in_qb" },
+    { jobId: null, qbStatus: "entered" },
+  ] as Expense[]).length,
+  1,
+);
+
+const payout = commissionPayout(18640, 11200, "gp10");
+assert.equal(payout.profit, 7440);
+assert.equal(payout.payout, 744);
+
+const profits = jobProfitRows({
+  jobs: [job({ id: "job_1", name: "Martinez", contractValue: 18640 })],
+  invoices: [invoice({ id: "open", number: "INV-1", jobId: "job_1" })],
+  invoiceLines: [line("open", 18640)],
+  payments: [],
+  expenses: [{ id: "e1", number: "EX-1", jobId: "job_1", vendor: "ABC", account: "materials", amount: 11200, incurredAt: "2026-09-01", method: "check", memo: "", receiptUrl: "", receiptStoragePath: null, qbStatus: "entered", extractedByAi: false, createdAt: "2026-09-01", createdBy: "" }],
+  basis: "accrual",
+});
+assert.equal(profits.length, 1);
+assert.equal(profits[0]?.profit, 7440);
+assert.equal(commissionRows(profits)[0]?.payout, 744);
+
+console.log("accounting-books tests passed");
