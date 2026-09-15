@@ -10,6 +10,7 @@ import { invoiceTermsValues, resolveInvoiceTerms } from "@/lib/document-terms";
 import { DocumentNotesBlock } from "@/components/document-notes";
 import { DocumentTermsFields } from "@/components/document-terms-fields";
 import { formatDate, formatMoney } from "@/lib/format";
+import { FormattedLineText } from "@/components/formatted-line-text";
 import { invoiceBalance, invoiceTotal, lineAmount, paidOnInvoice } from "@/lib/money";
 
 export function InvoiceDocument({
@@ -93,7 +94,10 @@ export function InvoiceDocument({
           {sorted.map((line) => (
             <li key={line.id} className="flex items-start justify-between gap-3 py-3">
               <div className="min-w-0">
-                <p className="font-medium">{line.description}</p>
+                <FormattedLineText
+                  text={line.description}
+                  className="text-sm text-muted-foreground [&_p:first-child]:font-medium [&_p:first-child]:text-foreground"
+                />
                 <p className="mt-1 text-xs tabular-nums text-muted-foreground">
                   {line.quantity} {line.unit} × {formatMoney(line.unitCost)}
                 </p>

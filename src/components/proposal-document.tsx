@@ -26,6 +26,8 @@ import type { CompanySettings, Estimate, EstimateLine, JobMarket, JobPhoto } fro
 import { estimateTermsValues, resolveEstimateTerms } from "@/lib/document-terms";
 import { DocumentNotesBlock } from "@/components/document-notes";
 import { DocumentTermsFields } from "@/components/document-terms-fields";
+import { FormattedLineText } from "@/components/formatted-line-text";
+import { lineHeading, shouldShowLineDescription } from "@/lib/line-format";
 import { cn } from "@/lib/utils";
 
 export function EstimateTotals({
@@ -227,16 +229,19 @@ export function ProposalDocument({
                             <Checkbox
                               checked={line.selected}
                               onCheckedChange={(value) => onToggleOptional(line, Boolean(value))}
-                              aria-label={`Include ${line.title || line.description}`}
+                              aria-label={`Include ${lineHeading(line)}`}
                             />
                           ) : null}
-                          <p className="font-medium">{line.title || line.description}</p>
+                          <p className="font-medium">{lineHeading(line)}</p>
                           {line.optional ? (
                             <Badge variant="secondary">{included ? "Selected" : "Optional"}</Badge>
                           ) : null}
                         </div>
-                        {line.description && line.description !== line.title ? (
-                          <p className="mt-0.5 text-sm text-muted-foreground">{line.description}</p>
+                        {shouldShowLineDescription(line) ? (
+                          <FormattedLineText
+                            text={line.description}
+                            className="mt-0.5 text-sm text-muted-foreground"
+                          />
                         ) : null}
                         <ProposalLinePhotos line={line} gallery={crm?.photos ?? []} />
                         <p className="mt-1 text-xs tabular-nums text-muted-foreground">

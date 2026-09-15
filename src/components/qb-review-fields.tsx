@@ -1,5 +1,6 @@
 "use client";
 
+import { FormattedTextEditor } from "@/components/formatted-text-editor";
 import { InvoiceDocument } from "@/components/invoice-document";
 import { VendorPicker } from "@/components/vendor-picker";
 import { Input } from "@/components/ui/input";
@@ -189,11 +190,11 @@ function InvoiceFields({ invoiceId, locked }: { invoiceId: string; locked: boole
         <p className="text-xs font-medium">Lines QuickBooks will post</p>
         {lines.map((line) => (
           <div key={line.id} className="grid gap-2 rounded-md border p-2 sm:grid-cols-[1fr_4.5rem_5.5rem]">
-            <Input
-              defaultValue={line.description}
+            <FormattedTextEditor
+              value={line.description}
               disabled={locked}
-              onBlur={(event) => {
-                const description = event.target.value.trim();
+              placeholder="Line description"
+              onCommit={(description) => {
                 if (description !== line.description) void crm.updateInvoiceLine(line.id, { description });
               }}
             />

@@ -13,6 +13,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
+import { FormattedTextEditor } from "@/components/formatted-text-editor";
 import { EstimateLinePhotos } from "@/components/estimate-line-photos";
 import { EstimateFilesPanel } from "@/components/estimate-files";
 import { BackToJobButton } from "@/components/back-to-job";
@@ -345,10 +346,9 @@ export function LineCard({
             placeholder="Title"
             onCommit={(value) => onPatch({ title: value })}
           />
-          <CommitTextarea
+          <FormattedTextEditor
             value={line.description}
             disabled={!editable}
-            rows={2}
             placeholder="What the homeowner sees under the title"
             onCommit={(value) => onPatch({ description: value })}
           />
