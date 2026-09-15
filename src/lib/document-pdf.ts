@@ -480,7 +480,7 @@ function writeProjectManager(doc: Doc, manager: ProjectManagerContact | null | u
   return y + 6;
 }
 
-export async function downloadEstimatePdf(input: {
+export async function buildEstimatePdf(input: {
   estimate: Estimate;
   lines: EstimateLine[];
   company: CompanySettings;
@@ -706,7 +706,11 @@ export async function downloadEstimatePdf(input: {
     y,
   );
 
-  downloadBlob(doc.output("blob"), `${input.estimate.number}.pdf`);
+  return doc.output("blob");
+}
+
+export async function downloadEstimatePdf(input: Parameters<typeof buildEstimatePdf>[0]) {
+  downloadBlob(await buildEstimatePdf(input), `${input.estimate.number}.pdf`);
 }
 
 export async function downloadSignatureCertificatePdf(input: {
@@ -747,7 +751,7 @@ export async function downloadSignatureCertificatePdf(input: {
   downloadBlob(doc.output("blob"), `${input.estimate.number}-signature-certificate.pdf`);
 }
 
-export async function downloadInvoicePdf(input: {
+export async function buildInvoicePdf(input: {
   invoice: Invoice;
   lines: InvoiceLine[];
   payments: Payment[];
@@ -855,5 +859,9 @@ export async function downloadInvoicePdf(input: {
     y = writeLabeledBlock(doc, "PAYMENT TERMS", paymentTerms, y, TERMS_BODY_SIZE);
   }
 
-  downloadBlob(doc.output("blob"), `${input.invoice.number}.pdf`);
+  return doc.output("blob");
+}
+
+export async function downloadInvoicePdf(input: Parameters<typeof buildInvoicePdf>[0]) {
+  downloadBlob(await buildInvoicePdf(input), `${input.invoice.number}.pdf`);
 }

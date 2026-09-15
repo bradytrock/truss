@@ -75,6 +75,7 @@ export function FormattedTextEditor({
       <div
         ref={ref}
         contentEditable={!disabled}
+        suppressContentEditableWarning
         role="textbox"
         aria-multiline
         aria-label={placeholder}
