@@ -470,6 +470,7 @@ export function mapCatalogItem(row: CatalogRow): CatalogItem {
   return fillCatalogItem({
     id: row.id,
     name: row.name,
+    description: row.description ?? "",
     kind: row.kind,
     unit: row.unit,
     unitCost: Number(row.unit_cost),
@@ -482,6 +483,7 @@ export function mapCatalogItem(row: CatalogRow): CatalogItem {
 export function catalogPatch(patch: Partial<CatalogItem>) {
   const row: Database["public"]["Tables"]["catalog_items"]["Update"] = {};
   if (patch.name !== undefined) row.name = patch.name;
+  if (patch.description !== undefined) row.description = patch.description;
   if (patch.kind !== undefined) row.kind = patch.kind;
   if (patch.unit !== undefined) row.unit = patch.unit;
   if (patch.unitCost !== undefined) row.unit_cost = patch.unitCost;

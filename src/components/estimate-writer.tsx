@@ -224,6 +224,9 @@ export function PriceBookSheet({
                   >
                     <div className="min-w-0 flex-1">
                       <p>{item.name}</p>
+                      {item.description ? (
+                        <p className="line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
+                      ) : null}
                       <p className="text-xs text-muted-foreground">
                         {item.costCode} · {item.unit}
                         {effectiveCatalogMargin(item.marginPercent, company.minimumMarginPercent) > 0

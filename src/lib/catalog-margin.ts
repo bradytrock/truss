@@ -2,10 +2,16 @@ import type { CatalogItem, CompanySettings } from "@/lib/types";
 
 export const MAX_MARGIN_PERCENT = 1000;
 
-export type CatalogItemDraft = Omit<CatalogItem, "id" | "marginPercent"> & {
+export type CatalogItemDraft = Omit<CatalogItem, "id" | "marginPercent" | "description"> & {
   id?: string;
   marginPercent?: number;
+  description?: string;
 };
+
+/** Product text that copies onto a new estimate or template line. Empty when none is set. */
+export function catalogItemDescription(item: Pick<CatalogItem, "description"> | { description?: string | null }) {
+  return String(item.description ?? "").trim();
+}
 
 function roundMoney(value: number) {
   return Math.round(value * 100) / 100;
@@ -19,6 +25,7 @@ export function clampMarginPercent(value: number | null | undefined) {
 export function fillCatalogItem(item: CatalogItemDraft & { id: string }): CatalogItem {
   return {
     ...item,
+    description: item.description?.trim() ?? "",
     marginPercent: clampMarginPercent(item.marginPercent),
   };
 }

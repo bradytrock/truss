@@ -652,6 +652,19 @@ export function missingMaterialOrdersMessage() {
   return `Saved in this browser. Run ${MATERIAL_ORDERS_SQL} in the SQL editor (or a fresh bootstrap) so material orders persist for the office and the field.`;
 }
 
+export const CATALOG_DESCRIPTION_SQL = "supabase/migrations/20260915120000_catalog_item_description.sql";
+
+export function isMissingCatalogDescription(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  if (!message.includes("description")) return false;
+  return message.includes("catalog_items") || message.includes("catalog_item");
+}
+
+export function missingCatalogDescriptionMessage() {
+  return `Saved in this browser. Run ${CATALOG_DESCRIPTION_SQL} in the SQL editor so price book descriptions copy onto proposals.`;
+}
+
 export const CATALOG_MARGIN_SQL = "supabase/migrations/20260828140000_catalog_margin.sql";
 
 export function isMissingCatalogMargin(error: { message?: string; code?: string } | null | undefined) {

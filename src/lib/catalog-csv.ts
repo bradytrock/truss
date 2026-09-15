@@ -8,6 +8,7 @@ import { clampMarginPercent } from "@/lib/catalog-margin";
 
 export type CatalogImportDraft = {
   name: string;
+  description: string;
   kind: CatalogKind;
   unit: string;
   unitCost: number;
@@ -25,9 +26,25 @@ export type CatalogImportPreview = {
   issues: CatalogImportIssue[];
 };
 
-export const CATALOG_CSV_HEADERS = ["name", "kind", "unit", "unit_cost", "cost_code", "margin_percent"] as const;
+export const CATALOG_CSV_HEADERS = [
+  "name",
+  "item_description",
+  "kind",
+  "unit",
+  "unit_cost",
+  "cost_code",
+  "margin_percent",
+] as const;
 
-const NAME_HEADERS = new Set(["name", "item", "item name", "description", "title"]);
+const NAME_HEADERS = new Set(["name", "item", "item name", "title"]);
+const DESCRIPTION_HEADERS = new Set([
+  "item description",
+  "item_description",
+  "line description",
+  "proposal description",
+  "scope",
+]);
+const LEGACY_NAME_HEADERS = new Set(["description"]);
 const KIND_HEADERS = new Set(["kind", "type", "category", "class"]);
 const UNIT_HEADERS = new Set(["unit", "uom", "u m"]);
 const COST_HEADERS = new Set(["unit cost", "cost", "price", "unit price", "rate", "amount"]);
@@ -57,9 +74,9 @@ const KIND_ALIASES: Record<string, CatalogKind> = {
 };
 
 export const CATALOG_CSV_TEMPLATE = `${CATALOG_CSV_HEADERS.join(",")}
-Architectural shingles,material,sq,425.00,07 31 13,25
-Tear-off,labor,sq,85.00,07 31 13.L,20
-Dumpster,equipment,ea,450.00,,15
+Architectural shingles,,material,sq,425.00,07 31 13,25
+Tear-off,,labor,sq,85.00,07 31 13.L,20
+Dumpster,,equipment,ea,450.00,,15
 `;
 
 function normalizeHeader(value: string) {
@@ -171,8 +188,12 @@ export function parseCatalogCsv(text: string): CatalogImportPreview {
   if (table.length === 0) throw new Error("The file is empty.");
 
   const first = (table[0] ?? []).map(normalizeHeader);
+  const nameIdx = columnIndex(first, NAME_HEADERS);
+  const legacyNameIdx = columnIndex(first, LEGACY_NAME_HEADERS);
+  const descriptionIdx = columnIndex(first, DESCRIPTION_HEADERS);
   const named = {
-    name: columnIndex(first, NAME_HEADERS),
+    name: nameIdx >= 0 ? nameIdx : legacyNameIdx,
+    description: descriptionIdx >= 0 ? descriptionIdx : nameIdx >= 0 && legacyNameIdx >= 0 ? legacyNameIdx : -1,
     kind: columnIndex(first, KIND_HEADERS),
     unit: columnIndex(first, UNIT_HEADERS),
     unitCost: columnIndex(first, COST_HEADERS),
@@ -183,7 +204,7 @@ export function parseCatalogCsv(text: string): CatalogImportPreview {
   const body = hasHeader ? table.slice(1) : table;
   const cols = hasHeader
     ? named
-    : { name: 0, kind: 1, unit: 2, unitCost: 3, costCode: 4, marginPercent: 5 };
+    : { name: 0, description: -1, kind: 1, unit: 2, unitCost: 3, costCode: 4, marginPercent: 5 };
 
   if (cols.name < 0) {
     throw new Error("Add a name column. Use headers name, kind, unit, unit_cost, cost_code, margin_percent.");
@@ -220,6 +241,7 @@ export function parseCatalogCsv(text: string): CatalogImportPreview {
     }
     rows.push({
       name,
+      description: (cols.description >= 0 ? (cells[cols.description] ?? "") : "").trim(),
       kind,
       unit: (cols.unit >= 0 ? (cells[cols.unit] ?? "") : "").trim() || "ea",
       unitCost,
@@ -235,7 +257,15 @@ export function catalogToCsv(items: CatalogItem[]) {
   const lines = [
     CATALOG_CSV_HEADERS.join(","),
     ...items.map((item) =>
-      [item.name, item.kind, item.unit, item.unitCost.toFixed(2), item.costCode, item.marginPercent.toFixed(2)]
+      [
+        item.name,
+        item.description,
+        item.kind,
+        item.unit,
+        item.unitCost.toFixed(2),
+        item.costCode,
+        item.marginPercent.toFixed(2),
+      ]
         .map((cell) => `"${String(cell).replaceAll('"', '""')}"`)
         .join(","),
     ),

@@ -445,6 +445,8 @@ export interface PriceList {
 export interface CatalogItem {
   id: string;
   name: string;
+  /** Proposal line text copied onto estimates. Blank until someone writes one. */
+  description: string;
   kind: CatalogKind;
   unit: string;
   unitCost: number;
