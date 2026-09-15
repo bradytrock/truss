@@ -33,6 +33,7 @@ import { isBusinessDevelopment } from "@/lib/bd";
 import { BdRoiPanel } from "@/components/bd-roi";
 import { HomeOnboarding } from "@/components/home-onboarding";
 import { HomeDashboardCanvas } from "@/components/home-dashboard-canvas";
+import { HomeToday } from "@/components/home-today";
 import {
   DashboardChart,
   HomeAreaChart,
@@ -53,6 +54,17 @@ import {
   wonDeals,
 } from "@/lib/home-dashboard";
 import { availableHomeModules, type HomeModuleId } from "@/lib/home-layout";
+import {
+  buildHomeBrief,
+  buildHomeFocus,
+  jobsMissingContract,
+  jobsMissingStart,
+  openCallbacks,
+  overdueDays,
+  preconJobs,
+  sourceShares,
+  unsignedProposals,
+} from "@/lib/home-today";
 
 export default function HomePage() {
   const crm = useCrm();
@@ -178,6 +190,96 @@ export default function HomePage() {
   const feed = [...crm.activities]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 6);
+
+  const today = useMemo(() => {
+    const callbacks = openCallbacks(crm.tasks);
+    const proposals = unsignedProposals(crm.estimates);
+    const active = stats.activeJobs;
+    const precon = preconJobs(active);
+    const missingContract = jobsMissingContract(active);
+    const missingStart = jobsMissingStart(precon);
+    const firstName = crm.user.name.split(" ")[0] || "there";
+    const callbackRows = callbacks.slice(0, 8).map((task) => {
+      const related =
+        task.relatedType === "job"
+          ? crm.getJob(task.relatedId ?? "")
+          : task.relatedType === "opportunity"
+            ? crm.getOpportunity(task.relatedId ?? "")
+            : undefined;
+      const contactId =
+        related && "primaryContactId" in related ? related.primaryContactId : null;
+      const contact = crm.getContact(contactId);
+      const who = contact?.name || (related ? crm.customerName(related) : task.assignee) || "Callback";
+      const street =
+        related && "street" in related && typeof related.street === "string" ? related.street : "";
+      const city = related && "city" in related && typeof related.city === "string" ? related.city : "";
+      const location = (related && "location" in related ? related.location : "") || [street, city].filter(Boolean).join(", ");
+      const href =
+        task.relatedType === "job" && task.relatedId
+          ? `/jobs?job=${task.relatedId}`
+          : task.relatedType === "opportunity" && task.relatedId
+            ? `/opportunities/${task.relatedId}`
+            : "/calendar";
+      return {
+        id: task.id,
+        title: task.title,
+        who,
+        sub: location || task.assignee || "Open task",
+        daysLate: overdueDays(task.dueAt),
+        phone: contact?.phone ?? "",
+        href,
+      };
+    });
+    const oldest = callbackRows[0];
+    const brief = buildHomeBrief({
+      firstName,
+      callbackCount: callbacks.length,
+      oldestCallback: oldest
+        ? { name: oldest.who, dueAt: callbacks[0]?.dueAt ?? "" }
+        : null,
+      proposalCount: proposals.length,
+      preconWithoutStart: missingStart.length,
+      jobsWithoutContract: missingContract.length,
+    });
+    const focus = buildHomeFocus({
+      callbackCount: callbacks.length,
+      oldestDays: oldest?.daysLate ?? 0,
+      proposalCount: proposals.length,
+      jobsWithoutContract: missingContract.length,
+      names: [...new Set(callbackRows.map((row) => row.who))],
+    });
+    const inProgress = active.filter((job) => job.status === "in_progress").length;
+    return {
+      brief,
+      focus,
+      callbackRows,
+      activeJobRows: active.slice(0, 8).map((job) => ({
+        id: job.id,
+        name: job.name,
+        who: crm.customerName(job) || job.name,
+        code: job.code,
+        location: job.location || [job.street, job.city].filter(Boolean).join(", "),
+        status: job.status,
+        contractValue: job.contractValue,
+      })),
+      stages: [
+        { label: "Leads", count: stats.openCount, note: stats.pipelineValue > 0 ? formatCurrency(stats.pipelineValue) : "Value not estimated" },
+        { label: "Proposals out", count: proposals.length, note: proposals.length ? "Awaiting signature" : "None waiting" },
+        { label: "Signed", count: salesDashboard.closedCount, note: salesDashboard.closedCount ? formatCurrency(salesDashboard.closedAmount) : "None this month" },
+        { label: "Preconstruction", count: precon.length, note: missingStart.length ? "Needs start dates" : "Scheduled" },
+        { label: "In production", count: inProgress, note: inProgress ? "On the board" : "None active" },
+      ],
+      sources: sourceShares(salesDashboard.bySource),
+      signedSpark: salesDashboard.byCloseDate.map((item) => item.value),
+      missingContract: missingContract.length,
+      preconCount: precon.length,
+      inProgress,
+      proposalCount: proposals.length,
+      proposalHint: proposals.length
+        ? "Sent and still unsigned"
+        : "Nothing waiting on a signature",
+    };
+  }, [crm, salesDashboard, stats]);
 
   const reviewNotices = useMemo(() => {
     const staff = crm.effectiveStaff;
@@ -623,62 +725,84 @@ export default function HomePage() {
   if (!crm.hydrated) return <LoadingScreen />;
 
   const hasLeads = crm.opportunities.length > 0;
+  const staffId = crm.effectiveStaff?.id || crm.user.staffId || "anon";
+
+  const customize = hasLeads ? (
+    <>
+      <Button
+        type="button"
+        variant={editing ? "default" : "outline"}
+        className="rounded-lg border-[rgba(28,25,22,0.08)] bg-white"
+        onClick={() => setEditing((value) => !value)}
+      >
+        {editing ? "Done" : "Customize"}
+      </Button>
+      <Button
+        nativeButton={false}
+        className="rounded-lg bg-[#1d1d1f] text-white hover:bg-black"
+        render={<Link href="/pipeline" />}
+      >
+        View pipeline
+      </Button>
+    </>
+  ) : null;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {crm.hydrateError ? (
         <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
       ) : null}
-      <PageHeader
-        eyebrow="Home"
-        title={`${greeting()}, ${crm.user.name.split(" ")[0] || "there"}`}
-        description={
-          crm.effectiveStaff?.role === "accountant"
-            ? "Accounting queues for expenses, receipts, and QuickBooks — sales charts stay with the field seats."
-            : crm.effectiveStaff?.role === "business_development"
-            ? "Executive sales view: open pipeline, closed-won gauge, source mix, and your agent ROI."
-            : crm.effectiveStaff?.role === "project_manager" || crm.effectiveStaff?.role === "superintendent"
-              ? "Your sales dashboard and today’s desk — charts first, lists below."
-              : crm.effectiveStaff?.role === "team_lead" || crm.effectiveStaff?.role === "team_admin"
-                ? "Team sales dashboard and desk lists. Login As a teammate, or open Reports."
-                : crm.effectiveStaff?.role === "company_admin"
-                  ? "Executive sales dashboard: open pipeline, closed-won gauge, and source mix."
-                  : crm.effectiveStaff?.role === "estimator"
-                    ? "Sales dashboard for bids and signed work, with the jobs you’re pricing below."
-                    : "Sales executive dashboard for pipeline and closed-won — restoration and remodel from lead to job photo."
-        }
-        actions={
-          hasLeads ? (
-            <>
-              <Button
-                type="button"
-                size="sm"
-                variant={editing ? "default" : "outline"}
-                className="h-8 rounded-sm text-xs font-semibold"
-                onClick={() => setEditing((value) => !value)}
-              >
-                {editing ? "Done" : "Customize"}
-              </Button>
-              <Button
-                nativeButton={false}
-                size="sm"
-                className="h-8 rounded-sm bg-[#0176d3] text-xs font-semibold text-white hover:bg-[#014486]"
-                render={<Link href="/pipeline" />}
-              >
-                View pipeline
-              </Button>
-            </>
-          ) : null
-        }
-      />
 
-      {!hasLeads ? <HomeOnboarding viewer={crm.effectiveStaff} /> : null}
+      {!hasLeads ? (
+        <>
+          <PageHeader
+            eyebrow="Home"
+            title={`${greeting()}, ${crm.user.name.split(" ")[0] || "there"}`}
+            description="Your home shows today’s brief, callbacks, and pipeline once the first lead is in."
+          />
+          <HomeOnboarding viewer={crm.effectiveStaff} />
+        </>
+      ) : (
+        <HomeToday
+          key={staffId}
+          staffId={staffId}
+          brief={today.brief}
+          focus={today.focus}
+          signed={{
+            amount: salesDashboard.closedAmount,
+            count: salesDashboard.closedCount,
+            avg: salesDashboard.avgDeal,
+            spark: today.signedSpark,
+          }}
+          proposals={{ count: today.proposalCount, hint: today.proposalHint }}
+          jobs={{
+            count: stats.activeJobs.length,
+            precon: today.preconCount,
+            inProgress: today.inProgress,
+            missingContract: today.missingContract,
+          }}
+          callbacks={today.callbackRows}
+          activeJobs={today.activeJobRows}
+          stages={today.stages}
+          sources={today.sources}
+          closeRate={stats.winRate}
+          quota={salesDashboard.quota}
+          activities={feed.map((activity) => ({
+            id: activity.id,
+            title: activity.body,
+            sub: activity.author,
+            when: formatRelative(activity.createdAt),
+          }))}
+          onCompleteTask={(id) => void crm.toggleTask(id)}
+          customize={customize}
+        />
+      )}
 
-      {hasLeads ? (
+      {hasLeads && editing ? (
         <HomeDashboardCanvas
-          key={`${crm.user.companyId}:${crm.effectiveStaff?.id ?? crm.user.staffId}`}
+          key={`${crm.user.companyId}:${staffId}`}
           companyId={crm.user.companyId || "local"}
-          staffId={crm.effectiveStaff?.id || crm.user.staffId || "anon"}
+          staffId={staffId}
           editing={editing}
           availableIds={availableHomeModules({
             hasLeads,
@@ -692,14 +816,12 @@ export default function HomePage() {
             <div className="flex flex-wrap items-end justify-between gap-2">
               <div>
                 <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
-                  Sales executive dashboard
+                  Classic modules
                 </p>
                 <p className="text-xs text-[#706e6b]">
-                  Pipeline and closed-won for{" "}
-                  {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                  Hide, resize, or rearrange the older sales tiles. Today stays the default home.
                 </p>
               </div>
-              <RelatedListLink href="/reports">Open reports</RelatedListLink>
             </div>
           }
           renderModule={(id) => renderHomeModule(id)}
