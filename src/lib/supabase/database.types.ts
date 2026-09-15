@@ -239,6 +239,7 @@ export type Database = {
           expires_at: string;
           created_at: string;
           created_by: string | null;
+          used_at: string | null;
         };
         Insert: {
           id?: string;
@@ -249,6 +250,7 @@ export type Database = {
           expires_at: string;
           created_at?: string;
           created_by?: string | null;
+          used_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["account_invites"]["Insert"]>;
         Relationships: [];

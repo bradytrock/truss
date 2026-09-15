@@ -2,6 +2,7 @@ import type { SeatRole, StaffMember } from "@/lib/types";
 
 export const ACCOUNT_MANAGEMENT_SQL = "supabase/migrations/20260820200000_account_management.sql";
 export const INVITE_SIGNUP_SQL = "supabase/migrations/20260821010000_invite_signup.sql";
+export const INVITE_USED_ONCE_SQL = "supabase/migrations/20260915210000_invite_used_once.sql";
 export const BOOTSTRAP_SQL_RAW =
   "https://raw.githubusercontent.com/bradytrock/truss/main/supabase/bootstrap.sql";
 export const INVITE_SIGNUP_SQL_RAW =

@@ -105,7 +105,7 @@ function SignupForm() {
       }
       const row = firstInviteRow(data as InvitePreview[] | InvitePreview | null);
       if (!row) {
-        setInviteError("That invite is missing or expired. Ask a company admin to send a new one.");
+        setInviteError("That invite is missing, already used, or expired. Ask a company admin to send a new one.");
         setInviteLoading(false);
         return;
       }

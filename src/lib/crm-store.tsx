@@ -834,6 +834,15 @@ type CrmContextValue = CrmState & {
     phone?: string;
     teamId?: string | null;
   }) => Promise<{ member: StaffMember; inviteUrl: string | null } | null>;
+  inviteStaffMany: (
+    rows: Array<{
+      name: string;
+      email: string;
+      role: SeatRole;
+      title?: string;
+      teamId?: string | null;
+    }>,
+  ) => Promise<Array<{ member: StaffMember; inviteUrl: string | null }>>;
   updateStaffAccount: (
     id: string,
     patch: Partial<
@@ -10188,6 +10197,90 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [canEditCompany, persistStaffFields, persistTeam, state.staff, state.teams],
   );
 
+  const inviteStaffMany = useCallback(
+    async (
+      rows: Array<{
+        name: string;
+        email: string;
+        role: SeatRole;
+        title?: string;
+        teamId?: string | null;
+      }>,
+    ) => {
+      if (!canEditCompany) {
+        toast.error("Only a company admin can add people.");
+        return [];
+      }
+      const taken = new Set(
+        state.staff.map((member) => normalizeSeatEmail(member.email)).filter(Boolean),
+      );
+      const created: Array<{ member: StaffMember; inviteUrl: string | null }> = [];
+      const slugs = state.staff.map((item) => item.cardSlug);
+      let nextTeams = state.teams;
+      for (const input of rows) {
+        const name = input.name.trim();
+        const email = normalizeSeatEmail(input.email);
+        if (!name || !email) {
+          toast.error("Every invited row needs a name and email.");
+          break;
+        }
+        if (taken.has(email)) {
+          toast.error(`${email} already belongs to someone on this company.`);
+          break;
+        }
+        const teamId = looksLikeUuid(input.teamId) ? input.teamId! : "";
+        if (teamId && !nextTeams.some((team) => team.id === teamId)) {
+          toast.error("Pick a team that still exists.");
+          break;
+        }
+        const token = newInviteToken();
+        const expires = inviteExpiry();
+        const member: StaffMember = {
+          id: crypto.randomUUID(),
+          name,
+          title: input.title?.trim() || defaultTitleForRole(input.role),
+          role: input.role,
+          teamId,
+          initials: initialsFromName(name),
+          email,
+          phone: "",
+          cardSlug: mintPersonCardSlug(name, "", slugs),
+          locked: false,
+          restricted: false,
+          inviteToken: token,
+          inviteExpiresAt: expires,
+          emailSignature: "",
+        };
+        slugs.push(member.cardSlug);
+        const ok = await persistStaffFields(member, { inviteToken: token, inviteExpiresAt: expires });
+        if (!ok) break;
+        taken.add(email);
+        if (teamId && member.role === "team_lead") {
+          const team = nextTeams.find((item) => item.id === teamId);
+          if (team && !team.leadStaffId) {
+            const withLead = { ...team, leadStaffId: member.id };
+            const saved = await persistTeam(withLead);
+            if (saved) nextTeams = nextTeams.map((item) => (item.id === teamId ? withLead : item));
+          }
+        }
+        created.push({
+          member,
+          inviteUrl: inviteSignupUrl(window.location.origin, token),
+        });
+      }
+      if (created.length) {
+        const members = created.map((item) => item.member);
+        setState((current) => ({
+          ...current,
+          staff: [...current.staff, ...members],
+          teams: nextTeams,
+        }));
+      }
+      return created;
+    },
+    [canEditCompany, persistStaffFields, persistTeam, state.staff, state.teams],
+  );
+
   const updateStaffAccount = useCallback(
     async (
       id: string,
@@ -10825,6 +10918,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       uploadCompanyLogo,
       removeCompanyLogo,
       inviteStaff,
+      inviteStaffMany,
       updateStaffAccount,
       uploadStaffPhoto,
       removeStaffPhoto,
@@ -10989,6 +11083,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       uploadCompanyLogo,
       removeCompanyLogo,
       inviteStaff,
+      inviteStaffMany,
       updateStaffAccount,
       uploadStaffPhoto,
       removeStaffPhoto,

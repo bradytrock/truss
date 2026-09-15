@@ -40,10 +40,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { BulkInviteDialog } from "@/components/bulk-invite-dialog";
 import { EmptyState } from "@/components/page-chrome";
 import { GoogleLocationSelect } from "@/components/google-locations-settings";
 import { StaffPhotoField } from "@/components/staff-photo-field";
 import { staffTeamLabel, TeamSelect } from "@/components/teams-settings";
+import { requestInviteEmails } from "@/lib/invite-email";
 import {
   defaultTitleForRole,
   INVITE_DAYS,
@@ -91,6 +93,7 @@ export function PeopleSettings({
   googleLocations,
   companySignature = "",
   onInvite,
+  onInviteMany,
   onUpdate,
   onRefreshInvite,
   onRemove,
@@ -111,6 +114,15 @@ export function PeopleSettings({
     phone?: string;
     teamId?: string | null;
   }) => Promise<{ member: StaffMember; inviteUrl: string | null } | null>;
+  onInviteMany: (
+    rows: Array<{
+      name: string;
+      email: string;
+      role: SeatRole;
+      title?: string;
+      teamId?: string | null;
+    }>,
+  ) => Promise<Array<{ member: StaffMember; inviteUrl: string | null }>>;
   onUpdate: (
     id: string,
     patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "emailSignature" | "locked" | "restricted" | "teamId" | "cardSlug">>,
@@ -120,8 +132,10 @@ export function PeopleSettings({
   hideIntro?: boolean;
 }) {
   const [addOpen, setAddOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [inviteName, setInviteName] = useState("");
+  const [inviteEmailedTo, setInviteEmailedTo] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<StaffMember | null>(null);
   const [profileTarget, setProfileTarget] = useState<StaffMember | null>(null);
   const people = useMemo(
@@ -134,11 +148,31 @@ export function PeopleSettings({
     [staff, viewerId],
   );
 
-  async function showInvite(url: string | null, name: string) {
+  async function showInvite(url: string | null, name: string, emailedTo?: string | null) {
     if (!url) return;
     setInviteName(name);
+    setInviteEmailedTo(emailedTo ?? null);
     setInviteUrl(url);
-    await copyInvite(url);
+    if (!emailedTo) await copyInvite(url);
+  }
+
+  async function emailSeatInvite(member: StaffMember) {
+    let tokenReady = Boolean(member.inviteToken) && !inviteIsExpired(member);
+    if (!tokenReady) {
+      const url = await onRefreshInvite(member.id);
+      if (!url) return;
+    }
+    const emailed = await requestInviteEmails([member.id]);
+    const row = emailed.results.find((item) => item.staffId === member.id);
+    if (emailed.ok || row?.ok) {
+      toast.success(`Invite emailed to ${row?.email || member.email}. It works once.`);
+      return;
+    }
+    toast.error(emailed.error || row?.error || "Could not email that invite.");
+    const url = member.inviteToken
+      ? inviteSignupUrl(window.location.origin, member.inviteToken)
+      : await onRefreshInvite(member.id);
+    await showInvite(url, member.name);
   }
 
   async function copyCard(member: StaffMember) {
@@ -180,26 +214,36 @@ export function PeopleSettings({
             <div className="space-y-1.5">
               <CardTitle>People</CardTitle>
               <CardDescription>
-                Add a roster seat, put them on a team, send a signup link into this company, restrict
-                someone to their own book, lock a login, or remove them. Invites expire in {INVITE_DAYS}{" "}
-                days.
+                Add a roster seat, put them on a team, or email a one-time signup link into this
+                company. Restrict someone to their own book, lock a login, or remove them. Invites
+                expire in {INVITE_DAYS} days and cannot be reused after they set up their account.
               </CardDescription>
             </div>
           )}
-          <Button type="button" onClick={() => setAddOpen(true)}>
-            <Plus />
-            Add teammate
-          </Button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setBulkOpen(true)}>
+              Bulk add
+            </Button>
+            <Button type="button" onClick={() => setAddOpen(true)}>
+              <Plus />
+              Add teammate
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="pt-4">
           {people.length === 0 ? (
             <EmptyState
               title="No seats yet"
-              description="Add the people who run jobs, estimates, and the office. An email creates a signup link; skip it to assign work before they have a login."
+              description="Add the people who run jobs, estimates, and the office. An email sends a one-time signup link; skip it to assign work before they have a login."
               action={
-                <Button type="button" onClick={() => setAddOpen(true)}>
-                  Add teammate
-                </Button>
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button type="button" variant="outline" onClick={() => setBulkOpen(true)}>
+                    Bulk add
+                  </Button>
+                  <Button type="button" onClick={() => setAddOpen(true)}>
+                    Add teammate
+                  </Button>
+                </div>
               }
             />
           ) : (
@@ -269,6 +313,7 @@ export function PeopleSettings({
                               const url = await onRefreshInvite(member.id);
                               await showInvite(url, member.name);
                             }}
+                            onEmailInvite={() => void emailSeatInvite(member)}
                             onRemove={() => setRemoveTarget(member)}
                           />
                         </TableCell>
@@ -321,6 +366,7 @@ export function PeopleSettings({
                         const url = await onRefreshInvite(member.id);
                         await showInvite(url, member.name);
                       }}
+                      onEmailInvite={() => void emailSeatInvite(member)}
                       onRemove={() => setRemoveTarget(member)}
                       full
                     />
@@ -340,18 +386,45 @@ export function PeopleSettings({
           const result = await onInvite(input);
           if (!result) return false;
           setAddOpen(false);
+          if (result.member.email && result.inviteUrl) {
+            const emailed = await requestInviteEmails([result.member.id]);
+            const row = emailed.results.find((item) => item.staffId === result.member.id);
+            if (emailed.ok || row?.ok) {
+              toast.success(`Invite emailed to ${result.member.email}. It works once.`);
+              await showInvite(result.inviteUrl, result.member.name, result.member.email);
+              return true;
+            }
+            toast.error(emailed.error || row?.error || "Invite saved. Copy the link to send it.");
+          }
           await showInvite(result.inviteUrl, result.member.name);
           return true;
         }}
       />
 
-      <Dialog open={Boolean(inviteUrl)} onOpenChange={(open) => !open && setInviteUrl(null)}>
+      <BulkInviteDialog
+        open={bulkOpen}
+        teams={teams}
+        existingEmails={staff.map((member) => member.email)}
+        onOpenChange={setBulkOpen}
+        onInviteMany={onInviteMany}
+      />
+
+      <Dialog
+        open={Boolean(inviteUrl)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setInviteUrl(null);
+            setInviteEmailedTo(null);
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Invite {inviteName}</DialogTitle>
             <DialogDescription>
-              They sign up with this link and join this company. The link is not emailed from Truss —
-              copy it into a text or email.
+              {inviteEmailedTo
+                ? `We emailed a one-time setup link to ${inviteEmailedTo}. After they set a password, this link cannot be reused.`
+                : "They sign up with this one-time link and join this company. Copy it into a text or email if you still need to send it."}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
@@ -489,6 +562,7 @@ function SeatMenu({
   onCopyCard,
   onRefreshInvite,
   onCopyInvite,
+  onEmailInvite,
   onRemove,
   full,
 }: {
@@ -502,6 +576,7 @@ function SeatMenu({
   onCopyCard: () => void;
   onRefreshInvite: () => Promise<void>;
   onCopyInvite: () => Promise<void>;
+  onEmailInvite: () => Promise<void> | void;
   onRemove: () => void;
   full?: boolean;
 }) {
@@ -527,11 +602,14 @@ function SeatMenu({
           Copy card link
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        <DropdownMenuItem disabled={!canInvite} onClick={() => void onEmailInvite()}>
+          Email invite
+        </DropdownMenuItem>
         <DropdownMenuItem disabled={!canInvite} onClick={() => void onCopyInvite()}>
           Copy invite link
         </DropdownMenuItem>
         <DropdownMenuItem disabled={!canInvite} onClick={() => void onRefreshInvite()}>
-          {inviteIsPending(member) ? "Refresh invite" : "Send invite"}
+          {inviteIsPending(member) ? "Refresh invite" : "Create invite"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -614,8 +692,8 @@ function AddTeammateDialog({
           <DialogHeader>
             <DialogTitle>Add teammate</DialogTitle>
             <DialogDescription>
-              An email creates a signup link into this company. Leave it blank to add a seat you can
-              assign work to before they have a login.
+              An email sends a one-time setup link into this company. Leave it blank to add a seat you
+              can assign work to before they have a login.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
@@ -694,7 +772,7 @@ function AddTeammateDialog({
               Cancel
             </Button>
             <Button type="submit" nativeButton disabled={pending}>
-              {pending ? "Saving…" : email.trim() ? "Add and copy invite" : "Add to roster"}
+              {pending ? "Saving…" : email.trim() ? "Add and email invite" : "Add to roster"}
             </Button>
           </DialogFooter>
         </form>

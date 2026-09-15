@@ -2288,7 +2288,8 @@ create table if not exists public.account_invites (
   token text not null unique,
   expires_at timestamptz not null,
   created_at timestamptz not null default now(),
-  created_by uuid references public.profiles (id) on delete set null
+  created_by uuid references public.profiles (id) on delete set null,
+  used_at timestamptz
 );
 
 create index if not exists account_invites_company_id_idx on public.account_invites (company_id);
@@ -2411,6 +2412,7 @@ begin
   join public.team_members tm on tm.id = i.staff_id
   join public.companies c on c.id = i.company_id
   where i.token = p_token
+    and i.used_at is null
     and i.expires_at > now()
     and tm.locked = false
   limit 1;
@@ -2446,19 +2448,35 @@ begin
   from auth.users u
   where u.id = uid;
 
-  select i.company_id, i.staff_id, i.email, tm.role, tm.title
-    into invite_company, invite_staff, invite_email, invite_role, seat_title
-  from public.account_invites i
-  join public.team_members tm on tm.id = i.staff_id
-  where i.token = p_token
-    and i.expires_at > now()
-    and tm.locked = false;
+  update public.account_invites
+  set used_at = now()
+  where token = p_token
+    and used_at is null
+    and expires_at > now()
+  returning company_id, staff_id, email
+    into invite_company, invite_staff, invite_email;
 
   if invite_company is null then
-    raise exception 'That invite is missing or expired.';
+    raise exception 'That invite is missing, already used, or expired.';
+  end if;
+
+  select tm.role, tm.title
+    into invite_role, seat_title
+  from public.team_members tm
+  where tm.id = invite_staff
+    and tm.locked = false;
+
+  if invite_role is null then
+    update public.account_invites
+    set used_at = null
+    where token = p_token and staff_id = invite_staff;
+    raise exception 'That invite is missing, already used, or expired.';
   end if;
 
   if lower(invite_email) is distinct from lower(coalesce(user_email, '')) then
+    update public.account_invites
+    set used_at = null
+    where token = p_token and staff_id = invite_staff;
     raise exception 'Sign in with the email this invite was sent to.';
   end if;
 
@@ -2536,6 +2554,7 @@ begin
     from public.account_invites i
     join public.team_members tm on tm.id = i.staff_id
     where i.token = invite_token
+      and i.used_at is null
       and i.expires_at > now()
       and coalesce(tm.locked, false) = false;
 
@@ -2733,6 +2752,7 @@ begin
     from public.account_invites i
     join public.team_members tm on tm.id = i.staff_id
     where i.token = invite_token
+      and i.used_at is null
       and i.expires_at > now()
       and coalesce(tm.locked, false) = false;
 
@@ -2872,20 +2892,36 @@ begin
   from auth.users u
   where u.id = uid;
 
-  select i.company_id, i.staff_id, i.email, tm.role, tm.title
-    into invite_company, invite_staff, invite_email, invite_role, seat_title
-  from public.account_invites i
-  join public.team_members tm on tm.id = i.staff_id
-  where i.token = p_token
-    and i.expires_at > now()
-    and coalesce(tm.locked, false) = false;
+  update public.account_invites
+  set used_at = now()
+  where token = p_token
+    and used_at is null
+    and expires_at > now()
+  returning company_id, staff_id, email
+    into invite_company, invite_staff, invite_email;
 
   if invite_company is null then
-    raise exception 'That invite is missing or expired.';
+    raise exception 'That invite is missing, already used, or expired.';
+  end if;
+
+  select tm.role, tm.title
+    into invite_role, seat_title
+  from public.team_members tm
+  where tm.id = invite_staff
+    and coalesce(tm.locked, false) = false;
+
+  if invite_role is null then
+    update public.account_invites
+    set used_at = null
+    where token = p_token and staff_id = invite_staff;
+    raise exception 'That invite is missing, already used, or expired.';
   end if;
 
   if nullif(trim(coalesce(invite_email, '')), '') is not null
      and lower(trim(invite_email)) is distinct from lower(trim(coalesce(user_email, ''))) then
+    update public.account_invites
+    set used_at = null
+    where token = p_token and staff_id = invite_staff;
     raise exception 'Sign in with the email this invite was sent to.';
   end if;
 
@@ -2968,6 +3004,7 @@ as $$
   join public.team_members tm on tm.id = i.staff_id
   join public.companies c on c.id = i.company_id
   where i.token = p_token
+    and i.used_at is null
     and i.expires_at > now()
     and coalesce(tm.locked, false) = false
   limit 1;
