@@ -20,7 +20,7 @@ import {
 export const CONTACT_STAGES = ["lead", "prop", "cust", "past"] as const;
 export type ContactStage = (typeof CONTACT_STAGES)[number];
 
-export const CONTACT_FILTERS = ["all", "lead", "prop", "cust", "past", "tasks"] as const;
+export const CONTACT_FILTERS = ["all", "lead", "prop", "cust", "past", "tasks", "vendors"] as const;
 export type ContactFilter = (typeof CONTACT_FILTERS)[number];
 
 export const CONTACT_FILTER_OPTIONS: { value: ContactFilter; label: string }[] = [
@@ -30,6 +30,7 @@ export const CONTACT_FILTER_OPTIONS: { value: ContactFilter; label: string }[] =
   { value: "cust", label: "Customers" },
   { value: "past", label: "Past" },
   { value: "tasks", label: "Needs a call" },
+  { value: "vendors", label: "Vendors" },
 ];
 
 const AVATAR_TONES = [
@@ -341,6 +342,7 @@ export function contactRowMatchesQuery(row: ContactBookRow, query: string) {
 }
 
 export function visibleContactRows(rows: ContactBookRow[], filter: ContactFilter, query: string) {
+  if (filter === "vendors") return [];
   return rows.filter((row) => {
     if (filter === "tasks" && row.openTaskCount === 0) return false;
     if (filter !== "all" && filter !== "tasks" && row.stage !== filter) return false;
@@ -348,7 +350,7 @@ export function visibleContactRows(rows: ContactBookRow[], filter: ContactFilter
   });
 }
 
-export function contactFilterCounts(rows: ContactBookRow[]) {
+export function contactFilterCounts(rows: ContactBookRow[], vendorCount = 0) {
   return {
     all: rows.length,
     lead: rows.filter((row) => row.stage === "lead").length,
@@ -356,6 +358,7 @@ export function contactFilterCounts(rows: ContactBookRow[]) {
     cust: rows.filter((row) => row.stage === "cust").length,
     past: rows.filter((row) => row.stage === "past").length,
     tasks: rows.filter((row) => row.openTaskCount > 0).length,
+    vendors: vendorCount,
   } satisfies Record<ContactFilter, number>;
 }
 
