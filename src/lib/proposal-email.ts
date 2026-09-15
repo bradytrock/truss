@@ -127,10 +127,6 @@ export function renderProposalEmailHtml(input: ProposalEmailInput) {
     ? `<a href="${websiteHrefEsc}" style="text-decoration:none;">${logoBlock}</a>`
     : logoBlock;
 
-  const headerPhone = companyPhoneTel
-    ? `<a href="tel:${escapeHtml(companyPhoneTel)}" style="color:#1a1a1a;text-decoration:none;font-weight:bold;">${escapeHtml(companyPhoneLabel)}</a>`
-    : "";
-
   const owner = input.owner;
   const pmName = owner?.name?.trim() ?? "";
   const pmFirst = escapeHtml(firstName(pmName || "your project manager"));
@@ -245,17 +241,8 @@ export function renderProposalEmailHtml(input: ProposalEmailInput) {
         <table role="presentation" class="container" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;">
 
           <tr>
-            <td class="px" style="padding:0 8px 18px 8px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                  <td align="left" valign="middle">
-                    ${logoLinked}
-                  </td>
-                  <td align="right" valign="middle" style="font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:16px;color:#6b6763;letter-spacing:0.04em;">
-                    ${headerPhone}
-                  </td>
-                </tr>
-              </table>
+            <td class="px" style="padding:0 8px 18px 8px;" align="left">
+              ${logoLinked}
             </td>
           </tr>
 
