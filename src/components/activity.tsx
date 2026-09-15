@@ -44,7 +44,7 @@ export function ActivityComposer({
   }
 
   return (
-    <div className="border bg-card p-3">
+    <div className="rounded-md border bg-card p-3">
       <div className="mb-2 flex flex-wrap gap-1">
         {types.map((item) => (
           <Button

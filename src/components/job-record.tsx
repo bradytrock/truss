@@ -2,18 +2,14 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
-  Briefcase,
-  Building2,
-  Calendar,
   ChevronDown,
-  ChevronsRight,
+  ChevronLeft,
+  ChevronRight,
   Copy,
-  ExternalLink,
   FileText,
   ImageIcon,
-  Link2,
   Mail,
   MapPin,
   MessageSquare,
@@ -22,10 +18,8 @@ import {
   Plus,
   RotateCcw,
   Sparkles,
-  Star,
   Trash2,
   User,
-  Users,
   XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -68,7 +62,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RecordCode } from "@/components/page-chrome";
 import { EstimateStatusBadge, InvoiceStatusBadge, QbStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
-import { formatCurrencyFull, formatDate, formatInboxTime } from "@/lib/format";
+import { formatCurrencyFull, formatDate, formatInboxTime, formatPhone } from "@/lib/format";
 import { mailHref } from "@/lib/job-emails";
 import { assignedCrewPatch, isDeletedJob, jobAddress, mapsUrl, primaryHomeownerPatch, uniqueIds, uniqueNames } from "@/lib/job-record";
 import { visibleJobCustomFields } from "@/lib/job-files";
@@ -86,13 +80,15 @@ import { livePhotos, primaryJobPhoto } from "@/lib/photo-trash";
 import { shareUrl } from "@/lib/share";
 import { leadSourceChoices, leadSourceLabel } from "@/lib/leads";
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
-import { acceptedAmountForJob, amountForEstimate } from "@/lib/estimate-totals";
+import { amountForEstimate } from "@/lib/estimate-totals";
+import { jobProfitAndLoss } from "@/lib/job-financials";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { workMarket } from "@/lib/market";
-import { boardValue } from "@/lib/work-board";
 import { COURSE } from "@/lib/training/engine";
 import { recommendedChapterIds } from "@/lib/training/recommend";
 import {
+  ESTIMATE_STATUS_LABELS,
+  JOB_MARKET_LABELS,
   JOB_STATUS_LABELS,
   JOB_STATUSES,
   PROJECT_TYPE_LABELS,
@@ -163,26 +159,66 @@ function JobSection({
   );
 }
 
-function FieldRow({
-  icon: Icon,
+const quietSelect =
+  "h-auto w-full justify-end border-0 bg-transparent p-0 shadow-none hover:bg-transparent dark:bg-transparent";
+
+const pillSelect =
+  "h-7 w-auto gap-1 rounded-full border bg-background px-2.5 text-xs font-medium shadow-none";
+
+function DetailRow({
   label,
   children,
 }: {
-  icon: typeof User;
   label: string;
   children: ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-[1.25rem_7.5rem_minmax(0,1fr)] items-center gap-3 border-b py-2.5 last:border-b-0">
-      <Icon className="size-4 text-muted-foreground" />
+    <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3 border-b py-2 last:border-b-0">
       <p className="text-sm text-muted-foreground">{label}</p>
       <div className="min-w-0 text-right text-sm">{children}</div>
     </div>
   );
 }
 
-const quietSelect =
-  "h-auto w-full justify-end border-0 bg-transparent p-0 shadow-none hover:bg-transparent dark:bg-transparent";
+function SummaryCard({
+  eyebrow,
+  title,
+  children,
+  href,
+  onClick,
+}: {
+  eyebrow: string;
+  title: string;
+  children: ReactNode;
+  href?: string;
+  onClick?: () => void;
+}) {
+  const inner = (
+    <>
+      <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+        {eyebrow}
+      </p>
+      <p className="mt-2 text-sm font-medium">{title}</p>
+      <div className="mt-1 text-sm text-muted-foreground">{children}</div>
+    </>
+  );
+  const className = "rounded-md border bg-card p-4 text-left transition-colors hover:bg-muted/40";
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {inner}
+      </Link>
+    );
+  }
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={className}>
+        {inner}
+      </button>
+    );
+  }
+  return <div className="rounded-md border bg-card p-4">{inner}</div>;
+}
 
 function PeopleChips({
   names,
@@ -240,16 +276,23 @@ function contactKind(contact: Contact, job: Job) {
   return contact.title || "Homeowner";
 }
 
-export function JobRecord({ job, className }: { job: Job; className?: string }) {
+export function JobRecord({
+  job,
+  className,
+  onClose,
+}: {
+  job: Job;
+  className?: string;
+  onClose?: () => void;
+}) {
   const crm = useCrm();
   const router = useRouter();
   const searchParams = useSearchParams();
   const startEstimateFlow = useStartEstimate();
   const { prompt: startEstimate, pending: estimatePending } = startEstimateFlow;
   const { start: startMaterialOrder, pending: materialPending } = useStartMaterialOrder();
-  const requestedTab = parseJobTab(searchParams.get("tab"));
-  const [tab, setTab] = useState<JobTab>(requestedTab);
-  const [heroOpen, setHeroOpen] = useState(true);
+  const tab = parseJobTab(searchParams.get("tab"));
+  const [photoOffset, setPhotoOffset] = useState(0);
   const [addressOpen, setAddressOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
@@ -272,12 +315,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
   const canTrash = canDeleteJobs(crm.viewer) && !crm.impersonatedStaff;
   const deleted = isDeletedJob(job);
 
-  useEffect(() => {
-    setTab(requestedTab);
-  }, [requestedTab]);
-
   function setJobTab(next: JobTab) {
-    setTab(next);
     const params = new URLSearchParams(searchParams.toString());
     if (next === "overview") params.delete("tab");
     else params.set("tab", next);
@@ -323,7 +361,16 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
   const reports = crm.photoReports.filter((report) => report.jobId === job.id);
   const openReport = reportId ? reports.find((report) => report.id === reportId) : undefined;
   const hero = primaryJobPhoto(crm.photos, job);
+  const primaryPhotoIndex = photos.findIndex((photo) => photo.id === job.primaryPhotoId);
+  const startPhotoIndex = primaryPhotoIndex >= 0 ? primaryPhotoIndex : 0;
+  const photoIndex = photos.length
+    ? (((startPhotoIndex + photoOffset) % photos.length) + photos.length) % photos.length
+    : 0;
+  const shownPhoto = photos[photoIndex] ?? hero ?? null;
   const address = jobAddress(job);
+  const cityLine = [job.city, [job.state, job.postalCode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  const jobFiles = (crm.jobFiles ?? []).filter((file) => file.jobId === job.id);
+  const fileCount = jobFiles.length + reports.length;
   const estimates = crm.estimates.filter((estimate) => estimate.jobId === job.id);
   const invoices = crm.invoices.filter((invoice) => invoice.jobId === job.id);
   const materialOrders = (crm.materialOrders ?? []).filter((order) => order.jobId === job.id);
@@ -341,6 +388,33 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
         activity.entityId === job.opportunityId)
   );
   const tasks = crm.tasks.filter((task) => task.relatedType === "job" && task.relatedId === job.id);
+  const books = jobProfitAndLoss({
+    job,
+    invoices: crm.invoices,
+    invoiceLines: crm.invoiceLines,
+    payments: crm.payments,
+    expenses: crm.expenses,
+    basis: "accrual",
+  });
+  const draftEstimateTotal = estimates
+    .filter((estimate) => estimate.status === "draft")
+    .reduce(
+      (sum, estimate) => sum + amountForEstimate(estimate, crm.estimateLines, workMarket(job, opportunity)),
+      0,
+    );
+  const featuredEstimate =
+    estimates.find((estimate) => estimate.status === "sent" || estimate.status === "viewed") ??
+    estimates.find((estimate) => estimate.status === "draft") ??
+    estimates.find((estimate) => estimate.status === "accepted") ??
+    estimates[0];
+  const nextTask = tasks
+    .filter((task) => !task.completed)
+    .slice()
+    .sort((left, right) => (left.dueAt || "z").localeCompare(right.dueAt || "z"))[0];
+  const nextStepTitle =
+    nextTask?.title.trim() || (job.status === "precon" ? "Scope review" : JOB_STATUS_LABELS[job.status]);
+  const nextStepDate = nextTask?.dueAt ? formatDate(nextTask.dueAt) : "No date set";
+  const latestPage = reports[0];
   const jobMail = (crm.gmailMessages ?? [])
     .filter((message) => message.jobId === job.id)
     .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
@@ -446,239 +520,494 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
     setFieldValue("");
   }
 
+  const newMenu = !deleted ? (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            type="button"
+            size="sm"
+            disabled={estimatePending || materialPending}
+            aria-label="Create on this job"
+          />
+        }
+      >
+        <Plus data-icon="inline-start" />
+        {estimatePending || materialPending ? "Opening…" : "New"}
+        <ChevronDown data-icon="inline-end" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-44">
+        <DropdownMenuItem onClick={() => openNew("estimate")}>New estimate</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => openNew("invoice")}>New invoice</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => openNew("materials")}>New material order</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setMaterialTemplateOpen(true)}>
+          New material order from template
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => openNew("interaction")}>New interaction</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => openNew("expense")}>New expense</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ) : null;
+
   return (
-    <div className={cn("mx-auto w-full max-w-xl", className)}>
-      <div className="mb-3 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          {job.code ? (
-            <p className="mb-1">
-              <RecordCode code={job.code} className="text-xs" />
-            </p>
-          ) : null}
-          <h1
-            id="job-window-title"
-            className="font-heading text-2xl leading-tight font-medium text-balance"
+    <div className={cn("flex h-full min-h-0 flex-col bg-background", className)}>
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 sm:px-5">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          {job.code ? <RecordCode code={job.code} className="text-xs" /> : null}
+          <Select
+            value={job.status}
+            disabled={deleted}
+            onValueChange={(value) => {
+              if (!value || deleted) return;
+              patch({ status: value as JobStatus });
+              toast.success("Job status updated.");
+            }}
+            items={JOB_STATUSES.map((status) => ({
+              value: status,
+              label: JOB_STATUS_LABELS[status],
+            }))}
           >
-            {job.name}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {primary ? (
-              <Link href={`/contacts?contact=${primary.id}`} className="hover:underline">
-                {primary.name}
-              </Link>
-            ) : client ? (
-              <Link href={`/clients/${client.id}`} className="hover:underline">
-                {client.name}
-              </Link>
-            ) : (
-              crm.customerName(job)
-            )}
-          </p>
-        </div>
-        <p className="font-heading text-2xl leading-none font-medium tabular-nums">
-          {formatCurrencyFull(
-            boardValue(
-              job,
-              opportunity,
-              acceptedAmountForJob(job, crm.estimates, crm.estimateLines, workMarket(job, opportunity)),
-            ),
-          )}
-        </p>
-      </div>
-      {primary?.phone || !deleted ? (
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          {!deleted ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={estimatePending || materialPending}
-                    aria-label="Create on this job"
-                  />
+            <SelectTrigger className={pillSelect}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {JOB_STATUSES.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {JOB_STATUS_LABELS[status]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={job.market || "residential"}
+            onValueChange={(value) => {
+              const market = value as Job["market"];
+              if (market !== "residential" && market !== "commercial") return;
+              patch({ market });
+              if (opportunity && opportunity.market !== market) {
+                void crm.updateOpportunity(opportunity.id, { market });
+              }
+              if (market === "residential") {
+                for (const estimate of crm.estimates.filter(
+                  (item) =>
+                    item.taxRate !== 0 &&
+                    (item.jobId === job.id ||
+                      (job.opportunityId && item.opportunityId === job.opportunityId)),
+                )) {
+                  void crm.updateEstimate(estimate.id, { taxRate: 0 });
                 }
-              >
-                <Plus data-icon="inline-start" />
-                {estimatePending || materialPending ? "Opening…" : "New"}
-                <ChevronDown data-icon="inline-end" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-44">
-                <DropdownMenuItem onClick={() => openNew("estimate")}>
-                  New estimate
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => openNew("invoice")}>
-                  New invoice
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => openNew("materials")}>
-                  New material order
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setMaterialTemplateOpen(true)}>
-                  New material order from template
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => openNew("interaction")}>
-                  New interaction
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => openNew("expense")}>
-                  New expense
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
+              }
+            }}
+            items={[
+              { value: "residential", label: JOB_MARKET_LABELS.residential },
+              { value: "commercial", label: JOB_MARKET_LABELS.commercial },
+            ]}
+          >
+            <SelectTrigger className={pillSelect}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="residential">{JOB_MARKET_LABELS.residential}</SelectItem>
+              <SelectItem value="commercial">{JOB_MARKET_LABELS.commercial}</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={job.projectType || undefined}
+            onValueChange={(value) => {
+              if (value) patch({ projectType: value as ProjectType });
+            }}
+            items={PROJECT_TYPES.map((type) => ({
+              value: type,
+              label: PROJECT_TYPE_LABELS[type],
+            }))}
+          >
+            <SelectTrigger className={cn(pillSelect, !job.projectType && "text-muted-foreground")}>
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              {PROJECT_TYPES.map((type) => (
+                <SelectItem key={type} value={type}>
+                  {PROJECT_TYPE_LABELS[type]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {primary?.phone ? (
             <Button
               nativeButton={false}
               variant="outline"
               size="sm"
+              className="rounded-full"
               render={<Link href={`/messages?job=${job.id}&contact=${primary.id}`} />}
             >
-              <MessageSquare data-icon="inline-start" />
               Text homeowner
             </Button>
           ) : null}
-          {primary?.email ? (
-            <Button
-              nativeButton={false}
-              variant="outline"
-              size="sm"
-              render={<Link href={mailHref({ job: job.id, contact: primary.id })} />}
-            >
-              <Mail data-icon="inline-start" />
-              Mail
-            </Button>
-          ) : (
-            <Button
-              nativeButton={false}
-              variant="outline"
-              size="sm"
-              render={<Link href={mailHref({ job: job.id })} />}
-            >
-              <Mail data-icon="inline-start" />
-              Mail
-            </Button>
-          )}
-        </div>
-      ) : null}
-
-      {heroOpen ? (
-        <div className="relative overflow-hidden border bg-muted">
-          {hero ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={hero.imageUrl}
-              alt={hero.caption || job.name}
-              className="aspect-[16/9] w-full object-cover"
-            />
-          ) : (
-            <button
-              type="button"
-              onClick={() => setPhotoOpen(true)}
-              className="flex aspect-[16/9] w-full flex-col items-center justify-center gap-2 text-muted-foreground"
-            >
-              <ImageIcon className="size-8" />
-              <span className="text-sm">Add a job-site photo</span>
-            </button>
-          )}
-          {hero && job.primaryPhotoId === hero.id ? (
-            <span className="absolute bottom-3 left-3 bg-background/90 px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase">
-              Primary
-            </span>
-          ) : null}
           <Button
-            variant="secondary"
-            size="icon"
-            className="absolute top-3 right-3 size-8 bg-background/90"
-            onClick={() => setHeroOpen(false)}
-            aria-label="Collapse photo"
+            nativeButton={false}
+            variant="outline"
+            size="sm"
+            className="rounded-full"
+            render={<Link href={mailHref({ job: job.id, contact: primary?.id })} />}
           >
-            <ChevronsRight className="size-4" />
+            Mail
           </Button>
-        </div>
-      ) : (
-        <div className="flex justify-end border-x border-t px-3 py-2">
-          <Button variant="ghost" size="icon" className="size-8" onClick={() => setHeroOpen(true)} aria-label="Show photo">
-            <ChevronsRight className="size-4 rotate-180" />
-          </Button>
-        </div>
-      )}
-
-      <div className="flex items-start justify-between gap-3 border px-4 py-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-            Address
-          </p>
-          <p className="mt-1 text-sm leading-snug">{address || "Add a job-site address"}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-0.5">
-          {address ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              nativeButton={false}
-              render={<a href={mapsUrl(address)} target="_blank" rel="noreferrer" />}
-              aria-label="Open in maps"
-            >
-              <MapPin className="size-4" />
+          {newMenu}
+          {onClose ? (
+            <Button type="button" variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close">
+              <XIcon />
             </Button>
           ) : null}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            onClick={() => copyText(address, "Address")}
-            aria-label="Copy address"
-            disabled={!address}
-          >
-            <Copy className="size-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8"
-            onClick={() => {
-              setStreet(job.street);
-              setCity(job.city);
-              setState(job.state);
-              setPostalCode(job.postalCode);
-              setAddressOpen(true);
-            }}
-            aria-label="Edit address"
-          >
-            <Pencil className="size-4" />
-          </Button>
-          {canTrash && deleted ? (
+        </div>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+
+      <div className="grid gap-8 px-4 py-5 sm:px-6 lg:grid-cols-[19.5rem_minmax(0,1fr)] lg:gap-10">
+        <aside className="min-w-0 space-y-5">
+          <div>
+            <h1
+              id="job-window-title"
+              className="font-heading text-2xl leading-tight font-medium text-balance"
+            >
+              {job.name}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {cityLine || address || "Add a job-site address"}
+            </p>
+          </div>
+
+          <div className="relative overflow-hidden rounded-md border bg-muted">
+            {shownPhoto ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={shownPhoto.imageUrl}
+                alt={shownPhoto.caption || job.name}
+                className="aspect-[16/10] w-full object-cover"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setPhotoOpen(true)}
+                className="flex aspect-[16/10] w-full flex-col items-center justify-center gap-2 text-muted-foreground"
+              >
+                <ImageIcon className="size-8" />
+                <span className="text-sm">Add a job-site photo</span>
+              </button>
+            )}
+            {shownPhoto && job.primaryPhotoId === shownPhoto.id ? (
+              <span className="absolute bottom-3 left-3 rounded-sm bg-background/90 px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase">
+                Primary
+              </span>
+            ) : null}
+            {photos.length > 0 ? (
+              <span className="absolute right-3 bottom-3 rounded-sm bg-background/90 px-2 py-0.5 text-[11px] text-muted-foreground">
+                {photos.length} photo{photos.length === 1 ? "" : "s"}
+              </span>
+            ) : null}
+            {photos.length > 1 ? (
+              <>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="absolute top-1/2 left-2 size-7 -translate-y-1/2 bg-background/90"
+                  onClick={() => setPhotoOffset((offset) => offset - 1)}
+                  aria-label="Previous photo"
+                >
+                  <ChevronLeft className="size-4" />
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  className="absolute top-1/2 right-2 size-7 -translate-y-1/2 bg-background/90"
+                  onClick={() => setPhotoOffset((offset) => offset + 1)}
+                  aria-label="Next photo"
+                >
+                  <ChevronRight className="size-4" />
+                </Button>
+              </>
+            ) : null}
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
             <Button
-              variant="ghost"
-              size="icon"
-              className="size-8"
-              disabled={restoring}
+              variant="outline"
+              size="sm"
+              className="h-8 px-2"
+              disabled={!address}
+              nativeButton={false}
+              render={address ? <a href={mapsUrl(address)} target="_blank" rel="noreferrer" /> : undefined}
+            >
+              <MapPin data-icon="inline-start" />
+              Map
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-2"
+              onClick={() => copyText(address, "Address")}
+              disabled={!address}
+            >
+              <Copy data-icon="inline-start" />
+              Copy
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-2"
               onClick={() => {
-                setRestoring(true);
-                void crm.restoreJob(job.id).then((ok) => {
-                  setRestoring(false);
-                  if (ok) toast.success(`${job.code || job.name} is back on the board.`);
-                });
+                setStreet(job.street);
+                setCity(job.city);
+                setState(job.state);
+                setPostalCode(job.postalCode);
+                setAddressOpen(true);
               }}
-              aria-label="Restore job"
             >
-              <RotateCcw className="size-4" />
+              <Pencil data-icon="inline-start" />
+              Edit
             </Button>
+          </div>
+          {canTrash ? (
+            <div className="flex justify-end">
+              {deleted ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={restoring}
+                  onClick={() => {
+                    setRestoring(true);
+                    void crm.restoreJob(job.id).then((ok) => {
+                      setRestoring(false);
+                      if (ok) toast.success(`${job.code || job.name} is back on the board.`);
+                    });
+                  }}
+                >
+                  <RotateCcw data-icon="inline-start" />
+                  Restore
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => setDeleteOpen(true)}
+                >
+                  <Trash2 data-icon="inline-start" />
+                  Delete
+                </Button>
+              )}
+            </div>
           ) : null}
-          {canTrash && !deleted ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => setDeleteOpen(true)}
-              aria-label="Delete job"
-            >
-              <Trash2 className="size-4" />
-            </Button>
-          ) : null}
-        </div>
-      </div>
 
+          <section>
+            <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+              Homeowner
+            </p>
+            <div className="flex items-start justify-between gap-3 rounded-md border bg-card p-3">
+              <div className="min-w-0">
+                <Link
+                  href={primary ? `/contacts?contact=${primary.id}` : client ? `/clients/${client.id}` : "/contacts"}
+                  className="text-sm font-medium hover:underline"
+                >
+                  {primary?.name || client?.name || crm.customerName(job) || "Add a homeowner"}
+                </Link>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {primary?.phone ? formatPhone(primary.phone) : "No phone"}
+                  {primary ? " · Primary" : ""}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center">
+                {primary?.phone ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    nativeButton={false}
+                    render={<a href={`tel:${primary.phone}`} />}
+                    aria-label={`Call ${primary.name}`}
+                  >
+                    <Phone />
+                  </Button>
+                ) : null}
+                {primary?.phone ? (
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    nativeButton={false}
+                    render={<Link href={`/messages?job=${job.id}&contact=${primary.id}`} />}
+                    aria-label={`Text ${primary.name}`}
+                  >
+                    <MessageSquare />
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <p className="mb-1 text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+              Details
+            </p>
+            <DetailRow label="Seed">
+              <Select
+                value={job.leadSource || undefined}
+                onValueChange={(value) => {
+                  if (value) patch({ leadSource: value as LeadSource });
+                }}
+                items={leadSourceChoices(job.leadSource).map((source) => ({
+                  value: source,
+                  label: leadSourceLabel(source),
+                }))}
+              >
+                <SelectTrigger className={cn(quietSelect, !job.leadSource && "text-muted-foreground")}>
+                  <SelectValue placeholder="How they found you" />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {leadSourceChoices(job.leadSource).map((source) => (
+                    <SelectItem key={source} value={source}>
+                      {leadSourceLabel(source)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </DetailRow>
+            <DetailRow label="Sales rep">
+              <Select
+                value={job.salesRep || undefined}
+                onValueChange={(value) => {
+                  if (value) patch({ salesRep: String(value) });
+                }}
+                items={crm.teamMembers.map((person) => ({ value: person, label: person }))}
+              >
+                <SelectTrigger className={cn(quietSelect, !job.salesRep && "text-muted-foreground")}>
+                  <SelectValue placeholder="Add a sales rep" />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {crm.teamMembers.map((person) => (
+                    <SelectItem key={person} value={person}>
+                      {person}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </DetailRow>
+            <DetailRow label="Assigned">
+              <PeopleChips
+                names={job.assigned}
+                options={crm.teamMembers}
+                empty="Add crew"
+                onRemove={(name) => patch(assignedCrewPatch(job.assigned.filter((item) => item !== name), crm.staff))}
+                onAdd={(name) => patch(assignedCrewPatch([...job.assigned, name], crm.staff))}
+              />
+            </DetailRow>
+            <DetailRow label="Start">
+              <Input
+                type="date"
+                value={job.startDate?.slice(0, 10) ?? ""}
+                onChange={(event) => patch({ startDate: event.target.value })}
+                className="h-7 border-0 bg-transparent px-0 text-right shadow-none"
+              />
+            </DetailRow>
+            <DetailRow label="End">
+              <Input
+                type="date"
+                value={job.substantialCompletion?.slice(0, 10) ?? ""}
+                onChange={(event) => patch({ substantialCompletion: event.target.value || null })}
+                className="h-7 border-0 bg-transparent px-0 text-right shadow-none"
+              />
+            </DetailRow>
+            <DetailRow label="Subcontractor">
+              <PeopleChips
+                names={job.subcontractorIds.map((id) => crm.getContact(id)?.name ?? "").filter(Boolean)}
+                options={tradeOptions.map((contact) => contact.name)}
+                empty="Add a trade"
+                onRemove={(name) => {
+                  const contact = crm.contacts.find((item) => item.name === name);
+                  if (contact) {
+                    patch({
+                      subcontractorIds: job.subcontractorIds.filter((id) => id !== contact.id),
+                    });
+                  }
+                }}
+                onAdd={(name) => {
+                  const contact = crm.contacts.find((item) => item.name === name);
+                  if (contact) {
+                    patch({ subcontractorIds: uniqueIds([...job.subcontractorIds, contact.id]) });
+                  }
+                }}
+              />
+            </DetailRow>
+            <DetailRow label="Primary">
+              <Select
+                value={job.primaryContactId || undefined}
+                disabled={deleted || primaryHomeownerOptions.length === 0}
+                onValueChange={(value) => {
+                  if (!value || deleted) return;
+                  setPrimaryHomeowner(String(value));
+                }}
+                items={primaryHomeownerOptions.map((contact) => ({
+                  value: contact.id,
+                  label: contact.name,
+                }))}
+              >
+                <SelectTrigger className={cn(quietSelect, !job.primaryContactId && "text-muted-foreground")}>
+                  <SelectValue placeholder="Choose a homeowner" />
+                </SelectTrigger>
+                <SelectContent align="end" className="max-h-72">
+                  {primaryHomeownerOptions.map((contact) => (
+                    <SelectItem key={contact.id} value={contact.id}>
+                      {contact.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </DetailRow>
+            {opportunity ? (
+              <DetailRow label="Came from">
+                <Link href={`/opportunities/${opportunity.id}`} className="text-primary hover:underline">
+                  {opportunity.code ? `${opportunity.code} · ` : ""}
+                  {opportunity.name}
+                </Link>
+              </DetailRow>
+            ) : null}
+          </section>
+
+          <section>
+            <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+              Tags
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {job.tags.map((tag) => (
+                <Badge key={tag} variant="secondary" className="gap-1 pr-1">
+                  {tag}
+                  <button
+                    type="button"
+                    className="rounded-sm p-0.5 hover:bg-foreground/10"
+                    onClick={() => patch({ tags: job.tags.filter((item) => item !== tag) })}
+                    aria-label={`Remove ${tag}`}
+                  >
+                    <XIcon className="size-3" />
+                  </button>
+                </Badge>
+              ))}
+              <Input
+                value={tagDraft}
+                onChange={(event) => setTagDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    addTag();
+                  }
+                }}
+                placeholder="Add"
+                className="h-7 w-20"
+              />
+            </div>
+          </section>
+        </aside>
+
+        <div className="min-w-0">
       {deleted ? (
         <div className="border border-t-0 bg-muted/60 px-4 py-3">
           <p className="text-sm font-medium">This job is in Deleted.</p>
@@ -724,328 +1053,116 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
           if (typeof value === "string") setJobTab(parseJobTab(value));
         }}
       >
-        <TabsList variant="line" className="w-full justify-start overflow-x-auto rounded-none border-x px-2">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="photos">Photos</TabsTrigger>
-          <TabsTrigger value="files">Files</TabsTrigger>
-          <TabsTrigger value="financials">Financials</TabsTrigger>
-          <TabsTrigger value="paper">Paper</TabsTrigger>
-          <TabsTrigger value="fields">Custom fields</TabsTrigger>
-        </TabsList>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <TabsList variant="line" className="h-auto w-full justify-start overflow-x-auto rounded-none bg-transparent p-0">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="photos">
+              Photos
+              <span className="ml-1 text-muted-foreground">{photos.length}</span>
+            </TabsTrigger>
+            <TabsTrigger value="files">
+              Files
+              <span className="ml-1 text-muted-foreground">{fileCount}</span>
+            </TabsTrigger>
+            <TabsTrigger value="paper">
+              Paper
+              <span className="ml-1 text-muted-foreground">{estimates.length + invoices.length}</span>
+            </TabsTrigger>
+            <TabsTrigger value="financials">Financials</TabsTrigger>
+            <TabsTrigger value="fields">Custom fields</TabsTrigger>
+          </TabsList>
+          <p className="shrink-0 text-right text-sm tabular-nums">
+            <span className="font-medium">{formatCurrencyFull(books.invoiced)}</span>
+            <span className="text-muted-foreground"> invoiced</span>
+            <span className="mx-1.5 text-muted-foreground">·</span>
+            <span className="text-muted-foreground">est. draft {formatCurrencyFull(draftEstimateTotal)}</span>
+          </p>
+        </div>
 
-        <TabsContent value="overview" className="border-x border-b">
-          <JobSection title="Description">
+        <TabsContent value="overview" className="mt-0">
+          <div className="mb-6 grid gap-3 sm:grid-cols-3">
+            <SummaryCard
+              eyebrow="Estimate"
+              title={featuredEstimate?.number ?? "No estimate yet"}
+              href={featuredEstimate ? `/estimates/${featuredEstimate.id}` : undefined}
+            >
+              {featuredEstimate ? (
+                <>
+                  <p>
+                    {ESTIMATE_STATUS_LABELS[featuredEstimate.status]}
+                    {" · "}
+                    {formatCurrencyFull(
+                      amountForEstimate(
+                        featuredEstimate,
+                        crm.estimateLines,
+                        workMarket(job, opportunity),
+                      ),
+                    )}
+                  </p>
+                  <p className="mt-1">
+                    {hasEstimateSignature(featuredEstimate)
+                      ? `Signed by ${featuredEstimate.signatureName}`
+                      : featuredEstimate.status === "declined"
+                        ? "Declined"
+                        : "Open to collect a signature"}
+                  </p>
+                </>
+              ) : (
+                <p>Start a proposal from New.</p>
+              )}
+            </SummaryCard>
+            <SummaryCard
+              eyebrow="Files"
+              title={
+                fileCount > 0
+                  ? `${fileCount} uploaded`
+                  : "No files yet"
+              }
+              onClick={() => setJobTab("files")}
+            >
+              {latestPage ? (
+                <p>
+                  {latestPage.title || "Untitled page"}
+                  {PAGE_TEMPLATE_OPTIONS.find((option) => option.id === latestPage.template)
+                    ? ` · ${PAGE_TEMPLATE_OPTIONS.find((option) => option.id === latestPage.template)?.title}`
+                    : ""}
+                </p>
+              ) : jobFiles[0] ? (
+                <p>{jobFiles[0].name}</p>
+              ) : (
+                <p>Photo reports and job files land here.</p>
+              )}
+            </SummaryCard>
+            <SummaryCard
+              eyebrow="Next step"
+              title={nextStepTitle}
+              onClick={() => setJobTab("paper")}
+            >
+              <p>This week</p>
+              <p className="mt-1">{nextStepDate}</p>
+            </SummaryCard>
+          </div>
+
+          <section className="mb-6">
+            <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+              Description
+            </p>
             <Textarea
               defaultValue={job.description}
               placeholder="Add a description"
               rows={3}
+              className="rounded-md"
               onBlur={(event) => {
                 if (event.target.value !== job.description) {
                   patch({ description: event.target.value });
                 }
               }}
             />
-          </JobSection>
-
-          <JobSection title="Details">
-            <FieldRow icon={Calendar} label="Status">
-              <Select
-                value={job.status}
-                disabled={deleted}
-                onValueChange={(value) => {
-                  if (!value || deleted) return;
-                  patch({ status: value as JobStatus });
-                  toast.success("Job status updated.");
-                }}
-                items={JOB_STATUSES.map((status) => ({
-                  value: status,
-                  label: JOB_STATUS_LABELS[status],
-                }))}
-              >
-                <SelectTrigger className={quietSelect}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  {JOB_STATUSES.map((status) => (
-                    <SelectItem key={status} value={status}>
-                      {JOB_STATUS_LABELS[status]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FieldRow>
-            <FieldRow icon={Building2} label="Residential or commercial">
-              <Select
-                value={job.market || "residential"}
-                onValueChange={(value) => {
-                  const market = value as Job["market"];
-                  if (market !== "residential" && market !== "commercial") return;
-                  patch({ market });
-                  if (opportunity && opportunity.market !== market) {
-                    void crm.updateOpportunity(opportunity.id, { market });
-                  }
-                  if (market === "residential") {
-                    for (const estimate of crm.estimates.filter(
-                      (item) =>
-                        item.taxRate !== 0 &&
-                        (item.jobId === job.id ||
-                          (job.opportunityId && item.opportunityId === job.opportunityId)),
-                    )) {
-                      void crm.updateEstimate(estimate.id, { taxRate: 0 });
-                    }
-                  }
-                }}
-                items={[
-                  { value: "residential", label: "Residential" },
-                  { value: "commercial", label: "Commercial" },
-                ]}
-              >
-                <SelectTrigger className={quietSelect}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  <SelectItem value="residential">Residential</SelectItem>
-                  <SelectItem value="commercial">Commercial</SelectItem>
-                </SelectContent>
-              </Select>
-            </FieldRow>
-            <FieldRow icon={Briefcase} label="Type">
-              <Select
-                value={job.projectType || undefined}
-                onValueChange={(value) => {
-                  if (value) patch({ projectType: value as ProjectType });
-                }}
-                items={PROJECT_TYPES.map((type) => ({
-                  value: type,
-                  label: PROJECT_TYPE_LABELS[type],
-                }))}
-              >
-                <SelectTrigger className={cn(quietSelect, !job.projectType && "text-muted-foreground")}>
-                  <SelectValue placeholder="Add a type" />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  {PROJECT_TYPES.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {PROJECT_TYPE_LABELS[type]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FieldRow>
-            <FieldRow icon={ExternalLink} label="Seed">
-              <Select
-                value={job.leadSource || undefined}
-                onValueChange={(value) => {
-                  if (value) patch({ leadSource: value as LeadSource });
-                }}
-                items={leadSourceChoices(job.leadSource).map((source) => ({
-                  value: source,
-                  label: leadSourceLabel(source),
-                }))}
-              >
-                <SelectTrigger className={cn(quietSelect, !job.leadSource && "text-muted-foreground")}>
-                  <SelectValue placeholder="How they found you" />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  {leadSourceChoices(job.leadSource).map((source) => (
-                    <SelectItem key={source} value={source}>
-                      {leadSourceLabel(source)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FieldRow>
-            <FieldRow icon={User} label="Primary homeowner">
-              <Select
-                value={job.primaryContactId || undefined}
-                disabled={deleted || primaryHomeownerOptions.length === 0}
-                onValueChange={(value) => {
-                  if (!value || deleted) return;
-                  setPrimaryHomeowner(String(value));
-                }}
-                items={primaryHomeownerOptions.map((contact) => ({
-                  value: contact.id,
-                  label: contact.name,
-                }))}
-              >
-                <SelectTrigger
-                  className={cn(quietSelect, !job.primaryContactId && "text-muted-foreground")}
-                >
-                  <SelectValue placeholder="Choose a homeowner" />
-                </SelectTrigger>
-                <SelectContent align="end" className="max-h-72">
-                  {primaryHomeownerOptions.map((contact) => (
-                    <SelectItem key={contact.id} value={contact.id}>
-                      {contact.name}
-                      {contact.title ? (
-                        <span className="ml-2 text-xs text-muted-foreground">{contact.title}</span>
-                      ) : null}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FieldRow>
-            <FieldRow icon={Link2} label="Client portal">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-7"
-                disabled={deleted || !job.primaryContactId}
-                onClick={() => {
-                  if (!job.primaryContactId) {
-                    toast.error("Choose a primary homeowner first.");
-                    return;
-                  }
-                  void (async () => {
-                    const invite = await crm.createPortalInvite({
-                      contactId: job.primaryContactId!,
-                      jobId: job.id,
-                    });
-                    if (!invite) return;
-                    try {
-                      await navigator.clipboard.writeText(invite.url);
-                      toast.success("Portal link copied.");
-                    } catch {
-                      toast.message("Portal link ready", { description: invite.url });
-                    }
-                  })();
-                }}
-              >
-                <Copy className="size-3.5" />
-                Copy invite link
-              </Button>
-            </FieldRow>
-            <FieldRow icon={User} label="Assigned">
-              <PeopleChips
-                names={job.assigned}
-                options={crm.teamMembers}
-                empty="Add crew"
-                onRemove={(name) => patch(assignedCrewPatch(job.assigned.filter((item) => item !== name), crm.staff))}
-                onAdd={(name) => patch(assignedCrewPatch([...job.assigned, name], crm.staff))}
-              />
-            </FieldRow>
-            <FieldRow icon={Building2} label="Company">
-              <span>{crm.company.name}</span>
-            </FieldRow>
-            <FieldRow icon={Calendar} label="Start date">
-              <Input
-                type="date"
-                value={job.startDate?.slice(0, 10) ?? ""}
-                onChange={(event) => patch({ startDate: event.target.value })}
-                className="h-7 border-0 bg-transparent px-0 text-right shadow-none"
-              />
-            </FieldRow>
-            <FieldRow icon={Calendar} label="End date">
-              <Input
-                type="date"
-                value={job.substantialCompletion?.slice(0, 10) ?? ""}
-                onChange={(event) => patch({ substantialCompletion: event.target.value || null })}
-                className="h-7 border-0 bg-transparent px-0 text-right shadow-none"
-              />
-            </FieldRow>
-            <FieldRow icon={Star} label="Sales rep">
-              <Select
-                value={job.salesRep || undefined}
-                onValueChange={(value) => {
-                  if (value) patch({ salesRep: String(value) });
-                }}
-                items={crm.teamMembers.map((person) => ({ value: person, label: person }))}
-              >
-                <SelectTrigger className={cn(quietSelect, !job.salesRep && "text-muted-foreground")}>
-                  <SelectValue placeholder="Add a sales rep" />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  {crm.teamMembers.map((person) => (
-                    <SelectItem key={person} value={person}>
-                      {person}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FieldRow>
-            <FieldRow icon={Users} label="Subcontractors">
-              <PeopleChips
-                names={job.subcontractorIds.map((id) => crm.getContact(id)?.name ?? "").filter(Boolean)}
-                options={tradeOptions.map((contact) => contact.name)}
-                empty="Add a trade"
-                onRemove={(name) => {
-                  const contact = crm.contacts.find((item) => item.name === name);
-                  if (contact) {
-                    patch({
-                      subcontractorIds: job.subcontractorIds.filter((id) => id !== contact.id),
-                    });
-                  }
-                }}
-                onAdd={(name) => {
-                  const contact = crm.contacts.find((item) => item.name === name);
-                  if (contact) {
-                    patch({ subcontractorIds: uniqueIds([...job.subcontractorIds, contact.id]) });
-                  }
-                }}
-              />
-            </FieldRow>
-            <FieldRow icon={ImageIcon} label="Job photos">
-              <button
-                type="button"
-                className="inline-flex items-center justify-end gap-2"
-                onClick={() => setPhotoOpen(true)}
-              >
-                {photos.length > 0 ? (
-                  <span>{photos.length} linked</span>
-                ) : (
-                  <>
-                    <span className="size-1.5 rounded-full bg-destructive" />
-                    <span className="text-muted-foreground">Not linked</span>
-                  </>
-                )}
-              </button>
-            </FieldRow>
-            {opportunity ? (
-              <FieldRow icon={Briefcase} label="Came from">
-                <Link href={`/opportunities/${opportunity.id}`} className="text-primary hover:underline">
-                  {opportunity.code ? `${opportunity.code} · ` : ""}
-                  {opportunity.name}
-                </Link>
-              </FieldRow>
-            ) : null}
-            {job.leadSource ? (
-              <p className="sr-only">{leadSourceLabel(job.leadSource)}</p>
-            ) : null}
-          </JobSection>
-
-          <JobSection title="Tags">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {job.tags.map((tag) => (
-                <Badge key={tag} variant="secondary" className="gap-1 pr-1">
-                  {tag}
-                  <button
-                    type="button"
-                    className="rounded-sm p-0.5 hover:bg-foreground/10"
-                    onClick={() => patch({ tags: job.tags.filter((item) => item !== tag) })}
-                    aria-label={`Remove ${tag}`}
-                  >
-                    <XIcon className="size-3" />
-                  </button>
-                </Badge>
-              ))}
-              <Input
-                value={tagDraft}
-                onChange={(event) => setTagDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    addTag();
-                  }
-                }}
-                placeholder="Add a tag"
-                className="h-7 w-28"
-              />
-            </div>
-          </JobSection>
+          </section>
 
           <JobSection
             title="Related contacts"
+            defaultOpen={false}
             actions={
               relatedOptions.length > 0 ? (
                 <DropdownMenu>
@@ -1170,8 +1287,8 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
             </ul>
           </JobSection>
 
-          <div className="px-4 py-4" id="job-activity">
-            <p className="mb-3 text-[11px] font-semibold tracking-[0.16em] text-foreground uppercase">
+          <section className="pt-2" id="job-activity">
+            <p className="mb-3 text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
               Activity
             </p>
             {jobMail.length > 0 ? (
@@ -1182,7 +1299,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                     <li key={message.id}>
                       <Link
                         href={mailHref({ thread: message.threadId || message.id, job: job.id })}
-                        className="block border px-3 py-2 hover:bg-muted/50"
+                        className="block rounded-md border px-3 py-2 hover:bg-muted/50"
                       >
                         <span className="flex items-baseline justify-between gap-2">
                           <span className="truncate text-sm font-medium">
@@ -1201,15 +1318,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                   ))}
                 </ul>
               </div>
-            ) : (
-              <p className="mb-4 text-sm text-muted-foreground">
-                No Gmail tagged to this job yet.{" "}
-                <Link href={mailHref({ job: job.id, contact: primary?.id })} className="font-medium hover:underline">
-                  Open Mail
-                </Link>{" "}
-                to tag a thread.
-              </p>
-            )}
+            ) : null}
             <ActivityComposer entityType="job" entityId={job.id} focusRequest={activityFocus} />
             <div className="mt-4">
               <ActivityList
@@ -1217,10 +1326,10 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
                 empty="No field notes yet. Log a call, text, or what the crew needs to see."
               />
             </div>
-          </div>
+          </section>
         </TabsContent>
 
-        <TabsContent value="photos" className="border-x border-b p-4">
+        <TabsContent value="photos" className="mt-0">
           <JobPhotosPanel
             jobId={job.id}
             disabled={deleted}
@@ -1228,7 +1337,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
           />
         </TabsContent>
 
-        <TabsContent value="files" className="space-y-8 border-x border-b p-4">
+        <TabsContent value="files" className="mt-0 space-y-8">
           <section>
             <div className="mb-3">
               <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Invoices, receipts, and payments</p>
@@ -1333,11 +1442,11 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
           </section>
         </TabsContent>
 
-        <TabsContent value="financials" className="border-x border-b p-4">
+        <TabsContent value="financials" className="mt-0">
           <JobFinancials job={job} />
         </TabsContent>
 
-        <TabsContent value="paper" className="space-y-4 border-x border-b p-4">
+        <TabsContent value="paper" className="mt-0 space-y-4">
           {tasks.length > 0 ? (
             <div>
               <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">Tasks</p>
@@ -1501,7 +1610,7 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
           </div>
         </TabsContent>
 
-        <TabsContent value="fields" className="border-x border-b p-4">
+        <TabsContent value="fields" className="mt-0">
           {visibleJobCustomFields(job.customFields).length === 0 ? (
             <p className="mb-4 text-sm text-muted-foreground">
               Claim numbers, deductibles, HOA notes — fields that do not belong on every job.
@@ -1557,6 +1666,9 @@ export function JobRecord({ job, className }: { job: Job; className?: string }) 
           </div>
         </TabsContent>
       </Tabs>
+        </div>
+      </div>
+      </div>
 
       <Dialog open={addressOpen} onOpenChange={setAddressOpen}>
         <DialogContent className="sm:max-w-md">
