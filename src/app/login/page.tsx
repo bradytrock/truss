@@ -6,8 +6,10 @@ import { Eye, EyeOff } from "lucide-react";
 import { Suspense, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { TheRoofingCrmMark } from "@/components/brand";
+import { AuthWelcomePreview } from "@/components/welcome-screen";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { createClient } from "@/lib/supabase/client";
+import { isWelcomePendingMetadata, queueFirstWelcome } from "@/lib/welcome";
 
 function LoginForm() {
   const router = useRouter();
@@ -25,14 +27,22 @@ function LoginForm() {
     setPending(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         const message = authErrorMessage(error);
         setFormError(message);
         toast.error(message);
         return;
       }
-      router.replace(next);
+      if (isWelcomePendingMetadata(data.user?.user_metadata)) {
+        queueFirstWelcome();
+        const dest = next.startsWith("/") ? next : "/";
+        const url = new URL(dest, window.location.origin);
+        url.searchParams.set("welcome", "1");
+        router.replace(`${url.pathname}${url.search}`);
+      } else {
+        router.replace(next);
+      }
       router.refresh();
     } catch (error) {
       const message = authErrorMessage(error instanceof Error ? error.message : "Could not sign in.");
@@ -66,6 +76,7 @@ function LoginForm() {
 
   return (
     <div className="relative flex min-h-full flex-1 flex-col bg-[#1a1a1a] text-white">
+      <AuthWelcomePreview />
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-cover bg-center opacity-40"
@@ -75,16 +86,25 @@ function LoginForm() {
         }}
       />
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-black/55" />
+      <div
+        aria-hidden
+        className="auth-orb pointer-events-none absolute top-[-6rem] left-1/2 size-80 -translate-x-1/2 rounded-full bg-[#c8102e]/25 blur-3xl"
+      />
 
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-16">
         <div className="flex w-full max-w-[22rem] flex-col items-center">
-          <TheRoofingCrmMark className="size-7 text-[#c8102e]" />
-          <p className="font-script mt-4 text-center text-[2.35rem] leading-none text-white">
+          <TheRoofingCrmMark className="auth-fade size-7 text-[#c8102e]" />
+          <p
+            className="auth-rise font-script mt-4 text-center text-[2.35rem] leading-none text-white"
+            style={{ animationDelay: "90ms" }}
+          >
             Where Legacy Gets Built
           </p>
-          <h1 className="mt-7 text-[1.35rem] font-normal tracking-wide">Sign In</h1>
+          <h1 className="auth-rise mt-7 text-[1.35rem] font-normal tracking-wide" style={{ animationDelay: "180ms" }}>
+            Sign In
+          </h1>
 
-          <form onSubmit={onSubmit} className="mt-5 w-full space-y-3.5">
+          <form onSubmit={onSubmit} className="auth-rise mt-5 w-full space-y-3.5" style={{ animationDelay: "260ms" }}>
             {formError ? (
               <p className="text-center text-sm text-red-300">{formError}</p>
             ) : null}
@@ -130,7 +150,8 @@ function LoginForm() {
           <button
             type="button"
             onClick={onForgotPassword}
-            className="mt-5 text-sm text-white/90 hover:text-white"
+            className="auth-rise mt-5 text-sm text-white/90 hover:text-white"
+            style={{ animationDelay: "340ms" }}
           >
             Forgot Password
           </button>

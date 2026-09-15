@@ -60,6 +60,7 @@ import { SettingsMobileBar } from "@/components/settings-nav";
 import { AssistantPanel } from "@/components/assistant-panel";
 import { useStartEstimate } from "@/lib/start-estimate";
 import { StartEstimateDialogHost } from "@/components/start-estimate-button";
+import { FirstWelcomeHost } from "@/components/welcome-screen";
 
 type NavItem = { href: string; label: string };
 type NavSection = { id: string; label?: string; items: NavItem[] };
@@ -294,6 +295,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         onOpenChange={(open) => setCreate(open ? "payment" : null)}
       />
       <StartEstimateDialogHost flow={startEstimateFlow} />
+      <FirstWelcomeHost />
     </div>
   );
 }

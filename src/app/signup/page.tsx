@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Eye, EyeOff } from "lucide-react";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthFrame } from "@/components/auth-frame";
+import { AuthWelcomePreview } from "@/components/welcome-screen";
 import {
   isMissingAccountManagement,
   missingAccountManagementMessage,
@@ -17,6 +19,7 @@ import { authErrorMessage } from "@/lib/auth-errors";
 import { createClient } from "@/lib/supabase/client";
 import type { SeatRole } from "@/lib/types";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
+import { queueFirstWelcome, signupUserMetadata } from "@/lib/welcome";
 
 type InvitePreview = {
   company_id?: string;
@@ -81,6 +84,7 @@ function SignupForm() {
   const [title, setTitle] = useState("Company admin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [alreadySignedIn, setAlreadySignedIn] = useState(false);
 
@@ -125,6 +129,12 @@ function SignupForm() {
     };
   }, [inviteToken, router]);
 
+  function goHomeWithWelcome() {
+    queueFirstWelcome();
+    router.replace("/?welcome=1");
+    router.refresh();
+  }
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setFormError(null);
@@ -145,8 +155,7 @@ function SignupForm() {
           return;
         }
         toast.success(invite ? `Joined ${invite.company_name}` : "Joined company");
-        router.replace("/");
-        router.refresh();
+        goHomeWithWelcome();
         return;
       }
       const origin = window.location.origin;
@@ -155,12 +164,12 @@ function SignupForm() {
         password,
         options: {
           emailRedirectTo: `${origin}/auth/callback`,
-          data: {
-            full_name: fullName,
+          data: signupUserMetadata({
+            fullName,
             company: invite ? invite.company_name : company,
             title,
-            ...(inviteToken ? { invite_token: inviteToken } : {}),
-          },
+            inviteToken: inviteToken || undefined,
+          }),
         },
       });
       if (error) {
@@ -183,8 +192,7 @@ function SignupForm() {
             return;
           }
           toast.success(invite ? `Joined ${invite.company_name}` : "Signed in");
-          router.replace("/");
-          router.refresh();
+          goHomeWithWelcome();
           return;
         }
         const message = authErrorMessage(error);
@@ -202,8 +210,7 @@ function SignupForm() {
           }
           toast.success(invite ? `Joined ${invite.company_name}` : "Account created");
         }
-        router.replace("/");
-        router.refresh();
+        goHomeWithWelcome();
         return;
       }
       const message = invite
@@ -221,30 +228,38 @@ function SignupForm() {
   }
 
   const joining = Boolean(invite);
-  const titleText = joining ? `Join ${invite?.company_name}` : "Create your GC workspace";
+  const titleText = joining ? `Join ${invite?.company_name}` : "Create your workspace";
   const description = joining
     ? alreadySignedIn
       ? `You're already signed in. Join ${invite?.company_name} as ${invite?.email} — you will land on that company, not a new one.`
-      : `This invite is for ${invite?.email} as ${invite?.seat_title || SEAT_ROLE_LABELS[invite?.seat_role ?? "project_manager"]}. You will land on the existing company, not a new one.`
-    : "A company, your profile, and your seat are created in Postgres on first sign-in.";
+      : `This invite is for ${invite?.email} as ${invite?.seat_title || SEAT_ROLE_LABELS[invite?.seat_role ?? "project_manager"]}. Set a password and you are on the existing company.`
+    : "Name the company, add your seat, and you land on the desk. First sign-in opens a welcome with your logo.";
 
   return (
-    <AuthFrame title={titleText} description={description}>
-      <form onSubmit={onSubmit} className="grid gap-3">
+    <>
+      <AuthWelcomePreview
+        companyName={invite?.company_name || company || undefined}
+        firstName={fullName.split(/\s+/)[0]}
+      />
+      <AuthFrame title={titleText} description={description}>
+        <form onSubmit={onSubmit} className="grid gap-3">
           {inviteLoading ? (
-            <p className="text-sm text-muted-foreground">Looking up the invite…</p>
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span className="size-2 animate-pulse rounded-full bg-primary" />
+              Looking up the invite…
+            </p>
           ) : null}
           {inviteError ? (
-            <p className="border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <p className="auth-rise border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {inviteError}
             </p>
           ) : null}
           {formError ? (
-            <p className="border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            <p className="auth-rise border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {formError}
             </p>
           ) : null}
-          <div className="grid gap-1.5">
+          <div className="auth-rise grid gap-1.5" style={{ animationDelay: "120ms" }}>
             <Label htmlFor="name">Your name</Label>
             <Input
               id="name"
@@ -255,7 +270,7 @@ function SignupForm() {
             />
           </div>
           {joining ? (
-            <div className="grid gap-1.5">
+            <div className="auth-rise grid gap-1.5" style={{ animationDelay: "180ms" }}>
               <Label htmlFor="title">Title</Label>
               <Input
                 id="title"
@@ -265,7 +280,7 @@ function SignupForm() {
               />
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="auth-rise grid gap-3 sm:grid-cols-2" style={{ animationDelay: "180ms" }}>
               <div className="grid gap-1.5">
                 <Label htmlFor="company">Company</Label>
                 <Input
@@ -273,6 +288,7 @@ function SignupForm() {
                   value={company}
                   onChange={(event) => setCompany(event.target.value)}
                   required
+                  placeholder="Your company"
                 />
               </div>
               <div className="grid gap-1.5">
@@ -287,7 +303,7 @@ function SignupForm() {
               </div>
             </div>
           )}
-          <div className="grid gap-1.5">
+          <div className="auth-rise grid gap-1.5" style={{ animationDelay: "240ms" }}>
             <Label htmlFor="email">Email</Label>
             <Input
               id="email"
@@ -300,37 +316,51 @@ function SignupForm() {
             />
           </div>
           {alreadySignedIn && joining ? null : (
-          <div className="grid gap-1.5">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="new-password"
-              minLength={8}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required={!alreadySignedIn}
-            />
-          </div>
+            <div className="auth-rise grid gap-1.5" style={{ animationDelay: "300ms" }}>
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  minLength={8}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  required={!alreadySignedIn}
+                  className="pr-11"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((value) => !value)}
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
+            </div>
           )}
           <Button
             type="submit"
             nativeButton
+            className="auth-rise mt-1"
+            style={{ animationDelay: "360ms" }}
             disabled={pending || inviteLoading || Boolean(inviteToken && !invite)}
           >
             {pending ? "Working…" : joining ? "Join company" : "Create account"}
           </Button>
         </form>
-      <p className="mt-4 text-center text-sm text-muted-foreground">
-        Already on Truss?{" "}
-        <Link
-          href={inviteToken ? `/login?next=${encodeURIComponent(`/signup?invite=${inviteToken}`)}` : "/login"}
-          className="font-medium text-primary hover:underline"
-        >
-          Sign in
-        </Link>
-      </p>
-    </AuthFrame>
+        <p className="auth-rise mt-4 text-center text-sm text-muted-foreground" style={{ animationDelay: "420ms" }}>
+          Already on Truss?{" "}
+          <Link
+            href={inviteToken ? `/login?next=${encodeURIComponent(`/signup?invite=${inviteToken}`)}` : "/login"}
+            className="font-medium text-primary hover:underline"
+          >
+            Sign in
+          </Link>
+        </p>
+      </AuthFrame>
+    </>
   );
 }
 
