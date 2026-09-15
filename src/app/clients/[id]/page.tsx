@@ -9,7 +9,7 @@ import { RecordProperty } from "@/components/app-shell";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { JobStatusBadge, StageBadge, TypeBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
-import { formatCurrency, formatCurrencyFull } from "@/lib/format";
+import { formatCurrency, formatCurrencyFull, formatPhone } from "@/lib/format";
 import { CLIENT_TYPE_LABELS } from "@/lib/types";
 
 export default function ClientDetailPage() {
@@ -192,7 +192,7 @@ export default function ClientDetailPage() {
                         </a>
                       ) : null}
                       {contact.phone ? (
-                        <p className="text-xs text-muted-foreground">{contact.phone}</p>
+                        <p className="text-xs text-muted-foreground">{formatPhone(contact.phone)}</p>
                       ) : null}
                     </li>
                   ))}

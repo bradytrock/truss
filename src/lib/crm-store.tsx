@@ -275,7 +275,7 @@ import {
   type ReturningClientMatch,
   type ReturningClientNoticeKind,
 } from "@/lib/returning-client";
-import { looksLikePhone, toE164 } from "@/lib/phone";
+import { looksLikePhone, storedPhone, toE164 } from "@/lib/phone";
 import { resolveCustomerName, applyCoOwnerToEstimate, coOwnerContact, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage, missingPageShareMessage, isMissingPageShare, parsePageTemplate } from "@/lib/photo-report";
 import { canDeleteJobs, canLoginAs, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
@@ -3146,6 +3146,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const contact: Contact = {
         id: "",
         ...input,
+        phone: storedPhone(input.phone),
         listingWatchUrl: input.listingWatchUrl ?? "",
         listingWatchEnabled: Boolean(input.listingWatchEnabled),
         ownerStaffId: input.ownerStaffId || user.staffId,
@@ -3202,11 +3203,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const updateContact = useCallback(
     async (id: string, patch: Partial<Omit<Contact, "id">>, options?: { skipAudit?: boolean }) => {
       const before = state.contacts.find((contact) => contact.id === id);
+      const nextPatch = patch.phone !== undefined ? { ...patch, phone: storedPhone(patch.phone) } : patch;
       const apply = () =>
         setState((prev) => ({
           ...prev,
           contacts: prev.contacts.map((contact) =>
-            contact.id === id ? { ...contact, ...patch } : contact
+            contact.id === id ? { ...contact, ...nextPatch } : contact
           ),
         }));
       const finish = async (ok: boolean) => {
@@ -3216,7 +3218,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             entityId: id,
             action: "updated",
             before,
-            after: { ...before, ...patch },
+            after: { ...before, ...nextPatch },
             label: before.name,
           });
         }
@@ -3227,7 +3229,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         apply();
         return finish(true);
       }
-      const { error } = await supabase.from("contacts").update(contactPatch(patch)).eq("id", id);
+      const { error } = await supabase.from("contacts").update(contactPatch(nextPatch)).eq("id", id);
       if (error) {
         toast.error(
           isRequiredClientId(error) ? requiredClientIdMessage() : error.message || "Could not save the contact."
@@ -9572,7 +9574,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const settings: CompanySettings = {
         name,
         slug,
-        phone: next.phone.trim(),
+        phone: storedPhone(next.phone),
         email: next.email.trim(),
         website: next.website.trim(),
         street: next.street.trim(),
@@ -10089,7 +10091,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         teamId,
         initials: initialsFromName(name),
         email,
-        phone: input.phone?.trim() ?? "",
+        phone: storedPhone(input.phone),
         cardSlug: mintPersonCardSlug(
           name,
           "",
@@ -10184,7 +10186,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         name: patch.name !== undefined ? patch.name.trim() : current.name,
         title: patch.title !== undefined ? patch.title.trim() : current.title,
         email: patch.email !== undefined ? normalizeSeatEmail(patch.email) : current.email,
-        phone: patch.phone !== undefined ? patch.phone.trim() : current.phone,
+        phone: patch.phone !== undefined ? storedPhone(patch.phone) : current.phone,
         emailSignature:
           patch.emailSignature !== undefined ? patch.emailSignature.trim() : current.emailSignature,
         googleLocationId:

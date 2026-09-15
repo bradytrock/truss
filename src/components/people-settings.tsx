@@ -52,7 +52,9 @@ import {
   inviteSignupUrl,
   staffStatusLabel,
 } from "@/lib/accounts";
+import { PhoneInput } from "@/components/phone-input";
 import { formatDate, formatPhone, initials } from "@/lib/format";
+import { formatPhoneInput } from "@/lib/phone";
 import { copyText } from "@/lib/share";
 import { cardUrl } from "@/lib/card";
 import { mintPersonCardSlug } from "@/lib/card-slug";
@@ -639,12 +641,11 @@ function AddTeammateDialog({
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="seat-phone">Phone</Label>
-              <Input
+              <PhoneInput
                 id="seat-phone"
-                type="tel"
                 value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="(303) 555-0142"
+                onValueChange={setPhone}
+                placeholder="(214) 555-0142"
               />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -750,7 +751,7 @@ function EditProfileDialog({
     setName(member.name);
     setTitle(member.title);
     setEmail(member.email);
-    setPhone(member.phone);
+    setPhone(formatPhoneInput(member.phone));
     setCardSlug(member.cardSlug);
     setRole(member.role);
     setTeamId(member.teamId || NO_TEAM);
@@ -827,12 +828,11 @@ function EditProfileDialog({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="grid gap-1.5">
                 <Label htmlFor="profile-edit-phone">Phone</Label>
-                <Input
+                <PhoneInput
                   id="profile-edit-phone"
-                  type="tel"
                   value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
-                  placeholder="(303) 555-0142"
+                  onValueChange={setPhone}
+                  placeholder="(214) 555-0142"
                 />
               </div>
               <div className="grid gap-1.5">

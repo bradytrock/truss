@@ -2,7 +2,7 @@ import { siteForContact, siteLabelFromRecord } from "@/lib/contacts";
 import { formatDateShort, formatPhone, localYmd } from "@/lib/format";
 import { leadSourceLabel } from "@/lib/leads";
 import { jobsForContact, opportunitiesForContact } from "@/lib/parties";
-import { contactMatchesQuery } from "@/lib/phone";
+import { contactMatchesQuery, storedPhone } from "@/lib/phone";
 import {
   CLIENT_TYPE_LABELS,
   JOB_STATUS_LABELS,
@@ -411,7 +411,7 @@ export function parseContactCsv(text: string): {
     }
     rows.push({
       name,
-      phone: get("phone", "mobile", "cell"),
+      phone: storedPhone(get("phone", "mobile", "cell")),
       email: get("email", "e-mail"),
       title: get("title", "role", "type") || "Homeowner",
     });

@@ -13,10 +13,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { PhoneInput } from "@/components/phone-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { looksLikePhone } from "@/lib/phone";
+import { formatPhoneInput, looksLikePhone } from "@/lib/phone";
 import { copyText } from "@/lib/share";
 import type { ShareRecipient } from "@/lib/parties";
 import {
@@ -493,12 +494,11 @@ export function ShareLinkDialog({
                       />
                       <div className="grid min-w-0 flex-1 gap-1">
                         <p className="text-sm font-medium">{person.name}</p>
-                        <Input
-                          type="tel"
-                          value={phones[person.id] ?? person.phone}
+                        <PhoneInput
+                          value={phones[person.id] ?? formatPhoneInput(person.phone)}
                           placeholder="Mobile for text"
-                          onChange={(event) =>
-                            setPhones((current) => ({ ...current, [person.id]: event.target.value }))
+                          onValueChange={(value) =>
+                            setPhones((current) => ({ ...current, [person.id]: value }))
                           }
                         />
                         <Input
@@ -551,11 +551,10 @@ export function ShareLinkDialog({
               </ul>
             ) : null}
             <div className="grid gap-2 sm:grid-cols-2">
-              <Input
-                type="tel"
+              <PhoneInput
                 value={customPhone}
                 placeholder={people.length ? "Or another mobile" : "Homeowner mobile"}
-                onChange={(event) => setCustomPhone(event.target.value)}
+                onValueChange={setCustomPhone}
               />
               <Input
                 type="email"

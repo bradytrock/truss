@@ -1241,9 +1241,9 @@ export function JobRecord({
                       <p className="mt-1.5 flex items-center gap-2 text-sm">
                         <Phone className="size-3.5 text-muted-foreground" />
                         <a href={`tel:${contact.phone}`} className="hover:underline">
-                          {contact.phone}
+                          {formatPhone(contact.phone)}
                         </a>
-                        <button type="button" onClick={() => copyText(contact.phone, "Phone")} aria-label="Copy phone">
+                        <button type="button" onClick={() => copyText(formatPhone(contact.phone), "Phone")} aria-label="Copy phone">
                           <Copy className="size-3.5 text-muted-foreground" />
                         </button>
                         <Link

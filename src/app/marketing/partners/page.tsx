@@ -4,6 +4,7 @@ import Link from "next/link";
 import { EmptyState } from "@/components/page-chrome";
 import { Button } from "@/components/ui/button";
 import { useCrm } from "@/lib/crm-store";
+import { formatPhone } from "@/lib/format";
 
 export default function MarketingPartnersPage() {
   const crm = useCrm();
@@ -35,7 +36,7 @@ export default function MarketingPartnersPage() {
                 <p className="font-medium">{partner.name}</p>
                 <p className="text-xs text-muted-foreground">
                   {partner.title || "Referral partner"}
-                  {partner.phone ? ` · ${partner.phone}` : ""}
+                  {partner.phone ? ` · ${formatPhone(partner.phone)}` : ""}
                 </p>
               </div>
               <Button

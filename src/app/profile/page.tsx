@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { PhoneInput } from "@/components/phone-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +17,7 @@ import { cardUrl } from "@/lib/card";
 import { mintPersonCardSlug } from "@/lib/card-slug";
 import { useCrm } from "@/lib/crm-store";
 import { formatPhone } from "@/lib/format";
+import { formatPhoneInput } from "@/lib/phone";
 import { copyText } from "@/lib/share";
 
 export default function ProfilePage() {
@@ -32,7 +34,7 @@ export default function ProfilePage() {
     if (!member) return;
     setName(member.name);
     setTitle(member.title);
-    setPhone(member.phone);
+    setPhone(formatPhoneInput(member.phone));
     setEmailSignature(member.emailSignature ?? "");
     setLocationId(member.googleLocationId ?? null);
   }, [member]);
@@ -130,13 +132,11 @@ export default function ProfilePage() {
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="profile-phone">Phone</Label>
-              <Input
+              <PhoneInput
                 id="profile-phone"
-                type="tel"
                 value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="(303) 555-0142"
-                autoComplete="tel"
+                onValueChange={setPhone}
+                placeholder="(214) 555-0142"
               />
               <p className="text-xs text-muted-foreground">
                 Direct or mobile. Preview: {formatPhone(phone) === "—" ? "office line on the letterhead" : formatPhone(phone)}
@@ -231,7 +231,7 @@ export default function ProfilePage() {
               onClick={() => {
                 setName(seat.name);
                 setTitle(seat.title);
-                setPhone(seat.phone);
+                setPhone(formatPhoneInput(seat.phone));
                 setEmailSignature(seat.emailSignature ?? "");
                 setLocationId(seat.googleLocationId ?? null);
               }}
