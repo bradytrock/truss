@@ -492,10 +492,10 @@ export interface Estimate {
   signatureImage: string;
   secondSignatureName: string;
   secondSignatureImage: string;
-  /** `gbb` offers mutually exclusive Good / Better / Best packages. Empty is a single-scope proposal. */
+  /** `gbb` offers mutually exclusive options. Empty is a single-scope proposal. */
   packageMode: "" | "gbb";
-  /** Which package is selected for preview, signing, and convert-to-invoice. */
-  selectedPackage: "good" | "better" | "best";
+  /** Which option is selected for preview, signing, and convert-to-invoice. */
+  selectedPackage: string;
   /** Markup % on the included line sum before discount and tax. Ignored when subtotalOverride is set. */
   marginPercent: number;
   /** When set, customer/contract subtotal before discount and tax. Null uses the line sum (plus margin). */
@@ -563,8 +563,8 @@ export interface EstimateLine {
   coverageAmount?: number;
   /** Unit for coverageAmount: squares | sqft | ft | each. */
   coverageUnit?: string;
-  /** Empty = in every package. `good` / `better` / `best` = only that package. */
-  package: "" | "good" | "better" | "best";
+  /** Empty = shared / in every option. Any other key is only that option. */
+  package: string;
   photoIds: string[];
   photos?: EstimateLinePhoto[];
 }

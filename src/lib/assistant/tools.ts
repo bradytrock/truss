@@ -204,12 +204,11 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
         packageMode: {
           type: "string",
           enum: ["", "gbb"],
-          description: "Pass gbb to start a Good / Better / Best proposal.",
+          description: "Pass gbb to start a proposal with exclusive options.",
         },
         selectedPackage: {
           type: "string",
-          enum: ["good", "better", "best"],
-          description: "Default selected package when packageMode is gbb. Default better.",
+          description: "Default selected option key when the estimate has options.",
         },
       },
       ["job"],
@@ -232,9 +231,8 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
         optional: bool("True if this is optional work"),
         package: {
           type: "string",
-          enum: ["", "good", "better", "best"],
           description:
-            "Good / Better / Best assignment. Empty is in every package. Use good, better, or best for one package only.",
+            "Option key for this line. Empty is shared / in every option. Use the option section key (opt_1) to put the line on one option.",
         },
       },
       ["estimate"],
@@ -242,7 +240,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   },
   {
     name: "update_estimate_line",
-    description: "Change quantity, price, title, optional flag, or Good / Better / Best package on a line.",
+    description: "Change quantity, price, title, optional flag, or option assignment on a line.",
     status: "Updating the line…",
     gate: "ops",
     parameters: object(
@@ -255,8 +253,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
         selected: bool("Whether an optional line is included"),
         package: {
           type: "string",
-          enum: ["", "good", "better", "best"],
-          description: "Empty for all packages, or good / better / best.",
+          description: "Empty for shared work, or the option key (opt_1, good, better, best).",
         },
       },
       ["lineId"],
@@ -264,7 +261,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   },
   {
     name: "update_estimate",
-    description: "Turn Good / Better / Best packages on or off, or pick which package is selected.",
+    description: "Turn exclusive options on or off, or pick which option is selected.",
     status: "Updating the estimate…",
     gate: "ops",
     parameters: object(
@@ -273,12 +270,11 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
         packageMode: {
           type: "string",
           enum: ["", "gbb"],
-          description: "gbb offers three mutually exclusive packages. Empty is a single-scope proposal.",
+          description: "gbb offers mutually exclusive options. Empty is a single-scope proposal.",
         },
         selectedPackage: {
           type: "string",
-          enum: ["good", "better", "best"],
-          description: "Which package is selected for preview, signing, and convert-to-invoice.",
+          description: "Which option is selected for preview, signing, and convert-to-invoice.",
         },
       },
       ["estimate"],

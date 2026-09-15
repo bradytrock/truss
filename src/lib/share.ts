@@ -192,7 +192,7 @@ export type SharedEstimatePayload = {
     secondSignatureName: string;
     secondSignatureImage: string;
     packageMode: "" | "gbb";
-    selectedPackage: "good" | "better" | "best";
+    selectedPackage: string;
     marginPercent: number;
     subtotalOverride: number | null;
     hideLinePrices: boolean;
@@ -211,7 +211,7 @@ export type SharedEstimatePayload = {
     optional: boolean;
     selected: boolean;
     taxable: boolean;
-    package: "" | "good" | "better" | "best";
+    package: string;
     photoIds: string[];
     photos?: EstimateLinePhoto[];
   }>;

@@ -53,7 +53,7 @@ export function proposalScopeSummary(input: {
   if (type && type in PROJECT_TYPE_LABELS) {
     return PROJECT_TYPE_LABELS[type as ProjectType];
   }
-  if (input.packageMode === "gbb") return "Good / Better / Best packages";
+  if (input.packageMode === "gbb") return "Proposal options";
   const name = input.name?.trim() ?? "";
   const street = input.street?.trim() ?? "";
   if (name && street && (name === street || name.startsWith(`${street},`) || name.startsWith(`${street} `))) {
@@ -345,7 +345,7 @@ export function renderProposalEmailHtml(input: ProposalEmailInput) {
                         </td>
                         <td class="stack stack-gap" width="33%" valign="top" style="padding:0 6px;font-family:Helvetica,Arial,sans-serif;">
                           <div style="font-family:Georgia,'Times New Roman',serif;font-size:22px;line-height:26px;color:#b51e28;">2</div>
-                          <div style="padding-top:6px;font-size:14px;line-height:20px;font-weight:bold;color:#1a1a1a;">Pick your package</div>
+                          <div style="padding-top:6px;font-size:14px;line-height:20px;font-weight:bold;color:#1a1a1a;">Pick your option</div>
                           <div style="padding-top:2px;font-size:13px;line-height:19px;color:#6b6763;">Choose the shingle and upgrade options that fit your budget.</div>
                         </td>
                         <td class="stack stack-gap" width="33%" valign="top" style="padding-left:12px;font-family:Helvetica,Arial,sans-serif;">

@@ -183,7 +183,7 @@ export function ProposalDocument({
       ) : null}
       {isGbbEstimate(estimate) ? (
         <div className="space-y-2">
-          <h3 className="text-[11px] font-semibold tracking-[0.16em] uppercase">Choose a package</h3>
+          <h3 className="text-[11px] font-semibold tracking-[0.16em] uppercase">Choose an option</h3>
           <PackagePicker
             estimate={billed.estimate}
             lines={billed.lines}
@@ -191,7 +191,7 @@ export function ProposalDocument({
             onSelect={onSelectPackage}
           />
           <p className="text-xs text-muted-foreground">
-            Pick one package. The items below are that package plus shared work. Packages do not stack.
+            Pick one option. The items below are that option plus the shared work. Options do not stack.
           </p>
         </div>
       ) : null}

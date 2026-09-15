@@ -13381,3 +13381,9 @@ revoke all on function public.email_unsubscribe_info(text) from public;
 grant execute on function public.email_unsubscribe_info(text) to anon, authenticated;
 revoke all on function public.unsubscribe_email_campaign(text) from public;
 grant execute on function public.unsubscribe_email_campaign(text) to anon, authenticated;
+
+-- ========== 20260915160000_estimate_options.sql ==========
+-- Named estimate options (not only Good / Better / Best).
+
+alter table public.estimates drop constraint if exists estimates_selected_package_check;
+alter table public.estimate_lines drop constraint if exists estimate_lines_package_check;

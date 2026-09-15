@@ -4,6 +4,7 @@ import { billingEstimate } from "@/lib/market";
 import { normalizeLinePhotoIds } from "@/lib/estimate-line-photos";
 import {
   ESTIMATE_PACKAGES,
+  listEstimateOptions,
   parseEstimatePackage,
   parseEstimatePackageMode,
   parseLinePackage,
@@ -205,9 +206,11 @@ export function allPackageTotals(
     Partial<Pick<Estimate, "packageMode" | "selectedPackage" | "subtotalOverride" | "marginPercent">>,
   lines: EstimateLine[],
 ) {
+  const options = listEstimateOptions(lines);
+  const keys = options.length > 0 ? options.map((item) => item.key) : [...ESTIMATE_PACKAGES];
   return Object.fromEntries(
-    ESTIMATE_PACKAGES.map((pkg) => [pkg, totalsForPackage(estimate, lines, pkg)]),
-  ) as Record<EstimatePackage, ReturnType<typeof estimateTotals>>;
+    keys.map((pkg) => [pkg, totalsForPackage(estimate, lines, pkg)]),
+  ) as Record<string, ReturnType<typeof estimateTotals>>;
 }
 
 export function invoiceLinesFromEstimate(
@@ -386,7 +389,7 @@ export function fillEstimate(estimate: EstimateDraft): Estimate {
     secondSignatureName: secondContactId ? (estimate.secondSignatureName ?? "") : "",
     secondSignatureImage: secondContactId ? (estimate.secondSignatureImage ?? "") : "",
     packageMode: parseEstimatePackageMode(estimate.packageMode),
-    selectedPackage: parseEstimatePackage(estimate.selectedPackage),
+    selectedPackage: parseEstimatePackage(estimate.selectedPackage) || "better",
     marginPercent: Math.max(0, Number(estimate.marginPercent) || 0),
     subtotalOverride:
       estimate.subtotalOverride == null || estimate.subtotalOverride === undefined
