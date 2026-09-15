@@ -18,6 +18,7 @@ import { fillEstimateTemplate, fillEstimateTemplateLine } from "@/lib/estimate-t
 import { parsePageTemplate, parsePhotoReportPages } from "@/lib/photo-report";
 import { customFieldsJson, fillJobRecord, parseCustomFields } from "@/lib/job-record";
 import { parseMarket } from "@/lib/market";
+import { storedPhone } from "@/lib/phone";
 import { resolveStoredFileUrl, normalizeObjectKey } from "@/lib/storage/urls";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { parseQbStatus } from "@/lib/types";
@@ -140,7 +141,7 @@ export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>):
   return {
     name: row.name,
     slug: "slug" in row ? String(row.slug ?? "") : "",
-    phone: row.phone ?? "",
+    phone: storedPhone(row.phone),
     email: row.email ?? "",
     website: row.website ?? "",
     street: row.street ?? "",
@@ -191,7 +192,7 @@ export function mapStaff(row: StaffRow): StaffMember {
     teamId: row.team_id,
     initials: row.initials || row.name.slice(0, 2).toUpperCase(),
     email: row.email ?? "",
-    phone: row.phone ?? "",
+    phone: storedPhone(row.phone),
     cardSlug: "card_slug" in row ? String(row.card_slug ?? "") : "",
     photoUrl: resolveStoredFileUrl({
       storagePath: "photo_storage_path" in row ? row.photo_storage_path : "",
@@ -256,7 +257,7 @@ export function mapContact(row: ContactRow): Contact {
     name: row.name ?? "",
     title: row.title ?? "",
     email: row.email ?? "",
-    phone: row.phone ?? "",
+    phone: storedPhone(row.phone),
     ownerStaffId: row.owner_staff_id ?? "",
     isReferralPartner: Boolean(row.is_referral_partner),
     listingWatchUrl: row.listing_watch_url ?? "",

@@ -1,6 +1,14 @@
 import type { DeliveryMethod, LeadSource } from "@/lib/types";
 import { LEAD_SOURCE_LABELS, LEAD_SOURCES, LEGACY_LEAD_SOURCE_LABELS } from "@/lib/types";
 
+/** Most work is in Texas; the lead form can still change this. */
+export const DEFAULT_LEAD_STATE = "TX";
+
+export function leadStateOrDefault(state?: string | null) {
+  const value = state?.trim() ?? "";
+  return value || DEFAULT_LEAD_STATE;
+}
+
 export function formatJobSite(input: {
   street?: string;
   city?: string;

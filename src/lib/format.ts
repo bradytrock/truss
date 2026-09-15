@@ -1,10 +1,7 @@
-import { digitsOnly } from "@/lib/phone";
+import { formatPhoneInput } from "@/lib/phone";
 
 export function formatPhone(value: string | null | undefined) {
-  const trimmed = (value ?? "").trim();
-  const last10 = digitsOnly(trimmed).slice(-10);
-  if (last10.length !== 10) return trimmed || "—";
-  return `(${last10.slice(0, 3)}) ${last10.slice(3, 6)}-${last10.slice(6)}`;
+  return formatPhoneInput(value ?? "") || "—";
 }
 
 export function formatCurrency(value: number) {

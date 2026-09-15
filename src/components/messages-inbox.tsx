@@ -14,6 +14,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { PhoneInput } from "@/components/phone-input";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,7 +39,7 @@ import {
   initials,
   sameLocalDay,
 } from "@/lib/format";
-import { looksLikePhone } from "@/lib/phone";
+import { formatPhoneInput, looksLikePhone } from "@/lib/phone";
 import { mailHref } from "@/lib/job-emails";
 import { cn } from "@/lib/utils";
 
@@ -103,7 +104,7 @@ export function MessagesInbox() {
 
   useEffect(() => {
     if (queryContact?.phone) {
-      setDraftPhone((current) => current || queryContact.phone);
+      setDraftPhone((current) => current || formatPhoneInput(queryContact.phone));
       setDraftContactId((current) => current || queryContact.id);
     }
   }, [queryContact?.id, queryContact?.phone]);
@@ -140,7 +141,7 @@ export function MessagesInbox() {
   );
 
   const openCompose = useCallback(() => {
-    setDraftPhone(queryContact?.phone ?? "");
+    setDraftPhone(formatPhoneInput(queryContact?.phone ?? ""));
     setDraftContactId(queryContact?.id ?? "");
     setBody("");
     router.replace(
@@ -457,7 +458,7 @@ export function MessagesInbox() {
                               value={`${contact.id} ${contact.name} ${contact.phone}`}
                               onSelect={() => {
                                 setDraftContactId(contact.id);
-                                setDraftPhone(contact.phone);
+                                setDraftPhone(formatPhoneInput(contact.phone));
                                 setPickerOpen(false);
                                 setPickerQuery("");
                               }}
@@ -473,16 +474,14 @@ export function MessagesInbox() {
                     </Command>
                   </PopoverContent>
                 </Popover>
-                <Input
+                <PhoneInput
                   value={draftPhone}
-                  onChange={(event) => {
-                    setDraftPhone(event.target.value);
-                    const match = contactForPhone(crm.contacts, event.target.value);
+                  onValueChange={(value) => {
+                    setDraftPhone(value);
+                    const match = contactForPhone(crm.contacts, value);
                     setDraftContactId(match?.id ?? "");
                   }}
                   placeholder="Mobile number"
-                  inputMode="tel"
-                  autoComplete="tel"
                 />
               </div>
             ) : null}

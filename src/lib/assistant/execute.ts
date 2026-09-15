@@ -1,4 +1,4 @@
-import { defaultDeliveryForSource, formatJobSite, leadName } from "@/lib/leads";
+import { defaultDeliveryForSource, formatJobSite, leadName, leadStateOrDefault } from "@/lib/leads";
 import { localYmd } from "@/lib/format";
 import { isDeletedJob } from "@/lib/job-record";
 import { estimateTotals, allPackageTotals } from "@/lib/estimate-totals";
@@ -472,7 +472,7 @@ async function runTool(
       const market = (arg(args, "market") === "commercial" ? "commercial" : "residential") as JobMarket;
       const street = arg(args, "street");
       const city = arg(args, "city");
-      const state = arg(args, "state");
+      const state = leadStateOrDefault(arg(args, "state"));
       const postalCode = arg(args, "postalCode");
       const site = formatJobSite({ street, city, state, postalCode });
       const fullName = `${firstName} ${lastName}`;

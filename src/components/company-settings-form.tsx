@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PhoneInput } from "@/components/phone-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCrm } from "@/lib/crm-store";
@@ -161,14 +162,24 @@ export function Field({
   return (
     <div className="grid gap-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <Input
-        id={id}
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        required={required}
-        placeholder={placeholder}
-      />
+      {type === "tel" ? (
+        <PhoneInput
+          id={id}
+          value={value}
+          onValueChange={onChange}
+          required={required}
+          placeholder={placeholder}
+        />
+      ) : (
+        <Input
+          id={id}
+          type={type}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          required={required}
+          placeholder={placeholder}
+        />
+      )}
     </div>
   );
 }

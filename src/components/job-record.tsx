@@ -23,6 +23,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
+import { AddressStreetField } from "@/components/address-street-field";
 import { ActivityComposer, ActivityList } from "@/components/activity";
 import { AddPhotoDialog, CreateInvoiceDialog } from "@/components/create-ops-dialogs";
 import { StartEstimateButton, StartEstimateDialogHost } from "@/components/start-estimate-button";
@@ -1165,9 +1166,9 @@ export function JobRecord({
                       <p className="mt-1.5 flex items-center gap-2 text-sm">
                         <Phone className="size-3.5 text-muted-foreground" />
                         <a href={`tel:${contact.phone}`} className="hover:underline">
-                          {contact.phone}
+                          {formatPhone(contact.phone)}
                         </a>
-                        <button type="button" onClick={() => copyText(contact.phone, "Phone")} aria-label="Copy phone">
+                        <button type="button" onClick={() => copyText(formatPhone(contact.phone), "Phone")} aria-label="Copy phone">
                           <Copy className="size-3.5 text-muted-foreground" />
                         </button>
                         <Link
@@ -1603,7 +1604,19 @@ export function JobRecord({
           <div className="grid gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="job-street">Street</Label>
-              <Input id="job-street" value={street} onChange={(event) => setStreet(event.target.value)} />
+              <AddressStreetField
+                id="job-street"
+                street={street}
+                city={city}
+                state={state}
+                onStreetChange={setStreet}
+                onPick={(address) => {
+                  setStreet(address.street);
+                  setCity(address.city);
+                  setState(address.state || state);
+                  setPostalCode(address.postalCode);
+                }}
+              />
             </div>
             <div className="grid gap-3 sm:grid-cols-[1fr_5rem_6rem]">
               <div className="grid gap-1.5">

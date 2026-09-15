@@ -318,6 +318,6 @@ assert.equal(noHeader.rows[0]?.phone, "(469) 555-0104");
 
 const firstLast = parseContactCsv("first,last,mobile\nKen,Kowalski,2145550138");
 assert.equal(firstLast.rows[0]?.name, "Ken Kowalski");
-assert.equal(firstLast.rows[0]?.phone, "2145550138");
+assert.equal(firstLast.rows[0]?.phone, "(214) 555-0138");
 
 console.log("contact-book tests passed");

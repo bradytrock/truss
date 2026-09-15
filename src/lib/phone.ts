@@ -3,6 +3,24 @@ export function digitsOnly(value: string) {
   return value.replace(/\D/g, "");
 }
 
+/** `(214) 555-0100` as you type. Leaves non-US `+` numbers alone. */
+export function formatPhoneInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("+") && !trimmed.startsWith("+1")) return trimmed;
+  const digits = digitsOnly(trimmed);
+  const national = digits.length >= 11 && digits.startsWith("1") ? digits.slice(1, 11) : digits.slice(0, 10);
+  if (!national) return "";
+  if (national.length <= 3) return `(${national}`;
+  if (national.length <= 6) return `(${national.slice(0, 3)}) ${national.slice(3)}`;
+  return `(${national.slice(0, 3)}) ${national.slice(3, 6)}-${national.slice(6)}`;
+}
+
+/** Same as the input mask — use when persisting a phone. */
+export function storedPhone(value: string | null | undefined) {
+  return formatPhoneInput(value ?? "");
+}
+
 export function toE164(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return "";

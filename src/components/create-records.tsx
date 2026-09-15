@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { MapPin, Search, User, XIcon } from "lucide-react";
+import { Search, User, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,10 +32,13 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { AddressStreetField } from "@/components/address-street-field";
 import { MarketField } from "@/components/market-field";
+import { PhoneInput } from "@/components/phone-input";
 import { useCrm } from "@/lib/crm-store";
 import { localYmd } from "@/lib/format";
 import {
+  DEFAULT_LEAD_STATE,
   defaultDeliveryForSource,
   formatJobSite,
   leadName,
@@ -58,7 +61,8 @@ import { LeadAssigneeSelect } from "@/components/lead-assignee";
 import { assignmentOptions } from "@/lib/visibility";
 import { hasBusinessDevelopmentSeat } from "@/lib/bd";
 import { phonesMatch } from "@/lib/job-messages";
-import { phoneQueryMatches } from "@/lib/phone";
+import { formatPhone } from "@/lib/format";
+import { formatPhoneInput, phoneQueryMatches } from "@/lib/phone";
 import {
   assignsToPreviousPm,
   emailsMatch,
@@ -87,7 +91,7 @@ export function CreateOpportunityDialog({
   const [email, setEmail] = useState("");
   const [street, setStreet] = useState("");
   const [city, setCity] = useState("");
-  const [region, setRegion] = useState("");
+  const [region, setRegion] = useState(DEFAULT_LEAD_STATE);
   const [postalCode, setPostalCode] = useState("");
   const [source, setSource] = useState<LeadSource | "">("");
   const [market, setMarket] = useState<JobMarket>("residential");
@@ -145,7 +149,7 @@ export function CreateOpportunityDialog({
     setEmail("");
     setStreet("");
     setCity("");
-    setRegion("");
+    setRegion(DEFAULT_LEAD_STATE);
     setPostalCode("");
     setSource("");
     setMarket("residential");
@@ -377,12 +381,11 @@ export function CreateOpportunityDialog({
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Phone" htmlFor="lead-phone">
-                <Input
+                <PhoneInput
                   id="lead-phone"
                   value={phone}
-                  onChange={(event) => setPhone(event.target.value)}
-                  placeholder="(555) 123-4567"
-                  autoComplete="tel"
+                  onValueChange={setPhone}
+                  placeholder="(214) 555-0100"
                 />
               </Field>
               <Field label="Email" htmlFor="lead-email">
@@ -414,18 +417,20 @@ export function CreateOpportunityDialog({
             ) : null}
 
             <Field label="Address" htmlFor="lead-street">
-              <InputGroup>
-                <InputGroupAddon>
-                  <MapPin />
-                </InputGroupAddon>
-                <InputGroupInput
-                  id="lead-street"
-                  value={street}
-                  onChange={(event) => setStreet(event.target.value)}
-                  placeholder="Start typing an address..."
-                  autoComplete="street-address"
-                />
-              </InputGroup>
+              <AddressStreetField
+                id="lead-street"
+                street={street}
+                city={city}
+                state={region}
+                withPin
+                onStreetChange={setStreet}
+                onPick={(address) => {
+                  setStreet(address.street);
+                  setCity(address.city);
+                  setRegion(address.state || DEFAULT_LEAD_STATE);
+                  setPostalCode(address.postalCode);
+                }}
+              />
             </Field>
 
             <div className="grid grid-cols-[1fr_4.5rem_6rem] gap-3">
@@ -544,7 +549,7 @@ export function CreateOpportunityDialog({
                               <span className="text-xs text-muted-foreground">
                                 {contact.title || "Contact"}
                                 {contact.isReferralPartner ? " · Referral partner" : ""}
-                                {contact.phone ? ` · ${contact.phone}` : ""}
+                                {contact.phone ? ` · ${formatPhone(contact.phone)}` : ""}
                               </span>
                             </button>
                           </li>
@@ -719,11 +724,11 @@ export function CreateClientDialog({
               />
             </Field>
             <Field label="Phone" htmlFor="cli-phone">
-              <Input
+              <PhoneInput
                 id="cli-phone"
                 value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="(303) 555-0100"
+                onValueChange={setPhone}
+                placeholder="(214) 555-0100"
               />
             </Field>
           </div>
@@ -868,7 +873,7 @@ export function EditContactDialog({
   const [name, setName] = useState(contact.name);
   const [title, setTitle] = useState(contact.title);
   const [email, setEmail] = useState(contact.email);
-  const [phone, setPhone] = useState(contact.phone);
+  const [phone, setPhone] = useState(formatPhoneInput(contact.phone));
   const [companyMode, setCompanyMode] = useState<"none" | "existing">(
     contact.clientId ? "existing" : "none"
   );
@@ -884,7 +889,7 @@ export function EditContactDialog({
     setName(contact.name);
     setTitle(contact.title);
     setEmail(contact.email);
-    setPhone(contact.phone);
+    setPhone(formatPhoneInput(contact.phone));
     setCompanyMode(contact.clientId ? "existing" : "none");
     setExistingClientId(contact.clientId ?? clients[0]?.id ?? "");
     setOwnerStaffId(contact.ownerStaffId);
@@ -953,11 +958,11 @@ export function EditContactDialog({
               />
             </Field>
             <Field label="Phone" htmlFor="edit-contact-phone">
-              <Input
+              <PhoneInput
                 id="edit-contact-phone"
                 value={phone}
-                onChange={(event) => setPhone(event.target.value)}
-                placeholder="(303) 555-0100"
+                onValueChange={setPhone}
+                placeholder="(214) 555-0100"
               />
             </Field>
           </div>

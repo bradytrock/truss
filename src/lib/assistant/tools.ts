@@ -111,7 +111,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
         email: str("Email"),
         street: str("Job site street"),
         city: str("City"),
-        state: str("State abbreviation"),
+        state: str("State abbreviation. Defaults to TX."),
         postalCode: str("ZIP"),
         source: {
           type: "string",

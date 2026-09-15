@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RecordProperty } from "@/components/app-shell";
 import { JobStatusBadge, StageBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
-import { formatCurrency, formatInboxTime, initials } from "@/lib/format";
+import { formatCurrency, formatInboxTime, formatPhone, initials } from "@/lib/format";
 import { mailForContact, mailHref } from "@/lib/job-emails";
 import { jobsForContact, opportunitiesForContact } from "@/lib/parties";
 import { SEAT_ROLE_LABELS, type Contact } from "@/lib/types";
@@ -282,7 +282,7 @@ export function ContactRecord({ contact }: { contact: Contact }) {
                   "—"
                 )}
               </RecordProperty>
-              <RecordProperty label="Phone">{contact.phone || "—"}</RecordProperty>
+              <RecordProperty label="Phone">{formatPhone(contact.phone)}</RecordProperty>
               <RecordProperty label="Book owner">
                 {owner ? (
                   <span>
