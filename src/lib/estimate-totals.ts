@@ -10,6 +10,7 @@ import {
   scopedEstimateLines,
   type EstimatePackage,
 } from "@/lib/estimate-packages";
+import { firstPlainLine, invoiceLineDescription } from "@/lib/line-format";
 import type { Estimate, EstimateLine, JobMarket } from "@/lib/types";
 
 export type AdjustmentKind = "percent" | "amount";
@@ -210,7 +211,7 @@ export function invoiceLinesFromEstimate(
         },
       ]
     : billed.map((line, index) => ({
-        description: lineLabel(line),
+        description: invoiceLineDescription(line),
         quantity: line.quantity,
         unit: line.unit,
         unitCost: line.unitCost,
@@ -375,11 +376,18 @@ export function fillEstimate(estimate: EstimateDraft): Estimate {
   };
 }
 
+export function placeholderLineDescription(description: string | null | undefined) {
+  const value = String(description ?? "");
+  return value.trim().toLowerCase() === "new item" ? "" : value;
+}
+
 export function fillEstimateLine(line: EstimateLineDraft): EstimateLine {
   const photoIds = normalizeLinePhotoIds(line.photoIds ?? line.photos?.map((photo) => photo.id));
+  const description = placeholderLineDescription(line.description);
   return {
     ...line,
-    title: line.title?.trim() || line.description,
+    description,
+    title: line.title?.trim() || firstPlainLine(description) || description,
     groupName: line.groupName ?? "",
     optional: Boolean(line.optional),
     selected: line.selected ?? true,

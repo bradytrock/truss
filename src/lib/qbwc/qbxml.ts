@@ -1,3 +1,4 @@
+import { linePlainText } from "@/lib/line-format";
 import { xmlAttr, xmlEscape } from "@/lib/qbwc/xml";
 
 /** QuickBooks Desktop customer/job Name max length. */
@@ -367,7 +368,7 @@ export function invoiceAddXml(input: QbInvoiceAddInput) {
 }
 
 function invoiceLineXml(line: QbInvoiceLine, itemName: string) {
-  const raw = [line.description, line.unit && line.unit !== "ea" && line.unit !== "ls" ? `(${line.unit})` : ""]
+  const raw = [linePlainText(line.description) || line.description, line.unit && line.unit !== "ea" && line.unit !== "ls" ? `(${line.unit})` : ""]
     .filter(Boolean)
     .join(" ");
   const desc = qbAscii(raw, 4095) || qbName(itemName);

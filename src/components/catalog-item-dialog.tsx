@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FormattedTextEditor } from "@/components/formatted-text-editor";
 import { useCrm } from "@/lib/crm-store";
 import { COMMON_UNITS } from "@/lib/estimate-totals";
 import {
@@ -38,6 +39,7 @@ import {
 
 type Draft = {
   name: string;
+  description: string;
   kind: CatalogKind;
   unit: string;
   unitCost: string;
@@ -47,6 +49,7 @@ type Draft = {
 
 const emptyDraft: Draft = {
   name: "",
+  description: "",
   kind: "labor",
   unit: "ea",
   unitCost: "0",
@@ -57,6 +60,7 @@ const emptyDraft: Draft = {
 function draftFromItem(item: CatalogItem): Draft {
   return {
     name: item.name,
+    description: item.description ?? "",
     kind: item.kind,
     unit: item.unit,
     unitCost: String(item.unitCost),
@@ -116,6 +120,7 @@ export function CatalogItemDialog({
     try {
       const payload = {
         name,
+        description: draft.description,
         kind: draft.kind,
         unit: draft.unit.trim() || "ea",
         unitCost: parseCost(draft.unitCost),
@@ -139,12 +144,13 @@ export function CatalogItemDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{editing ? "Edit price book item" : "New price book item"}</DialogTitle>
           <DialogDescription>
             Drop this onto a proposal and the sell price is unit cost plus margin, at least the company
-            minimum. Quantity and price stay editable on the estimate.
+            minimum. The description copies onto every new estimate line. Quantity and price stay
+            editable on the estimate.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-3">
@@ -156,6 +162,14 @@ export function CatalogItemDialog({
               onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
               placeholder="Architectural shingles"
               autoComplete="off"
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="catalog-description">Description</Label>
+            <FormattedTextEditor
+              value={draft.description}
+              onCommit={(value) => setDraft((current) => ({ ...current, description: value }))}
+              placeholder="What the homeowner sees under the title. Leave blank if none."
             />
           </div>
           <div className="grid grid-cols-2 gap-3">

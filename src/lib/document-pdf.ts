@@ -26,6 +26,13 @@ import {
   resolveInvoiceTerms,
 } from "@/lib/document-terms";
 import type { ProjectManagerContact } from "@/lib/document-owner";
+import {
+  firstPlainLine,
+  parseLineFormat,
+  shouldShowLineDescription,
+  type FormatBlock,
+  type InlineRun,
+} from "@/lib/line-format";
 
 type Doc = {
   setFont: (face: string, style?: string) => void;
@@ -33,6 +40,7 @@ type Doc = {
   setTextColor: (r: number, g?: number, b?: number) => void;
   text: (text: string | string[], x: number, y: number, options?: { align?: "left" | "right" | "center" }) => void;
   splitTextToSize: (text: string, width: number) => string[];
+  getTextWidth: (text: string) => number;
   line: (x1: number, y1: number, x2: number, y2: number) => void;
   addPage: () => void;
   addImage: (
@@ -190,6 +198,112 @@ function writeParagraph(
     y += line ? lineHeight : blankHeight;
   }
   return y + (fontSize <= 8 ? 6 : 8);
+}
+
+type PdfWord = { text: string; bold: boolean; spaceAfter: boolean; newline: boolean };
+
+function flattenRuns(runs: InlineRun[]): PdfWord[] {
+  const words: PdfWord[] = [];
+  for (const run of runs) {
+    const pieces = run.text.split(/(\n+)/);
+    for (const piece of pieces) {
+      if (!piece) continue;
+      if (/^\n+$/.test(piece)) {
+        words.push({ text: "", bold: Boolean(run.bold), spaceAfter: false, newline: true });
+        continue;
+      }
+      const tokens = piece.split(/(\s+)/);
+      for (const token of tokens) {
+        if (!token) continue;
+        if (/^\s+$/.test(token)) {
+          if (words.length) words[words.length - 1].spaceAfter = true;
+          continue;
+        }
+        words.push({ text: token, bold: Boolean(run.bold), spaceAfter: false, newline: false });
+      }
+    }
+  }
+  return words;
+}
+
+function writeFormattedRuns(
+  doc: Doc,
+  runs: InlineRun[],
+  x: number,
+  startY: number,
+  maxWidth: number,
+  lineHeight: number,
+) {
+  const words = flattenRuns(runs);
+  if (!words.length) return startY + lineHeight;
+  let y = startY;
+  let cx = x;
+  let spacePending = false;
+  for (const word of words) {
+    if (word.newline) {
+      y += lineHeight;
+      y = ensureSpace(doc, y, lineHeight);
+      cx = x;
+      spacePending = false;
+      continue;
+    }
+    doc.setFont("helvetica", word.bold ? "bold" : "normal");
+    const gap = spacePending ? doc.getTextWidth(" ") : 0;
+    const width = doc.getTextWidth(word.text);
+    if (cx > x && cx + gap + width > x + maxWidth) {
+      y += lineHeight;
+      y = ensureSpace(doc, y, lineHeight);
+      cx = x;
+      spacePending = false;
+    } else if (spacePending) {
+      cx += gap;
+    }
+    doc.text(word.text, cx, y);
+    cx += width;
+    spacePending = word.spaceAfter;
+  }
+  return y + lineHeight;
+}
+
+function writeFormattedText(
+  doc: Doc,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  options?: {
+    fontSize?: number;
+    lineHeight?: number;
+    firstParagraphBold?: boolean;
+  },
+) {
+  const blocks = parseLineFormat(text);
+  if (!blocks.length) return y;
+  const fontSize = options?.fontSize ?? 9;
+  const lineHeight = options?.lineHeight ?? (fontSize <= 9 ? 11 : 12);
+  let ordered = 0;
+  doc.setFontSize(fontSize);
+  for (let index = 0; index < blocks.length; index++) {
+    const block = blocks[index] as FormatBlock;
+    y = ensureSpace(doc, y, lineHeight + 2);
+    if (block.type === "li") {
+      if (block.ordered) ordered += 1;
+      else ordered = 0;
+      const marker = block.ordered ? `${ordered}.` : "•";
+      const indent = block.ordered ? 16 : 12;
+      doc.setFont("helvetica", "normal");
+      doc.text(marker, x, y);
+      y = writeFormattedRuns(doc, block.runs, x + indent, y, maxWidth - indent, lineHeight);
+      continue;
+    }
+    ordered = 0;
+    const runs =
+      options?.firstParagraphBold && index === 0
+        ? block.runs.map((run) => ({ ...run, bold: true }))
+        : block.runs;
+    y = writeFormattedRuns(doc, runs, x, y, maxWidth, lineHeight);
+  }
+  return y;
 }
 
 function writeLabeledBlock(
@@ -366,7 +480,7 @@ function writeProjectManager(doc: Doc, manager: ProjectManagerContact | null | u
   return y + 6;
 }
 
-export async function downloadEstimatePdf(input: {
+export async function buildEstimatePdf(input: {
   estimate: Estimate;
   lines: EstimateLine[];
   company: CompanySettings;
@@ -453,11 +567,9 @@ export async function downloadEstimatePdf(input: {
     y += 14;
     for (const line of group.lines) {
       const included = lineIncluded(line);
-      const label = line.title || line.description;
-      const detail =
-        line.description && line.description !== line.title ? line.description : "";
-      const block = 28 + (detail ? 12 : 0) + (line.optional ? 12 : 0);
-      y = ensureSpace(doc, y, block);
+      const label = line.title || firstPlainLine(line.description);
+      const detail = shouldShowLineDescription(line) ? line.description : "";
+      y = ensureSpace(doc, y, 40);
       doc.setFont("helvetica", included ? "bold" : "normal");
       doc.setFontSize(10);
       doc.setTextColor(included ? 28 : 140, included ? 28 : 140, included ? 28 : 140);
@@ -477,9 +589,9 @@ export async function downloadEstimatePdf(input: {
       );
       y += 12;
       if (detail) {
-        const wrapped = doc.splitTextToSize(detail, 360);
-        doc.text(wrapped, 54, y);
-        y += wrapped.length * 11;
+        doc.setTextColor(70, 70, 70);
+        y = writeFormattedText(doc, detail, 54, y, 360, { fontSize: 9, lineHeight: 11 });
+        doc.setTextColor(included ? 28 : 140, included ? 28 : 140, included ? 28 : 140);
       }
       if (line.optional) {
         doc.text(included ? "Optional — selected" : "Optional — not in this total", 54, y);
@@ -594,7 +706,11 @@ export async function downloadEstimatePdf(input: {
     y,
   );
 
-  downloadBlob(doc.output("blob"), `${input.estimate.number}.pdf`);
+  return doc.output("blob");
+}
+
+export async function downloadEstimatePdf(input: Parameters<typeof buildEstimatePdf>[0]) {
+  downloadBlob(await buildEstimatePdf(input), `${input.estimate.number}.pdf`);
 }
 
 export async function downloadSignatureCertificatePdf(input: {
@@ -635,7 +751,7 @@ export async function downloadSignatureCertificatePdf(input: {
   downloadBlob(doc.output("blob"), `${input.estimate.number}-signature-certificate.pdf`);
 }
 
-export async function downloadInvoicePdf(input: {
+export async function buildInvoicePdf(input: {
   invoice: Invoice;
   lines: InvoiceLine[];
   payments: Payment[];
@@ -689,10 +805,16 @@ export async function downloadInvoicePdf(input: {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(28, 28, 28);
-    const wrapped = doc.splitTextToSize(line.description, 360);
-    doc.text(wrapped, 54, y);
-    doc.text(formatMoney(invoiceLineAmount(line)), right, y, { align: "right" });
-    y += wrapped.length * 12;
+    const amountY = y;
+    y = writeFormattedText(doc, line.description, 54, y, 360, {
+      fontSize: 10,
+      lineHeight: 12,
+      firstParagraphBold: true,
+    });
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(28, 28, 28);
+    doc.text(formatMoney(invoiceLineAmount(line)), right, amountY, { align: "right" });
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(90, 90, 90);
@@ -737,5 +859,9 @@ export async function downloadInvoicePdf(input: {
     y = writeLabeledBlock(doc, "PAYMENT TERMS", paymentTerms, y, TERMS_BODY_SIZE);
   }
 
-  downloadBlob(doc.output("blob"), `${input.invoice.number}.pdf`);
+  return doc.output("blob");
+}
+
+export async function downloadInvoicePdf(input: Parameters<typeof buildInvoicePdf>[0]) {
+  downloadBlob(await buildInvoicePdf(input), `${input.invoice.number}.pdf`);
 }

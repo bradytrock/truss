@@ -24,7 +24,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newPortalToken, portalInviteExpiry, portalUrl } from "@/lib/portal";
@@ -46,6 +46,7 @@ import {
 import { mergePaymentTerms, lockedTermsChanged, resolveEstimateTerms, resolveInvoiceTerms } from "@/lib/document-terms";
 import { matchCatalogItem, type CatalogImportDraft } from "@/lib/catalog-csv";
 import {
+  catalogItemDescription,
   catalogProposalUnitPrice,
   clampMarginPercent,
   fillCatalogItem,
@@ -436,10 +437,24 @@ async function insertCatalogRows(
   rows: CatalogInsertRow[],
 ) {
   if (rows.length === 0) return [] as CatalogItem[];
-  const attempts: Array<{ rows: CatalogInsertRow[]; missingMargin?: boolean; missingLists?: boolean }> = [
+  const attempts: Array<{
+    rows: CatalogInsertRow[];
+    missingMargin?: boolean;
+    missingLists?: boolean;
+    missingDescription?: boolean;
+  }> = [
     { rows },
     {
+      rows: rows.map(({ description: _description, ...row }) => row),
+      missingDescription: true,
+    },
+    {
       rows: rows.map(({ margin_percent: _margin, ...row }) => row),
+      missingMargin: true,
+    },
+    {
+      rows: rows.map(({ description: _description, margin_percent: _margin, ...row }) => row),
+      missingDescription: true,
       missingMargin: true,
     },
     {
@@ -447,7 +462,18 @@ async function insertCatalogRows(
       missingLists: true,
     },
     {
+      rows: rows.map(({ description: _description, price_list_id: _list, ...row }) => row),
+      missingDescription: true,
+      missingLists: true,
+    },
+    {
       rows: rows.map(({ margin_percent: _margin, price_list_id: _list, ...row }) => row),
+      missingMargin: true,
+      missingLists: true,
+    },
+    {
+      rows: rows.map(({ description: _description, margin_percent: _margin, price_list_id: _list, ...row }) => row),
+      missingDescription: true,
       missingMargin: true,
       missingLists: true,
     },
@@ -456,12 +482,13 @@ async function insertCatalogRows(
   for (const attempt of attempts) {
     const { data, error } = await supabase.from("catalog_items").insert(attempt.rows).select("*");
     if (!error) {
+      if (attempt.missingDescription) toast.message(missingCatalogDescriptionMessage());
       if (attempt.missingMargin) toast.message(missingCatalogMarginMessage());
       if (attempt.missingLists) toast.message(missingPriceListsMessage());
       return (data ?? []).map(mapCatalogItem);
     }
     lastError = error;
-    if (!isMissingCatalogMargin(error) && !isMissingPriceLists(error)) break;
+    if (!isMissingCatalogDescription(error) && !isMissingCatalogMargin(error) && !isMissingPriceLists(error)) break;
   }
   throw lastError ?? new Error("Could not save catalog items.");
 }
@@ -968,6 +995,7 @@ type CrmContextValue = CrmState & {
   saveEstimateAsTemplate: (estimateId: string, name: string) => Promise<EstimateTemplate>;
   addCatalogItem: (input: {
     name: string;
+    description?: string;
     kind: CatalogKind;
     unit: string;
     unitCost: number;
@@ -4903,7 +4931,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         templateId,
         catalogItemId: item.id,
         title: item.name,
-        description: item.name,
+        description: catalogItemDescription(item),
         quantity: 1,
         unit: item.unit,
         unitCost: catalogProposalUnitPrice(item, companySettings),
@@ -5067,6 +5095,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const addCatalogItem = useCallback(
     async (input: {
       name: string;
+      description?: string;
       kind: CatalogKind;
       unit: string;
       unitCost: number;
@@ -5086,6 +5115,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const item = fillCatalogItem({
         id: crypto.randomUUID(),
         name,
+        description: input.description,
         kind: input.kind,
         unit: input.unit.trim() || "ea",
         unitCost: Math.max(0, Math.round(input.unitCost * 100) / 100),
@@ -5104,6 +5134,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             id: item.id,
             company_id: user.companyId,
             name: item.name,
+            description: item.description,
             kind: item.kind,
             unit: item.unit,
             unit_cost: item.unitCost,
@@ -5145,6 +5176,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return;
     }
     const { error } = await supabase.from("catalog_items").update(catalogPatch(next)).eq("id", id);
+    if (error && isMissingCatalogDescription(error)) {
+      const { description: _description, ...rest } = catalogPatch(next);
+      const retry = await supabase.from("catalog_items").update(rest).eq("id", id);
+      if (!retry.error) {
+        toast.message(missingCatalogDescriptionMessage());
+        apply();
+        return;
+      }
+      toast.error(retry.error.message);
+      return;
+    }
     if (error && isMissingCatalogMargin(error)) {
       const { margin_percent: _margin, ...rest } = catalogPatch(next);
       const retry = await supabase.from("catalog_items").update(rest).eq("id", id);
@@ -5191,6 +5233,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       for (const row of rows) {
         const next = {
           name: row.name.trim(),
+          description: row.description?.trim() ?? "",
           kind: row.kind,
           unit: row.unit.trim() || "ea",
           unitCost: Math.max(0, Math.round(row.unitCost * 100) / 100),
@@ -5206,7 +5249,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             existing.unit === next.unit &&
             existing.unitCost === next.unitCost &&
             existing.marginPercent === next.marginPercent &&
-            existing.costCode === next.costCode;
+            existing.costCode === next.costCode &&
+            existing.description === next.description;
           if (!same) {
             toUpdate.push({ id: existing.id, patch: next });
             Object.assign(existing, next);
@@ -5240,6 +5284,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             id: item.id,
             company_id: user.companyId,
             name: item.name,
+            description: item.description,
             kind: item.kind,
             unit: item.unit,
             unit_cost: item.unitCost,
@@ -5260,6 +5305,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           .update(catalogPatch(change.patch))
           .eq("id", change.id);
         if (error) {
+          if (isMissingCatalogDescription(error)) {
+            const { description: _description, ...rest } = catalogPatch(change.patch);
+            const retry = await supabase.from("catalog_items").update(rest).eq("id", change.id);
+            if (!retry.error) {
+              toast.message(missingCatalogDescriptionMessage());
+              continue;
+            }
+            toast.error(retry.error.message);
+            throw retry.error;
+          }
           if (isMissingCatalogMargin(error)) {
             const { margin_percent: _margin, ...rest } = catalogPatch(change.patch);
             const retry = await supabase.from("catalog_items").update(rest).eq("id", change.id);
@@ -5398,6 +5453,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               id: item.id,
               company_id: user.companyId,
               name: item.name,
+              description: item.description,
               kind: item.kind,
               unit: item.unit,
               unit_cost: item.unitCost,
@@ -5518,7 +5574,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         estimateId,
         catalogItemId: item.id,
         title: item.name,
-        description: item.name,
+        description: catalogItemDescription(item),
         quantity: 1,
         unit: item.unit,
         unitCost: catalogProposalUnitPrice(item, companySettings),
@@ -5621,7 +5677,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         company_id: user.companyId,
         estimate_id: estimateId,
         title: line.title,
-        description: line.description || line.title,
+        description: line.description,
         quantity: line.quantity,
         unit: line.unit,
         unit_cost: line.unitCost,

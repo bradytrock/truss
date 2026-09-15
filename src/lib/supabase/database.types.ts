@@ -500,6 +500,7 @@ export type Database = {
           id: string;
           company_id: string;
           name: string;
+          description: string;
           kind: Database["public"]["Enums"]["catalog_kind"];
           unit: string;
           unit_cost: number;
@@ -512,6 +513,7 @@ export type Database = {
           id?: string;
           company_id: string;
           name: string;
+          description?: string;
           kind: Database["public"]["Enums"]["catalog_kind"];
           unit?: string;
           unit_cost?: number;

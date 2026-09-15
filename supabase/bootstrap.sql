@@ -8043,6 +8043,10 @@ alter table public.companies
 alter table public.catalog_items
   add column if not exists margin_percent numeric(8, 2) not null default 0;
 
+-- ========== 20260915120000_catalog_item_description.sql ==========
+alter table public.catalog_items
+  add column if not exists description text not null default '';
+
 -- ========== 20260828150000_price_lists.sql ==========
 -- Dated price lists. A new list becomes current; the previous list is
 -- outdated and kept for lookup. Catalog items belong to one list.

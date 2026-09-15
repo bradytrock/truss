@@ -13,6 +13,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
+import { FormattedTextEditor } from "@/components/formatted-text-editor";
 import { EstimateLinePhotos } from "@/components/estimate-line-photos";
 import { EstimateFilesPanel } from "@/components/estimate-files";
 import { BackToJobButton } from "@/components/back-to-job";
@@ -223,6 +224,9 @@ export function PriceBookSheet({
                   >
                     <div className="min-w-0 flex-1">
                       <p>{item.name}</p>
+                      {item.description ? (
+                        <p className="line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
+                      ) : null}
                       <p className="text-xs text-muted-foreground">
                         {item.costCode} · {item.unit}
                         {effectiveCatalogMargin(item.marginPercent, company.minimumMarginPercent) > 0
@@ -345,10 +349,9 @@ export function LineCard({
             placeholder="Title"
             onCommit={(value) => onPatch({ title: value })}
           />
-          <CommitTextarea
+          <FormattedTextEditor
             value={line.description}
             disabled={!editable}
-            rows={2}
             placeholder="What the homeowner sees under the title"
             onCommit={(value) => onPatch({ description: value })}
           />

@@ -105,6 +105,7 @@ export function PriceBookPanel() {
         if (!needle) return true;
         return (
           item.name.toLowerCase().includes(needle) ||
+          item.description.toLowerCase().includes(needle) ||
           item.costCode.toLowerCase().includes(needle) ||
           CATALOG_KIND_LABELS[item.kind].toLowerCase().includes(needle) ||
           item.unit.toLowerCase().includes(needle)
@@ -471,6 +472,9 @@ export function PriceBookPanel() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-medium">{item.name}</p>
+                    {item.description ? (
+                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
+                    ) : null}
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {item.costCode || "No code"} · {item.unit}
                       {effectiveCatalogMargin(item.marginPercent, minMargin) > 0
@@ -526,7 +530,14 @@ export function PriceBookPanel() {
                 {rows.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell className="tabular-nums">{item.costCode || "—"}</TableCell>
-                    <TableCell className="font-medium">{item.name}</TableCell>
+                    <TableCell>
+                      <p className="font-medium">{item.name}</p>
+                      {item.description ? (
+                        <p className="mt-0.5 line-clamp-2 text-xs font-normal text-muted-foreground">
+                          {item.description}
+                        </p>
+                      ) : null}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="font-normal">
                         {CATALOG_KIND_LABELS[item.kind]}

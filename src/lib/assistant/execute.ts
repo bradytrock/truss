@@ -426,7 +426,7 @@ async function runTool(
       const query = arg(args, "query");
       if (!query) return fail("Need a catalog search.");
       const items = currentCatalog(crm.catalog, crm.priceLists ?? [])
-        .filter((item) => matches(haystack(item.name, item.costCode, item.kind), query))
+        .filter((item) => matches(haystack(item.name, item.description, item.costCode, item.kind), query))
         .slice(0, 12)
         .map((item) => ({
           id: item.id,

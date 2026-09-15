@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { seedState } from "@/lib/seed";
-import { isMissingEstimateWriter, isMissingShareToken, isMissingFinancials, isMissingSignatureColumn, isMissingMessages, isMissingPriceLists, isMissingCatalogMargin } from "@/lib/supabase/schema-errors";
+import { isMissingEstimateWriter, isMissingShareToken, isMissingFinancials, isMissingSignatureColumn, isMissingMessages, isMissingPriceLists, isMissingCatalogMargin, isMissingCatalogDescription } from "@/lib/supabase/schema-errors";
 import type { Database } from "@/lib/supabase/database.types";
 
 type Client = SupabaseClient<Database>;
@@ -119,6 +119,7 @@ export async function insertOperations(
     id: remap(item.id, ids),
     company_id: companyId,
     name: item.name,
+    description: item.description ?? "",
     kind: item.kind,
     unit: item.unit,
     unit_cost: item.unitCost,
@@ -129,6 +130,13 @@ export async function insertOperations(
       : undefined,
   }));
   let catalogError = (await supabase.from("catalog_items").insert(catalogPayload)).error;
+  if (catalogError && isMissingCatalogDescription(catalogError)) {
+    catalogError = (
+      await supabase.from("catalog_items").insert(
+        catalogPayload.map(({ description: _description, ...row }) => row),
+      )
+    ).error;
+  }
   if (catalogError && isMissingCatalogMargin(catalogError)) {
     catalogError = (
       await supabase.from("catalog_items").insert(

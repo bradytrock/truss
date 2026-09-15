@@ -182,3 +182,44 @@
 .lesson-body strong {
   font-weight: 600;
 }
+
+.formatted-line-text ul,
+.formatted-line-editor ul {
+  list-style: disc;
+  margin: 0.2rem 0;
+  padding-left: 1.2rem;
+}
+.formatted-line-text ol,
+.formatted-line-editor ol {
+  list-style: decimal;
+  margin: 0.2rem 0;
+  padding-left: 1.2rem;
+}
+.formatted-line-text li,
+.formatted-line-editor li {
+  margin: 0.15rem 0;
+}
+.formatted-line-text p,
+.formatted-line-editor p,
+.formatted-line-text div,
+.formatted-line-editor div {
+  margin: 0 0 0.4rem;
+}
+.formatted-line-text p:last-child,
+.formatted-line-editor p:last-child,
+.formatted-line-text div:last-child,
+.formatted-line-editor div:last-child {
+  margin-bottom: 0;
+}
+.formatted-line-text strong,
+.formatted-line-text b,
+.formatted-line-editor strong,
+.formatted-line-editor b {
+  font-weight: 600;
+}
+.formatted-line-editor:empty:before,
+.formatted-line-editor:has(> br:only-child):before {
+  color: var(--muted-foreground);
+  content: attr(data-placeholder);
+  pointer-events: none;
+}
