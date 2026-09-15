@@ -39,6 +39,7 @@ import {
   type ContactBookRow,
   type ContactFilter,
 } from "@/lib/contact-book";
+import { buildVendorBook, visibleVendorRows, type VendorBookRow } from "@/lib/vendor-book";
 import { useCrm } from "@/lib/crm-store";
 import { formatDateShort, initials, localYmd } from "@/lib/format";
 import { mailHref } from "@/lib/job-emails";
@@ -63,8 +64,10 @@ export function ContactsDesk() {
   const [addingTask, setAddingTask] = useState(false);
   const startEstimate = useStartEstimate();
 
-  const filter = parseContactFilter(searchParams.get("filter"));
+  const vendorId = searchParams.get("vendor");
+  const filter = parseContactFilter(searchParams.get("filter") || (vendorId ? "vendors" : null));
   const contactId = searchParams.get("contact");
+  const showingVendors = filter === "vendors";
 
   const rows = useMemo(
     () =>
@@ -90,10 +93,18 @@ export function ContactsDesk() {
     ],
   );
 
+  const vendorRows = useMemo(() => buildVendorBook(crm.book.qbVendors), [crm.book.qbVendors]);
   const visible = useMemo(() => visibleContactRows(rows, filter, query), [filter, query, rows]);
-  const counts = useMemo(() => contactFilterCounts(rows), [rows]);
-  const openContact = contactId ? crm.getContact(contactId) : undefined;
+  const visibleVendors = useMemo(
+    () => (showingVendors ? visibleVendorRows(vendorRows, query) : []),
+    [query, showingVendors, vendorRows],
+  );
+  const counts = useMemo(() => contactFilterCounts(rows, vendorRows.length), [rows, vendorRows.length]);
+  const openContact = !showingVendors && contactId ? crm.getContact(contactId) : undefined;
   const selected = openContact ? rows.find((row) => row.id === openContact.id) : undefined;
+  const selectedVendor = showingVendors
+    ? vendorRows.find((row) => row.id === vendorId)
+    : undefined;
 
   const replaceParams = useCallback(
     (mutate: (params: URLSearchParams) => void) => {
@@ -110,6 +121,8 @@ export function ContactsDesk() {
       replaceParams((params) => {
         if (next === "all") params.delete("filter");
         else params.set("filter", next);
+        if (next === "vendors") params.delete("contact");
+        else params.delete("vendor");
       });
     },
     [replaceParams],
@@ -131,14 +144,39 @@ export function ContactsDesk() {
   const closeContact = useCallback(() => {
     replaceParams((params) => {
       params.delete("contact");
+      params.delete("vendor");
     });
     setFullOpen(false);
     setEditOpen(false);
     setAddingTask(false);
   }, [replaceParams]);
 
+  const selectVendor = useCallback(
+    (id: string) => {
+      replaceParams((params) => {
+        params.set("filter", "vendors");
+        params.set("vendor", id);
+        params.delete("contact");
+      });
+    },
+    [replaceParams],
+  );
+
   const step = useCallback(
     (delta: number) => {
+      if (showingVendors) {
+        if (visibleVendors.length === 0) return;
+        const index = visibleVendors.findIndex((row) => row.id === vendorId);
+        const next =
+          visibleVendors[Math.min(visibleVendors.length - 1, Math.max(0, (index < 0 ? 0 : index) + delta))];
+        if (next) {
+          selectVendor(next.id);
+          document.querySelector<HTMLElement>(`[data-vendor="${next.id}"]`)?.scrollIntoView({
+            block: "nearest",
+          });
+        }
+        return;
+      }
       if (visible.length === 0) return;
       const index = visible.findIndex((row) => row.id === contactId);
       const next = visible[Math.min(visible.length - 1, Math.max(0, (index < 0 ? 0 : index) + delta))];
@@ -149,7 +187,7 @@ export function ContactsDesk() {
         });
       }
     },
-    [contactId, selectContact, visible],
+    [contactId, selectContact, selectVendor, showingVendors, vendorId, visible, visibleVendors],
   );
 
   useEffect(() => {
@@ -163,18 +201,18 @@ export function ContactsDesk() {
         event.preventDefault();
         searchRef.current?.focus();
       }
-      if (event.key === "Escape" && contactId && !fullOpen && !editOpen) {
+      if (event.key === "Escape" && (contactId || vendorId) && !fullOpen && !editOpen) {
         event.preventDefault();
         closeContact();
       }
-      if (contactId && !fullOpen && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+      if ((contactId || vendorId) && !fullOpen && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
         event.preventDefault();
         step(event.key === "ArrowDown" ? 1 : -1);
       }
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [closeContact, contactId, editOpen, fullOpen, step]);
+  }, [closeContact, contactId, editOpen, fullOpen, step, vendorId]);
 
   async function importCsv(file: File) {
     setImporting(true);
@@ -248,7 +286,8 @@ export function ContactsDesk() {
 
   if (!crm.hydrated) return <LoadingScreen />;
 
-  const open = Boolean(selected);
+  const open = Boolean(selected) || Boolean(selectedVendor);
+  const listCount = showingVendors ? vendorRows.length : rows.length;
 
   return (
     <div className="space-y-5">
@@ -260,7 +299,7 @@ export function ContactsDesk() {
         <h1 className="text-[2.1rem] leading-none font-semibold tracking-tight text-[#1d1d1f]">
           Contacts
           <span className="ml-2.5 text-[15px] font-normal tracking-normal text-[#6e6e73] tabular-nums">
-            {rows.length}
+            {listCount}
           </span>
         </h1>
         <div className="ml-auto flex flex-wrap gap-2">
@@ -303,7 +342,9 @@ export function ContactsDesk() {
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Name, address, phone, or email"
+            placeholder={
+              showingVendors ? "Vendor name, phone, email, or address" : "Name, address, phone, or email"
+            }
             aria-label="Search contacts"
             className="h-10 flex-1 bg-transparent text-sm outline-none"
           />
@@ -360,10 +401,30 @@ export function ContactsDesk() {
             <span>Name</span>
             <span className={cn("hidden", !open && "xl:inline")}>Address</span>
             <span className={cn("hidden", !open && "xl:inline")}>Phone</span>
-            <span className={cn("hidden", !open && "xl:inline")}>Last contact</span>
-            <span>Stage</span>
+            <span className={cn("hidden", !open && "xl:inline")}>
+              {showingVendors ? "Email" : "Last contact"}
+            </span>
+            <span>{showingVendors ? "Status" : "Stage"}</span>
           </div>
-          {visible.length === 0 ? (
+          {showingVendors ? (
+            visibleVendors.length === 0 ? (
+              <p className="px-5 py-12 text-center text-sm text-[#6e6e73]">
+                {query.trim()
+                  ? `No vendors match “${query.trim()}”.`
+                  : emptyFilterCopy(filter)}
+              </p>
+            ) : (
+              visibleVendors.map((row) => (
+                <VendorRow
+                  key={row.id}
+                  row={row}
+                  compact={open}
+                  selected={row.id === vendorId}
+                  onOpen={() => selectVendor(row.id)}
+                />
+              ))
+            )
+          ) : visible.length === 0 ? (
             <p className="px-5 py-12 text-center text-sm text-[#6e6e73]">
               {query.trim()
                 ? `No contacts match “${query.trim()}”.`
@@ -392,7 +453,14 @@ export function ContactsDesk() {
               : "hidden",
           )}
         >
-          {selected && openContact ? (
+          {selectedVendor ? (
+            <VendorPanel
+              row={selectedVendor}
+              onClose={closeContact}
+              onPrev={() => step(-1)}
+              onNext={() => step(1)}
+            />
+          ) : selected && openContact ? (
             <ContactPanel
               row={selected}
               note={note}
@@ -451,7 +519,196 @@ function emptyFilterCopy(filter: ContactFilter) {
   if (filter === "prop") return "No proposals waiting.";
   if (filter === "cust") return "No customers with active jobs.";
   if (filter === "past") return "No past customers yet.";
+  if (filter === "vendors") {
+    return "No vendors pulled yet. Run the Web Connector so QuickBooks payees show up here.";
+  }
   return "Add a contact to start the book.";
+}
+
+function vendorStatusChip(active: boolean) {
+  return active
+    ? { label: "Active", chip: "bg-[#e6f3ea] text-[#1f7a3f]" }
+    : { label: "Inactive", chip: "bg-[#f7ebe8] text-[#8a2f22]" };
+}
+
+function VendorRow({
+  row,
+  compact,
+  selected,
+  onOpen,
+}: {
+  row: VendorBookRow;
+  compact: boolean;
+  selected: boolean;
+  onOpen: () => void;
+}) {
+  const status = vendorStatusChip(row.isActive);
+  return (
+    <div
+      role="option"
+      tabIndex={0}
+      aria-selected={selected}
+      data-vendor={row.id}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+      className={cn(
+        "relative grid min-h-[62px] cursor-pointer items-center gap-4 border-t border-[rgba(28,25,22,0.05)] px-5 first:border-t-0",
+        compact
+          ? "grid-cols-[minmax(0,1fr)_6.875rem]"
+          : "grid-cols-[minmax(0,1fr)_6.875rem] xl:grid-cols-[minmax(12.5rem,1.4fr)_minmax(0,1.6fr)_8.125rem_7.5rem_6.875rem]",
+        selected ? "bg-[#eef3fb]" : "hover:bg-[#fafaf8]",
+        !row.isActive && "opacity-80",
+      )}
+    >
+      {selected ? (
+        <span className="absolute top-2.5 bottom-2.5 left-0 w-[3px] rounded-r-[3px] bg-[#0a66d8]" />
+      ) : null}
+      <div className="flex min-w-0 items-center gap-3">
+        <ContactAvatar name={row.name} className="size-[34px] text-xs" />
+        <div className="min-w-0">
+          <div className="truncate font-medium text-[#1d1d1f]">{row.name}</div>
+          <div className="truncate text-[12.5px] text-[#6e6e73]">{row.typeLine}</div>
+        </div>
+      </div>
+      <div className={cn("hidden truncate text-[13.5px] text-[#6e6e73]", !compact && "xl:block")}>
+        {row.address || "—"}
+      </div>
+      <div className={cn("hidden truncate text-[13.5px] tabular-nums", !compact && "xl:block")}>
+        {row.phone}
+      </div>
+      <div className={cn("hidden truncate text-[13.5px] text-[#6e6e73]", !compact && "xl:block")}>
+        {row.email || "—"}
+      </div>
+      <div>
+        <span className={cn("inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium", status.chip)}>
+          {status.label}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function VendorPanel({
+  row,
+  onClose,
+  onPrev,
+  onNext,
+}: {
+  row: VendorBookRow;
+  onClose: () => void;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  const status = vendorStatusChip(row.isActive);
+  const tel = digitsOnly(row.phoneRaw);
+  const fields = [
+    ["Company", row.companyName],
+    ["Contact", row.contact],
+    ["Phone", row.phone !== "—" ? row.phone : ""],
+    ["Alt phone", row.altPhone !== "—" ? row.altPhone : ""],
+    ["Fax", row.fax],
+    ["Email", row.email],
+    ["Address", row.address],
+    ["Account #", row.accountNumber],
+    ["Type", row.vendorType],
+    ["Terms", row.terms],
+    ["Tax ID", row.taxId],
+    ["Credit limit", row.creditLimit],
+    ["Balance", row.balance],
+    ["Notes", row.notes],
+    ["List ID", row.listId],
+  ] as const;
+
+  return (
+    <>
+      <div className="flex items-center gap-1.5 px-3 pt-3 pr-3 pl-[18px]">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+            status.chip,
+          )}
+        >
+          <span className="size-1.5 rounded-full bg-current" />
+          {status.label}
+        </span>
+        <span className="flex-1" />
+        <IconBtn label="Previous vendor" onClick={onPrev}>
+          <ChevronUp />
+        </IconBtn>
+        <IconBtn label="Next vendor" onClick={onNext}>
+          <ChevronDown />
+        </IconBtn>
+        <IconBtn label="Close" onClick={onClose}>
+          <X />
+        </IconBtn>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto px-6 pt-1.5 pb-7">
+        <div className="mt-2 mb-4 flex items-center gap-3.5">
+          <ContactAvatar name={row.name} className="size-14 text-[19px]" />
+          <div className="min-w-0">
+            <h2 className="text-[22px] leading-tight font-semibold tracking-tight text-[#1d1d1f]">
+              {row.name}
+            </h2>
+            <p className="text-sm text-[#6e6e73]">
+              QuickBooks vendor
+              {row.typeLine && row.typeLine !== "Vendor" ? ` · ${row.typeLine}` : ""}
+            </p>
+          </div>
+        </div>
+
+        {!row.isActive ? (
+          <p className="mb-4 rounded-xl bg-[#f7ebe8] px-3.5 py-3 text-sm text-[#8a2f22]">
+            This vendor is inactive in QuickBooks. It stays on the book so you can still see the
+            payee, but it is hidden from new expense dropdowns.
+          </p>
+        ) : null}
+
+        <div className="mb-5 grid grid-cols-3 gap-2">
+          {tel ? (
+            <a href={`tel:${tel}`} className={quickClass}>
+              <Phone className="size-5 text-[#13295b]" />
+              Call
+            </a>
+          ) : (
+            <button type="button" className={quickClass} onClick={() => toast.message("No phone on file")}>
+              <Phone className="size-5 text-[#13295b]" />
+              Call
+            </button>
+          )}
+          {row.email ? (
+            <a href={`mailto:${row.email}`} className={quickClass}>
+              <Mail className="size-5 text-[#13295b]" />
+              Email
+            </a>
+          ) : (
+            <button type="button" className={quickClass} onClick={() => toast.message("No email on file")}>
+              <Mail className="size-5 text-[#13295b]" />
+              Email
+            </button>
+          )}
+        </div>
+
+        <section>
+          <SectionHead label="QuickBooks" />
+          <div className="overflow-hidden rounded-xl shadow-[0_0_0_1px_rgba(28,25,22,0.08)]">
+            <FieldRow label="Status" value={status.label} />
+            {fields.map(([label, value]) =>
+              value ? <FieldRow key={label} label={label} value={value} copy={value} /> : null,
+            )}
+            {row.syncedAt ? (
+              <FieldRow label="Synced" value={formatDateShort(row.syncedAt)} />
+            ) : null}
+          </div>
+        </section>
+      </div>
+    </>
+  );
 }
 
 function ContactRow({

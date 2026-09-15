@@ -1,6 +1,8 @@
 import { createAnonClient } from "@/lib/supabase/anon";
 import { isMissingQbwc } from "@/lib/supabase/schema-errors";
+import type { QbVendorRow } from "@/lib/qbwc/qbxml";
 import { parseWorkPayload, type QbwcWork } from "@/lib/qbwc/work";
+import type { Json } from "@/lib/supabase/database.types";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -90,7 +92,7 @@ export async function qbwcApply(
 
 export async function qbwcSaveVendors(
   ticket: string,
-  vendors: { listId: string; name: string; isActive: boolean }[],
+  vendors: QbVendorRow[],
   iteratorId: string,
   done: boolean,
   abort = false,
@@ -98,7 +100,7 @@ export async function qbwcSaveVendors(
   const supabase = createAnonClient();
   const { data, error } = await supabase.rpc("qbwc_save_vendors", {
     p_ticket: ticket,
-    p_vendors: vendors,
+    p_vendors: vendors as unknown as Json,
     p_iterator_id: iteratorId,
     p_done: done,
     p_abort: abort,

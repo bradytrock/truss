@@ -176,6 +176,26 @@ export type QbVendorRow = {
   listId: string;
   name: string;
   isActive: boolean;
+  companyName: string;
+  firstName: string;
+  lastName: string;
+  street: string;
+  street2: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  phone: string;
+  altPhone: string;
+  fax: string;
+  email: string;
+  contact: string;
+  accountNumber: string;
+  vendorType: string;
+  terms: string;
+  taxId: string;
+  creditLimit: string;
+  balance: string;
+  notes: string;
 };
 
 export function readVendorListResponse(xml: string) {
@@ -183,15 +203,8 @@ export function readVendorListResponse(xml: string) {
   const re = /<VendorRet\b[\s\S]*?<\/VendorRet>/gi;
   let match: RegExpExecArray | null;
   while ((match = re.exec(xml))) {
-    const block = match[0];
-    const listId = innerTag(block, "ListID");
-    const name = innerTag(block, "Name") || innerTag(block, "FullName");
-    if (!name) continue;
-    vendors.push({
-      listId,
-      name,
-      isActive: innerTag(block, "IsActive").toLowerCase() !== "false",
-    });
+    const parsed = readVendorRet(match[0]);
+    if (parsed) vendors.push(parsed);
   }
   const remaining = Number(xmlAttr(xml, "iteratorRemainingCount") || "0");
   const iteratorId = xmlAttr(xml, "iteratorID");
@@ -476,6 +489,50 @@ function firstStatusMessage(xml: string) {
 function innerTag(xml: string, tag: string) {
   const match = new RegExp(`<${tag}>([^<]*)</${tag}>`, "i").exec(xml);
   return match?.[1]?.trim() ?? "";
+}
+
+function innerBlock(xml: string, tag: string) {
+  const match = new RegExp(`<${tag}\\b[\\s\\S]*?<\\/${tag}>`, "i").exec(xml);
+  return match?.[0] ?? "";
+}
+
+function decodedTag(xml: string, tag: string) {
+  return decodeEntities(innerTag(xml, tag));
+}
+
+function refFullName(xml: string, tag: string) {
+  return decodedTag(innerBlock(xml, tag), "FullName");
+}
+
+export function readVendorRet(block: string): QbVendorRow | null {
+  const name = decodedTag(block, "Name") || decodedTag(block, "FullName");
+  if (!name) return null;
+  const address = innerBlock(block, "VendorAddress") || innerBlock(block, "BillAddress");
+  return {
+    listId: decodedTag(block, "ListID"),
+    name,
+    isActive: innerTag(block, "IsActive").toLowerCase() !== "false",
+    companyName: decodedTag(block, "CompanyName"),
+    firstName: decodedTag(block, "FirstName"),
+    lastName: decodedTag(block, "LastName"),
+    street: decodedTag(address, "Addr1"),
+    street2: decodedTag(address, "Addr2"),
+    city: decodedTag(address, "City"),
+    state: decodedTag(address, "State"),
+    postalCode: decodedTag(address, "PostalCode"),
+    phone: decodedTag(block, "Phone"),
+    altPhone: decodedTag(block, "AltPhone"),
+    fax: decodedTag(block, "Fax"),
+    email: decodedTag(block, "Email"),
+    contact: decodedTag(block, "Contact"),
+    accountNumber: decodedTag(block, "AccountNumber"),
+    vendorType: refFullName(block, "VendorTypeRef"),
+    terms: refFullName(block, "TermsRef"),
+    taxId: decodedTag(block, "VendorTaxIdent"),
+    creditLimit: decodedTag(block, "CreditLimit"),
+    balance: decodedTag(block, "Balance"),
+    notes: decodedTag(block, "Notes"),
+  };
 }
 
 function decodeEntities(value: string) {

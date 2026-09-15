@@ -734,6 +734,26 @@ export interface QbVendor {
   name: string;
   isActive: boolean;
   syncedAt: string;
+  companyName: string;
+  firstName: string;
+  lastName: string;
+  street: string;
+  street2: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  phone: string;
+  altPhone: string;
+  fax: string;
+  email: string;
+  contact: string;
+  accountNumber: string;
+  vendorType: string;
+  terms: string;
+  taxId: string;
+  creditLimit: string;
+  balance: string;
+  notes: string;
 }
 
 export interface ScheduleEvent {

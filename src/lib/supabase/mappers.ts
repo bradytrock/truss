@@ -868,13 +868,39 @@ export function mapExpense(row: Database["public"]["Tables"]["expenses"]["Row"])
   };
 }
 
+function vendorText(row: Record<string, unknown>, key: string) {
+  const value = row[key];
+  return typeof value === "string" ? value : "";
+}
+
 export function mapQbVendor(row: Database["public"]["Tables"]["qb_vendors"]["Row"]): QbVendor {
+  const extra = row as Database["public"]["Tables"]["qb_vendors"]["Row"] & Record<string, unknown>;
   return {
     id: row.id,
     listId: row.list_id,
     name: row.name,
     isActive: row.is_active,
     syncedAt: row.synced_at,
+    companyName: vendorText(extra, "company_name"),
+    firstName: vendorText(extra, "first_name"),
+    lastName: vendorText(extra, "last_name"),
+    street: vendorText(extra, "street"),
+    street2: vendorText(extra, "street2"),
+    city: vendorText(extra, "city"),
+    state: vendorText(extra, "state"),
+    postalCode: vendorText(extra, "postal_code"),
+    phone: vendorText(extra, "phone"),
+    altPhone: vendorText(extra, "alt_phone"),
+    fax: vendorText(extra, "fax"),
+    email: vendorText(extra, "email"),
+    contact: vendorText(extra, "contact"),
+    accountNumber: vendorText(extra, "account_number"),
+    vendorType: vendorText(extra, "vendor_type"),
+    terms: vendorText(extra, "terms"),
+    taxId: vendorText(extra, "tax_id"),
+    creditLimit: vendorText(extra, "credit_limit"),
+    balance: vendorText(extra, "balance"),
+    notes: vendorText(extra, "notes"),
   };
 }
 

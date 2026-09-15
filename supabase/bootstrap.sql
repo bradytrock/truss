@@ -7217,8 +7217,50 @@ create table if not exists public.qb_vendors (
   list_id text not null default '',
   name text not null,
   is_active boolean not null default true,
-  synced_at timestamptz not null default now()
+  synced_at timestamptz not null default now(),
+  company_name text not null default '',
+  first_name text not null default '',
+  last_name text not null default '',
+  street text not null default '',
+  street2 text not null default '',
+  city text not null default '',
+  state text not null default '',
+  postal_code text not null default '',
+  phone text not null default '',
+  alt_phone text not null default '',
+  fax text not null default '',
+  email text not null default '',
+  contact text not null default '',
+  account_number text not null default '',
+  vendor_type text not null default '',
+  terms text not null default '',
+  tax_id text not null default '',
+  credit_limit text not null default '',
+  balance text not null default '',
+  notes text not null default ''
 );
+
+alter table public.qb_vendors
+  add column if not exists company_name text not null default '',
+  add column if not exists first_name text not null default '',
+  add column if not exists last_name text not null default '',
+  add column if not exists street text not null default '',
+  add column if not exists street2 text not null default '',
+  add column if not exists city text not null default '',
+  add column if not exists state text not null default '',
+  add column if not exists postal_code text not null default '',
+  add column if not exists phone text not null default '',
+  add column if not exists alt_phone text not null default '',
+  add column if not exists fax text not null default '',
+  add column if not exists email text not null default '',
+  add column if not exists contact text not null default '',
+  add column if not exists account_number text not null default '',
+  add column if not exists vendor_type text not null default '',
+  add column if not exists terms text not null default '',
+  add column if not exists tax_id text not null default '',
+  add column if not exists credit_limit text not null default '',
+  add column if not exists balance text not null default '',
+  add column if not exists notes text not null default '';
 
 create unique index if not exists qb_vendors_company_list_id_idx
   on public.qb_vendors (company_id, list_id);
@@ -7325,10 +7367,60 @@ begin
     if v_list = '' then
       continue;
     end if;
-    insert into public.qb_vendors (company_id, list_id, name, is_active, synced_at)
-    values (sess.company_id, v_list, v_name, v_active, now())
+    insert into public.qb_vendors (
+      company_id, list_id, name, is_active, synced_at,
+      company_name, first_name, last_name, street, street2, city, state, postal_code,
+      phone, alt_phone, fax, email, contact, account_number, vendor_type, terms,
+      tax_id, credit_limit, balance, notes
+    )
+    values (
+      sess.company_id, v_list, v_name, v_active, now(),
+      coalesce(nullif(trim(item->>'companyName'), ''), ''),
+      coalesce(nullif(trim(item->>'firstName'), ''), ''),
+      coalesce(nullif(trim(item->>'lastName'), ''), ''),
+      coalesce(nullif(trim(item->>'street'), ''), ''),
+      coalesce(nullif(trim(item->>'street2'), ''), ''),
+      coalesce(nullif(trim(item->>'city'), ''), ''),
+      coalesce(nullif(trim(item->>'state'), ''), ''),
+      coalesce(nullif(trim(item->>'postalCode'), ''), ''),
+      coalesce(nullif(trim(item->>'phone'), ''), ''),
+      coalesce(nullif(trim(item->>'altPhone'), ''), ''),
+      coalesce(nullif(trim(item->>'fax'), ''), ''),
+      coalesce(nullif(trim(item->>'email'), ''), ''),
+      coalesce(nullif(trim(item->>'contact'), ''), ''),
+      coalesce(nullif(trim(item->>'accountNumber'), ''), ''),
+      coalesce(nullif(trim(item->>'vendorType'), ''), ''),
+      coalesce(nullif(trim(item->>'terms'), ''), ''),
+      coalesce(nullif(trim(item->>'taxId'), ''), ''),
+      coalesce(nullif(trim(item->>'creditLimit'), ''), ''),
+      coalesce(nullif(trim(item->>'balance'), ''), ''),
+      coalesce(nullif(trim(item->>'notes'), ''), '')
+    )
     on conflict (company_id, list_id)
-    do update set name = excluded.name, is_active = excluded.is_active, synced_at = now();
+    do update set
+      name = excluded.name,
+      is_active = excluded.is_active,
+      synced_at = now(),
+      company_name = excluded.company_name,
+      first_name = excluded.first_name,
+      last_name = excluded.last_name,
+      street = excluded.street,
+      street2 = excluded.street2,
+      city = excluded.city,
+      state = excluded.state,
+      postal_code = excluded.postal_code,
+      phone = excluded.phone,
+      alt_phone = excluded.alt_phone,
+      fax = excluded.fax,
+      email = excluded.email,
+      contact = excluded.contact,
+      account_number = excluded.account_number,
+      vendor_type = excluded.vendor_type,
+      terms = excluded.terms,
+      tax_id = excluded.tax_id,
+      credit_limit = excluded.credit_limit,
+      balance = excluded.balance,
+      notes = excluded.notes;
   end loop;
 
   if p_done then

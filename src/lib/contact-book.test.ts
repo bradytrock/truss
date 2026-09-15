@@ -296,6 +296,8 @@ assert.equal(counts.prop, 1);
 assert.equal(counts.cust, 1);
 assert.equal(counts.past, 1);
 assert.equal(counts.tasks, 1);
+assert.equal(counts.vendors, 0);
+assert.equal(contactFilterCounts(rows, 12).vendors, 12);
 
 assert.equal(visibleContactRows(rows, "lead", "").map((row) => row.id).join(), "c_lead");
 assert.equal(visibleContactRows(rows, "tasks", "").map((row) => row.id).join(), "c_cust");
