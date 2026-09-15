@@ -1,4 +1,5 @@
 import {
+  billAddXml,
   checkAddXml,
   creditCardChargeAddXml,
   customerAddXml,
@@ -126,6 +127,9 @@ function expenseRequest(requestId: string, work: QbwcWork, useAlias: boolean) {
   };
   if (work.payWith === "credit_card") {
     return creditCardChargeAddXml({ ...line, ccAccount: work.payAccount });
+  }
+  if (work.payWith === "bill") {
+    return billAddXml(line);
   }
   return checkAddXml({ ...line, bankAccount: work.payAccount });
 }
@@ -329,6 +333,6 @@ export const STEP_LABELS: Record<QbwcStep, string> = {
   vendor_query: "Find the vendor in QuickBooks",
   vendor_add: "Create the vendor",
   vendor_list_query: "Pull vendors from QuickBooks",
-  expense_add: "Add the check or credit card charge",
+  expense_add: "Add the bill, check, or credit card charge",
   payment_add: "Receive the payment against the invoice",
 };

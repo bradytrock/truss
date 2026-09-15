@@ -87,7 +87,7 @@ export type QbExpenseWork = {
   vendor: string;
   accountName: string;
   amount: number;
-  payWith: "credit_card" | "check";
+  payWith: "credit_card" | "check" | "bill";
   txnDate: string;
   memo: string;
   payAccount: string;
@@ -134,7 +134,6 @@ export function invoicePushBlocked(input: {
   job?: Job;
   lines: InvoiceLine[];
 }): string | null {
-  if (input.invoice.status === "draft") return "Still a draft — send it before QuickBooks.";
   if (input.invoice.status === "void") return "Voided invoices stay out of QuickBooks.";
   if (!input.job) return "Assign this invoice to a job so QuickBooks can hang it on Customer:Job.";
   if (input.lines.length === 0) return "Add line items first. The connector will not guess amounts.";
@@ -332,7 +331,7 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
       vendor,
       accountName: asString(row.accountName, "Other"),
       amount: asNumber(row.amount),
-      payWith: asString(row.payWith) === "credit_card" ? "credit_card" : "check",
+      payWith: asPayWith(row.payWith),
       txnDate: asString(row.txnDate),
       memo: asString(row.memo),
       payAccount: asString(row.payAccount, DEFAULT_QB_BANK),
@@ -399,6 +398,12 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
       })),
     ...resolvedIds(row),
   };
+}
+
+function asPayWith(value: unknown): QbExpenseWork["payWith"] {
+  if (value === "credit_card") return "credit_card";
+  if (value === "bill") return "bill";
+  return "check";
 }
 
 function asString(value: unknown, fallback = "") {

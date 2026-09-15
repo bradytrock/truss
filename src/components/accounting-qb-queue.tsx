@@ -23,7 +23,7 @@ import { expensePushBlocked, invoicePushBlocked, paymentPushBlocked } from "@/li
 export function AccountingSyncQueues() {
   const crm = useCrm();
   const invoices = crm.invoices.filter(
-    (invoice) => invoice.qbStatus !== "entered" && invoice.status !== "draft" && invoice.status !== "void",
+    (invoice) => invoice.qbStatus !== "entered" && invoice.status !== "void",
   );
   const expenses = crm.expenses.filter((expense) => expense.qbStatus !== "entered");
   const payments = crm.payments.filter((payment) => payment.qbStatus !== "entered");

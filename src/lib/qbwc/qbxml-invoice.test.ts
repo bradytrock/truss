@@ -1,0 +1,80 @@
+import assert from "node:assert/strict";
+import { billAddXml, invoiceAddXml, signedInvoiceQtyRate } from "./qbxml.ts";
+import { requestForStep } from "./steps.ts";
+import type { QbExpenseWork, QbInvoiceWork } from "./work.ts";
+
+assert.deepEqual(signedInvoiceQtyRate(1, 7482.12), { quantity: 1, unitCost: 7482.12 });
+assert.deepEqual(signedInvoiceQtyRate(1, -1000), { quantity: -1, unitCost: 1000 });
+assert.deepEqual(signedInvoiceQtyRate(2, -50), { quantity: -2, unitCost: 50 });
+
+const xml = invoiceAddXml({
+  requestId: "inv-1-invoice_add",
+  customerJobFullName: "Ojamaye:BJ091026-A",
+  refNumber: "INV-1002",
+  txnDate: "2026-09-10",
+  itemName: "Contract work",
+  lines: [
+    { description: "Concrete Tile Roof Repair", quantity: 1, unit: "ea", unitCost: 7482.12 },
+    { description: "Discount", quantity: 1, unit: "LS", unitCost: -1000 },
+  ],
+});
+assert.match(xml, /<Quantity>1<\/Quantity>[\s\S]*<Rate>7482.12<\/Rate>/);
+assert.match(xml, /<Quantity>-1<\/Quantity>[\s\S]*<Rate>1000.00<\/Rate>/);
+assert.doesNotMatch(xml, /<Quantity>1<\/Quantity>[\s\S]*<Rate>-1000.00<\/Rate>/);
+
+const invoiceWork: QbInvoiceWork = {
+  kind: "invoice",
+  invoiceId: "inv-1",
+  number: "INV-1002",
+  name: "Ojamaye",
+  issuedAt: "2026-09-10",
+  dueAt: null,
+  notes: "",
+  customerName: "Ojamaye",
+  jobCode: "BJ091026-A",
+  jobName: "Ojamaye",
+  street: "",
+  city: "",
+  state: "",
+  postalCode: "",
+  phone: "",
+  itemName: "Contract work",
+  lines: [{ description: "Discount", quantity: 1, unit: "LS", unitCost: -1000 }],
+};
+assert.match(requestForStep("invoice_add", invoiceWork), /<Quantity>-1<\/Quantity>/);
+
+const expenseWork: QbExpenseWork = {
+  kind: "expense",
+  expenseId: "exp-1",
+  number: "EXP-1001",
+  vendor: "Silva's Sheet Metal LLC",
+  accountName: "Subcontractors",
+  amount: 2800,
+  payWith: "bill",
+  txnDate: "2026-09-10",
+  memo: "",
+  payAccount: "Checking",
+  customerName: "Ojamaye",
+  jobCode: "BJ091026-A",
+  jobName: "Ojamaye",
+  street: "",
+  city: "",
+  state: "",
+  postalCode: "",
+  phone: "",
+  hasJob: true,
+};
+const billXml = requestForStep("expense_add", expenseWork);
+assert.match(billXml, /<BillAddRq/);
+assert.match(billXml, /<VendorRef>[\s\S]*Silva&apos;s Sheet Metal LLC/);
+assert.match(billXml, /<CustomerRef>[\s\S]*Ojamaye:BJ091026-A/);
+assert.doesNotMatch(billXml, /<CheckAddRq/);
+
+const checkXml = billAddXml({
+  requestId: "e1",
+  vendor: "Vendor",
+  txnDate: "2026-09-10",
+  accountName: "Subcontractors",
+  amount: 10,
+});
+assert.match(checkXml, /<BillAdd>/);

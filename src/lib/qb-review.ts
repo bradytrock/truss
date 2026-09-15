@@ -85,7 +85,6 @@ export function qbApproveInbox(input: {
 
   const pendingInvoices = input.invoices.filter(
     (invoice) =>
-      invoice.status !== "draft" &&
       invoice.status !== "void" &&
       invoice.qbStatus !== "entered" &&
       !weekInvoiceIds.has(invoice.id),

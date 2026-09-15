@@ -142,7 +142,7 @@ export function AccountingExpenseReview({
       <div>
         <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">Expense review</p>
         <p className="text-sm text-[#706e6b]">
-          Compare the receipt to the fields QuickBooks will get, then approve the check or credit card charge.
+          Compare the receipt to the fields QuickBooks will get, then approve the bill, check, or credit card charge.
         </p>
       </div>
 

@@ -108,7 +108,7 @@ assert.deepEqual(
     invoice({ id: "in", number: "INV-E", qbStatus: "entered" }),
     invoice({ id: "open", number: "INV-1" }),
   ]).map((item) => item.id),
-  ["open"],
+  ["draft", "open"],
 );
 
 assert.equal(invoiceDueLabel(invoice({ id: "a", number: "INV-1", dueAt: null })), "Due on receipt");
@@ -201,5 +201,12 @@ assert.equal(preview.vendor, "ABC Supply");
 assert.equal(preview.accountName, "Job materials");
 assert.equal(preview.customerJob, "Martinez:J-12");
 assert.equal(preview.memo, "Ridge vent");
+
+const achPreview = expenseQbPreview(
+  { ...bill, method: "ach" },
+  job({ id: "job_1", name: "Martinez", code: "J-12" }),
+  "Martinez",
+);
+assert.equal(achPreview.txnType, "Vendor bill");
 
 console.log("accounting-books tests passed");
