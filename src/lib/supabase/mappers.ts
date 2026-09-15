@@ -534,9 +534,9 @@ export function mapEstimate(row: EstimateRow): Estimate {
     secondSignatureName: "second_signature_name" in row ? String(row.second_signature_name ?? "") : "",
     secondSignatureImage: "second_signature_image" in row ? String(row.second_signature_image ?? "") : "",
     packageMode: parseEstimatePackageMode("package_mode" in row ? String(row.package_mode ?? "") : ""),
-    selectedPackage: parseEstimatePackage(
-      "selected_package" in row ? String(row.selected_package ?? "") : "",
-    ),
+    selectedPackage:
+      parseEstimatePackage("selected_package" in row ? String(row.selected_package ?? "") : "") ||
+      "better",
     marginPercent: "margin_percent" in row && row.margin_percent != null ? Number(row.margin_percent) : 0,
     subtotalOverride:
       "subtotal_override" in row && row.subtotal_override != null

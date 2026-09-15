@@ -1,10 +1,10 @@
 import type { CompanySettings, Estimate, EstimateLine, EstimateSignatureEvent, Invoice, InvoiceLine, JobPhoto, Payment } from "@/lib/types";
 import { estimateTotals, groupEstimateLines, lineAmount, lineIncluded, totalsForPackage } from "@/lib/estimate-totals";
 import {
-  ESTIMATE_PACKAGES,
-  PACKAGE_LABEL,
   isGbbEstimate,
-  parseEstimatePackage,
+  listEstimateOptions,
+  optionLabel,
+  resolveSelectedPackage,
   scopedEstimateLines,
 } from "@/lib/estimate-packages";
 import { formatDate, formatMoney, formatPhone, formatDateTimeUtc } from "@/lib/format";
@@ -498,7 +498,7 @@ export async function buildEstimatePdf(input: {
   const site = formatJobSite(input.estimate);
   const visibleLines = scopedEstimateLines(input.estimate, input.lines);
   const totals = estimateTotals(input.estimate, input.lines);
-  const selectedPackage = parseEstimatePackage(input.estimate.selectedPackage);
+  const selectedPackage = resolveSelectedPackage(input.estimate, input.lines);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
@@ -532,15 +532,16 @@ export async function buildEstimatePdf(input: {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(90, 90, 90);
-    doc.text("PACKAGES", 54, y);
+    doc.text("OPTIONS", 54, y);
     y += 14;
-    for (const pkg of ESTIMATE_PACKAGES) {
-      const amount = totalsForPackage(input.estimate, input.lines, pkg).total;
-      const active = pkg === selectedPackage;
+    const options = listEstimateOptions(input.lines);
+    for (const option of options) {
+      const amount = totalsForPackage(input.estimate, input.lines, option.key).total;
+      const active = option.key === selectedPackage;
       doc.setFont("helvetica", active ? "bold" : "normal");
       doc.setFontSize(10);
       doc.setTextColor(active ? 28 : 70, active ? 28 : 70, active ? 28 : 70);
-      const label = active ? `${PACKAGE_LABEL[pkg]} — this proposal` : PACKAGE_LABEL[pkg];
+      const label = active ? `${option.name} — this proposal` : option.name;
       doc.text(label, 54, y);
       doc.text(formatMoney(amount), right, y, { align: "right" });
       y += 14;
@@ -550,7 +551,7 @@ export async function buildEstimatePdf(input: {
     doc.setTextColor(70, 70, 70);
     y = writeParagraph(
       doc,
-      `This proposal is the ${PACKAGE_LABEL[selectedPackage]} package plus shared work. Packages replace each other; they do not stack.`,
+      `This proposal is ${optionLabel(selectedPackage)} plus shared work. Options replace each other; they do not stack.`,
       y,
     );
   }

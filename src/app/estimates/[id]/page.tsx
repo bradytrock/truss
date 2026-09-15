@@ -27,5 +27,5 @@ export default function EstimateDetailPage() {
     );
   }
 
-  return <EstimateWriter estimate={estimate} />;
+  return <EstimateWriter key={estimate.id} estimate={estimate} />;
 }

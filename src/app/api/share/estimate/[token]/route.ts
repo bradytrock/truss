@@ -66,14 +66,14 @@ export async function PATCH(request: Request, context: { params: Promise<{ token
   const body = (await request.json().catch(() => null)) as
     | { lineId?: string; selected?: boolean; package?: string }
     | null;
-  const pkg = typeof body?.package === "string" ? body.package.trim().toLowerCase() : "";
+  const pkg = typeof body?.package === "string" ? body.package.trim() : "";
   const lineId = typeof body?.lineId === "string" ? body.lineId.trim() : "";
-  if (!lineId && pkg !== "good" && pkg !== "better" && pkg !== "best") {
-    return shareJson({ error: "Pick a package or an optional line to include." }, 400);
+  if (!lineId && !pkg) {
+    return shareJson({ error: "Pick an option or an optional line to include." }, 400);
   }
   try {
     const supabase = createAnonClient();
-    if (pkg === "good" || pkg === "better" || pkg === "best") {
+    if (pkg) {
       const { data, error } = await supabase.rpc("select_shared_estimate_package", {
         p_token: trimmed,
         p_package: pkg,

@@ -24,7 +24,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newPortalToken, portalInviteExpiry, portalUrl } from "@/lib/portal";
@@ -1026,9 +1026,28 @@ type CrmContextValue = CrmState & {
   addEstimateLineFromCatalog: (
     estimateId: string,
     catalogItemId: string,
-    groupName?: string
+    groupName?: string,
+    fields?: Partial<Pick<EstimateLine, "package">>
   ) => Promise<EstimateLine | undefined>;
-  addCustomEstimateLine: (estimateId: string, groupName?: string) => Promise<EstimateLine | undefined>;
+  addCustomEstimateLine: (
+    estimateId: string,
+    groupName?: string,
+    fields?: Partial<
+      Pick<
+        EstimateLine,
+        | "package"
+        | "title"
+        | "description"
+        | "quantity"
+        | "unit"
+        | "unitCost"
+        | "optional"
+        | "selected"
+        | "taxable"
+        | "catalogItemId"
+      >
+    >,
+  ) => Promise<EstimateLine | undefined>;
   updateEstimateLine: (id: string, patch: Partial<EstimateLine>) => Promise<void>;
   removeEstimateLine: (id: string) => Promise<void>;
   reorderEstimateLine: (id: string, direction: "up" | "down") => Promise<void>;
@@ -4019,6 +4038,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     const { error } = await supabase.from("estimates").update(estimatePatch(patch)).eq("id", id);
     if (error) {
+      if (isRestrictedEstimatePackage(error)) {
+        toast.error(restrictedEstimatePackageMessage());
+        return;
+      }
       if (isMissingEstimatePackages(error)) {
         apply();
         toast.message(missingEstimatePackagesMessage());
@@ -5559,7 +5582,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const addEstimateLineFromCatalog = useCallback(
-    async (estimateId: string, catalogItemId: string, groupName?: string) => {
+    async (
+      estimateId: string,
+      catalogItemId: string,
+      groupName?: string,
+      fields?: Partial<Pick<EstimateLine, "package">>,
+    ) => {
       const item = state.catalog.find((entry) => entry.id === catalogItemId);
       if (!item) return;
       const sortOrder =
@@ -5580,6 +5608,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         unitCost: catalogProposalUnitPrice(item, companySettings),
         sortOrder,
         groupName: groupName ?? "",
+        package: fields?.package ?? "",
       });
       const supabase = maybeClient();
       if (!supabase) {
@@ -5607,6 +5636,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         coverage_unit: line.coverageUnit || "squares",
       };
       let { data, error } = await supabase.from("estimate_lines").insert(payload).select("*").single();
+      if (error && isRestrictedEstimatePackage(error)) {
+        toast.error(restrictedEstimatePackageMessage());
+        return;
+      }
       if (error && isMissingEstimatePackages(error)) {
         const { package: _pkg, ...withoutPackage } = payload;
         const retry = await supabase.from("estimate_lines").insert(withoutPackage).select("*").single();
@@ -5648,7 +5681,25 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const addCustomEstimateLine = useCallback(
-    async (estimateId: string, groupName?: string) => {
+    async (
+      estimateId: string,
+      groupName?: string,
+      fields?: Partial<
+        Pick<
+          EstimateLine,
+          | "package"
+          | "title"
+          | "description"
+          | "quantity"
+          | "unit"
+          | "unitCost"
+          | "optional"
+          | "selected"
+          | "taxable"
+          | "catalogItemId"
+        >
+      >,
+    ) => {
       const sortOrder =
         Math.max(
           0,
@@ -5659,14 +5710,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const line = fillEstimateLine({
         id: crypto.randomUUID(),
         estimateId,
-        catalogItemId: null,
-        title: "New item",
-        description: "",
-        quantity: 1,
-        unit: "LS",
-        unitCost: 0,
+        catalogItemId: fields?.catalogItemId ?? null,
+        title: fields?.title ?? "New item",
+        description: fields?.description ?? "",
+        quantity: fields?.quantity ?? 1,
+        unit: fields?.unit ?? "LS",
+        unitCost: fields?.unitCost ?? 0,
         sortOrder,
         groupName: groupName ?? "",
+        package: fields?.package ?? "",
+        optional: fields?.optional,
+        selected: fields?.selected,
+        taxable: fields?.taxable,
       });
       const supabase = maybeClient();
       if (!supabase) {
@@ -5693,6 +5748,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         coverage_unit: line.coverageUnit || "squares",
       };
       let { data, error } = await supabase.from("estimate_lines").insert(payload).select("*").single();
+      if (error && isRestrictedEstimatePackage(error)) {
+        toast.error(restrictedEstimatePackageMessage());
+        return;
+      }
       if (error && isMissingEstimatePackages(error)) {
         const { package: _pkg, ...withoutPackage } = payload;
         const retry = await supabase.from("estimate_lines").insert(withoutPackage).select("*").single();

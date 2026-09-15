@@ -733,7 +733,7 @@ async function runTool(
     case "update_estimate": {
       const estimate = resolveEstimate(crm, arg(args, "estimate"));
       if (!estimate) return fail("No estimate matches that.");
-      const patch: { packageMode?: "" | "gbb"; selectedPackage?: "good" | "better" | "best" } = {};
+      const patch: { packageMode?: "" | "gbb"; selectedPackage?: string } = {};
       if (args.packageMode !== undefined) patch.packageMode = parseEstimatePackageMode(arg(args, "packageMode"));
       if (args.selectedPackage !== undefined) patch.selectedPackage = parseEstimatePackage(arg(args, "selectedPackage"));
       if (!Object.keys(patch).length) return fail("Set packageMode or selectedPackage.");

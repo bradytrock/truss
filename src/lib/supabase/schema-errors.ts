@@ -80,7 +80,18 @@ export function isMissingEstimatePackages(error: { message?: string; code?: stri
 }
 
 export function missingEstimatePackagesMessage() {
-  return `Saved in this browser. Run ${ESTIMATE_PACKAGES_SQL} in the SQL editor so Good / Better / Best packages stay on the proposal.`;
+  return `Saved in this browser. Run ${ESTIMATE_PACKAGES_SQL} in the SQL editor so proposal options stay on the estimate.`;
+}
+
+export const ESTIMATE_OPTIONS_SQL = "supabase/migrations/20260915160000_estimate_options.sql";
+
+export function isRestrictedEstimatePackage(error: { message?: string; code?: string } | null | undefined) {
+  const message = error?.message ?? "";
+  return /estimate_lines_package_check|estimates_selected_package_check/i.test(message);
+}
+
+export function restrictedEstimatePackageMessage() {
+  return `Named options need a database update. Run ${ESTIMATE_OPTIONS_SQL} in the SQL editor.`;
 }
 
 export const ESTIMATE_LUMP_SUM_SQL = "supabase/migrations/20260906010000_estimate_lump_sum_pricing.sql";

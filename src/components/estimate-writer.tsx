@@ -73,10 +73,18 @@ import { COMMON_UNITS, estimateTotals, groupEstimateLines, lineAmount, linesForE
 import {
   ESTIMATE_PACKAGES,
   PACKAGE_LABEL,
+  groupHasMixedPackages,
   isGbbEstimate,
   linePackageFromSelect,
   linePackageSelectValue,
+  listEstimateOptions,
+  nextOptionKey,
+  nextOptionName,
+  optionKeyForGroup,
   parseEstimatePackage,
+  parseLinePackage,
+  resolveSelectedPackage,
+  type EstimateOption,
 } from "@/lib/estimate-packages";
 import {
   COVERAGE_PREVIEW_SQUARES,
@@ -277,7 +285,7 @@ export type PricedLine = {
   optional: boolean;
   selected: boolean;
   taxable: boolean;
-  package?: "" | "good" | "better" | "best";
+  package?: string;
   /** EagleView qty formula used when applying measurements (advanced). */
   quantityFormula?: string;
   measurementKeys?: string[];
@@ -469,25 +477,35 @@ export function LineCard({
                   onPatch({ package: linePackageFromSelect(String(value ?? "all")) })
                 }
                 items={[
-                  { value: "all", label: "All packages" },
+                  { value: "all", label: "Shared work" },
                   ...ESTIMATE_PACKAGES.map((pkg) => ({ value: pkg, label: PACKAGE_LABEL[pkg] })),
+                  ...(parseLinePackage(line.package) && !ESTIMATE_PACKAGES.includes(parseLinePackage(line.package) as (typeof ESTIMATE_PACKAGES)[number])
+                    ? [{ value: parseLinePackage(line.package), label: parseLinePackage(line.package) }]
+                    : []),
                 ]}
               >
                 <SelectTrigger size="sm" className="w-[9.5rem]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All packages</SelectItem>
+                  <SelectItem value="all">Shared work</SelectItem>
                   {ESTIMATE_PACKAGES.map((pkg) => (
                     <SelectItem key={pkg} value={pkg}>
                       {PACKAGE_LABEL[pkg]}
                     </SelectItem>
                   ))}
+                  {parseLinePackage(line.package) &&
+                  !ESTIMATE_PACKAGES.includes(parseLinePackage(line.package) as (typeof ESTIMATE_PACKAGES)[number]) ? (
+                    <SelectItem value={parseLinePackage(line.package)}>{parseLinePackage(line.package)}</SelectItem>
+                  ) : null}
                 </SelectContent>
               </Select>
             ) : (
               <p className="text-sm">
-                {line.package ? PACKAGE_LABEL[parseEstimatePackage(line.package)] : "All packages"}
+                {line.package
+                  ? PACKAGE_LABEL[parseEstimatePackage(line.package) as (typeof ESTIMATE_PACKAGES)[number]] ??
+                    line.package
+                  : "Shared work"}
               </p>
             )}
           </div>
@@ -652,6 +670,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   } | null>(null);
   const [sectionName, setSectionName] = useState("");
   const [emptySections, setEmptySections] = useState<string[]>([]);
+  const [emptyOptions, setEmptyOptions] = useState<EstimateOption[]>([]);
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [signOpen, setSignOpen] = useState(false);
@@ -781,7 +800,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   const billed = billingEstimate(estimate, market);
   const totals = estimateTotals(billed, lines);
   const gbb = isGbbEstimate(estimate);
-  const selectedPackage = parseEstimatePackage(estimate.selectedPackage);
+  const estimateOptions = listEstimateOptions(lines, emptyOptions);
+  const selectedPackage = resolveSelectedPackage(estimate, lines, emptyOptions);
   const letterhead = letterheadCompanyForRecord({
     company: crm.company,
     job,
@@ -812,10 +832,50 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     return pendingSections.at(-1) || groups.at(-1)?.name;
   }
 
-  useEffect(() => {
-    setEmptySections([]);
-    setSectionName("");
-  }, [estimate.id]);
+  function packageForGroup(name?: string) {
+    if (!name) return "";
+    return optionKeyForGroup(name, lines, emptyOptions);
+  }
+
+  function addOptionSection() {
+    const name = nextOptionName(displayGroups.map((group) => group.name));
+    const key = nextOptionKey([...lines.map((line) => line.package), ...emptyOptions.map((item) => item.key)]);
+    setEmptySections((prev) => [...prev, name]);
+    setEmptyOptions((prev) => [...prev, { key, name }]);
+    void crm.updateEstimate(estimate.id, {
+      packageMode: "gbb",
+      selectedPackage: gbb ? estimate.selectedPackage || key : key,
+    });
+  }
+
+  async function buildOptionFrom(group: { name: string; lines: EstimateLine[] }) {
+    const name = nextOptionName(displayGroups.map((item) => item.name));
+    const key = nextOptionKey([...lines.map((line) => line.package), ...emptyOptions.map((item) => item.key)]);
+    if (!gbb || !estimate.selectedPackage) {
+      await crm.updateEstimate(estimate.id, { packageMode: "gbb", selectedPackage: key });
+    }
+    if (group.lines.length === 0) {
+      setEmptySections((prev) => [...prev, name]);
+      setEmptyOptions((prev) => [...prev, { key, name }]);
+      toast.success(`Started ${name} from ${group.name}.`);
+      return;
+    }
+    for (const line of group.lines) {
+      await crm.addCustomEstimateLine(estimate.id, name, {
+        package: key,
+        title: line.title,
+        description: line.description,
+        quantity: line.quantity,
+        unit: line.unit,
+        unitCost: line.unitCost,
+        optional: line.optional,
+        selected: line.selected,
+        taxable: line.taxable,
+        catalogItemId: line.catalogItemId,
+      });
+    }
+    toast.success(`Started ${name} from ${group.name}.`);
+  }
 
   async function handleConvert() {
     setPending(true);
@@ -1092,41 +1152,23 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         </CardContent>
       </Card>
 
-      {editable || gbb ? (
+      {gbb && estimateOptions.length > 0 ? (
         <Card>
           <CardHeader className="border-b">
-            <CardTitle>Good / Better / Best</CardTitle>
+            <CardTitle>Options</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <label className="flex items-start gap-2 text-sm">
-              <Checkbox
-                className="mt-0.5"
-                checked={gbb}
-                disabled={!editable}
-                onCheckedChange={(value) =>
-                  void crm.updateEstimate(estimate.id, {
-                    packageMode: value ? "gbb" : "",
-                    selectedPackage: value ? selectedPackage : estimate.selectedPackage,
-                  })
-                }
-              />
-              <span>
-                <span className="font-medium">Offer Good / Better / Best packages</span>
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  Packages replace each other — the homeowner picks one, they do not stack. Put shared
-                  work like tear-off and dumpster on All packages. Put 3-tab on Good, architectural on
-                  Better, and designer on Best.
-                </span>
-              </span>
-            </label>
-            {gbb ? (
-              <PackagePicker
-                estimate={estimate}
-                lines={lines}
-                locked={!editable && !optionalOpen}
-                onSelect={(pkg) => void crm.updateEstimate(estimate.id, { selectedPackage: pkg })}
-              />
-            ) : null}
+            <p className="text-sm text-muted-foreground">
+              Shared sections sit on every option. Each option section is a fork the homeowner can pick.
+              Options replace each other — they do not stack.
+            </p>
+            <PackagePicker
+              estimate={estimate}
+              lines={lines}
+              pending={emptyOptions}
+              locked={!editable && !optionalOpen}
+              onSelect={(pkg) => void crm.updateEstimate(estimate.id, { selectedPackage: pkg })}
+            />
           </CardContent>
         </Card>
       ) : null}
@@ -1155,9 +1197,13 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
               <Button type="submit" variant="outline">
                 Add section
               </Button>
+              <Button type="button" variant="outline" onClick={addOptionSection}>
+                Add option
+              </Button>
             </form>
             <p className="text-xs text-muted-foreground">
-              Name the section first, then add price-book or custom lines into it.
+              Shared sections (tear-off, dumpster) stay on every option. Add an option, put the work that
+              changes in that section, then build the next option off it.
             </p>
           </div>
         ) : null}
@@ -1180,7 +1226,11 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => void crm.addCustomEstimateLine(estimate.id, lastGroup())}
+                onClick={() =>
+                  void crm.addCustomEstimateLine(estimate.id, lastGroup(), {
+                    package: packageForGroup(lastGroup()),
+                  })
+                }
               >
                 Custom item
               </Button>
@@ -1210,21 +1260,31 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           displayGroups.map((group) => (
             <section key={group.name} className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <CommitInput
-                  className="h-8 max-w-xs font-medium"
-                  disabled={!editable}
-                  value={group.name}
-                  onCommit={(value) => {
-                    const next = value.trim() || "Items";
-                    if (next === group.name) return;
-                    for (const line of group.lines) {
-                      void crm.updateEstimateLine(line.id, { groupName: next });
-                    }
-                    setEmptySections((prev) =>
-                      prev.map((name) => (name === group.name ? next : name)).filter((name, index, all) => all.indexOf(name) === index),
-                    );
-                  }}
-                />
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <CommitInput
+                    className="h-8 max-w-xs font-medium"
+                    disabled={!editable}
+                    value={group.name}
+                    onCommit={(value) => {
+                      const next = value.trim() || "Items";
+                      if (next === group.name) return;
+                      for (const line of group.lines) {
+                        void crm.updateEstimateLine(line.id, { groupName: next });
+                      }
+                      setEmptySections((prev) =>
+                        prev.map((name) => (name === group.name ? next : name)).filter((name, index, all) => all.indexOf(name) === index),
+                      );
+                      setEmptyOptions((prev) =>
+                        prev.map((item) => (item.name === group.name ? { ...item, name: next } : item)),
+                      );
+                    }}
+                  />
+                  {packageForGroup(group.name) ? (
+                    <span className="rounded-full bg-[#e7effb] px-2.5 py-0.5 text-xs font-medium text-[#13295b]">
+                      Option
+                    </span>
+                  ) : null}
+                </div>
                 {editable ? (
                   <div className="flex flex-wrap gap-1">
                     <Button
@@ -1240,10 +1300,20 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => void crm.addCustomEstimateLine(estimate.id, group.name)}
+                      onClick={() =>
+                        void crm.addCustomEstimateLine(estimate.id, group.name, {
+                          package: packageForGroup(group.name),
+                        })
+                      }
                     >
                       Custom item
                     </Button>
+                    {packageForGroup(group.name) ? (
+                      <Button size="sm" variant="ghost" onClick={() => void buildOptionFrom(group)}>
+                        <Copy />
+                        Build another option
+                      </Button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -1258,7 +1328,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                     line={line}
                     editable={editable}
                     showTax={!residential}
-                    showPackage={gbb}
+                    showPackage={gbb && groupHasMixedPackages(group.lines)}
                     galleryPhotos={jobPhotos}
                     galleryHint={galleryHint}
                     onPhotosChange={(photoIds) => void crm.updateEstimateLine(line.id, { photoIds })}
@@ -1498,18 +1568,18 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       </div>
 
       <div className="rounded-md border bg-muted/40 px-4 py-3 sm:flex sm:items-center sm:justify-between">
-        {gbb ? (
+        {gbb && estimateOptions.length > 0 ? (
           <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-            {ESTIMATE_PACKAGES.map((pkg) => {
-              const amount = estimateTotals({ ...billed, packageMode: "gbb", selectedPackage: pkg }, lines)
+            {estimateOptions.map((option) => {
+              const amount = estimateTotals({ ...billed, packageMode: "gbb", selectedPackage: option.key }, lines)
                 .total;
-              const active = pkg === selectedPackage;
+              const active = option.key === selectedPackage;
               return (
                 <span
-                  key={pkg}
+                  key={option.key}
                   className={active ? "font-medium tabular-nums" : "text-muted-foreground tabular-nums"}
                 >
-                  {PACKAGE_LABEL[pkg]} {formatMoney(amount)}
+                  {option.name} {formatMoney(amount)}
                 </span>
               );
             })}
@@ -1548,7 +1618,11 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       <PriceBookSheet
         open={bookOpen}
         onOpenChange={setBookOpen}
-        onPick={(catalogItemId) => void crm.addEstimateLineFromCatalog(estimate.id, catalogItemId, bookGroup)}
+        onPick={(catalogItemId) =>
+          void crm.addEstimateLineFromCatalog(estimate.id, catalogItemId, bookGroup, {
+            package: packageForGroup(bookGroup),
+          })
+        }
       />
       <ShareLinkDialog
         open={shareOpen}
