@@ -77,7 +77,7 @@ function SignupForm() {
   const [invite, setInvite] = useState<InvitePreview | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [fullName, setFullName] = useState("");
-  const [company, setCompany] = useState("Northline Construction");
+  const [company, setCompany] = useState("");
   const [title, setTitle] = useState("Company admin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -273,6 +273,7 @@ function SignupForm() {
                   value={company}
                   onChange={(event) => setCompany(event.target.value)}
                   required
+                  placeholder="Your company"
                 />
               </div>
               <div className="grid gap-1.5">

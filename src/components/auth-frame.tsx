@@ -6,10 +6,13 @@ import { cn } from "@/lib/utils";
 export function AuthFrame({
   title,
   description,
+  credit,
   children,
 }: {
   title: string;
   description: string;
+  /** Optional footer on the marketing panel. Never use demo “Northline” here. */
+  credit?: string;
   children: ReactNode;
 }) {
   return (
@@ -29,9 +32,13 @@ export function AuthFrame({
             <AuthPoint index="03" label="Field" copy="Calendar, photos, punch." />
           </ol>
         </div>
-        <p className="text-[11px] tracking-[0.14em] text-sidebar-foreground/40 uppercase">
-          Northline Construction · Denver
-        </p>
+        {credit ? (
+          <p className="text-[11px] tracking-[0.14em] text-sidebar-foreground/40 uppercase">
+            {credit}
+          </p>
+        ) : (
+          <span />
+        )}
       </div>
       <div className="flex flex-1 items-center justify-center px-6 py-12">
         <div className="w-full max-w-[22rem]">
