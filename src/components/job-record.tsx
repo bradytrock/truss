@@ -436,7 +436,6 @@ export function JobRecord({
       !job.relatedContactIds.includes(contact.id) &&
       !job.subcontractorIds.includes(contact.id)
   );
-  const tradeOptions = crm.contacts.filter((contact) => !job.subcontractorIds.includes(contact.id));
   const primaryHomeownerOptions = useMemo(() => {
     const onJob = new Set(
       [job.primaryContactId, ...job.relatedContactIds, ...job.subcontractorIds].filter(Boolean),
@@ -872,26 +871,6 @@ export function JobRecord({
                 </SelectContent>
               </Select>
             </DetailRow>
-            <DetailRow label="Sales rep">
-              <Select
-                value={job.salesRep || undefined}
-                onValueChange={(value) => {
-                  if (value) patch({ salesRep: String(value) });
-                }}
-                items={crm.teamMembers.map((person) => ({ value: person, label: person }))}
-              >
-                <SelectTrigger className={cn(quietSelect, !job.salesRep && "text-muted-foreground")}>
-                  <SelectValue placeholder="Add a sales rep" />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  {crm.teamMembers.map((person) => (
-                    <SelectItem key={person} value={person}>
-                      {person}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </DetailRow>
             <DetailRow label="Assigned">
               <PeopleChips
                 names={job.assigned}
@@ -917,60 +896,6 @@ export function JobRecord({
                 className="h-7 border-0 bg-transparent px-0 text-right shadow-none"
               />
             </DetailRow>
-            <DetailRow label="Subcontractor">
-              <PeopleChips
-                names={job.subcontractorIds.map((id) => crm.getContact(id)?.name ?? "").filter(Boolean)}
-                options={tradeOptions.map((contact) => contact.name)}
-                empty="Add a trade"
-                onRemove={(name) => {
-                  const contact = crm.contacts.find((item) => item.name === name);
-                  if (contact) {
-                    patch({
-                      subcontractorIds: job.subcontractorIds.filter((id) => id !== contact.id),
-                    });
-                  }
-                }}
-                onAdd={(name) => {
-                  const contact = crm.contacts.find((item) => item.name === name);
-                  if (contact) {
-                    patch({ subcontractorIds: uniqueIds([...job.subcontractorIds, contact.id]) });
-                  }
-                }}
-              />
-            </DetailRow>
-            <DetailRow label="Primary">
-              <Select
-                value={job.primaryContactId || undefined}
-                disabled={deleted || primaryHomeownerOptions.length === 0}
-                onValueChange={(value) => {
-                  if (!value || deleted) return;
-                  setPrimaryHomeowner(String(value));
-                }}
-                items={primaryHomeownerOptions.map((contact) => ({
-                  value: contact.id,
-                  label: contact.name,
-                }))}
-              >
-                <SelectTrigger className={cn(quietSelect, !job.primaryContactId && "text-muted-foreground")}>
-                  <SelectValue placeholder="Choose a homeowner" />
-                </SelectTrigger>
-                <SelectContent align="end" className="max-h-72">
-                  {primaryHomeownerOptions.map((contact) => (
-                    <SelectItem key={contact.id} value={contact.id}>
-                      {contact.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </DetailRow>
-            {opportunity ? (
-              <DetailRow label="Came from">
-                <Link href={`/opportunities/${opportunity.id}`} className="text-primary hover:underline">
-                  {opportunity.code ? `${opportunity.code} · ` : ""}
-                  {opportunity.name}
-                </Link>
-              </DetailRow>
-            ) : null}
           </section>
 
           <section>
