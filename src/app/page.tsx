@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -32,6 +32,7 @@ import { actionableReturningClientNotices } from "@/lib/returning-client";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { BdRoiPanel } from "@/components/bd-roi";
 import { HomeOnboarding } from "@/components/home-onboarding";
+import { HomeDashboardCanvas } from "@/components/home-dashboard-canvas";
 import {
   DashboardChart,
   HomeAreaChart,
@@ -51,10 +52,12 @@ import {
   homeQuota,
   wonDeals,
 } from "@/lib/home-dashboard";
+import { availableHomeModules, type HomeModuleId } from "@/lib/home-layout";
 
 export default function HomePage() {
   const crm = useCrm();
   const [decidingId, setDecidingId] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
 
   const stats = useMemo(() => {
     const open = crm.opportunities.filter(
@@ -215,6 +218,408 @@ export default function HomePage() {
     }
   }
 
+  function renderHomeModule(id: HomeModuleId): ReactNode {
+    switch (id) {
+      case "salesKpis":
+        return (
+          <div className="grid h-full gap-3 sm:grid-cols-3">
+            <HomeKpiTile
+              label="Amount open"
+              value={formatCompactCurrency(salesDashboard.openPipeline)}
+              hint={`${stats.openCount} open leads`}
+            />
+            <HomeKpiTile
+              label="Closed won"
+              value={String(salesDashboard.closedCount)}
+              hint={formatCurrency(salesDashboard.closedAmount)}
+            />
+            <HomeKpiTile
+              label="Average deal"
+              value={
+                salesDashboard.closedCount > 0
+                  ? formatCompactCurrency(salesDashboard.avgDeal)
+                  : "—"
+              }
+              hint="Signed this month"
+            />
+          </div>
+        );
+      case "closedWonGauge":
+        return (
+          <DashboardChart
+            title="Closed won sales"
+            description="Month-to-date signed contracts vs quota"
+          >
+            <HomeGauge
+              value={salesDashboard.closedAmount}
+              target={salesDashboard.quota}
+              format={formatCompactCurrency}
+            />
+          </DashboardChart>
+        );
+      case "dealsByCloseDate":
+        return (
+          <DashboardChart
+            title="Deals by close date"
+            description="Signed contract value over the last 14 days"
+            action={<RelatedListLink href="/pipeline">Pipeline</RelatedListLink>}
+          >
+            <HomeAreaChart
+              items={salesDashboard.byCloseDate}
+              format={formatCompactCurrency}
+              empty="No signed deals in the last two weeks."
+            />
+          </DashboardChart>
+        );
+      case "closedBySource":
+        return (
+          <DashboardChart
+            title="Amount closed by lead source"
+            description="This month’s signed work by source"
+            action={<RelatedListLink href="/reports">Sources</RelatedListLink>}
+          >
+            <HomeDonut
+              items={salesDashboard.bySource}
+              format={formatCompactCurrency}
+              empty="No sourced closed-won this month."
+            />
+          </DashboardChart>
+        );
+      case "bdRoi":
+        return crm.viewer ? <BdRoiPanel state={crm.book} viewer={crm.viewer} /> : null;
+      case "qbApprove":
+        return (
+          <RelatedList
+            title="Approve for QuickBooks"
+            description="Approve queues the Web Connector, or tag the PM to fix the file on the job."
+            action={<RelatedListLink href="/accounting/approve">Open Approve</RelatedListLink>}
+          >
+            <p className="px-3 py-3 text-sm text-[#181818]">
+              {stats.qb.invoiceCount + stats.qb.expenseCount + stats.qb.paymentCount} items waiting ·{" "}
+              {stats.qb.invoiceCount} invoices, {stats.qb.expenseCount} expenses, {stats.qb.paymentCount}{" "}
+              payments
+            </p>
+          </RelatedList>
+        );
+      case "accountingNotices":
+        return (
+          <Card className="rounded-sm border-[#c9c9c9] shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
+            <CardHeader className="border-b border-[#c9c9c9] bg-[#f3f3f3]">
+              <CardTitle className="font-sans text-sm font-semibold text-[#181818]">Accounting needs you</CardTitle>
+              <CardDescription>
+                Open the file on the job, make the change, leave a comment, and send it back. Replies
+                happen on that file — not on Approve.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-2">
+              <ul className="divide-y">
+                {reviewNotices.map((notice) => (
+                  <li key={`${notice.item.kind}-${notice.item.id}`} className="py-3 first:pt-1">
+                    <Link
+                      href={jobDocumentHref(notice.jobId, notice.item.kind, notice.item.id)}
+                      className="text-sm font-semibold text-[#0176d3] hover:underline"
+                    >
+                      {itemTitle(notice.item)}
+                    </Link>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {notice.reason === "tagged" ? "You were tagged. " : "Sent back for a change. "}
+                      {notice.preview}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        );
+      case "returningClients":
+        return (
+          <Card className="rounded-sm border-[#c9c9c9] shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
+            <CardHeader className="border-b border-[#c9c9c9] bg-[#f3f3f3]">
+              <CardTitle className="font-sans text-sm font-semibold text-[#181818]">Returning clients</CardTitle>
+              <CardDescription>
+                Past clients called back. The previous project manager is asked first. Company admins
+                decide only after they decline, or when that seat is locked.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-2">
+              <ul className="divide-y">
+                {returningNotices.map((notice) => {
+                  const opportunity = crm.getOpportunity(notice.opportunityId);
+                  const job = notice.jobId ? crm.getJob(notice.jobId) : undefined;
+                  const href = job ? `/jobs?job=${job.id}` : `/opportunities/${notice.opportunityId}`;
+                  const busy = decidingId === notice.id;
+                  const when = notice.completedAt ? ` Completed ${formatDate(notice.completedAt)}.` : "";
+                  const jobBit = notice.previousJobCode ? ` on ${notice.previousJobCode}` : "";
+                  return (
+                    <li key={notice.id} className="py-3 first:pt-1">
+                      <Link href={href} className="text-sm font-semibold text-[#0176d3] hover:underline">
+                        {opportunity?.code || opportunity?.name || "Lead"}
+                        {opportunity?.name && opportunity.code ? ` · ${opportunity.name}` : ""}
+                      </Link>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {notice.status === "assigned"
+                          ? `${notice.openedByName} assigned this past client to you${jobBit}.${when}`
+                          : notice.status === "offered"
+                            ? `${notice.openedByName} opened this lead and did not assign it to you. You ran the last job${jobBit}.${when}`
+                            : notice.openedByStaffId === notice.previousStaffId
+                              ? `${notice.openedByName} assigned this past client away from themselves${jobBit}.${when}`
+                              : `${notice.previousStaffName || "The previous project manager"} declined or cannot take this lead${jobBit}.${when} ${notice.openedByName} kept another assignee.`}
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {notice.status === "offered" ? (
+                          <>
+                            <Button size="sm" disabled={busy} onClick={() => void decideReturning(notice.id, "take")}>
+                              {busy ? "Saving…" : "Take this lead"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy}
+                              onClick={() => void decideReturning(notice.id, "decline")}
+                            >
+                              I don&apos;t want it
+                            </Button>
+                          </>
+                        ) : null}
+                        {notice.status === "assigned" ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() => void decideReturning(notice.id, "dismiss")}
+                          >
+                            {busy ? "Saving…" : "Got it"}
+                          </Button>
+                        ) : null}
+                        {notice.status === "pending" ? (
+                          <>
+                            {notice.previousStaffId ? (
+                              <Button
+                                size="sm"
+                                disabled={busy}
+                                onClick={() => void decideReturning(notice.id, "reassigned")}
+                              >
+                                {busy ? "Saving…" : `Reassign to ${notice.previousStaffName}`}
+                              </Button>
+                            ) : null}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy}
+                              onClick={() => void decideReturning(notice.id, "kept")}
+                            >
+                              Keep assignment
+                            </Button>
+                          </>
+                        ) : null}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </CardContent>
+          </Card>
+        );
+      case "pipelinePath":
+        return (
+          <RelatedList
+            title="Pipeline path"
+            description="Unweighted contract value by stage. Open the board to move records."
+            action={<RelatedListLink href="/pipeline">Open board</RelatedListLink>}
+          >
+            <div className="p-3">
+              <PipelinePath
+                stages={stats.byStage.map((item) => ({
+                  key: item.stage,
+                  label: STAGE_LABELS[item.stage],
+                  value: formatCurrency(item.value),
+                  active: item.value > 0 && item.value === Math.max(...stats.byStage.map((s) => s.value)),
+                }))}
+              />
+            </div>
+          </RelatedList>
+        );
+      case "proposalsDue":
+        return (
+          <RelatedList
+            title="Proposals due"
+            description="Estimating dates that cannot slip."
+            action={<RelatedListLink href="/pipeline">View all</RelatedListLink>}
+          >
+            {stats.bidsThisWeek.length === 0 ? (
+              <p className="px-3 py-6 text-sm text-[#706e6b]">
+                Nothing due in the next seven days.
+              </p>
+            ) : (
+              <ul className="divide-y divide-[#e5e5e5]">
+                {stats.bidsThisWeek
+                  .slice()
+                  .sort((a, b) => (a.bidDueAt ?? "").localeCompare(b.bidDueAt ?? ""))
+                  .map((opportunity) => {
+                    const due = daysUntil(opportunity.bidDueAt);
+                    return (
+                      <li key={opportunity.id} className="px-3 py-2.5 hover:bg-[#f3f3f3]">
+                        <Link href={`/opportunities/${opportunity.id}`} className="block">
+                          <p className="text-sm font-semibold text-[#0176d3] hover:underline">
+                            {opportunity.name}
+                          </p>
+                          <p className="text-xs text-[#706e6b]">
+                            {crm.customerName(opportunity)} · {formatCurrency(opportunity.value)}
+                          </p>
+                        </Link>
+                        <p
+                          className={cn(
+                            "mt-1 text-xs tabular-nums",
+                            due !== null && due <= 2 ? "font-semibold text-destructive" : "text-[#706e6b]",
+                          )}
+                        >
+                          {due === 0
+                            ? "Due today"
+                            : due === 1
+                              ? "Due tomorrow"
+                              : `Due ${formatDateShort(opportunity.bidDueAt)}`}
+                        </p>
+                      </li>
+                    );
+                  })}
+              </ul>
+            )}
+          </RelatedList>
+        );
+      case "todaysWork":
+        return (
+          <RelatedList title="Today’s work" description="Open tasks on your desk.">
+            {upcomingTasks.length === 0 ? (
+              <p className="px-3 py-6 text-sm text-[#706e6b]">All caught up. No open tasks.</p>
+            ) : (
+              <ul className="divide-y divide-[#e5e5e5]">
+                {upcomingTasks.map((task) => {
+                  const overdue = (daysUntil(task.dueAt) ?? 0) < 0;
+                  return (
+                    <li key={task.id} className="flex items-start gap-2.5 px-3 py-2.5 hover:bg-[#f3f3f3]">
+                      <Checkbox
+                        checked={task.completed}
+                        onCheckedChange={() => crm.toggleTask(task.id)}
+                        className="mt-0.5"
+                        aria-label={`Complete ${task.title}`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm leading-snug text-[#181818]">{task.title}</p>
+                        <p className={cn("text-xs", overdue ? "text-destructive" : "text-[#706e6b]")}>
+                          {task.assignee} · {formatDateShort(task.dueAt)}
+                          {overdue ? " · overdue" : ""}
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </RelatedList>
+        );
+      case "training": {
+        const training = overallProgress(staffProgress(crm.trainingProgress, crm.user.staffId));
+        return (
+          <RelatedList
+            title="Training"
+            description={`Chapter tests ${COURSE.passScore}% · exam ${COURSE.finalPassScore}%.`}
+            action={<RelatedListLink href="/training">Open</RelatedListLink>}
+          >
+            <div className="px-3 py-3 text-sm text-[#181818]">
+              <p>
+                {training.read} of {training.totalLessons} lessons · {training.passedChapters} of{" "}
+                {training.chapterCount} chapter tests
+                {training.certified ? " · certified" : ""}
+              </p>
+              <p className="mt-2 text-xs text-[#706e6b]">
+                {crm.trainingBulletins[0]
+                  ? `Bulletin: ${crm.trainingBulletins[0].title}`
+                  : "No company training notes this week."}
+              </p>
+            </div>
+          </RelatedList>
+        );
+      }
+      case "recentActivity":
+        return (
+          <RelatedList
+            title="Recent activity"
+            description="Calls, walks, and stage moves across the book."
+          >
+            {feed.length === 0 ? (
+              <p className="px-3 py-6 text-sm text-[#706e6b]">
+                Nothing logged yet. Open a record and capture the last owner conversation.
+              </p>
+            ) : (
+              <ul className="divide-y divide-[#e5e5e5]">
+                {feed.map((activity) => (
+                  <li key={activity.id} className="px-3 py-2.5 hover:bg-[#f3f3f3]">
+                    <p className="text-sm leading-snug text-[#181818]">{activity.body}</p>
+                    <p className="mt-0.5 text-xs text-[#706e6b]">
+                      {activity.author} · {formatRelative(activity.createdAt)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </RelatedList>
+        );
+      case "activeJobs":
+        return (
+          <RelatedList
+            title="Active jobs"
+            description="Jobs in precon, production, or punch."
+            action={<RelatedListLink href="/jobs">View all</RelatedListLink>}
+          >
+            {stats.activeJobs.length === 0 ? (
+              <p className="px-3 py-6 text-sm text-[#706e6b]">No active jobs in your book.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[40rem] text-left text-sm">
+                  <thead className="border-b border-[#c9c9c9] bg-[#f3f3f3] text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
+                    <tr>
+                      <th className="px-3 py-2">Job</th>
+                      <th className="px-3 py-2">Customer</th>
+                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2">PM</th>
+                      <th className="px-3 py-2 text-right">Contract</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#e5e5e5]">
+                    {stats.activeJobs.map((job) => (
+                      <tr key={job.id} className="hover:bg-[#f3f3f3]">
+                        <td className="px-3 py-2">
+                          <Link href={`/jobs/${job.id}`} className="font-semibold text-[#0176d3] hover:underline">
+                            {job.name}
+                          </Link>
+                          <div className="mt-0.5">
+                            <RecordCode code={job.code} />
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-[#706e6b]">
+                          {crm.customerName(job)}
+                          <div className="text-xs">{job.location}</div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <JobStatusBadge status={job.status} />
+                        </td>
+                        <td className="px-3 py-2 text-[#706e6b]">{job.projectManager}</td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums text-[#181818]">
+                          {formatCurrencyFull(job.contractValue)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </RelatedList>
+        );
+      default:
+        return null;
+    }
+  }
+
   if (!crm.hydrated) return <LoadingScreen />;
 
   const hasLeads = crm.opportunities.length > 0;
@@ -244,441 +649,62 @@ export default function HomePage() {
         }
         actions={
           hasLeads ? (
-            <Button
-              nativeButton={false}
-              size="sm"
-              className="h-8 rounded-sm bg-[#0176d3] text-xs font-semibold text-white hover:bg-[#014486]"
-              render={<Link href="/pipeline" />}
-            >
-              View pipeline
-            </Button>
+            <>
+              <Button
+                type="button"
+                size="sm"
+                variant={editing ? "default" : "outline"}
+                className="h-8 rounded-sm text-xs font-semibold"
+                onClick={() => setEditing((value) => !value)}
+              >
+                {editing ? "Done" : "Customize"}
+              </Button>
+              <Button
+                nativeButton={false}
+                size="sm"
+                className="h-8 rounded-sm bg-[#0176d3] text-xs font-semibold text-white hover:bg-[#014486]"
+                render={<Link href="/pipeline" />}
+              >
+                View pipeline
+              </Button>
+            </>
           ) : null
         }
       />
 
       {!hasLeads ? <HomeOnboarding viewer={crm.effectiveStaff} /> : null}
 
-      {hasLeads && crm.effectiveStaff?.role !== "accountant" ? (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
-                Sales executive dashboard
-              </p>
-              <p className="text-xs text-[#706e6b]">
-                Pipeline and closed-won for{" "}
-                {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-              </p>
-            </div>
-            <RelatedListLink href="/reports">Open reports</RelatedListLink>
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-5">
-            <div className="grid gap-3 sm:grid-cols-3 lg:col-span-3 lg:grid-cols-3">
-              <HomeKpiTile
-                label="Amount open"
-                value={formatCompactCurrency(salesDashboard.openPipeline)}
-                hint={`${stats.openCount} open leads`}
-              />
-              <HomeKpiTile
-                label="Closed won"
-                value={String(salesDashboard.closedCount)}
-                hint={formatCurrency(salesDashboard.closedAmount)}
-              />
-              <HomeKpiTile
-                label="Average deal"
-                value={
-                  salesDashboard.closedCount > 0
-                    ? formatCompactCurrency(salesDashboard.avgDeal)
-                    : "—"
-                }
-                hint="Signed this month"
-              />
-            </div>
-
-            <DashboardChart
-              className="lg:col-span-2"
-              title="Closed won sales"
-              description="Month-to-date signed contracts vs quota"
-            >
-              <HomeGauge
-                value={salesDashboard.closedAmount}
-                target={salesDashboard.quota}
-                format={formatCompactCurrency}
-              />
-            </DashboardChart>
-          </div>
-
-          <div className="grid gap-3 xl:grid-cols-5">
-            <DashboardChart
-              className="xl:col-span-3"
-              title="Deals by close date"
-              description="Signed contract value over the last 14 days"
-              action={<RelatedListLink href="/pipeline">Pipeline</RelatedListLink>}
-            >
-              <HomeAreaChart
-                items={salesDashboard.byCloseDate}
-                format={formatCompactCurrency}
-                empty="No signed deals in the last two weeks."
-              />
-            </DashboardChart>
-
-            <DashboardChart
-              className="xl:col-span-2"
-              title="Amount closed by lead source"
-              description="This month’s signed work by source"
-              action={<RelatedListLink href="/reports">Sources</RelatedListLink>}
-            >
-              <HomeDonut
-                items={salesDashboard.bySource}
-                format={formatCompactCurrency}
-                empty="No sourced closed-won this month."
-              />
-            </DashboardChart>
-          </div>
-        </div>
-      ) : null}
-
       {hasLeads ? (
-      <>
-
-      {crm.viewer && isBusinessDevelopment(crm.viewer.role) ? (
-        <BdRoiPanel state={crm.book} viewer={crm.viewer} />
-      ) : null}
-
-      {crm.effectiveStaff && canViewAccounting(crm.effectiveStaff.role) ? (
-        <RelatedList
-          title="Approve for QuickBooks"
-          description="Approve queues the Web Connector, or tag the PM to fix the file on the job."
-          action={<RelatedListLink href="/accounting/approve">Open Approve</RelatedListLink>}
-        >
-          <p className="px-3 py-3 text-sm text-[#181818]">
-            {stats.qb.invoiceCount + stats.qb.expenseCount + stats.qb.paymentCount} items waiting ·{" "}
-            {stats.qb.invoiceCount} invoices, {stats.qb.expenseCount} expenses, {stats.qb.paymentCount}{" "}
-            payments
-          </p>
-        </RelatedList>
-      ) : null}
-
-      {reviewNotices.length > 0 ? (
-        <Card className="rounded-sm border-[#c9c9c9] shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
-          <CardHeader className="border-b border-[#c9c9c9] bg-[#f3f3f3]">
-            <CardTitle className="font-sans text-sm font-semibold text-[#181818]">Accounting needs you</CardTitle>
-            <CardDescription>
-              Open the file on the job, make the change, leave a comment, and send it back. Replies
-              happen on that file — not on Approve.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-2">
-            <ul className="divide-y">
-              {reviewNotices.map((notice) => (
-                <li key={`${notice.item.kind}-${notice.item.id}`} className="py-3 first:pt-1">
-                  <Link
-                    href={jobDocumentHref(notice.jobId, notice.item.kind, notice.item.id)}
-                    className="text-sm font-semibold text-[#0176d3] hover:underline"
-                  >
-                    {itemTitle(notice.item)}
-                  </Link>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {notice.reason === "tagged" ? "You were tagged. " : "Sent back for a change. "}
-                    {notice.preview}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {returningNotices.length > 0 ? (
-        <Card className="rounded-sm border-[#c9c9c9] shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
-          <CardHeader className="border-b border-[#c9c9c9] bg-[#f3f3f3]">
-            <CardTitle className="font-sans text-sm font-semibold text-[#181818]">Returning clients</CardTitle>
-            <CardDescription>
-              Past clients called back. The previous project manager is asked first. Company admins
-              decide only after they decline, or when that seat is locked.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-2">
-            <ul className="divide-y">
-              {returningNotices.map((notice) => {
-                const opportunity = crm.getOpportunity(notice.opportunityId);
-                const job = notice.jobId ? crm.getJob(notice.jobId) : undefined;
-                const href = job ? `/jobs?job=${job.id}` : `/opportunities/${notice.opportunityId}`;
-                const busy = decidingId === notice.id;
-                const when = notice.completedAt ? ` Completed ${formatDate(notice.completedAt)}.` : "";
-                const jobBit = notice.previousJobCode ? ` on ${notice.previousJobCode}` : "";
-                return (
-                  <li key={notice.id} className="py-3 first:pt-1">
-                    <Link href={href} className="text-sm font-semibold text-[#0176d3] hover:underline">
-                      {opportunity?.code || opportunity?.name || "Lead"}
-                      {opportunity?.name && opportunity.code ? ` · ${opportunity.name}` : ""}
-                    </Link>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {notice.status === "assigned"
-                        ? `${notice.openedByName} assigned this past client to you${jobBit}.${when}`
-                        : notice.status === "offered"
-                          ? `${notice.openedByName} opened this lead and did not assign it to you. You ran the last job${jobBit}.${when}`
-                          : notice.openedByStaffId === notice.previousStaffId
-                            ? `${notice.openedByName} assigned this past client away from themselves${jobBit}.${when}`
-                            : `${notice.previousStaffName || "The previous project manager"} declined or cannot take this lead${jobBit}.${when} ${notice.openedByName} kept another assignee.`}
-                    </p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {notice.status === "offered" ? (
-                        <>
-                          <Button size="sm" disabled={busy} onClick={() => void decideReturning(notice.id, "take")}>
-                            {busy ? "Saving…" : "Take this lead"}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={busy}
-                            onClick={() => void decideReturning(notice.id, "decline")}
-                          >
-                            I don&apos;t want it
-                          </Button>
-                        </>
-                      ) : null}
-                      {notice.status === "assigned" ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={busy}
-                          onClick={() => void decideReturning(notice.id, "dismiss")}
-                        >
-                          {busy ? "Saving…" : "Got it"}
-                        </Button>
-                      ) : null}
-                      {notice.status === "pending" ? (
-                        <>
-                          {notice.previousStaffId ? (
-                            <Button
-                              size="sm"
-                              disabled={busy}
-                              onClick={() => void decideReturning(notice.id, "reassigned")}
-                            >
-                              {busy ? "Saving…" : `Reassign to ${notice.previousStaffName}`}
-                            </Button>
-                          ) : null}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={busy}
-                            onClick={() => void decideReturning(notice.id, "kept")}
-                          >
-                            Keep assignment
-                          </Button>
-                        </>
-                      ) : null}
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <RelatedList
-        title="Pipeline path"
-        description="Unweighted contract value by stage. Open the board to move records."
-        action={<RelatedListLink href="/pipeline">Open board</RelatedListLink>}
-      >
-        <div className="p-3">
-          <PipelinePath
-            stages={stats.byStage.map((item) => ({
-              key: item.stage,
-              label: STAGE_LABELS[item.stage],
-              value: formatCurrency(item.value),
-              active: item.value > 0 && item.value === Math.max(...stats.byStage.map((s) => s.value)),
-            }))}
-          />
-        </div>
-      </RelatedList>
-
-      <div className="grid gap-3 xl:grid-cols-3">
-        <RelatedList
-          className="xl:col-span-1"
-          title="Proposals due"
-          description="Estimating dates that cannot slip."
-          action={<RelatedListLink href="/pipeline">View all</RelatedListLink>}
-        >
-          {stats.bidsThisWeek.length === 0 ? (
-            <p className="px-3 py-6 text-sm text-[#706e6b]">
-              Nothing due in the next seven days.
-            </p>
-          ) : (
-            <ul className="divide-y divide-[#e5e5e5]">
-              {stats.bidsThisWeek
-                .slice()
-                .sort((a, b) => (a.bidDueAt ?? "").localeCompare(b.bidDueAt ?? ""))
-                .map((opportunity) => {
-                  const due = daysUntil(opportunity.bidDueAt);
-                  return (
-                    <li key={opportunity.id} className="px-3 py-2.5 hover:bg-[#f3f3f3]">
-                      <Link href={`/opportunities/${opportunity.id}`} className="block">
-                        <p className="text-sm font-semibold text-[#0176d3] hover:underline">
-                          {opportunity.name}
-                        </p>
-                        <p className="text-xs text-[#706e6b]">
-                          {crm.customerName(opportunity)} · {formatCurrency(opportunity.value)}
-                        </p>
-                      </Link>
-                      <p
-                        className={cn(
-                          "mt-1 text-xs tabular-nums",
-                          due !== null && due <= 2 ? "font-semibold text-destructive" : "text-[#706e6b]",
-                        )}
-                      >
-                        {due === 0
-                          ? "Due today"
-                          : due === 1
-                            ? "Due tomorrow"
-                            : `Due ${formatDateShort(opportunity.bidDueAt)}`}
-                      </p>
-                    </li>
-                  );
-                })}
-            </ul>
-          )}
-        </RelatedList>
-
-        <RelatedList
-          className="xl:col-span-2"
-          title="Today’s work"
-          description="Open tasks on your desk."
-        >
-          {upcomingTasks.length === 0 ? (
-            <p className="px-3 py-6 text-sm text-[#706e6b]">All caught up. No open tasks.</p>
-          ) : (
-            <ul className="divide-y divide-[#e5e5e5]">
-              {upcomingTasks.map((task) => {
-                const overdue = (daysUntil(task.dueAt) ?? 0) < 0;
-                return (
-                  <li key={task.id} className="flex items-start gap-2.5 px-3 py-2.5 hover:bg-[#f3f3f3]">
-                    <Checkbox
-                      checked={task.completed}
-                      onCheckedChange={() => crm.toggleTask(task.id)}
-                      className="mt-0.5"
-                      aria-label={`Complete ${task.title}`}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm leading-snug text-[#181818]">{task.title}</p>
-                      <p className={cn("text-xs", overdue ? "text-destructive" : "text-[#706e6b]")}>
-                        {task.assignee} · {formatDateShort(task.dueAt)}
-                        {overdue ? " · overdue" : ""}
-                      </p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </RelatedList>
-      </div>
-
-      <div className="grid gap-3 lg:grid-cols-3">
-        <RelatedList
-          title="Training"
-          description={`Chapter tests ${COURSE.passScore}% · exam ${COURSE.finalPassScore}%.`}
-          action={<RelatedListLink href="/training">Open</RelatedListLink>}
-        >
-          <div className="px-3 py-3 text-sm text-[#181818]">
-            {(() => {
-              const training = overallProgress(staffProgress(crm.trainingProgress, crm.user.staffId));
-              return (
-                <>
-                  <p>
-                    {training.read} of {training.totalLessons} lessons · {training.passedChapters} of{" "}
-                    {training.chapterCount} chapter tests
-                    {training.certified ? " · certified" : ""}
-                  </p>
-                  <p className="mt-2 text-xs text-[#706e6b]">
-                    {crm.trainingBulletins[0]
-                      ? `Bulletin: ${crm.trainingBulletins[0].title}`
-                      : "No company training notes this week."}
-                  </p>
-                </>
-              );
-            })()}
-          </div>
-        </RelatedList>
-
-        <RelatedList
-          className="lg:col-span-2"
-          title="Recent activity"
-          description="Calls, walks, and stage moves across the book."
-        >
-          {feed.length === 0 ? (
-            <p className="px-3 py-6 text-sm text-[#706e6b]">
-              Nothing logged yet. Open a record and capture the last owner conversation.
-            </p>
-          ) : (
-            <ul className="divide-y divide-[#e5e5e5]">
-              {feed.map((activity) => (
-                <li key={activity.id} className="px-3 py-2.5 hover:bg-[#f3f3f3]">
-                  <p className="text-sm leading-snug text-[#181818]">{activity.body}</p>
-                  <p className="mt-0.5 text-xs text-[#706e6b]">
-                    {activity.author} · {formatRelative(activity.createdAt)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </RelatedList>
-      </div>
-
-      <RelatedList
-        title="Active jobs"
-        description="Jobs in precon, production, or punch."
-        action={<RelatedListLink href="/jobs">View all</RelatedListLink>}
-      >
-        {stats.activeJobs.length === 0 ? (
-          <p className="px-3 py-6 text-sm text-[#706e6b]">No active jobs in your book.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[40rem] text-left text-sm">
-              <thead className="border-b border-[#c9c9c9] bg-[#f3f3f3] text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
-                <tr>
-                  <th className="px-3 py-2">Job</th>
-                  <th className="px-3 py-2">Customer</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">PM</th>
-                  <th className="px-3 py-2 text-right">Contract</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#e5e5e5]">
-                {stats.activeJobs.map((job) => (
-                  <tr key={job.id} className="hover:bg-[#f3f3f3]">
-                    <td className="px-3 py-2">
-                      <Link href={`/jobs/${job.id}`} className="font-semibold text-[#0176d3] hover:underline">
-                        {job.name}
-                      </Link>
-                      <div className="mt-0.5">
-                        <RecordCode code={job.code} />
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-[#706e6b]">
-                      {crm.customerName(job)}
-                      <div className="text-xs">{job.location}</div>
-                    </td>
-                    <td className="px-3 py-2">
-                      <JobStatusBadge status={job.status} />
-                    </td>
-                    <td className="px-3 py-2 text-[#706e6b]">{job.projectManager}</td>
-                    <td className="px-3 py-2 text-right font-semibold tabular-nums text-[#181818]">
-                      {formatCurrencyFull(job.contractValue)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </RelatedList>
-      </>
+        <HomeDashboardCanvas
+          key={`${crm.user.companyId}:${crm.effectiveStaff?.id ?? crm.user.staffId}`}
+          companyId={crm.user.companyId || "local"}
+          staffId={crm.effectiveStaff?.id || crm.user.staffId || "anon"}
+          editing={editing}
+          availableIds={availableHomeModules({
+            hasLeads,
+            isAccountant: crm.effectiveStaff?.role === "accountant",
+            isBd: Boolean(crm.viewer && isBusinessDevelopment(crm.viewer.role)),
+            canViewAccounting: Boolean(crm.effectiveStaff && canViewAccounting(crm.effectiveStaff.role)),
+            hasAccountingNotices: reviewNotices.length > 0,
+            hasReturningClients: returningNotices.length > 0,
+          })}
+          salesIntro={
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
+                  Sales executive dashboard
+                </p>
+                <p className="text-xs text-[#706e6b]">
+                  Pipeline and closed-won for{" "}
+                  {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+                </p>
+              </div>
+              <RelatedListLink href="/reports">Open reports</RelatedListLink>
+            </div>
+          }
+          renderModule={(id) => renderHomeModule(id)}
+        />
       ) : null}
     </div>
   );
 }
-
