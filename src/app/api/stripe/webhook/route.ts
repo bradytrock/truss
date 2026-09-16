@@ -16,18 +16,25 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const secret = stripeWebhookSecret();
-  if (!secret) {
-    return NextResponse.json({ error: "Stripe webhook is not configured." }, { status: 500 });
-  }
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Database is not configured." }, { status: 500 });
   }
 
   const payload = await request.text();
   const header = request.headers.get("stripe-signature") ?? "";
-  if (!verifyStripeSignature(payload, header, secret)) {
-    return NextResponse.json({ error: "Invalid signature." }, { status: 400 });
+  const hostSecret = stripeWebhookSecret();
+  const hostOk = Boolean(hostSecret) && verifyStripeSignature(payload, header, hostSecret);
+  const supabase = createAnonClient();
+  await supabase.rpc("stripe_apply_company_revokes");
+  if (!hostOk) {
+    const matched = await supabase.rpc("stripe_match_webhook", {
+      p_payload: payload,
+      p_header: header,
+    });
+    const row = asStripeObject(matched.data);
+    if (matched.error || row?.ok !== true) {
+      return NextResponse.json({ error: "Invalid signature." }, { status: 400 });
+    }
   }
 
   let parsed: unknown;
@@ -64,7 +71,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Incomplete Stripe session." }, { status: 400 });
   }
 
-  const supabase = createAnonClient();
   const { data, error } = await supabase.rpc("stripe_record_pending_payment", {
     p_company_id: asUuid(metadata.company_id),
     p_invoice_id: asUuid(metadata.invoice_id),

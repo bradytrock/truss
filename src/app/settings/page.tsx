@@ -12,11 +12,12 @@ import {
   SettingsSaveActions,
   useCompanySettingsDraft,
 } from "@/components/company-settings-form";
+import { CompanyStripeSettings } from "@/components/company-stripe-settings";
 
 export default function CompanySettingsPage() {
   return (
     <SettingsAdminGate>
-      <CompanySettingsForm />
+      <CompanySettingsWithStripe />
     </SettingsAdminGate>
   );
 }
@@ -381,5 +382,16 @@ function CompanySettingsForm() {
         </CardContent>
       </Card>
     </form>
+  );
+}
+
+function CompanySettingsWithStripe() {
+  return (
+    <>
+      <CompanySettingsForm />
+      <div className="max-w-2xl">
+        <CompanyStripeSettings />
+      </div>
+    </>
   );
 }

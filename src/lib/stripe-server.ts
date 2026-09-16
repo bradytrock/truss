@@ -12,8 +12,12 @@ export function isStripeConfigured() {
   return Boolean(stripeSecretKey());
 }
 
-export async function stripeForm(path: string, params: Record<string, string>) {
-  const key = stripeSecretKey();
+export async function stripeForm(
+  path: string,
+  params: Record<string, string>,
+  secret = stripeSecretKey(),
+) {
+  const key = secret.trim();
   if (!key) return { ok: false as const, error: "Stripe is not connected." };
   const body = new URLSearchParams(params);
   const response = await fetch(`https://api.stripe.com/v1/${path}`, {

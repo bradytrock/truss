@@ -714,6 +714,34 @@ export function missingEagleviewMessage() {
   return `Run ${EAGLEVIEW_SQL} in the SQL editor so EagleView orders and credentials persist.`;
 }
 
+export const COMPANY_STRIPE_SQL = "supabase/migrations/20260916050000_company_stripe_keys.sql";
+
+export function isMissingCompanyStripe(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentions =
+    message.includes("company_stripe_accounts") ||
+    message.includes("stripe_company_status") ||
+    message.includes("stripe_company_set_keys") ||
+    message.includes("stripe_company_request_revoke") ||
+    message.includes("stripe_secret_for_token") ||
+    message.includes("stripe_enabled_for_token") ||
+    message.includes("stripe_match_webhook");
+  return (
+    (code === "pgrst205" && mentions) ||
+    (code === "pgrst202" && mentions) ||
+    ((message.includes("schema cache") ||
+      message.includes("could not find the") ||
+      message.includes("does not exist")) &&
+      mentions)
+  );
+}
+
+export function missingCompanyStripeMessage() {
+  return `Run ${COMPANY_STRIPE_SQL} in the SQL editor so company Stripe keys can be saved.`;
+}
+
 export const EMAIL_SIGNATURES_SQL = "supabase/migrations/20260901150000_email_signatures.sql";
 
 export function isMissingEmailSignatureColumns(error: { message?: string; code?: string } | null | undefined) {

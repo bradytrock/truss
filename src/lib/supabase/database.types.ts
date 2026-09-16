@@ -1434,6 +1434,32 @@ export type Database = {
         };
         Relationships: [];
       };
+      company_stripe_accounts: {
+        Row: {
+          company_id: string;
+          secret_key: string;
+          webhook_secret: string;
+          connected_at: string | null;
+          revoke_at: string | null;
+          revoke_requested_at: string | null;
+          revoke_requested_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          company_id: string;
+          secret_key?: string;
+          webhook_secret?: string;
+          connected_at?: string | null;
+          revoke_at?: string | null;
+          revoke_requested_at?: string | null;
+          revoke_requested_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["company_stripe_accounts"]["Insert"]>;
+        Relationships: [];
+      };
       eagleview_orders: {
         Row: {
           id: string;
@@ -2465,6 +2491,34 @@ export type Database = {
           p_reference: string;
         };
         Returns: Json;
+      };
+      stripe_company_status: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      stripe_company_set_keys: {
+        Args: { p_secret_key: string; p_webhook_secret: string };
+        Returns: Json;
+      };
+      stripe_company_request_revoke: {
+        Args: { p_requested_by: string };
+        Returns: Json;
+      };
+      stripe_enabled_for_token: {
+        Args: { p_token: string };
+        Returns: boolean;
+      };
+      stripe_secret_for_token: {
+        Args: { p_token: string };
+        Returns: string;
+      };
+      stripe_match_webhook: {
+        Args: { p_payload: string; p_header: string };
+        Returns: Json;
+      };
+      stripe_apply_company_revokes: {
+        Args: Record<string, never>;
+        Returns: undefined;
       };
       shared_page: {
         Args: { p_token: string };

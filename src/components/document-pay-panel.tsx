@@ -32,7 +32,7 @@ export function InvoicePayPanel({
   stripeEnabled?: boolean;
   payable?: boolean;
 }) {
-  const cardReady = useStripeEnabled(stripeEnabled);
+  const cardReady = useStripeEnabled(stripeEnabled, token);
   const paid = paidOnInvoice(invoice.id, payments);
   const balance = invoiceBalance(invoice.id, lines, payments);
   const pendingCard = pendingCardOnInvoice(invoice.id, payments);
@@ -127,7 +127,7 @@ export function EstimateDepositPayPanel({
   company: CompanyPaymentFields;
   stripeEnabled?: boolean;
 }) {
-  const cardReady = useStripeEnabled(stripeEnabled);
+  const cardReady = useStripeEnabled(stripeEnabled, token);
   const remaining = Math.max(0, deposit - collected);
   const options = paymentOptions(company);
   const note = company.paymentNote?.trim() ?? "";
@@ -162,7 +162,7 @@ export function EstimateDepositPayPanel({
   );
 }
 
-function useStripeEnabled(explicit?: boolean) {
+function useStripeEnabled(explicit?: boolean, token?: string) {
   const [enabled, setEnabled] = useState(explicit ?? false);
   useEffect(() => {
     if (explicit !== undefined) {
@@ -170,7 +170,8 @@ function useStripeEnabled(explicit?: boolean) {
       return;
     }
     let cancelled = false;
-    void fetch("/api/stripe/status")
+    const query = token ? `?token=${encodeURIComponent(token)}` : "";
+    void fetch(`/api/stripe/status${query}`)
       .then((response) => response.json())
       .then((body: { enabled?: boolean }) => {
         if (!cancelled) setEnabled(Boolean(body.enabled));
@@ -181,7 +182,7 @@ function useStripeEnabled(explicit?: boolean) {
     return () => {
       cancelled = true;
     };
-  }, [explicit]);
+  }, [explicit, token]);
   return enabled;
 }
 

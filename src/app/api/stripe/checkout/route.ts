@@ -10,15 +10,12 @@ import {
   parseOpenBalance,
   requestOrigin,
 } from "@/lib/stripe-checkout";
-import { isStripeConfigured, stripeForm } from "@/lib/stripe-server";
+import { stripeForm, stripeSecretKey } from "@/lib/stripe-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  if (!isStripeConfigured()) {
-    return NextResponse.json({ error: "Card payments are not connected yet." }, { status: 400 });
-  }
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: "Could not start the card payment." }, { status: 400 });
   }
@@ -71,9 +68,18 @@ export async function POST(request: Request) {
     );
   }
 
+  await supabase.rpc("stripe_apply_company_revokes");
+  const companySecret = await supabase.rpc("stripe_secret_for_token", { p_token: token });
+  const secret =
+    (typeof companySecret.data === "string" ? companySecret.data.trim() : "") || stripeSecretKey();
+  if (!secret) {
+    return NextResponse.json({ error: "Card payments are not connected yet." }, { status: 400 });
+  }
+
   const session = await stripeForm(
     "checkout/sessions",
     checkoutSessionParams({ origin, target, token, amountCents }),
+    secret,
   );
   if (!session.ok) {
     return NextResponse.json({ error: session.error }, { status: 400 });
