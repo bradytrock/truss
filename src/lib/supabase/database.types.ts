@@ -1439,6 +1439,7 @@ export type Database = {
           company_id: string;
           secret_key: string;
           webhook_secret: string;
+          webhook_token: string;
           connected_at: string | null;
           revoke_at: string | null;
           revoke_requested_at: string | null;
@@ -1450,6 +1451,7 @@ export type Database = {
           company_id: string;
           secret_key?: string;
           webhook_secret?: string;
+          webhook_token?: string;
           connected_at?: string | null;
           revoke_at?: string | null;
           revoke_requested_at?: string | null;
@@ -2480,7 +2482,7 @@ export type Database = {
       };
       stripe_record_pending_payment: {
         Args: {
-          p_company_id: string | null;
+          p_company_id: string;
           p_invoice_id: string | null;
           p_estimate_id: string | null;
           p_job_id: string | null;
@@ -2490,6 +2492,10 @@ export type Database = {
           p_checkout_session: string;
           p_reference: string;
         };
+        Returns: Json;
+      };
+      stripe_verify_company_webhook: {
+        Args: { p_token: string; p_payload: string; p_header: string };
         Returns: Json;
       };
       stripe_company_status: {

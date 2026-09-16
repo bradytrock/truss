@@ -8,21 +8,28 @@ export function looksLikeStripeWebhookSecret(value: string) {
   return key.startsWith("whsec_") && key.length >= 16;
 }
 
-export function parseStripeStatus(raw: unknown): {
+export type StripeCompanyStatus = {
   connected: boolean;
   revokeAt: string | null;
   revokeRequestedBy: string;
   connectedAt: string | null;
+  webhookToken: string;
   error?: string;
-} {
+};
+
+export function parseStripeStatus(raw: unknown): StripeCompanyStatus {
+  const empty: StripeCompanyStatus = {
+    connected: false,
+    revokeAt: null,
+    revokeRequestedBy: "",
+    connectedAt: null,
+    webhookToken: "",
+  };
   const data = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
-  if (!data) return { connected: false, revokeAt: null, revokeRequestedBy: "", connectedAt: null };
+  if (!data) return empty;
   if (data.ok === false) {
     return {
-      connected: false,
-      revokeAt: null,
-      revokeRequestedBy: "",
-      connectedAt: null,
+      ...empty,
       error: typeof data.error === "string" ? data.error : "Could not load Stripe settings.",
     };
   }
@@ -31,7 +38,15 @@ export function parseStripeStatus(raw: unknown): {
     revokeAt: typeof data.revokeAt === "string" && data.revokeAt ? data.revokeAt : null,
     revokeRequestedBy: typeof data.revokeRequestedBy === "string" ? data.revokeRequestedBy : "",
     connectedAt: typeof data.connectedAt === "string" && data.connectedAt ? data.connectedAt : null,
+    webhookToken: typeof data.webhookToken === "string" ? data.webhookToken.trim() : "",
   };
+}
+
+export function companyStripeWebhookUrl(origin: string, token: string) {
+  const base = origin.trim().replace(/\/+$/, "");
+  const webhookToken = token.trim();
+  if (!base || webhookToken.length < 24) return "";
+  return `${base}/api/stripe/webhook/${encodeURIComponent(webhookToken)}`;
 }
 
 export function revokeIsPending(revokeAt: string | null, now = Date.now()) {

@@ -727,7 +727,9 @@ export function isMissingCompanyStripe(error: { message?: string; code?: string 
     message.includes("stripe_company_request_revoke") ||
     message.includes("stripe_secret_for_token") ||
     message.includes("stripe_enabled_for_token") ||
-    message.includes("stripe_match_webhook");
+    message.includes("stripe_match_webhook") ||
+    message.includes("stripe_verify_company_webhook") ||
+    message.includes("webhook_token");
   return (
     (code === "pgrst205" && mentions) ||
     (code === "pgrst202" && mentions) ||

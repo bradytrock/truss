@@ -127,6 +127,7 @@ export function CompanyStripeSettings() {
               Stripe is connected. Card Pay is on for invoices and optional deposits. The keys are
               locked and cannot be viewed.
             </p>
+            <CompanyWebhookUrl url={info.webhookUrl} />
             {pendingRevoke ? (
               <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
                 {info?.revokeRequestedBy || "A company admin"} scheduled removal. Keys come off{" "}
@@ -140,6 +141,7 @@ export function CompanyStripeSettings() {
           </div>
         ) : info && !info.error ? (
           <div className="space-y-4">
+            <CompanyWebhookUrl url={info.webhookUrl} />
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="grid gap-1.5">
                 <Label htmlFor="stripe-secret">Secret key</Label>
@@ -165,12 +167,9 @@ export function CompanyStripeSettings() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              In Stripe, add an endpoint at{" "}
-              <span className="font-mono">
-                {info?.webhookUrl || "/api/stripe/webhook"}
-              </span>{" "}
-              for <span className="font-mono">checkout.session.completed</span>. Then paste both
-              keys here. After save, this form locks.
+              In Stripe, add an endpoint at this company’s URL for{" "}
+              <span className="font-mono">checkout.session.completed</span>. Then paste both keys
+              here. After save, this form locks. Do not use another office’s webhook URL.
             </p>
             <Button
               type="button"
@@ -183,5 +182,23 @@ export function CompanyStripeSettings() {
         ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+function CompanyWebhookUrl({ url }: { url?: string }) {
+  if (!url) return null;
+  return (
+    <div className="grid gap-1.5">
+      <Label htmlFor="stripe-webhook-url">This company’s webhook URL</Label>
+      <Input
+        id="stripe-webhook-url"
+        readOnly
+        value={url}
+        onFocus={(event) => event.target.select()}
+      />
+      <p className="text-xs text-muted-foreground">
+        Unique to this office. Stripe events posted here cannot land on another company.
+      </p>
+    </div>
   );
 }

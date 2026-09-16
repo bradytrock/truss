@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  companyStripeWebhookUrl,
   looksLikeStripeSecretKey,
   looksLikeStripeWebhookSecret,
   parseStripeStatus,
@@ -17,5 +18,22 @@ assert.equal(locked.connected, true);
 assert.equal(revokeIsPending(locked.revokeAt, Date.parse("2026-09-16T12:00:00.000Z")), true);
 assert.equal(revokeIsPending(locked.revokeAt, Date.parse("2026-09-18T12:00:00.000Z")), false);
 assert.equal(revokeIsPending(null), false);
+
+const token = "a".repeat(48);
+const parsed = parseStripeStatus({
+  ok: true,
+  connected: true,
+  webhookToken: token,
+});
+assert.equal(parsed.webhookToken, token);
+assert.equal(
+  companyStripeWebhookUrl("https://app.truss.test", token),
+  `https://app.truss.test/api/stripe/webhook/${token}`,
+);
+assert.equal(companyStripeWebhookUrl("https://app.truss.test", "short"), "");
+assert.notEqual(
+  companyStripeWebhookUrl("https://app.truss.test", token),
+  companyStripeWebhookUrl("https://app.truss.test", "b".repeat(48)),
+);
 
 console.log("stripe-company tests passed");

@@ -3,9 +3,11 @@ import { loadProfileCompany } from "@/lib/eagleview-server";
 import { requestOrigin } from "@/lib/share-text";
 import { emailCompanyAdminsStripeRevoke } from "@/lib/stripe-admin-email";
 import {
+  companyStripeWebhookUrl,
   looksLikeStripeSecretKey,
   looksLikeStripeWebhookSecret,
   parseStripeStatus,
+  type StripeCompanyStatus,
 } from "@/lib/stripe-company";
 import { createClient } from "@/lib/supabase/server";
 import { isMissingCompanyStripe, missingCompanyStripeMessage } from "@/lib/supabase/schema-errors";
@@ -30,10 +32,7 @@ export async function GET(request: Request) {
   if (parsed.error) {
     return NextResponse.json({ error: parsed.error }, { status: 403 });
   }
-  return NextResponse.json({
-    ...parsed,
-    webhookUrl: `${requestOrigin(request)}/api/stripe/webhook`,
-  });
+  return NextResponse.json(stripeCompanyPayload(request, parsed));
 }
 
 export async function POST(request: Request) {
@@ -72,10 +71,7 @@ export async function POST(request: Request) {
     }
     const parsed = parseStripeStatus(saved.data);
     if (parsed.error) return NextResponse.json({ error: parsed.error }, { status: 400 });
-    return NextResponse.json({
-      ...parsed,
-      webhookUrl: `${requestOrigin(request)}/api/stripe/webhook`,
-    });
+    return NextResponse.json(stripeCompanyPayload(request, parsed));
   }
 
   const requestedBy = auth.profile.full_name?.trim() || "A company admin";
@@ -134,19 +130,13 @@ export async function POST(request: Request) {
         })
       : { sent: 0, failed: recipients.length, configured: false };
     return NextResponse.json({
-      ...parsed,
-      connected: true,
+      ...stripeCompanyPayload(request, { ...parsed, connected: true }),
       emailed: mailed.sent,
       emailConfigured: mailed.configured,
-      webhookUrl: `${requestOrigin(request)}/api/stripe/webhook`,
     });
   }
 
-  return NextResponse.json({
-    ...parsed,
-    connected: true,
-    webhookUrl: `${requestOrigin(request)}/api/stripe/webhook`,
-  });
+  return NextResponse.json(stripeCompanyPayload(request, { ...parsed, connected: true }));
 }
 
 async function companyAdmin() {
@@ -163,6 +153,13 @@ async function companyAdmin() {
     };
   }
   return { ok: true as const, supabase, user, profile };
+}
+
+function stripeCompanyPayload(request: Request, parsed: StripeCompanyStatus) {
+  return {
+    ...parsed,
+    webhookUrl: companyStripeWebhookUrl(requestOrigin(request), parsed.webhookToken),
+  };
 }
 
 function asRecord(value: unknown) {
