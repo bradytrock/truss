@@ -5,6 +5,7 @@ import {
   customerAliasName,
   customerQueryXml,
   invoiceAddXml,
+  isQbNotFoundMessage,
   itemQueryXml,
   itemServiceAddXml,
   readQbResponse,
@@ -17,7 +18,6 @@ import {
 import {
   billedCustomerName,
   customerFullName,
-  expenseReplacesCheck,
   jobFullName,
   paymentCustomerRef,
   splitQbwcStep,
@@ -98,8 +98,11 @@ export function requestForStep(rawStep: string, work: QbwcWork) {
     case "expense_add":
       return expenseRequest(requestId, work, useAlias);
     case "txn_void":
-      if (work.kind === "expense" && work.replaceTxnId?.trim()) {
-        return txnVoidXml({ requestId, txnType: "Check", txnId: work.replaceTxnId.trim() });
+      if (work.kind === "expense") {
+        const replaceId = work.replaceTxnId?.trim();
+        if (replaceId) {
+          return txnVoidXml({ requestId, txnType: "Check", txnId: replaceId });
+        }
       }
       return expenseRequest(requestId, work, useAlias);
     case "payment_add":
@@ -168,6 +171,11 @@ export function advanceFromResponse(
   work?: QbwcWork | null,
 ): StepAdvance {
   const { step, useAlias } = splitQbwcStep(rawStep);
+  // A leftover check may be locked in another QuickBooks window. Never abort
+  // the session for TxnVoid — the vendor bill still needs to post.
+  if (step === "txn_void") {
+    return { action: "next", step: taggedQbwcStep("expense_add", useAlias) };
+  }
   const result = readQbResponse(responseXml, fallbackMessage);
   const qbMessage = result.statusMessage || `QuickBooks status ${result.statusCode}`;
   if (result.kind === "error") {
@@ -263,10 +271,34 @@ export function advanceFromResponse(
     case "expense_add":
     case "payment_add":
       return missing ? { action: "fail", error: qbMessage } : { action: "complete", txnId: result.txnId };
-    case "txn_void":
-      // Void the mistaken check even if QuickBooks already deleted it, then add the bill.
-      return { action: "next", step: taggedQbwcStep("expense_add", useAlias) };
   }
+}
+
+function hresultFailed(hresult: string) {
+  const value = hresult.trim();
+  return Boolean(value) && value !== "0x0" && value !== "0";
+}
+
+/** Web Connector receiveResponseXML: empty body + HRESULT is usually a COM miss, not a session killer. */
+export function receiveWorkAdvance(input: {
+  step: string;
+  responseXml: string;
+  hresult?: string;
+  message?: string;
+  work?: QbwcWork | null;
+}): StepAdvance {
+  const responseXml = input.responseXml ?? "";
+  const message = input.message ?? "";
+  const hresult = input.hresult ?? "";
+  const { step, useAlias } = splitQbwcStep(input.step);
+  const hasXml = Boolean(responseXml.trim());
+  if (!hasXml && hresultFailed(hresult) && !isQbNotFoundMessage(message)) {
+    if (step === "txn_void") {
+      return { action: "next", step: taggedQbwcStep("expense_add", useAlias) };
+    }
+    return { action: "fail", error: `${stepLabel(input.step)}: ${message || hresult}` };
+  }
+  return advanceFromResponse(input.step, responseXml, message, input.work);
 }
 
 function afterVendor(work?: QbwcWork | null) {
@@ -285,7 +317,9 @@ function afterCustomer(work: QbwcWork | null | undefined, useAlias: boolean) {
 
 function afterJob(work: QbwcWork | null | undefined, useAlias: boolean) {
   if (work?.kind === "expense") {
-    return taggedQbwcStep(expenseReplacesCheck(work) ? "txn_void" : "expense_add", useAlias);
+    // Do not TxnVoid leftover checks here — a check open in another QB session
+    // cannot be locked and used to abort the vendor-bill post.
+    return taggedQbwcStep("expense_add", useAlias);
   }
   if (work?.kind === "payment") return taggedQbwcStep("payment_add", useAlias);
   return taggedQbwcStep("item_query", useAlias);

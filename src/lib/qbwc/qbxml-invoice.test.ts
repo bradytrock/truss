@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { billAddXml, invoiceAddXml, signedInvoiceQtyRate, txnVoidXml } from "./qbxml.ts";
-import { advanceFromResponse, requestForStep } from "./steps.ts";
-import { parseWorkPayload, type QbExpenseWork, type QbInvoiceWork } from "./work.ts";
+import { advanceFromResponse, receiveWorkAdvance, requestForStep } from "./steps.ts";
+import { expenseReplacesCheck, parseWorkPayload, type QbExpenseWork, type QbInvoiceWork } from "./work.ts";
 
 assert.deepEqual(signedInvoiceQtyRate(1, 7482.12), { quantity: 1, unitCost: 7482.12 });
 assert.deepEqual(signedInvoiceQtyRate(1, -1000), { quantity: -1, unitCost: 1000 });
@@ -72,6 +72,8 @@ assert.match(billXml, /<BillableStatus>NotBillable<\/BillableStatus>/);
 assert.doesNotMatch(billXml, /<CheckAddRq/);
 
 const replaceWork = { ...expenseWork, replaceTxnId: "43-1789510995" };
+assert.equal(expenseReplacesCheck(replaceWork), true);
+assert.equal(expenseReplacesCheck(expenseWork), false);
 const voidXml = requestForStep("txn_void", replaceWork);
 assert.match(voidXml, /<TxnVoidRq/);
 assert.match(voidXml, /<TxnVoidType>Check<\/TxnVoidType>/);
@@ -84,8 +86,51 @@ assert.equal(
   advanceFromResponse("txn_void", "<TxnVoidRs statusCode=\"3120\" statusMessage=\"Object not found\" />").step,
   "expense_add",
 );
+const lockMessage =
+  'Cannot void the object specified by the id = "43-1789510995".  QuickBooks error message: The transaction could not be locked.  It is in use by another user.';
+assert.equal(advanceFromResponse("txn_void", "", lockMessage, replaceWork).action, "next");
+assert.equal(advanceFromResponse("txn_void", "", lockMessage, replaceWork).step, "expense_add");
+assert.equal(
+  advanceFromResponse(
+    "txn_void",
+    `<TxnVoidRs statusCode="3180" statusMessage="${lockMessage}" />`,
+    lockMessage,
+    replaceWork,
+  ).step,
+  "expense_add",
+);
+assert.equal(
+  receiveWorkAdvance({
+    step: "txn_void",
+    responseXml: "",
+    hresult: "0x80040400",
+    message: lockMessage,
+    work: replaceWork,
+  }).action,
+  "next",
+);
+assert.equal(
+  receiveWorkAdvance({
+    step: "txn_void+alias",
+    responseXml: "",
+    hresult: "0x80040400",
+    message: lockMessage,
+    work: replaceWork,
+  }).step,
+  "expense_add+alias",
+);
+assert.equal(
+  receiveWorkAdvance({
+    step: "expense_add",
+    responseXml: "",
+    hresult: "0x80040400",
+    message: "Something else failed",
+    work: expenseWork,
+  }).action,
+  "fail",
+);
 const jobOk = "<CustomerAddRs statusCode=\"0\"><CustomerRet><ListID>1</ListID></CustomerRet></CustomerAddRs>";
-assert.equal(advanceFromResponse("job_add", jobOk, "", replaceWork).step, "txn_void");
+assert.equal(advanceFromResponse("job_add", jobOk, "", replaceWork).step, "expense_add");
 assert.equal(advanceFromResponse("job_add", jobOk, "", expenseWork).step, "expense_add");
 
 assert.match(

@@ -15,8 +15,8 @@ import {
   qbwcNextWork,
   qbwcSaveVendors,
 } from "@/lib/qbwc/service";
-import { isQbNotFoundMessage, readVendorListResponse } from "@/lib/qbwc/qbxml";
-import { advanceFromResponse, requestForStep, stepLabel } from "@/lib/qbwc/steps";
+import { readVendorListResponse } from "@/lib/qbwc/qbxml";
+import { receiveWorkAdvance, requestForStep } from "@/lib/qbwc/steps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -78,19 +78,13 @@ async function dispatch(call: ReturnType<typeof parseQbwcSoap>) {
       if (current.work.kind === "vendor_sync") {
         return handleVendorSync(call.ticket, call.response, call.hresult, call.message);
       }
-      const hasXml = Boolean(call.response.trim());
-      const hresultFailed =
-        Boolean(call.hresult.trim()) && call.hresult !== "0x0" && call.hresult !== "0";
-      // Query FullName misses come back as status 500 (and sometimes hresult) — that is
-      // "create this customer/job/item", not a session-ending COM failure.
-      if (!hasXml && hresultFailed && !isQbNotFoundMessage(call.message)) {
-        const label = stepLabel(current.step);
-        await qbwcApply(call.ticket, "fail", {
-          error: `${label}: ${call.message || call.hresult}`,
-        });
-        return soapIntResponse("receiveResponseXML", -1);
-      }
-      const advance = advanceFromResponse(current.step, call.response, call.message, current.work);
+      const advance = receiveWorkAdvance({
+        step: current.step,
+        responseXml: call.response,
+        hresult: call.hresult,
+        message: call.message,
+        work: current.work,
+      });
       console.info(
         "[qbwc] receive",
         current.step,
