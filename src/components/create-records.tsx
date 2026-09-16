@@ -1133,7 +1133,7 @@ export function CreateJobDialog({
     >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Log a job</DialogTitle>
+          <DialogTitle>New job</DialogTitle>
           <DialogDescription>
             For work already under contract — a sold restoration, remodel, or roof that did not come through this pipeline.
           </DialogDescription>

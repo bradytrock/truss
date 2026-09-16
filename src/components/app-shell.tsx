@@ -39,7 +39,6 @@ import {
 } from "@/components/ui/sheet";
 import {
   CreateClientDialog,
-  CreateJobDialog,
   CreateOpportunityDialog,
 } from "@/components/create-records";
 import {
@@ -148,7 +147,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const startEstimate = startEstimateFlow.prompt;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [create, setCreate] = useState<
-    "opportunity" | "client" | "job" | "invoice" | "event" | "expense" | "payment" | null
+    "opportunity" | "client" | "invoice" | "event" | "expense" | "payment" | null
   >(null);
 
   const launcherApps = appLauncherItems();
@@ -171,7 +170,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         <DropdownMenuItem onClick={() => setCreate("invoice")}>New invoice</DropdownMenuItem>
         <DropdownMenuItem onClick={() => setCreate("event")}>Calendar event</DropdownMenuItem>
         <DropdownMenuItem onClick={() => setCreate("client")}>New contact</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("job")}>Log a job</DropdownMenuItem>
       </>
     );
 
@@ -272,10 +270,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       <CreateClientDialog
         open={create === "client"}
         onOpenChange={(open) => setCreate(open ? "client" : null)}
-      />
-      <CreateJobDialog
-        open={create === "job"}
-        onOpenChange={(open) => setCreate(open ? "job" : null)}
       />
       <CreateInvoiceDialog
         open={create === "invoice"}
