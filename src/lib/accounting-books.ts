@@ -2,7 +2,6 @@ import { daysUntil } from "@/lib/format";
 import { jobProfitAndLoss, type JobBooksBasis } from "@/lib/job-financials";
 import { invoiceBalance, invoiceTotal } from "@/lib/money";
 import {
-  DEFAULT_QB_BANK,
   DEFAULT_QB_CC,
   expensePushBlocked,
   expenseRequiresJob,
@@ -96,11 +95,10 @@ export function reviewableExpenses(expenses: Expense[]) {
 
 export function expenseQbPayWith(
   method: ExpenseMethod,
-  hasJob = false,
-): "credit_card" | "check" | "bill" {
+  _hasJob = false,
+): "credit_card" | "bill" {
+  void _hasJob;
   if (method === "credit_card") return "credit_card";
-  if (hasJob) return "bill";
-  if (method === "check") return "check";
   return "bill";
 }
 
@@ -118,8 +116,7 @@ export function expenseQbPreview(
       ? "Needs a job"
       : "Company overhead";
   return {
-    txnType:
-      payWith === "credit_card" ? "Credit card charge" : payWith === "bill" ? "Vendor bill" : "Check",
+    txnType: payWith === "credit_card" ? "Credit card charge" : "Vendor bill",
     vendor: expense.vendor.trim() || "Add a vendor",
     amount: expense.amount,
     txnDate: expense.incurredAt.slice(0, 10),
@@ -128,9 +125,7 @@ export function expenseQbPreview(
     payAccount:
       payWith === "credit_card"
         ? accounts?.ccAccount?.trim() || DEFAULT_QB_CC
-        : payWith === "bill"
-          ? "Accounts Payable"
-          : accounts?.bankAccount?.trim() || DEFAULT_QB_BANK,
+        : "Accounts Payable",
     memo: expense.memo.trim() || expense.number,
     refNumber: expense.number,
     customerJob: jobLabel,

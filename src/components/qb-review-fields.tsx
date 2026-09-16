@@ -264,13 +264,7 @@ export function ExpenseFields({ expenseId, locked }: { expenseId: string; locked
     <div className="space-y-3">
       <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs leading-relaxed">
         QuickBooks will post a{" "}
-        {expense.method === "credit_card"
-          ? "credit card charge"
-          : job
-            ? "vendor bill"
-            : expense.method === "check"
-              ? "check"
-              : "vendor bill"}{" "}
+        {expense.method === "credit_card" ? "credit card charge" : "vendor bill"}{" "}
         to{" "}
         <span className="font-medium">{expense.vendor || "the vendor"}</span> on{" "}
         {EXPENSE_ACCOUNT_LABELS[expense.account]}

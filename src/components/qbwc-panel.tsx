@@ -182,7 +182,7 @@ export function QbwcPanel() {
         <CardTitle>QuickBooks Web Connector</CardTitle>
         <CardDescription>
           Approved invoices, expenses, and payments post into QuickBooks Desktop after you push them
-          from Accounting. Invoices land on Customer:Job. Job expenses post as a vendor bill, check, or credit card
+          from Accounting. Invoices land on Customer:Job. Expenses post as a vendor bill or a credit card
           charge on that same Customer:Job. Office and insurance can stay on the company. Payments
           receive against the invoice that is already in QuickBooks.
         </CardDescription>
@@ -238,8 +238,8 @@ export function QbwcPanel() {
               placeholder={DEFAULT_QB_BANK}
             />
             <p className="text-xs text-muted-foreground">
-              Checks that are not on a job, plus deposits, use this account. Job costs post as vendor
-              bills on Customer:Job. The name must match QB exactly.
+              Deposits and invoice payments use this account. Expenses are never checks — they post as
+              a vendor bill (paid later by ACH) or a credit card charge. The name must match QB exactly.
             </p>
           </div>
           <div className="grid gap-1.5">

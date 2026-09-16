@@ -88,7 +88,7 @@ export type QbExpenseWork = {
   vendor: string;
   accountName: string;
   amount: number;
-  payWith: "credit_card" | "check" | "bill";
+  payWith: "credit_card" | "bill";
   txnDate: string;
   memo: string;
   payAccount: string;
@@ -414,9 +414,8 @@ function isAccountsPayable(name: string) {
 }
 
 function asPayWith(value: unknown, payAccount = ""): QbExpenseWork["payWith"] {
-  if (value === "credit_card") return "credit_card";
-  if (value === "bill" || isAccountsPayable(payAccount)) return "bill";
-  return "check";
+  if (value === "credit_card" && !isAccountsPayable(payAccount)) return "credit_card";
+  return "bill";
 }
 
 function asString(value: unknown, fallback = "") {

@@ -210,8 +210,8 @@ export function itemKindLabel(kind: QbReviewKind, item?: QbReviewItem) {
   if (kind === "invoice") return "Invoice";
   if (kind === "expense") {
     const expense = item?.kind === "expense" ? item.expense : null;
-    if (expense?.jobId && expense.method !== "credit_card") return "Vendor bill";
-    return "Expense";
+    if (expense?.method !== "credit_card") return "Vendor bill";
+    return "Credit card charge";
   }
   return "Payment";
 }

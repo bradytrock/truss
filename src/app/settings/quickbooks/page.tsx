@@ -39,7 +39,7 @@ export default function QuickBooksSettingsPage() {
       <PageHeader
         eyebrow="Settings"
         title="QuickBooks"
-        description="The Web Connector posts approved invoices onto Customer:Job, and job expenses as a vendor bill (ACH and other paid-outside-the-register methods), a check, or a credit card charge on that same Customer:Job."
+        description="The Web Connector posts approved invoices onto Customer:Job. Expenses post as a vendor bill (ACH from accounting) or a credit card charge — never as a check."
         actions={
           <Button nativeButton={false} variant="outline" render={<Link href="/accounting" />}>
             Accounting

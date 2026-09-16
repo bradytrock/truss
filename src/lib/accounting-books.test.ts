@@ -94,7 +94,11 @@ assert.equal(
 );
 assert.equal(
   itemKindLabel("expense", { kind: "expense", id: "e2", expense: { jobId: null, method: "ach" } as Expense }),
-  "Expense",
+  "Vendor bill",
+);
+assert.equal(
+  itemKindLabel("expense", { kind: "expense", id: "e3", expense: { jobId: "job_1", method: "credit_card" } as Expense }),
+  "Credit card charge",
 );
 
 assert.equal(parseAccountingTab("review"), "review");
@@ -226,5 +230,9 @@ const jobCheckPreview = expenseQbPreview(
 );
 assert.equal(jobCheckPreview.txnType, "Vendor bill");
 assert.equal(jobCheckPreview.customerJob, "Martinez:J-12");
+
+const overheadCheck = expenseQbPreview({ ...bill, method: "check", jobId: null }, null);
+assert.equal(overheadCheck.txnType, "Vendor bill");
+assert.equal(overheadCheck.payAccount, "Accounts Payable");
 
 console.log("accounting-books tests passed");

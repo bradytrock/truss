@@ -134,3 +134,15 @@ const apAsCheck = parseWorkPayload({
   jobCode: "BJ091026-A",
 });
 assert.equal(apAsCheck && apAsCheck.kind === "expense" && apAsCheck.payWith, "bill");
+
+const checkMethod = parseWorkPayload({
+  kind: "expense",
+  expenseId: "exp-check",
+  vendor: "Vendor Co",
+  payWith: "check",
+  payAccount: "Checking",
+});
+assert.equal(checkMethod && checkMethod.kind === "expense" && checkMethod.payWith, "bill");
+if (checkMethod && checkMethod.kind === "expense") {
+  assert.match(requestForStep("expense_add", checkMethod), /<BillAddRq/);
+}
