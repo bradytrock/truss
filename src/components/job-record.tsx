@@ -187,12 +187,14 @@ function SummaryCard({
   children,
   href,
   onClick,
+  ariaLabel,
 }: {
   eyebrow: string;
   title: string;
   children: ReactNode;
   href?: string;
   onClick?: () => void;
+  ariaLabel?: string;
 }) {
   const inner = (
     <>
@@ -203,17 +205,18 @@ function SummaryCard({
       <div className="mt-1 text-sm text-muted-foreground">{children}</div>
     </>
   );
-  const className = "rounded-md border bg-card p-4 text-left transition-colors hover:bg-muted/40";
+  const className =
+    "rounded-md border bg-card p-4 text-left transition-colors hover:bg-muted/40 cursor-pointer";
   if (href) {
     return (
-      <Link href={href} className={className}>
+      <Link href={href} className={className} aria-label={ariaLabel}>
         {inner}
       </Link>
     );
   }
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className={className}>
+      <button type="button" onClick={onClick} className={className} aria-label={ariaLabel}>
         {inner}
       </button>
     );
@@ -324,16 +327,20 @@ export function JobRecord({
     router.replace(qs ? `/jobs?${qs}` : "/jobs", { scroll: false });
   }
 
+  function promptJobEstimate() {
+    startEstimate({
+      jobId: job.id,
+      opportunityId: job.opportunityId,
+      contactId: job.primaryContactId,
+      clientId: job.clientId,
+    });
+  }
+
   function openNew(kind: "estimate" | "invoice" | "interaction" | "expense" | "materials") {
     if (deleted) return;
     if (kind === "estimate") {
       setJobTab("paper");
-      startEstimate({
-        jobId: job.id,
-        opportunityId: job.opportunityId,
-        contactId: job.primaryContactId,
-        clientId: job.clientId,
-      });
+      promptJobEstimate();
       return;
     }
     if (kind === "materials") {
@@ -1011,6 +1018,8 @@ export function JobRecord({
               eyebrow="Estimate"
               title={featuredEstimate?.number ?? "No estimate yet"}
               href={featuredEstimate ? `/estimates/${featuredEstimate.id}` : undefined}
+              ariaLabel={featuredEstimate ? undefined : "Create an estimate"}
+              onClick={featuredEstimate || deleted ? undefined : promptJobEstimate}
             >
               {featuredEstimate ? (
                 <>
@@ -1034,7 +1043,7 @@ export function JobRecord({
                   </p>
                 </>
               ) : (
-                <p>Start a proposal from New.</p>
+                <p>Click to create an estimate.</p>
               )}
             </SummaryCard>
             <SummaryCard
@@ -1403,7 +1412,17 @@ export function JobRecord({
               </StartEstimateButton>
             </div>
             {estimates.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No estimates tied to this job.</p>
+              deleted ? (
+                <p className="text-sm text-muted-foreground">No estimates tied to this job.</p>
+              ) : (
+                <button
+                  type="button"
+                  className="text-left text-sm text-muted-foreground hover:underline"
+                  onClick={promptJobEstimate}
+                >
+                  No estimates yet. Click to create one.
+                </button>
+              )
             ) : (
               <ul className="space-y-2">
                 {estimates.map((estimate) => (
