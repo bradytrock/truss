@@ -12,6 +12,7 @@ import {
   type EstimatePackage,
 } from "@/lib/estimate-packages";
 import { firstPlainLine, invoiceLineDescription } from "@/lib/line-format";
+import { estimateFullySigned } from "@/lib/estimate-signers";
 import type { Estimate, EstimateLine, JobMarket } from "@/lib/types";
 
 export type AdjustmentKind = "percent" | "amount";
@@ -161,6 +162,29 @@ export function acceptedAmountForJob(
   const preferred = [...related].sort((a, b) => (b.acceptedAt ?? "").localeCompare(a.acceptedAt ?? ""))[0];
   if (!preferred) return 0;
   return amountForEstimate(preferred, lines, market);
+}
+
+export function isSignedEstimate(
+  estimate: Pick<Estimate, "status" | "acceptedAt" | "secondAcceptedAt" | "secondContactId"> &
+    Partial<Pick<Estimate, "signatureImage" | "secondSignatureImage">>,
+) {
+  return estimate.status === "accepted" || estimateFullySigned(estimate);
+}
+
+/** The estimate a job card should open: a signed proposal first, then the live send. */
+export function featuredEstimateForJob<T extends Estimate>(estimates: T[]): T | undefined {
+  const live = estimates.filter((estimate) => !estimate.archivedAt);
+  const signed = live.filter((estimate) => isSignedEstimate(estimate));
+  if (signed.length) {
+    return [...signed].sort((left, right) =>
+      (right.acceptedAt ?? right.createdAt).localeCompare(left.acceptedAt ?? left.createdAt),
+    )[0];
+  }
+  return (
+    live.find((estimate) => estimate.status === "sent" || estimate.status === "viewed") ??
+    live.find((estimate) => estimate.status === "draft") ??
+    live[0]
+  );
 }
 
 export function contractValueForOpportunity(

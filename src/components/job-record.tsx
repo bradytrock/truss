@@ -82,7 +82,7 @@ import { livePhotos, primaryJobPhoto } from "@/lib/photo-trash";
 import { shareUrl } from "@/lib/share";
 import { leadSourceChoices, leadSourceLabel } from "@/lib/leads";
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
-import { amountForEstimate } from "@/lib/estimate-totals";
+import { amountForEstimate, featuredEstimateForJob } from "@/lib/estimate-totals";
 import { jobProfitAndLoss } from "@/lib/job-financials";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { workMarket } from "@/lib/market";
@@ -419,11 +419,7 @@ export function JobRecord({
       (sum, estimate) => sum + amountForEstimate(estimate, crm.estimateLines, workMarket(job, opportunity)),
       0,
     );
-  const featuredEstimate =
-    estimates.find((estimate) => estimate.status === "sent" || estimate.status === "viewed") ??
-    estimates.find((estimate) => estimate.status === "draft") ??
-    estimates.find((estimate) => estimate.status === "accepted") ??
-    estimates[0];
+  const featuredEstimate = featuredEstimateForJob(estimates);
   const nextTask = tasks
     .filter((task) => !task.completed)
     .slice()
