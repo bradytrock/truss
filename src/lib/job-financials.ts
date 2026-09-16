@@ -9,6 +9,7 @@ import type {
   QbSyncStatus,
 } from "@/lib/types";
 import { invoiceTotal, paidOnInvoice } from "@/lib/money";
+import { isPostedPayment } from "@/lib/payment-posting";
 
 export function isQbEntered(status: QbSyncStatus | undefined) {
   return status === "entered";
@@ -30,6 +31,12 @@ export function fillPayment(
     receiptStoragePath: payment.receiptStoragePath ?? null,
     qbStatus: payment.qbStatus ?? "not_in_qb",
     createdBy: payment.createdBy ?? "",
+    estimateId: payment.estimateId ?? null,
+    postingStatus: payment.postingStatus ?? "posted",
+    postedAt: payment.postedAt ?? null,
+    postedBy: payment.postedBy ?? "",
+    stripePaymentIntentId: payment.stripePaymentIntentId ?? "",
+    stripeCheckoutSessionId: payment.stripeCheckoutSessionId ?? "",
   };
 }
 
@@ -72,7 +79,7 @@ export function jobProfitAndLoss(input: {
     0,
   );
   const jobPayments = paymentsForJob(input.job.id, input.payments, input.invoices);
-  const collected = jobPayments.reduce((sum, payment) => sum + payment.amount, 0);
+  const collected = jobPayments.filter(isPostedPayment).reduce((sum, payment) => sum + payment.amount, 0);
   const jobExpenses = expensesForJob(input.job.id, input.expenses);
   const expenses = jobExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   const income = input.basis === "cash" ? collected : invoiced;
@@ -112,7 +119,9 @@ export function qbQueue(input: {
       invoice.status !== "void",
   );
   const expenses = input.expenses.filter((expense) => expense.qbStatus !== "entered");
-  const payments = input.payments.filter((payment) => payment.qbStatus !== "entered");
+  const payments = input.payments.filter(
+    (payment) => payment.qbStatus !== "entered" && isPostedPayment(payment),
+  );
   const invoiceTotalDue = invoices.reduce(
     (sum, invoice) => sum + invoiceTotal(invoice.id, input.invoiceLines),
     0,
@@ -248,7 +257,9 @@ function loadImage(src: string) {
 }
 
 export function jobIncomeToDate(jobId: string, payments: Payment[], invoices: Invoice[]) {
-  return paymentsForJob(jobId, payments, invoices).reduce((sum, payment) => sum + payment.amount, 0);
+  return paymentsForJob(jobId, payments, invoices)
+    .filter(isPostedPayment)
+    .reduce((sum, payment) => sum + payment.amount, 0);
 }
 
 export { paidOnInvoice };

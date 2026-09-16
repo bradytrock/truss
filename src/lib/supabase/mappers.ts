@@ -820,7 +820,25 @@ export function mapPayment(row: PaymentRow): Payment {
     receiptStoragePath: row.receipt_storage_path ?? null,
     qbStatus: parseQbStatus(row.qb_status),
     createdBy: row.created_by ?? "",
+    estimateId: row.estimate_id ?? (extraPaymentField(row, "estimate_id") || null),
+    postingStatus: parsePaymentPosting(row.posting_status ?? extraPaymentField(row, "posting_status")),
+    postedAt: row.posted_at ?? (extraPaymentField(row, "posted_at") || null),
+    postedBy: row.posted_by ?? extraPaymentField(row, "posted_by"),
+    stripePaymentIntentId:
+      row.stripe_payment_intent_id ?? extraPaymentField(row, "stripe_payment_intent_id"),
+    stripeCheckoutSessionId:
+      row.stripe_checkout_session_id ?? extraPaymentField(row, "stripe_checkout_session_id"),
   };
+}
+
+function extraPaymentField(row: PaymentRow, key: string) {
+  const value = (row as PaymentRow & Record<string, unknown>)[key];
+  return typeof value === "string" ? value : "";
+}
+
+function parsePaymentPosting(value: string) {
+  if (value === "pending" || value === "rejected" || value === "posted") return value;
+  return "posted" as const;
 }
 
 export function mapExpense(row: Database["public"]["Tables"]["expenses"]["Row"]): Expense {
@@ -926,6 +944,10 @@ export function paymentPatch(patch: Partial<Payment>) {
   if (patch.paidAt !== undefined) row.paid_at = patch.paidAt;
   if (patch.reference !== undefined) row.reference = patch.reference;
   if (patch.qbStatus !== undefined) row.qb_status = patch.qbStatus;
+  if (patch.postingStatus !== undefined) row.posting_status = patch.postingStatus;
+  if (patch.postedAt !== undefined) row.posted_at = patch.postedAt;
+  if (patch.postedBy !== undefined) row.posted_by = patch.postedBy;
+  if (patch.estimateId !== undefined) row.estimate_id = patch.estimateId;
   return row;
 }
 

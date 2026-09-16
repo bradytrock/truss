@@ -147,6 +147,11 @@ export type SharedCompany = {
   postalCode: string;
   licenseNumber: string;
   logoUrl?: string;
+  paymentVenmo?: string;
+  paymentZelle?: string;
+  paymentCashapp?: string;
+  paymentPaypal?: string;
+  paymentNote?: string;
 };
 
 export type SharedEstimatePayload = {
@@ -215,6 +220,7 @@ export type SharedEstimatePayload = {
     photoIds: string[];
     photos?: EstimateLinePhoto[];
   }>;
+  payments?: SharedInvoicePayload["payments"];
   projectManager?: ProjectManagerContact | null;
 };
 
@@ -257,6 +263,8 @@ export type SharedInvoicePayload = {
     receiptStoragePath: string | null;
     qbStatus: "not_in_qb" | "entered";
     createdBy: string;
+    postingStatus?: "pending" | "posted" | "rejected";
+    estimateId?: string | null;
   }>;
   projectManager?: ProjectManagerContact | null;
 };
@@ -275,6 +283,11 @@ function parseCompany(raw: unknown): SharedCompany {
     postalCode: asString(data.postalCode),
     licenseNumber: asString(data.licenseNumber),
     logoUrl: asString(data.logoUrl),
+    paymentVenmo: asString(data.paymentVenmo),
+    paymentZelle: asString(data.paymentZelle),
+    paymentCashapp: asString(data.paymentCashapp),
+    paymentPaypal: asString(data.paymentPaypal),
+    paymentNote: asString(data.paymentNote),
   };
 }
 
@@ -383,6 +396,7 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
       photos,
     };
     }),
+    payments: parseSharedPayments(raw.payments, ""),
     projectManager: parseProjectManager(raw.projectManager),
   };
 }
@@ -393,7 +407,6 @@ export function parseSharedInvoice(raw: unknown): SharedInvoicePayload | null {
   const status = asString(invoice.status, "sent");
   if (!asString(invoice.id) || !asString(invoice.number)) return null;
   const linesRaw = Array.isArray(raw.lines) ? raw.lines : [];
-  const payments = Array.isArray(raw.payments) ? raw.payments.filter(isRecord) : [];
   return {
     customer: asString(raw.customer, "Homeowner"),
     company: parseCompany(raw.company),
@@ -421,21 +434,31 @@ export function parseSharedInvoice(raw: unknown): SharedInvoicePayload | null {
       unitCost: asNumber(line.unitCost),
       sortOrder: asNumber(line.sortOrder, index),
     })),
-    payments: payments.map((payment, index) => ({
-      id: asString(payment.id, `pay-${index}`),
-      invoiceId: asNullable(payment.invoiceId) ?? asString(invoice.id),
-      jobId: asNullable(payment.jobId),
-      amount: asNumber(payment.amount),
-      method: asString(payment.method, "check"),
-      paidAt: asString(payment.paidAt),
-      reference: asString(payment.reference),
-      receiptUrl: asString(payment.receiptUrl),
-      receiptStoragePath: asNullable(payment.receiptStoragePath),
-      qbStatus: "not_in_qb",
-      createdBy: "",
-    })),
+    payments: parseSharedPayments(raw.payments, asString(invoice.id)),
     projectManager: parseProjectManager(raw.projectManager),
   };
+}
+
+function parseSharedPayments(raw: unknown, fallbackInvoiceId: string): SharedInvoicePayload["payments"] {
+  const payments = Array.isArray(raw) ? raw.filter(isRecord) : [];
+  return payments.map((payment, index) => ({
+    id: asString(payment.id, `pay-${index}`),
+    invoiceId: asNullable(payment.invoiceId) ?? (fallbackInvoiceId || null),
+    jobId: asNullable(payment.jobId),
+    amount: asNumber(payment.amount),
+    method: asString(payment.method, "check"),
+    paidAt: asString(payment.paidAt),
+    reference: asString(payment.reference),
+    receiptUrl: asString(payment.receiptUrl),
+    receiptStoragePath: asNullable(payment.receiptStoragePath),
+    qbStatus: "not_in_qb",
+    createdBy: "",
+    postingStatus:
+      asString(payment.postingStatus) === "pending" || asString(payment.postingStatus) === "rejected"
+        ? (asString(payment.postingStatus) as "pending" | "rejected")
+        : "posted",
+    estimateId: asNullable(payment.estimateId),
+  }));
 }
 
 export type SharedPagePayload = {
@@ -470,6 +493,11 @@ export function companySettingsFromShared(company: SharedCompany): CompanySettin
     postalCode: company.postalCode,
     licenseNumber: company.licenseNumber,
     logoUrl: company.logoUrl,
+    paymentVenmo: company.paymentVenmo,
+    paymentZelle: company.paymentZelle,
+    paymentCashapp: company.paymentCashapp,
+    paymentPaypal: company.paymentPaypal,
+    paymentNote: company.paymentNote,
     defaultEstimateTerms: null,
     defaultInvoiceTerms: null,
     minimumMarginPercent: 0,

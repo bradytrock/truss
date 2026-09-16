@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ProposalDocument } from "@/components/proposal-document";
+import { EstimateDepositPayPanel } from "@/components/document-pay-panel";
 import { CollectSignatureDialog } from "@/components/signature-pad";
 import { ShareFrame, ShareLoading, ShareMissing, SharePdfButton } from "@/components/share-frame";
 import { downloadEstimatePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
-import { fillEstimate, linesForEstimate } from "@/lib/estimate-totals";
+import { estimateTotals, fillEstimate, linesForEstimate } from "@/lib/estimate-totals";
+import { collectedTowardDeposit } from "@/lib/payment-posting";
 import {
   homeownerHasSigned,
   signerRoleForToken,
@@ -230,6 +232,14 @@ export function ShareEstimateClient({
               : undefined
           }
         />
+        {fromStore.status === "accepted" ? (
+          <EstimateDepositPayPanel
+            token={token}
+            deposit={estimateTotals(fromStore, lines).deposit}
+            collected={collectedTowardDeposit(fromStore.id, crm.payments)}
+            company={crm.company}
+          />
+        ) : null}
         <CollectSignatureDialog
           open={signOpen}
           onOpenChange={setSignOpen}
@@ -311,6 +321,14 @@ export function ShareEstimateClient({
         onToggleOptional={(line, selected) => void toggleRemoteOptional(line, selected)}
         onSelectPackage={optionalOpen ? (pkg) => void selectRemotePackage(pkg) : undefined}
       />
+      {estimate.status === "accepted" ? (
+        <EstimateDepositPayPanel
+          token={token}
+          deposit={estimateTotals(billingEstimate(estimate, remote.market), remote.lines).deposit}
+          collected={collectedTowardDeposit(estimate.id, remote.payments ?? [])}
+          company={remote.company}
+        />
+      ) : null}
       <CollectSignatureDialog
         open={signOpen}
         onOpenChange={setSignOpen}

@@ -653,10 +653,13 @@ export type ExpenseAccount = (typeof EXPENSE_ACCOUNTS)[number];
 export const EXPENSE_METHODS = ["credit_card", "debit", "check", "ach", "cash"] as const;
 export type ExpenseMethod = (typeof EXPENSE_METHODS)[number];
 
+export type PaymentPostingStatus = "pending" | "posted" | "rejected";
+
 export interface Payment {
   id: string;
   invoiceId: string | null;
   jobId: string | null;
+  estimateId?: string | null;
   amount: number;
   method: string;
   paidAt: string;
@@ -665,6 +668,12 @@ export interface Payment {
   receiptStoragePath: string | null;
   qbStatus: QbSyncStatus;
   createdBy: string;
+  /** Card charges start pending until accounting matches Stripe. Missing means posted. */
+  postingStatus?: PaymentPostingStatus;
+  postedAt?: string | null;
+  postedBy?: string;
+  stripePaymentIntentId?: string;
+  stripeCheckoutSessionId?: string;
 }
 
 export interface Expense {

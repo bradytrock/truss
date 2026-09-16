@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { toast } from "sonner";
 import { InvoiceDocument } from "@/components/invoice-document";
+import { InvoicePayPanel } from "@/components/document-pay-panel";
 import { ShareFrame, ShareLoading, ShareMissing, SharePdfButton } from "@/components/share-frame";
 import { downloadInvoicePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
@@ -92,6 +93,13 @@ export function ShareInvoiceClient({
           status={status}
           showStatus={false}
         />
+        <InvoicePayPanel
+          invoice={fromStore}
+          lines={lines}
+          payments={payments}
+          company={crm.company}
+          token={token}
+        />
       </ShareFrame>
     );
   }
@@ -130,6 +138,13 @@ export function ShareInvoiceClient({
         status={remote.invoice.status}
         showStatus={false}
         projectManager={remote.projectManager}
+      />
+      <InvoicePayPanel
+        invoice={remote.invoice}
+        lines={remote.lines}
+        payments={remote.payments}
+        company={remote.company}
+        token={token}
       />
     </ShareFrame>
   );

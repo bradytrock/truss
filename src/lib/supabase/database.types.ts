@@ -935,6 +935,7 @@ export type Database = {
           company_id: string;
           invoice_id: string | null;
           job_id: string | null;
+          estimate_id: string | null;
           amount: number;
           method: string;
           paid_at: string;
@@ -945,12 +946,18 @@ export type Database = {
           qb_txn_id: string;
           created_by: string;
           created_at: string;
+          posting_status: string;
+          posted_at: string | null;
+          posted_by: string;
+          stripe_payment_intent_id: string;
+          stripe_checkout_session_id: string;
         };
         Insert: {
           id?: string;
           company_id: string;
           invoice_id?: string | null;
           job_id?: string | null;
+          estimate_id?: string | null;
           amount: number;
           method?: string;
           paid_at?: string;
@@ -960,6 +967,11 @@ export type Database = {
           qb_status?: string;
           qb_txn_id?: string;
           created_by?: string;
+          posting_status?: string;
+          posted_at?: string | null;
+          posted_by?: string;
+          stripe_payment_intent_id?: string;
+          stripe_checkout_session_id?: string;
         };
         Update: Partial<Database["public"]["Tables"]["payments"]["Insert"]>;
         Relationships: [];
@@ -2434,6 +2446,24 @@ export type Database = {
       };
       shared_invoice: {
         Args: { p_token: string };
+        Returns: Json;
+      };
+      stripe_open_balance: {
+        Args: { p_token: string; p_kind: string; p_deposit_amount?: number };
+        Returns: Json;
+      };
+      stripe_record_pending_payment: {
+        Args: {
+          p_company_id: string | null;
+          p_invoice_id: string | null;
+          p_estimate_id: string | null;
+          p_job_id: string | null;
+          p_amount: number;
+          p_paid_at: string;
+          p_payment_intent: string;
+          p_checkout_session: string;
+          p_reference: string;
+        };
         Returns: Json;
       };
       shared_page: {

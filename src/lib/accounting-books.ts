@@ -1,4 +1,5 @@
 import { daysUntil } from "@/lib/format";
+import { isPostedPayment, pendingCardPayments } from "@/lib/payment-posting";
 import { jobProfitAndLoss, type JobBooksBasis } from "@/lib/job-financials";
 import { invoiceBalance, invoiceTotal } from "@/lib/money";
 import {
@@ -183,6 +184,7 @@ export function collectedThisMonth(payments: Payment[], now = new Date()) {
   let amount = 0;
   let count = 0;
   for (const payment of payments) {
+    if (!isPostedPayment(payment)) continue;
     const stamp = new Date(payment.paidAt).getTime();
     if (!Number.isFinite(stamp) || stamp < start || stamp > end) continue;
     amount += payment.amount;
@@ -312,5 +314,13 @@ export function agingInvoiceRows(input: {
 }
 
 export function recentPaymentRows(payments: Payment[]) {
-  return [...payments].sort((a, b) => b.paidAt.localeCompare(a.paidAt));
+  return postedPaymentsNewest(payments);
+}
+
+export function postedPaymentsNewest(payments: Payment[]) {
+  return payments.filter(isPostedPayment).sort((a, b) => b.paidAt.localeCompare(a.paidAt));
+}
+
+export function pendingCardPaymentRows(payments: Payment[]) {
+  return pendingCardPayments(payments).sort((a, b) => b.paidAt.localeCompare(a.paidAt));
 }

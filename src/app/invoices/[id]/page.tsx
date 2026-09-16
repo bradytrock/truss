@@ -12,6 +12,7 @@ import { RecordPaymentDialog } from "@/components/create-ops-dialogs";
 import { CommitTextarea } from "@/components/estimate-writer";
 import { RecordProperty } from "@/components/app-shell";
 import { InvoiceDocument } from "@/components/invoice-document";
+import { InvoicePayPanel } from "@/components/document-pay-panel";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { shareContactsForInvoice } from "@/lib/parties";
@@ -214,6 +215,14 @@ export default function InvoiceDetailPage() {
             onTermsChange={
               status === "void" ? undefined : (terms) => void crm.updateInvoice(record.id, { terms })
             }
+          />
+          <InvoicePayPanel
+            invoice={record}
+            lines={lines}
+            payments={payments}
+            company={crm.company}
+            token={record.shareToken}
+            payable={status !== "void" && status !== "draft"}
           />
 
           <Card>

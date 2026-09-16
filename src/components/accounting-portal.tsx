@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Hourglass, PieChart, PlugZap, Receipt, RefreshCw, Users } from "lucide-react";
+import { CreditCard, Hourglass, PieChart, PlugZap, Receipt, RefreshCw, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,10 +36,12 @@ import {
   invoiceReviewAmount,
   jobProfitRows,
   parseAccountingTab,
+  pendingCardPaymentRows,
   recentPaymentRows,
   reviewableInvoices,
   type AgingKey,
 } from "@/lib/accounting-books";
+import { paymentMethodLabel } from "@/lib/payment-posting";
 import { formatCurrency, formatCurrencyFull, formatDate } from "@/lib/format";
 import { qbQueue, type JobBooksBasis } from "@/lib/job-financials";
 import { buildProfitAndLoss, formatPnlPeriod, yearToDateBounds } from "@/lib/profit-and-loss";
@@ -68,9 +70,10 @@ export function AccountingPortal() {
   const [contract, setContract] = useState("18640");
   const [jobCost, setJobCost] = useState("11200");
   const [plan, setPlan] = useState<"gp10" | "gp50" | "rev3">("gp10");
-  const [report, setReport] = useState<"aging" | "profit" | "commission" | "payments" | "pnl" | null>(
-    null,
-  );
+  const [report, setReport] = useState<
+    "aging" | "profit" | "commission" | "payments" | "pending" | "pnl" | null
+  >(null);
+  const [settlingId, setSettlingId] = useState<string | null>(null);
   const ytd = useMemo(() => yearToDateBounds(), []);
 
   const queue = useMemo(
@@ -160,6 +163,17 @@ export function AccountingPortal() {
     [crm.invoiceLines, crm.invoices, crm.payments],
   );
   const paymentRows = useMemo(() => recentPaymentRows(crm.payments).slice(0, 8), [crm.payments]);
+  const pendingRows = useMemo(() => pendingCardPaymentRows(crm.payments), [crm.payments]);
+  const pendingAmount = pendingRows.reduce((sum, payment) => sum + payment.amount, 0);
+
+  async function settlePending(id: string, next: "posted" | "rejected") {
+    setSettlingId(id);
+    try {
+      await crm.settlePendingPayment(id, next);
+    } finally {
+      setSettlingId(null);
+    }
+  }
 
   function setTab(next: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -293,6 +307,29 @@ export function AccountingPortal() {
               warn={syncErrors.length > 0}
             />
           </div>
+          {pendingRows.length > 0 ? (
+            <section className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-[#f0994f] bg-[#fff8f0] px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-[#181818]">
+                  {pendingRows.length} pending card payment{pendingRows.length === 1 ? "" : "s"}
+                </p>
+                <p className="text-xs text-[#706e6b]">
+                  {formatCurrencyFull(pendingAmount)} charged in Stripe. Match and post as a job
+                  deposit, or reject if it does not belong.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setTab("reports");
+                  setReport("pending");
+                }}
+              >
+                Open pending report
+              </Button>
+            </section>
+          ) : null}
 
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
             <section className="overflow-hidden rounded-sm border border-[#c9c9c9] bg-white shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
@@ -478,8 +515,14 @@ export function AccountingPortal() {
             <ReportCard
               icon={<Receipt className="size-5 text-[#13295b]" />}
               title="Deposits and payments"
-              description="Every payment recorded, newest first."
+              description="Every posted payment, newest first."
               onRun={() => setReport("payments")}
+            />
+            <ReportCard
+              icon={<CreditCard className="size-5 text-[#13295b]" />}
+              title="Pending card payments"
+              description="Match Stripe charges before they post as a job deposit."
+              onRun={() => setReport("pending")}
             />
             <ReportCard
               icon={<PieChart className="size-5 text-[#13295b]" />}
@@ -589,6 +632,106 @@ export function AccountingPortal() {
                   ))}
                 </tbody>
               </table>
+            </ReportPreview>
+          ) : null}
+          {report === "pending" ? (
+            <ReportPreview
+              title="Pending card payments"
+              subtitle={
+                pendingRows.length
+                  ? `${pendingRows.length} to match · ${formatCurrencyFull(pendingAmount)}`
+                  : "None waiting"
+              }
+            >
+              {pendingRows.length === 0 ? (
+                <p className="px-4 py-6 text-sm text-[#706e6b]">
+                  No card charges are waiting. New Stripe payments show here until someone in
+                  accounting matches them.
+                </p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="border-b border-[#c9c9c9] bg-[#f3f3f3] text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Date</th>
+                      <th className="px-4 py-2 text-left">On</th>
+                      <th className="px-4 py-2 text-right">Amount</th>
+                      <th className="px-4 py-2 text-right">Match</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pendingRows.map((payment) => {
+                      const invoice = payment.invoiceId
+                        ? crm.invoices.find((item) => item.id === payment.invoiceId)
+                        : undefined;
+                      const estimate = payment.estimateId
+                        ? crm.estimates.find((item) => item.id === payment.estimateId)
+                        : undefined;
+                      const job = payment.jobId ? crm.getJob(payment.jobId) : undefined;
+                      const label =
+                        invoice?.number ||
+                        estimate?.number ||
+                        job?.name ||
+                        job?.code ||
+                        "Job deposit";
+                      return (
+                        <tr key={payment.id} className="border-b border-[#e5e5e5] last:border-0">
+                          <td className="px-4 py-2.5">
+                            {formatDate(payment.paidAt)}
+                            <p className="text-xs text-[#86827b]">
+                              {paymentMethodLabel(payment.method)}
+                              {payment.reference ? ` · ${payment.reference}` : ""}
+                            </p>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            {invoice ? (
+                              <button
+                                type="button"
+                                className="text-[#0176d3] hover:underline"
+                                onClick={() => setInvoice(invoice.id)}
+                              >
+                                {label}
+                              </button>
+                            ) : job ? (
+                              <Link href={`/jobs/${job.id}`} className="text-[#0176d3] hover:underline">
+                                {label}
+                              </Link>
+                            ) : (
+                              label
+                            )}
+                            {job && (invoice || estimate) ? (
+                              <p className="text-xs text-[#86827b]">{job.name || job.code}</p>
+                            ) : null}
+                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums">
+                            {formatCurrencyFull(payment.amount)}
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                disabled={settlingId === payment.id}
+                                onClick={() => void settlePending(payment.id, "posted")}
+                              >
+                                Match & post
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                disabled={settlingId === payment.id}
+                                onClick={() => void settlePending(payment.id, "rejected")}
+                              >
+                                Reject
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
             </ReportPreview>
           ) : null}
           {report === "pnl" ? <ProfitAndLossReport statement={statement} /> : null}

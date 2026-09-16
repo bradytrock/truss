@@ -1,5 +1,6 @@
 import type { Invoice, InvoiceLine, Payment } from "@/lib/types";
 import { daysUntil } from "@/lib/format";
+import { postedPaidOnInvoice } from "./payment-posting";
 
 export function lineAmount(line: { quantity: number; unitCost: number }) {
   return line.quantity * line.unitCost;
@@ -10,9 +11,7 @@ export function sumLines(lines: { quantity: number; unitCost: number }[]) {
 }
 
 export function paidOnInvoice(invoiceId: string, payments: Payment[]) {
-  return payments
-    .filter((payment) => payment.invoiceId === invoiceId)
-    .reduce((sum, payment) => sum + payment.amount, 0);
+  return postedPaidOnInvoice(invoiceId, payments);
 }
 
 export function invoiceTotal(invoiceId: string, lines: InvoiceLine[]) {

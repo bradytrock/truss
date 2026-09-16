@@ -13,6 +13,7 @@ import {
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
+import { isPendingPayment } from "@/lib/payment-posting";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import {
   asAuditState,
@@ -1116,6 +1117,7 @@ type CrmContextValue = CrmState & {
   removeMaterialOrderTemplateLine: (id: string) => Promise<void>;
   updateExpense: (id: string, patch: Partial<Expense>) => Promise<boolean>;
   updatePayment: (id: string, patch: Partial<Payment>) => Promise<boolean>;
+  settlePendingPayment: (id: string, next: "posted" | "rejected") => Promise<boolean>;
   updateInvoiceLine: (id: string, patch: Partial<InvoiceLine>) => Promise<boolean>;
   setQbStatus: (
     kind: "invoice" | "payment" | "expense",
@@ -7438,6 +7440,47 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     return true;
   }, []);
 
+  const settlePendingPayment = useCallback(
+    async (id: string, next: "posted" | "rejected") => {
+      const payment = state.payments.find((item) => item.id === id);
+      if (!payment || !isPendingPayment(payment)) {
+        toast.error("That payment is not pending.");
+        return false;
+      }
+      const patch: Partial<Payment> = {
+        postingStatus: next,
+        postedAt: next === "posted" ? new Date().toISOString() : payment.postedAt ?? null,
+        postedBy: next === "posted" ? user.name : payment.postedBy ?? "",
+      };
+      const ok = await updatePayment(id, patch);
+      if (!ok) return false;
+      if (next === "posted" && payment.invoiceId) {
+        const invoice = state.invoices.find((item) => item.id === payment.invoiceId);
+        if (invoice) {
+          const nextPayments = state.payments.map((item) =>
+            item.id === id ? { ...item, ...patch } : item,
+          );
+          const status = derivedInvoiceStatus(
+            {
+              ...invoice,
+              status: invoice.status === "void" ? "void" : invoice.status === "draft" ? "sent" : invoice.status,
+            },
+            state.invoiceLines,
+            nextPayments,
+          );
+          await updateInvoice(invoice.id, { status });
+        }
+      }
+      toast.success(
+        next === "posted"
+          ? "Matched. Posted to the job as a deposit."
+          : "Rejected. It will not count on the books.",
+      );
+      return true;
+    },
+    [state.invoiceLines, state.invoices, state.payments, updateInvoice, updatePayment, user.name],
+  );
+
   const updateInvoiceLine = useCallback(async (id: string, patch: Partial<InvoiceLine>) => {
     const apply = () =>
       setState((prev) => ({
@@ -11014,6 +11057,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       removeMaterialOrderTemplateLine,
       updateExpense,
       updatePayment,
+      settlePendingPayment,
       updateInvoiceLine,
       setQbStatus,
       addQbReviewComment,
@@ -11179,6 +11223,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       removeMaterialOrderTemplateLine,
       updateExpense,
       updatePayment,
+      settlePendingPayment,
       updateInvoiceLine,
       setQbStatus,
       addQbReviewComment,

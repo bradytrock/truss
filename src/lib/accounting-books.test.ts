@@ -14,6 +14,7 @@ import {
   jobProfitRows,
   parseAccountingTab,
   parseInvoiceReviewFilter,
+  pendingCardPaymentRows,
   reviewableExpenses,
   reviewableInvoices,
 } from "./accounting-books.ts";
@@ -150,6 +151,61 @@ const collected = collectedThisMonth(
 );
 assert.equal(collected.count, 1);
 assert.equal(collected.amount, 250);
+
+const collectedIgnoresPending = collectedThisMonth(
+  [
+    {
+      id: "p3",
+      invoiceId: "open",
+      jobId: "job_1",
+      amount: 400,
+      method: "card",
+      paidAt: "2026-09-12",
+      reference: "pi_test",
+      receiptUrl: "",
+      receiptStoragePath: null,
+      qbStatus: "not_in_qb",
+      createdBy: "stripe",
+      postingStatus: "pending",
+    },
+    {
+      id: "p4",
+      invoiceId: "open",
+      jobId: "job_1",
+      amount: 250,
+      method: "check",
+      paidAt: "2026-09-10",
+      reference: "",
+      receiptUrl: "",
+      receiptStoragePath: null,
+      qbStatus: "not_in_qb",
+      createdBy: "",
+      postingStatus: "posted",
+    },
+  ] satisfies Payment[],
+  new Date("2026-09-15T12:00:00"),
+);
+assert.equal(collectedIgnoresPending.count, 1);
+assert.equal(collectedIgnoresPending.amount, 250);
+assert.equal(
+  pendingCardPaymentRows([
+    {
+      id: "p3",
+      invoiceId: "open",
+      jobId: "job_1",
+      amount: 400,
+      method: "card",
+      paidAt: "2026-09-12",
+      reference: "pi_test",
+      receiptUrl: "",
+      receiptStoragePath: null,
+      qbStatus: "not_in_qb",
+      createdBy: "stripe",
+      postingStatus: "pending",
+    },
+  ] satisfies Payment[]).length,
+  1,
+);
 
 const missing = completedJobsWithoutInvoice(
   [job({ id: "job_1", name: "Martinez" }), job({ id: "job_2", name: "Ramirez" })],
