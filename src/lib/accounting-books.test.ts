@@ -17,7 +17,7 @@ import {
   reviewableExpenses,
   reviewableInvoices,
 } from "./accounting-books.ts";
-import { approveHref, reviewHref } from "./qb-review.ts";
+import { approveHref, itemKindLabel, reviewHref } from "./qb-review.ts";
 import type { Expense, Invoice, InvoiceLine, Job, Payment } from "./types.ts";
 
 function invoice(partial: Partial<Invoice> & Pick<Invoice, "id" | "number">): Invoice {
@@ -88,6 +88,14 @@ function job(partial: Partial<Job> & Pick<Job, "id" | "name">): Job {
 assert.equal(reviewHref("invoice", "inv_1"), "/accounting?tab=review&invoice=inv_1");
 assert.equal(reviewHref("expense", "ex_1"), "/accounting?tab=expenses&expense=ex_1");
 assert.equal(approveHref(), "/accounting?tab=review");
+assert.equal(
+  itemKindLabel("expense", { kind: "expense", id: "e1", expense: { jobId: "job_1", method: "ach" } as Expense }),
+  "Vendor bill",
+);
+assert.equal(
+  itemKindLabel("expense", { kind: "expense", id: "e2", expense: { jobId: null, method: "ach" } as Expense }),
+  "Expense",
+);
 
 assert.equal(parseAccountingTab("review"), "review");
 assert.equal(parseAccountingTab("expenses"), "expenses");
@@ -108,7 +116,7 @@ assert.deepEqual(
     invoice({ id: "in", number: "INV-E", qbStatus: "entered" }),
     invoice({ id: "open", number: "INV-1" }),
   ]).map((item) => item.id),
-  ["open"],
+  ["draft", "open"],
 );
 
 assert.equal(invoiceDueLabel(invoice({ id: "a", number: "INV-1", dueAt: null })), "Due on receipt");
@@ -201,5 +209,22 @@ assert.equal(preview.vendor, "ABC Supply");
 assert.equal(preview.accountName, "Job materials");
 assert.equal(preview.customerJob, "Martinez:J-12");
 assert.equal(preview.memo, "Ridge vent");
+
+const achPreview = expenseQbPreview(
+  { ...bill, method: "ach" },
+  job({ id: "job_1", name: "Martinez", code: "J-12" }),
+  "Martinez",
+);
+assert.equal(achPreview.txnType, "Vendor bill");
+assert.equal(achPreview.customerJob, "Martinez:J-12");
+assert.equal(achPreview.payAccount, "Accounts Payable");
+
+const jobCheckPreview = expenseQbPreview(
+  { ...bill, method: "check" },
+  job({ id: "job_1", name: "Martinez", code: "J-12" }),
+  "Martinez",
+);
+assert.equal(jobCheckPreview.txnType, "Vendor bill");
+assert.equal(jobCheckPreview.customerJob, "Martinez:J-12");
 
 console.log("accounting-books tests passed");

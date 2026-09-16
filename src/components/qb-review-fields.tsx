@@ -263,7 +263,15 @@ export function ExpenseFields({ expenseId, locked }: { expenseId: string; locked
   return (
     <div className="space-y-3">
       <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs leading-relaxed">
-        QuickBooks will post a {expense.method === "credit_card" ? "credit card charge" : "check"} to{" "}
+        QuickBooks will post a{" "}
+        {expense.method === "credit_card"
+          ? "credit card charge"
+          : job
+            ? "vendor bill"
+            : expense.method === "check"
+              ? "check"
+              : "vendor bill"}{" "}
+        to{" "}
         <span className="font-medium">{expense.vendor || "the vendor"}</span> on{" "}
         {EXPENSE_ACCOUNT_LABELS[expense.account]}
         {jobFullName ? (
@@ -271,7 +279,7 @@ export function ExpenseFields({ expenseId, locked }: { expenseId: string; locked
             {" "}
             for{" "}
             <span className="font-mono">{jobFullName}</span>
-            . That Customer:Job assignment is what costs it to the job instead of company overhead.
+            . The bill hangs on that Customer:Job so it shows under the job, not as company overhead.
           </>
         ) : needsJob ? (
           ". Assign a job or this hits the company overhead account, not the job."

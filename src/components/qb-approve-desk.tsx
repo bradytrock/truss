@@ -305,7 +305,7 @@ function QueueGroup({
                     {item.kind === "invoice"
                       ? `Invoice · ${formatDate(item.invoice.issuedAt)}`
                       : item.kind === "expense"
-                        ? "Expense"
+                        ? itemKindLabel("expense", item)
                         : "Payment"}
                   </span>
                   {showStatus ? <QbStatusBadge status={reviewItemStatus(item)} /> : null}
@@ -476,7 +476,7 @@ function DataAndThread({
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-              {itemKindLabel(item.kind)}
+              {itemKindLabel(item.kind, item)}
             </p>
             <h2 className="font-heading text-lg font-medium">{itemTitle(item)}</h2>
           </div>

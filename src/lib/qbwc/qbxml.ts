@@ -47,6 +47,16 @@ export function qbQty(value: number) {
   return String(Math.round(value * 10000) / 10000);
 }
 
+/** QuickBooks rejects Quantity and Rate with opposite signs (discount lines). */
+export function signedInvoiceQtyRate(quantity: number, unitCost: number) {
+  const qty = !Number.isFinite(quantity) || quantity === 0 ? 1 : quantity;
+  const rate = Number.isFinite(unitCost) ? unitCost : 0;
+  if (qty * rate < 0) {
+    return { quantity: -Math.abs(qty), unitCost: Math.abs(rate) };
+  }
+  return { quantity: qty, unitCost: rate };
+}
+
 export function wrapQbxml(body: string) {
   return (
     `<?xml version="1.0" encoding="utf-8"?>\r\n` +
@@ -283,6 +293,43 @@ export function checkAddXml(input: {
   );
 }
 
+export function txnVoidXml(input: { requestId: string; txnType: "Check" | "Bill"; txnId: string }) {
+  return wrapQbxml(
+    `    <TxnVoidRq requestID="${xmlEscape(input.requestId)}">\r\n` +
+      `      <TxnVoidType>${xmlEscape(input.txnType)}</TxnVoidType>\r\n` +
+      `      <TxnID>${xmlEscape(input.txnId)}</TxnID>\r\n` +
+      `    </TxnVoidRq>\r\n`,
+  );
+}
+
+export function billAddXml(input: {
+  requestId: string;
+  vendor: string;
+  refNumber?: string;
+  txnDate: string;
+  memo?: string;
+  accountName: string;
+  amount: number;
+  customerJobFullName?: string;
+  customerListId?: string;
+}) {
+  const memo = qbAscii(input.memo ?? "", 4095);
+  const ref = qbAscii(input.refNumber ?? "", QB_REF_MAX);
+  return wrapQbxml(
+    `    <BillAddRq requestID="${xmlEscape(input.requestId)}">\r\n` +
+      `      <BillAdd>\r\n` +
+      `        <VendorRef>\r\n` +
+      `          <FullName>${xmlEscape(qbName(input.vendor))}</FullName>\r\n` +
+      `        </VendorRef>\r\n` +
+      `        <TxnDate>${xmlEscape(qbDate(input.txnDate))}</TxnDate>\r\n` +
+      (ref ? `        <RefNumber>${xmlEscape(ref)}</RefNumber>\r\n` : "") +
+      (memo ? `        <Memo>${xmlEscape(memo)}</Memo>\r\n` : "") +
+      expenseLineXml(input) +
+      `      </BillAdd>\r\n` +
+      `    </BillAddRq>\r\n`,
+  );
+}
+
 export function creditCardChargeAddXml(input: {
   requestId: string;
   ccAccount: string;
@@ -385,14 +432,15 @@ function invoiceLineXml(line: QbInvoiceLine, itemName: string) {
     .filter(Boolean)
     .join(" ");
   const desc = qbAscii(raw, 4095) || qbName(itemName);
+  const signed = signedInvoiceQtyRate(line.quantity, line.unitCost);
   return (
     `        <InvoiceLineAdd>\r\n` +
     `          <ItemRef>\r\n` +
     `            <FullName>${xmlEscape(qbName(itemName))}</FullName>\r\n` +
     `          </ItemRef>\r\n` +
     `          <Desc>${xmlEscape(desc)}</Desc>\r\n` +
-    `          <Quantity>${xmlEscape(qbQty(line.quantity))}</Quantity>\r\n` +
-    `          <Rate>${xmlEscape(qbMoney(line.unitCost))}</Rate>\r\n` +
+    `          <Quantity>${xmlEscape(qbQty(signed.quantity))}</Quantity>\r\n` +
+    `          <Rate>${xmlEscape(qbMoney(signed.unitCost))}</Rate>\r\n` +
     `        </InvoiceLineAdd>\r\n`
   );
 }
@@ -459,7 +507,7 @@ export function readQbResponse(xml: string, fallbackMessage = ""): QbParsedRespo
   }
   if (code === 0) {
     const hasRet =
-      /<(Customer|Vendor|ItemService|Invoice|Check|CreditCardCharge|ReceivePayment)Ret[\s>]/i.test(
+      /<(Customer|Vendor|ItemService|Invoice|Check|CreditCardCharge|Bill|ReceivePayment)Ret[\s>]/i.test(
         trimmed,
       );
     return { kind: hasRet ? "found" : "missing", ...parsed };

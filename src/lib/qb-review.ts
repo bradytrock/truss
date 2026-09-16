@@ -85,7 +85,6 @@ export function qbApproveInbox(input: {
 
   const pendingInvoices = input.invoices.filter(
     (invoice) =>
-      invoice.status !== "draft" &&
       invoice.status !== "void" &&
       invoice.qbStatus !== "entered" &&
       !weekInvoiceIds.has(invoice.id),
@@ -207,9 +206,13 @@ export function itemTitle(item: QbReviewItem) {
   return item.payment.reference || item.payment.method || "Payment";
 }
 
-export function itemKindLabel(kind: QbReviewKind) {
+export function itemKindLabel(kind: QbReviewKind, item?: QbReviewItem) {
   if (kind === "invoice") return "Invoice";
-  if (kind === "expense") return "Expense";
+  if (kind === "expense") {
+    const expense = item?.kind === "expense" ? item.expense : null;
+    if (expense?.jobId && expense.method !== "credit_card") return "Vendor bill";
+    return "Expense";
+  }
   return "Payment";
 }
 

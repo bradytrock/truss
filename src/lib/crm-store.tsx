@@ -7290,30 +7290,38 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     async (kind: "invoice" | "payment" | "expense", id: string, status: QbSyncStatus) => {
       const supabase = maybeClient();
       if (kind === "invoice") {
-        if (!supabase) {
+        const current = bookRef.current.invoices.find((item) => item.id === id);
+        const leaveDraft = status === "queued" && current?.status === "draft";
+        const applyInvoice = () =>
           setState((prev) => ({
             ...prev,
-            invoices: prev.invoices.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
+            invoices: prev.invoices.map((item) =>
+              item.id === id
+                ? { ...item, qbStatus: status, ...(leaveDraft ? { status: "sent" as const } : {}) }
+                : item,
+            ),
           }));
+        if (!supabase) {
+          applyInvoice();
           return true;
         }
-        const { error } = await supabase.from("invoices").update({ qb_status: status }).eq("id", id);
+        const { error } = await supabase
+          .from("invoices")
+          .update({
+            qb_status: status,
+            ...(leaveDraft ? { status: "sent" } : {}),
+          })
+          .eq("id", id);
         if (error && isMissingFinancials(error)) {
           toast.message(missingFinancialsMessage());
-          setState((prev) => ({
-            ...prev,
-            invoices: prev.invoices.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
-          }));
+          applyInvoice();
           return true;
         }
         if (error) {
           toast.error(error.message);
           return false;
         }
-        setState((prev) => ({
-          ...prev,
-          invoices: prev.invoices.map((item) => (item.id === id ? { ...item, qbStatus: status } : item)),
-        }));
+        applyInvoice();
         return true;
       }
       if (kind === "payment") {

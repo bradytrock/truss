@@ -31,6 +31,7 @@ export type QbwcStep =
   | "vendor_add"
   | "vendor_list_query"
   | "expense_add"
+  | "txn_void"
   | "payment_add";
 
 /** Session step may carry `+alias` so later requests hang the job under `Name Cust` without extra SQL. */
@@ -87,7 +88,7 @@ export type QbExpenseWork = {
   vendor: string;
   accountName: string;
   amount: number;
-  payWith: "credit_card" | "check";
+  payWith: "credit_card" | "check" | "bill";
   txnDate: string;
   memo: string;
   payAccount: string;
@@ -102,6 +103,8 @@ export type QbExpenseWork = {
   hasJob: boolean;
   customerListId?: string;
   jobListId?: string;
+  /** Previous Check TxnID to void when this job cost is being re-posted as a vendor bill. */
+  replaceTxnId?: string;
 };
 
 export type QbPaymentWork = {
@@ -134,7 +137,6 @@ export function invoicePushBlocked(input: {
   job?: Job;
   lines: InvoiceLine[];
 }): string | null {
-  if (input.invoice.status === "draft") return "Still a draft — send it before QuickBooks.";
   if (input.invoice.status === "void") return "Voided invoices stay out of QuickBooks.";
   if (!input.job) return "Assign this invoice to a job so QuickBooks can hang it on Customer:Job.";
   if (input.lines.length === 0) return "Add line items first. The connector will not guess amounts.";
@@ -307,6 +309,11 @@ export function paymentCustomerRef(work: QbPaymentWork, useAlias = false) {
   return work.hasJob ? jobFullName(work, useAlias) : billedCustomerName(work, useAlias);
 }
 
+/** Job costs that were posted as checks get voided, then entered as a vendor bill on Customer:Job. */
+export function expenseReplacesCheck(work: QbExpenseWork) {
+  return work.payWith === "bill" && Boolean(work.replaceTxnId?.trim());
+}
+
 function resolvedIds(row: Record<string, unknown>) {
   return {
     ...(asString(row.customerListId) ? { customerListId: asString(row.customerListId) } : {}),
@@ -332,7 +339,7 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
       vendor,
       accountName: asString(row.accountName, "Other"),
       amount: asNumber(row.amount),
-      payWith: asString(row.payWith) === "credit_card" ? "credit_card" : "check",
+      payWith: asPayWith(row.payWith),
       txnDate: asString(row.txnDate),
       memo: asString(row.memo),
       payAccount: asString(row.payAccount, DEFAULT_QB_BANK),
@@ -345,6 +352,7 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
       postalCode: asString(row.postalCode),
       phone: asString(row.phone),
       hasJob: expenseHasJob(row),
+      ...(asString(row.replaceTxnId) ? { replaceTxnId: asString(row.replaceTxnId) } : {}),
       ...resolvedIds(row),
     };
   }
@@ -399,6 +407,12 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
       })),
     ...resolvedIds(row),
   };
+}
+
+function asPayWith(value: unknown): QbExpenseWork["payWith"] {
+  if (value === "credit_card") return "credit_card";
+  if (value === "bill") return "bill";
+  return "check";
 }
 
 function asString(value: unknown, fallback = "") {

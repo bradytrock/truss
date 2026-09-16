@@ -1,4 +1,5 @@
 import {
+  billAddXml,
   checkAddXml,
   creditCardChargeAddXml,
   customerAddXml,
@@ -9,6 +10,7 @@ import {
   itemServiceAddXml,
   readQbResponse,
   receivePaymentAddXml,
+  txnVoidXml,
   vendorAddXml,
   vendorListQueryXml,
   vendorQueryXml,
@@ -16,6 +18,7 @@ import {
 import {
   billedCustomerName,
   customerFullName,
+  expenseReplacesCheck,
   jobFullName,
   paymentCustomerRef,
   splitQbwcStep,
@@ -95,6 +98,11 @@ export function requestForStep(rawStep: string, work: QbwcWork) {
       return vendorAddXml(work.kind === "expense" ? work.vendor : "Vendor", requestId);
     case "expense_add":
       return expenseRequest(requestId, work, useAlias);
+    case "txn_void":
+      if (work.kind === "expense" && work.replaceTxnId?.trim()) {
+        return txnVoidXml({ requestId, txnType: "Check", txnId: work.replaceTxnId.trim() });
+      }
+      return expenseRequest(requestId, work, useAlias);
     case "payment_add":
       if (work.kind !== "payment") return customerQueryXml("Homeowner", requestId);
       return receivePaymentAddXml({
@@ -126,6 +134,9 @@ function expenseRequest(requestId: string, work: QbwcWork, useAlias: boolean) {
   };
   if (work.payWith === "credit_card") {
     return creditCardChargeAddXml({ ...line, ccAccount: work.payAccount });
+  }
+  if (work.payWith === "bill") {
+    return billAddXml(line);
   }
   return checkAddXml({ ...line, bankAccount: work.payAccount });
 }
@@ -256,6 +267,9 @@ export function advanceFromResponse(
     case "expense_add":
     case "payment_add":
       return missing ? { action: "fail", error: qbMessage } : { action: "complete", txnId: result.txnId };
+    case "txn_void":
+      // Void the mistaken check even if QuickBooks already deleted it, then add the bill.
+      return { action: "next", step: taggedQbwcStep("expense_add", useAlias) };
   }
 }
 
@@ -274,7 +288,9 @@ function afterCustomer(work: QbwcWork | null | undefined, useAlias: boolean) {
 }
 
 function afterJob(work: QbwcWork | null | undefined, useAlias: boolean) {
-  if (work?.kind === "expense") return taggedQbwcStep("expense_add", useAlias);
+  if (work?.kind === "expense") {
+    return taggedQbwcStep(expenseReplacesCheck(work) ? "txn_void" : "expense_add", useAlias);
+  }
   if (work?.kind === "payment") return taggedQbwcStep("payment_add", useAlias);
   return taggedQbwcStep("item_query", useAlias);
 }
@@ -329,6 +345,7 @@ export const STEP_LABELS: Record<QbwcStep, string> = {
   vendor_query: "Find the vendor in QuickBooks",
   vendor_add: "Create the vendor",
   vendor_list_query: "Pull vendors from QuickBooks",
-  expense_add: "Add the check or credit card charge",
+  expense_add: "Add the vendor bill on that job (or the check / card charge)",
+  txn_void: "Void the check that was posted instead of a bill",
   payment_add: "Receive the payment against the invoice",
 };

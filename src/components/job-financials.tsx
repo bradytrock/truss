@@ -106,10 +106,10 @@ export function JobFinancials({ job }: { job: Job }) {
       <ProfitAndLossReport statement={statement} />
 
       <div>
-        <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">Expenses</p>
+        <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">Vendor bills</p>
         {expenses.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No expenses on this job yet. Photograph the receipt, then save.
+            No vendor bills on this job yet. Photograph the receipt, then save.
           </p>
         ) : (
           <ul className="space-y-3">

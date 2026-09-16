@@ -70,7 +70,7 @@ export function invoiceBlockedReason(input: {
 }
 
 export function reviewableInvoices(invoices: Invoice[]) {
-  return invoices.filter((invoice) => isOpenInvoice(invoice) && invoice.qbStatus !== "entered");
+  return invoices.filter((invoice) => invoice.status !== "void" && invoice.qbStatus !== "entered");
 }
 
 export function expenseReviewStatus(
@@ -94,8 +94,14 @@ export function reviewableExpenses(expenses: Expense[]) {
   return expenses.filter((expense) => expense.qbStatus !== "entered");
 }
 
-export function expenseQbPayWith(method: ExpenseMethod): "credit_card" | "check" {
-  return method === "credit_card" ? "credit_card" : "check";
+export function expenseQbPayWith(
+  method: ExpenseMethod,
+  hasJob = false,
+): "credit_card" | "check" | "bill" {
+  if (method === "credit_card") return "credit_card";
+  if (hasJob) return "bill";
+  if (method === "check") return "check";
+  return "bill";
 }
 
 export function expenseQbPreview(
@@ -104,7 +110,7 @@ export function expenseQbPreview(
   customerName = "",
   accounts?: { bankAccount?: string; ccAccount?: string },
 ) {
-  const payWith = expenseQbPayWith(expense.method);
+  const payWith = expenseQbPayWith(expense.method, Boolean(job));
   const hasJob = Boolean(job);
   const jobLabel = job
     ? `${customerName || "Customer"}:${job.code || job.name}`
@@ -112,7 +118,8 @@ export function expenseQbPreview(
       ? "Needs a job"
       : "Company overhead";
   return {
-    txnType: payWith === "credit_card" ? "Credit card charge" : "Check",
+    txnType:
+      payWith === "credit_card" ? "Credit card charge" : payWith === "bill" ? "Vendor bill" : "Check",
     vendor: expense.vendor.trim() || "Add a vendor",
     amount: expense.amount,
     txnDate: expense.incurredAt.slice(0, 10),
@@ -121,7 +128,9 @@ export function expenseQbPreview(
     payAccount:
       payWith === "credit_card"
         ? accounts?.ccAccount?.trim() || DEFAULT_QB_CC
-        : accounts?.bankAccount?.trim() || DEFAULT_QB_BANK,
+        : payWith === "bill"
+          ? "Accounts Payable"
+          : accounts?.bankAccount?.trim() || DEFAULT_QB_BANK,
     memo: expense.memo.trim() || expense.number,
     refNumber: expense.number,
     customerJob: jobLabel,
