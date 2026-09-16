@@ -103,8 +103,9 @@ export type QbExpenseWork = {
   hasJob: boolean;
   customerListId?: string;
   jobListId?: string;
-  /** Previous Check TxnID to void when this job cost is being re-posted as a vendor bill. */
+  /** Previous Check or unattached Bill TxnID to void before posting the job bill. */
   replaceTxnId?: string;
+  replaceTxnKind?: "check" | "bill";
 };
 
 export type QbPaymentWork = {
@@ -309,9 +310,14 @@ export function paymentCustomerRef(work: QbPaymentWork, useAlias = false) {
   return work.hasJob ? jobFullName(work, useAlias) : billedCustomerName(work, useAlias);
 }
 
-/** Job costs that were posted as checks get voided, then entered as a vendor bill on Customer:Job. */
+/** Leftover check from an earlier mistaken CheckAdd. */
 export function expenseReplacesCheck(work: QbExpenseWork) {
-  return work.payWith === "bill" && Boolean(work.replaceTxnId?.trim());
+  return work.payWith === "bill" && Boolean(work.replaceTxnId?.trim()) && work.replaceTxnKind !== "bill";
+}
+
+/** Bill already in A/P with no Customer:Job — void it, then add it on the job. */
+export function expenseRepairsBill(work: QbExpenseWork) {
+  return work.payWith === "bill" && Boolean(work.replaceTxnId?.trim()) && work.replaceTxnKind === "bill";
 }
 
 function resolvedIds(row: Record<string, unknown>) {
@@ -353,6 +359,9 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
       phone: asString(row.phone),
       hasJob: expenseHasJob(row),
       ...(asString(row.replaceTxnId) ? { replaceTxnId: asString(row.replaceTxnId) } : {}),
+      ...(asReplaceTxnKind(row.replaceTxnKind)
+        ? { replaceTxnKind: asReplaceTxnKind(row.replaceTxnKind) }
+        : {}),
       ...resolvedIds(row),
     };
   }
@@ -416,6 +425,10 @@ function isAccountsPayable(name: string) {
 function asPayWith(value: unknown, payAccount = ""): QbExpenseWork["payWith"] {
   if (value === "credit_card" && !isAccountsPayable(payAccount)) return "credit_card";
   return "bill";
+}
+
+function asReplaceTxnKind(value: unknown): QbExpenseWork["replaceTxnKind"] | undefined {
+  return value === "bill" || value === "check" ? value : undefined;
 }
 
 function asString(value: unknown, fallback = "") {

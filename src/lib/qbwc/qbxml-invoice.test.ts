@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { billAddXml, invoiceAddXml, signedInvoiceQtyRate, txnVoidXml } from "./qbxml.ts";
 import { advanceFromResponse, receiveWorkAdvance, requestForStep } from "./steps.ts";
-import { expenseReplacesCheck, parseWorkPayload, type QbExpenseWork, type QbInvoiceWork } from "./work.ts";
+import {
+  expenseRepairsBill,
+  expenseReplacesCheck,
+  parseWorkPayload,
+  type QbExpenseWork,
+  type QbInvoiceWork,
+} from "./work.ts";
 
 assert.deepEqual(signedInvoiceQtyRate(1, 7482.12), { quantity: 1, unitCost: 7482.12 });
 assert.deepEqual(signedInvoiceQtyRate(1, -1000), { quantity: -1, unitCost: 1000 });
@@ -70,10 +76,20 @@ assert.match(billXml, /<VendorRef>[\s\S]*Silva&apos;s Sheet Metal LLC/);
 assert.match(billXml, /<CustomerRef>[\s\S]*Ojamaye:BJ091026-A/);
 assert.match(billXml, /<BillableStatus>NotBillable<\/BillableStatus>/);
 assert.doesNotMatch(billXml, /<CheckAddRq/);
+assert.doesNotMatch(billXml, /<CustomerRef>[\s\S]*<ListID>/);
+
+const billedOnJob = requestForStep("expense_add", { ...expenseWork, jobListId: "80000012-1789520000" });
+assert.match(billedOnJob, /<CustomerRef>[\s\S]*<ListID>80000012-1789520000<\/ListID>/);
+assert.doesNotMatch(billedOnJob, /<CustomerRef>[\s\S]*<FullName>/);
 
 const replaceWork = { ...expenseWork, replaceTxnId: "43-1789510995" };
 assert.equal(expenseReplacesCheck(replaceWork), true);
 assert.equal(expenseReplacesCheck(expenseWork), false);
+assert.equal(expenseRepairsBill(replaceWork), false);
+const repairWork = { ...expenseWork, replaceTxnId: "49-1789524336", replaceTxnKind: "bill" as const };
+assert.equal(expenseRepairsBill(repairWork), true);
+assert.equal(expenseReplacesCheck(repairWork), false);
+assert.match(requestForStep("txn_void", repairWork), /<TxnVoidType>Bill<\/TxnVoidType>/);
 const voidXml = requestForStep("txn_void", replaceWork);
 assert.match(voidXml, /<TxnVoidRq/);
 assert.match(voidXml, /<TxnVoidType>Check<\/TxnVoidType>/);
@@ -132,6 +148,17 @@ assert.equal(
 const jobOk = "<CustomerAddRs statusCode=\"0\"><CustomerRet><ListID>1</ListID></CustomerRet></CustomerAddRs>";
 assert.equal(advanceFromResponse("job_add", jobOk, "", replaceWork).step, "expense_add");
 assert.equal(advanceFromResponse("job_add", jobOk, "", expenseWork).step, "expense_add");
+assert.equal(advanceFromResponse("job_add", jobOk, "", repairWork).step, "txn_void");
+assert.equal(
+  receiveWorkAdvance({
+    step: "txn_void",
+    responseXml: "",
+    hresult: "0x80040400",
+    message: lockMessage,
+    work: repairWork,
+  }).action,
+  "fail",
+);
 
 assert.match(
   txnVoidXml({ requestId: "e1-txn_void", txnType: "Check", txnId: "46-1789511000" }),
@@ -188,6 +215,23 @@ const checkMethod = parseWorkPayload({
   payAccount: "Checking",
 });
 assert.equal(checkMethod && checkMethod.kind === "expense" && checkMethod.payWith, "bill");
+
+const repairPayload = parseWorkPayload({
+  kind: "expense",
+  expenseId: "exp-repair",
+  vendor: "Silva's Sheet Metal LLC",
+  payWith: "bill",
+  hasJob: true,
+  customerName: "Don Ojamaye",
+  jobCode: "BJ091026-A",
+  replaceTxnId: "49-1789524336",
+  replaceTxnKind: "bill",
+  jobListId: "80000012-1789520000",
+});
+assert.equal(repairPayload && repairPayload.kind === "expense" && repairPayload.replaceTxnKind, "bill");
+if (repairPayload && repairPayload.kind === "expense") {
+  assert.match(requestForStep("expense_add", repairPayload), /<ListID>80000012-1789520000<\/ListID>/);
+}
 if (checkMethod && checkMethod.kind === "expense") {
   assert.match(requestForStep("expense_add", checkMethod), /<BillAddRq/);
 }

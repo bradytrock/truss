@@ -243,8 +243,17 @@ export function expenseLineXml(input: {
 }) {
   const memo = qbAscii(input.memo ?? "", 4095);
   const job = input.customerJobFullName?.trim() ?? "";
-  // CustomerRef FullName (Customer:Job) is what assigns the line for job costing.
-  // Without it QuickBooks posts the amount to the expense account as company overhead.
+  const listId = input.customerListId?.trim() ?? "";
+  // CustomerRef on the expense line is what hangs the bill on Customer:Job.
+  // Prefer the job ListID we just queried/created — FullName can miss (alias,
+  // renamed job) and continueOnError then saves the bill as company A/P only.
+  const customerRef = listId
+    ? `          <CustomerRef>\r\n            <ListID>${xmlEscape(listId)}</ListID>\r\n          </CustomerRef>\r\n` +
+      `          <BillableStatus>NotBillable</BillableStatus>\r\n`
+    : job
+      ? `          <CustomerRef>\r\n            <FullName>${xmlEscape(job)}</FullName>\r\n          </CustomerRef>\r\n` +
+        `          <BillableStatus>NotBillable</BillableStatus>\r\n`
+      : "";
   return (
     `        <ExpenseLineAdd>\r\n` +
     `          <AccountRef>\r\n` +
@@ -252,10 +261,7 @@ export function expenseLineXml(input: {
     `          </AccountRef>\r\n` +
     `          <Amount>${xmlEscape(qbMoney(input.amount))}</Amount>\r\n` +
     (memo ? `          <Memo>${xmlEscape(memo)}</Memo>\r\n` : "") +
-    (job
-      ? `          <CustomerRef>\r\n            <FullName>${xmlEscape(job)}</FullName>\r\n          </CustomerRef>\r\n` +
-        `          <BillableStatus>NotBillable</BillableStatus>\r\n`
-      : "") +
+    customerRef +
     `        </ExpenseLineAdd>\r\n`
   );
 }
@@ -478,6 +484,10 @@ export type QbParsedResponse = {
 /** CustomerQuery/ItemQuery status 500: the FullName is not in the company file. */
 export function isQbNotFoundMessage(message: string) {
   return /could not be found|not found in QuickBooks|no matching object/i.test(message);
+}
+
+export function isQbLockMessage(message: string) {
+  return /could not be locked|in use by another user/i.test(message);
 }
 
 export function readQbResponse(xml: string, fallbackMessage = ""): QbParsedResponse {

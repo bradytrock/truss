@@ -5,6 +5,7 @@ import {
   customerAliasName,
   customerQueryXml,
   invoiceAddXml,
+  isQbLockMessage,
   isQbNotFoundMessage,
   itemQueryXml,
   itemServiceAddXml,
@@ -18,6 +19,7 @@ import {
 import {
   billedCustomerName,
   customerFullName,
+  expenseRepairsBill,
   jobFullName,
   paymentCustomerRef,
   splitQbwcStep,
@@ -101,7 +103,11 @@ export function requestForStep(rawStep: string, work: QbwcWork) {
       if (work.kind === "expense") {
         const replaceId = work.replaceTxnId?.trim();
         if (replaceId) {
-          return txnVoidXml({ requestId, txnType: "Check", txnId: replaceId });
+          return txnVoidXml({
+            requestId,
+            txnType: work.replaceTxnKind === "bill" ? "Bill" : "Check",
+            txnId: replaceId,
+          });
         }
       }
       return expenseRequest(requestId, work, useAlias);
@@ -132,7 +138,7 @@ function expenseRequest(requestId: string, work: QbwcWork, useAlias: boolean) {
     accountName: work.accountName,
     amount: work.amount,
     customerJobFullName: work.hasJob ? jobFullName(work, useAlias) : "",
-    customerListId: undefined,
+    customerListId: work.hasJob ? work.jobListId : undefined,
   };
   if (work.payWith === "credit_card") {
     return creditCardChargeAddXml({ ...line, ccAccount: work.payAccount });
@@ -171,9 +177,21 @@ export function advanceFromResponse(
   work?: QbwcWork | null,
 ): StepAdvance {
   const { step, useAlias } = splitQbwcStep(rawStep);
-  // A leftover check may be locked in another QuickBooks window. Never abort
-  // the session for TxnVoid — the vendor bill still needs to post.
+  // Leftover checks may be locked — skip void and still post the bill.
+  // Unattached bills we are replacing must void (or be deleted) or we would
+  // add a second A/P bill.
   if (step === "txn_void") {
+    if (work?.kind === "expense" && expenseRepairsBill(work)) {
+      const result = readQbResponse(responseXml, fallbackMessage);
+      const qbMessage = result.statusMessage || fallbackMessage;
+      if (result.kind === "error" && isQbLockMessage(qbMessage)) {
+        return {
+          action: "fail",
+          error:
+            "Close that vendor bill in QuickBooks so we can hang it on the job, then run the connector again.",
+        };
+      }
+    }
     return { action: "next", step: taggedQbwcStep("expense_add", useAlias) };
   }
   const result = readQbResponse(responseXml, fallbackMessage);
@@ -294,6 +312,13 @@ export function receiveWorkAdvance(input: {
   const hasXml = Boolean(responseXml.trim());
   if (!hasXml && hresultFailed(hresult) && !isQbNotFoundMessage(message)) {
     if (step === "txn_void") {
+      if (input.work?.kind === "expense" && expenseRepairsBill(input.work) && isQbLockMessage(message)) {
+        return {
+          action: "fail",
+          error:
+            "Close that vendor bill in QuickBooks so we can hang it on the job, then run the connector again.",
+        };
+      }
       return { action: "next", step: taggedQbwcStep("expense_add", useAlias) };
     }
     return { action: "fail", error: `${stepLabel(input.step)}: ${message || hresult}` };
@@ -317,8 +342,11 @@ function afterCustomer(work: QbwcWork | null | undefined, useAlias: boolean) {
 
 function afterJob(work: QbwcWork | null | undefined, useAlias: boolean) {
   if (work?.kind === "expense") {
-    // Do not TxnVoid leftover checks here — a check open in another QB session
-    // cannot be locked and used to abort the vendor-bill post.
+    // Only void an unattached bill we are replacing. Leftover checks stay skipped
+    // so a locked check cannot block the first vendor-bill post.
+    if (expenseRepairsBill(work)) {
+      return taggedQbwcStep("txn_void", useAlias);
+    }
     return taggedQbwcStep("expense_add", useAlias);
   }
   if (work?.kind === "payment") return taggedQbwcStep("payment_add", useAlias);
