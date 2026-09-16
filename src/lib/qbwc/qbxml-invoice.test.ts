@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { billAddXml, invoiceAddXml, signedInvoiceQtyRate, txnVoidXml } from "./qbxml.ts";
 import { advanceFromResponse, requestForStep } from "./steps.ts";
-import type { QbExpenseWork, QbInvoiceWork } from "./work.ts";
+import { parseWorkPayload, type QbExpenseWork, type QbInvoiceWork } from "./work.ts";
 
 assert.deepEqual(signedInvoiceQtyRate(1, 7482.12), { quantity: 1, unitCost: 7482.12 });
 assert.deepEqual(signedInvoiceQtyRate(1, -1000), { quantity: -1, unitCost: 1000 });
@@ -101,3 +101,36 @@ const checkXml = billAddXml({
   amount: 10,
 });
 assert.match(checkXml, /<BillAdd>/);
+
+const apPayload = parseWorkPayload({
+  kind: "expense",
+  expenseId: "exp-ap",
+  number: "EXP-1001",
+  vendor: "Silva's Sheet Metal LLC",
+  accountName: "Subcontractors",
+  amount: 2800,
+  payWith: "bill",
+  payAccount: "Accounts Payable",
+  customerName: "Don Ojamaye",
+  jobCode: "BJ091026-A",
+  hasJob: true,
+});
+assert.equal(apPayload && apPayload.kind === "expense" && apPayload.payWith, "bill");
+if (apPayload && apPayload.kind === "expense") {
+  const apXml = requestForStep("expense_add", apPayload);
+  assert.match(apXml, /<BillAddRq/);
+  assert.doesNotMatch(apXml, /<CheckAddRq/);
+  assert.doesNotMatch(apXml, /<AccountRef>[\s\S]*Accounts Payable/);
+}
+
+const apAsCheck = parseWorkPayload({
+  kind: "expense",
+  expenseId: "exp-ap2",
+  vendor: "Economy Stucco LLC",
+  payWith: "check",
+  payAccount: "Accounts Payable",
+  hasJob: true,
+  customerName: "Don Ojamaye",
+  jobCode: "BJ091026-A",
+});
+assert.equal(apAsCheck && apAsCheck.kind === "expense" && apAsCheck.payWith, "bill");

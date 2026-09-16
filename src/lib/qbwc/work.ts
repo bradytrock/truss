@@ -339,7 +339,7 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
       vendor,
       accountName: asString(row.accountName, "Other"),
       amount: asNumber(row.amount),
-      payWith: asPayWith(row.payWith),
+      payWith: asPayWith(row.payWith, asString(row.payAccount)),
       txnDate: asString(row.txnDate),
       memo: asString(row.memo),
       payAccount: asString(row.payAccount, DEFAULT_QB_BANK),
@@ -409,9 +409,13 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
   };
 }
 
-function asPayWith(value: unknown): QbExpenseWork["payWith"] {
+function isAccountsPayable(name: string) {
+  return /accounts\s*payable|^a\s*\/?\s*p$/i.test(name.trim());
+}
+
+function asPayWith(value: unknown, payAccount = ""): QbExpenseWork["payWith"] {
   if (value === "credit_card") return "credit_card";
-  if (value === "bill") return "bill";
+  if (value === "bill" || isAccountsPayable(payAccount)) return "bill";
   return "check";
 }
 
