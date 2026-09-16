@@ -21,7 +21,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { ContactRecordWindow } from "@/components/contact-window";
-import { CreateClientDialog, CreateJobDialog, EditContactDialog } from "@/components/create-records";
+import { ContactNewSeedDialog } from "@/components/contact-new-seed-dialog";
+import { CreateClientDialog, EditContactDialog } from "@/components/create-records";
 import { ErrorBanner, LoadingScreen } from "@/components/page-chrome";
 import { StartEstimateDialogHost } from "@/components/start-estimate-button";
 import { Button } from "@/components/ui/button";
@@ -497,11 +498,7 @@ export function ContactsDesk() {
       </div>
 
       <CreateClientDialog open={createOpen} onOpenChange={setCreateOpen} />
-      <CreateJobDialog
-        open={jobOpen}
-        onOpenChange={setJobOpen}
-        defaultContactId={openContact?.id}
-      />
+      <ContactNewSeedDialog contact={openContact ?? null} open={jobOpen} onOpenChange={setJobOpen} />
       {openContact ? (
         <EditContactDialog contact={openContact} open={editOpen} onOpenChange={setEditOpen} />
       ) : null}
