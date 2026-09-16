@@ -34,6 +34,7 @@ import { JobFilesPanel } from "@/components/job-files";
 import { JobEagleviewPanel } from "@/components/job-eagleview";
 import { JobPhotosPanel } from "@/components/job-photos-panel";
 import { JobFinancials } from "@/components/job-financials";
+import { PaperArchiveButton } from "@/components/paper-archive-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -108,6 +109,7 @@ import { canDeleteJobs } from "@/lib/visibility";
 import { useStartEstimate } from "@/lib/start-estimate";
 import { useStartMaterialOrder } from "@/lib/start-material-order";
 import { materialOrderLinesFor, materialOrderTotal } from "@/lib/material-orders";
+import { archivedPaper, livePaper } from "@/lib/paper-archive";
 import { MaterialOrderFromTemplateDialog } from "@/components/material-order-from-template-dialog";
 
 const JOB_TABS = ["overview", "photos", "files", "financials", "paper", "fields"] as const;
@@ -379,9 +381,16 @@ export function JobRecord({
   const cityLine = [job.city, [job.state, job.postalCode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
   const jobFiles = (crm.jobFiles ?? []).filter((file) => file.jobId === job.id);
   const fileCount = jobFiles.length + reports.length;
-  const estimates = crm.estimates.filter((estimate) => estimate.jobId === job.id);
-  const invoices = crm.invoices.filter((invoice) => invoice.jobId === job.id);
-  const materialOrders = (crm.materialOrders ?? []).filter((order) => order.jobId === job.id);
+  const jobEstimates = crm.estimates.filter((estimate) => estimate.jobId === job.id);
+  const jobInvoices = crm.invoices.filter((invoice) => invoice.jobId === job.id);
+  const jobMaterialOrders = (crm.materialOrders ?? []).filter((order) => order.jobId === job.id);
+  const estimates = livePaper(jobEstimates);
+  const invoices = livePaper(jobInvoices);
+  const materialOrders = livePaper(jobMaterialOrders);
+  const archivedEstimates = archivedPaper(jobEstimates);
+  const archivedInvoices = archivedPaper(jobInvoices);
+  const archivedMaterialOrders = archivedPaper(jobMaterialOrders);
+  const archivedPaperCount = archivedEstimates.length + archivedInvoices.length + archivedMaterialOrders.length;
   const financialDocs = jobFinancialDocs(job.id, {
     invoices: crm.invoices,
     expenses: crm.expenses,
@@ -1427,9 +1436,19 @@ export function JobRecord({
               <ul className="space-y-2">
                 {estimates.map((estimate) => (
                   <li key={estimate.id}>
-                    <Link href={`/estimates/${estimate.id}`} className="text-sm font-medium hover:underline">
-                      {estimate.number}
-                    </Link>
+                    <div className="flex items-start justify-between gap-2">
+                      <Link href={`/estimates/${estimate.id}`} className="text-sm font-medium hover:underline">
+                        {estimate.number}
+                      </Link>
+                      {!deleted ? (
+                        <PaperArchiveButton
+                          compact
+                          archivedAt={estimate.archivedAt}
+                          label={estimate.number}
+                          onChange={(archivedAt) => crm.updateEstimate(estimate.id, { archivedAt })}
+                        />
+                      ) : null}
+                    </div>
                     <div className="mt-1 flex items-center justify-between gap-2">
                       <EstimateStatusBadge status={estimate.status} />
                       <span className="text-xs tabular-nums text-muted-foreground">
@@ -1467,15 +1486,25 @@ export function JobRecord({
               <ul className="space-y-2">
                 {invoices.map((invoice) => (
                   <li key={invoice.id}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        router.replace(jobDocumentHref(job.id, "invoice", invoice.id), { scroll: false })
-                      }
-                      className="text-sm font-medium hover:underline"
-                    >
-                      {invoice.number}
-                    </button>
+                    <div className="flex items-start justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          router.replace(jobDocumentHref(job.id, "invoice", invoice.id), { scroll: false })
+                        }
+                        className="text-sm font-medium hover:underline"
+                      >
+                        {invoice.number}
+                      </button>
+                      {!deleted ? (
+                        <PaperArchiveButton
+                          compact
+                          archivedAt={invoice.archivedAt}
+                          label={invoice.number}
+                          onChange={(archivedAt) => crm.updateInvoice(invoice.id, { archivedAt })}
+                        />
+                      ) : null}
+                    </div>
                     <div className="mt-1 flex items-center justify-between gap-2">
                       <InvoiceStatusBadge
                         status={derivedInvoiceStatus(invoice, crm.invoiceLines, crm.payments)}
@@ -1536,9 +1565,19 @@ export function JobRecord({
                   const lines = materialOrderLinesFor(order.id, crm.materialOrderLines ?? []);
                   return (
                     <li key={order.id}>
-                      <Link href={`/material-orders/${order.id}`} className="text-sm font-medium hover:underline">
-                        {order.number}
-                      </Link>
+                      <div className="flex items-start justify-between gap-2">
+                        <Link href={`/material-orders/${order.id}`} className="text-sm font-medium hover:underline">
+                          {order.number}
+                        </Link>
+                        {!deleted ? (
+                          <PaperArchiveButton
+                            compact
+                            archivedAt={order.archivedAt}
+                            label={order.number}
+                            onChange={(archivedAt) => crm.updateMaterialOrder(order.id, { archivedAt })}
+                          />
+                        ) : null}
+                      </div>
                       <div className="mt-1 flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground">
                           {order.vendor.trim() || "No supplier yet"}
@@ -1553,6 +1592,58 @@ export function JobRecord({
               </ul>
             )}
           </div>
+          {archivedPaperCount > 0 ? (
+            <div>
+              <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">Archived</p>
+              <ul className="space-y-2">
+                {archivedEstimates.map((estimate) => (
+                  <li key={estimate.id} className="flex items-center justify-between gap-2">
+                    <Link href={`/estimates/${estimate.id}`} className="text-sm text-muted-foreground hover:underline">
+                      {estimate.number}
+                    </Link>
+                    {!deleted ? (
+                      <PaperArchiveButton
+                        compact
+                        archivedAt={estimate.archivedAt}
+                        label={estimate.number}
+                        onChange={(archivedAt) => crm.updateEstimate(estimate.id, { archivedAt })}
+                      />
+                    ) : null}
+                  </li>
+                ))}
+                {archivedInvoices.map((invoice) => (
+                  <li key={invoice.id} className="flex items-center justify-between gap-2">
+                    <Link href={`/invoices/${invoice.id}`} className="text-sm text-muted-foreground hover:underline">
+                      {invoice.number}
+                    </Link>
+                    {!deleted ? (
+                      <PaperArchiveButton
+                        compact
+                        archivedAt={invoice.archivedAt}
+                        label={invoice.number}
+                        onChange={(archivedAt) => crm.updateInvoice(invoice.id, { archivedAt })}
+                      />
+                    ) : null}
+                  </li>
+                ))}
+                {archivedMaterialOrders.map((order) => (
+                  <li key={order.id} className="flex items-center justify-between gap-2">
+                    <Link href={`/material-orders/${order.id}`} className="text-sm text-muted-foreground hover:underline">
+                      {order.number}
+                    </Link>
+                    {!deleted ? (
+                      <PaperArchiveButton
+                        compact
+                        archivedAt={order.archivedAt}
+                        label={order.number}
+                        onChange={(archivedAt) => crm.updateMaterialOrder(order.id, { archivedAt })}
+                      />
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </TabsContent>
 
         <TabsContent value="fields" className="mt-0">

@@ -22,6 +22,7 @@ import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { CollectSignatureDialog } from "@/components/signature-pad";
 import { shareContactsForEstimate, coOwnerContact, jobHomeownersForEstimate } from "@/lib/parties";
 import { EstimateStatusBadge } from "@/components/status-badge";
+import { PaperArchiveButton, PaperArchivedBanner } from "@/components/paper-archive-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -684,7 +685,9 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     ...groups,
     ...pendingSections.map((name) => ({ name, lines: [] as EstimateLine[] })),
   ];
-  const relatedInvoice = crm.invoices.find((invoice) => invoice.estimateId === estimate.id);
+  const relatedInvoice = crm.invoices.find(
+    (invoice) => invoice.estimateId === estimate.id && !invoice.archivedAt,
+  );
   const editable = estimate.status === "draft";
   const optionalOpen = estimate.status === "draft" || estimate.status === "sent" || estimate.status === "viewed";
   const canConvert =
@@ -1016,6 +1019,12 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           Open {relatedInvoice.number}
         </Button>
       ) : null}
+      <PaperArchiveButton
+        archivedAt={estimate.archivedAt}
+        label={estimate.number}
+        pending={pending}
+        onChange={(archivedAt) => crm.updateEstimate(estimate.id, { archivedAt })}
+      />
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button variant="outline" />}>
           More
@@ -1565,6 +1574,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           </div>
           {actions}
         </div>
+        {estimate.archivedAt ? <PaperArchivedBanner label={estimate.number} /> : null}
       </div>
 
       <div className="rounded-md border bg-muted/40 px-4 py-3 sm:flex sm:items-center sm:justify-between">

@@ -48,7 +48,7 @@ function EstimatesList() {
   const searchParams = useSearchParams();
   const fromTemplate = searchParams.get("from") ?? "";
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState<EstimateStatus | "all">("all");
+  const [status, setStatus] = useState<EstimateStatus | "all" | "archived">("all");
   const startEstimateFlow = useStartEstimate();
   const { prompt } = startEstimateFlow;
   const startedFrom = useRef("");
@@ -62,7 +62,9 @@ function EstimatesList() {
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return crm.estimates.filter((estimate) => {
-      if (status !== "all" && estimate.status !== status) return false;
+      if (status !== "archived" && estimate.archivedAt) return false;
+      if (status === "archived" && !estimate.archivedAt) return false;
+      if (status !== "all" && status !== "archived" && estimate.status !== status) return false;
       if (!needle) return true;
       const customer = crm.customerName(estimate);
       return (
@@ -95,25 +97,27 @@ function EstimatesList() {
             />
             <Select
               value={status}
-              onValueChange={(value) => setStatus((value as EstimateStatus | "all") ?? "all")}
+              onValueChange={(value) => setStatus((value as EstimateStatus | "all" | "archived") ?? "all")}
               items={[
-                { value: "all", label: "All statuses" },
+                { value: "all", label: "Active" },
                 ...ESTIMATE_STATUSES.map((item) => ({
                   value: item,
                   label: ESTIMATE_STATUS_LABELS[item],
                 })),
+                { value: "archived", label: "Archived" },
               ]}
             >
               <SelectTrigger className="w-full sm:w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="all">Active</SelectItem>
                 {ESTIMATE_STATUSES.map((item) => (
                   <SelectItem key={item} value={item}>
                     {ESTIMATE_STATUS_LABELS[item]}
                   </SelectItem>
                 ))}
+                <SelectItem value="archived">Archived</SelectItem>
               </SelectContent>
             </Select>
             {crm.viewer && canManageSettings(crm.viewer.role, crm.viewer) ? (

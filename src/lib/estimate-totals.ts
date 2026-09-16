@@ -152,6 +152,7 @@ export function acceptedAmountForJob(
 ) {
   const related = estimates.filter(
     (estimate) =>
+      !estimate.archivedAt &&
       estimate.status === "accepted" &&
       (estimate.jobId === job.id ||
         Boolean(job.opportunityId && estimate.opportunityId === job.opportunityId)),
@@ -170,7 +171,10 @@ export function contractValueForOpportunity(
   market?: JobMarket | "" | null,
 ) {
   const related = estimates.filter(
-    (estimate) => estimate.opportunityId === opportunityId && estimate.status !== "declined",
+    (estimate) =>
+      !estimate.archivedAt &&
+      estimate.opportunityId === opportunityId &&
+      estimate.status !== "declined",
   );
   const preferred =
     related.find((estimate) => estimate.status === "accepted") ??
@@ -310,6 +314,7 @@ export type EstimateDraft = Omit<
   | "marginPercent"
   | "subtotalOverride"
   | "hideLinePrices"
+  | "archivedAt"
 > &
   Partial<
     Pick<
@@ -341,6 +346,7 @@ export type EstimateDraft = Omit<
       | "marginPercent"
       | "subtotalOverride"
       | "hideLinePrices"
+      | "archivedAt"
     >
   >;
 
@@ -396,6 +402,7 @@ export function fillEstimate(estimate: EstimateDraft): Estimate {
         ? null
         : roundMoney(Math.max(0, Number(estimate.subtotalOverride) || 0)),
     hideLinePrices: Boolean(estimate.hideLinePrices),
+    archivedAt: estimate.archivedAt ?? null,
   };
 }
 

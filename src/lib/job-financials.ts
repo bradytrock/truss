@@ -47,12 +47,15 @@ export function fillInvoiceQb(
     ...invoice,
     terms: invoice.terms ?? "",
     qbStatus: invoice.qbStatus ?? (invoice.status === "paid" ? "entered" : "not_in_qb"),
+    archivedAt: invoice.archivedAt ?? null,
   };
 }
 
 export function paymentsForJob(jobId: string, payments: Payment[], invoices: Invoice[]) {
   const invoiceIds = new Set(
-    invoices.filter((invoice) => invoice.jobId === jobId).map((invoice) => invoice.id),
+    invoices
+      .filter((invoice) => invoice.jobId === jobId && !invoice.archivedAt)
+      .map((invoice) => invoice.id),
   );
   return payments.filter((payment) => payment.jobId === jobId || (payment.invoiceId && invoiceIds.has(payment.invoiceId)));
 }
@@ -72,7 +75,11 @@ export function jobProfitAndLoss(input: {
   basis: JobBooksBasis;
 }) {
   const jobInvoices = input.invoices.filter(
-    (invoice) => invoice.jobId === input.job.id && invoice.status !== "void" && invoice.status !== "draft",
+    (invoice) =>
+      invoice.jobId === input.job.id &&
+      !invoice.archivedAt &&
+      invoice.status !== "void" &&
+      invoice.status !== "draft",
   );
   const invoiced = jobInvoices.reduce(
     (sum, invoice) => sum + invoiceTotal(invoice.id, input.invoiceLines),
@@ -114,6 +121,7 @@ export function qbQueue(input: {
 }) {
   const invoices = input.invoices.filter(
     (invoice) =>
+      !invoice.archivedAt &&
       invoice.qbStatus !== "entered" &&
       invoice.status !== "draft" &&
       invoice.status !== "void",

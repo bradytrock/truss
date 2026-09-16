@@ -544,6 +544,7 @@ export function mapEstimate(row: EstimateRow): Estimate {
         ? Number(row.subtotal_override)
         : null,
     hideLinePrices: "hide_line_prices" in row ? Boolean(row.hide_line_prices) : false,
+    archivedAt: "archived_at" in row ? ((row.archived_at as string | null | undefined) ?? null) : null,
   });
 }
 
@@ -722,6 +723,7 @@ export function estimatePatch(patch: Partial<Estimate>) {
   if (patch.marginPercent !== undefined) row.margin_percent = patch.marginPercent;
   if (patch.subtotalOverride !== undefined) row.subtotal_override = patch.subtotalOverride;
   if (patch.hideLinePrices !== undefined) row.hide_line_prices = patch.hideLinePrices;
+  if (patch.archivedAt !== undefined) row.archived_at = patch.archivedAt;
   return row;
 }
 
@@ -762,6 +764,7 @@ export function mapInvoice(row: InvoiceRow): Invoice {
     terms: row.terms ?? "",
     shareToken: row.share_token?.trim() || "",
     qbStatus: parseQbStatus(row.qb_status),
+    archivedAt: "archived_at" in row ? ((row.archived_at as string | null | undefined) ?? null) : null,
   };
 }
 
@@ -778,6 +781,7 @@ export function invoicePatch(patch: Partial<Invoice>) {
   if (patch.terms !== undefined) row.terms = patch.terms;
   if (patch.shareToken !== undefined) row.share_token = patch.shareToken;
   if (patch.qbStatus !== undefined) row.qb_status = patch.qbStatus;
+  if (patch.archivedAt !== undefined) row.archived_at = patch.archivedAt;
   return row;
 }
 
@@ -1251,6 +1255,7 @@ export function mapMaterialOrder(row: MaterialOrderRow): MaterialOrder {
     neededBy: row.needed_by,
     createdBy: row.created_by,
     createdAt: row.created_at,
+    archivedAt: "archived_at" in row ? ((row.archived_at as string | null | undefined) ?? null) : null,
   });
 }
 
@@ -1259,6 +1264,7 @@ export function materialOrderPatch(patch: Partial<MaterialOrder>) {
   if (patch.vendor !== undefined) row.vendor = patch.vendor;
   if (patch.notes !== undefined) row.notes = patch.notes;
   if (patch.neededBy !== undefined) row.needed_by = patch.neededBy;
+  if (patch.archivedAt !== undefined) row.archived_at = patch.archivedAt;
   return row;
 }
 

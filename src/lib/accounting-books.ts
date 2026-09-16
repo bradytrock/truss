@@ -45,7 +45,7 @@ export function parseInvoiceReviewFilter(raw: string | null): InvoiceReviewFilte
 }
 
 export function isOpenInvoice(invoice: Invoice) {
-  return invoice.status !== "draft" && invoice.status !== "void";
+  return invoice.status !== "draft" && invoice.status !== "void" && !invoice.archivedAt;
 }
 
 export function invoiceReviewStatus(
@@ -70,7 +70,9 @@ export function invoiceBlockedReason(input: {
 }
 
 export function reviewableInvoices(invoices: Invoice[]) {
-  return invoices.filter((invoice) => invoice.status !== "void" && invoice.qbStatus !== "entered");
+  return invoices.filter(
+    (invoice) => !invoice.archivedAt && invoice.status !== "void" && invoice.qbStatus !== "entered",
+  );
 }
 
 export function expenseReviewStatus(

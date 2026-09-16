@@ -502,6 +502,8 @@ export interface Estimate {
   subtotalOverride: number | null;
   /** Hide unit prices and line amounts on customer-facing proposals, share links, and PDFs. */
   hideLinePrices: boolean;
+  /** Set when this proposal is archived off the job Paper list. */
+  archivedAt?: string | null;
 }
 
 export const SIGNATURE_EVENT_KINDS = ["sent", "opened", "signed", "declined"] as const;
@@ -624,6 +626,8 @@ export interface Invoice {
   terms: string;
   shareToken: string;
   qbStatus: QbSyncStatus;
+  /** Set when this invoice is archived off the job Paper list. */
+  archivedAt?: string | null;
 }
 
 export interface InvoiceLine {
@@ -703,6 +707,8 @@ export interface MaterialOrder {
   neededBy: string | null;
   createdBy: string;
   createdAt: string;
+  /** Set when this order is archived off the job Paper list. */
+  archivedAt?: string | null;
 }
 
 export interface MaterialOrderLine {

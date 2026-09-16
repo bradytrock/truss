@@ -28,6 +28,7 @@ import { canManageSettings } from "@/lib/visibility";
 import { downloadMaterialOrderPdf } from "@/lib/material-order-pdf";
 import { materialOrderLinesFor, materialOrderTotal } from "@/lib/material-orders";
 import { vendorChoices } from "@/lib/qb-vendors";
+import { PaperArchiveButton, PaperArchivedBanner } from "@/components/paper-archive-button";
 import { documentOwnerStaff, documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
 import { cn } from "@/lib/utils";
 
@@ -152,8 +153,14 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
             <Download />
             PDF
           </Button>
+          <PaperArchiveButton
+            archivedAt={order.archivedAt}
+            label={order.number}
+            onChange={(archivedAt) => crm.updateMaterialOrder(order.id, { archivedAt })}
+          />
         </div>
         </div>
+        {order.archivedAt ? <PaperArchivedBanner label={order.number} /> : null}
       </div>
 
       <p className="text-sm text-muted-foreground">

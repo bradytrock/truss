@@ -557,6 +557,7 @@ export type Database = {
           needed_by: string | null;
           created_by: string;
           created_at: string;
+          archived_at: string | null;
         };
         Insert: {
           id?: string;
@@ -568,6 +569,7 @@ export type Database = {
           needed_by?: string | null;
           created_by?: string;
           created_at?: string;
+          archived_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["material_orders"]["Insert"]>;
         Relationships: [];
@@ -690,6 +692,7 @@ export type Database = {
           margin_percent: number;
           subtotal_override: number | null;
           hide_line_prices: boolean;
+          archived_at: string | null;
         };
         Insert: {
           id?: string;
@@ -732,6 +735,7 @@ export type Database = {
           margin_percent?: number;
           subtotal_override?: number | null;
           hide_line_prices?: boolean;
+          archived_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["estimates"]["Insert"]>;
         Relationships: [];
@@ -884,6 +888,7 @@ export type Database = {
           share_token: string;
           qb_status: string;
           qb_txn_id: string;
+          archived_at: string | null;
         };
         Insert: {
           id?: string;
@@ -901,6 +906,7 @@ export type Database = {
           share_token?: string;
           qb_status?: string;
           qb_txn_id?: string;
+          archived_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["invoices"]["Insert"]>;
         Relationships: [];

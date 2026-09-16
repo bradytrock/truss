@@ -17,6 +17,7 @@ import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { shareContactsForInvoice } from "@/lib/parties";
 import { InvoiceStatusBadge } from "@/components/status-badge";
+import { PaperArchiveButton, PaperArchivedBanner } from "@/components/paper-archive-button";
 import { downloadInvoicePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord, shareEmailOwnerFromBook } from "@/lib/document-owner";
@@ -178,8 +179,15 @@ export default function InvoiceDetailPage() {
               Void
             </Button>
           ) : null}
+          <PaperArchiveButton
+            archivedAt={record.archivedAt}
+            label={record.number}
+            pending={pending}
+            onChange={(archivedAt) => crm.updateInvoice(record.id, { archivedAt })}
+          />
         </div>
         </div>
+        {record.archivedAt ? <PaperArchivedBanner label={record.number} /> : null}
       </div>
 
       <section className="grid gap-3 sm:grid-cols-3">
