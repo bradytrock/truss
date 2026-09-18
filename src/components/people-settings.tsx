@@ -125,7 +125,7 @@ export function PeopleSettings({
   ) => Promise<Array<{ member: StaffMember; inviteUrl: string | null }>>;
   onUpdate: (
     id: string,
-    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "emailSignature" | "locked" | "restricted" | "teamId" | "cardSlug">>,
+    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "emailSignature" | "locked" | "restricted" | "manageAutomations" | "teamId" | "cardSlug">>,
   ) => Promise<boolean>;
   onRefreshInvite: (id: string) => Promise<string | null>;
   onRemove: (id: string) => Promise<boolean>;
@@ -571,7 +571,7 @@ function SeatMenu({
   onEditProfile: () => void;
   onUpdate: (
     id: string,
-    patch: Partial<Pick<StaffMember, "locked" | "restricted">>,
+    patch: Partial<Pick<StaffMember, "locked" | "restricted" | "manageAutomations">>,
   ) => Promise<boolean>;
   onCopyCard: () => void;
   onRefreshInvite: () => Promise<void>;
@@ -624,6 +624,13 @@ function SeatMenu({
         >
           {member.locked ? "Unlock login" : "Lock login"}
         </DropdownMenuItem>
+        {member.role === "company_admin" ? null : (
+          <DropdownMenuItem
+            onClick={() => void onUpdate(member.id, { manageAutomations: !member.manageAutomations })}
+          >
+            {member.manageAutomations ? "Revoke automations" : "Allow automations"}
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem disabled={isSelf} variant="destructive" onClick={onRemove}>
           Remove from company

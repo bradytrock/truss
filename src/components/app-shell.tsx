@@ -46,7 +46,7 @@ import {
   CreateInvoiceDialog,
 } from "@/components/create-ops-dialogs";
 import { LogExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
-import { canViewReports, canManageSettings, canViewAccounting } from "@/lib/visibility";
+import { canViewReports, canManageSettings, canManageAutomations, canViewAccounting } from "@/lib/visibility";
 import { isInboxPath } from "@/lib/inbox";
 import { actionableReturningClientNotices } from "@/lib/returning-client";
 import { isBusinessDevelopment } from "@/lib/bd";
@@ -380,7 +380,11 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
   const navOptions = {
     showReports: Boolean(effectiveStaff && canViewReports(effectiveStaff.role)),
     showAccounting: Boolean(effectiveStaff && canViewAccounting(effectiveStaff.role)),
-    showSettings: Boolean(effectiveStaff && canManageSettings(effectiveStaff.role, effectiveStaff)),
+    showSettings: Boolean(
+      effectiveStaff &&
+        (canManageSettings(effectiveStaff.role, effectiveStaff) ||
+          canManageAutomations(effectiveStaff.role, effectiveStaff)),
+    ),
     bdOnly: Boolean(effectiveStaff && isBusinessDevelopment(effectiveStaff.role)),
   };
   const sections = navSections({ bdOnly: navOptions.bdOnly });
@@ -761,8 +765,17 @@ function UserMenu() {
         ) : null}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => router.push("/profile")}>Profile</DropdownMenuItem>
-        {viewer && canManageSettings(viewer.role, viewer) ? (
-          <DropdownMenuItem onClick={() => router.push("/settings")}>Settings</DropdownMenuItem>
+        {viewer &&
+        (canManageSettings(viewer.role, viewer) || canManageAutomations(viewer.role, viewer)) ? (
+          <DropdownMenuItem
+            onClick={() =>
+              router.push(
+                canManageSettings(viewer.role, viewer) ? "/settings" : "/settings/automations",
+              )
+            }
+          >
+            Settings
+          </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem onClick={() => void signOut()}>Sign out</DropdownMenuItem>
       </DropdownMenuContent>

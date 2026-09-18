@@ -201,6 +201,7 @@ export type Database = {
           monthly_sales_quota: number | null;
           locked: boolean;
           restricted: boolean;
+          manage_automations: boolean;
           invite_expires_at: string | null;
           created_at: string;
         };
@@ -223,6 +224,7 @@ export type Database = {
           monthly_sales_quota?: number | null;
           locked?: boolean;
           restricted?: boolean;
+          manage_automations?: boolean;
           invite_expires_at?: string | null;
           created_at?: string;
         };
@@ -1837,6 +1839,118 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["returning_client_leads"]["Insert"]>;
         Relationships: [];
       };
+      automations: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          description: string;
+          trigger_kind: string;
+          trigger_config: Json;
+          conditions: Json;
+          actions: Json;
+          requires_confirmation: boolean;
+          once_per_job: boolean;
+          enabled: boolean;
+          created_by_staff_id: string | null;
+          last_fired_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name?: string;
+          description?: string;
+          trigger_kind: string;
+          trigger_config?: Json;
+          conditions?: Json;
+          actions?: Json;
+          requires_confirmation?: boolean;
+          once_per_job?: boolean;
+          enabled?: boolean;
+          created_by_staff_id?: string | null;
+          last_fired_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["automations"]["Insert"]>;
+        Relationships: [];
+      };
+      automation_runs: {
+        Row: {
+          id: string;
+          company_id: string;
+          automation_id: string;
+          job_id: string | null;
+          invoice_id: string | null;
+          estimate_id: string | null;
+          event_id: string | null;
+          status: string;
+          scheduled_for: string | null;
+          rendered_preview: string;
+          delivery_status: string;
+          error_text: string;
+          confirmed_by_staff_id: string | null;
+          confirmed_by_name: string;
+          decided_at: string | null;
+          dry_run: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          automation_id: string;
+          job_id?: string | null;
+          invoice_id?: string | null;
+          estimate_id?: string | null;
+          event_id?: string | null;
+          status?: string;
+          scheduled_for?: string | null;
+          rendered_preview?: string;
+          delivery_status?: string;
+          error_text?: string;
+          confirmed_by_staff_id?: string | null;
+          confirmed_by_name?: string;
+          decided_at?: string | null;
+          dry_run?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["automation_runs"]["Insert"]>;
+        Relationships: [];
+      };
+      automation_templates: {
+        Row: {
+          id: string;
+          slug: string;
+          name: string;
+          description: string;
+          trigger_kind: string;
+          trigger_config: Json;
+          conditions: Json;
+          actions: Json;
+          requires_confirmation: boolean;
+          once_per_job: boolean;
+          sort_order: number;
+        };
+        Insert: {
+          id?: string;
+          slug: string;
+          name: string;
+          description?: string;
+          trigger_kind: string;
+          trigger_config?: Json;
+          conditions?: Json;
+          actions?: Json;
+          requires_confirmation?: boolean;
+          once_per_job?: boolean;
+          sort_order?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["automation_templates"]["Insert"]>;
+        Relationships: [];
+      };
       estimate_signature_events: {
         Row: {
           id: string;
@@ -2449,6 +2563,37 @@ export type Database = {
       };
       realtor_listing_watches: {
         Args: Record<string, never>;
+        Returns: Json;
+      };
+      automation_due_runs: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      automation_mark_run: {
+        Args: {
+          p_id: string;
+          p_status: string;
+          p_delivery?: string;
+          p_error?: string;
+          p_preview?: string;
+        };
+        Returns: Json;
+      };
+      automation_add_task: {
+        Args: {
+          p_company_id: string;
+          p_title: string;
+          p_job_id?: string;
+          p_assignee?: string;
+        };
+        Returns: Json;
+      };
+      automation_upcoming_event_matches: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      automation_insert_run: {
+        Args: { p_run: Json };
         Returns: Json;
       };
       ingest_realtor_listing_browse: {

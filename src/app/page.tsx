@@ -32,6 +32,7 @@ import { actionableReturningClientNotices } from "@/lib/returning-client";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { BdRoiPanel } from "@/components/bd-roi";
 import { HomeOnboarding } from "@/components/home-onboarding";
+import { AutomationConfirmations } from "@/components/automation-confirmations";
 import { HomeDashboardCanvas } from "@/components/home-dashboard-canvas";
 import {
   DashboardChart,
@@ -671,6 +672,8 @@ export default function HomePage() {
           ) : null
         }
       />
+
+      <AutomationConfirmations />
 
       {!hasLeads ? <HomeOnboarding viewer={crm.effectiveStaff} /> : null}
 

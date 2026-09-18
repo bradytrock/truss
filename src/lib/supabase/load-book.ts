@@ -43,6 +43,9 @@ import {
   mapMaterialOrderTemplateLine,
   mapPriceList,
   mapEagleviewOrder,
+  mapAutomation,
+  mapAutomationRun,
+  mapAutomationTemplate,
 } from "@/lib/supabase/mappers";
 import type { Database } from "@/lib/supabase/database.types";
 import { initialsFromName, type CrmState, type SeatRole } from "@/lib/types";
@@ -127,6 +130,9 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     materialOrderTemplateLinesRes,
     priceListsRes,
     eagleviewOrdersRes,
+    automationsRes,
+    automationRunsRes,
+    automationTemplatesRes,
   ] = await Promise.all([
     supabase.from("clients").select("*").eq("company_id", companyId).order("name"),
     supabase.from("contacts").select("*").eq("company_id", companyId).order("name"),
@@ -205,6 +211,9 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       .select("*")
       .eq("company_id", companyId)
       .order("created_at", { ascending: false }),
+    supabase.from("automations").select("*").eq("company_id", companyId).order("updated_at", { ascending: false }),
+    supabase.from("automation_runs").select("*").eq("company_id", companyId).order("created_at", { ascending: false }).limit(500),
+    supabase.from("automation_templates").select("*").order("sort_order"),
   ]);
 
   const missingTeams = Boolean(teamsRes.error);
@@ -339,6 +348,11 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     eagleviewOrders: eagleviewOrdersRes.error
       ? []
       : mapRows(eagleviewOrdersRes.data, mapEagleviewOrder),
+    automations: automationsRes.error ? [] : mapRows(automationsRes.data, mapAutomation),
+    automationRuns: automationRunsRes.error ? [] : mapRows(automationRunsRes.data, mapAutomationRun),
+    automationTemplates: automationTemplatesRes.error
+      ? []
+      : mapRows(automationTemplatesRes.data, mapAutomationTemplate),
   };
 
   return {

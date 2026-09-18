@@ -225,6 +225,7 @@ export interface StaffMember {
   monthlySalesQuota?: number | null;
   locked: boolean;
   restricted: boolean;
+  manageAutomations?: boolean;
   inviteExpiresAt: string | null;
   inviteToken: string | null;
 }
@@ -1185,6 +1186,9 @@ export interface CrmState {
   messages: TextMessage[];
   returningClientLeads: ReturningClientLead[];
   eagleviewOrders: EagleviewOrder[];
+  automations: import("@/lib/automations").Automation[];
+  automationRuns: import("@/lib/automations").AutomationRun[];
+  automationTemplates: import("@/lib/automations").AutomationTemplate[];
 }
 
 export const STAGE_LABELS: Record<PipelineStage, string> = {
@@ -1384,6 +1388,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     cardSlug: "jordan.hale",
     locked: false,
     restricted: false,
+    manageAutomations: false,
     inviteExpiresAt: null,
     inviteToken: null,
   },
@@ -1400,6 +1405,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     cardSlug: "priya.shah",
     locked: false,
     restricted: false,
+    manageAutomations: false,
     inviteExpiresAt: null,
     inviteToken: null,
   },
@@ -1416,6 +1422,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     cardSlug: "claire.duvall",
     locked: false,
     restricted: false,
+    manageAutomations: false,
     inviteExpiresAt: null,
     inviteToken: null,
   },
@@ -1432,6 +1439,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     cardSlug: "luis.ortega",
     locked: false,
     restricted: false,
+    manageAutomations: false,
     inviteExpiresAt: null,
     inviteToken: null,
   },
@@ -1448,6 +1456,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     cardSlug: "maya.chen",
     locked: false,
     restricted: false,
+    manageAutomations: false,
     inviteExpiresAt: null,
     inviteToken: null,
   },
@@ -1464,6 +1473,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     cardSlug: "elena.voss",
     locked: false,
     restricted: false,
+    manageAutomations: false,
     inviteExpiresAt: null,
     inviteToken: null,
   },
@@ -1480,6 +1490,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     cardSlug: "tom.brennan",
     locked: false,
     restricted: false,
+    manageAutomations: false,
     inviteExpiresAt: null,
     inviteToken: null,
   },
@@ -1496,6 +1507,7 @@ export const NORTHLINE_STAFF: StaffMember[] = [
     cardSlug: "nora.keene",
     locked: false,
     restricted: false,
+    manageAutomations: false,
     inviteExpiresAt: null,
     inviteToken: null,
   },
