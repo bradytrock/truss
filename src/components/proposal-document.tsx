@@ -24,7 +24,7 @@ import { estimateSignatureLines } from "@/lib/estimate-signers";
 import { coOwnerContact } from "@/lib/parties";
 import { photosForEstimateLine } from "@/lib/estimate-line-photos";
 import type { CompanySettings, Estimate, EstimateLine, JobMarket, JobPhoto } from "@/lib/types";
-import { estimateTermsValues, resolveEstimateTerms } from "@/lib/document-terms";
+import { estimateTermsValues, liveEstimateTerms } from "@/lib/document-terms";
 import { DocumentNotesBlock } from "@/components/document-notes";
 import { DocumentTermsFields } from "@/components/document-terms-fields";
 import { FormattedLineText } from "@/components/formatted-line-text";
@@ -150,8 +150,8 @@ export function ProposalDocument({
       fallbackStaffId: crm?.user.staffId,
       companyPhone: letterhead.phone,
     });
-  const terms = resolveEstimateTerms({
-    explicit: estimate.terms,
+  const terms = liveEstimateTerms({
+    estimate,
     companyDefault: letterhead.defaultEstimateTerms,
   });
   return (

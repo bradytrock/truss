@@ -22,8 +22,8 @@ import {
 import {
   filledEstimateTerms,
   filledInvoiceTerms,
-  resolveEstimateTerms,
-  resolveInvoiceTerms,
+  liveEstimateTerms,
+  liveInvoiceTerms,
 } from "@/lib/document-terms";
 import type { ProjectManagerContact } from "@/lib/document-owner";
 import {
@@ -679,8 +679,8 @@ export async function buildEstimatePdf(raw: {
     );
   }
   y = writeNotes(doc, input.estimate.notes, y);
-  const estimateTerms = resolveEstimateTerms({
-    explicit: input.estimate.terms,
+  const estimateTerms = liveEstimateTerms({
+    estimate: input.estimate,
     companyDefault: input.company.defaultEstimateTerms,
   });
   y = writeLabeledBlock(
@@ -845,8 +845,8 @@ export async function buildInvoicePdf(input: {
   doc.text("Balance due", boxLeft, y);
   doc.text(formatMoney(balance), right, y, { align: "right" });
   y = writeNotes(doc, input.invoice.notes, y);
-  const invoiceTerms = resolveInvoiceTerms({
-    explicit: input.invoice.terms,
+  const invoiceTerms = liveInvoiceTerms({
+    invoice: input.invoice,
     companyDefault: input.company.defaultInvoiceTerms,
   });
   const paymentTerms = filledInvoiceTerms({

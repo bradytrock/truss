@@ -44,7 +44,15 @@ import {
   fillEstimateLine,
   invoiceLinesFromEstimate,
 } from "@/lib/estimate-totals";
-import { mergePaymentTerms, lockedTermsChanged, resolveEstimateTerms, resolveInvoiceTerms } from "@/lib/document-terms";
+import {
+  applyCompanyTermsToOpenDocuments,
+  lockedTermsChanged,
+  liveEstimateTerms,
+  liveInvoiceTerms,
+  mergePaymentTerms,
+  resolveEstimateTerms,
+  resolveInvoiceTerms,
+} from "@/lib/document-terms";
 import { matchCatalogItem, type CatalogImportDraft } from "@/lib/catalog-csv";
 import {
   catalogItemDescription,
@@ -4013,7 +4021,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const updateEstimate = useCallback(async (id: string, patch: Partial<Estimate>, options?: { skipAudit?: boolean }) => {
     const current = state.estimates.find((estimate) => estimate.id === id);
-    const allowed = applyPaymentOnlyTerms(patch, current?.terms);
+    const allowed = applyPaymentOnlyTerms(
+      patch,
+      current
+        ? liveEstimateTerms({
+            estimate: current,
+            companyDefault: companySettings.defaultEstimateTerms,
+          })
+        : current?.terms,
+    );
     if (!allowed) return;
     patch = allowed;
     const apply = () =>
@@ -4096,7 +4112,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     apply();
     await finish();
-  }, [recordCompanyAudit, state.estimates]);
+  }, [companySettings.defaultEstimateTerms, recordCompanyAudit, state.estimates]);
 
   const sendEstimate = useCallback(
     async (id: string) => {
@@ -4116,6 +4132,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       const ownerSignedAt = current.ownerSignedAt || sentAt;
       const ownerSignedName = current.ownerSignedName.trim() || owner.name;
+      const terms = liveEstimateTerms({
+        estimate: current,
+        companyDefault: companySettings.defaultEstimateTerms,
+      });
       const apply = () =>
         setState((prev) => {
           const next = {
@@ -4131,6 +4151,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
                     secondShareToken: tokens.secondShareToken,
                     ownerSignedAt,
                     ownerSignedName,
+                    terms,
                   }
                 : estimate
             ),
@@ -4148,6 +4169,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           second_contact_id?: string | null;
           owner_signed_at?: string;
           owner_signed_name?: string;
+          terms?: string;
         } = {
           status: "sent",
           sent_at: sentAt,
@@ -4156,6 +4178,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           second_contact_id: signing.secondContactId,
           owner_signed_at: ownerSignedAt,
           owner_signed_name: ownerSignedName,
+          terms,
         };
         let { error } = await supabase.from("estimates").update(payload).eq("id", id);
         if (error && isMissingSignerLinks(error)) {
@@ -4205,6 +4228,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           secondShareToken: tokens.secondShareToken,
           ownerSignedAt,
           ownerSignedName,
+          terms,
         },
         label: current.number || current.name,
         detail: `${current.status} → sent`,
@@ -4251,6 +4275,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     },
     [
       addActivity,
+      companySettings.defaultEstimateTerms,
       companySettings.name,
       ensureLeadForEstimate,
       moveOpportunity,
@@ -4275,17 +4300,23 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const next = nextEstimateSignature(current, role, now);
       const signatureName = signature?.name.trim() || (role === "second" ? current.secondSignatureName : current.signatureName);
       const signatureImage = signature?.image || (role === "second" ? current.secondSignatureImage : current.signatureImage);
+      const terms = liveEstimateTerms({
+        estimate: current,
+        companyDefault: companySettings.defaultEstimateTerms,
+      });
       const patch =
         role === "second"
           ? {
               ...next,
               secondSignatureName: signatureName,
               secondSignatureImage: signatureImage,
+              terms,
             }
           : {
               ...next,
               signatureName,
               signatureImage,
+              terms,
             };
       const apply = () =>
         setState((prev) => ({
@@ -4399,6 +4430,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     },
     [
       addActivity,
+      companySettings.defaultEstimateTerms,
       ensureLeadForEstimate,
       moveOpportunity,
       state.estimateLines,
@@ -6073,7 +6105,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const updateInvoice = useCallback(async (id: string, patch: Partial<Invoice>, options?: { skipAudit?: boolean }) => {
     const current = state.invoices.find((invoice) => invoice.id === id);
-    const allowed = applyPaymentOnlyTerms(patch, current?.terms);
+    const allowed = applyPaymentOnlyTerms(
+      patch,
+      current
+        ? liveInvoiceTerms({
+            invoice: current,
+            companyDefault: companySettings.defaultInvoiceTerms,
+          })
+        : current?.terms,
+    );
     if (!allowed) return;
     patch = allowed;
     const apply = () =>
@@ -6115,17 +6155,21 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     apply();
     await finish();
-  }, [recordCompanyAudit, state.invoices]);
+  }, [companySettings.defaultInvoiceTerms, recordCompanyAudit, state.invoices]);
 
   const sendInvoice = useCallback(async (id: string) => {
     const current = state.invoices.find((invoice) => invoice.id === id);
     if (!current) return;
     const shareToken = current.shareToken || newShareToken();
+    const terms = liveInvoiceTerms({
+      invoice: current,
+      companyDefault: companySettings.defaultInvoiceTerms,
+    });
     const apply = () =>
       setState((prev) => ({
         ...prev,
         invoices: prev.invoices.map((invoice) =>
-          invoice.id === id ? { ...invoice, status: "sent" as const, shareToken } : invoice
+          invoice.id === id ? { ...invoice, status: "sent" as const, shareToken, terms } : invoice
         ),
       }));
     const finish = () => {
@@ -6134,7 +6178,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         entityId: id,
         action: "status_changed",
         before: current,
-        after: { ...current, status: "sent", shareToken },
+        after: { ...current, status: "sent", shareToken, terms },
         label: current.number || current.name,
         detail: `${current.status} → sent`,
         relatedJobId: current.jobId,
@@ -6148,11 +6192,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     let { error } = await supabase
       .from("invoices")
-      .update({ status: "sent", share_token: shareToken })
+      .update({ status: "sent", share_token: shareToken, terms })
       .eq("id", id);
     if (error && isMissingShareToken(error)) {
-      const retry = await supabase.from("invoices").update({ status: "sent" }).eq("id", id);
+      const retry = await supabase.from("invoices").update({ status: "sent", terms }).eq("id", id);
       error = retry.error;
+    }
+    if (error && isMissingInvoiceTermsColumn(error)) {
+      const retry = await supabase
+        .from("invoices")
+        .update({ status: "sent", share_token: shareToken })
+        .eq("id", id);
+      error = retry.error;
+      if (!error) toast.message(missingDocumentTermsMessage());
     }
     if (error) {
       toast.error(error.message);
@@ -6160,7 +6212,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     apply();
     finish();
-  }, [recordCompanyAudit, state.invoices]);
+  }, [companySettings.defaultInvoiceTerms, recordCompanyAudit, state.invoices]);
 
   const ensureInvoiceShareToken = useCallback(async (id: string) => {
     const current = state.invoices.find((invoice) => invoice.id === id);
@@ -9721,10 +9773,52 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         defaultEmailSignature: next.defaultEmailSignature?.trim() ?? "",
         defaultMonthlySalesQuota: Math.max(0, Number(next.defaultMonthlySalesQuota) || 0),
       };
+      const syncOpenDocumentTerms = async () => {
+        const previousEstimates = bookRef.current.estimates;
+        const previousInvoices = bookRef.current.invoices;
+        const applied = applyCompanyTermsToOpenDocuments(
+          { estimates: previousEstimates, invoices: previousInvoices },
+          settings,
+        );
+        if (applied.estimateCount === 0 && applied.invoiceCount === 0) return;
+        setState((prev) => {
+          const nextApplied = applyCompanyTermsToOpenDocuments(
+            { estimates: prev.estimates, invoices: prev.invoices },
+            settings,
+          );
+          const next = {
+            ...prev,
+            estimates: nextApplied.estimates as typeof prev.estimates,
+            invoices: nextApplied.invoices as typeof prev.invoices,
+          };
+          bookRef.current = next;
+          return next;
+        });
+        const supabase = maybeClient();
+        if (!supabase || !user.companyId || user.companyId === "local") return;
+        const estimateWrites = applied.estimates.filter((estimate) => {
+          const previous = previousEstimates.find((item) => item.id === estimate.id);
+          return previous && previous.terms !== estimate.terms;
+        });
+        const invoiceWrites = applied.invoices.filter((invoice) => {
+          const previous = previousInvoices.find((item) => item.id === invoice.id);
+          return previous && previous.terms !== invoice.terms;
+        });
+        await Promise.all([
+          ...estimateWrites.map((estimate) =>
+            supabase.from("estimates").update({ terms: estimate.terms }).eq("id", estimate.id),
+          ),
+          ...invoiceWrites.map((invoice) =>
+            supabase.from("invoices").update({ terms: invoice.terms }).eq("id", invoice.id),
+          ),
+        ]);
+      };
+
       if (!isSupabaseConfigured() || !user.companyId || user.companyId === "local") {
         setCompanySettings(settings);
         setUser((current) => ({ ...current, company: settings.name }));
         writeLocalCompany(settings);
+        await syncOpenDocumentTerms();
         if (!quiet) toast.success("Business settings saved.");
         return settings;
       }
@@ -9925,6 +10019,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       };
       setCompanySettings(saved);
       setUser((current) => ({ ...current, company: saved.name }));
+      await syncOpenDocumentTerms();
       void recordCompanyAudit({
         entityType: "company_settings",
         entityId: user.companyId || "company",

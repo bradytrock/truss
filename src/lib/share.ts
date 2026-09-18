@@ -152,6 +152,8 @@ export type SharedCompany = {
   paymentCashapp?: string;
   paymentPaypal?: string;
   paymentNote?: string;
+  defaultEstimateTerms?: string | null;
+  defaultInvoiceTerms?: string | null;
 };
 
 export type SharedEstimatePayload = {
@@ -288,6 +290,8 @@ function parseCompany(raw: unknown): SharedCompany {
     paymentCashapp: asString(data.paymentCashapp),
     paymentPaypal: asString(data.paymentPaypal),
     paymentNote: asString(data.paymentNote),
+    defaultEstimateTerms: asNullable(data.defaultEstimateTerms ?? data.default_estimate_terms),
+    defaultInvoiceTerms: asNullable(data.defaultInvoiceTerms ?? data.default_invoice_terms),
   };
 }
 
@@ -498,8 +502,8 @@ export function companySettingsFromShared(company: SharedCompany): CompanySettin
     paymentCashapp: company.paymentCashapp,
     paymentPaypal: company.paymentPaypal,
     paymentNote: company.paymentNote,
-    defaultEstimateTerms: null,
-    defaultInvoiceTerms: null,
+    defaultEstimateTerms: company.defaultEstimateTerms ?? null,
+    defaultInvoiceTerms: company.defaultInvoiceTerms ?? null,
     minimumMarginPercent: 0,
   };
 }

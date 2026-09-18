@@ -6,7 +6,7 @@ import { InvoiceStatusBadge } from "@/components/status-badge";
 import { useCrmOptional } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord, type ProjectManagerContact } from "@/lib/document-owner";
 import type { CompanySettings, Invoice, InvoiceLine, InvoiceStatus, Payment } from "@/lib/types";
-import { invoiceTermsValues, resolveInvoiceTerms } from "@/lib/document-terms";
+import { invoiceTermsValues, liveInvoiceTerms } from "@/lib/document-terms";
 import { DocumentNotesBlock } from "@/components/document-notes";
 import { DocumentTermsFields } from "@/components/document-terms-fields";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -62,8 +62,8 @@ export function InvoiceDocument({
       fallbackStaffId: crm?.user.staffId,
       companyPhone: letterhead.phone,
     });
-  const terms = resolveInvoiceTerms({
-    explicit: invoice.terms,
+  const terms = liveInvoiceTerms({
+    invoice,
     companyDefault: letterhead.defaultInvoiceTerms,
   });
 

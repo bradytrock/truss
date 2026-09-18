@@ -43,7 +43,7 @@ function DocumentSettingsForm() {
       <PageHeader
         eyebrow="Settings"
         title="Documents"
-        description="Company admins write contract language and a proposal margin floor once. New estimates and invoices copy them. Documents already written stay as they are."
+        description="Company admins write contract language and a proposal margin floor once. Unsigned proposals and draft invoices pick up the new language automatically. Signed proposals and sent invoices stay as they were."
         actions={<SettingsSaveActions dirty={dirty} pending={pending} />}
       />
 
@@ -59,7 +59,7 @@ function DocumentSettingsForm() {
           <CollapsibleTerms
             title="Estimate terms"
             preview={form.defaultEstimateTerms ?? DEFAULT_ESTIMATE_TERMS}
-            summary="Copied onto new proposals and blank templates."
+            summary="Used on new proposals and every unsigned one. Signed proposals keep the language they were signed with."
           >
             <Label htmlFor="default-estimate-terms">Estimate terms</Label>
             <Textarea
@@ -71,15 +71,16 @@ function DocumentSettingsForm() {
               onChange={(event) => patch("defaultEstimateTerms", event.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Used on new proposals and blank templates. A template with its own terms still wins when you
-              start from it. {ESTIMATE_TERMS_HINT}
+              Used on new proposals and every unsigned proposal. A signed proposal keeps the language it
+              was signed with. A template with its own terms still wins when you start from it.{" "}
+              {ESTIMATE_TERMS_HINT}
             </p>
             <TermsLockPreview value={form.defaultEstimateTerms ?? DEFAULT_ESTIMATE_TERMS} />
           </CollapsibleTerms>
           <CollapsibleTerms
             title="Payment terms"
             preview={form.defaultInvoiceTerms ?? DEFAULT_INVOICE_TERMS}
-            summary="Copied onto new invoices, including invoices converted from estimates."
+            summary="Used on new invoices and draft invoices. Sent invoices stay as written."
           >
             <Label htmlFor="default-invoice-terms">Payment terms</Label>
             <Textarea
@@ -91,8 +92,8 @@ function DocumentSettingsForm() {
               onChange={(event) => patch("defaultInvoiceTerms", event.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Used on new invoices, including invoices converted from estimates. Payment terms, not
-              proposal terms. {INVOICE_TERMS_HINT}
+              Used on new invoices and every draft invoice, including invoices converted from estimates.
+              Sent invoices stay as written. Payment terms, not proposal terms. {INVOICE_TERMS_HINT}
             </p>
             <TermsLockPreview value={form.defaultInvoiceTerms ?? DEFAULT_INVOICE_TERMS} />
           </CollapsibleTerms>

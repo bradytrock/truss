@@ -2,6 +2,7 @@ import { DEFAULT_ESTIMATE_TERMS, estimateTotals } from "@/lib/estimate-totals";
 import { formatDate, formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
 import { invoiceBalance, invoiceTotal, paidOnInvoice } from "@/lib/money";
+import { homeownerHasSigned } from "@/lib/estimate-signers";
 import type {
   CompanySettings,
   Estimate,
@@ -396,6 +397,80 @@ export function resolveInvoiceTerms(input: {
   companyDefault?: string | null;
 }) {
   return firstCopiedTerms(input.explicit, input.companyDefault) ?? DEFAULT_INVOICE_TERMS;
+}
+
+type EstimateSignatureState = Parameters<typeof homeownerHasSigned>[0] & {
+  status?: Estimate["status"] | string;
+};
+
+/** Signed or partially signed proposals keep the language that was on them. */
+export function estimateFollowsCompanyTerms(estimate: EstimateSignatureState) {
+  if (estimate.status === "accepted") return false;
+  if (homeownerHasSigned(estimate, "primary") || homeownerHasSigned(estimate, "second")) return false;
+  return true;
+}
+
+/** Draft invoices still follow company payment terms. Sent invoices stay as written. */
+export function invoiceFollowsCompanyTerms(invoice: Pick<Invoice, "status"> | { status?: string }) {
+  return (invoice.status ?? "draft") === "draft";
+}
+
+/** Company locked language plus this document's payment amounts, for unsigned proposals. */
+export function liveEstimateTerms(input: {
+  estimate: EstimateSignatureState & { terms?: string | null };
+  companyDefault?: string | null;
+  templateTerms?: string | null;
+}) {
+  const stored = firstCopiedTerms(input.estimate.terms);
+  const company = firstCopiedTerms(input.companyDefault, input.templateTerms);
+  if (!estimateFollowsCompanyTerms(input.estimate)) {
+    return stored ?? company ?? DEFAULT_ESTIMATE_TERMS;
+  }
+  // Public share payloads may omit company defaults — keep written language.
+  if (!company) return stored ?? DEFAULT_ESTIMATE_TERMS;
+  if (!stored) return company;
+  return mergePaymentTerms(company, stored);
+}
+
+export function liveInvoiceTerms(input: {
+  invoice: Pick<Invoice, "status" | "terms"> | { status?: string; terms?: string | null };
+  companyDefault?: string | null;
+}) {
+  const stored = firstCopiedTerms(input.invoice.terms);
+  const company = firstCopiedTerms(input.companyDefault);
+  if (!invoiceFollowsCompanyTerms(input.invoice)) {
+    return stored ?? company ?? DEFAULT_INVOICE_TERMS;
+  }
+  if (!company) return stored ?? DEFAULT_INVOICE_TERMS;
+  if (!stored) return company;
+  return mergePaymentTerms(company, stored);
+}
+
+export function applyCompanyTermsToOpenDocuments<
+  T extends {
+    estimates: Array<EstimateSignatureState & { id: string; terms: string }>;
+    invoices: Array<{ id: string; status: string; terms: string }>;
+  },
+>(book: T, company: { defaultEstimateTerms?: string | null; defaultInvoiceTerms?: string | null }) {
+  const estimateDefault = resolveEstimateTerms({ companyDefault: company.defaultEstimateTerms });
+  const invoiceDefault = resolveInvoiceTerms({ companyDefault: company.defaultInvoiceTerms });
+  let estimateCount = 0;
+  let invoiceCount = 0;
+  const estimates = book.estimates.map((estimate) => {
+    if (!estimateFollowsCompanyTerms(estimate)) return estimate;
+    const terms = mergePaymentTerms(estimateDefault, estimate.terms);
+    if (terms === estimate.terms) return estimate;
+    estimateCount += 1;
+    return { ...estimate, terms };
+  });
+  const invoices = book.invoices.map((invoice) => {
+    if (!invoiceFollowsCompanyTerms(invoice)) return invoice;
+    const terms = mergePaymentTerms(invoiceDefault, invoice.terms);
+    if (terms === invoice.terms) return invoice;
+    invoiceCount += 1;
+    return { ...invoice, terms };
+  });
+  return { estimates, invoices, estimateCount, invoiceCount };
 }
 
 export function fillTermsPlaceholders(template: string, values: Record<string, string>) {
