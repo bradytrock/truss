@@ -4028,7 +4028,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             estimate: current,
             companyDefault: companySettings.defaultEstimateTerms,
           })
-        : current?.terms,
+        : undefined,
     );
     if (!allowed) return;
     patch = allowed;
@@ -6112,7 +6112,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             invoice: current,
             companyDefault: companySettings.defaultInvoiceTerms,
           })
-        : current?.terms,
+        : undefined,
     );
     if (!allowed) return;
     patch = allowed;
