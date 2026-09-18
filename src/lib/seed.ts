@@ -114,4 +114,7 @@ export const seedState: CrmState = {
   messages: extraMessages,
   returningClientLeads: [],
   eagleviewOrders: [],
+  automations: [],
+  automationRuns: [],
+  automationTemplates: [],
 };

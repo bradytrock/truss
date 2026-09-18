@@ -5,20 +5,21 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { EmptyState, ErrorBanner, LoadingScreen } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
-import { canManageSettings, canViewAccounting } from "@/lib/visibility";
+import { canManageAutomations, canManageSettings, canViewAccounting } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
 
 const SECTIONS = [
-  { href: "/settings", label: "Company", hint: "Name, logo, office", admin: true, accounting: false },
-  { href: "/settings/documents", label: "Documents", hint: "Terms and margin", admin: true, accounting: false },
-  { href: "/settings/files", label: "File directory", hint: "Warranties and PDFs", admin: true, accounting: false },
-  { href: "/settings/audit", label: "Audit trail", hint: "History and revert", admin: true, accounting: false },
-  { href: "/settings/teams", label: "Teams", hint: "Crews and leads", admin: true, accounting: false },
-  { href: "/settings/locations", label: "Locations", hint: "Google reviews", admin: true, accounting: false },
-  { href: "/settings/people", label: "People", hint: "Seats and invites", admin: true, accounting: false },
-  { href: "/settings/price-book", label: "Price book", hint: "Catalog and lists", admin: true, accounting: false },
-  { href: "/settings/eagleview", label: "EagleView", hint: "Roof reports", admin: true, accounting: false },
-  { href: "/settings/quickbooks", label: "QuickBooks", hint: "Web Connector", admin: true, accounting: true },
+  { href: "/settings", label: "Company", hint: "Name, logo, office", admin: true, accounting: false, automations: false },
+  { href: "/settings/documents", label: "Documents", hint: "Terms and margin", admin: true, accounting: false, automations: false },
+  { href: "/settings/files", label: "File directory", hint: "Warranties and PDFs", admin: true, accounting: false, automations: false },
+  { href: "/settings/audit", label: "Audit trail", hint: "History and revert", admin: true, accounting: false, automations: false },
+  { href: "/settings/teams", label: "Teams", hint: "Crews and leads", admin: true, accounting: false, automations: false },
+  { href: "/settings/locations", label: "Locations", hint: "Google reviews", admin: true, accounting: false, automations: false },
+  { href: "/settings/people", label: "People", hint: "Seats and invites", admin: true, accounting: false, automations: false },
+  { href: "/settings/automations", label: "Automations", hint: "When, if, then", admin: true, accounting: false, automations: true },
+  { href: "/settings/price-book", label: "Price book", hint: "Catalog and lists", admin: true, accounting: false, automations: false },
+  { href: "/settings/eagleview", label: "EagleView", hint: "Roof reports", admin: true, accounting: false, automations: false },
+  { href: "/settings/quickbooks", label: "QuickBooks", hint: "Web Connector", admin: true, accounting: true, automations: false },
 ] as const;
 
 function sectionIsActive(href: string, pathname: string) {
@@ -31,15 +32,22 @@ export function SettingsNav({ variant }: { variant: "bar" | "rail" }) {
   const router = useRouter();
   const crm = useCrm();
   const admin = Boolean(crm.viewer && canManageSettings(crm.viewer.role, crm.viewer));
+  const automations = Boolean(crm.viewer && canManageAutomations(crm.viewer.role, crm.viewer));
   const accounting = Boolean(crm.effectiveStaff && canViewAccounting(crm.effectiveStaff.role));
-  const items = SECTIONS.filter((item) => (item.admin && admin) || (item.accounting && accounting));
+  const items = SECTIONS.filter(
+    (item) =>
+      (item.admin && admin) ||
+      (item.accounting && accounting) ||
+      (item.automations && automations),
+  );
 
   useEffect(() => {
     if (!crm.hydrated) return;
     if (pathname !== "/settings") return;
     if (admin) return;
     if (accounting) router.replace("/settings/quickbooks");
-  }, [admin, accounting, crm.hydrated, pathname, router]);
+    else if (automations) router.replace("/settings/automations");
+  }, [admin, accounting, automations, crm.hydrated, pathname, router]);
 
   if (!crm.hydrated || items.length === 0) return null;
 
@@ -93,16 +101,22 @@ export function SettingsAdminGate({
   children,
   title = "Settings are restricted",
   description = "Only a company admin can change the business name, name teams, invite people, or lock accounts.",
+  allowAutomations = false,
 }: {
   children: ReactNode;
   title?: string;
   description?: string;
+  allowAutomations?: boolean;
 }) {
   const crm = useCrm();
 
   if (!crm.hydrated) return <LoadingScreen />;
 
-  if (!crm.viewer || !canManageSettings(crm.viewer.role, crm.viewer)) {
+  const allowed =
+    crm.viewer &&
+    (canManageSettings(crm.viewer.role, crm.viewer) ||
+      (allowAutomations && canManageAutomations(crm.viewer.role, crm.viewer)));
+  if (!crm.viewer || !allowed) {
     return (
       <EmptyState
         title={title}

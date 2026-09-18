@@ -34,6 +34,7 @@ import { JobFilesPanel } from "@/components/job-files";
 import { JobEagleviewPanel } from "@/components/job-eagleview";
 import { JobPhotosPanel } from "@/components/job-photos-panel";
 import { JobFinancials } from "@/components/job-financials";
+import { AutomationRuns } from "@/components/automation-runs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -1382,6 +1383,7 @@ export function JobRecord({
         </TabsContent>
 
         <TabsContent value="paper" className="mt-0 space-y-4">
+          <AutomationRuns jobId={job.id} />
           {tasks.length > 0 ? (
             <div>
               <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">Tasks</p>

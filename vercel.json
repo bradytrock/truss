@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/realtor-listings",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/automations",
+      "schedule": "0 * * * *"
     }
   ]
 }

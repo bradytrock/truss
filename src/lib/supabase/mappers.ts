@@ -67,6 +67,20 @@ import type {
   MaterialOrderTemplate,
   MaterialOrderTemplateLine,
 } from "@/lib/types";
+import {
+  AUTOMATION_ACTIONS,
+  AUTOMATION_CONDITION_FIELDS,
+  AUTOMATION_OPERATORS,
+  AUTOMATION_RUN_STATUSES,
+  AUTOMATION_TRIGGERS,
+  type Automation,
+  type AutomationAction,
+  type AutomationCondition,
+  type AutomationRun,
+  type AutomationTemplate,
+  type AutomationTriggerKind,
+} from "@/lib/automations";
+import { isWorkColumn } from "@/lib/work-board";
 
 type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
 type ContactRow = Database["public"]["Tables"]["contacts"]["Row"];
@@ -212,6 +226,7 @@ export function mapStaff(row: StaffRow): StaffMember {
         : null,
     locked: Boolean(row.locked),
     restricted: Boolean(row.restricted),
+    manageAutomations: "manage_automations" in row ? Boolean(row.manage_automations) : false,
     inviteExpiresAt: row.invite_expires_at ?? null,
     inviteToken: null,
   };
@@ -1395,6 +1410,169 @@ export function mapEagleviewOrder(row: EagleviewOrderRow): EagleviewOrder {
     orderedBy: row.ordered_by ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+type AutomationRow = Database["public"]["Tables"]["automations"]["Row"];
+type AutomationRunRow = Database["public"]["Tables"]["automation_runs"]["Row"];
+type AutomationTemplateRow = Database["public"]["Tables"]["automation_templates"]["Row"];
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function parseTriggerKind(value: string): AutomationTriggerKind {
+  return (AUTOMATION_TRIGGERS as readonly string[]).includes(value)
+    ? (value as AutomationTriggerKind)
+    : "job_created";
+}
+
+function parseConditions(raw: Json): AutomationCondition[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item, index) => {
+    const row = asRecord(item);
+    const field = String(row.field ?? "");
+    const operator = String(row.operator ?? "eq");
+    if (!(AUTOMATION_CONDITION_FIELDS as readonly string[]).includes(field)) return [];
+    if (!(AUTOMATION_OPERATORS as readonly string[]).includes(operator)) return [];
+    return [{
+      id: String(row.id ?? `c${index}`),
+      field: field as AutomationCondition["field"],
+      operator: operator as AutomationCondition["operator"],
+      value: String(row.value ?? ""),
+    }];
+  });
+}
+
+function parseActions(raw: Json): AutomationAction[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item, index) => {
+    const row = asRecord(item);
+    const kind = String(row.kind ?? "");
+    if (!(AUTOMATION_ACTIONS as readonly string[]).includes(kind)) return [];
+    return [{
+      id: String(row.id ?? `a${index}`),
+      kind: kind as AutomationAction["kind"],
+      to: row.to === "rep" || row.to === "staff" || row.to === "customer" ? row.to : undefined,
+      staffId: typeof row.staffId === "string" ? row.staffId : undefined,
+      body: typeof row.body === "string" ? row.body : undefined,
+      subject: typeof row.subject === "string" ? row.subject : undefined,
+      title: typeof row.title === "string" ? row.title : undefined,
+      dueInDays: typeof row.dueInDays === "number" ? row.dueInDays : undefined,
+      url: typeof row.url === "string" ? row.url : undefined,
+    }];
+  });
+}
+
+function parseTriggerConfig(raw: Json): Automation["triggerConfig"] {
+  const row = asRecord(raw);
+  const stage = typeof row.stage === "string" && isWorkColumn(row.stage) ? row.stage : undefined;
+  const days = typeof row.days === "number" ? row.days : Number(row.days);
+  return {
+    ...(stage ? { stage } : {}),
+    ...(Number.isFinite(days) && days > 0 ? { days } : {}),
+  };
+}
+
+export function mapAutomation(row: AutomationRow): Automation {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    name: row.name,
+    description: row.description ?? "",
+    triggerKind: parseTriggerKind(row.trigger_kind),
+    triggerConfig: parseTriggerConfig(row.trigger_config),
+    conditions: parseConditions(row.conditions),
+    actions: parseActions(row.actions),
+    requiresConfirmation: Boolean(row.requires_confirmation),
+    oncePerJob: Boolean(row.once_per_job),
+    enabled: Boolean(row.enabled),
+    createdByStaffId: row.created_by_staff_id,
+    lastFiredAt: row.last_fired_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapAutomationRun(row: AutomationRunRow): AutomationRun {
+  const status = (AUTOMATION_RUN_STATUSES as readonly string[]).includes(row.status)
+    ? (row.status as AutomationRun["status"])
+    : "scheduled";
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    automationId: row.automation_id,
+    jobId: row.job_id,
+    invoiceId: row.invoice_id,
+    estimateId: row.estimate_id,
+    eventId: row.event_id,
+    status,
+    scheduledFor: row.scheduled_for,
+    renderedPreview: row.rendered_preview ?? "",
+    deliveryStatus: row.delivery_status ?? "",
+    errorText: row.error_text ?? "",
+    confirmedByStaffId: row.confirmed_by_staff_id,
+    confirmedByName: row.confirmed_by_name ?? "",
+    decidedAt: row.decided_at,
+    dryRun: Boolean(row.dry_run),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapAutomationTemplate(row: AutomationTemplateRow): AutomationTemplate {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    description: row.description ?? "",
+    triggerKind: parseTriggerKind(row.trigger_kind),
+    triggerConfig: parseTriggerConfig(row.trigger_config),
+    conditions: parseConditions(row.conditions),
+    actions: parseActions(row.actions),
+    requiresConfirmation: Boolean(row.requires_confirmation),
+    oncePerJob: Boolean(row.once_per_job),
+    sortOrder: row.sort_order,
+  };
+}
+
+export function automationInsertPayload(automation: Automation, companyId: string) {
+  return {
+    id: automation.id,
+    company_id: companyId,
+    name: automation.name,
+    description: automation.description,
+    trigger_kind: automation.triggerKind,
+    trigger_config: automation.triggerConfig as Json,
+    conditions: automation.conditions as unknown as Json,
+    actions: automation.actions as unknown as Json,
+    requires_confirmation: automation.requiresConfirmation,
+    once_per_job: automation.oncePerJob,
+    enabled: automation.enabled,
+    created_by_staff_id: automation.createdByStaffId,
+    last_fired_at: automation.lastFiredAt,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+export function automationRunInsertPayload(run: AutomationRun) {
+  return {
+    id: run.id,
+    company_id: run.companyId,
+    automation_id: run.automationId,
+    job_id: run.jobId,
+    invoice_id: run.invoiceId,
+    estimate_id: run.estimateId,
+    event_id: run.eventId,
+    status: run.status,
+    scheduled_for: run.scheduledFor,
+    rendered_preview: run.renderedPreview,
+    delivery_status: run.deliveryStatus,
+    error_text: run.errorText,
+    confirmed_by_staff_id: run.confirmedByStaffId,
+    confirmed_by_name: run.confirmedByName,
+    decided_at: run.decidedAt,
+    dry_run: run.dryRun,
   };
 }
 

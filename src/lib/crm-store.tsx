@@ -164,8 +164,14 @@ import {
   mapGmailAccount,
   mapGmailMessage,
   mapReturningClientLead,
+  mapAutomation,
+  mapAutomationRun,
+  automationInsertPayload,
+  automationRunInsertPayload,
   opportunityPatch,
 } from "@/lib/supabase/mappers";
+import { plannedRunsForEvent, previewAutomation } from "@/lib/automations/queue";
+import type { Automation, AutomationEvent } from "@/lib/automations";
 import { expenseRequiresJob } from "@/lib/qbwc/work";
 import {
   NORTHLINE_COMPANY,
@@ -279,7 +285,7 @@ import {
 import { looksLikePhone, storedPhone, toE164 } from "@/lib/phone";
 import { resolveCustomerName, applyCoOwnerToEstimate, coOwnerContact, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage, missingPageShareMessage, isMissingPageShare, parsePageTemplate } from "@/lib/photo-report";
-import { canDeleteJobs, canLoginAs, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
+import { canDeleteJobs, canLoginAs, canManageAutomations, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 import { teamsAfterLeavingLead } from "@/lib/teams";
 
 export type LiveStatus = "offline" | "connecting" | "live";
@@ -351,6 +357,9 @@ const emptyState: CrmState = {
   messages: [],
   returningClientLeads: [],
   eagleviewOrders: [],
+  automations: [],
+  automationRuns: [],
+  automationTemplates: [],
 };
 
 function userFromStaff(
@@ -861,11 +870,17 @@ type CrmContextValue = CrmState & {
         | "googleLocationId"
         | "locked"
         | "restricted"
+        | "manageAutomations"
         | "teamId"
         | "cardSlug"
       >
     >,
   ) => Promise<boolean>;
+  saveAutomation: (input: Partial<Automation> & Pick<Automation, "name" | "triggerKind" | "actions">) => Promise<Automation | null>;
+  setAutomationEnabled: (id: string, enabled: boolean) => Promise<boolean>;
+  confirmAutomationRun: (id: string) => Promise<boolean>;
+  skipAutomationRun: (id: string) => Promise<boolean>;
+  testAutomation: (id: string, jobId: string) => Promise<string | null>;
   uploadStaffPhoto: (staffId: string, file: File) => Promise<boolean>;
   removeStaffPhoto: (staffId: string) => Promise<boolean>;
   addGoogleLocation: (input: { name: string; reviewUrl: string }) => Promise<GoogleLocation | null>;
@@ -1236,6 +1251,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const bookEpoch = useRef(0);
   const bookRef = useRef(state);
   bookRef.current = state;
+  const enqueueAutomationEventRef = useRef<(event: AutomationEvent) => void>(() => undefined);
   const auditRef = useRef<
     | ((input: {
         entityType: CompanyAuditEntityType;
@@ -2760,6 +2776,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (job.status !== next.status) {
         await updateJob(jobId, { status: next.status });
       }
+      enqueueAutomationEventRef.current({ kind: "job_stage_changed", jobId, stage: column });
     },
     [moveOpportunity, restoreJob, state.jobs, state.opportunities, updateJob],
   );
@@ -3337,6 +3354,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           relatedJobId: job.id,
           relatedOpportunityId: job.opportunityId,
         });
+        enqueueAutomationEventRef.current({ kind: "job_created", jobId: job.id });
         return job;
       }
       const payload = jobInsertPayload(job, user.companyId, { code });
@@ -3368,6 +3386,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         relatedJobId: mapped.id,
         relatedOpportunityId: mapped.opportunityId,
       });
+      enqueueAutomationEventRef.current({ kind: "job_created", jobId: mapped.id });
       return mapped;
     },
     [addActivity, recordCompanyAudit, state.jobs, state.opportunities, state.staff, user.companyId, user.name, user.staffId]
@@ -3455,6 +3474,218 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
     },
     [user.companyId]
+  );
+
+  const enqueueAutomationEvent = useCallback(
+    async (event: AutomationEvent) => {
+      const book = bookRef.current;
+      if (!book.automations.length) return;
+      const planned = plannedRunsForEvent({ event, book, company: companySettings });
+      if (planned.length === 0) return;
+      setState((prev) => {
+        const next = { ...prev, automationRuns: [...planned, ...prev.automationRuns] };
+        bookRef.current = next;
+        return next;
+      });
+      const supabase = maybeClient();
+      if (supabase && user.companyId && user.companyId !== "local") {
+        for (const run of planned) {
+          const { error } = await supabase.from("automation_runs").insert(automationRunInsertPayload(run));
+          if (error) console.error("[automations] queue", error.message);
+        }
+      }
+      for (const run of planned) {
+        if (run.status === "confirmed") {
+          void fetch("/api/automations/execute", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ runId: run.id }),
+          }).catch(() => undefined);
+        }
+      }
+    },
+    [companySettings, user.companyId],
+  );
+  enqueueAutomationEventRef.current = (event) => {
+    void enqueueAutomationEvent(event);
+  };
+
+  const saveAutomation = useCallback(
+    async (input: Partial<Automation> & Pick<Automation, "name" | "triggerKind" | "actions">) => {
+      if (!canManageAutomations(viewer?.role ?? "project_manager", viewer)) {
+        toast.error("Only a company admin, or a seat granted manage automations, can save these.");
+        return null;
+      }
+      const now = new Date().toISOString();
+      const current = input.id ? state.automations.find((item) => item.id === input.id) : undefined;
+      const row: Automation = {
+        id: current?.id ?? crypto.randomUUID(),
+        companyId: user.companyId,
+        name: input.name.trim(),
+        description: input.description ?? current?.description ?? "",
+        triggerKind: input.triggerKind,
+        triggerConfig: input.triggerConfig ?? current?.triggerConfig ?? {},
+        conditions: input.conditions ?? current?.conditions ?? [],
+        actions: input.actions,
+        requiresConfirmation: input.requiresConfirmation ?? current?.requiresConfirmation ?? true,
+        oncePerJob: input.oncePerJob ?? current?.oncePerJob ?? true,
+        enabled: input.enabled ?? current?.enabled ?? true,
+        createdByStaffId: current?.createdByStaffId ?? viewer?.id ?? null,
+        lastFiredAt: current?.lastFiredAt ?? null,
+        createdAt: current?.createdAt ?? now,
+        updatedAt: now,
+      };
+      const supabase = maybeClient();
+      if (supabase && user.companyId && user.companyId !== "local") {
+        const { data, error } = await supabase
+          .from("automations")
+          .upsert(automationInsertPayload(row, user.companyId))
+          .select("*")
+          .single();
+        if (error || !data) {
+          toast.error(error?.message ?? "Could not save that automation.");
+          return null;
+        }
+        const mapped = mapAutomation(data);
+        setState((prev) => ({
+          ...prev,
+          automations: [mapped, ...prev.automations.filter((item) => item.id !== mapped.id)],
+        }));
+        return mapped;
+      }
+      setState((prev) => ({
+        ...prev,
+        automations: [row, ...prev.automations.filter((item) => item.id !== row.id)],
+      }));
+      return row;
+    },
+    [state.automations, user.companyId, viewer],
+  );
+
+  const setAutomationEnabled = useCallback(
+    async (id: string, enabled: boolean) => {
+      if (!canManageAutomations(viewer?.role ?? "project_manager", viewer)) {
+        toast.error("Only a company admin, or a seat granted manage automations, can pause these.");
+        return false;
+      }
+      const current = state.automations.find((item) => item.id === id);
+      if (!current) return false;
+      setState((prev) => ({
+        ...prev,
+        automations: prev.automations.map((item) => (item.id === id ? { ...item, enabled } : item)),
+      }));
+      const supabase = maybeClient();
+      if (supabase) {
+        const { error } = await supabase.from("automations").update({ enabled, updated_at: new Date().toISOString() }).eq("id", id);
+        if (error) {
+          toast.error(error.message);
+          return false;
+        }
+      }
+      return true;
+    },
+    [state.automations, viewer],
+  );
+
+  const confirmAutomationRun = useCallback(
+    async (id: string) => {
+      const run = state.automationRuns.find((item) => item.id === id);
+      if (!run) return false;
+      const decidedAt = new Date().toISOString();
+      setState((prev) => ({
+        ...prev,
+        automationRuns: prev.automationRuns.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                status: "confirmed",
+                confirmedByStaffId: viewer?.id ?? null,
+                confirmedByName: viewer?.name ?? user.name,
+                decidedAt,
+              }
+            : item,
+        ),
+      }));
+      const supabase = maybeClient();
+      if (supabase) {
+        await supabase
+          .from("automation_runs")
+          .update({
+            status: "confirmed",
+            confirmed_by_staff_id: viewer?.id ?? null,
+            confirmed_by_name: viewer?.name ?? user.name,
+            decided_at: decidedAt,
+            updated_at: decidedAt,
+          })
+          .eq("id", id);
+      }
+      const response = await fetch("/api/automations/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ runId: id }),
+      });
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        toast.error(payload.error || "Could not send that automation.");
+        return false;
+      }
+      toast.success("Sent.");
+      return true;
+    },
+    [state.automationRuns, user.name, viewer],
+  );
+
+  const skipAutomationRun = useCallback(
+    async (id: string) => {
+      const decidedAt = new Date().toISOString();
+      setState((prev) => ({
+        ...prev,
+        automationRuns: prev.automationRuns.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                status: "skipped",
+                confirmedByStaffId: viewer?.id ?? null,
+                confirmedByName: viewer?.name ?? user.name,
+                decidedAt,
+              }
+            : item,
+        ),
+      }));
+      const supabase = maybeClient();
+      if (supabase) {
+        await supabase
+          .from("automation_runs")
+          .update({
+            status: "skipped",
+            confirmed_by_staff_id: viewer?.id ?? null,
+            confirmed_by_name: viewer?.name ?? user.name,
+            decided_at: decidedAt,
+            updated_at: decidedAt,
+          })
+          .eq("id", id);
+      }
+      return true;
+    },
+    [user.name, viewer],
+  );
+
+  const testAutomation = useCallback(
+    async (id: string, jobId: string) => {
+      const automation = state.automations.find((item) => item.id === id);
+      const job = state.jobs.find((item) => item.id === jobId);
+      if (!automation || !job) return null;
+      const preview = previewAutomation({
+        automation,
+        book: state,
+        company: companySettings,
+        job,
+      });
+      return preview
+        ? `Dry run on ${job.code}: nothing sent.\n\n${preview}`
+        : `Dry run on ${job.code}: this rule would not send a message.`;
+    },
+    [companySettings, state],
   );
 
   const fileReturningClientNotice = useCallback(
@@ -4248,6 +4479,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           body: `Sent proposal ${current.number} — ${current.name}.`,
         });
       }
+      const jobId = current.jobId || bookRef.current.jobs.find((job) => job.opportunityId && job.opportunityId === opportunityId)?.id;
+      enqueueAutomationEventRef.current({
+        kind: "estimate_sent",
+        estimateId: id,
+        jobId: jobId || undefined,
+      });
     },
     [
       addActivity,
@@ -6524,6 +6761,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         label: saved.reference || `$${saved.amount}`,
         detail: `Payment of ${saved.amount} recorded`,
         relatedJobId: saved.jobId,
+      });
+      enqueueAutomationEventRef.current({
+        kind: "invoice_paid",
+        invoiceId: saved.invoiceId ?? undefined,
+        jobId: saved.jobId ?? undefined,
       });
     },
     [addActivity, recordCompanyAudit, state.invoiceLines, state.invoices, state.payments, user.companyId, user.id, user.name, user.staffId]
@@ -10050,6 +10292,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         monthly_sales_quota: member.monthlySalesQuota ?? null,
         locked: member.locked,
         restricted: member.restricted,
+        manage_automations: Boolean(member.manageAutomations),
         invite_expires_at: inviteExpiresAt,
       };
       let { error } = await supabase.from("team_members").upsert(payload);
@@ -10087,6 +10330,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         const retry = await supabase.from("team_members").upsert(withoutReview);
         error = retry.error;
         if (!retry.error) toast.message(missingPaymentReviewMessage());
+      }
+      if (error && /manage_automations/i.test(error.message ?? "")) {
+        const { manage_automations: _manage, ...withoutManage } = payload;
+        const retry = await supabase.from("team_members").upsert(withoutManage);
+        error = retry.error;
       }
       if (error) {
         toast.error("Could not save teammate", {
@@ -10350,6 +10598,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           | "googleLocationId"
           | "locked"
           | "restricted"
+          | "manageAutomations"
           | "teamId"
           | "cardSlug"
         >
@@ -11001,6 +11250,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       logOutboundEmail,
       toggleTask,
       addTask,
+      saveAutomation,
+      setAutomationEnabled,
+      confirmAutomationRun,
+      skipAutomationRun,
+      testAutomation,
       addEstimate,
       updateEstimate,
       sendEstimate,
@@ -11167,6 +11421,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       logOutboundEmail,
       toggleTask,
       addTask,
+      saveAutomation,
+      setAutomationEnabled,
+      confirmAutomationRun,
+      skipAutomationRun,
+      testAutomation,
       addEstimate,
       updateEstimate,
       sendEstimate,

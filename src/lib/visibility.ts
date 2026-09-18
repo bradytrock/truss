@@ -159,6 +159,12 @@ export function canManageSettings(role: SeatRole, member?: StaffMember) {
   return role === "company_admin";
 }
 
+export function canManageAutomations(role: SeatRole, member?: StaffMember) {
+  if (member?.restricted || member?.locked) return false;
+  if (role === "company_admin") return true;
+  return Boolean(member?.manageAutomations);
+}
+
 /** Company default estimate/invoice terms in Settings. Payment sections on a document are separate. */
 export function canEditDocumentTerms(role: SeatRole, member?: StaffMember) {
   return canManageSettings(role, member);
@@ -446,6 +452,13 @@ export function scopeBook(
       return notice.openedByStaffId === effective.id;
     }),
     eagleviewOrders: (state.eagleviewOrders ?? []).filter((order) => jobIds.has(order.jobId)),
+    automations: state.automations ?? [],
+    automationTemplates: state.automationTemplates ?? [],
+    automationRuns: (state.automationRuns ?? []).filter((run) => {
+      if (canManageAutomations(effective.role, effective)) return true;
+      if (!run.jobId) return false;
+      return jobIds.has(run.jobId);
+    }),
   };
 }
 
