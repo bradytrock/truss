@@ -213,7 +213,7 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
             Ask before sending
           </label>
           <p className="text-xs text-muted-foreground">
-            {defaultRequiresConfirmation(actions)
+            {actions.length === 0 || defaultRequiresConfirmation(actions)
               ? "On by default for customer texts and emails. The job owner confirms on Home or the job."
               : "Internal actions can send without asking. Turn this on if you still want a yes first."}
           </p>

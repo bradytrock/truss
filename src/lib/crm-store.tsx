@@ -171,7 +171,7 @@ import {
   opportunityPatch,
 } from "@/lib/supabase/mappers";
 import { plannedRunsForEvent, previewAutomation } from "@/lib/automations/queue";
-import type { Automation, AutomationEvent } from "@/lib/automations";
+import { validateAutomationDraft, type Automation, type AutomationEvent } from "@/lib/automations";
 import { expenseRequiresJob } from "@/lib/qbwc/work";
 import {
   NORTHLINE_COMPANY,
@@ -3516,8 +3516,30 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error("Only a company admin, or a seat granted manage automations, can save these.");
         return null;
       }
-      const now = new Date().toISOString();
       const current = input.id ? state.automations.find((item) => item.id === input.id) : undefined;
+      let smsConfigured: boolean | undefined;
+      try {
+        const response = await fetch("/api/messages/send");
+        const payload = (await response.json().catch(() => ({}))) as { configured?: boolean };
+        smsConfigured = Boolean(payload.configured);
+      } catch {
+        smsConfigured = undefined;
+      }
+      const check = validateAutomationDraft(
+        {
+          name: input.name,
+          triggerKind: input.triggerKind,
+          triggerConfig: input.triggerConfig ?? current?.triggerConfig ?? {},
+          conditions: input.conditions ?? current?.conditions ?? [],
+          actions: input.actions,
+        },
+        { smsConfigured },
+      );
+      if (!check.ok) {
+        toast.error(check.errors[0] ?? "Fix the highlighted fields.");
+        return null;
+      }
+      const now = new Date().toISOString();
       const row: Automation = {
         id: current?.id ?? crypto.randomUUID(),
         companyId: user.companyId,
