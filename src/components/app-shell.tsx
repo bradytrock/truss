@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { LayoutGrid, Menu, Plus, Search } from "lucide-react";
 import { useCrm } from "@/lib/crm-store";
 import { phoneSearchText } from "@/lib/phone";
@@ -47,6 +47,7 @@ import {
 } from "@/components/create-ops-dialogs";
 import { LogExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
 import { canViewReports, canManageSettings, canManageAutomations, canViewAccounting } from "@/lib/visibility";
+import { groupLoginAsTargets, readLoginAsRecent, recentLoginAsTargets, rememberLoginAsRecent } from "@/lib/login-as";
 import { isInboxPath } from "@/lib/inbox";
 import { actionableReturningClientNotices } from "@/lib/returning-client";
 import { isBusinessDevelopment } from "@/lib/bd";
@@ -703,13 +704,94 @@ function ScopeBanners() {
   );
 }
 
+function LoginAsDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { loginAs, loginAsOptions, teams, viewer } = useCrm();
+  const [recentIds, setRecentIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!open || !viewer) return;
+    setRecentIds(readLoginAsRecent(viewer.id));
+  }, [open, viewer]);
+
+  const recent = useMemo(
+    () => recentLoginAsTargets(loginAsOptions, recentIds),
+    [loginAsOptions, recentIds],
+  );
+  const groups = useMemo(
+    () => groupLoginAsTargets(loginAsOptions, teams ?? []),
+    [loginAsOptions, teams],
+  );
+
+  function pick(staffId: string) {
+    if (viewer) rememberLoginAsRecent(viewer.id, staffId);
+    loginAs(staffId);
+    onOpenChange(false);
+  }
+
+  return (
+    <CommandDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Login As"
+      description="Search a seat and view their jobs and contact book"
+      className="sm:max-w-md"
+    >
+      <Command>
+        <CommandInput placeholder="Search by name, role, or team…" />
+        <CommandList>
+          <CommandEmpty>No matching seats.</CommandEmpty>
+          {recent.length > 0 ? (
+            <CommandGroup heading="Recent">
+              {recent.map((member) => (
+                <CommandItem
+                  key={`recent-${member.id}`}
+                  value={`recent ${member.name} ${member.title} ${SEAT_ROLE_LABELS[member.role]}`}
+                  onSelect={() => pick(member.id)}
+                >
+                  <span className="min-w-0 truncate">{member.name}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {SEAT_ROLE_LABELS[member.role]}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          ) : null}
+          {groups.map(([heading, members]) => (
+            <CommandGroup key={heading} heading={heading}>
+              {members.map((member) => (
+                <CommandItem
+                  key={member.id}
+                  value={`${member.name} ${member.title} ${SEAT_ROLE_LABELS[member.role]} ${heading}`}
+                  onSelect={() => pick(member.id)}
+                >
+                  <span className="min-w-0 truncate">{member.name}</span>
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {SEAT_ROLE_LABELS[member.role]}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          ))}
+        </CommandList>
+      </Command>
+    </CommandDialog>
+  );
+}
+
 function UserMenu() {
   const router = useRouter();
-  const { signOut, user, loginAs, loginAsOptions, viewer, impersonatedStaff, stopLoginAs } =
-    useCrm();
+  const { signOut, user, loginAsOptions, viewer, impersonatedStaff, stopLoginAs } = useCrm();
+  const [loginAsOpen, setLoginAsOpen] = useState(false);
   const seatPhoto = (impersonatedStaff ?? viewer)?.photoUrl?.trim() ?? "";
 
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
@@ -739,27 +821,16 @@ function UserMenu() {
             </div>
           </DropdownMenuLabel>
         </DropdownMenuGroup>
-        {loginAsOptions.length > 0 ? (
+        {loginAsOptions.length > 0 || impersonatedStaff ? (
           <>
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
-              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-                Login As…
-              </DropdownMenuLabel>
-            {loginAsOptions.map((member) => (
-              <DropdownMenuItem
-                key={member.id}
-                onClick={() => loginAs(member.id)}
-              >
-                {member.name}
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {SEAT_ROLE_LABELS[member.role]}
-                </span>
-              </DropdownMenuItem>
-            ))}
-            {impersonatedStaff ? (
-              <DropdownMenuItem onClick={() => stopLoginAs()}>Exit Login As</DropdownMenuItem>
-            ) : null}
+              {loginAsOptions.length > 0 ? (
+                <DropdownMenuItem onClick={() => setLoginAsOpen(true)}>Login As…</DropdownMenuItem>
+              ) : null}
+              {impersonatedStaff ? (
+                <DropdownMenuItem onClick={() => stopLoginAs()}>Exit Login As</DropdownMenuItem>
+              ) : null}
             </DropdownMenuGroup>
           </>
         ) : null}
@@ -780,6 +851,10 @@ function UserMenu() {
         <DropdownMenuItem onClick={() => void signOut()}>Sign out</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+    {loginAsOptions.length > 0 ? (
+      <LoginAsDialog open={loginAsOpen} onOpenChange={setLoginAsOpen} />
+    ) : null}
+    </>
   );
 }
 
