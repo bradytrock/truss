@@ -375,7 +375,26 @@ export function mapTask(row: TaskRow): Task {
     relatedType: row.related_type,
     relatedId: row.related_id,
     assignee: row.assignee,
+    notes: "notes" in row && typeof row.notes === "string" ? row.notes : "",
+    remindedAt:
+      "reminded_at" in row && typeof row.reminded_at === "string" ? row.reminded_at : null,
   };
+}
+
+export function taskPatch(patch: Partial<Task>) {
+  const row: Database["public"]["Tables"]["tasks"]["Update"] = {};
+  if (patch.title !== undefined) row.title = patch.title;
+  if (patch.dueAt !== undefined) {
+    row.due_at = patch.dueAt;
+    row.reminded_at = null;
+  }
+  if (patch.completed !== undefined) row.completed = patch.completed;
+  if (patch.relatedType !== undefined) row.related_type = patch.relatedType;
+  if (patch.relatedId !== undefined) row.related_id = patch.relatedId;
+  if (patch.assignee !== undefined) row.assignee = patch.assignee;
+  if (patch.notes !== undefined) row.notes = patch.notes;
+  if (patch.remindedAt !== undefined) row.reminded_at = patch.remindedAt;
+  return row;
 }
 
 export function opportunityPatch(patch: Partial<Opportunity>) {

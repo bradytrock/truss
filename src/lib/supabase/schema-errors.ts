@@ -930,3 +930,18 @@ export function isCardSlugPrivilegeError(error: { message?: string; code?: strin
 export function cardSlugPrivilegeMessage() {
   return `Run ${CARD_SLUG_TRIGGER_SQL} in the SQL editor so adding a person can mint their card URL.`;
 }
+
+export const TASK_DESK_SQL = "supabase/migrations/20260920140000_task_desk.sql";
+
+export function isMissingTaskDeskColumns(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("reminded_at") ||
+    (message.includes("notes") && message.includes("tasks"))
+  );
+}
+
+export function missingTaskDeskMessage() {
+  return `Saved without notes or reminders. Run ${TASK_DESK_SQL} in the SQL editor so task notes and due-date emails persist.`;
+}

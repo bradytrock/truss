@@ -24,6 +24,8 @@ import { amountForEstimate } from "@/lib/estimate-totals";
 import { StartEstimateButton } from "@/components/start-estimate-button";
 import { formatJobSite, leadSourceLabel } from "@/lib/leads";
 import { parseMarket } from "@/lib/market";
+import { CreateTaskDialog } from "@/components/create-task-dialog";
+import { TaskRow } from "@/components/task-row";
 import { LeadAssigneeSelect } from "@/components/lead-assignee";
 import {
   DELIVERY_LABELS,
@@ -42,6 +44,7 @@ export default function OpportunityDetailPage() {
   const crm = useCrm();
   const opportunity = crm.getOpportunity(id);
   const [nextStep, setNextStep] = useState<string | null>(null);
+  const [taskOpen, setTaskOpen] = useState(false);
 
   if (!crm.hydrated) return <LoadingScreen />;
   if (!opportunity) {
@@ -412,28 +415,35 @@ export default function OpportunityDetailPage() {
           </Card>
 
           <Card>
-            <CardHeader className="border-b">
+            <CardHeader className="flex-row items-center justify-between space-y-0 border-b">
               <CardTitle>Tasks</CardTitle>
+              <Button size="sm" variant="ghost" onClick={() => setTaskOpen(true)}>
+                New
+              </Button>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               {tasks.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No open tasks on this pursuit.</p>
+                <p className="px-4 py-4 text-sm text-muted-foreground">No tasks on this pursuit.</p>
               ) : (
-                <ul className="space-y-2">
+                <ul className="divide-y">
                   {tasks.map((task) => (
-                    <li key={task.id} className="text-sm">
-                      <p className={task.completed ? "text-muted-foreground line-through" : ""}>
-                        {task.title}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {task.assignee} · {formatDate(task.dueAt)}
-                      </p>
-                    </li>
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      onToggle={() => void crm.toggleTask(task.id)}
+                    />
                   ))}
                 </ul>
               )}
             </CardContent>
           </Card>
+          <CreateTaskDialog
+            open={taskOpen}
+            onOpenChange={setTaskOpen}
+            defaultRelatedType="opportunity"
+            defaultRelatedId={opportunity.id}
+            lockRelated
+          />
         </div>
       </div>
     </div>
