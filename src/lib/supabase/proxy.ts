@@ -1,4 +1,5 @@
 import { isPublicAppPath, isPublicCardPath } from "@/lib/auth-paths";
+import { isLegalPath } from "@/lib/legal";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import {
@@ -37,8 +38,8 @@ export async function updateSession(request: NextRequest) {
   const key = getSupabaseKey() || request.cookies.get(SB_KEY_COOKIE)?.value || "";
   const path = request.nextUrl.pathname;
 
-  // Homeowner links and the QuickBooks Web Connector must not wait on a CRM session.
-  if (isSharePath(path)) {
+  // Legal pages and homeowner links must not wait on a CRM session.
+  if (isLegalPath(path) || isSharePath(path)) {
     return NextResponse.next({ request });
   }
 

@@ -14,10 +14,13 @@ assert.deepEqual(
 
 for (const page of LEGAL_PAGES) {
   assert.equal(isLegalPath(page.href), true);
+  assert.equal(isLegalPath(`${page.href}/`), true);
+  assert.equal(isLegalPath(page.href.toUpperCase()), true);
 }
 
 assert.equal(isLegalPath("/login"), false);
 assert.equal(isLegalPath("/privacy/extra"), true);
+assert.equal(isLegalPath("/jobs"), false);
 
 assert.ok(PRIVACY_SECTIONS.some((section) => /collect/i.test(section.heading)));
 assert.ok(TERMS_SECTIONS.some((section) => /job book/i.test(section.heading)));

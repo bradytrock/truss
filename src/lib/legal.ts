@@ -12,7 +12,9 @@ export const LEGAL_PAGES = [
 export type LegalPageId = (typeof LEGAL_PAGES)[number]["id"];
 
 export function isLegalPath(pathname: string) {
-  return LEGAL_PAGES.some((page) => pathname === page.href || pathname.startsWith(`${page.href}/`));
+  const raw = pathname.split("?")[0]?.split("#")[0] ?? "";
+  const normalized = raw.replace(/\/+$/, "").toLowerCase() || "/";
+  return LEGAL_PAGES.some((page) => normalized === page.href || normalized.startsWith(`${page.href}/`));
 }
 
 export type LegalSection = {
