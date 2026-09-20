@@ -692,7 +692,7 @@ export function AccountingPortal() {
                                 {label}
                               </button>
                             ) : job ? (
-                              <Link href={`/jobs/${job.id}`} className="text-[#0176d3] hover:underline">
+                              <Link href={`/jobs?job=${job.id}`} className="text-[#0176d3] hover:underline">
                                 {label}
                               </Link>
                             ) : (

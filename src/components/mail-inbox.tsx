@@ -629,7 +629,7 @@ export function MailInbox() {
                 {taggedJob ? (
                   <span>
                     Tagged to{" "}
-                    <Link href={`/jobs/${taggedJob.id}`} className="font-medium hover:underline">
+                    <Link href={`/jobs?job=${taggedJob.id}`} className="font-medium hover:underline">
                       {taggedJob.code ? `${taggedJob.code} · ` : ""}
                       {taggedJob.name}
                     </Link>

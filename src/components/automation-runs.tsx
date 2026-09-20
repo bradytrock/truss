@@ -30,10 +30,10 @@ export function AutomationRuns({
   const crm = useCrm();
   const [query, setQuery] = useState("");
   const automation = automationId
-    ? crm.book.automations.find((item) => item.id === automationId)
+    ? (crm.book.automations ?? []).find((item) => item.id === automationId)
     : undefined;
   const rows = useMemo(() => {
-    return crm.book.automationRuns.filter((run) => {
+    return (crm.book.automationRuns ?? []).filter((run) => {
       if (automationId && run.automationId !== automationId) return false;
       if (jobId && run.jobId !== jobId) return false;
       if (!query.trim()) return true;
@@ -73,7 +73,7 @@ export function AutomationRuns({
         <ul className="divide-y rounded-md border">
           {rows.map((run) => {
             const job = run.jobId ? crm.getJob(run.jobId) : undefined;
-            const rule = crm.book.automations.find((item) => item.id === run.automationId);
+            const rule = (crm.book.automations ?? []).find((item) => item.id === run.automationId);
             return (
               <li key={run.id} className="space-y-1 px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">

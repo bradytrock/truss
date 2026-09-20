@@ -124,7 +124,7 @@ export default function ClientDetailPage() {
                   {jobs.map((job) => (
                     <li key={job.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0">
                       <div className="min-w-0">
-                        <Link href={`/jobs/${job.id}`} className="text-sm font-medium hover:underline">
+                        <Link href={`/jobs?job=${job.id}`} className="text-sm font-medium hover:underline">
                           {job.name}
                         </Link>
                         <p className="text-xs text-muted-foreground">

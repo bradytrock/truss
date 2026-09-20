@@ -58,7 +58,7 @@ export function AccountingSyncQueues() {
                     </TableCell>
                     <TableCell className="text-sm">
                       {job ? (
-                        <Link href={`/jobs/${job.id}?tab=financials`} className="hover:underline">
+                        <Link href={`/jobs?job=${job.id}&tab=financials`} className="hover:underline">
                           {job.code} · {job.name}
                         </Link>
                       ) : (

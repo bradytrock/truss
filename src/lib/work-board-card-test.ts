@@ -22,4 +22,13 @@ const distinct = boardCardDetails({
 assert(distinct.showCustomer, "customer is extra");
 assert(distinct.showLocation, "location is extra");
 
+const missing = boardCardDetails({
+  title: undefined as unknown as string,
+  customerName: undefined as unknown as string,
+  location: undefined as unknown as string,
+});
+assert(missing.title === "", "nullish title does not throw");
+assert(!missing.showCustomer, "nullish customer is hidden");
+assert(!missing.showLocation, "nullish location is hidden");
+
 console.log("work-board card tests passed");

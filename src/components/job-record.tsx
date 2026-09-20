@@ -274,11 +274,12 @@ function PeopleChips({
 }
 
 function contactKind(contact: Contact, job: Job) {
-  if (job.subcontractorIds.includes(contact.id)) return "Trade";
-  if (contact.isReferralPartner) return contact.title.includes("adjuster") ? "Adjuster" : "Referral";
-  if (contact.title.toLowerCase().includes("adjuster")) return "Adjuster";
-  if (contact.clientId) return contact.title || "Company";
-  return contact.title || "Homeowner";
+  const title = contact.title ?? "";
+  if (job.subcontractorIds?.includes(contact.id)) return "Trade";
+  if (contact.isReferralPartner) return title.toLowerCase().includes("adjuster") ? "Adjuster" : "Referral";
+  if (title.toLowerCase().includes("adjuster")) return "Adjuster";
+  if (contact.clientId) return title || "Company";
+  return title || "Homeowner";
 }
 
 export function JobRecord({
@@ -563,7 +564,7 @@ export function JobRecord({
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {job.code ? <RecordCode code={job.code} className="text-xs" /> : null}
           <Select
-            value={job.status}
+            value={JOB_STATUSES.includes(job.status) ? job.status : "precon"}
             disabled={deleted}
             onValueChange={(value) => {
               if (!value || deleted) return;
@@ -882,7 +883,7 @@ export function JobRecord({
             </DetailRow>
             <DetailRow label="Assigned">
               <PeopleChips
-                names={job.assigned}
+                names={job.assigned ?? []}
                 options={crm.teamMembers}
                 empty="Add crew"
                 onRemove={(name) => patch(assignedCrewPatch(job.assigned.filter((item) => item !== name), crm.staff))}

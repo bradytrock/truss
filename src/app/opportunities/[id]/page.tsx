@@ -50,7 +50,7 @@ export default function OpportunityDetailPage() {
         title="Pursuit not found"
         description="It may have been removed when demo data was reset."
         action={
-          <Button nativeButton={false} render={<Link href="/pipeline" />}>
+          <Button nativeButton={false} render={<Link href="/jobs" />}>
             Back to pipeline
           </Button>
         }
@@ -197,7 +197,7 @@ export default function OpportunityDetailPage() {
               <CardContent className="space-y-2">
                 <p className="text-sm">
                   {opportunity.stage === "awarded" ? "Awarded work lives on " : "This lead is on the books as "}
-                  <Link href={`/jobs/${job.id}?tab=financials`} className="font-medium text-primary hover:underline">
+                  <Link href={`/jobs?job=${job.id}&tab=financials`} className="font-medium text-primary hover:underline">
                     {job.code ? `${job.code} · ${job.name}` : job.name}
                   </Link>
                   . Log expenses and payments against it like any other job.

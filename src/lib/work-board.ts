@@ -88,9 +88,9 @@ export function boardCardDetails(input: {
   location: string;
   street?: string;
 }) {
-  const title = input.title.trim();
-  const customer = input.customerName.trim();
-  const location = input.location.trim();
+  const title = (input.title ?? "").trim();
+  const customer = (input.customerName ?? "").trim();
+  const location = (input.location ?? "").trim();
   const haystack = title.toLowerCase();
   const last = customer.split(/\s+/).filter(Boolean).at(-1) ?? "";
   const showCustomer =

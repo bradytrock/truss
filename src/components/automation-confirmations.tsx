@@ -10,7 +10,7 @@ import { canManageAutomations } from "@/lib/visibility";
 export function AutomationConfirmations() {
   const crm = useCrm();
   const [busyId, setBusyId] = useState<string | null>(null);
-  const pending = crm.book.automationRuns.filter((run) => {
+  const pending = (crm.book.automationRuns ?? []).filter((run) => {
     if (run.status !== "pending_confirmation" || run.dryRun) return false;
     if (!crm.effectiveStaff) return false;
     if (canManageAutomations(crm.effectiveStaff.role, crm.effectiveStaff)) return true;
@@ -38,7 +38,7 @@ export function AutomationConfirmations() {
         <ul className="divide-y">
           {pending.map((run) => {
             const job = run.jobId ? crm.getJob(run.jobId) : undefined;
-            const rule = crm.book.automations.find((item) => item.id === run.automationId);
+            const rule = (crm.book.automations ?? []).find((item) => item.id === run.automationId);
             const busy = busyId === run.id;
             return (
               <li key={run.id} className="py-3 first:pt-1">

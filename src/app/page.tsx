@@ -263,7 +263,7 @@ export default function HomePage() {
           <DashboardChart
             title="Deals by close date"
             description="Signed contract value over the last 14 days"
-            action={<RelatedListLink href="/pipeline">Pipeline</RelatedListLink>}
+            action={<RelatedListLink href="/jobs">Pipeline</RelatedListLink>}
           >
             <HomeAreaChart
               items={salesDashboard.byCloseDate}
@@ -426,7 +426,7 @@ export default function HomePage() {
           <RelatedList
             title="Pipeline path"
             description="Unweighted contract value by stage. Open the board to move records."
-            action={<RelatedListLink href="/pipeline">Open board</RelatedListLink>}
+            action={<RelatedListLink href="/jobs">Open board</RelatedListLink>}
           >
             <div className="p-3">
               <PipelinePath
@@ -445,7 +445,7 @@ export default function HomePage() {
           <RelatedList
             title="Proposals due"
             description="Estimating dates that cannot slip."
-            action={<RelatedListLink href="/pipeline">View all</RelatedListLink>}
+            action={<RelatedListLink href="/jobs">View all</RelatedListLink>}
           >
             {stats.bidsThisWeek.length === 0 ? (
               <p className="px-3 py-6 text-sm text-[#706e6b]">
@@ -590,7 +590,7 @@ export default function HomePage() {
                     {stats.activeJobs.map((job) => (
                       <tr key={job.id} className="hover:bg-[#f3f3f3]">
                         <td className="px-3 py-2">
-                          <Link href={`/jobs/${job.id}`} className="font-semibold text-[#0176d3] hover:underline">
+                          <Link href={`/jobs?job=${job.id}`} className="font-semibold text-[#0176d3] hover:underline">
                             {job.name}
                           </Link>
                           <div className="mt-0.5">
@@ -664,7 +664,7 @@ export default function HomePage() {
                 nativeButton={false}
                 size="sm"
                 className="h-8 rounded-sm bg-[#0176d3] text-xs font-semibold text-white hover:bg-[#014486]"
-                render={<Link href="/pipeline" />}
+                render={<Link href="/jobs" />}
               >
                 View pipeline
               </Button>
