@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,6 +14,7 @@ import {
   useCompanySettingsDraft,
 } from "@/components/company-settings-form";
 import { CompanyStripeSettings } from "@/components/company-stripe-settings";
+import { LEGAL_EMAIL, LEGAL_PAGES } from "@/lib/legal";
 
 export default function CompanySettingsPage() {
   return (
@@ -389,8 +391,23 @@ function CompanySettingsWithStripe() {
   return (
     <>
       <CompanySettingsForm />
-      <div className="max-w-2xl">
+      <div className="max-w-2xl space-y-6">
         <CompanyStripeSettings />
+        <Card>
+          <CardHeader>
+            <CardTitle>Legal</CardTitle>
+            <CardDescription>
+              Privacy, terms, and cookies for Truss. Questions go to {LEGAL_EMAIL}.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+            {LEGAL_PAGES.map((page) => (
+              <Link key={page.href} href={page.href} className="font-medium text-primary hover:underline">
+                {page.label}
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
       </div>
     </>
   );

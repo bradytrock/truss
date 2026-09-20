@@ -1,3 +1,5 @@
+import { isLegalPath } from "./legal";
+
 /** Metadata routes Next.js serves beside a card page, fetched by link-preview crawlers. */
 const CARD_METADATA_SEGMENTS = new Set(["opengraph-image", "twitter-image"]);
 
@@ -18,6 +20,7 @@ export function isPublicAppPath(pathname: string) {
     pathname.startsWith("/realtor-portal") ||
     pathname.startsWith("/unsubscribe") ||
     pathname.startsWith("/api/") ||
+    isLegalPath(pathname) ||
     isPublicCardPath(pathname)
   );
 }

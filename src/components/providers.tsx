@@ -1,6 +1,7 @@
 "use client";
 
 import { isPublicAppPath } from "@/lib/auth-paths";
+import { isLegalPath } from "@/lib/legal";
 import { ThemeProvider } from "next-themes";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
@@ -28,7 +29,8 @@ function Shell({ children }: { children: ReactNode }) {
     const isAuth =
       pathname.startsWith("/login") ||
       pathname.startsWith("/signup") ||
-      pathname.startsWith("/auth");
+      pathname.startsWith("/auth") ||
+      isLegalPath(pathname);
     if (isAuth) return children;
     return <CrmProvider>{children}</CrmProvider>;
   }

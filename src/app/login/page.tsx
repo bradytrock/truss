@@ -138,8 +138,15 @@ function LoginForm() {
       </div>
 
       <footer className="relative z-10 flex flex-wrap items-center justify-center gap-x-8 gap-y-2 px-6 pb-8 text-sm text-white/90">
-        <span className="cursor-default">Privacy Policy</span>
-        <span className="cursor-default">Terms of Service</span>
+        <Link href="/privacy" className="hover:text-white">
+          Privacy Policy
+        </Link>
+        <Link href="/terms" className="hover:text-white">
+          Terms of Service
+        </Link>
+        <Link href="/cookies" className="hover:text-white">
+          Cookie Policy
+        </Link>
         <Link href="/signup" className="hover:text-white">
           Create an account
         </Link>
