@@ -105,10 +105,11 @@ export function HomeDashboardCanvas({
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={visible.map((item) => item.id)} strategy={rectSortingStrategy}>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
-            {visible.map((item) => (
+            {visible.map((item, index) => (
               <SortableHomeModule
                 key={item.id}
                 item={item}
+                index={index}
                 editing={editing}
                 onHide={() => {
                   commit(setHomeModuleHidden(layout, item.id, true));
@@ -150,12 +151,14 @@ export function HomeDashboardCanvas({
 
 function SortableHomeModule({
   item,
+  index,
   editing,
   children,
   onHide,
   onSpan,
 }: {
   item: HomeModulePlacement;
+  index: number;
   editing: boolean;
   children: ReactNode;
   onHide: () => void;
@@ -172,10 +175,12 @@ function SortableHomeModule({
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
+        animationDelay: editing ? undefined : `${index * 70}ms`,
       }}
       className={cn(
         "col-span-1 min-w-0",
         homeModuleSpanClass(item.span),
+        !editing && !isDragging && "home-module-enter",
         isDragging && "z-20 opacity-80",
       )}
     >

@@ -1,5 +1,12 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
+import {
+  donutIndexAt,
+  nearestChartIndex,
+  pointerInViewBox,
+} from "@/lib/home-chart-motion";
 import { cn } from "@/lib/utils";
 
 export const HOME_CARD_CLASS =
@@ -87,6 +94,28 @@ export function HomeKpiTile({
   );
 }
 
+function ChartTip({
+  title,
+  value,
+  className,
+}: {
+  title: string;
+  value: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "pointer-events-none absolute z-10 rounded-lg border border-black/8 bg-white px-2.5 py-1.5 shadow-[0_8px_20px_rgba(15,23,42,0.12)]",
+        className,
+      )}
+    >
+      <p className="text-[11px] text-[#706e6b]">{title}</p>
+      <p className="text-sm font-semibold tabular-nums text-[#0f172a]">{value}</p>
+    </div>
+  );
+}
+
 /** Semi-circle quota gauge like Salesforce Closed Won Sales. */
 export function HomeGauge({
   value,
@@ -97,6 +126,12 @@ export function HomeGauge({
   target: number;
   format: (n: number) => string;
 }) {
+  const [drawn, setDrawn] = useState(false);
+  const [hover, setHover] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setDrawn(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const max = Math.max(target, value, 1);
   const ratio = Math.min(1, value / max);
   const angle = -90 + ratio * 180;
@@ -114,24 +149,36 @@ export function HomeGauge({
     const large = to - from > 180 ? 1 : 0;
     return `M ${a.x} ${a.y} A ${r} ${r} 0 ${large} 1 ${b.x} ${b.y}`;
   };
-  const needle = point(angle, r - 8);
   const pct = target > 0 ? Math.round((value / target) * 100) : 0;
 
   return (
-    <div className="flex flex-col items-center">
-      <svg viewBox="0 0 200 120" className="h-36 w-full max-w-[16rem]">
+    <div className="relative flex flex-col items-center">
+      <svg
+        viewBox="0 0 200 120"
+        className="h-36 w-full max-w-[16rem] cursor-pointer"
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+      >
         <path d={arc(-90, -30)} stroke="#ea001e" strokeWidth="14" fill="none" strokeLinecap="butt" />
         <path d={arc(-30, 30)} stroke="#fe9339" strokeWidth="14" fill="none" strokeLinecap="butt" />
         <path d={arc(30, 90)} stroke="#2e844a" strokeWidth="14" fill="none" strokeLinecap="butt" />
-        <line
-          x1={cx}
-          y1={cy}
-          x2={needle.x}
-          y2={needle.y}
-          stroke="#032d60"
-          strokeWidth="3"
-          strokeLinecap="round"
-        />
+        <g
+          className="home-gauge-needle"
+          style={{
+            transform: `rotate(${drawn ? angle : -90}deg)`,
+            transformOrigin: `${cx}px ${cy}px`,
+          }}
+        >
+          <line
+            x1={cx}
+            y1={cy}
+            x2={cx}
+            y2={cy - (r - 8)}
+            stroke="#032d60"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+        </g>
         <circle cx={cx} cy={cy} r="5" fill="#032d60" />
         <text
           x={cx}
@@ -146,6 +193,15 @@ export function HomeGauge({
       <p className="text-xs text-[#706e6b]">
         {target > 0 ? `${pct}% of ${format(target)} quota` : "Set a monthly quota in Settings"}
       </p>
+      {hover ? (
+        <ChartTip
+          title="Closed won this month"
+          value={
+            target > 0 ? `${format(value)} · ${pct}% of ${format(target)}` : format(value)
+          }
+          className="bottom-10 left-1/2 -translate-x-1/2"
+        />
+      ) : null}
     </div>
   );
 }
@@ -160,6 +216,7 @@ export function HomeAreaChart({
   format: (n: number) => string;
   empty?: string;
 }) {
+  const [hover, setHover] = useState<number | null>(null);
   if (items.length === 0 || items.every((item) => item.value <= 0)) {
     return <p className="py-10 text-center text-sm text-[#706e6b]">{empty}</p>;
   }
@@ -182,63 +239,107 @@ export function HomeAreaChart({
   const line = coords.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
   const area = `${line} L ${coords[coords.length - 1].x} ${padTop + innerH} L ${coords[0].x} ${padTop + innerH} Z`;
   const labelEvery = Math.max(1, Math.ceil(items.length / 6));
+  const active = hover !== null ? coords[hover] : null;
+
+  function onMove(event: MouseEvent<SVGSVGElement>) {
+    const point = pointerInViewBox(
+      event.clientX,
+      event.clientY,
+      event.currentTarget.getBoundingClientRect(),
+      width,
+      height,
+    );
+    setHover(nearestChartIndex(point.x, coords.map((item) => item.x)));
+  }
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="h-52 w-full">
-      <defs>
-        <linearGradient id="homeAreaFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#1b96ff" stopOpacity="0.28" />
-          <stop offset="100%" stopColor="#1b96ff" stopOpacity="0.02" />
-        </linearGradient>
-      </defs>
-      {[0.25, 0.5, 0.75, 1].map((tick) => {
-        const y = padTop + innerH - tick * innerH;
-        return (
-          <line
-            key={tick}
-            x1={padX}
-            x2={width - padX}
-            y1={y}
-            y2={y}
-            stroke="#e5e5e5"
-            strokeWidth="1"
-          />
-        );
-      })}
-      <path d={area} fill="url(#homeAreaFill)" />
-      <path d={line} fill="none" stroke="#0176d3" strokeWidth="2.5" strokeLinejoin="round" />
-      {coords.map((point) => (
-        <circle
-          key={`dot-${point.key ?? point.label}`}
-          cx={point.x}
-          cy={point.y}
-          r="3.5"
-          fill="#fff"
-          stroke="#e8a317"
-          strokeWidth="2"
+    <div className="relative">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-52 w-full cursor-crosshair"
+        onMouseMove={onMove}
+        onMouseLeave={() => setHover(null)}
+      >
+        <defs>
+          <linearGradient id="homeAreaFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#1b96ff" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="#1b96ff" stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {[0.25, 0.5, 0.75, 1].map((tick) => {
+          const y = padTop + innerH - tick * innerH;
+          return (
+            <line
+              key={tick}
+              x1={padX}
+              x2={width - padX}
+              y1={y}
+              y2={y}
+              stroke="#e5e5e5"
+              strokeWidth="1"
+            />
+          );
+        })}
+        <path className="home-chart-area" d={area} fill="url(#homeAreaFill)" />
+        <path
+          className="home-chart-line"
+          d={line}
+          fill="none"
+          stroke="#0176d3"
+          strokeWidth="2.5"
+          strokeLinejoin="round"
+          pathLength={1}
         />
-      ))}
-      {coords.map((point, index) =>
-        index % labelEvery === 0 || index === coords.length - 1 ? (
-          <text
-            key={point.key ?? point.label}
-            x={point.x}
-            y={height - 8}
-            textAnchor="middle"
-            fill="#706e6b"
-            style={{ fontSize: "10px" }}
-          >
-            {point.label}
-          </text>
-        ) : null,
-      )}
-      <title>
-        {coords
-          .filter((p) => p.value > 0)
-          .map((p) => `${p.label}: ${format(p.value)}`)
-          .join(" · ")}
-      </title>
-    </svg>
+        {coords.map((point, index) => (
+          <circle
+            key={`dot-${point.key ?? point.label}`}
+            className="home-chart-dot"
+            cx={point.x}
+            cy={point.y}
+            r={hover === index ? 5.5 : 3.5}
+            fill="#fff"
+            stroke={hover === index ? "#0176d3" : "#e8a317"}
+            strokeWidth="2"
+            style={{ animationDelay: `${120 + index * 35}ms` }}
+          />
+        ))}
+        {active ? (
+          <line
+            x1={active.x}
+            x2={active.x}
+            y1={padTop}
+            y2={padTop + innerH}
+            stroke="#0176d3"
+            strokeWidth="1"
+            strokeDasharray="3 3"
+          />
+        ) : null}
+        {coords.map((point, index) =>
+          index % labelEvery === 0 || index === coords.length - 1 ? (
+            <text
+              key={point.key ?? point.label}
+              x={point.x}
+              y={height - 8}
+              textAnchor="middle"
+              fill="#706e6b"
+              style={{ fontSize: "10px" }}
+            >
+              {point.label}
+            </text>
+          ) : null,
+        )}
+      </svg>
+      {active ? (
+        <ChartTip
+          title={active.label}
+          value={format(active.value)}
+          className={cn(
+            "top-2",
+            active.x > width * 0.62 ? "right-2" : "left-2",
+          )}
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -254,6 +355,7 @@ export function HomeDonut({
   format: (n: number) => string;
   empty?: string;
 }) {
+  const [hover, setHover] = useState<number | null>(null);
   const slices = items.filter((item) => item.value > 0).slice(0, 6);
   const total = slices.reduce((sum, item) => sum + item.value, 0);
   if (!slices.length || total <= 0) {
@@ -287,16 +389,56 @@ export function HomeDonut({
       `A ${inner} ${inner} 0 ${large} 0 ${ix2} ${iy2}`,
       "Z",
     ].join(" ");
-    return { d, color: DONUT_COLORS[index % DONUT_COLORS.length], ...item, portion };
+    return {
+      d,
+      color: DONUT_COLORS[index % DONUT_COLORS.length],
+      start,
+      end,
+      ...item,
+      portion,
+    };
   });
 
+  const active = hover !== null ? arcs[hover] : null;
+
+  function onMove(event: MouseEvent<SVGSVGElement>) {
+    const point = pointerInViewBox(
+      event.clientX,
+      event.clientY,
+      event.currentTarget.getBoundingClientRect(),
+      180,
+      180,
+    );
+    const index = donutIndexAt(
+      point.x,
+      point.y,
+      cx,
+      cy,
+      inner,
+      r,
+      arcs.map((arc) => ({ start: arc.start, end: arc.end })),
+    );
+    setHover(index < 0 ? null : index);
+  }
+
   return (
-    <div className="flex flex-col items-center gap-3 sm:flex-row sm:items-center sm:justify-center sm:gap-4">
-      <svg viewBox="0 0 180 180" className="size-40 shrink-0">
-        {arcs.map((arc) => (
-          <path key={arc.label} d={arc.d} fill={arc.color}>
-            <title>{`${arc.label}: ${format(arc.value)}`}</title>
-          </path>
+    <div className="relative flex flex-col items-center gap-3 sm:flex-row sm:items-center sm:justify-center sm:gap-4">
+      <svg
+        viewBox="0 0 180 180"
+        className="size-40 shrink-0 cursor-pointer"
+        onMouseMove={onMove}
+        onMouseLeave={() => setHover(null)}
+      >
+        {arcs.map((arc, index) => (
+          <path
+            key={arc.label}
+            className="home-chart-slice"
+            d={arc.d}
+            fill={arc.color}
+            opacity={hover === null || hover === index ? 1 : 0.35}
+            style={{ animationDelay: `${index * 80}ms` }}
+            onMouseEnter={() => setHover(index)}
+          />
         ))}
         <text
           x={cx}
@@ -305,18 +447,33 @@ export function HomeDonut({
           fill="#032d60"
           style={{ fontSize: "16px", fontWeight: 700 }}
         >
-          {format(total)}
+          {format(active?.value ?? total)}
         </text>
       </svg>
       <ul className="w-full min-w-0 space-y-1.5">
-        {arcs.map((arc) => (
-          <li key={arc.label} className="flex items-center gap-2 text-xs">
+        {arcs.map((arc, index) => (
+          <li
+            key={arc.label}
+            className={cn(
+              "flex cursor-pointer items-center gap-2 rounded-md px-1 py-0.5 text-xs",
+              hover === index && "bg-[#f3f8fd]",
+            )}
+            onMouseEnter={() => setHover(index)}
+            onMouseLeave={() => setHover(null)}
+          >
             <span className="size-2.5 shrink-0 rounded-sm" style={{ background: arc.color }} />
             <span className="min-w-0 flex-1 truncate text-[#181818]">{arc.label}</span>
             <span className="tabular-nums text-[#706e6b]">{Math.round(arc.portion * 100)}%</span>
           </li>
         ))}
       </ul>
+      {active ? (
+        <ChartTip
+          title={active.label}
+          value={`${format(active.value)} · ${Math.round(active.portion * 100)}%`}
+          className="top-0 right-0 sm:top-2 sm:right-2"
+        />
+      ) : null}
     </div>
   );
 }
