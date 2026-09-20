@@ -647,6 +647,7 @@ export default function HomePage() {
       {crm.hydrateError ? (
         <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
       ) : null}
+      <div className="[&>div]:border-b-0 [&>div]:pb-1 [&_h1]:text-[1.75rem] [&_h1]:tracking-tight">
       <PageHeader
         title={`${greeting()}, ${crm.user.name.split(" ")[0] || "there"}`}
         description={
@@ -678,6 +679,7 @@ export default function HomePage() {
           ) : null
         }
       />
+      </div>
 
       <AutomationConfirmations />
 
