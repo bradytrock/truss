@@ -31,6 +31,12 @@ import {
   type CompanyFile,
   type CompanyFileCategory,
 } from "@/lib/types";
+import {
+  companyFileCategoryLabel,
+  companyFileSearchText,
+  companyFilesList,
+  isCompanyFileCategory,
+} from "@/lib/company-files";
 import { cn } from "@/lib/utils";
 
 export function CompanyFilesPanel() {
@@ -45,17 +51,10 @@ export function CompanyFilesPanel() {
 
   const files = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return [...(crm.companyFiles ?? [])]
+    return companyFilesList(crm.companyFiles)
       .filter((file) => (filter === "all" ? true : file.category === filter))
-      .filter((file) => {
-        if (!needle) return true;
-        return (
-          file.name.toLowerCase().includes(needle) ||
-          file.notes.toLowerCase().includes(needle) ||
-          COMPANY_FILE_CATEGORY_LABELS[file.category].toLowerCase().includes(needle)
-        );
-      })
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      .filter((file) => (needle ? companyFileSearchText(file).includes(needle) : true))
+      .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
   }, [crm.companyFiles, filter, query]);
 
   async function upload(list: FileList | null) {
@@ -199,7 +198,7 @@ export function CompanyFilesPanel() {
             return (
               <li key={file.id} className="flex items-center gap-2 rounded-md border px-3 py-2">
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-sm border bg-muted text-muted-foreground">
-                  {file.mimeType.startsWith("image/") ? (
+                  {(file.mimeType ?? "").startsWith("image/") ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={file.url} alt="" className="size-10 rounded-sm object-cover" />
                   ) : (
@@ -242,7 +241,7 @@ export function CompanyFilesPanel() {
                   )}
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <Select
-                      value={file.category}
+                      value={isCompanyFileCategory(file.category) ? file.category : "other"}
                       onValueChange={(value) =>
                         void changeCategory(file, (value as CompanyFileCategory) ?? file.category)
                       }
@@ -302,8 +301,8 @@ export function CompanyFilesPanel() {
 }
 
 function iconForFile(file: CompanyFile) {
-  const mime = file.mimeType.toLowerCase();
-  const name = file.name.toLowerCase();
+  const mime = (file.mimeType ?? "").toLowerCase();
+  const name = (file.name ?? "").toLowerCase();
   if (mime.startsWith("video/") || /\.(mp4|mov|m4v|webm)$/.test(name)) return Film;
   if (mime.includes("spreadsheet") || mime.includes("excel") || /\.(xlsx|xls|csv)$/.test(name)) {
     return FileSpreadsheet;
@@ -326,7 +325,7 @@ export function CompanyFilePickerList({
   const [pendingId, setPendingId] = useState<string | null>(null);
   const files = useMemo(
     () =>
-      [...(crm.companyFiles ?? [])].sort((a, b) => {
+      companyFilesList(crm.companyFiles).sort((a, b) => {
         const byCat = a.category.localeCompare(b.category);
         if (byCat !== 0) return byCat;
         return a.name.localeCompare(b.name);
@@ -362,7 +361,7 @@ export function CompanyFilePickerList({
             <span className="min-w-0">
               <span className="block truncate text-sm font-medium">{file.name}</span>
               <span className="block text-xs text-muted-foreground">
-                {COMPANY_FILE_CATEGORY_LABELS[file.category]} · {formatFileSize(file.sizeBytes)}
+                {companyFileCategoryLabel(file.category)} · {formatFileSize(file.sizeBytes)}
               </span>
             </span>
             <span className="shrink-0 text-xs text-muted-foreground">
