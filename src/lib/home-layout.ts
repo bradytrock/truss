@@ -8,8 +8,9 @@ export const HOME_MODULE_IDS = [
   "accountingNotices",
   "returningClients",
   "pipelinePath",
-  "proposalsDue",
   "todaysWork",
+  "calendarDay",
+  "proposalsDue",
   "training",
   "recentActivity",
   "activeJobs",
@@ -36,8 +37,9 @@ export const HOME_MODULE_LABELS: Record<HomeModuleId, string> = {
   accountingNotices: "Accounting needs you",
   returningClients: "Returning clients",
   pipelinePath: "Pipeline path",
+  todaysWork: "Tasks",
+  calendarDay: "Today’s calendar",
   proposalsDue: "Proposals due",
-  todaysWork: "Today’s work",
   training: "Training",
   recentActivity: "Recent activity",
   activeJobs: "Active jobs",
@@ -68,8 +70,9 @@ const DEFAULT_BY_ID: Record<HomeModuleId, HomeModulePlacement> = {
   accountingNotices: { id: "accountingNotices", hidden: false, span: 12 },
   returningClients: { id: "returningClients", hidden: false, span: 12 },
   pipelinePath: { id: "pipelinePath", hidden: false, span: 12 },
+  todaysWork: { id: "todaysWork", hidden: false, span: 6 },
+  calendarDay: { id: "calendarDay", hidden: false, span: 6 },
   proposalsDue: { id: "proposalsDue", hidden: false, span: 4 },
-  todaysWork: { id: "todaysWork", hidden: false, span: 8 },
   training: { id: "training", hidden: false, span: 4 },
   recentActivity: { id: "recentActivity", hidden: false, span: 8 },
   activeJobs: { id: "activeJobs", hidden: false, span: 12 },
@@ -109,7 +112,7 @@ export function mergeHomeLayout(raw: unknown): HomeModulePlacement[] {
 }
 
 export function homeLayoutStorageKey(companyId: string, staffId: string) {
-  return `truss.homeLayout.v1:${companyId || "local"}:${staffId || "anon"}`;
+  return `truss.homeLayout.v2:${companyId || "local"}:${staffId || "anon"}`;
 }
 
 export function loadHomeLayout(companyId: string, staffId: string): HomeModulePlacement[] {

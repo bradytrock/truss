@@ -32,14 +32,14 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2 border-b border-[#c9c9c9] pb-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="flex flex-col gap-2 pb-1 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
         {eyebrow ? (
           <p className="mb-1 text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="text-[1.35rem] leading-tight font-semibold text-[#181818] text-balance">
+        <h1 className="text-[1.75rem] leading-tight font-semibold tracking-tight text-[#181818] text-balance">
           {title}
         </h1>
         {description ? (

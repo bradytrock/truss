@@ -71,9 +71,9 @@ export function HomeDashboardCanvas({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {editing ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-sm border border-[#c9c9c9] bg-[#f3f3f3] px-3 py-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-black/6 bg-[#f8fafc] px-4 py-2.5">
           <p className="text-xs text-[#706e6b]">
             Drag modules to rearrange. Change width or hide anything you do not want on Home.
           </p>
@@ -95,7 +95,7 @@ export function HomeDashboardCanvas({
       {showSalesIntro ? salesIntro : null}
 
       {visible.length === 0 && !editing ? (
-        <div className="rounded-sm border border-dashed border-[#c9c9c9] px-4 py-10 text-center">
+        <div className="rounded-2xl border border-dashed border-black/10 px-4 py-10 text-center">
           <LayoutGrid className="mx-auto size-6 text-[#706e6b]" />
           <p className="mt-2 text-sm font-medium text-[#181818]">Every module is hidden.</p>
           <p className="mt-1 text-sm text-[#706e6b]">Customize the dashboard to add them back.</p>
@@ -104,7 +104,7 @@ export function HomeDashboardCanvas({
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={visible.map((item) => item.id)} strategy={rectSortingStrategy}>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-12">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-12">
             {visible.map((item) => (
               <SortableHomeModule
                 key={item.id}
@@ -124,7 +124,7 @@ export function HomeDashboardCanvas({
       </DndContext>
 
       {editing && hidden.length > 0 ? (
-        <section className="rounded-sm border border-[#c9c9c9] bg-white px-3 py-3">
+        <section className="rounded-2xl border border-black/6 bg-white px-4 py-3">
           <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
             Off this dashboard
           </p>

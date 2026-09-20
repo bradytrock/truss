@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
+import { CreateTaskDialog } from "@/components/create-task-dialog";
+import { HomeDayCalendar } from "@/components/home-day-calendar";
+import { TaskRow } from "@/components/task-row";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { ErrorBanner, LoadingScreen, PageHeader, RecordCode } from "@/components/page-chrome";
 import { JobStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
@@ -54,11 +55,15 @@ import {
   wonDeals,
 } from "@/lib/home-dashboard";
 import { availableHomeModules, type HomeModuleId } from "@/lib/home-layout";
+import { filterTasks, sortTasks, taskRelatedHref, taskRelatedLabel } from "@/lib/task-desk";
+import type { Task } from "@/lib/types";
 
 export default function HomePage() {
   const crm = useCrm();
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
+  const [createTaskOpen, setCreateTaskOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const stats = useMemo(() => {
     const open = crm.opportunities.filter(
@@ -171,10 +176,10 @@ export default function HomePage() {
     stats.pipelineValue,
   ]);
 
-  const upcomingTasks = crm.tasks
-    .filter((task) => !task.completed)
-    .sort((a, b) => a.dueAt.localeCompare(b.dueAt))
-    .slice(0, 6);
+  const upcomingTasks = sortTasks(filterTasks(crm.tasks, "open", crm.effectiveStaff?.name || crm.user.name || "")).slice(
+    0,
+    8,
+  );
 
   const feed = [...crm.activities]
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -223,7 +228,7 @@ export default function HomePage() {
     switch (id) {
       case "salesKpis":
         return (
-          <div className="grid h-full gap-3 sm:grid-cols-3">
+          <div className="grid h-full gap-4 sm:grid-cols-3">
             <HomeKpiTile
               label="Amount open"
               value={formatCompactCurrency(salesDashboard.openPipeline)}
@@ -295,7 +300,7 @@ export default function HomePage() {
             description="Approve invoices here. Open Expense review for receipts next to the QuickBooks fields."
             action={<RelatedListLink href="/accounting?tab=review">Invoice review</RelatedListLink>}
           >
-            <p className="px-3 py-3 text-sm text-[#181818]">
+            <p className="px-5 py-4 text-sm text-[#181818]">
               {stats.qb.invoiceCount + stats.qb.expenseCount + stats.qb.paymentCount} items waiting ·{" "}
               {stats.qb.invoiceCount} invoices, {stats.qb.expenseCount} expenses, {stats.qb.paymentCount}{" "}
               payments
@@ -304,46 +309,35 @@ export default function HomePage() {
         );
       case "accountingNotices":
         return (
-          <Card className="rounded-sm border-[#c9c9c9] shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
-            <CardHeader className="border-b border-[#c9c9c9] bg-[#f3f3f3]">
-              <CardTitle className="font-sans text-sm font-semibold text-[#181818]">Accounting needs you</CardTitle>
-              <CardDescription>
-                Open the file on the job, make the change, leave a comment, and send it back. Replies
-                happen on that file — not on Approve.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-2">
-              <ul className="divide-y">
-                {reviewNotices.map((notice) => (
-                  <li key={`${notice.item.kind}-${notice.item.id}`} className="py-3 first:pt-1">
-                    <Link
-                      href={jobDocumentHref(notice.jobId, notice.item.kind, notice.item.id)}
-                      className="text-sm font-semibold text-[#0176d3] hover:underline"
-                    >
-                      {itemTitle(notice.item)}
-                    </Link>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {notice.reason === "tagged" ? "You were tagged. " : "Sent back for a change. "}
-                      {notice.preview}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
+          <RelatedList
+            title="Accounting needs you"
+            description="Open the file on the job, make the change, leave a comment, and send it back."
+          >
+            <ul className="divide-y divide-black/5 px-5 pb-2">
+              {reviewNotices.map((notice) => (
+                <li key={`${notice.item.kind}-${notice.item.id}`} className="py-3">
+                  <Link
+                    href={jobDocumentHref(notice.jobId, notice.item.kind, notice.item.id)}
+                    className="text-sm font-semibold text-[#0176d3] hover:underline"
+                  >
+                    {itemTitle(notice.item)}
+                  </Link>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {notice.reason === "tagged" ? "You were tagged. " : "Sent back for a change. "}
+                    {notice.preview}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </RelatedList>
         );
       case "returningClients":
         return (
-          <Card className="rounded-sm border-[#c9c9c9] shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
-            <CardHeader className="border-b border-[#c9c9c9] bg-[#f3f3f3]">
-              <CardTitle className="font-sans text-sm font-semibold text-[#181818]">Returning clients</CardTitle>
-              <CardDescription>
-                Past clients called back. The previous project manager is asked first. Company admins
-                decide only after they decline, or when that seat is locked.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-2">
-              <ul className="divide-y">
+          <RelatedList
+            title="Returning clients"
+            description="Past clients called back. The previous project manager is asked first."
+          >
+              <ul className="divide-y divide-black/5 px-5 pb-2">
                 {returningNotices.map((notice) => {
                   const opportunity = crm.getOpportunity(notice.opportunityId);
                   const job = notice.jobId ? crm.getJob(notice.jobId) : undefined;
@@ -418,8 +412,7 @@ export default function HomePage() {
                   );
                 })}
               </ul>
-            </CardContent>
-          </Card>
+          </RelatedList>
         );
       case "pipelinePath":
         return (
@@ -428,7 +421,7 @@ export default function HomePage() {
             description="Unweighted contract value by stage. Open the board to move records."
             action={<RelatedListLink href="/pipeline">Open board</RelatedListLink>}
           >
-            <div className="p-3">
+            <div className="px-5 pb-5">
               <PipelinePath
                 stages={stats.byStage.map((item) => ({
                   key: item.stage,
@@ -448,18 +441,18 @@ export default function HomePage() {
             action={<RelatedListLink href="/pipeline">View all</RelatedListLink>}
           >
             {stats.bidsThisWeek.length === 0 ? (
-              <p className="px-3 py-6 text-sm text-[#706e6b]">
+              <p className="px-5 py-6 text-sm text-[#706e6b]">
                 Nothing due in the next seven days.
               </p>
             ) : (
-              <ul className="divide-y divide-[#e5e5e5]">
+              <ul className="divide-y divide-black/5">
                 {stats.bidsThisWeek
                   .slice()
                   .sort((a, b) => (a.bidDueAt ?? "").localeCompare(b.bidDueAt ?? ""))
                   .map((opportunity) => {
                     const due = daysUntil(opportunity.bidDueAt);
                     return (
-                      <li key={opportunity.id} className="px-3 py-2.5 hover:bg-[#f3f3f3]">
+                      <li key={opportunity.id} className="px-5 py-2.5 hover:bg-[#f8fafc]">
                         <Link href={`/opportunities/${opportunity.id}`} className="block">
                           <p className="text-sm font-semibold text-[#0176d3] hover:underline">
                             {opportunity.name}
@@ -490,36 +483,56 @@ export default function HomePage() {
       case "todaysWork":
         return (
           <RelatedList
-            title="Today’s work"
-            description="Open tasks on your desk."
-            action={<RelatedListLink href="/tasks">All tasks</RelatedListLink>}
+            title="Tasks"
+            description="Assigned work with a deadline. Check it off, or open it to edit."
+            action={
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-[#0176d3] hover:underline"
+                  onClick={() => setCreateTaskOpen(true)}
+                >
+                  New task
+                </button>
+                <RelatedListLink href="/tasks">All tasks</RelatedListLink>
+              </div>
+            }
           >
             {upcomingTasks.length === 0 ? (
-              <p className="px-3 py-6 text-sm text-[#706e6b]">All caught up. No open tasks.</p>
+              <p className="px-5 py-6 text-sm text-[#706e6b]">
+                All caught up.{" "}
+                <button
+                  type="button"
+                  className="font-semibold text-[#0176d3] hover:underline"
+                  onClick={() => setCreateTaskOpen(true)}
+                >
+                  Add a task
+                </button>
+              </p>
             ) : (
-              <ul className="divide-y divide-[#e5e5e5]">
-                {upcomingTasks.map((task) => {
-                  const overdue = (daysUntil(task.dueAt) ?? 0) < 0;
-                  return (
-                    <li key={task.id} className="flex items-start gap-2.5 px-3 py-2.5 hover:bg-[#f3f3f3]">
-                      <Checkbox
-                        checked={task.completed}
-                        onCheckedChange={() => crm.toggleTask(task.id)}
-                        className="mt-0.5"
-                        aria-label={`Complete ${task.title}`}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm leading-snug text-[#181818]">{task.title}</p>
-                        <p className={cn("text-xs", overdue ? "text-destructive" : "text-[#706e6b]")}>
-                          {task.assignee} · {formatDateShort(task.dueAt)}
-                          {overdue ? " · overdue" : ""}
-                        </p>
-                      </div>
-                    </li>
-                  );
-                })}
+              <ul className="divide-y divide-black/5">
+                {upcomingTasks.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    relatedLabel={taskRelatedLabel(task, crm.jobs, crm.opportunities)}
+                    relatedHref={taskRelatedHref(task)}
+                    onToggle={() => void crm.toggleTask(task.id)}
+                    onOpen={() => setEditingTask(task)}
+                  />
+                ))}
               </ul>
             )}
+          </RelatedList>
+        );
+      case "calendarDay":
+        return (
+          <RelatedList
+            title="Today"
+            description="Your day on the calendar."
+            action={<RelatedListLink href="/calendar">Open calendar</RelatedListLink>}
+          >
+            <HomeDayCalendar day={new Date()} events={crm.events} />
           </RelatedList>
         );
       case "training": {
@@ -530,7 +543,7 @@ export default function HomePage() {
             description={`Chapter tests ${COURSE.passScore}% · exam ${COURSE.finalPassScore}%.`}
             action={<RelatedListLink href="/training">Open</RelatedListLink>}
           >
-            <div className="px-3 py-3 text-sm text-[#181818]">
+            <div className="px-5 py-4 text-sm text-[#181818]">
               <p>
                 {training.read} of {training.totalLessons} lessons · {training.passedChapters} of{" "}
                 {training.chapterCount} chapter tests
@@ -552,13 +565,13 @@ export default function HomePage() {
             description="Calls, walks, and stage moves across the book."
           >
             {feed.length === 0 ? (
-              <p className="px-3 py-6 text-sm text-[#706e6b]">
+              <p className="px-5 py-6 text-sm text-[#706e6b]">
                 Nothing logged yet. Open a record and capture the last owner conversation.
               </p>
             ) : (
-              <ul className="divide-y divide-[#e5e5e5]">
+              <ul className="divide-y divide-black/5">
                 {feed.map((activity) => (
-                  <li key={activity.id} className="px-3 py-2.5 hover:bg-[#f3f3f3]">
+                  <li key={activity.id} className="px-5 py-2.5 hover:bg-[#f8fafc]">
                     <p className="text-sm leading-snug text-[#181818]">{activity.body}</p>
                     <p className="mt-0.5 text-xs text-[#706e6b]">
                       {activity.author} · {formatRelative(activity.createdAt)}
@@ -577,23 +590,23 @@ export default function HomePage() {
             action={<RelatedListLink href="/jobs">View all</RelatedListLink>}
           >
             {stats.activeJobs.length === 0 ? (
-              <p className="px-3 py-6 text-sm text-[#706e6b]">No active jobs in your book.</p>
+              <p className="px-5 py-6 text-sm text-[#706e6b]">No active jobs in your book.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[40rem] text-left text-sm">
-                  <thead className="border-b border-[#c9c9c9] bg-[#f3f3f3] text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
+                  <thead className="border-b border-black/6 text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
                     <tr>
-                      <th className="px-3 py-2">Job</th>
+                      <th className="px-5 py-2">Job</th>
                       <th className="px-3 py-2">Customer</th>
                       <th className="px-3 py-2">Status</th>
                       <th className="px-3 py-2">PM</th>
-                      <th className="px-3 py-2 text-right">Contract</th>
+                      <th className="px-5 py-2 text-right">Contract</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#e5e5e5]">
+                  <tbody className="divide-y divide-black/5">
                     {stats.activeJobs.map((job) => (
-                      <tr key={job.id} className="hover:bg-[#f3f3f3]">
-                        <td className="px-3 py-2">
+                      <tr key={job.id} className="hover:bg-[#f8fafc]">
+                        <td className="px-5 py-2">
                           <Link href={`/jobs/${job.id}`} className="font-semibold text-[#0176d3] hover:underline">
                             {job.name}
                           </Link>
@@ -609,7 +622,7 @@ export default function HomePage() {
                           <JobStatusBadge status={job.status} />
                         </td>
                         <td className="px-3 py-2 text-[#706e6b]">{job.projectManager}</td>
-                        <td className="px-3 py-2 text-right font-semibold tabular-nums text-[#181818]">
+                        <td className="px-5 py-2 text-right font-semibold tabular-nums text-[#181818]">
                           {formatCurrencyFull(job.contractValue)}
                         </td>
                       </tr>
@@ -630,27 +643,16 @@ export default function HomePage() {
   const hasLeads = crm.opportunities.length > 0;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {crm.hydrateError ? (
         <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
       ) : null}
       <PageHeader
-        eyebrow="Home"
         title={`${greeting()}, ${crm.user.name.split(" ")[0] || "there"}`}
         description={
           crm.effectiveStaff?.role === "accountant"
-            ? "Accounting queues for expenses, receipts, and QuickBooks — sales charts stay with the field seats."
-            : crm.effectiveStaff?.role === "business_development"
-            ? "Executive sales view: open pipeline, closed-won gauge, source mix, and your agent ROI."
-            : crm.effectiveStaff?.role === "project_manager" || crm.effectiveStaff?.role === "superintendent"
-              ? "Your sales dashboard and today’s desk — charts first, lists below."
-              : crm.effectiveStaff?.role === "team_lead" || crm.effectiveStaff?.role === "team_admin"
-                ? "Team sales dashboard and desk lists. Login As a teammate, or open Reports."
-                : crm.effectiveStaff?.role === "company_admin"
-                  ? "Executive sales dashboard: open pipeline, closed-won gauge, and source mix."
-                  : crm.effectiveStaff?.role === "estimator"
-                    ? "Sales dashboard for bids and signed work, with the jobs you’re pricing below."
-                    : "Sales executive dashboard for pipeline and closed-won — restoration and remodel from lead to job photo."
+            ? "Accounting queues for expenses, receipts, and QuickBooks."
+            : "Pipeline, closed-won, today’s tasks, and the day on the calendar."
         }
         actions={
           hasLeads ? (
@@ -659,7 +661,7 @@ export default function HomePage() {
                 type="button"
                 size="sm"
                 variant={editing ? "default" : "outline"}
-                className="h-8 rounded-sm text-xs font-semibold"
+                className="h-8 rounded-xl text-xs font-semibold"
                 onClick={() => setEditing((value) => !value)}
               >
                 {editing ? "Done" : "Customize"}
@@ -667,7 +669,7 @@ export default function HomePage() {
               <Button
                 nativeButton={false}
                 size="sm"
-                className="h-8 rounded-sm bg-[#0176d3] text-xs font-semibold text-white hover:bg-[#014486]"
+                className="h-8 rounded-xl bg-[#0176d3] text-xs font-semibold text-white hover:bg-[#014486]"
                 render={<Link href="/pipeline" />}
               >
                 View pipeline
@@ -696,10 +698,10 @@ export default function HomePage() {
             hasReturningClients: returningNotices.length > 0,
           })}
           salesIntro={
-            <div className="flex flex-wrap items-end justify-between gap-2">
+            <div className="flex flex-wrap items-end justify-between gap-2 px-1">
               <div>
                 <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
-                  Sales executive dashboard
+                  Sales
                 </p>
                 <p className="text-xs text-[#706e6b]">
                   Pipeline and closed-won for{" "}
@@ -712,6 +714,15 @@ export default function HomePage() {
           renderModule={(id) => renderHomeModule(id)}
         />
       ) : null}
+
+      <CreateTaskDialog open={createTaskOpen} onOpenChange={setCreateTaskOpen} />
+      <CreateTaskDialog
+        open={Boolean(editingTask)}
+        onOpenChange={(open) => {
+          if (!open) setEditingTask(null);
+        }}
+        task={editingTask}
+      />
     </div>
   );
 }

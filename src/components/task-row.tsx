@@ -25,7 +25,7 @@ export function TaskRow({
   const notes = taskNotes(task);
 
   return (
-    <li className="flex items-start gap-2.5 px-3 py-2.5 hover:bg-[#f3f3f3]">
+    <li className="flex items-start gap-2.5 px-5 py-3 hover:bg-[#f8fafc]">
       <Checkbox
         checked={task.completed}
         onCheckedChange={onToggle}

@@ -2,7 +2,10 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-/** Salesforce-style related list / panel chrome used on Home. */
+export const HOME_CARD_CLASS =
+  "overflow-hidden rounded-2xl border border-black/6 bg-white shadow-[0_10px_28px_rgba(15,23,42,0.06)]";
+
+/** Soft dashboard card chrome used on Home. */
 export function RelatedList({
   title,
   description,
@@ -17,15 +20,10 @@ export function RelatedList({
   className?: string;
 }) {
   return (
-    <section
-      className={cn(
-        "overflow-hidden rounded-sm border border-[#c9c9c9] bg-white shadow-[0_2px_2px_rgba(0,0,0,0.05)]",
-        className,
-      )}
-    >
-      <div className="flex items-start justify-between gap-3 border-b border-[#c9c9c9] bg-[#f3f3f3] px-3 py-2">
+    <section className={cn(HOME_CARD_CLASS, "h-full", className)}>
+      <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-2">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-[#181818]">{title}</h2>
+          <h2 className="text-sm font-semibold tracking-tight text-[#181818]">{title}</h2>
           {description ? (
             <p className="mt-0.5 text-xs leading-snug text-[#706e6b]">{description}</p>
           ) : null}
@@ -52,7 +50,7 @@ export function DashboardChart({
 }) {
   return (
     <RelatedList title={title} description={description} action={action} className={className}>
-      <div className="px-3 py-3">{children}</div>
+      <div className="px-5 pb-5 pt-1">{children}</div>
     </RelatedList>
   );
 }
@@ -68,7 +66,7 @@ export function RelatedListLink({ href, children }: { href: string; children: Re
   );
 }
 
-/** Compact Salesforce-style KPI tile (Amount Open / Closed Won / Avg Deal). */
+/** Compact KPI tile (Amount Open / Closed Won / Avg Deal). */
 export function HomeKpiTile({
   label,
   value,
@@ -79,12 +77,12 @@ export function HomeKpiTile({
   hint?: string;
 }) {
   return (
-    <div className="rounded-sm border border-[#c9c9c9] bg-white px-3 py-3 shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
+    <div className={cn(HOME_CARD_CLASS, "flex h-full flex-col justify-between px-5 py-5")}>
       <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">{label}</p>
-      <p className="mt-1.5 text-[1.65rem] leading-none font-semibold tabular-nums text-[#032d60]">
+      <p className="mt-4 text-[2rem] leading-none font-semibold tabular-nums text-[#0f172a]">
         {value}
       </p>
-      <p className="mt-1.5 text-[11px] text-[#706e6b]">{hint}</p>
+      <p className="mt-3 text-[11px] text-[#706e6b]">{hint}</p>
     </div>
   );
 }
@@ -186,11 +184,11 @@ export function HomeAreaChart({
   const labelEvery = Math.max(1, Math.ceil(items.length / 6));
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="h-48 w-full">
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-52 w-full">
       <defs>
         <linearGradient id="homeAreaFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#0176d3" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#0176d3" stopOpacity="0.02" />
+          <stop offset="0%" stopColor="#1b96ff" stopOpacity="0.28" />
+          <stop offset="100%" stopColor="#1b96ff" stopOpacity="0.02" />
         </linearGradient>
       </defs>
       {[0.25, 0.5, 0.75, 1].map((tick) => {
@@ -209,6 +207,17 @@ export function HomeAreaChart({
       })}
       <path d={area} fill="url(#homeAreaFill)" />
       <path d={line} fill="none" stroke="#0176d3" strokeWidth="2.5" strokeLinejoin="round" />
+      {coords.map((point) => (
+        <circle
+          key={`dot-${point.key ?? point.label}`}
+          cx={point.x}
+          cy={point.y}
+          r="3.5"
+          fill="#fff"
+          stroke="#e8a317"
+          strokeWidth="2"
+        />
+      ))}
       {coords.map((point, index) =>
         index % labelEvery === 0 || index === coords.length - 1 ? (
           <text
@@ -312,49 +321,30 @@ export function HomeDonut({
   );
 }
 
-/** Horizontal Lightning Path for pipeline stages. */
+/** Horizontal stage cards for pipeline value. */
 export function PipelinePath({
   stages,
 }: {
   stages: Array<{ key: string; label: string; value: string; active?: boolean }>;
 }) {
   return (
-    <ol className="flex min-w-0 overflow-x-auto">
-      {stages.map((stage, index) => {
-        const isLast = index === stages.length - 1;
-        return (
-          <li
-            key={stage.key}
-            className={cn(
-              "relative flex min-w-[7.5rem] flex-1 flex-col justify-center border-y border-[#c9c9c9] px-3 py-2.5",
-              index === 0 && "border-l",
-              "border-r",
-              stage.active ? "bg-[#0176d3] text-white" : "bg-[#f3f3f3] text-[#181818]",
-            )}
-          >
-            {!isLast ? (
-              <span
-                aria-hidden
-                className={cn(
-                  "absolute top-1/2 -right-2 z-10 size-4 -translate-y-1/2 rotate-45 border-t border-r",
-                  stage.active
-                    ? "border-[#0176d3] bg-[#0176d3]"
-                    : "border-[#c9c9c9] bg-[#f3f3f3]",
-                )}
-              />
-            ) : null}
-            <span
-              className={cn(
-                "text-[10px] font-semibold tracking-wide uppercase",
-                stage.active ? "text-white/80" : "text-[#706e6b]",
-              )}
-            >
-              {stage.label}
-            </span>
-            <span className="mt-0.5 text-sm font-semibold tabular-nums">{stage.value}</span>
-          </li>
-        );
-      })}
+    <ol className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      {stages.map((stage) => (
+        <li
+          key={stage.key}
+          className={cn(
+            "rounded-xl border px-3 py-3",
+            stage.active
+              ? "border-[#e8a317]/70 bg-[#fff8e8] text-[#181818] shadow-[0_6px_16px_rgba(232,163,23,0.12)]"
+              : "border-black/6 bg-[#f8fafc] text-[#181818]",
+          )}
+        >
+          <span className="text-[10px] font-semibold tracking-wide text-[#706e6b] uppercase">
+            {stage.label}
+          </span>
+          <span className="mt-1.5 block text-base font-semibold tabular-nums">{stage.value}</span>
+        </li>
+      ))}
     </ol>
   );
 }
