@@ -484,6 +484,8 @@ export type Database = {
           related_type: Database["public"]["Enums"]["entity_kind"] | null;
           related_id: string | null;
           assignee: string;
+          notes: string;
+          reminded_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -495,6 +497,8 @@ export type Database = {
           related_type?: Database["public"]["Enums"]["entity_kind"] | null;
           related_id?: string | null;
           assignee?: string;
+          notes?: string;
+          reminded_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["tasks"]["Insert"]>;
         Relationships: [];
@@ -2595,6 +2599,27 @@ export type Database = {
       automation_insert_run: {
         Args: { p_run: Json };
         Returns: Json;
+      };
+      due_task_reminders: {
+        Args: Record<string, never>;
+        Returns: {
+          task_id: string;
+          company_id: string;
+          title: string;
+          due_at: string;
+          assignee: string;
+          notes: string;
+          related_type: Database["public"]["Enums"]["entity_kind"] | null;
+          related_id: string | null;
+          assignee_email: string;
+          assignee_name: string;
+          company_name: string;
+          company_email: string;
+        }[];
+      };
+      mark_task_reminded: {
+        Args: { p_task_id: string };
+        Returns: undefined;
       };
       ingest_realtor_listing_browse: {
         Args: {

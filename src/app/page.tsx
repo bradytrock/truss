@@ -489,7 +489,11 @@ export default function HomePage() {
         );
       case "todaysWork":
         return (
-          <RelatedList title="Today’s work" description="Open tasks on your desk.">
+          <RelatedList
+            title="Today’s work"
+            description="Open tasks on your desk."
+            action={<RelatedListLink href="/tasks">All tasks</RelatedListLink>}
+          >
             {upcomingTasks.length === 0 ? (
               <p className="px-3 py-6 text-sm text-[#706e6b]">All caught up. No open tasks.</p>
             ) : (

@@ -357,7 +357,18 @@ export interface Task {
   relatedType: "opportunity" | "job" | "client" | null;
   relatedId: string | null;
   assignee: string;
+  notes?: string;
+  remindedAt?: string | null;
 }
+
+export type TaskDraft = {
+  title: string;
+  dueAt: string;
+  relatedType: Task["relatedType"];
+  relatedId: string | null;
+  assignee: string;
+  notes?: string;
+};
 
 export const CATALOG_KINDS = [
   "labor",

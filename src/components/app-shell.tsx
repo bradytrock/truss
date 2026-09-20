@@ -45,6 +45,7 @@ import {
   CreateEventDialog,
   CreateInvoiceDialog,
 } from "@/components/create-ops-dialogs";
+import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { LogExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
 import { canViewReports, canManageSettings, canManageAutomations, canViewAccounting } from "@/lib/visibility";
 import { groupLoginAsTargets, readLoginAsRecent, recentLoginAsTargets, rememberLoginAsRecent } from "@/lib/login-as";
@@ -74,6 +75,7 @@ function navSections(options: { bdOnly: boolean }): NavSection[] {
           { href: "/messages", label: "Inbox" },
           { href: "/jobs", label: "Jobs" },
           { href: "/contacts", label: "Agents & contacts" },
+          { href: "/tasks", label: "Tasks" },
           { href: "/photos", label: "Photos" },
         ],
       },
@@ -88,6 +90,7 @@ function navSections(options: { bdOnly: boolean }): NavSection[] {
         { href: "/jobs", label: "Jobs" },
         { href: "/contacts", label: "Contacts" },
         { href: "/calendar", label: "Calendar" },
+        { href: "/tasks", label: "Tasks" },
       ],
     },
     {
@@ -148,7 +151,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const startEstimate = startEstimateFlow.prompt;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [create, setCreate] = useState<
-    "opportunity" | "client" | "invoice" | "event" | "expense" | "payment" | null
+    "opportunity" | "client" | "invoice" | "event" | "expense" | "payment" | "task" | null
   >(null);
 
   const launcherApps = appLauncherItems();
@@ -158,6 +161,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <>
         <DropdownMenuItem onClick={() => setCreate("opportunity")}>New lead</DropdownMenuItem>
         <DropdownMenuItem onClick={() => setCreate("client")}>New contact</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setCreate("task")}>New task</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => setCreate("expense")}>Log expense</DropdownMenuItem>
       </>
@@ -170,6 +174,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <DropdownMenuItem onClick={() => startEstimate()}>New estimate</DropdownMenuItem>
         <DropdownMenuItem onClick={() => setCreate("invoice")}>New invoice</DropdownMenuItem>
         <DropdownMenuItem onClick={() => setCreate("event")}>Calendar event</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setCreate("task")}>New task</DropdownMenuItem>
         <DropdownMenuItem onClick={() => setCreate("client")}>New contact</DropdownMenuItem>
       </>
     );
@@ -279,6 +284,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       <CreateEventDialog
         open={create === "event"}
         onOpenChange={(open) => setCreate(open ? "event" : null)}
+      />
+      <CreateTaskDialog
+        open={create === "task"}
+        onOpenChange={(open) => setCreate(open ? "task" : null)}
       />
       <LogExpenseDialog
         open={create === "expense"}
@@ -456,7 +465,7 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
 function SearchTrigger() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const { opportunities, jobs, contacts, estimates, invoices, materialOrders, materialOrderTemplates, viewer } = useCrm();
+  const { opportunities, jobs, contacts, estimates, invoices, materialOrders, materialOrderTemplates, viewer, tasks } = useCrm();
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -530,6 +539,35 @@ function SearchTrigger() {
                 </CommandItem>
                 );
               })}
+            </CommandGroup>
+            <CommandGroup heading="Tasks">
+              <CommandItem
+                value="tasks todo desk reminders deadline assign"
+                onSelect={() => {
+                  setOpen(false);
+                  router.push("/tasks");
+                }}
+              >
+                Task desk
+              </CommandItem>
+              {tasks
+                .filter((task) => !task.completed)
+                .slice(0, 12)
+                .map((task) => (
+                  <CommandItem
+                    key={task.id}
+                    value={`${task.title} ${task.assignee} task`}
+                    onSelect={() => {
+                      setOpen(false);
+                      router.push("/tasks");
+                    }}
+                  >
+                    <span className="min-w-0 truncate">{task.title}</span>
+                    {task.assignee ? (
+                      <span className="ml-auto text-[10px] text-muted-foreground">{task.assignee}</span>
+                    ) : null}
+                  </CommandItem>
+                ))}
             </CommandGroup>
             <CommandGroup heading="Inbox">
               <CommandItem

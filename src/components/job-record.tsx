@@ -26,6 +26,8 @@ import { toast } from "sonner";
 import { AddressStreetField } from "@/components/address-street-field";
 import { ActivityComposer, ActivityList } from "@/components/activity";
 import { AddPhotoDialog, CreateInvoiceDialog } from "@/components/create-ops-dialogs";
+import { CreateTaskDialog } from "@/components/create-task-dialog";
+import { TaskRow } from "@/components/task-row";
 import { StartEstimateButton, StartEstimateDialogHost } from "@/components/start-estimate-button";
 import { LogExpenseDialog } from "@/components/log-financial-dialogs";
 import { CreatePageDialog } from "@/components/create-page-dialog";
@@ -305,6 +307,7 @@ export function JobRecord({
   const [materialTemplateOpen, setMaterialTemplateOpen] = useState(false);
   const [activityFocus, setActivityFocus] = useState(0);
   const [reportId, setReportId] = useState<string | null>(null);
+  const [taskOpen, setTaskOpen] = useState(false);
   const [pageCreateOpen, setPageCreateOpen] = useState(false);
   const [pageCreating, setPageCreating] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
@@ -1384,21 +1387,29 @@ export function JobRecord({
 
         <TabsContent value="paper" className="mt-0 space-y-4">
           <AutomationRuns jobId={job.id} />
-          {tasks.length > 0 ? (
-            <div>
-              <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">Tasks</p>
-              <ul className="space-y-2">
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Tasks</p>
+              {deleted ? null : (
+                <Button size="sm" variant="ghost" onClick={() => setTaskOpen(true)}>
+                  New
+                </Button>
+              )}
+            </div>
+            {tasks.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No tasks on this job yet.</p>
+            ) : (
+              <ul className="divide-y divide-[#e5e5e5] overflow-hidden rounded-sm border border-[#c9c9c9] bg-white">
                 {tasks.map((task) => (
-                  <li key={task.id} className="text-sm">
-                    <p className={task.completed ? "text-muted-foreground line-through" : ""}>{task.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {task.assignee} · {formatDate(task.dueAt)}
-                    </p>
-                  </li>
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    onToggle={() => void crm.toggleTask(task.id)}
+                  />
                 ))}
               </ul>
-            </div>
-          ) : null}
+            )}
+          </div>
           <div>
             <div className="mb-2 flex items-center justify-between">
               <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Estimates</p>
@@ -1678,6 +1689,13 @@ export function JobRecord({
         onCreated={() => setJobTab("paper")}
       />
       <LogExpenseDialog open={expenseOpen} onOpenChange={setExpenseOpen} defaultJobId={job.id} />
+      <CreateTaskDialog
+        open={taskOpen}
+        onOpenChange={setTaskOpen}
+        defaultRelatedType="job"
+        defaultRelatedId={job.id}
+        lockRelated
+      />
       <MaterialOrderFromTemplateDialog
         jobId={job.id}
         open={materialTemplateOpen}

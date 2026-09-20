@@ -25,7 +25,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newPortalToken, portalInviteExpiry, portalUrl } from "@/lib/portal";
@@ -167,6 +167,7 @@ import {
   mapScheduleEvent,
   mapStaff,
   mapTask,
+  taskPatch,
   mapTrainingBulletin,
   mapMessage,
   mapGmailAccount,
@@ -219,6 +220,8 @@ import {
   type ScheduleEvent,
   type SeatRole,
   type StaffMember,
+  type Task,
+  type TaskDraft,
   type GoogleLocation,
   type Team,
   type TrainingBulletin,
@@ -974,13 +977,9 @@ type CrmContextValue = CrmState & {
     name?: string;
   }) => Promise<void>;
   toggleTask: (id: string) => Promise<void>;
-  addTask: (input: {
-    title: string;
-    dueAt: string;
-    relatedType: "opportunity" | "job" | "client" | null;
-    relatedId: string | null;
-    assignee: string;
-  }) => Promise<void>;
+  addTask: (input: TaskDraft) => Promise<Task | null>;
+  updateTask: (id: string, patch: Partial<Omit<Task, "id">>) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
   addEstimate: (input: {
     name: string;
     clientId: string | null;
@@ -3446,32 +3445,51 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   }, [recordCompanyAudit, state.tasks]);
 
   const addTask = useCallback(
-    async (input: {
-      title: string;
-      dueAt: string;
-      relatedType: "opportunity" | "job" | "client" | null;
-      relatedId: string | null;
-      assignee: string;
-    }) => {
+    async (input: TaskDraft) => {
+      const notes = input.notes?.trim() ?? "";
+      const localTask: Task = {
+        id: crypto.randomUUID(),
+        title: input.title.trim(),
+        dueAt: input.dueAt,
+        completed: false,
+        relatedType: input.relatedType,
+        relatedId: input.relatedId,
+        assignee: input.assignee,
+        notes,
+        remindedAt: null,
+      };
       const supabase = requireClient();
-    if (!supabase) throw new Error("Connect a Supabase project to save.");
-      const { data, error } = await supabase
-        .from("tasks")
-        .insert({
-          company_id: user.companyId,
-          title: input.title,
-          due_at: input.dueAt,
-          related_type: input.relatedType,
-          related_id: input.relatedId,
-          assignee: input.assignee,
-        })
-        .select("*")
-        .single();
-      if (error || !data) {
-        toast.error(error?.message ?? "Could not add the task.");
-        return;
+      if (!supabase) {
+        setState((prev) => ({ ...prev, tasks: [localTask, ...prev.tasks] }));
+        void recordCompanyAudit({
+          entityType: "task",
+          entityId: localTask.id,
+          action: "created",
+          after: localTask,
+          label: localTask.title,
+        });
+        return localTask;
       }
-      const mappedTask = mapTask(data);
+      const payload = {
+        company_id: user.companyId,
+        title: localTask.title,
+        due_at: localTask.dueAt,
+        related_type: localTask.relatedType,
+        related_id: localTask.relatedId,
+        assignee: localTask.assignee,
+        notes,
+      };
+      let inserted = await supabase.from("tasks").insert(payload).select("*").single();
+      if (inserted.error && isMissingTaskDeskColumns(inserted.error)) {
+        toast.message(missingTaskDeskMessage());
+        const { notes: _notes, ...rest } = payload;
+        inserted = await supabase.from("tasks").insert(rest).select("*").single();
+      }
+      if (inserted.error || !inserted.data) {
+        toast.error(inserted.error?.message ?? "Could not add the task.");
+        return null;
+      }
+      const mappedTask = mapTask(inserted.data);
       setState((prev) => ({ ...prev, tasks: [mappedTask, ...prev.tasks] }));
       void recordCompanyAudit({
         entityType: "task",
@@ -3480,8 +3498,97 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         after: mappedTask,
         label: mappedTask.title,
       });
+      return mappedTask;
     },
-    [user.companyId]
+    [recordCompanyAudit, user.companyId]
+  );
+
+  const updateTask = useCallback(
+    async (id: string, patch: Partial<Omit<Task, "id">>) => {
+      const current = state.tasks.find((task) => task.id === id);
+      if (!current) return;
+      const after: Task = {
+        ...current,
+        ...patch,
+        id,
+        notes: patch.notes !== undefined ? patch.notes : current.notes,
+        remindedAt: patch.dueAt !== undefined && patch.dueAt !== current.dueAt ? null : (patch.remindedAt ?? current.remindedAt),
+      };
+      const supabase = requireClient();
+      if (!supabase) {
+        setState((prev) => ({
+          ...prev,
+          tasks: prev.tasks.map((task) => (task.id === id ? after : task)),
+        }));
+        void recordCompanyAudit({
+          entityType: "task",
+          entityId: id,
+          action: "updated",
+          before: current,
+          after,
+          label: after.title,
+        });
+        return;
+      }
+      let nextPatch = taskPatch(patch);
+      let { error } = await supabase.from("tasks").update(nextPatch).eq("id", id);
+      if (error && isMissingTaskDeskColumns(error)) {
+        toast.message(missingTaskDeskMessage());
+        const { notes: _notes, reminded_at: _reminded, ...rest } = nextPatch;
+        nextPatch = rest;
+        ({ error } = await supabase.from("tasks").update(nextPatch).eq("id", id));
+      }
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        tasks: prev.tasks.map((task) => (task.id === id ? after : task)),
+      }));
+      void recordCompanyAudit({
+        entityType: "task",
+        entityId: id,
+        action: "updated",
+        before: current,
+        after,
+        label: after.title,
+      });
+    },
+    [recordCompanyAudit, state.tasks]
+  );
+
+  const deleteTask = useCallback(
+    async (id: string) => {
+      const current = state.tasks.find((task) => task.id === id);
+      if (!current) return;
+      const supabase = requireClient();
+      if (!supabase) {
+        setState((prev) => ({ ...prev, tasks: prev.tasks.filter((task) => task.id !== id) }));
+        void recordCompanyAudit({
+          entityType: "task",
+          entityId: id,
+          action: "deleted",
+          before: current,
+          label: current.title,
+        });
+        return;
+      }
+      const { error } = await supabase.from("tasks").delete().eq("id", id);
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+      setState((prev) => ({ ...prev, tasks: prev.tasks.filter((task) => task.id !== id) }));
+      void recordCompanyAudit({
+        entityType: "task",
+        entityId: id,
+        action: "deleted",
+        before: current,
+        label: current.title,
+      });
+    },
+    [recordCompanyAudit, state.tasks]
   );
 
   const enqueueAutomationEvent = useCallback(
@@ -11367,6 +11474,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       logOutboundEmail,
       toggleTask,
       addTask,
+      updateTask,
+      deleteTask,
       saveAutomation,
       setAutomationEnabled,
       confirmAutomationRun,
@@ -11538,6 +11647,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       logOutboundEmail,
       toggleTask,
       addTask,
+      updateTask,
+      deleteTask,
       saveAutomation,
       setAutomationEnabled,
       confirmAutomationRun,
