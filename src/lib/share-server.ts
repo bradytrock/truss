@@ -85,7 +85,7 @@ export async function loadSharedEstimate(token: string): Promise<{
   sender: ShareSender | null;
 }> {
   const { data, sender } = await rpcShare("shared_estimate", token);
-  const payload = clientFacingSharePayload(data);
+  const payload = clientFacingSharePayload(data, token);
   if (data != null && !payload) {
     logShareRpc("shared_estimate", token, { message: "unparseable payload" });
     return { payload: null, sender: sender ?? (await lookupShareSender(token)) };

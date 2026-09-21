@@ -551,6 +551,7 @@ export interface EstimateLinePhoto {
   id: string;
   imageUrl: string;
   caption: string;
+  storagePath?: string | null;
 }
 
 export interface EstimateLine {

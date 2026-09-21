@@ -92,6 +92,7 @@ export function ProposalDocument({
   customer,
   company,
   market,
+  photos,
   onToggleOptional,
   selectable,
   showStatus = true,
@@ -107,6 +108,7 @@ export function ProposalDocument({
   customer: string;
   company?: CompanySettings;
   market?: JobMarket | "" | null;
+  photos?: JobPhoto[];
   onToggleOptional?: (line: EstimateLine, selected: boolean) => void;
   selectable?: boolean;
   showStatus?: boolean;
@@ -235,7 +237,7 @@ export function ProposalDocument({
                             className="mt-0.5 text-sm text-muted-foreground"
                           />
                         ) : null}
-                        <ProposalLinePhotos line={line} gallery={crm?.photos ?? []} />
+                        <ProposalLinePhotos line={line} gallery={photos ?? crm?.photos ?? []} />
                         <p className="mt-1 text-xs tabular-nums text-muted-foreground">
                           {estimate.hideLinePrices
                             ? `${line.quantity} ${line.unit}`

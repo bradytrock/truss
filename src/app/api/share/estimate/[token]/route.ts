@@ -49,7 +49,7 @@ export async function GET(request: Request, context: { params: Promise<{ token: 
     }
     await recordShareEvent(trimmed, request.headers, { kind: "opened" });
     return shareJson(
-      withStorageShareAccessDeep(clientFacingSharePayload(data) ?? data, trimmed),
+      withStorageShareAccessDeep(clientFacingSharePayload(data, trimmed) ?? data, trimmed),
     );
   } catch (error) {
     console.error("[share] shared_estimate threw", error);
@@ -91,7 +91,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ token
         return shareNotFoundJson(trimmed);
       }
       return shareJson(
-        withStorageShareAccessDeep(clientFacingSharePayload(data) ?? data, trimmed),
+        withStorageShareAccessDeep(clientFacingSharePayload(data, trimmed) ?? data, trimmed),
       );
     }
     const { data, error } = await supabase.rpc("select_shared_estimate_line", {
@@ -109,7 +109,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ token
       return shareNotFoundJson(trimmed);
     }
     return shareJson(
-      withStorageShareAccessDeep(clientFacingSharePayload(data) ?? data, trimmed),
+      withStorageShareAccessDeep(clientFacingSharePayload(data, trimmed) ?? data, trimmed),
     );
   } catch {
     return shareNotFoundJson(trimmed);
@@ -189,7 +189,9 @@ export async function POST(request: Request, context: { params: Promise<{ token:
       documentSnapshot: snapshot ?? undefined,
       timeZone: typeof body.timeZone === "string" ? body.timeZone : "",
     });
-    return shareJson(withStorageShareAccessDeep(data, trimmed));
+    return shareJson(
+      withStorageShareAccessDeep(clientFacingSharePayload(data, trimmed) ?? data, trimmed),
+    );
   } catch {
     return shareNotFoundJson(trimmed);
   }

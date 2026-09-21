@@ -1,5 +1,5 @@
 import { fillJobRecord, parseCustomFields } from "@/lib/job-record";
-import { normalizeLinePhotoIds } from "@/lib/estimate-line-photos";
+import { normalizeLinePhotoIds, resolveEstimateLinePhotoUrl } from "@/lib/estimate-line-photos";
 import { parseEstimatePackage, parseEstimatePackageMode, parseLinePackage } from "@/lib/estimate-packages";
 import { parsePageTemplate, parsePhotoReportPages } from "@/lib/photo-report";
 import type { CompanySettings, EstimateLinePhoto, Job, JobPhoto, PhotoReport } from "@/lib/types";
@@ -372,9 +372,14 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
       const photos = Array.isArray(line.photos)
         ? line.photos.filter(isRecord).flatMap((photo) => {
             const id = asString(photo.id);
-            const imageUrl = asString(photo.imageUrl);
+            const storagePath =
+              asString(photo.storagePath) || asString(photo.storage_path) || null;
+            const imageUrl = resolveEstimateLinePhotoUrl({
+              imageUrl: asString(photo.imageUrl),
+              storagePath,
+            });
             if (!id || !imageUrl) return [];
-            return [{ id, imageUrl, caption: asString(photo.caption) }];
+            return [{ id, imageUrl, caption: asString(photo.caption), storagePath }];
           })
         : [];
       const photoIds = normalizeLinePhotoIds([

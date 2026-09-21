@@ -1,26 +1,38 @@
+import { isAllowedObjectKey, objectKeyFromStoredUrl, publicObjectUrl } from "./urls";
+
+function proxyUrlForStoredObject(url: string) {
+  const raw = url.trim();
+  if (!raw) return "";
+  if (raw.includes("/api/storage/object")) return raw;
+  const key = objectKeyFromStoredUrl(raw);
+  if (key && isAllowedObjectKey(key)) return publicObjectUrl(key);
+  return raw;
+}
+
 /** Append a document share token to private storage proxy URLs so share pages can load photos. */
 export function withStorageShareAccess(url: string, shareToken: string) {
   const token = shareToken.trim();
   const raw = url.trim();
-  if (!token || !raw) return raw;
+  if (!raw) return raw;
   if (raw.startsWith("data:") || raw.startsWith("blob:")) return raw;
+  const proxied = proxyUrlForStoredObject(raw);
+  if (!token) return proxied;
   try {
-    const absolute = raw.startsWith("http://") || raw.startsWith("https://");
-    const parsed = absolute ? new URL(raw) : new URL(raw, "http://local.invalid");
+    const absolute = proxied.startsWith("http://") || proxied.startsWith("https://");
+    const parsed = absolute ? new URL(proxied) : new URL(proxied, "http://local.invalid");
     const isProxy =
       parsed.pathname === "/api/storage/object" || parsed.pathname.endsWith("/api/storage/object");
-    if (!isProxy) return raw;
+    if (!isProxy) return proxied;
     parsed.searchParams.set("share", token);
     if (absolute) return parsed.toString();
     return `${parsed.pathname}${parsed.search}${parsed.hash}`;
   } catch {
-    return raw;
+    return proxied;
   }
 }
 
 export function withStorageShareAccessDeep(value: unknown, shareToken: string): unknown {
   const token = shareToken.trim();
-  if (!token) return value;
   if (typeof value === "string") return withStorageShareAccess(value, token);
   if (Array.isArray(value)) {
     return value.map((item) => withStorageShareAccessDeep(item, token));
