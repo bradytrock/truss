@@ -59,6 +59,17 @@ export function taggedQbwcStep(step: QbwcStep, useAlias: boolean) {
   return `${step}${QBWC_ALIAS_FLAG}`;
 }
 
+/** Job expenses must hang on a Customer:Job ListID. Query the job before BillAdd. */
+export function resolveQbwcStep(rawStep: string, work?: QbwcWork | null) {
+  const { step, useAlias } = splitQbwcStep(rawStep);
+  if (work?.kind === "expense" && work.hasJob && !work.jobListId?.trim()) {
+    if (step === "expense_add" || step === "txn_void") {
+      return taggedQbwcStep("job_query", useAlias);
+    }
+  }
+  return rawStep;
+}
+
 export type QbInvoiceWork = {
   kind: "invoice";
   invoiceId: string;

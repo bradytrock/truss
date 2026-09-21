@@ -92,7 +92,7 @@ async function dispatch(call: ReturnType<typeof parseQbwcSoap>) {
         advance.action === "next" ? advance.step : advance.action === "complete" ? advance.txnId : advance.error,
       );
       if (advance.action === "fail") {
-        await qbwcApply(call.ticket, "fail", { error: advance.error });
+        await qbwcApply(call.ticket, "fail", { error: advance.error, txnId: advance.txnId });
         return soapIntResponse("receiveResponseXML", -1);
       }
       if (advance.action === "complete") {

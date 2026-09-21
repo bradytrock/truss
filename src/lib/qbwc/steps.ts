@@ -4,6 +4,7 @@ import {
   customerAddXml,
   customerAliasName,
   customerQueryXml,
+  expenseRetHasJobCustomer,
   invoiceAddXml,
   isQbLockMessage,
   isQbNotFoundMessage,
@@ -23,6 +24,7 @@ import {
   jobFullName,
   paymentCustomerRef,
   splitQbwcStep,
+  resolveQbwcStep,
   taggedQbwcStep,
   type QbwcStep,
   type QbwcWork,
@@ -36,7 +38,7 @@ function recordId(work: QbwcWork) {
 }
 
 export function requestForStep(rawStep: string, work: QbwcWork) {
-  const { step, useAlias } = splitQbwcStep(rawStep);
+  const { step, useAlias } = splitQbwcStep(resolveQbwcStep(rawStep, work));
   const requestId = `${recordId(work)}-${step}`;
   if (step === "vendor_list_query") {
     return vendorListQueryXml(requestId, work.kind === "vendor_sync" ? work.iteratorId : "");
@@ -168,7 +170,7 @@ export type StepAdvance =
       jobListId?: string;
     }
   | { action: "complete"; txnId: string }
-  | { action: "fail"; error: string };
+  | { action: "fail"; error: string; txnId?: string };
 
 export function advanceFromResponse(
   rawStep: string,
@@ -260,6 +262,12 @@ export function advanceFromResponse(
       };
     case "job_query":
       if (missing) return { action: "next", step: taggedQbwcStep("job_add", useAlias) };
+      if (needsExpenseJobListId(work) && !result.listId) {
+        return {
+          action: "fail",
+          error: "QuickBooks found the job but did not return a ListID. Run the connector again.",
+        };
+      }
       return {
         action: "next",
         step: afterJob(work, useAlias),
@@ -271,10 +279,13 @@ export function advanceFromResponse(
         if (useAlias) return { action: "fail", error: aliasParentFailedMessage(work, qbMessage) };
         return { action: "next", step: "customer_alias_query" };
       }
+      if (!result.listId) {
+        return { action: "next", step: taggedQbwcStep("job_query", useAlias) };
+      }
       return {
         action: "next",
         step: afterJob(work, useAlias),
-        jobListId: result.listId || undefined,
+        jobListId: result.listId,
       };
     case "item_query":
       return {
@@ -286,9 +297,10 @@ export function advanceFromResponse(
         ? { action: "fail", error: qbMessage }
         : { action: "next", step: taggedQbwcStep("invoice_add", useAlias) };
     case "invoice_add":
-    case "expense_add":
     case "payment_add":
       return missing ? { action: "fail", error: qbMessage } : { action: "complete", txnId: result.txnId };
+    case "expense_add":
+      return expenseAddAdvance(result, qbMessage, responseXml, work);
   }
 }
 
@@ -308,7 +320,8 @@ export function receiveWorkAdvance(input: {
   const responseXml = input.responseXml ?? "";
   const message = input.message ?? "";
   const hresult = input.hresult ?? "";
-  const { step, useAlias } = splitQbwcStep(input.step);
+  const resolvedStep = resolveQbwcStep(input.step, input.work);
+  const { step, useAlias } = splitQbwcStep(resolvedStep);
   const hasXml = Boolean(responseXml.trim());
   if (!hasXml && hresultFailed(hresult) && !isQbNotFoundMessage(message)) {
     if (step === "txn_void") {
@@ -321,9 +334,38 @@ export function receiveWorkAdvance(input: {
       }
       return { action: "next", step: taggedQbwcStep("expense_add", useAlias) };
     }
-    return { action: "fail", error: `${stepLabel(input.step)}: ${message || hresult}` };
+    return { action: "fail", error: `${stepLabel(resolvedStep)}: ${message || hresult}` };
   }
-  return advanceFromResponse(input.step, responseXml, message, input.work);
+  return advanceFromResponse(resolvedStep, responseXml, message, input.work);
+}
+
+function needsExpenseJobListId(work?: QbwcWork | null) {
+  return work?.kind === "expense" && work.hasJob;
+}
+
+function expenseAddAdvance(
+  result: ReturnType<typeof readQbResponse>,
+  qbMessage: string,
+  responseXml: string,
+  work?: QbwcWork | null,
+): StepAdvance {
+  if (result.kind === "missing") return { action: "fail", error: qbMessage };
+  if (needsExpenseJobListId(work) && !expenseRetHasJobCustomer(responseXml)) {
+    if (work?.kind === "expense" && work.payWith === "credit_card") {
+      return {
+        action: "fail",
+        error:
+          "That credit card charge posted without Customer:Job. Void it in QuickBooks and run the connector again.",
+      };
+    }
+    return {
+      action: "fail",
+      error:
+        "That vendor bill landed in Accounts Payable without Customer:Job. We saved it so the next connector run can void it and post it on the job.",
+      txnId: result.txnId,
+    };
+  }
+  return { action: "complete", txnId: result.txnId };
 }
 
 function afterVendor(work?: QbwcWork | null) {

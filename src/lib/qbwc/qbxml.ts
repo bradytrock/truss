@@ -242,18 +242,15 @@ export function expenseLineXml(input: {
   customerListId?: string;
 }) {
   const memo = qbAscii(input.memo ?? "", 4095);
-  const job = input.customerJobFullName?.trim() ?? "";
   const listId = input.customerListId?.trim() ?? "";
   // CustomerRef on the expense line is what hangs the bill on Customer:Job.
-  // Prefer the job ListID we just queried/created — FullName can miss (alias,
-  // renamed job) and continueOnError then saves the bill as company A/P only.
+  // ListID only — FullName can miss (alias, renamed job) and continueOnError
+  // then saves the bill as company A/P with no job. The connector queries the
+  // job first and will not BillAdd a job expense until it has this ListID.
   const customerRef = listId
     ? `          <CustomerRef>\r\n            <ListID>${xmlEscape(listId)}</ListID>\r\n          </CustomerRef>\r\n` +
       `          <BillableStatus>NotBillable</BillableStatus>\r\n`
-    : job
-      ? `          <CustomerRef>\r\n            <FullName>${xmlEscape(job)}</FullName>\r\n          </CustomerRef>\r\n` +
-        `          <BillableStatus>NotBillable</BillableStatus>\r\n`
-      : "";
+    : "";
   return (
     `        <ExpenseLineAdd>\r\n` +
     `          <AccountRef>\r\n` +
@@ -488,6 +485,17 @@ export function isQbNotFoundMessage(message: string) {
 
 export function isQbLockMessage(message: string) {
   return /could not be locked|in use by another user/i.test(message);
+}
+
+/** True when every expense line on the saved bill/charge is hung on a customer or job. */
+export function expenseRetHasJobCustomer(xml: string) {
+  const lines = xml.match(/<ExpenseLineRet\b[\s\S]*?<\/ExpenseLineRet>/gi) ?? [];
+  if (lines.length === 0) return false;
+  return lines.every((line) =>
+    /<CustomerRef\b[\s\S]*?(?:<ListID>[^<]+<\/ListID>|<FullName>[^<]+<\/FullName>)[\s\S]*?<\/CustomerRef>/i.test(
+      line,
+    ),
+  );
 }
 
 export function readQbResponse(xml: string, fallbackMessage = ""): QbParsedResponse {

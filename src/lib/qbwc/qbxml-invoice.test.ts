@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { billAddXml, invoiceAddXml, signedInvoiceQtyRate, txnVoidXml } from "./qbxml.ts";
+import { billAddXml, expenseRetHasJobCustomer, invoiceAddXml, signedInvoiceQtyRate, txnVoidXml } from "./qbxml.ts";
 import { advanceFromResponse, receiveWorkAdvance, requestForStep } from "./steps.ts";
 import {
   expenseRepairsBill,
   expenseReplacesCheck,
   parseWorkPayload,
+  resolveQbwcStep,
   type QbExpenseWork,
   type QbInvoiceWork,
 } from "./work.ts";
@@ -70,23 +71,48 @@ const expenseWork: QbExpenseWork = {
   phone: "",
   hasJob: true,
 };
+assert.equal(resolveQbwcStep("expense_add", expenseWork), "job_query");
+assert.equal(resolveQbwcStep("txn_void+alias", expenseWork), "job_query+alias");
+assert.equal(resolveQbwcStep("expense_add", { ...expenseWork, jobListId: "80000012-1789520000" }), "expense_add");
+assert.equal(resolveQbwcStep("vendor_query", expenseWork), "vendor_query");
+const jobFound =
+  "<CustomerQueryRs statusCode=\"0\"><CustomerRet><ListID>80000012-1789520000</ListID><FullName>Ojamaye:BJ091026-A</FullName></CustomerRet></CustomerQueryRs>";
+const queriedFromBill = receiveWorkAdvance({
+  step: "expense_add",
+  responseXml: jobFound,
+  work: expenseWork,
+});
+assert.equal(queriedFromBill.action, "next");
+assert.equal(queriedFromBill.action === "next" ? queriedFromBill.step : "", "expense_add");
+assert.equal(queriedFromBill.action === "next" ? queriedFromBill.jobListId : "", "80000012-1789520000");
+
 const billXml = requestForStep("expense_add", expenseWork);
-assert.match(billXml, /<BillAddRq/);
-assert.match(billXml, /<VendorRef>[\s\S]*Silva&apos;s Sheet Metal LLC/);
-assert.match(billXml, /<CustomerRef>[\s\S]*Ojamaye:BJ091026-A/);
-assert.match(billXml, /<BillableStatus>NotBillable<\/BillableStatus>/);
-assert.doesNotMatch(billXml, /<CheckAddRq/);
-assert.doesNotMatch(billXml, /<CustomerRef>[\s\S]*<ListID>/);
+assert.match(billXml, /<CustomerQueryRq/);
+assert.match(billXml, /<FullName>Ojamaye:BJ091026-A<\/FullName>/);
+assert.doesNotMatch(billXml, /<BillAddRq/);
 
 const billedOnJob = requestForStep("expense_add", { ...expenseWork, jobListId: "80000012-1789520000" });
+assert.match(billedOnJob, /<BillAddRq/);
+assert.match(billedOnJob, /<VendorRef>[\s\S]*Silva&apos;s Sheet Metal LLC/);
 assert.match(billedOnJob, /<CustomerRef>[\s\S]*<ListID>80000012-1789520000<\/ListID>/);
+assert.match(billedOnJob, /<BillableStatus>NotBillable<\/BillableStatus>/);
 assert.doesNotMatch(billedOnJob, /<CustomerRef>[\s\S]*<FullName>/);
+assert.doesNotMatch(billedOnJob, /<CheckAddRq/);
+assert.doesNotMatch(billAddXml({
+  requestId: "e-no-job",
+  vendor: "Vendor",
+  txnDate: "2026-09-10",
+  accountName: "Subcontractors",
+  amount: 10,
+  customerJobFullName: "Ojamaye:BJ091026-A",
+}), /<CustomerRef>/);
 
-const replaceWork = { ...expenseWork, replaceTxnId: "43-1789510995" };
+const jobListId = "80000012-1789520000";
+const replaceWork = { ...expenseWork, replaceTxnId: "43-1789510995", jobListId };
 assert.equal(expenseReplacesCheck(replaceWork), true);
 assert.equal(expenseReplacesCheck(expenseWork), false);
 assert.equal(expenseRepairsBill(replaceWork), false);
-const repairWork = { ...expenseWork, replaceTxnId: "49-1789524336", replaceTxnKind: "bill" as const };
+const repairWork = { ...expenseWork, replaceTxnId: "49-1789524336", replaceTxnKind: "bill" as const, jobListId };
 assert.equal(expenseRepairsBill(repairWork), true);
 assert.equal(expenseReplacesCheck(repairWork), false);
 assert.match(requestForStep("txn_void", repairWork), /<TxnVoidType>Bill<\/TxnVoidType>/);
@@ -149,6 +175,25 @@ const jobOk = "<CustomerAddRs statusCode=\"0\"><CustomerRet><ListID>1</ListID></
 assert.equal(advanceFromResponse("job_add", jobOk, "", replaceWork).step, "expense_add");
 assert.equal(advanceFromResponse("job_add", jobOk, "", expenseWork).step, "expense_add");
 assert.equal(advanceFromResponse("job_add", jobOk, "", repairWork).step, "txn_void");
+const jobExists = "<CustomerAddRs statusCode=\"3100\" statusMessage=\"The name is already in use.\" />";
+assert.equal(advanceFromResponse("job_add", jobExists, "", expenseWork).step, "job_query");
+assert.equal(advanceFromResponse("job_add+alias", jobExists, "", expenseWork).step, "job_query+alias");
+const jobFoundNoId = "<CustomerQueryRs statusCode=\"0\"><CustomerRet><FullName>Ojamaye:BJ091026-A</FullName></CustomerRet></CustomerQueryRs>";
+assert.equal(advanceFromResponse("job_query", jobFoundNoId, "", expenseWork).action, "fail");
+const billNoJob =
+  "<BillAddRs statusCode=\"0\"><BillRet><TxnID>49-1</TxnID><ExpenseLineRet><Amount>2800.00</Amount></ExpenseLineRet></BillRet></BillAddRs>";
+const hungOffJob = advanceFromResponse("expense_add", billNoJob, "", expenseWork);
+assert.equal(hungOffJob.action, "fail");
+assert.equal(hungOffJob.action === "fail" ? hungOffJob.txnId : "", "49-1");
+const billOnJob =
+  "<BillAddRs statusCode=\"0\"><BillRet><TxnID>50-1</TxnID><ExpenseLineRet><CustomerRef><ListID>80000012-1789520000</ListID></CustomerRef></ExpenseLineRet></BillRet></BillAddRs>";
+assert.equal(advanceFromResponse("expense_add", billOnJob, "", { ...expenseWork, jobListId }).action, "complete");
+assert.equal(
+  advanceFromResponse("expense_add", billNoJob, "", { ...expenseWork, hasJob: false, jobCode: "" }).action,
+  "complete",
+);
+assert.equal(expenseRetHasJobCustomer(billOnJob), true);
+assert.equal(expenseRetHasJobCustomer(billNoJob), false);
 assert.equal(
   receiveWorkAdvance({
     step: "txn_void",
@@ -186,11 +231,13 @@ const apPayload = parseWorkPayload({
   customerName: "Don Ojamaye",
   jobCode: "BJ091026-A",
   hasJob: true,
+  jobListId: "80000012-1789520000",
 });
 assert.equal(apPayload && apPayload.kind === "expense" && apPayload.payWith, "bill");
 if (apPayload && apPayload.kind === "expense") {
   const apXml = requestForStep("expense_add", apPayload);
   assert.match(apXml, /<BillAddRq/);
+  assert.match(apXml, /<ListID>80000012-1789520000<\/ListID>/);
   assert.doesNotMatch(apXml, /<CheckAddRq/);
   assert.doesNotMatch(apXml, /<AccountRef>[\s\S]*Accounts Payable/);
 }
