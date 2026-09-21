@@ -17,6 +17,7 @@ import {
   GripVertical,
   Link2,
   Plus,
+  RotateCcw,
   Trash2,
   XIcon,
 } from "lucide-react";
@@ -47,6 +48,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PhotoReportPagePreview } from "@/components/photo-report-preview";
+import { WorkOrderEditor } from "@/components/work-order-editor";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { useCrm } from "@/lib/crm-store";
 import { downloadPhotoReportPdf } from "@/lib/photo-report-pdf";
@@ -73,6 +75,7 @@ import {
   type PhotoReportPage,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { fillWorkOrderFromJob } from "@/lib/work-order";
 
 export function PhotoReportBuilder({
   job,
@@ -105,8 +108,10 @@ export function PhotoReportBuilder({
     }) ||
     job.location.trim() ||
     "";
-  const [draft, setDraft] = useState(report);
+  const [draft, setDraft] = useState(() => withJobBoundWorkOrder(report, job));
   const [selectedId, setSelectedId] = useState(report.pages[0]?.id ?? "");
+  const historyRef = useRef<PhotoReport[]>([]);
+  const [canUndo, setCanUndo] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -192,6 +197,21 @@ export function PhotoReportBuilder({
     setJumpNonce((value) => value + 1);
   }
 
+  function pushHistory(current: PhotoReport) {
+    historyRef.current = [...historyRef.current.slice(-39), structuredClone(current)];
+    setCanUndo(true);
+  }
+
+  function undoChange() {
+    const previous = historyRef.current.pop();
+    if (!previous) return;
+    setCanUndo(historyRef.current.length > 0);
+    setDraft(previous);
+    if (!previous.pages.some((page) => page.id === selectedId)) {
+      setSelectedId(previous.pages[0]?.id ?? "");
+    }
+  }
+
   function commit(pages: PhotoReportPage[], extra?: Partial<PhotoReport>) {
     const next: PhotoReport = {
       ...draft,
@@ -199,6 +219,10 @@ export function PhotoReportBuilder({
       pages,
       updatedAt: new Date().toISOString(),
     };
+    if (JSON.stringify({ ...draft, updatedAt: "" }) === JSON.stringify({ ...next, updatedAt: "" })) {
+      return;
+    }
+    pushHistory(draft);
     setDraft(next);
     if (!pages.some((page) => page.id === selectedId)) {
       setSelectedId(pages[0]?.id ?? "");
@@ -234,6 +258,11 @@ export function PhotoReportBuilder({
   }
 
   function requestRemove(pageId: string) {
+    const target = draft.pages.find((page) => page.id === pageId);
+    if (target?.type === "work_order") {
+      toast.error("Work order sections stay on the page. Use Undo to reverse a change.");
+      return;
+    }
     if (draft.pages.length === 1) {
       toast.error("Keep at least one page.");
       return;
@@ -349,6 +378,17 @@ export function PhotoReportBuilder({
           />
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!canUndo}
+            onClick={undoChange}
+            aria-label="Undo last change"
+          >
+            <RotateCcw data-icon="inline-start" />
+            Undo
+          </Button>
           <Button type="button" variant="outline" size="sm" onClick={() => addPage("photos")}>
             <Plus data-icon="inline-start" />
             Photos
@@ -399,7 +439,7 @@ export function PhotoReportBuilder({
                     page={page}
                     index={index}
                     selected={page.id === selected?.id}
-                    canDelete={draft.pages.length > 1}
+                    canDelete={page.type !== "work_order" && draft.pages.length > 1}
                     onSelect={() => jumpToPage(page.id)}
                     onDelete={() => requestRemove(page.id)}
                   />
@@ -456,29 +496,39 @@ export function PhotoReportBuilder({
                         page.id === selected?.id && "ring-2 ring-primary/50 ring-offset-2 ring-offset-muted/40",
                       )}
                     >
-                      <PhotoReportPagePreview
-                        page={page}
-                        job={job}
-                        photos={photos}
-                        report={draft}
-                        company={crm.company}
-                        contacts={crm.contacts}
-                        staff={crm.staff}
-                        customerName={crm.customerName(job)}
-                        edit={{
-                          onChange: (patch) => patchPage(page.id, patch),
-                          onAddPhotos: photosPage
-                            ? () => {
-                                jumpToPage(page.id);
-                                setPickerPageId(page.id);
-                                setPickerOpen(true);
-                              }
-                            : undefined,
-                          onRemovePhoto: photosPage
-                            ? (photoIndex) => removePhotoFromPage(photosPage, photoIndex)
-                            : undefined,
-                        }}
-                      />
+                      {page.type === "work_order" ? (
+                        <WorkOrderEditor
+                          page={page}
+                          job={job}
+                          title={draft.title}
+                          onTitleChange={(title) => commit(draft.pages, { title })}
+                          onChange={(next) => patchPage(page.id, next)}
+                        />
+                      ) : (
+                        <PhotoReportPagePreview
+                          page={page}
+                          job={job}
+                          photos={photos}
+                          report={draft}
+                          company={crm.company}
+                          contacts={crm.contacts}
+                          staff={crm.staff}
+                          customerName={crm.customerName(job)}
+                          edit={{
+                            onChange: (patch) => patchPage(page.id, patch),
+                            onAddPhotos: photosPage
+                              ? () => {
+                                  jumpToPage(page.id);
+                                  setPickerPageId(page.id);
+                                  setPickerOpen(true);
+                                }
+                              : undefined,
+                            onRemovePhoto: photosPage
+                              ? (photoIndex) => removePhotoFromPage(photosPage, photoIndex)
+                              : undefined,
+                          }}
+                        />
+                      )}
                     </div>
                   </section>
                 );
@@ -648,6 +698,17 @@ function SortablePageCard({
       </div>
     </li>
   );
+}
+
+function withJobBoundWorkOrder(report: PhotoReport, job: Job): PhotoReport {
+  let changed = false;
+  const pages = report.pages.map((page) => {
+    if (page.type !== "work_order") return page;
+    const next = fillWorkOrderFromJob(page, job);
+    if (next !== page) changed = true;
+    return next;
+  });
+  return changed ? { ...report, pages } : report;
 }
 
 function chunkAsPages(photos: JobPhoto[], layout: PhotoPageLayout) {
