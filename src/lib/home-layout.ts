@@ -7,6 +7,7 @@ export const HOME_MODULE_IDS = [
   "qbApprove",
   "accountingNotices",
   "returningClients",
+  "jobCodes",
   "pipelinePath",
   "todaysWork",
   "calendarDay",
@@ -36,6 +37,7 @@ export const HOME_MODULE_LABELS: Record<HomeModuleId, string> = {
   qbApprove: "Approve for QuickBooks",
   accountingNotices: "Accounting needs you",
   returningClients: "Returning clients",
+  jobCodes: "Job codes",
   pipelinePath: "Pipeline path",
   todaysWork: "Tasks",
   calendarDay: "Today’s calendar",
@@ -69,6 +71,7 @@ const DEFAULT_BY_ID: Record<HomeModuleId, HomeModulePlacement> = {
   qbApprove: { id: "qbApprove", hidden: false, span: 12 },
   accountingNotices: { id: "accountingNotices", hidden: false, span: 12 },
   returningClients: { id: "returningClients", hidden: false, span: 12 },
+  jobCodes: { id: "jobCodes", hidden: false, span: 12 },
   pipelinePath: { id: "pipelinePath", hidden: false, span: 12 },
   todaysWork: { id: "todaysWork", hidden: false, span: 6 },
   calendarDay: { id: "calendarDay", hidden: false, span: 6 },
@@ -141,6 +144,7 @@ export function availableHomeModules(input: {
   canViewAccounting: boolean;
   hasAccountingNotices: boolean;
   hasReturningClients: boolean;
+  hasJobCodeReviews: boolean;
 }): HomeModuleId[] {
   if (!input.hasLeads) return [];
   return HOME_MODULE_IDS.filter((id) => {
@@ -149,6 +153,7 @@ export function availableHomeModules(input: {
     if (id === "qbApprove") return input.canViewAccounting;
     if (id === "accountingNotices") return input.hasAccountingNotices;
     if (id === "returningClients") return input.hasReturningClients;
+    if (id === "jobCodes") return input.hasJobCodeReviews;
     return true;
   });
 }

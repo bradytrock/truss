@@ -273,10 +273,19 @@ import {
   backfillRecordCodes,
   codeInsertError,
   existingRecordCodes,
+  isJobCodeReviewTask,
+  isJobReassigned,
   isMissingCodeColumn,
+  jobCodeOwnerName,
+  jobCodeReviewNotes,
+  jobCodeReviewSms,
+  jobCodeReviewTitle,
   missingCodeColumnMessage,
   nextJobCode,
+  parseJobCodeReviewNotes,
   payloadWithoutCode,
+  suggestedJobCode,
+  codeReviewAudience,
 } from "@/lib/job-code";
 import { formatJobSite } from "@/lib/leads";
 import { defaultEstimateValidUntil, localYmd } from "@/lib/format";
@@ -932,6 +941,11 @@ type CrmContextValue = CrmState & {
     noticeId: string,
     decision: "take" | "decline" | "reassigned" | "kept" | "dismiss",
   ) => Promise<void>;
+  decideJobCodeReview: (
+    jobId: string,
+    decision: "redo" | "keep" | "change",
+    code?: string,
+  ) => Promise<boolean>;
   updateJob: (id: string, patch: Partial<Job>) => Promise<boolean>;
   deleteJob: (id: string, reason: string) => Promise<boolean>;
   restoreJob: (id: string) => Promise<boolean>;
@@ -1294,6 +1308,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const bookRef = useRef(state);
   bookRef.current = state;
   const enqueueAutomationEventRef = useRef<(event: AutomationEvent) => void>(() => undefined);
+  const fileJobCodeReviewRef = useRef<(job: Job, fromName: string, toName: string) => void>(() => undefined);
+  const filingJobCodeReviews = useRef(new Set<string>());
   const auditRef = useRef<
     | ((input: {
         entityType: CompanyAuditEntityType;
@@ -2378,8 +2394,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               fillJobRecord(
                 jobDraftFromOpportunity(current, {
                   id: crypto.randomUUID(),
-                  ownerStaffId: user.staffId,
-                  projectManager: user.name || current.estimator,
+                  ownerStaffId: staffByName(current.estimator, state.staff)?.id || user.staffId,
+                  projectManager: current.estimator || user.name,
                 }),
                 current
               ),
@@ -2523,14 +2539,25 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               { ...current, value: stage === "awarded" ? contractValue : current.value, street, city, state: stateCode, postalCode, location },
               {
                 id: crypto.randomUUID(),
-                ownerStaffId: user.staffId,
-                projectManager: user.name || current.estimator,
+                ownerStaffId: staffByName(current.estimator, state.staff)?.id || user.staffId,
+                projectManager: current.estimator || user.name,
               },
             ),
             current
           );
           const payload = jobInsertPayload(awarded, user.companyId, {
-            code: allocateCode(user.name, state.jobs, state.opportunities, current.code),
+            code: allocateCode(
+              jobCodeOwnerName({
+                projectManager: current.estimator || user.name,
+                estimator: current.estimator,
+                ownerStaffId: awarded.ownerStaffId,
+                staff: state.staff,
+                fallback: user.name,
+              }),
+              state.jobs,
+              state.opportunities,
+              current.code,
+            ),
           });
           const inserted = await insertJobWithFallbacks(payload, async (row) => {
             const result = await supabase.from("jobs").insert(row as never).select("*").single();
@@ -2566,7 +2593,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       await load();
       return createdJob;
     },
-    [addActivity, load, recordCompanyAudit, state.estimateLines, state.estimates, state.jobs, state.opportunities, user.companyId, user.name, user.staffId]
+    [addActivity, load, recordCompanyAudit, state.estimateLines, state.estimates, state.jobs, state.opportunities, state.staff, user.companyId, user.name, user.staffId]
   );
 
   const updateOpportunity = useCallback(
@@ -2590,6 +2617,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const supabase = requireClient();
       if (!supabase) {
         apply();
+        if (
+          linked &&
+          jobUpdates.projectManager !== undefined &&
+          isJobReassigned(linked.projectManager, jobUpdates.projectManager)
+        ) {
+          fileJobCodeReviewRef.current(
+            fillJobRecord({ ...linked, ...jobUpdates }),
+            linked.projectManager,
+            jobUpdates.projectManager,
+          );
+        }
         if (!options?.skipAudit && before) {
           await recordCompanyAudit({
             entityType: "opportunity",
@@ -2621,6 +2659,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
       apply();
+      if (
+        linked &&
+        jobUpdates.projectManager !== undefined &&
+        isJobReassigned(linked.projectManager, jobUpdates.projectManager)
+      ) {
+        fileJobCodeReviewRef.current(
+          fillJobRecord({ ...linked, ...jobUpdates }),
+          linked.projectManager,
+          jobUpdates.projectManager,
+        );
+      }
       if (!options?.skipAudit && before) {
         await recordCompanyAudit({
           entityType: "opportunity",
@@ -2646,6 +2695,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         jobs: prev.jobs.map((job) => (job.id === id ? fillJobRecord({ ...job, ...patch }) : job)),
       }));
     const finish = async (ok: boolean) => {
+      if (ok && before && patch.projectManager !== undefined && isJobReassigned(before.projectManager, patch.projectManager)) {
+        fileJobCodeReviewRef.current(
+          fillJobRecord({ ...before, ...patch }),
+          before.projectManager,
+          patch.projectManager,
+        );
+      }
       if (ok && !options?.skipAudit && before) {
         await recordCompanyAudit({
           entityType: "job",
@@ -2835,7 +2891,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         staffByName(input.estimator, state.staff)?.id ||
         user.staffId;
       const originatorStaffId = input.originatorStaffId || user.staffId;
-      const code = allocateCode(user.name, state.jobs, state.opportunities);
+      const code = allocateCode(
+        jobCodeOwnerName({
+          estimator: input.estimator,
+          ownerStaffId,
+          staff: state.staff,
+          fallback: user.name,
+        }),
+        state.jobs,
+        state.opportunities,
+      );
       const supabase = maybeClient();
       if (!supabase) {
         const opportunity: Opportunity = {
@@ -3382,7 +3447,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const linked = input.opportunityId
         ? state.opportunities.find((opportunity) => opportunity.id === input.opportunityId)
         : undefined;
-      const code = allocateCode(user.name, state.jobs, state.opportunities, linked?.code);
+      const code = allocateCode(
+        jobCodeOwnerName({
+          projectManager: input.projectManager,
+          estimator: linked?.estimator,
+          ownerStaffId,
+          staff: state.staff,
+          fallback: user.name,
+        }),
+        state.jobs,
+        state.opportunities,
+        linked?.code,
+      );
       const job = fillJobRecord({ ...input, id: crypto.randomUUID(), ownerStaffId, code }, linked);
       const supabase = requireClient();
       if (!supabase) {
@@ -3538,6 +3614,68 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [recordCompanyAudit, user.companyId]
   );
 
+  const fileJobCodeReview = useCallback(
+    async (job: Job, fromName: string, toName: string) => {
+      const alreadyOpen = state.tasks.some(
+        (task) =>
+          !task.completed &&
+          task.relatedId === job.id &&
+          isJobCodeReviewTask(task),
+      );
+      if (alreadyOpen || filingJobCodeReviews.current.has(job.id)) return;
+      filingJobCodeReviews.current.add(job.id);
+      const suggested = suggestedJobCode(
+        toName,
+        job.code,
+        existingRecordCodes([...state.jobs, ...state.opportunities]),
+      );
+      const title = jobCodeReviewTitle(job.code);
+      const notes = jobCodeReviewNotes({
+        fromName,
+        toName,
+        fromCode: job.code,
+        suggestedCode: suggested,
+      });
+      try {
+        const audience = codeReviewAudience(state.staff);
+        const sms = jobCodeReviewSms({
+          jobCode: job.code,
+          fromName,
+          toName,
+          suggestedCode: suggested,
+        });
+        for (const member of audience) {
+          try {
+            await addTask({
+              title,
+              dueAt: localYmd(new Date()),
+              relatedType: "job",
+              relatedId: job.id,
+              assignee: member.name,
+              notes,
+            });
+          } catch {
+            // Local book or missing tasks table — notice still stands.
+          }
+          await notifyStaffByText(member, sms);
+        }
+        await addActivity({
+          entityType: "job",
+          entityId: job.id,
+          type: "note",
+          body: `${fromName} handed this job to ${toName}. Company admins and accounting can redo ${job.code} as ${suggested} or keep it.`,
+        });
+        toast.message("Company admins and accounting can redo or change the job code.");
+      } catch {
+        filingJobCodeReviews.current.delete(job.id);
+      }
+    },
+    [addActivity, addTask, notifyStaffByText, state.jobs, state.opportunities, state.staff, state.tasks],
+  );
+  fileJobCodeReviewRef.current = (job, fromName, toName) => {
+    void fileJobCodeReview(job, fromName, toName);
+  };
+
   const updateTask = useCallback(
     async (id: string, patch: Partial<Omit<Task, "id">>) => {
       const current = state.tasks.find((task) => task.id === id);
@@ -3591,6 +3729,61 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
     },
     [recordCompanyAudit, state.tasks]
+  );
+
+  const decideJobCodeReview = useCallback(
+    async (jobId: string, decision: "redo" | "keep" | "change", code?: string) => {
+      const job = state.jobs.find((item) => item.id === jobId);
+      if (!job) return false;
+      const open = state.tasks.filter(
+        (task) => !task.completed && task.relatedId === jobId && isJobCodeReviewTask(task),
+      );
+      const parsed = parseJobCodeReviewNotes(open[0]?.notes);
+      const nextCode =
+        decision === "keep"
+          ? job.code
+          : (code?.trim() || parsed.suggestedCode || suggestedJobCode(
+              job.projectManager || parsed.toName,
+              job.code,
+              existingRecordCodes([...state.jobs, ...state.opportunities]),
+            ));
+      if (decision !== "keep" && nextCode && nextCode !== job.code) {
+        const ok = await updateJob(job.id, { code: nextCode }, { skipAudit: true });
+        if (!ok) return false;
+        if (job.opportunityId) {
+          await updateOpportunity(job.opportunityId, { code: nextCode }, { skipAudit: true });
+        }
+        void recordCompanyAudit({
+          entityType: "job",
+          entityId: job.id,
+          action: "updated",
+          before: job,
+          after: { ...job, code: nextCode },
+          label: nextCode,
+          detail: decision === "redo" ? `Redid job code as ${nextCode}` : `Changed job code to ${nextCode}`,
+          relatedJobId: job.id,
+          relatedOpportunityId: job.opportunityId,
+        });
+        await addActivity({
+          entityType: "job",
+          entityId: job.id,
+          type: "note",
+          body:
+            decision === "redo"
+              ? `Job code redone as ${nextCode} for ${job.projectManager || parsed.toName}.`
+              : `Job code changed from ${job.code} to ${nextCode}.`,
+        });
+        toast.success(`Job code is now ${nextCode}.`);
+      } else {
+        toast.message(`Kept ${job.code}.`);
+      }
+      for (const task of open) {
+        await updateTask(task.id, { completed: true });
+      }
+      filingJobCodeReviews.current.delete(jobId);
+      return true;
+    },
+    [addActivity, recordCompanyAudit, state.jobs, state.opportunities, state.tasks, updateJob, updateOpportunity, updateTask],
   );
 
   const deleteTask = useCallback(
@@ -11731,6 +11924,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       assignOpportunityOwner,
       fileReturningClientNotice,
       decideReturningClientLead,
+      decideJobCodeReview,
       updateJob,
       deleteJob,
       restoreJob,
@@ -11907,6 +12101,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       assignOpportunityOwner,
       fileReturningClientNotice,
       decideReturningClientLead,
+      decideJobCodeReview,
       updateJob,
       deleteJob,
       restoreJob,

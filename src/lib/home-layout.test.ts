@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   HOME_MODULE_IDS,
+  availableHomeModules,
   defaultHomeLayout,
   homeLayoutStorageKey,
   mergeHomeLayout,
@@ -9,6 +10,7 @@ import {
 
 assert.ok(HOME_MODULE_IDS.includes("calendarDay"));
 assert.ok(HOME_MODULE_IDS.includes("todaysWork"));
+assert.ok(HOME_MODULE_IDS.includes("jobCodes"));
 
 const ids = defaultHomeLayout().map((item) => item.id);
 assert.ok(ids.indexOf("pipelinePath") < ids.indexOf("todaysWork"));
@@ -31,5 +33,28 @@ assert.ok(visible.some((item) => item.id === "calendarDay"));
 assert.ok(visible.some((item) => item.id === "todaysWork"));
 
 assert.match(homeLayoutStorageKey("co", "st"), /homeLayout\.v2/);
+
+const withCodes = availableHomeModules({
+  hasLeads: true,
+  isAccountant: false,
+  isBd: false,
+  canViewAccounting: true,
+  hasAccountingNotices: false,
+  hasReturningClients: false,
+  hasJobCodeReviews: true,
+});
+assert.ok(withCodes.includes("jobCodes"));
+assert.ok(!withCodes.includes("returningClients"));
+
+const withoutCodes = availableHomeModules({
+  hasLeads: true,
+  isAccountant: true,
+  isBd: false,
+  canViewAccounting: true,
+  hasAccountingNotices: false,
+  hasReturningClients: false,
+  hasJobCodeReviews: false,
+});
+assert.ok(!withoutCodes.includes("jobCodes"));
 
 console.log("home-layout.test.ts ok");

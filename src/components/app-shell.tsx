@@ -51,6 +51,7 @@ import { canViewReports, canManageSettings, canManageAutomations, canViewAccount
 import { groupLoginAsTargets, readLoginAsRecent, recentLoginAsTargets, rememberLoginAsRecent } from "@/lib/login-as";
 import { isInboxPath } from "@/lib/inbox";
 import { actionableReturningClientNotices } from "@/lib/returning-client";
+import { actionableJobCodeReviews } from "@/lib/job-code";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { COURSE } from "@/lib/training/engine";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
@@ -387,8 +388,10 @@ function LivePulse({ tone = "light" }: { tone?: "light" | "dark" }) {
 }
 
 function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
-  const { effectiveStaff, returningClientLeads } = useCrm();
-  const homeBadge = actionableReturningClientNotices(returningClientLeads, effectiveStaff).length;
+  const { effectiveStaff, returningClientLeads, tasks, jobs } = useCrm();
+  const homeBadge =
+    actionableReturningClientNotices(returningClientLeads, effectiveStaff).length +
+    actionableJobCodeReviews(tasks, jobs, effectiveStaff).length;
   const navOptions = {
     showReports: Boolean(effectiveStaff && canViewReports(effectiveStaff.role)),
     showAccounting: Boolean(effectiveStaff && canViewAccounting(effectiveStaff.role)),

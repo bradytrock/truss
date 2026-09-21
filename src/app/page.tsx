@@ -6,6 +6,7 @@ import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { HomeDayCalendar } from "@/components/home-day-calendar";
 import { TaskRow } from "@/components/task-row";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ErrorBanner, LoadingScreen, PageHeader, RecordCode } from "@/components/page-chrome";
 import { JobStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
@@ -30,6 +31,7 @@ import { qbQueue } from "@/lib/job-financials";
 import { itemTitle, jobDocumentHref, pmReviewNotices } from "@/lib/qb-review";
 import { canViewAccounting } from "@/lib/visibility";
 import { actionableReturningClientNotices } from "@/lib/returning-client";
+import { actionableJobCodeReviews } from "@/lib/job-code";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { BdRoiPanel } from "@/components/bd-roi";
 import { HomeOnboarding } from "@/components/home-onboarding";
@@ -61,6 +63,9 @@ import type { Task } from "@/lib/types";
 export default function HomePage() {
   const crm = useCrm();
   const [decidingId, setDecidingId] = useState<string | null>(null);
+  const [decidingCodeId, setDecidingCodeId] = useState<string | null>(null);
+  const [changeJobId, setChangeJobId] = useState<string | null>(null);
+  const [changeCode, setChangeCode] = useState("");
   const [editing, setEditing] = useState(false);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -212,6 +217,11 @@ export default function HomePage() {
     [crm.effectiveStaff, crm.returningClientLeads],
   );
 
+  const jobCodeReviews = useMemo(
+    () => actionableJobCodeReviews(crm.tasks, crm.jobs, crm.effectiveStaff),
+    [crm.effectiveStaff, crm.jobs, crm.tasks],
+  );
+
   async function decideReturning(
     noticeId: string,
     decision: "take" | "decline" | "reassigned" | "kept" | "dismiss",
@@ -221,6 +231,23 @@ export default function HomePage() {
       await crm.decideReturningClientLead(noticeId, decision);
     } finally {
       setDecidingId(null);
+    }
+  }
+
+  async function decideJobCode(
+    jobId: string,
+    decision: "redo" | "keep" | "change",
+    code?: string,
+  ) {
+    setDecidingCodeId(jobId);
+    try {
+      const ok = await crm.decideJobCodeReview(jobId, decision, code);
+      if (ok) {
+        setChangeJobId(null);
+        setChangeCode("");
+      }
+    } finally {
+      setDecidingCodeId(null);
     }
   }
 
@@ -412,6 +439,94 @@ export default function HomePage() {
                   );
                 })}
               </ul>
+          </RelatedList>
+        );
+      case "jobCodes":
+        return (
+          <RelatedList
+            title="Job codes"
+            description="A project manager changed. Redo the code with their initials, keep it, or type a new one."
+          >
+            <ul className="divide-y divide-black/5 px-5 pb-2">
+              {jobCodeReviews.map((notice) => {
+                const busy = decidingCodeId === notice.jobId;
+                const changing = changeJobId === notice.jobId;
+                return (
+                  <li key={notice.jobId} className="py-3 first:pt-1">
+                    <Link
+                      href={`/jobs?job=${notice.jobId}`}
+                      className="text-sm font-semibold text-[#0176d3] hover:underline"
+                    >
+                      {notice.jobCode || notice.jobName || "Job"}
+                      {notice.jobName && notice.jobCode ? ` · ${notice.jobName}` : ""}
+                    </Link>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Reassigned from {notice.fromName || "the previous project manager"} to{" "}
+                      {notice.toName || "a new project manager"}. Current code {notice.fromCode || notice.jobCode}.
+                      Suggested {notice.suggestedCode}.
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <Button
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => void decideJobCode(notice.jobId, "redo", notice.suggestedCode)}
+                      >
+                        {busy ? "Saving…" : `Redo as ${notice.suggestedCode}`}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => void decideJobCode(notice.jobId, "keep")}
+                      >
+                        Keep {notice.jobCode}
+                      </Button>
+                      {changing ? (
+                        <>
+                          <Input
+                            value={changeCode}
+                            onChange={(event) => setChangeCode(event.target.value)}
+                            placeholder="New job code"
+                            className="h-8 w-36"
+                            aria-label="New job code"
+                          />
+                          <Button
+                            size="sm"
+                            disabled={busy || !changeCode.trim()}
+                            onClick={() => void decideJobCode(notice.jobId, "change", changeCode)}
+                          >
+                            Save code
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={busy}
+                            onClick={() => {
+                              setChangeJobId(null);
+                              setChangeCode("");
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() => {
+                            setChangeJobId(notice.jobId);
+                            setChangeCode(notice.suggestedCode || notice.jobCode);
+                          }}
+                        >
+                          Change
+                        </Button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           </RelatedList>
         );
       case "pipelinePath":
@@ -698,6 +813,7 @@ export default function HomePage() {
             canViewAccounting: Boolean(crm.effectiveStaff && canViewAccounting(crm.effectiveStaff.role)),
             hasAccountingNotices: reviewNotices.length > 0,
             hasReturningClients: returningNotices.length > 0,
+            hasJobCodeReviews: jobCodeReviews.length > 0,
           })}
           salesIntro={
             <div className="flex flex-wrap items-end justify-between gap-2 px-1">

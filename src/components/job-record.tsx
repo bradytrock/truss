@@ -71,6 +71,13 @@ import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate, formatInboxTime, formatPhone } from "@/lib/format";
 import { mailHref } from "@/lib/job-emails";
 import { assignedCrewPatch, isDeletedJob, jobAddress, mapsUrl, primaryHomeownerPatch, uniqueIds, uniqueNames } from "@/lib/job-record";
+import {
+  canReviewJobCodes,
+  isJobCodeReviewTask,
+  parseJobCodeReviewNotes,
+  suggestedJobCode,
+  existingRecordCodes,
+} from "@/lib/job-code";
 import { visibleJobCustomFields } from "@/lib/job-files";
 import {
   isWaitingOnPm,
@@ -324,6 +331,9 @@ export function JobRecord({
   const [postalCode, setPostalCode] = useState(job.postalCode);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [codeDraft, setCodeDraft] = useState(job.code);
+  const [reviewBusy, setReviewBusy] = useState(false);
 
   const canTrash = canDeleteJobs(crm.viewer) && !crm.impersonatedStaff;
   const deleted = isDeletedJob(job);
@@ -412,6 +422,23 @@ export function JobRecord({
         activity.entityId === job.opportunityId)
   );
   const tasks = crm.tasks.filter((task) => task.relatedType === "job" && task.relatedId === job.id);
+  const canEditCode = canReviewJobCodes(crm.effectiveStaff?.role);
+  const codeReviewTask = tasks.find((task) => !task.completed && isJobCodeReviewTask(task));
+  const codeReview = codeReviewTask ? parseJobCodeReviewNotes(codeReviewTask.notes) : null;
+  const suggestedCode = codeReview
+    ? codeReview.suggestedCode ||
+      suggestedJobCode(
+        job.projectManager || codeReview.toName,
+        job.code,
+        existingRecordCodes([...crm.jobs, ...crm.opportunities]),
+      )
+    : "";
+  const pmOptions = [
+    ...crm.staff.filter((member) => !member.locked),
+    ...(job.projectManager && !crm.staff.some((member) => member.name === job.projectManager)
+      ? [{ id: `pm-${job.id}`, name: job.projectManager, locked: false }]
+      : []),
+  ];
   const books = jobProfitAndLoss({
     job,
     invoices: crm.invoices,
@@ -501,6 +528,25 @@ export function JobRecord({
     void crm.updateJob(job.id, next);
   }
 
+  function assignProjectManager(name: string) {
+    const member = crm.staff.find((item) => item.name === name);
+    patch({
+      projectManager: name,
+      ownerStaffId: member?.id || job.ownerStaffId,
+      assigned: uniqueNames([name, ...(job.assigned ?? [])]),
+    });
+  }
+
+  async function decideCode(decision: "redo" | "keep" | "change", code?: string) {
+    setReviewBusy(true);
+    try {
+      const ok = await crm.decideJobCodeReview(job.id, decision, code);
+      if (ok) setCodeOpen(false);
+    } finally {
+      setReviewBusy(false);
+    }
+  }
+
   function saveAddress() {
     const location =
       [street.trim(), [city.trim(), state.trim()].filter(Boolean).join(", "), postalCode.trim()]
@@ -574,6 +620,20 @@ export function JobRecord({
       <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 sm:px-5">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {job.code ? <RecordCode code={job.code} className="text-xs" /> : null}
+          {canEditCode && !deleted ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 rounded-full px-2 text-xs"
+              onClick={() => {
+                setCodeDraft(suggestedCode || job.code);
+                setCodeOpen(true);
+              }}
+            >
+              Change code
+            </Button>
+          ) : null}
           <Select
             value={JOB_STATUSES.includes(job.status) ? job.status : "precon"}
             disabled={deleted}
@@ -898,6 +958,30 @@ export function JobRecord({
                 </SelectContent>
               </Select>
             </DetailRow>
+            <DetailRow label="Project manager">
+              <Select
+                value={job.projectManager || undefined}
+                disabled={deleted}
+                onValueChange={(value) => {
+                  if (value) assignProjectManager(value);
+                }}
+                items={pmOptions.map((member) => ({
+                  value: member.name,
+                  label: member.name,
+                }))}
+              >
+                <SelectTrigger className={cn(quietSelect, !job.projectManager && "text-muted-foreground")}>
+                  <SelectValue placeholder="Assign a project manager" />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  {pmOptions.map((member) => (
+                    <SelectItem key={member.id} value={member.name}>
+                      {member.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </DetailRow>
             <DetailRow label="Assigned">
               <PeopleChips
                 names={job.assigned ?? []}
@@ -968,6 +1052,45 @@ export function JobRecord({
             {job.deletedAt ? ` ${formatDate(job.deletedAt)}` : ""}.
             {job.deletedReason ? ` Reason: ${job.deletedReason}` : ""}
           </p>
+        </div>
+      ) : null}
+
+      {codeReview && canEditCode && !deleted ? (
+        <div className="border border-b-0 bg-primary/8 px-4 py-3">
+          <p className="text-sm font-medium">
+            {job.projectManager || codeReview.toName || "A new project manager"} now owns this job.
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Redo {job.code} as {suggestedCode} from their initials, keep the current code, or type a new one.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              disabled={reviewBusy}
+              onClick={() => void decideCode("redo", suggestedCode)}
+            >
+              {reviewBusy ? "Saving…" : `Redo as ${suggestedCode}`}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={reviewBusy}
+              onClick={() => void decideCode("keep")}
+            >
+              Keep {job.code}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={reviewBusy}
+              onClick={() => {
+                setCodeDraft(suggestedCode || job.code);
+                setCodeOpen(true);
+              }}
+            >
+              Change
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -1815,6 +1938,42 @@ export function JobRecord({
       {openReport ? (
         <PhotoReportBuilder job={job} report={openReport} onClose={() => setReportId(null)} />
       ) : null}
+      <Dialog open={codeOpen} onOpenChange={setCodeOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change job code</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Label htmlFor="job-code-draft">Job code</Label>
+            <Input
+              id="job-code-draft"
+              value={codeDraft}
+              onChange={(event) => setCodeDraft(event.target.value)}
+              placeholder={suggestedCode || job.code}
+            />
+            {suggestedCode ? (
+              <p className="text-xs text-muted-foreground">
+                Suggested from {job.projectManager || "the project manager"}: {suggestedCode}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Codes use the assigned project manager&apos;s initials and the original date stamp.
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCodeOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={reviewBusy || !codeDraft.trim()}
+              onClick={() => void decideCode("change", codeDraft)}
+            >
+              {reviewBusy ? "Saving…" : "Save code"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <DeleteJobDialog job={job} open={deleteOpen} onOpenChange={setDeleteOpen} />
     </div>
   );
