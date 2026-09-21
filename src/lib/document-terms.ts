@@ -1,3 +1,4 @@
+import { companyEstimateTermsFor } from "@/lib/contract-types";
 import { DEFAULT_ESTIMATE_TERMS, estimateTotals } from "@/lib/estimate-totals";
 import { formatDate, formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
@@ -448,16 +449,27 @@ export function liveInvoiceTerms(input: {
 
 export function applyCompanyTermsToOpenDocuments<
   T extends {
-    estimates: Array<EstimateSignatureState & { id: string; terms: string }>;
+    estimates: Array<
+      EstimateSignatureState & { id: string; terms: string; contractTypeId?: string | null }
+    >;
     invoices: Array<{ id: string; status: string; terms: string }>;
   },
->(book: T, company: { defaultEstimateTerms?: string | null; defaultInvoiceTerms?: string | null }) {
-  const estimateDefault = resolveEstimateTerms({ companyDefault: company.defaultEstimateTerms });
+>(
+  book: T,
+  company: {
+    defaultEstimateTerms?: string | null;
+    defaultInvoiceTerms?: string | null;
+    contractTypes?: import("@/lib/types").CompanyContractType[];
+  },
+) {
   const invoiceDefault = resolveInvoiceTerms({ companyDefault: company.defaultInvoiceTerms });
   let estimateCount = 0;
   let invoiceCount = 0;
   const estimates = book.estimates.map((estimate) => {
     if (!estimateFollowsCompanyTerms(estimate)) return estimate;
+    const estimateDefault = resolveEstimateTerms({
+      companyDefault: companyEstimateTermsFor(company, estimate.contractTypeId),
+    });
     const terms = mergePaymentTerms(estimateDefault, estimate.terms);
     if (terms === estimate.terms) return estimate;
     estimateCount += 1;

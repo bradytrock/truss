@@ -1,4 +1,5 @@
 import type { CompanySettings, Estimate, EstimateLine, EstimateSignatureEvent, Invoice, InvoiceLine, JobPhoto, Payment } from "@/lib/types";
+import { companyEstimateTermsFor } from "@/lib/contract-types";
 import { estimateTotals, groupEstimateLines, lineAmount, lineIncluded, toClientFacingProposal, totalsForPackage } from "@/lib/estimate-totals";
 import {
   isGbbEstimate,
@@ -681,7 +682,7 @@ export async function buildEstimatePdf(raw: {
   y = writeNotes(doc, input.estimate.notes, y);
   const estimateTerms = liveEstimateTerms({
     estimate: input.estimate,
-    companyDefault: input.company.defaultEstimateTerms,
+    companyDefault: companyEstimateTermsFor(input.company, input.estimate.contractTypeId),
   });
   y = writeLabeledBlock(
     doc,

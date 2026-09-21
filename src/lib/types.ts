@@ -132,6 +132,13 @@ export interface CurrentUser {
   teamId: string | null;
 }
 
+export interface CompanyContractType {
+  id: string;
+  name: string;
+  body: string;
+  isDefault: boolean;
+}
+
 export interface CompanySettings {
   name: string;
   /** Hyphenated public URL segment. Unique across Truss. */
@@ -165,6 +172,8 @@ export interface CompanySettings {
   /** Null or blank means the app fallback is still in use. */
   defaultEstimateTerms?: string | null;
   defaultInvoiceTerms?: string | null;
+  /** Named proposal contracts. The default one stays in sync with defaultEstimateTerms. */
+  contractTypes?: CompanyContractType[];
   /** Floor applied when a catalog item is added to a proposal. 20 means 20%. */
   minimumMarginPercent?: number;
   /** Plain-text email sign-off used when a seat has no signature of their own. */
@@ -198,6 +207,7 @@ export const NORTHLINE_COMPANY: CompanySettings = {
   socialTiktok: "",
   defaultEstimateTerms: null,
   defaultInvoiceTerms: null,
+  contractTypes: [],
   minimumMarginPercent: 0,
   defaultEmailSignature: "",
   defaultMonthlySalesQuota: 80000,
@@ -514,6 +524,8 @@ export interface Estimate {
   subtotalOverride: number | null;
   /** Hide unit prices and line amounts on customer-facing proposals, share links, and PDFs. */
   hideLinePrices: boolean;
+  /** Company contract used for locked terms. Null means the company default. */
+  contractTypeId: string | null;
 }
 
 export const SIGNATURE_EVENT_KINDS = ["sent", "opened", "signed", "declined"] as const;

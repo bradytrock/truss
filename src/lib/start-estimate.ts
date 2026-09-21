@@ -18,6 +18,7 @@ export type StartEstimateInput = {
 
 export type StartEstimateChoices = {
   templateId: string | null;
+  contractTypeId: string | null;
   useMeasurements: boolean;
 };
 
@@ -117,6 +118,7 @@ export function useStartEstimate() {
           postalCode: site.postalCode,
           market: template?.market ?? workMarket(job, opportunity),
           templateId,
+          contractTypeId: asUuid(choices.contractTypeId),
           notes: template?.notes ?? "",
         });
 

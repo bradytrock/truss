@@ -356,6 +356,25 @@ export function missingDocumentTermsMessage() {
   return `Saved in this browser. Run ${DOCUMENT_TERMS_SQL} in the SQL editor so company default terms and invoice terms persist.`;
 }
 
+export const CONTRACT_TYPES_SQL = "supabase/migrations/20260921160000_contract_types.sql";
+
+export function isMissingCompanyContractTypes(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return message.includes("contract_types");
+}
+
+export function isMissingEstimateContractType(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  if (message.includes("contract_types")) return false;
+  return message.includes("contract_type_id");
+}
+
+export function missingContractTypesMessage() {
+  return `Saved in this browser. Run ${CONTRACT_TYPES_SQL} in the SQL editor so company contract types persist.`;
+}
+
 export const ESTIMATE_SIGNATURE_SQL = "supabase/migrations/20260821200000_estimate_signature.sql";
 
 export function isMissingSignatureColumn(error: { message?: string; code?: string } | null | undefined) {

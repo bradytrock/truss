@@ -314,8 +314,9 @@ export type EstimateDraft = Omit<
   | "packageMode"
   | "selectedPackage"
   | "marginPercent"
-  | "subtotalOverride"
-  | "hideLinePrices"
+      | "subtotalOverride"
+      | "hideLinePrices"
+      | "contractTypeId"
 > &
   Partial<
     Pick<
@@ -347,6 +348,7 @@ export type EstimateDraft = Omit<
       | "marginPercent"
       | "subtotalOverride"
       | "hideLinePrices"
+      | "contractTypeId"
     >
   >;
 
@@ -402,6 +404,7 @@ export function fillEstimate(estimate: EstimateDraft): Estimate {
         ? null
         : roundMoney(Math.max(0, Number(estimate.subtotalOverride) || 0)),
     hideLinePrices: Boolean(estimate.hideLinePrices),
+    contractTypeId: estimate.contractTypeId?.trim() || null,
   };
 }
 

@@ -98,6 +98,12 @@ import {
 } from "@/lib/eagleview-formulas";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { PackagePicker } from "@/components/package-picker";
+import {
+  contractTypeById,
+  contractTypesFromCompany,
+  defaultContractType,
+} from "@/lib/contract-types";
+import { estimateFollowsCompanyTerms } from "@/lib/document-terms";
 import { downloadEstimatePdf, downloadSignatureCertificatePdf } from "@/lib/document-pdf";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { mintEstimateSignerTokens } from "@/lib/estimate-signers";
@@ -1468,6 +1474,43 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           </label>
           <p className="text-xs text-muted-foreground sm:col-span-2">
             Type the Payment 1, 2, and 3 amounts on the terms lines. They stay blank until you enter them.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Contract</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Label htmlFor="estimate-contract-type">Company contract</Label>
+          <Select
+            value={
+              contractTypeById(contractTypesFromCompany(crm.company), estimate.contractTypeId)?.id ??
+              defaultContractType(contractTypesFromCompany(crm.company)).id
+            }
+            disabled={!estimateFollowsCompanyTerms(estimate) || estimate.status === "declined"}
+            onValueChange={(value) => {
+              if (!value) return;
+              void crm.updateEstimate(estimate.id, { contractTypeId: value });
+            }}
+          >
+            <SelectTrigger id="estimate-contract-type">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {contractTypesFromCompany(crm.company).map((contract) => (
+                <SelectItem key={contract.id} value={contract.id}>
+                  {contract.name}
+                  {contract.isDefault ? " · Default" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            {estimateFollowsCompanyTerms(estimate)
+              ? "Locked language comes from this company contract. Payment amounts on this proposal stay put."
+              : "Signed proposals keep the contract they were signed with."}
           </p>
         </CardContent>
       </Card>

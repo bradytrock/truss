@@ -109,4 +109,32 @@ assert.match(applied.invoices[1]?.terms ?? "", /Old scope language/);
 
 assert.match(mergePaymentTerms(company, stored), /New scope language/);
 
+const insurance =
+  "1. Scope of work\nInsurance scope.\n\n2. Payment\nPayment 1: {{pay_1:100}}";
+const perType = applyCompanyTermsToOpenDocuments(
+  {
+    estimates: [
+      {
+        id: "e-ins",
+        status: "sent",
+        terms: stored,
+        contractTypeId: "ct-ins",
+        acceptedAt: null,
+        secondAcceptedAt: null,
+      },
+    ],
+    invoices: [],
+  },
+  {
+    defaultEstimateTerms: company,
+    contractTypes: [
+      { id: "ct-std", name: "Standard", body: company, isDefault: true },
+      { id: "ct-ins", name: "Insurance", body: insurance, isDefault: false },
+    ],
+  },
+);
+assert.match(perType.estimates[0]?.terms ?? "", /Insurance scope/);
+assert.doesNotMatch(perType.estimates[0]?.terms ?? "", /New scope language/);
+assert.match(perType.estimates[0]?.terms ?? "", /pay_1:250/);
+
 console.log("document-terms.test.ts ok");

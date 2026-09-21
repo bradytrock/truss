@@ -2,6 +2,7 @@ import { fillJobRecord, parseCustomFields } from "@/lib/job-record";
 import { normalizeLinePhotoIds } from "@/lib/estimate-line-photos";
 import { parseEstimatePackage, parseEstimatePackageMode, parseLinePackage } from "@/lib/estimate-packages";
 import { parsePageTemplate, parsePhotoReportPages } from "@/lib/photo-report";
+import { parseContractTypes } from "@/lib/contract-types";
 import type { CompanySettings, EstimateLinePhoto, Job, JobPhoto, PhotoReport } from "@/lib/types";
 import type { ProjectManagerContact } from "@/lib/document-owner";
 
@@ -154,6 +155,7 @@ export type SharedCompany = {
   paymentNote?: string;
   defaultEstimateTerms?: string | null;
   defaultInvoiceTerms?: string | null;
+  contractTypes?: CompanySettings["contractTypes"];
 };
 
 export type SharedEstimatePayload = {
@@ -203,6 +205,7 @@ export type SharedEstimatePayload = {
     marginPercent: number;
     subtotalOverride: number | null;
     hideLinePrices: boolean;
+    contractTypeId?: string | null;
   };
   lines: Array<{
     id: string;
@@ -292,6 +295,7 @@ function parseCompany(raw: unknown): SharedCompany {
     paymentNote: asString(data.paymentNote),
     defaultEstimateTerms: asNullable(data.defaultEstimateTerms ?? data.default_estimate_terms),
     defaultInvoiceTerms: asNullable(data.defaultInvoiceTerms ?? data.default_invoice_terms),
+    contractTypes: parseContractTypes(data.contractTypes ?? data.contract_types),
   };
 }
 
@@ -367,6 +371,7 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
           ? null
           : asNumber(estimate.subtotalOverride),
       hideLinePrices: asBool(estimate.hideLinePrices),
+      contractTypeId: asString(estimate.contractTypeId) || asString(estimate.contract_type_id) || null,
     },
     lines: linesRaw.filter(isRecord).map((line, index) => {
       const photos = Array.isArray(line.photos)
@@ -504,6 +509,7 @@ export function companySettingsFromShared(company: SharedCompany): CompanySettin
     paymentNote: company.paymentNote,
     defaultEstimateTerms: company.defaultEstimateTerms ?? null,
     defaultInvoiceTerms: company.defaultInvoiceTerms ?? null,
+    contractTypes: company.contractTypes ?? [],
     minimumMarginPercent: 0,
   };
 }

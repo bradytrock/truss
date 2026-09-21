@@ -12,6 +12,7 @@ import {
 } from "@/lib/eagleview";
 import { fillMaterialOrder, fillMaterialOrderLine } from "@/lib/material-orders";
 import { fillMaterialOrderTemplate, fillMaterialOrderTemplateLine } from "@/lib/material-order-templates";
+import { parseContractTypes } from "@/lib/contract-types";
 import { fillEstimate, fillEstimateLine } from "@/lib/estimate-totals";
 import { parseEstimatePackage, parseEstimatePackageMode, parseLinePackage } from "@/lib/estimate-packages";
 import { fillEstimateTemplate, fillEstimateTemplateLine } from "@/lib/estimate-templates";
@@ -151,6 +152,11 @@ function mapAttempts(value: Json | undefined, staffId: string): TrainingAttempt[
   return attempts;
 }
 
+function parseCompanyContractTypes(row: Partial<CompanyRow>) {
+  if (!("contract_types" in row)) return [];
+  return parseContractTypes(row.contract_types);
+}
+
 export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>): CompanySettings {
   return {
     name: row.name,
@@ -188,6 +194,7 @@ export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>):
     socialTiktok: "social_tiktok" in row ? String(row.social_tiktok ?? "") : "",
     defaultEstimateTerms: row.default_estimate_terms ?? null,
     defaultInvoiceTerms: row.default_invoice_terms ?? null,
+    contractTypes: parseCompanyContractTypes(row),
     minimumMarginPercent: Number(row.minimum_margin_percent ?? 0),
     defaultEmailSignature:
       "default_email_signature" in row ? String(row.default_email_signature ?? "") : "",
@@ -578,6 +585,7 @@ export function mapEstimate(row: EstimateRow): Estimate {
         ? Number(row.subtotal_override)
         : null,
     hideLinePrices: "hide_line_prices" in row ? Boolean(row.hide_line_prices) : false,
+    contractTypeId: "contract_type_id" in row ? String(row.contract_type_id ?? "").trim() || null : null,
   });
 }
 
@@ -764,6 +772,7 @@ export function estimatePatch(patch: Partial<Estimate>) {
   if (patch.marginPercent !== undefined) row.margin_percent = patch.marginPercent;
   if (patch.subtotalOverride !== undefined) row.subtotal_override = patch.subtotalOverride;
   if (patch.hideLinePrices !== undefined) row.hide_line_prices = patch.hideLinePrices;
+  if (patch.contractTypeId !== undefined) row.contract_type_id = patch.contractTypeId;
   return row;
 }
 
