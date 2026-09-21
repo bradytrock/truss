@@ -10667,7 +10667,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         social_tiktok: settings.socialTiktok ?? "",
         default_estimate_terms: settings.defaultEstimateTerms,
         default_invoice_terms: settings.defaultInvoiceTerms,
-        contract_types: settings.contractTypes ?? [],
+        contract_types: (settings.contractTypes ?? []) as unknown as Json,
         minimum_margin_percent: settings.minimumMarginPercent,
         default_email_signature: settings.defaultEmailSignature ?? "",
         default_monthly_sales_quota: settings.defaultMonthlySalesQuota ?? 0,
