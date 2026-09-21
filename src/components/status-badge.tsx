@@ -172,9 +172,15 @@ export function QbStatusBadge({ status }: { status: QbSyncStatus }) {
   );
 }
 
-export function PhotoCategoryBadge({ category }: { category: PhotoCategory }) {
+export function PhotoCategoryBadge({
+  category,
+  className,
+}: {
+  category: PhotoCategory;
+  className?: string;
+}) {
   return (
-    <Badge variant="outline" className="font-normal text-muted-foreground">
+    <Badge variant="outline" className={cn("font-normal text-muted-foreground", className)}>
       {PHOTO_CATEGORY_LABELS[category]}
     </Badge>
   );
