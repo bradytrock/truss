@@ -482,6 +482,7 @@ export function JobRecord({
           photos,
           author: crm.user.name,
           template,
+          opportunity,
         }),
       );
       setPageCreateOpen(false);
@@ -1383,8 +1384,8 @@ export function JobRecord({
               </ul>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Pages are branded job documents you send out — photo documentation, inspections, closeouts, and
-                claim packets. Pick a template, then share a link or download a PDF.
+                Pages are branded job documents you send out — work orders, photo documentation, inspections,
+                closeouts, and claim packets. Pick a template, then share a link or download a PDF.
               </p>
             )}
           </section>

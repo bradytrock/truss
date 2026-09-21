@@ -6,6 +6,7 @@ import type {
   PhotoReport,
   PhotoReportPage,
   PhotoReportPhotosPage,
+  PhotoReportWorkOrderPage,
   StaffMember,
 } from "@/lib/types";
 import { formatDate, initials } from "@/lib/format";
@@ -14,6 +15,7 @@ import { PHOTO_CATEGORY_LABELS } from "@/lib/types";
 import { COVER_RED, photoReportCoverModel } from "@/lib/photo-report-cover";
 import { layoutCapacity, photoById, photoPageColumns } from "@/lib/photo-report";
 import { downloadBlob } from "@/lib/share";
+import { workOrderFieldValue } from "@/lib/work-order";
 
 type Doc = {
   setFont: (face: string, style?: string) => void;
@@ -407,6 +409,65 @@ async function drawCover(
   }
 }
 
+function displayWorkOrderValue(
+  field: PhotoReportWorkOrderPage["fields"][number],
+  job: Job,
+) {
+  const value = workOrderFieldValue(field, job).trim();
+  if (!value) return "—";
+  if (field.key === "startDate") {
+    const formatted = formatDate(value);
+    return formatted === "—" ? value : formatted;
+  }
+  return value;
+}
+
+async function drawWorkOrderPage(doc: Doc, page: PhotoReportWorkOrderPage, job: Job, company: CompanySettings) {
+  let y = await writeHeader(doc, company, 54);
+  const heading = (page.heading.trim() || "Work Order").trim();
+  doc.setFont("times", "bold");
+  doc.setFontSize(18);
+  doc.setTextColor(28, 28, 28);
+  const headingLines = doc.splitTextToSize(heading, 514);
+  doc.text(headingLines, 48, y);
+  y += headingLines.length * 22 + 8;
+  doc.setDrawColor(220, 220, 220);
+  for (const field of page.fields) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(120, 120, 120);
+    doc.text(field.label.trim() || "Field", 48, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.setTextColor(40, 40, 40);
+    const valueLines = doc.splitTextToSize(displayWorkOrderValue(field, job), 360);
+    doc.text(valueLines, 180, y);
+    y += Math.max(16, valueLines.length * 14) + 6;
+    doc.line(48, y - 8, 562, y - 8);
+  }
+  y += 10;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(28, 28, 28);
+  doc.text((page.tasksHeading.trim() || "Tasks").toUpperCase(), 48, y);
+  y += 18;
+  for (const item of page.items) {
+    doc.setDrawColor(80, 80, 80);
+    doc.rect(48, y - 8, 10, 10);
+    if (item.done) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.text("X", 50.5, y);
+    }
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.setTextColor(40, 40, 40);
+    const lines = doc.splitTextToSize(item.text.trim() || "Untitled task", 490);
+    doc.text(lines, 66, y);
+    y += Math.max(18, lines.length * 14);
+  }
+}
+
 async function drawTextPage(doc: Doc, page: Extract<PhotoReportPage, { type: "text" }>, company: CompanySettings) {
   let y = await writeHeader(doc, company, 54);
   if (page.heading.trim()) {
@@ -462,6 +523,8 @@ export async function downloadPhotoReportPdf(input: {
       await drawCover(doc, page, input);
     } else if (page.type === "text") {
       await drawTextPage(doc, page, input.company);
+    } else if (page.type === "work_order") {
+      await drawWorkOrderPage(doc, page, input.job, input.company);
     } else {
       await drawPhotosPage(doc, page, input.photos, cache);
     }

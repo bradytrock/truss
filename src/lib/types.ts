@@ -1079,9 +1079,40 @@ export interface PhotoReportTextPage {
   body: string;
 }
 
-export type PhotoReportPage = PhotoReportCoverPage | PhotoReportPhotosPage | PhotoReportTextPage;
+export const WORK_ORDER_FIELD_KEYS = ["crew", "startDate", "property", "custom"] as const;
+export type WorkOrderFieldKey = (typeof WORK_ORDER_FIELD_KEYS)[number];
 
-export const PAGE_TEMPLATES = ["photos", "inspection", "completion", "claim", "blank"] as const;
+export interface WorkOrderField {
+  id: string;
+  key: WorkOrderFieldKey;
+  label: string;
+  value: string;
+  locked: boolean;
+}
+
+export interface WorkOrderChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+  locked: boolean;
+}
+
+export interface PhotoReportWorkOrderPage {
+  id: string;
+  type: "work_order";
+  heading: string;
+  fields: WorkOrderField[];
+  tasksHeading: string;
+  items: WorkOrderChecklistItem[];
+}
+
+export type PhotoReportPage =
+  | PhotoReportCoverPage
+  | PhotoReportPhotosPage
+  | PhotoReportTextPage
+  | PhotoReportWorkOrderPage;
+
+export const PAGE_TEMPLATES = ["work_order", "photos", "inspection", "completion", "claim", "blank"] as const;
 export type PageTemplateId = (typeof PAGE_TEMPLATES)[number];
 
 export interface PhotoReport {

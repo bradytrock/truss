@@ -2,6 +2,7 @@ import type {
   Job,
   JobPhoto,
   LetterheadKind,
+  Opportunity,
   PageTemplateId,
   PhotoPageLayout,
   PhotoReport,
@@ -9,6 +10,7 @@ import type {
   PhotoReportPhotosPage,
 } from "@/lib/types";
 import { LETTERHEAD_KIND_LABELS, LETTERHEAD_KINDS } from "@/lib/types";
+import { emptyWorkOrderPage, parseWorkOrderPage } from "@/lib/work-order";
 
 export const PHOTO_REPORTS_SQL = "supabase/migrations/20260821140000_photo_reports.sql";
 export const PHOTO_REPORTS_SQL_RAW =
@@ -22,6 +24,11 @@ export const PAGE_TEMPLATE_OPTIONS: Array<{
   title: string;
   description: string;
 }> = [
+  {
+    id: "work_order",
+    title: "Work order",
+    description: "Crew, start date, property, and a site checklist. Critical parts stay on the page — use Undo to reverse a change.",
+  },
   {
     id: "photos",
     title: "Photo documentation",
@@ -82,7 +89,14 @@ export function parseLetterheadKind(value: unknown): LetterheadKind {
 }
 
 export function parsePageTemplate(value: unknown): PageTemplateId {
-  if (value === "inspection" || value === "completion" || value === "claim" || value === "blank" || value === "photos") {
+  if (
+    value === "work_order" ||
+    value === "inspection" ||
+    value === "completion" ||
+    value === "claim" ||
+    value === "blank" ||
+    value === "photos"
+  ) {
     return value;
   }
   return "photos";
@@ -93,6 +107,7 @@ export function pageCoverCopy(template: PageTemplateId): { kicker: string | null
   if (template === "completion") return { kicker: "COMPLETION", reportTitle: "COMPLETION REPORT" };
   if (template === "claim") return { kicker: "CLAIM", reportTitle: "CLAIM DOCUMENTATION" };
   if (template === "blank") return { kicker: "PAGE", reportTitle: "DOCUMENT" };
+  if (template === "work_order") return { kicker: "WORK ORDER", reportTitle: "WORK ORDER" };
   return { kicker: null, reportTitle: "DOCUMENTATION REPORT" };
 }
 
@@ -193,6 +208,7 @@ export function emptyTextPage(input?: {
 
 export function pageLabel(page: PhotoReportPage, index: number) {
   if (page.type === "cover") return page.title.trim() || "Cover";
+  if (page.type === "work_order") return page.heading.trim() || "Work order";
   if (page.type === "text") {
     return page.heading.trim() || LETTERHEAD_KIND_LABELS[page.kind] || "Letterhead";
   }
@@ -229,6 +245,7 @@ function titleForTemplate(template: PageTemplateId, jobName: string) {
   if (template === "completion") return `${jobName} completion`;
   if (template === "claim") return `${jobName} claim documentation`;
   if (template === "blank") return `${jobName} page`;
+  if (template === "work_order") return `${jobName} work order`;
   return `${jobName} photo report`;
 }
 
@@ -238,6 +255,7 @@ export function createPhotoReport(input: {
   photos: JobPhoto[];
   author: string;
   template?: PageTemplateId;
+  opportunity?: Pick<Opportunity, "street" | "city" | "state" | "postalCode" | "location"> | null;
 }): PhotoReport {
   const now = new Date().toISOString();
   const template = parsePageTemplate(input.template);
@@ -251,15 +269,17 @@ export function createPhotoReport(input: {
     heroPhotoId: preferred?.id ?? photos[0]?.id ?? input.photos[0]?.id ?? null,
   });
   const pages: PhotoReportPage[] =
-    template === "blank"
-      ? [cover, emptyTextPage({ kind: "blank" })]
-      : template === "inspection"
-        ? [...[cover], ...photosPagesFromPhotos(photos), emptyTextPage({ kind: "findings" })]
-        : template === "completion"
-          ? [...[cover], ...photosPagesFromPhotos(photos), emptyTextPage({ kind: "punch", heading: "Work completed" })]
-          : template === "claim"
-            ? [...[cover], ...photosPagesFromPhotos(photos), emptyTextPage({ kind: "scope", heading: "Scope of damage" })]
-            : [cover, ...photosPagesFromPhotos(photos)];
+    template === "work_order"
+      ? [emptyWorkOrderPage(input.job, { opportunity: input.opportunity })]
+      : template === "blank"
+        ? [cover, emptyTextPage({ kind: "blank" })]
+        : template === "inspection"
+          ? [...[cover], ...photosPagesFromPhotos(photos), emptyTextPage({ kind: "findings" })]
+          : template === "completion"
+            ? [...[cover], ...photosPagesFromPhotos(photos), emptyTextPage({ kind: "punch", heading: "Work completed" })]
+            : template === "claim"
+              ? [...[cover], ...photosPagesFromPhotos(photos), emptyTextPage({ kind: "scope", heading: "Scope of damage" })]
+              : [cover, ...photosPagesFromPhotos(photos)];
   return {
     id: crypto.randomUUID(),
     jobId: input.job.id,
@@ -324,6 +344,11 @@ export function parsePhotoReportPages(raw: unknown): PhotoReportPage[] {
         dateOfLoss: asString(row.dateOfLoss),
         claimNumber: asString(row.claimNumber),
       });
+      continue;
+    }
+    if (row.type === "work_order") {
+      const parsed = parseWorkOrderPage(row, id);
+      if (parsed) pages.push(parsed);
       continue;
     }
     if (row.type === "text") {

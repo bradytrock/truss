@@ -17,9 +17,11 @@ import {
   type JobPhoto,
   type PhotoReport,
   type PhotoReportPage,
+  type PhotoReportWorkOrderPage,
   type StaffMember,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { workOrderFieldValue } from "@/lib/work-order";
 
 export type PageCanvasEdit = {
   onChange: (patch: Partial<PhotoReportPage> | PhotoReportPage) => void;
@@ -63,6 +65,8 @@ export function PhotoReportPagePreview({
             staff={staff}
             customerName={customerName}
           />
+        ) : page.type === "work_order" ? (
+          <WorkOrderPreview page={page} job={job} company={company} />
         ) : (
           <div className="flex h-full min-h-0 flex-col p-5">
             {page.type === "text" ? (
@@ -76,6 +80,56 @@ export function PhotoReportPagePreview({
           </div>
         )}
       </article>
+    </div>
+  );
+}
+
+function WorkOrderPreview({
+  page,
+  job,
+  company,
+}: {
+  page: PhotoReportWorkOrderPage;
+  job: Job;
+  company: CompanySettings;
+}) {
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-white p-5 text-neutral-900">
+      <CompanyLetterhead company={company} className="shrink-0 border-b pb-3" />
+      <h2 className="mt-4 font-heading text-xl">{page.heading.trim() || "Work Order"}</h2>
+      <dl className="mt-4 divide-y border-y">
+        {page.fields.map((field) => (
+          <div key={field.id} className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-3 py-2">
+            <dt className="text-xs text-neutral-500">{field.label.trim() || "Field"}</dt>
+            <dd className="text-sm font-medium">
+              {field.key === "startDate"
+                ? formatDate(workOrderFieldValue(field, job)) === "—"
+                  ? workOrderFieldValue(field, job).trim() || "—"
+                  : formatDate(workOrderFieldValue(field, job))
+                : workOrderFieldValue(field, job).trim() || "—"}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <h3 className="mt-5 text-sm font-semibold tracking-wide uppercase">
+        {page.tasksHeading.trim() || "Tasks"}
+      </h3>
+      <ul className="mt-2 space-y-1.5">
+        {page.items.map((item) => (
+          <li key={item.id} className="flex items-start gap-2 text-sm">
+            <span
+              className="mt-0.5 flex size-3.5 shrink-0 items-center justify-center border border-neutral-400 text-[9px]"
+              aria-hidden
+            >
+              {item.done ? "✓" : ""}
+            </span>
+            <span className={item.done ? "text-neutral-500 line-through" : ""}>
+              {item.text.trim() || "Untitled task"}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-auto pt-3 text-[10px] tracking-wide text-neutral-400 uppercase">{company.name}</p>
     </div>
   );
 }
