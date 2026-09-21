@@ -39,14 +39,16 @@ export function KanbanScroller({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="relative h-[min(42rem,calc(100dvh-13rem))]">
+    <div className="relative">
       <div
         ref={scrollerRef}
-        className="h-full w-full overflow-x-auto overflow-y-auto pb-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {children}
       </div>
-      <BoardScrollSlider metrics={metrics} onScrub={scrub} />
+      <div className="pointer-events-none sticky bottom-4 z-20 -mt-9 flex justify-end pr-1">
+        <BoardScrollSlider metrics={metrics} onScrub={scrub} />
+      </div>
     </div>
   );
 }
@@ -80,41 +82,39 @@ export function BoardScrollSlider({
   }
 
   return (
-    <div className="pointer-events-none absolute right-3 bottom-3 z-20">
+    <div
+      ref={trackRef}
+      role="slider"
+      aria-label="Scroll pipeline"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(metrics.thumbStart * 100)}
+      tabIndex={0}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowRight") onScrub(metrics.thumbStart + metrics.thumbRatio / 2 + 0.08);
+        if (event.key === "ArrowLeft") onScrub(metrics.thumbStart + metrics.thumbRatio / 2 - 0.08);
+      }}
+      className={cn(
+        "pointer-events-auto relative h-6 w-40 cursor-ew-resize overflow-hidden rounded-md border border-black/10 bg-white shadow-[0_6px_18px_rgba(15,23,42,0.12)]",
+      )}
+    >
       <div
-        ref={trackRef}
-        role="slider"
-        aria-label="Scroll pipeline"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(metrics.thumbStart * 100)}
-        tabIndex={0}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowRight") onScrub(metrics.thumbStart + metrics.thumbRatio / 2 + 0.08);
-          if (event.key === "ArrowLeft") onScrub(metrics.thumbStart + metrics.thumbRatio / 2 - 0.08);
+        aria-hidden
+        className="absolute inset-0 opacity-80"
+        style={{
+          backgroundImage:
+            "repeating-linear-gradient(90deg, transparent 0 6px, #d7dbe2 6px 7px)",
         }}
-        className={cn(
-          "pointer-events-auto relative h-6 w-40 cursor-ew-resize overflow-hidden rounded-md border border-black/10 bg-white shadow-[0_6px_18px_rgba(15,23,42,0.12)]",
-        )}
-      >
-        <div
-          aria-hidden
-          className="absolute inset-0 opacity-80"
-          style={{
-            backgroundImage:
-              "repeating-linear-gradient(90deg, transparent 0 6px, #d7dbe2 6px 7px)",
-          }}
-        />
-        <div
-          className="absolute top-0.5 bottom-0.5 rounded-sm bg-[#b8c8e4] ring-1 ring-[#8aa0c8]"
-          style={{
-            left: `${metrics.thumbStart * 100}%`,
-            width: `${metrics.thumbRatio * 100}%`,
-          }}
-        />
-      </div>
+      />
+      <div
+        className="absolute top-0.5 bottom-0.5 rounded-sm bg-[#b8c8e4] ring-1 ring-[#8aa0c8]"
+        style={{
+          left: `${metrics.thumbStart * 100}%`,
+          width: `${metrics.thumbRatio * 100}%`,
+        }}
+      />
     </div>
   );
 }
