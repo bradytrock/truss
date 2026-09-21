@@ -285,6 +285,102 @@
 .home-gauge-needle {
   transition: transform 0.85s cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+@keyframes auth-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes auth-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes auth-orb {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate3d(12px, 10px, 0) scale(1.08);
+    opacity: 0.85;
+  }
+}
+
+@keyframes welcome-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes welcome-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.auth-rise {
+  animation: auth-rise 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.auth-fade {
+  animation: auth-fade 0.8s ease both;
+}
+
+.auth-orb {
+  animation: auth-orb 8s ease-in-out infinite;
+}
+
+.auth-orb-delay {
+  animation: auth-orb 10s ease-in-out 1.4s infinite;
+}
+
+.welcome-rise {
+  animation: welcome-rise 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.welcome-pop {
+  animation: welcome-pop 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.08s both;
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translate3d(0, -8vh, 0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--confetti-drift, 16px), 110vh, 0) rotate(540deg);
+    opacity: 0.9;
+  }
+}
+
+.confetti-piece {
+  animation-name: confetti-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .home-module-enter,
   .home-chart-line,
@@ -298,5 +394,14 @@
   }
   .home-gauge-needle {
     transition: none;
+  }
+  .auth-rise,
+  .auth-fade,
+  .auth-orb,
+  .auth-orb-delay,
+  .welcome-rise,
+  .welcome-pop,
+  .confetti-piece {
+    animation: none !important;
   }
 }
