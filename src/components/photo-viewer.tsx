@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { PhotoAnnotateEditor } from "@/components/photo-annotate-editor";
+import { PhotoCategoryBadge } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -69,7 +70,10 @@ export function PhotoViewer({
         />
         <div className="space-y-3 p-5">
           <DialogHeader className="p-0">
-            <DialogTitle>{title || photo.caption || "Photo"}</DialogTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <DialogTitle>{title || photo.caption || "Photo"}</DialogTitle>
+              <PhotoCategoryBadge category={photo.category} />
+            </div>
             {description ? <DialogDescription>{description}</DialogDescription> : null}
           </DialogHeader>
           <div className="flex flex-wrap items-center gap-2">

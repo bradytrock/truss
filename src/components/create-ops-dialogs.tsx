@@ -545,7 +545,7 @@ export function AddPhotoDialog({
             />
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Category">
+            <Field label="Tag">
               <Select
                 value={category}
                 onValueChange={(value) => setCategory(value as PhotoCategory)}

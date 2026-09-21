@@ -17,8 +17,9 @@ import { useCrm } from "@/lib/crm-store";
 import { formatDate, initials } from "@/lib/format";
 import { isDeletedJob } from "@/lib/job-record";
 import {
-  groupPhotosByDay,
+  groupPhotoFeed,
   PHOTO_DATE_RANGE_LABELS,
+  PHOTO_SORT_LABELS,
   PHOTO_TAG_FILTERS,
   photoFeedTakenBy,
   photoFeedTitle,
@@ -28,6 +29,7 @@ import {
   resolvePhotoPhotographer,
   type PhotoDateRange,
   type PhotoFeedItem,
+  type PhotoSort,
 } from "@/lib/photos-feed";
 import type { PhotoCategory } from "@/lib/types";
 
@@ -38,13 +40,15 @@ export default function PhotosPage() {
   const [jobId, setJobId] = useState("all");
   const [userName, setUserName] = useState("all");
   const [tag, setTag] = useState<"all" | PhotoCategory>("all");
+  const [sort, setSort] = useState<PhotoSort>("newest");
   const [openId, setOpenId] = useState<string | null>(null);
 
+  const logAudit = crm.logAudit;
   useEffect(() => {
     if (!openId) return;
     const photo = crm.photos.find((item) => item.id === openId);
     if (!photo) return;
-    void crm.logAudit({
+    void logAudit({
       entityType: "photo",
       entityId: photo.id,
       action: "opened",
@@ -52,7 +56,8 @@ export default function PhotosPage() {
       label: photo.caption?.trim() || "Photo",
       relatedJobId: photo.jobId,
     });
-  }, [crm, openId]);
+    // Log once per opened photo. `crm` changes after the audit write and must not retrigger.
+  }, [crm.photos, logAudit, openId]);
 
   const jobsById = useMemo(() => {
     const map = new Map(crm.book.jobs.map((job) => [job.id, job]));
@@ -105,7 +110,7 @@ export default function PhotosPage() {
     });
   }, [items, jobId, range, tag, userName]);
 
-  const groups = useMemo(() => groupPhotosByDay(filtered), [filtered]);
+  const groups = useMemo(() => groupPhotoFeed(filtered, sort), [filtered, sort]);
   const openItem = filtered.find((item) => item.photo.id === openId) ?? items.find((item) => item.photo.id === openId);
   const canOpenJob = Boolean(
     openItem && crm.getJob(openItem.photo.jobId) && !isDeletedJob(openItem.job ?? { deletedAt: null }),
@@ -123,7 +128,7 @@ export default function PhotosPage() {
       <PageHeader
         eyebrow="Field"
         title="Photos"
-        description="Every shot from the company, newest first. Thumbnails show who took the photo, then the job. You can open a job from here only if it is already in your seat."
+        description="Every shot from the company. Thumbnails show the tag, who took the photo, and the job. Sort by date or tag. You can open a job from here only if it is already in your seat."
       />
 
       <div className="flex flex-wrap gap-2">
@@ -182,13 +187,29 @@ export default function PhotosPage() {
           onValueChange={(value) => setTag((value as "all" | PhotoCategory) ?? "all")}
           items={PHOTO_TAG_FILTERS.map((item) => ({ value: item.value, label: item.label }))}
         >
-          <SelectTrigger className="w-full sm:w-36">
+          <SelectTrigger className="w-full sm:w-36" aria-label="Filter by tag">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {PHOTO_TAG_FILTERS.map((item) => (
               <SelectItem key={item.value} value={item.value}>
                 {item.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={sort}
+          onValueChange={(value) => setSort((value as PhotoSort) ?? "newest")}
+          items={Object.entries(PHOTO_SORT_LABELS).map(([value, label]) => ({ value, label }))}
+        >
+          <SelectTrigger className="w-full sm:w-40" aria-label="Sort photos">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(PHOTO_SORT_LABELS).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -208,7 +229,7 @@ export default function PhotosPage() {
       ) : (
         <div className="space-y-8">
           {groups.map((group) => (
-            <section key={group.day}>
+            <section key={group.key}>
               <h2 className="mb-3 text-sm font-medium">{group.label}</h2>
               <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5">
                 {group.items.map((item) => {
@@ -228,6 +249,10 @@ export default function PhotosPage() {
                           src={item.photo.imageUrl}
                           alt={title}
                           className="size-full object-cover transition-transform group-hover:scale-[1.03]"
+                        />
+                        <PhotoCategoryBadge
+                          category={item.photo.category}
+                          className="absolute top-2 right-2 border-white/20 bg-black/60 text-white"
                         />
                         <span className="absolute inset-x-0 bottom-0 flex items-end gap-2 bg-gradient-to-t from-black/80 to-transparent p-2 pt-8 text-white">
                           <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-white/20 text-[10px] font-medium">
@@ -271,26 +296,23 @@ export default function PhotosPage() {
         }
         actions={
           openItem ? (
-            <>
-              <PhotoCategoryBadge category={openItem.photo.category} />
-              {canOpenJob ? (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setOpenId(null);
-                    router.push(`/jobs?job=${openItem.photo.jobId}`);
-                  }}
-                >
-                  Open job
-                </Button>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  This job is not in your book. The photo is still here for the company.
-                </p>
-              )}
-            </>
+            canOpenJob ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setOpenId(null);
+                  router.push(`/jobs?job=${openItem.photo.jobId}`);
+                }}
+              >
+                Open job
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                This job is not in your book. The photo is still here for the company.
+              </p>
+            )
           ) : null
         }
       />
