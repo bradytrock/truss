@@ -2,6 +2,7 @@ import type {
   Job,
   JobPhoto,
   LetterheadKind,
+  Opportunity,
   PageTemplateId,
   PhotoPageLayout,
   PhotoReport,
@@ -254,6 +255,7 @@ export function createPhotoReport(input: {
   photos: JobPhoto[];
   author: string;
   template?: PageTemplateId;
+  opportunity?: Pick<Opportunity, "street" | "city" | "state" | "postalCode" | "location"> | null;
 }): PhotoReport {
   const now = new Date().toISOString();
   const template = parsePageTemplate(input.template);
@@ -268,7 +270,7 @@ export function createPhotoReport(input: {
   });
   const pages: PhotoReportPage[] =
     template === "work_order"
-      ? [emptyWorkOrderPage(input.job)]
+      ? [emptyWorkOrderPage(input.job, { opportunity: input.opportunity })]
       : template === "blank"
         ? [cover, emptyTextPage({ kind: "blank" })]
         : template === "inspection"

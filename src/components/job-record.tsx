@@ -481,6 +481,7 @@ export function JobRecord({
           photos,
           author: crm.user.name,
           template,
+          opportunity,
         }),
       );
       setPageCreateOpen(false);

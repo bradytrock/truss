@@ -108,7 +108,7 @@ export function PhotoReportBuilder({
     }) ||
     job.location.trim() ||
     "";
-  const [draft, setDraft] = useState(() => withJobBoundWorkOrder(report, job));
+  const [draft, setDraft] = useState(() => withJobBoundWorkOrder(report, job, opportunity));
   const [selectedId, setSelectedId] = useState(report.pages[0]?.id ?? "");
   const historyRef = useRef<PhotoReport[]>([]);
   const [canUndo, setCanUndo] = useState(false);
@@ -500,6 +500,7 @@ export function PhotoReportBuilder({
                         <WorkOrderEditor
                           page={page}
                           job={job}
+                          opportunity={opportunity}
                           title={draft.title}
                           onTitleChange={(title) => commit(draft.pages, { title })}
                           onChange={(next) => patchPage(page.id, next)}
@@ -700,11 +701,15 @@ function SortablePageCard({
   );
 }
 
-function withJobBoundWorkOrder(report: PhotoReport, job: Job): PhotoReport {
+function withJobBoundWorkOrder(
+  report: PhotoReport,
+  job: Job,
+  opportunity?: Parameters<typeof fillWorkOrderFromJob>[2],
+): PhotoReport {
   let changed = false;
   const pages = report.pages.map((page) => {
     if (page.type !== "work_order") return page;
-    const next = fillWorkOrderFromJob(page, job);
+    const next = fillWorkOrderFromJob(page, job, opportunity);
     if (next !== page) changed = true;
     return next;
   });

@@ -9,23 +9,26 @@ import {
   addWorkOrderItem,
   canRemoveWorkOrderField,
   canRemoveWorkOrderItem,
+  isJobBoundWorkOrderField,
   patchWorkOrderField,
   patchWorkOrderItem,
   removeWorkOrderField,
   removeWorkOrderItem,
   workOrderFieldValue,
 } from "@/lib/work-order";
-import type { Job, PhotoReportWorkOrderPage } from "@/lib/types";
+import type { Job, Opportunity, PhotoReportWorkOrderPage } from "@/lib/types";
 
 export function WorkOrderEditor({
   page,
   job,
+  opportunity,
   title,
   onTitleChange,
   onChange,
 }: {
   page: PhotoReportWorkOrderPage;
   job: Job;
+  opportunity?: Opportunity | null;
   title: string;
   onTitleChange: (title: string) => void;
   onChange: (page: PhotoReportWorkOrderPage) => void;
@@ -66,13 +69,18 @@ export function WorkOrderEditor({
                 aria-label={`${field.label || "Field"} label`}
               />
               <Input
-                value={workOrderFieldValue(field, job)}
+                value={workOrderFieldValue(field, job, opportunity)}
                 onChange={(event) =>
                   onChange(patchWorkOrderField(page, field.id, { value: event.target.value }))
                 }
-                placeholder="Value"
+                readOnly={isJobBoundWorkOrderField(field)}
+                placeholder={isJobBoundWorkOrderField(field) ? "Job site" : "Value"}
                 className="h-8 min-w-0 flex-1 border-0 bg-transparent px-0.5 text-sm shadow-none"
-                aria-label={field.label || "Field value"}
+                aria-label={
+                  isJobBoundWorkOrderField(field)
+                    ? "Property from this job"
+                    : field.label || "Field value"
+                }
               />
               {canRemoveWorkOrderField(field) ? (
                 <Button

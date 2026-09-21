@@ -60,6 +60,24 @@ assert.equal(
   workOrderPropertyFromJob(job({ street: "", city: "", state: "", postalCode: "", location: "Park Hill" })),
   "Park Hill",
 );
+const lead = {
+  street: "900 Blake St",
+  city: "Denver",
+  state: "CO",
+  postalCode: "80204",
+  location: "Ballpark",
+} satisfies Pick<Opportunity, "street" | "city" | "state" | "postalCode" | "location">;
+assert.equal(
+  workOrderPropertyFromJob(job({ street: "", city: "", state: "", postalCode: "", location: "" }), lead),
+  "900 Blake St, Denver, CO 80204",
+);
+assert.equal(
+  workOrderFieldValue(
+    { id: "p", key: "property", label: "Property", value: "typed over", locked: true },
+    site,
+  ),
+  "4418 E 32nd Ave, Denver, CO 80207",
+);
 assert.equal(workOrderCrewFromJob(site), "Luis Ortega, Maya Chen");
 assert.equal(workOrderCrewFromJob(job({ assigned: [], superintendent: "Dana Ruiz" })), "Dana Ruiz");
 
@@ -100,6 +118,16 @@ const emptyBound: PhotoReportWorkOrderPage = {
 assert.equal(workOrderFieldValue(emptyBound.fields.find((field) => field.key === "property")!, site), "4418 E 32nd Ave, Denver, CO 80207");
 const filled = fillWorkOrderFromJob(emptyBound, site);
 assert.equal(filled.fields.find((field) => field.key === "property")?.value, "4418 E 32nd Ave, Denver, CO 80207");
+const stale = fillWorkOrderFromJob(
+  {
+    ...page,
+    fields: page.fields.map((field) =>
+      field.key === "property" ? { ...field, value: "old address" } : field,
+    ),
+  },
+  site,
+);
+assert.equal(stale.fields.find((field) => field.key === "property")?.value, "4418 E 32nd Ave, Denver, CO 80207");
 
 const parsed = parseWorkOrderPage(
   {
@@ -130,5 +158,19 @@ if (created.pages[0]?.type === "work_order") {
   assert.equal(
     created.pages[0].fields.find((field) => field.key === "property")?.value,
     "4418 E 32nd Ave, Denver, CO 80207",
+  );
+}
+const fromLead = createPhotoReport({
+  job: job({ street: "", city: "", state: "", postalCode: "", location: "" }),
+  customer: "Alvarez",
+  photos: [],
+  author: "Brady",
+  template: "work_order",
+  opportunity: lead,
+});
+if (fromLead.pages[0]?.type === "work_order") {
+  assert.equal(
+    fromLead.pages[0].fields.find((field) => field.key === "property")?.value,
+    "900 Blake St, Denver, CO 80204",
   );
 }

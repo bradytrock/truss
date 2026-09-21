@@ -1,6 +1,8 @@
+import { jobAddress } from "@/lib/job-record";
 import { formatJobSite } from "@/lib/leads";
 import type {
   Job,
+  Opportunity,
   PhotoReportWorkOrderPage,
   WorkOrderChecklistItem,
   WorkOrderField,
@@ -14,10 +16,34 @@ export const DEFAULT_WORK_ORDER_TASKS = [
   "Final nail sweep & photos",
 ] as const;
 
+export type WorkOrderJobSite = Pick<Job, "street" | "city" | "state" | "postalCode" | "location">;
+
+export function jobSiteForWorkOrder(
+  job: WorkOrderJobSite,
+  opportunity?: Pick<Opportunity, "street" | "city" | "state" | "postalCode" | "location"> | null,
+): WorkOrderJobSite {
+  const fromJob = jobAddress(job);
+  if (fromJob) return job;
+  if (!opportunity) return job;
+  return {
+    street: opportunity.street?.trim() || "",
+    city: opportunity.city?.trim() || "",
+    state: opportunity.state?.trim() || "",
+    postalCode: opportunity.postalCode?.trim() || "",
+    location: opportunity.location.trim() || job.location,
+  };
+}
+
 export function workOrderPropertyFromJob(
-  job: Pick<Job, "street" | "city" | "state" | "postalCode" | "location">,
+  job: WorkOrderJobSite,
+  opportunity?: Pick<Opportunity, "street" | "city" | "state" | "postalCode" | "location"> | null,
 ) {
-  return formatJobSite(job) || job.location.trim() || "";
+  const site = jobSiteForWorkOrder(job, opportunity);
+  return jobAddress(site) || formatJobSite(site) || site.location.trim() || "";
+}
+
+export function isJobBoundWorkOrderField(field: WorkOrderField) {
+  return field.key === "property";
 }
 
 export function workOrderCrewFromJob(job: Pick<Job, "assigned" | "superintendent">) {
@@ -33,10 +59,11 @@ export function workOrderStartDateFromJob(job: Pick<Job, "startDate">) {
 export function workOrderFieldValue(
   field: WorkOrderField,
   job: Pick<Job, "street" | "city" | "state" | "postalCode" | "location" | "assigned" | "superintendent" | "startDate">,
+  opportunity?: Pick<Opportunity, "street" | "city" | "state" | "postalCode" | "location"> | null,
 ) {
+  if (field.key === "property") return workOrderPropertyFromJob(job, opportunity);
   const stored = field.value.trim();
   if (stored) return field.value;
-  if (field.key === "property") return workOrderPropertyFromJob(job);
   if (field.key === "crew") return workOrderCrewFromJob(job);
   if (field.key === "startDate") return workOrderStartDateFromJob(job);
   return "";
@@ -70,7 +97,9 @@ function field(
 
 export function emptyWorkOrderPage(
   job: Pick<Job, "street" | "city" | "state" | "postalCode" | "location" | "assigned" | "superintendent" | "startDate">,
-  input?: Partial<PhotoReportWorkOrderPage>,
+  input?: Partial<PhotoReportWorkOrderPage> & {
+    opportunity?: Pick<Opportunity, "street" | "city" | "state" | "postalCode" | "location"> | null;
+  },
 ): PhotoReportWorkOrderPage {
   return {
     id: input?.id || newWorkOrderPartId(),
@@ -80,7 +109,7 @@ export function emptyWorkOrderPage(
       input?.fields ?? [
         field("crew", "Crew", workOrderCrewFromJob(job)),
         field("startDate", "Start date", workOrderStartDateFromJob(job)),
-        field("property", "Property", workOrderPropertyFromJob(job)),
+        field("property", "Property", workOrderPropertyFromJob(job, input?.opportunity)),
       ],
     tasksHeading: input?.tasksHeading ?? "Tasks",
     items:
@@ -97,18 +126,28 @@ export function emptyWorkOrderPage(
 export function fillWorkOrderFromJob(
   page: PhotoReportWorkOrderPage,
   job: Pick<Job, "street" | "city" | "state" | "postalCode" | "location" | "assigned" | "superintendent" | "startDate">,
+  opportunity?: Pick<Opportunity, "street" | "city" | "state" | "postalCode" | "location"> | null,
 ): PhotoReportWorkOrderPage {
   let changed = false;
-  const fields = page.fields.map((item) => {
+  const property = workOrderPropertyFromJob(job, opportunity);
+  let fields = page.fields;
+  if (property && !fields.some((item) => item.key === "property")) {
+    fields = [...fields, field("property", "Property", property)];
+    changed = true;
+  }
+  fields = fields.map((item) => {
+    if (item.key === "property") {
+      if (item.value === property) return item;
+      changed = true;
+      return { ...item, value: property };
+    }
     if (item.value.trim()) return item;
     const next =
-      item.key === "property"
-        ? workOrderPropertyFromJob(job)
-        : item.key === "crew"
-          ? workOrderCrewFromJob(job)
-          : item.key === "startDate"
-            ? workOrderStartDateFromJob(job)
-            : "";
+      item.key === "crew"
+        ? workOrderCrewFromJob(job)
+        : item.key === "startDate"
+          ? workOrderStartDateFromJob(job)
+          : "";
     if (!next) return item;
     changed = true;
     return { ...item, value: next };
