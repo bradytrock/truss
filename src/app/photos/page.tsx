@@ -43,11 +43,12 @@ export default function PhotosPage() {
   const [sort, setSort] = useState<PhotoSort>("newest");
   const [openId, setOpenId] = useState<string | null>(null);
 
+  const logAudit = crm.logAudit;
   useEffect(() => {
     if (!openId) return;
     const photo = crm.photos.find((item) => item.id === openId);
     if (!photo) return;
-    void crm.logAudit({
+    void logAudit({
       entityType: "photo",
       entityId: photo.id,
       action: "opened",
@@ -55,7 +56,8 @@ export default function PhotosPage() {
       label: photo.caption?.trim() || "Photo",
       relatedJobId: photo.jobId,
     });
-  }, [crm, openId]);
+    // Log once per opened photo. `crm` changes after the audit write and must not retrigger.
+  }, [crm.photos, logAudit, openId]);
 
   const jobsById = useMemo(() => {
     const map = new Map(crm.book.jobs.map((job) => [job.id, job]));
