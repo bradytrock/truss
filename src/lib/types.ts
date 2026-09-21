@@ -526,6 +526,8 @@ export interface Estimate {
   hideLinePrices: boolean;
   /** Company contract used for locked terms. Null means the company default. */
   contractTypeId: string | null;
+  /** Set when this proposal is archived off the job Paper list. */
+  archivedAt?: string | null;
 }
 
 export const SIGNATURE_EVENT_KINDS = ["sent", "opened", "signed", "declined"] as const;
@@ -655,6 +657,8 @@ export interface Invoice {
   terms: string;
   shareToken: string;
   qbStatus: QbSyncStatus;
+  /** Set when this invoice is archived off the job Paper list. */
+  archivedAt?: string | null;
 }
 
 export interface InvoiceLine {
@@ -734,6 +738,8 @@ export interface MaterialOrder {
   neededBy: string | null;
   createdBy: string;
   createdAt: string;
+  /** Set when this order is archived off the job Paper list. */
+  archivedAt?: string | null;
 }
 
 export interface MaterialOrderLine {

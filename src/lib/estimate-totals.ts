@@ -12,6 +12,7 @@ import {
   type EstimatePackage,
 } from "@/lib/estimate-packages";
 import { firstPlainLine, invoiceLineDescription } from "@/lib/line-format";
+import { estimateFullySigned } from "@/lib/estimate-signers";
 import type { Estimate, EstimateLine, JobMarket } from "@/lib/types";
 
 export type AdjustmentKind = "percent" | "amount";
@@ -152,6 +153,7 @@ export function acceptedAmountForJob(
 ) {
   const related = estimates.filter(
     (estimate) =>
+      !estimate.archivedAt &&
       estimate.status === "accepted" &&
       (estimate.jobId === job.id ||
         Boolean(job.opportunityId && estimate.opportunityId === job.opportunityId)),
@@ -162,6 +164,29 @@ export function acceptedAmountForJob(
   return amountForEstimate(preferred, lines, market);
 }
 
+export function isSignedEstimate(
+  estimate: Pick<Estimate, "status" | "acceptedAt" | "secondAcceptedAt" | "secondContactId"> &
+    Partial<Pick<Estimate, "signatureImage" | "secondSignatureImage">>,
+) {
+  return estimate.status === "accepted" || estimateFullySigned(estimate);
+}
+
+/** The estimate a job card should open: a signed proposal first, then the live send. */
+export function featuredEstimateForJob<T extends Estimate>(estimates: T[]): T | undefined {
+  const live = estimates.filter((estimate) => !estimate.archivedAt);
+  const signed = live.filter((estimate) => isSignedEstimate(estimate));
+  if (signed.length) {
+    return [...signed].sort((left, right) =>
+      (right.acceptedAt ?? right.createdAt).localeCompare(left.acceptedAt ?? left.createdAt),
+    )[0];
+  }
+  return (
+    live.find((estimate) => estimate.status === "sent" || estimate.status === "viewed") ??
+    live.find((estimate) => estimate.status === "draft") ??
+    live[0]
+  );
+}
+
 export function contractValueForOpportunity(
   opportunityId: string,
   estimates: Estimate[],
@@ -170,7 +195,10 @@ export function contractValueForOpportunity(
   market?: JobMarket | "" | null,
 ) {
   const related = estimates.filter(
-    (estimate) => estimate.opportunityId === opportunityId && estimate.status !== "declined",
+    (estimate) =>
+      !estimate.archivedAt &&
+      estimate.opportunityId === opportunityId &&
+      estimate.status !== "declined",
   );
   const preferred =
     related.find((estimate) => estimate.status === "accepted") ??
@@ -314,9 +342,10 @@ export type EstimateDraft = Omit<
   | "packageMode"
   | "selectedPackage"
   | "marginPercent"
-      | "subtotalOverride"
-      | "hideLinePrices"
-      | "contractTypeId"
+  | "subtotalOverride"
+  | "hideLinePrices"
+  | "contractTypeId"
+  | "archivedAt"
 > &
   Partial<
     Pick<
@@ -349,6 +378,7 @@ export type EstimateDraft = Omit<
       | "subtotalOverride"
       | "hideLinePrices"
       | "contractTypeId"
+      | "archivedAt"
     >
   >;
 
@@ -405,6 +435,7 @@ export function fillEstimate(estimate: EstimateDraft): Estimate {
         : roundMoney(Math.max(0, Number(estimate.subtotalOverride) || 0)),
     hideLinePrices: Boolean(estimate.hideLinePrices),
     contractTypeId: estimate.contractTypeId?.trim() || null,
+    archivedAt: estimate.archivedAt ?? null,
   };
 }
 

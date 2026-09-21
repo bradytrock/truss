@@ -173,6 +173,7 @@ export function estimatesForContact(
   const jobIds = new Set(jobs.map((job) => job.id));
   const oppIds = new Set(opportunities.map((opportunity) => opportunity.id));
   return estimates.filter((estimate) => {
+    if (estimate.archivedAt) return false;
     if (estimate.contactId === contact.id) return true;
     if (estimate.secondContactId === contact.id) return true;
     if (estimate.jobId && jobIds.has(estimate.jobId)) return true;

@@ -9,8 +9,9 @@ export function estimatesForJob(
 ) {
   return estimates.filter(
     (estimate) =>
-      estimate.jobId === job.id ||
-      Boolean(job.opportunityId && estimate.opportunityId === job.opportunityId),
+      !estimate.archivedAt &&
+      (estimate.jobId === job.id ||
+        Boolean(job.opportunityId && estimate.opportunityId === job.opportunityId)),
   );
 }
 
@@ -24,7 +25,8 @@ export function estimatesForOpportunity(
   );
   return estimates.filter(
     (estimate) =>
-      estimate.opportunityId === opportunity.id || Boolean(estimate.jobId && jobIds.has(estimate.jobId)),
+      !estimate.archivedAt &&
+      (estimate.opportunityId === opportunity.id || Boolean(estimate.jobId && jobIds.has(estimate.jobId))),
   );
 }
 

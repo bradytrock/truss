@@ -707,6 +707,18 @@ export function missingMaterialOrdersMessage() {
   return `Saved in this browser. Run ${MATERIAL_ORDERS_SQL} in the SQL editor (or a fresh bootstrap) so material orders persist for the office and the field.`;
 }
 
+export const PAPER_ARCHIVE_SQL = "supabase/migrations/20260916140000_paper_archive.sql";
+
+export function isMissingPaperArchive(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return message.includes("archived_at");
+}
+
+export function missingPaperArchiveMessage() {
+  return `Saved in this browser. Run ${PAPER_ARCHIVE_SQL} in the SQL editor so archived estimates, invoices, and material orders stay off the job.`;
+}
+
 export const CATALOG_DESCRIPTION_SQL = "supabase/migrations/20260915120000_catalog_item_description.sql";
 
 export function isMissingCatalogDescription(error: { message?: string; code?: string } | null | undefined) {

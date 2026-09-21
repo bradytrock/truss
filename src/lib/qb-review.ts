@@ -85,6 +85,7 @@ export function qbApproveInbox(input: {
 
   const pendingInvoices = input.invoices.filter(
     (invoice) =>
+      !invoice.archivedAt &&
       invoice.status !== "void" &&
       invoice.qbStatus !== "entered" &&
       !weekInvoiceIds.has(invoice.id),
@@ -336,7 +337,9 @@ export function pmReviewNotices(input: {
 }
 
 export function jobFinancialDocs(jobId: string, book: { invoices: Invoice[]; expenses: Expense[]; payments: Payment[] }) {
-  const invoices = book.invoices.filter((invoice) => invoice.jobId === jobId && invoice.status !== "void");
+  const invoices = book.invoices.filter(
+    (invoice) => invoice.jobId === jobId && invoice.status !== "void" && !invoice.archivedAt,
+  );
   const expenses = book.expenses.filter((expense) => expense.jobId === jobId);
   const payments = book.payments.filter((payment) => payment.jobId === jobId);
   const items: QbReviewItem[] = [

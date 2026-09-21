@@ -17,6 +17,7 @@ export function fillMaterialOrder(order: MaterialOrderDraft): MaterialOrder {
     neededBy: order.neededBy ?? null,
     createdBy: order.createdBy ?? "",
     createdAt: order.createdAt ?? new Date().toISOString(),
+    archivedAt: order.archivedAt ?? null,
   };
 }
 

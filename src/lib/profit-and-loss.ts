@@ -155,6 +155,7 @@ export function jobPeriodBounds(job: Job, now = new Date()) {
 function postedInvoices(invoices: Invoice[], from: string | null, to: string | null) {
   return invoices.filter(
     (invoice) =>
+      !invoice.archivedAt &&
       invoice.status !== "void" &&
       invoice.status !== "draft" &&
       inRange(invoice.issuedAt, from, to),
@@ -163,6 +164,7 @@ function postedInvoices(invoices: Invoice[], from: string | null, to: string | n
 
 function liveEstimates(estimates: Estimate[], from: string | null, to: string | null) {
   return estimates.filter((estimate) => {
+    if (estimate.archivedAt) return false;
     if (estimate.status !== "sent" && estimate.status !== "viewed" && estimate.status !== "accepted") {
       return false;
     }

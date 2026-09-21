@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { estimateTotals, toClientFacingProposal } from "./estimate-totals.ts";
+import { featuredEstimateForJob, estimateTotals, toClientFacingProposal } from "./estimate-totals.ts";
+import type { Estimate } from "./types.ts";
 
 const estimate = {
   taxRate: 0,
@@ -51,5 +52,60 @@ const shareTotals = estimateTotals(sharePage.estimate, sharePage.lines);
 assert.equal(shareTotals.lineSubtotal, 30420);
 assert.equal(shareTotals.marginAmount, 0);
 assert.equal(shareTotals.subtotal, 30420);
+
+function estimateRow(partial: Partial<Estimate> & Pick<Estimate, "id" | "status">): Estimate {
+  return {
+    number: partial.number ?? partial.id,
+    name: partial.name ?? partial.id,
+    clientId: null,
+    opportunityId: null,
+    jobId: "job_1",
+    contactId: null,
+    secondContactId: null,
+    notes: "",
+    validUntil: null,
+    sentAt: null,
+    acceptedAt: null,
+    secondAcceptedAt: null,
+    ownerSignedAt: null,
+    ownerSignedName: "",
+    createdAt: "2026-09-01T00:00:00.000Z",
+    taxRate: 0,
+    discountKind: "percent",
+    discountValue: 0,
+    depositKind: "percent",
+    depositValue: 0,
+    intro: "",
+    terms: "",
+    street: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    shareToken: "",
+    secondShareToken: "",
+    signatureName: "",
+    signatureImage: "",
+    secondSignatureName: "",
+    secondSignatureImage: "",
+    packageMode: "",
+    selectedPackage: "better",
+    marginPercent: 0,
+    subtotalOverride: null,
+    hideLinePrices: false,
+    ...partial,
+  };
+}
+
+const draft = estimateRow({ id: "est_draft", number: "EST-1021", status: "draft" });
+const signed = estimateRow({
+  id: "est_signed",
+  number: "EST-1018",
+  status: "accepted",
+  acceptedAt: "2026-09-10T00:00:00.000Z",
+});
+const featured = featuredEstimateForJob([draft, signed]);
+assert.equal(featured?.id, "est_signed");
+assert.equal(featuredEstimateForJob([draft])?.id, "est_draft");
+assert.equal(featuredEstimateForJob([draft, { ...signed, archivedAt: "2026-09-16T00:00:00.000Z" }])?.id, "est_draft");
 
 console.log("estimate-totals.test.ts ok");

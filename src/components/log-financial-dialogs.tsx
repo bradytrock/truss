@@ -437,6 +437,7 @@ export function LogPaymentDialog({
   const [aiReady, setAiReady] = useState<boolean | null>(null);
 
   const invoices = crm.invoices.filter((invoice) => {
+    if (invoice.archivedAt) return false;
     if (invoice.status === "void" || invoice.status === "draft") return false;
     if (jobId && invoice.jobId !== jobId) return false;
     return true;

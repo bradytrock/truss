@@ -321,7 +321,7 @@ async function runTool(
         basis: "accrual",
       });
       const estimates = crm.estimates
-        .filter((estimate) => estimate.jobId === job.id)
+        .filter((estimate) => estimate.jobId === job.id && !estimate.archivedAt)
         .map((estimate) => ({ id: estimate.id, number: estimate.number, name: estimate.name, status: estimate.status }));
       return ok({
         id: job.id,

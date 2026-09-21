@@ -30,7 +30,7 @@ import { INVOICE_STATUS_LABELS, INVOICE_STATUSES, type InvoiceStatus } from "@/l
 export default function InvoicesPage() {
   const crm = useCrm();
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState<InvoiceStatus | "all">("all");
+  const [status, setStatus] = useState<InvoiceStatus | "all" | "archived">("all");
   const [create, setCreate] = useState(false);
 
   const rows = useMemo(() => {
@@ -44,7 +44,9 @@ export default function InvoicesPage() {
         balance: invoiceBalance(invoice.id, crm.invoiceLines, crm.payments),
       }))
       .filter((row) => {
-        if (status !== "all" && row.status !== status) return false;
+        if (status !== "archived" && row.invoice.archivedAt) return false;
+        if (status === "archived" && !row.invoice.archivedAt) return false;
+        if (status !== "all" && status !== "archived" && row.status !== status) return false;
         if (!needle) return true;
         const customer = crm.customerName(row.invoice);
         return (
@@ -76,25 +78,27 @@ export default function InvoicesPage() {
             />
             <Select
               value={status}
-              onValueChange={(value) => setStatus((value as InvoiceStatus | "all") ?? "all")}
+              onValueChange={(value) => setStatus((value as InvoiceStatus | "all" | "archived") ?? "all")}
               items={[
-                { value: "all", label: "All statuses" },
+                { value: "all", label: "Active" },
                 ...INVOICE_STATUSES.map((item) => ({
                   value: item,
                   label: INVOICE_STATUS_LABELS[item],
                 })),
+                { value: "archived", label: "Archived" },
               ]}
             >
               <SelectTrigger className="w-full sm:w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="all">Active</SelectItem>
                 {INVOICE_STATUSES.map((item) => (
                   <SelectItem key={item} value={item}>
                     {INVOICE_STATUS_LABELS[item]}
                   </SelectItem>
                 ))}
+                <SelectItem value="archived">Archived</SelectItem>
               </SelectContent>
             </Select>
             <Button onClick={() => setCreate(true)}>New invoice</Button>
