@@ -108,6 +108,7 @@ import {
   effectiveCatalogMargin,
   formatMarginPercent,
 } from "@/lib/catalog-margin";
+import { addItemsLabel, toggleSelectedId } from "@/lib/catalog-pick";
 import { currentCatalog } from "@/lib/price-lists";
 import { billingEstimate, defaultTaxRateForMarket, isResidentialMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { formatJobSite } from "@/lib/leads";
@@ -185,9 +186,11 @@ export function PriceBookSheet({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onPick: (catalogItemId: string) => void;
+  onPick: (catalogItemIds: string[]) => void | Promise<void>;
 }) {
   const { catalog, company, viewer, priceLists } = useCrm();
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [adding, setAdding] = useState(false);
   const items = useMemo(() => currentCatalog(catalog, priceLists ?? []), [catalog, priceLists]);
   const groups = useMemo(() => {
     const kinds = Array.from(new Set(items.map((item) => item.kind))) as CatalogKind[];
@@ -197,14 +200,37 @@ export function PriceBookSheet({
     }));
   }, [items]);
 
+  useEffect(() => {
+    if (!open) {
+      setSelectedIds([]);
+      setAdding(false);
+    }
+  }, [open]);
+
+  function toggle(id: string) {
+    setSelectedIds((prev) => toggleSelectedId(prev, id));
+  }
+
+  async function addSelected() {
+    if (selectedIds.length === 0 || adding) return;
+    setAdding(true);
+    try {
+      await onPick(selectedIds);
+      setSelectedIds([]);
+    } finally {
+      setAdding(false);
+    }
+  }
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-md">
         <SheetHeader>
           <SheetTitle>Price book</SheetTitle>
           <SheetDescription>
-            Drop a catalog item onto this proposal. The price is unit cost plus the item’s margin, at least the
-            company minimum. Quantity and price stay editable after you add it.
+            Check every catalog item you want, then add them together. The sheet stays open so you can
+            add another batch without starting over. Price is unit cost plus the item’s margin, at least
+            the company minimum.
           </SheetDescription>
         </SheetHeader>
         <Command className="min-h-0 flex-1 border-0 bg-transparent p-0">
@@ -221,44 +247,50 @@ export function PriceBookSheet({
             </CommandEmpty>
             {groups.map((group) => (
               <CommandGroup key={group.kind} heading={CATALOG_KIND_LABELS[group.kind]}>
-                {group.items.map((item) => (
-                  <CommandItem
-                    key={item.id}
-                    value={`${item.costCode} ${item.name}`}
-                    onSelect={() => {
-                      onPick(item.id);
-                      onOpenChange(false);
-                    }}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p>{item.name}</p>
-                      {item.description ? (
-                        <p className="line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
-                      ) : null}
-                      <p className="text-xs text-muted-foreground">
-                        {item.costCode} · {item.unit}
-                        {effectiveCatalogMargin(item.marginPercent, company.minimumMarginPercent) > 0
-                          ? ` · ${formatMoney(item.unitCost)} cost`
-                          : ""}
-                      </p>
-                    </div>
-                    <span className="tabular-nums text-muted-foreground">
-                      {formatMoney(catalogProposalUnitPrice(item, company))}
-                      {effectiveCatalogMargin(item.marginPercent, company.minimumMarginPercent) > 0 ? (
-                        <span className="ml-1 text-xs">
-                          {formatMarginPercent(
-                            effectiveCatalogMargin(item.marginPercent, company.minimumMarginPercent),
-                          )}
-                        </span>
-                      ) : null}
-                    </span>
-                  </CommandItem>
-                ))}
+                {group.items.map((item) => {
+                  const checked = selectedIds.includes(item.id);
+                  return (
+                    <CommandItem
+                      key={item.id}
+                      value={`${item.costCode} ${item.name}`}
+                      onSelect={() => toggle(item.id)}
+                    >
+                      <Checkbox
+                        checked={checked}
+                        tabIndex={-1}
+                        className="pointer-events-none"
+                        aria-hidden
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p>{item.name}</p>
+                        {item.description ? (
+                          <p className="line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
+                        ) : null}
+                        <p className="text-xs text-muted-foreground">
+                          {item.costCode} · {item.unit}
+                          {effectiveCatalogMargin(item.marginPercent, company.minimumMarginPercent) > 0
+                            ? ` · ${formatMoney(item.unitCost)} cost`
+                            : ""}
+                        </p>
+                      </div>
+                      <span className="tabular-nums text-muted-foreground">
+                        {formatMoney(catalogProposalUnitPrice(item, company))}
+                        {effectiveCatalogMargin(item.marginPercent, company.minimumMarginPercent) > 0 ? (
+                          <span className="ml-1 text-xs">
+                            {formatMarginPercent(
+                              effectiveCatalogMargin(item.marginPercent, company.minimumMarginPercent),
+                            )}
+                          </span>
+                        ) : null}
+                      </span>
+                    </CommandItem>
+                  );
+                })}
               </CommandGroup>
             ))}
           </CommandList>
         </Command>
-        <div className="border-t px-4 py-3">
+        <div className="flex items-center justify-between gap-3 border-t px-4 py-3">
           {viewer && canManageSettings(viewer.role, viewer) ? (
             <Link
               href="/settings/price-book"
@@ -270,6 +302,14 @@ export function PriceBookSheet({
           ) : (
             <p className="text-xs text-muted-foreground">A company admin manages the catalog in Settings.</p>
           )}
+          <Button
+            type="button"
+            size="sm"
+            disabled={selectedIds.length === 0 || adding}
+            onClick={() => void addSelected()}
+          >
+            {adding ? "Adding…" : addItemsLabel(selectedIds.length)}
+          </Button>
         </div>
       </SheetContent>
     </Sheet>
@@ -1618,11 +1658,13 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       <PriceBookSheet
         open={bookOpen}
         onOpenChange={setBookOpen}
-        onPick={(catalogItemId) =>
-          void crm.addEstimateLineFromCatalog(estimate.id, catalogItemId, bookGroup, {
+        onPick={async (catalogItemIds) => {
+          const added = await crm.addEstimateLinesFromCatalog(estimate.id, catalogItemIds, bookGroup, {
             package: packageForGroup(bookGroup),
-          })
-        }
+          });
+          if (added.length === 1) toast.success(`Added ${added[0].title}.`);
+          else if (added.length > 1) toast.success(`Added ${added.length} items.`);
+        }}
       />
       <ShareLinkDialog
         open={shareOpen}

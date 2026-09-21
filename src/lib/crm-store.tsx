@@ -60,6 +60,7 @@ import {
   clampMarginPercent,
   fillCatalogItem,
 } from "@/lib/catalog-margin";
+import { nextLineSortOrders, selectedCatalogItems } from "@/lib/catalog-pick";
 import {
   catalogForList,
   copyCatalogItemToList,
@@ -1059,6 +1060,12 @@ type CrmContextValue = CrmState & {
     groupName?: string,
     fields?: Partial<Pick<EstimateTemplateLine, "package">>,
   ) => Promise<void>;
+  addTemplateLinesFromCatalog: (
+    templateId: string,
+    catalogItemIds: string[],
+    groupName?: string,
+    fields?: Partial<Pick<EstimateTemplateLine, "package">>,
+  ) => Promise<void>;
   addCustomTemplateLine: (
     templateId: string,
     groupName?: string,
@@ -1072,8 +1079,14 @@ type CrmContextValue = CrmState & {
     estimateId: string,
     catalogItemId: string,
     groupName?: string,
-    fields?: Partial<Pick<EstimateLine, "package">>
+    fields?: Partial<Pick<EstimateLine, "package" | "sortOrder">>
   ) => Promise<EstimateLine | undefined>;
+  addEstimateLinesFromCatalog: (
+    estimateId: string,
+    catalogItemIds: string[],
+    groupName?: string,
+    fields?: Partial<Pick<EstimateLine, "package">>
+  ) => Promise<EstimateLine[]>;
   addCustomEstimateLine: (
     estimateId: string,
     groupName?: string,
@@ -5413,6 +5426,41 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [state.estimateLines, state.estimates, state.jobs, state.opportunities, user.companyId],
   );
 
+  const addTemplateLinesFromCatalog = useCallback(
+    async (
+      templateId: string,
+      catalogItemIds: string[],
+      groupName?: string,
+      fields?: Partial<Pick<EstimateTemplateLine, "package">>,
+    ) => {
+      const items = selectedCatalogItems(state.catalog, catalogItemIds);
+      if (items.length === 0) return;
+      const currentMax = Math.max(
+        0,
+        ...state.estimateTemplateLines.filter((line) => line.templateId === templateId).map((line) => line.sortOrder),
+      );
+      const orders = nextLineSortOrders(currentMax, items.length);
+      for (const [index, item] of items.entries()) {
+        await persistTemplateLine(
+          fillEstimateTemplateLine({
+            id: crypto.randomUUID(),
+            templateId,
+            catalogItemId: item.id,
+            title: item.name,
+            description: catalogItemDescription(item),
+            quantity: 1,
+            unit: item.unit,
+            unitCost: catalogProposalUnitPrice(item, companySettings),
+            sortOrder: orders[index],
+            groupName: groupName ?? "",
+            package: fields?.package ?? "",
+          }),
+        );
+      }
+    },
+    [companySettings, state.catalog, state.estimateTemplateLines, user.companyId],
+  );
+
   const addTemplateLineFromCatalog = useCallback(
     async (
       templateId: string,
@@ -5420,29 +5468,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       groupName?: string,
       fields?: Partial<Pick<EstimateTemplateLine, "package">>,
     ) => {
-      const item = state.catalog.find((entry) => entry.id === catalogItemId);
-      if (!item) return;
-      const sortOrder =
-        Math.max(
-          0,
-          ...state.estimateTemplateLines.filter((line) => line.templateId === templateId).map((line) => line.sortOrder),
-        ) + 1;
-      const line = fillEstimateTemplateLine({
-        id: crypto.randomUUID(),
-        templateId,
-        catalogItemId: item.id,
-        title: item.name,
-        description: catalogItemDescription(item),
-        quantity: 1,
-        unit: item.unit,
-        unitCost: catalogProposalUnitPrice(item, companySettings),
-        sortOrder,
-        groupName: groupName ?? "",
-        package: fields?.package ?? "",
-      });
-      await persistTemplateLine(line);
+      await addTemplateLinesFromCatalog(templateId, [catalogItemId], groupName, fields);
     },
-    [companySettings, state.catalog, state.estimateTemplateLines, user.companyId],
+    [addTemplateLinesFromCatalog],
   );
 
   const addCustomTemplateLine = useCallback(
@@ -6083,11 +6111,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       estimateId: string,
       catalogItemId: string,
       groupName?: string,
-      fields?: Partial<Pick<EstimateLine, "package">>,
+      fields?: Partial<Pick<EstimateLine, "package" | "sortOrder">>,
     ) => {
       const item = state.catalog.find((entry) => entry.id === catalogItemId);
       if (!item) return;
       const sortOrder =
+        fields?.sortOrder ??
         Math.max(
           0,
           ...state.estimateLines
@@ -6175,6 +6204,35 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return saved;
     },
     [companySettings, state.catalog, state.estimateLines, user.companyId]
+  );
+
+  const addEstimateLinesFromCatalog = useCallback(
+    async (
+      estimateId: string,
+      catalogItemIds: string[],
+      groupName?: string,
+      fields?: Partial<Pick<EstimateLine, "package">>,
+    ) => {
+      const items = selectedCatalogItems(state.catalog, catalogItemIds);
+      if (items.length === 0) return [];
+      const currentMax = Math.max(
+        0,
+        ...state.estimateLines
+          .filter((line) => line.estimateId === estimateId)
+          .map((line) => line.sortOrder),
+      );
+      const orders = nextLineSortOrders(currentMax, items.length);
+      const added: EstimateLine[] = [];
+      for (const [index, item] of items.entries()) {
+        const line = await addEstimateLineFromCatalog(estimateId, item.id, groupName, {
+          package: fields?.package,
+          sortOrder: orders[index],
+        });
+        if (line) added.push(line);
+      }
+      return added;
+    },
+    [addEstimateLineFromCatalog, state.catalog, state.estimateLines],
   );
 
   const addCustomEstimateLine = useCallback(
@@ -11630,6 +11688,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       markEstimateViewed,
       ensureEstimateShareToken,
       addEstimateLineFromCatalog,
+      addEstimateLinesFromCatalog,
       addCustomEstimateLine,
       updateEstimateLine,
       removeEstimateLine,
@@ -11647,6 +11706,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updatePriceList,
       outdatePriceList,
       addTemplateLineFromCatalog,
+      addTemplateLinesFromCatalog,
       addCustomTemplateLine,
       updateTemplateLine,
       removeTemplateLine,
@@ -11804,6 +11864,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       markEstimateViewed,
       ensureEstimateShareToken,
       addEstimateLineFromCatalog,
+      addEstimateLinesFromCatalog,
       addCustomEstimateLine,
       updateEstimateLine,
       removeEstimateLine,
@@ -11821,6 +11882,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updatePriceList,
       outdatePriceList,
       addTemplateLineFromCatalog,
+      addTemplateLinesFromCatalog,
       addCustomTemplateLine,
       updateTemplateLine,
       removeTemplateLine,
