@@ -471,11 +471,12 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
       <PriceBookSheet
         open={bookOpen}
         onOpenChange={setBookOpen}
-        onPick={(catalogItemId) =>
-          void crm.addTemplateLineFromCatalog(template.id, catalogItemId, bookGroup, {
+        onPick={async (catalogItemIds) => {
+          await crm.addTemplateLinesFromCatalog(template.id, catalogItemIds, bookGroup, {
             package: packageForGroup(bookGroup),
-          })
-        }
+          });
+          toast.success(catalogItemIds.length === 1 ? "Added 1 item." : `Added ${catalogItemIds.length} items.`);
+        }}
       />
     </div>
   );
