@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Virtuoso } from "react-virtuoso";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronsUpDown, Mail, MessageSquare, Phone, Search, Send, Smartphone } from "lucide-react";
@@ -90,7 +91,6 @@ export function MessagesInbox() {
   const [sending, setSending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
-  const bottomRef = useRef<HTMLDivElement>(null);
 
   const showCompose =
     composeParam || (!wantedThread && Boolean(queryContact) && !queryThread);
@@ -108,10 +108,6 @@ export function MessagesInbox() {
       setDraftContactId((current) => current || queryContact.id);
     }
   }, [queryContact?.id, queryContact?.phone]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [selected?.key, selected?.messages.length, showCompose]);
 
   const composeContact =
     (draftContactId ? crm.contacts.find((row) => row.id === draftContactId) : undefined) ??
@@ -240,7 +236,7 @@ export function MessagesInbox() {
               />
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="min-h-0 flex-1">
             {visibleThreads.length === 0 ? (
               <p className="px-4 py-8 text-sm text-muted-foreground">
                 {threads.length === 0
@@ -248,43 +244,18 @@ export function MessagesInbox() {
                   : "No threads match that search."}
               </p>
             ) : (
-              visibleThreads.map((thread) => {
-                const active = !showCompose && selected?.key === thread.key;
-                return (
-                  <button
-                    key={thread.key}
-                    type="button"
-                    onClick={() => openThread(thread.key)}
-                    className={cn(
-                      "flex w-full items-start gap-3 border-b px-4 py-3 text-left",
-                      active ? "bg-muted" : "hover:bg-muted/50",
-                    )}
-                  >
-                    <Avatar size="sm" className="mt-0.5">
-                      <AvatarFallback className="bg-primary/10 text-primary">
-                        {initials(thread.title) || "#"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-baseline justify-between gap-2">
-                        <span className="truncate text-sm font-medium">{thread.title}</span>
-                        <span className="shrink-0 text-[10px] text-muted-foreground">
-                          {formatInboxTime(thread.lastAt)}
-                        </span>
-                      </span>
-                      <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                        {thread.preview}
-                      </span>
-                      {thread.job ? (
-                        <span className="mt-1 block truncate text-[11px] text-muted-foreground">
-                          {thread.job.code ? `${thread.job.code} · ` : ""}
-                          {thread.job.name}
-                        </span>
-                      ) : null}
-                    </span>
-                  </button>
-                );
-              })
+              <Virtuoso
+                className="h-full"
+                data={visibleThreads}
+                increaseViewportBy={240}
+                itemContent={(_index, thread) => (
+                  <ThreadRow
+                    thread={thread}
+                    active={!showCompose && selected?.key === thread.key}
+                    onOpen={openThread}
+                  />
+                )}
+              />
             )}
           </div>
         </aside>
@@ -398,7 +369,12 @@ export function MessagesInbox() {
             )}
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto bg-muted/20 px-4 py-4">
+          <div
+            className={cn(
+              "min-h-0 flex-1 bg-muted/20",
+              showCompose || !selected ? "overflow-y-auto px-4 py-4" : "",
+            )}
+          >
             {showCompose || !selected ? (
               threads.length === 0 && !showCompose ? (
                 <EmptyState
@@ -416,9 +392,8 @@ export function MessagesInbox() {
                 </p>
               )
             ) : (
-              <Conversation messages={selected.messages} />
+              <Conversation key={selected.key} messages={selected.messages} />
             )}
-            <div ref={bottomRef} />
           </div>
 
           <form
@@ -527,14 +502,62 @@ export function MessagesInbox() {
   );
 }
 
-function Conversation({ messages }: { messages: MessageThread["messages"] }) {
+function ThreadRow({
+  thread,
+  active,
+  onOpen,
+}: {
+  thread: MessageThread;
+  active: boolean;
+  onOpen: (key: string) => void;
+}) {
   return (
-    <div className="space-y-3">
-      {messages.map((message, index) => {
+    <button
+      type="button"
+      onClick={() => onOpen(thread.key)}
+      className={cn(
+        "flex w-full items-start gap-3 border-b px-4 py-3 text-left",
+        active ? "bg-muted" : "hover:bg-muted/50",
+      )}
+    >
+      <Avatar size="sm" className="mt-0.5">
+        <AvatarFallback className="bg-primary/10 text-primary">
+          {initials(thread.title) || "#"}
+        </AvatarFallback>
+      </Avatar>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline justify-between gap-2">
+          <span className="truncate text-sm font-medium">{thread.title}</span>
+          <span className="shrink-0 text-[10px] text-muted-foreground">
+            {formatInboxTime(thread.lastAt)}
+          </span>
+        </span>
+        <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{thread.preview}</span>
+        {thread.job ? (
+          <span className="mt-1 block truncate text-[11px] text-muted-foreground">
+            {thread.job.code ? `${thread.job.code} · ` : ""}
+            {thread.job.name}
+          </span>
+        ) : null}
+      </span>
+    </button>
+  );
+}
+
+function Conversation({ messages }: { messages: MessageThread["messages"] }) {
+  const lastIndex = Math.max(0, messages.length - 1);
+  return (
+    <Virtuoso
+      className="h-full"
+      data={messages}
+      increaseViewportBy={{ top: 240, bottom: 400 }}
+      initialTopMostItemIndex={lastIndex}
+      followOutput="smooth"
+      itemContent={(index, message) => {
         const prior = messages[index - 1];
         const showDay = !prior || !sameLocalDay(prior.createdAt, message.createdAt);
         return (
-          <div key={message.id}>
+          <div className={cn("px-4", index === 0 ? "pt-4" : "pt-3", index === lastIndex ? "pb-4" : "")}>
             {showDay ? (
               <p className="mb-3 text-center text-[11px] tracking-wide text-muted-foreground uppercase">
                 {formatDate(message.createdAt)}
@@ -570,8 +593,8 @@ function Conversation({ messages }: { messages: MessageThread["messages"] }) {
             </div>
           </div>
         );
-      })}
-    </div>
+      }}
+    />
   );
 }
 
