@@ -18,6 +18,7 @@ import { parseEstimatePackage, parseEstimatePackageMode, parseLinePackage } from
 import { fillEstimateTemplate, fillEstimateTemplateLine } from "@/lib/estimate-templates";
 import { parsePageTemplate, parsePhotoReportPages } from "@/lib/photo-report";
 import { customFieldsJson, fillJobRecord, parseCustomFields } from "@/lib/job-record";
+import { fillCompanyFile, parseCompanyFileCategory } from "@/lib/company-files";
 import { parseMarket } from "@/lib/market";
 import { storedPhone } from "@/lib/phone";
 import { resolveStoredFileUrl, normalizeObjectKey } from "@/lib/storage/urls";
@@ -1130,20 +1131,6 @@ export function mapEstimateFile(row: {
   };
 }
 
-function parseCompanyFileCategory(value: unknown): import("@/lib/types").CompanyFileCategory {
-  const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
-  if (
-    raw === "warranty" ||
-    raw === "product" ||
-    raw === "template" ||
-    raw === "insurance" ||
-    raw === "other"
-  ) {
-    return raw;
-  }
-  return "other";
-}
-
 export function mapCompanyFile(
   row: Database["public"]["Tables"]["company_files"]["Row"],
 ): import("@/lib/types").CompanyFile {
@@ -1151,23 +1138,25 @@ export function mapCompanyFile(
     typeof row.content_type === "string" && row.content_type.trim()
       ? row.content_type
       : "application/octet-stream";
-  return {
+  const storagePath =
+    normalizeObjectKey(row.storage_path || "", "company-files") || row.storage_path || "";
+  return fillCompanyFile({
     id: row.id,
-    name: row.name,
+    name: row.name ?? "",
     category: parseCompanyFileCategory(row.category),
     mimeType,
     sizeBytes: Number(row.size_bytes) || 0,
     url: resolveStoredFileUrl({
-      storagePath: row.storage_path,
+      storagePath,
       url: row.url,
       kind: "company-files",
     }),
-    storagePath: normalizeObjectKey(row.storage_path, "company-files") || row.storage_path,
+    storagePath,
     notes: row.notes ?? "",
     createdBy: row.uploaded_by ? String(row.uploaded_by) : "",
-    createdAt: row.created_at,
-    updatedAt: row.updated_at ?? row.created_at,
-  };
+    createdAt: row.created_at ?? "",
+    updatedAt: row.updated_at ?? row.created_at ?? "",
+  });
 }
 
 export function mapPhotoReport(row: PhotoReportRow): PhotoReport {
