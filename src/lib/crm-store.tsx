@@ -1209,6 +1209,8 @@ type CrmContextValue = CrmState & {
     imageUrl?: string;
     file?: File;
   }) => Promise<void>;
+  /** Replace the visible image after markup. Keeps the original Backblaze object. */
+  updateJobPhoto: (id: string, input: { file: File }) => Promise<boolean>;
   /** Soft-delete a job photo from the UI. Never removes the Backblaze object. */
   deleteJobPhoto: (id: string) => Promise<boolean>;
   /** Restore a soft-deleted job photo from the Project Trashcan. */
@@ -9003,6 +9005,60 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [effectiveStaff?.name, recordCompanyAudit, state.jobs, updateJob, user.companyId, user.name]
   );
 
+  const updateJobPhoto = useCallback(
+    async (id: string, input: { file: File }) => {
+      const current = state.photos.find((photo) => photo.id === id);
+      if (!current) {
+        toast.error("That photo is no longer in the book.");
+        return false;
+      }
+      const ext = input.file.name.split(".").pop()?.toLowerCase() || "jpg";
+      const relativePath = `${current.jobId}/${crypto.randomUUID()}.${ext}`;
+      let imageUrl = "";
+      let storagePath: string | null = current.storagePath;
+      try {
+        const uploaded = await uploadViaApi("job-photos", input.file, relativePath, input.file.name);
+        storagePath = uploaded.path;
+        imageUrl = uploaded.publicUrl;
+      } catch (error) {
+        const supabase = maybeClient();
+        if (supabase) {
+          toast.error(error instanceof Error ? error.message : "Could not upload the annotated photo.");
+          return false;
+        }
+        imageUrl = URL.createObjectURL(input.file);
+      }
+      const next = { ...current, imageUrl, storagePath };
+      const supabase = maybeClient();
+      if (supabase) {
+        const { error } = await supabase
+          .from("job_photos")
+          .update({ image_url: imageUrl, storage_path: storagePath })
+          .eq("id", id);
+        if (error) {
+          toast.error(error.message);
+          return false;
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        photos: prev.photos.map((photo) => (photo.id === id ? next : photo)),
+      }));
+      void recordCompanyAudit({
+        entityType: "photo",
+        entityId: current.id,
+        action: "updated",
+        before: current,
+        after: next,
+        label: current.caption?.trim() || "Photo",
+        detail: "Annotated photo saved.",
+        relatedJobId: current.jobId,
+      });
+      return true;
+    },
+    [recordCompanyAudit, state.photos],
+  );
+
   const recordPhotoAudit = useCallback(
     async (input: {
       jobId: string;
@@ -11645,6 +11701,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       submitQuiz,
       addTrainingBulletin,
       addJobPhoto,
+      updateJobPhoto,
       deleteJobPhoto,
       restoreJobPhoto,
       revertCompanyAudit,
@@ -11818,6 +11875,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       submitQuiz,
       addTrainingBulletin,
       addJobPhoto,
+      updateJobPhoto,
       deleteJobPhoto,
       restoreJobPhoto,
       revertCompanyAudit,

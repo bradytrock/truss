@@ -35,6 +35,7 @@ import { DeleteJobDialog } from "@/components/delete-job-dialog";
 import { JobFilesPanel } from "@/components/job-files";
 import { JobEagleviewPanel } from "@/components/job-eagleview";
 import { JobPhotosPanel } from "@/components/job-photos-panel";
+import { PhotoViewer } from "@/components/photo-viewer";
 import { JobFinancials } from "@/components/job-financials";
 import { AutomationRuns } from "@/components/automation-runs";
 import { Badge } from "@/components/ui/badge";
@@ -302,6 +303,7 @@ export function JobRecord({
   const [photoOffset, setPhotoOffset] = useState(0);
   const [addressOpen, setAddressOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
+  const [photoViewOpen, setPhotoViewOpen] = useState(false);
   const [invoiceOpen, setInvoiceOpen] = useState(false);
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [materialTemplateOpen, setMaterialTemplateOpen] = useState(false);
@@ -692,12 +694,18 @@ export function JobRecord({
 
           <div className="relative overflow-hidden rounded-md border bg-muted">
             {shownPhoto ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={shownPhoto.imageUrl}
-                alt={shownPhoto.caption || job.name}
-                className="aspect-[16/10] w-full object-cover"
-              />
+              <button
+                type="button"
+                onClick={() => setPhotoViewOpen(true)}
+                className="block w-full"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={shownPhoto.imageUrl}
+                  alt={shownPhoto.caption || job.name}
+                  className="aspect-[16/10] w-full object-cover"
+                />
+              </button>
             ) : (
               <button
                 type="button"
@@ -1675,6 +1683,19 @@ export function JobRecord({
       </Dialog>
 
       <AddPhotoDialog open={photoOpen} onOpenChange={setPhotoOpen} jobId={job.id} />
+      <PhotoViewer
+        photo={shownPhoto}
+        open={photoViewOpen && Boolean(shownPhoto)}
+        onOpenChange={setPhotoViewOpen}
+        title={shownPhoto?.caption || job.name}
+        description={
+          shownPhoto
+            ? shownPhoto.createdBy?.trim()
+              ? `Taken by ${shownPhoto.createdBy.trim()} · ${formatDate(shownPhoto.takenAt)}`
+              : formatDate(shownPhoto.takenAt)
+            : undefined
+        }
+      />
       <CreatePageDialog
         open={pageCreateOpen}
         onOpenChange={setPageCreateOpen}

@@ -5,13 +5,6 @@ import { useRouter } from "next/navigation";
 import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -19,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PhotoCategoryBadge } from "@/components/status-badge";
+import { PhotoViewer } from "@/components/photo-viewer";
 import { useCrm } from "@/lib/crm-store";
 import { formatDate, initials } from "@/lib/format";
 import { isDeletedJob } from "@/lib/job-record";
@@ -254,57 +248,52 @@ export default function PhotosPage() {
         </div>
       )}
 
-      <Dialog open={Boolean(openItem)} onOpenChange={(open) => { if (!open) setOpenId(null); }}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto p-0 sm:max-w-3xl">
-          {openItem ? (
+      <PhotoViewer
+        photo={openItem?.photo ?? null}
+        open={Boolean(openItem)}
+        onOpenChange={(open) => {
+          if (!open) setOpenId(null);
+        }}
+        title={openItem ? photoFeedTitle(openItem) : undefined}
+        description={
+          openItem
+            ? [
+                photoFeedTakenBy(openItem.photographer),
+                openItem.label,
+                openItem.job?.code,
+                [formatDate(openItem.photo.takenAt), photoTimeLabel(openItem.photo.takenAt)]
+                  .filter(Boolean)
+                  .join(" "),
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            : undefined
+        }
+        actions={
+          openItem ? (
             <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={openItem.photo.imageUrl}
-                alt={photoFeedTitle(openItem)}
-                className="max-h-[70vh] w-full object-contain bg-black"
-              />
-              <div className="space-y-3 p-5">
-                <DialogHeader className="p-0">
-                  <DialogTitle>{photoFeedTitle(openItem)}</DialogTitle>
-                  <DialogDescription>
-                    {[
-                      photoFeedTakenBy(openItem.photographer),
-                      openItem.label,
-                      openItem.job?.code,
-                      [
-                        formatDate(openItem.photo.takenAt),
-                        photoTimeLabel(openItem.photo.takenAt),
-                      ]
-                        .filter(Boolean)
-                        .join(" "),
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="flex flex-wrap items-center gap-2">
-                  <PhotoCategoryBadge category={openItem.photo.category} />
-                  {canOpenJob ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => {
-                        setOpenId(null);
-                        router.push(`/jobs?job=${openItem.photo.jobId}`);
-                      }}
-                    >
-                      Open job
-                    </Button>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">This job is not in your book. The photo is still here for the company.</p>
-                  )}
-                </div>
-              </div>
+              <PhotoCategoryBadge category={openItem.photo.category} />
+              {canOpenJob ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setOpenId(null);
+                    router.push(`/jobs?job=${openItem.photo.jobId}`);
+                  }}
+                >
+                  Open job
+                </Button>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  This job is not in your book. The photo is still here for the company.
+                </p>
+              )}
             </>
-          ) : null}
-        </DialogContent>
-      </Dialog>
+          ) : null
+        }
+      />
     </div>
   );
 }

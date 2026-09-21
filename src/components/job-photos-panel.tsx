@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { RotateCcw, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { PhotoViewer } from "@/components/photo-viewer";
 import { PhotoCategoryBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatDate, formatDateTimeUtc } from "@/lib/format";
@@ -22,9 +23,11 @@ export function JobPhotosPanel({
   const crm = useCrm();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const job = crm.getJob(jobId);
   const photos = useMemo(() => livePhotos(crm.photos, jobId), [crm.photos, jobId]);
+  const openPhoto = photos.find((photo) => photo.id === openId) ?? null;
   const trashed = useMemo(() => trashedPhotos(crm.photos, jobId), [crm.photos, jobId]);
   const primary = job ? primaryJobPhoto(crm.photos, job) : null;
   const audit = useMemo(
@@ -111,12 +114,18 @@ export function JobPhotosPanel({
               return (
                 <figure key={photo.id} className="overflow-hidden border">
                   <div className="relative">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={photo.imageUrl}
-                      alt={photo.caption || "Job photo"}
-                      className="aspect-[4/3] w-full object-cover"
-                    />
+                    <button
+                      type="button"
+                      onClick={() => setOpenId(photo.id)}
+                      className="block w-full"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={photo.imageUrl}
+                        alt={photo.caption || "Job photo"}
+                        className="aspect-[4/3] w-full object-cover"
+                      />
+                    </button>
                     {isPrimary ? (
                       <span className="absolute top-2 left-2 bg-background/90 px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase">
                         Primary
@@ -234,6 +243,23 @@ export function JobPhotosPanel({
           </div>
         </section>
       ) : null}
+
+      <PhotoViewer
+        photo={openPhoto}
+        open={Boolean(openPhoto)}
+        onOpenChange={(open) => {
+          if (!open) setOpenId(null);
+        }}
+        title={openPhoto?.caption || "Job photo"}
+        description={
+          openPhoto
+            ? openPhoto.createdBy?.trim()
+              ? `Taken by ${openPhoto.createdBy.trim()} · ${formatDate(openPhoto.takenAt)}`
+              : formatDate(openPhoto.takenAt)
+            : undefined
+        }
+        actions={openPhoto ? <PhotoCategoryBadge category={openPhoto.category} /> : null}
+      />
     </div>
   );
 }
