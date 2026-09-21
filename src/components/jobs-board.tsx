@@ -17,7 +17,7 @@ import { GripVertical, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { KanbanScroller } from "@/components/board-scroll-slider";
 import { EmptyState, RecordCode } from "@/components/page-chrome";
 import { MarketBadge } from "@/components/status-badge";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
@@ -178,7 +178,7 @@ export function JobsBoard({
       onDragEnd={onDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <ScrollArea className="w-full">
+      <KanbanScroller>
         <div className="flex min-h-[32rem] gap-3 pb-3">
           {columns.map((column) => {
             const cards = filtered.filter((job) => columnOf(job) === column);
@@ -206,8 +206,7 @@ export function JobsBoard({
             );
           })}
         </div>
-        <ScrollBar orientation="horizontal" />
-      </ScrollArea>
+      </KanbanScroller>
       <DragOverlay>
         {active ? (
           <JobCard

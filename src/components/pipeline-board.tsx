@@ -17,7 +17,7 @@ import {
 import { GripVertical } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { KanbanScroller } from "@/components/board-scroll-slider";
 import { MarketBadge, TypeBadge } from "@/components/status-badge";
 import { EmptyState, RecordCode } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
@@ -122,7 +122,7 @@ export function PipelineBoard({ query }: { query: string }) {
       onDragEnd={onDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <ScrollArea className="w-full">
+      <KanbanScroller>
         <div className="flex min-h-[32rem] gap-3 pb-3">
           {PIPELINE_STAGES.map((stage) => {
             const cards = filtered.filter((opportunity) => opportunity.stage === stage);
@@ -145,8 +145,7 @@ export function PipelineBoard({ query }: { query: string }) {
             );
           })}
         </div>
-        <ScrollBar orientation="horizontal" />
-      </ScrollArea>
+      </KanbanScroller>
       <DragOverlay>
         {active ? (
           <OpportunityCard
