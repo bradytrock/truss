@@ -3,10 +3,13 @@ import {
   groupHasMixedPackages,
   lineInPackage,
   listEstimateOptions,
+  nextClassicOrOptionKey,
   nextOptionKey,
   nextOptionName,
   optionKeyForGroup,
+  optionNameForKey,
   parseLinePackage,
+  pendingClassicPackages,
   resolveSelectedPackage,
   scopedEstimateLines,
 } from "./estimate-packages.ts";
@@ -67,6 +70,24 @@ assert.deepEqual(
 assert.deepEqual(
   scopedEstimateLines({ packageMode: "" }, lines).map((line) => line.package),
   ["", "opt_1", "opt_1", "opt_2"],
+);
+
+assert.equal(nextClassicOrOptionKey([]), "good");
+assert.equal(nextClassicOrOptionKey(["good"]), "better");
+assert.equal(nextClassicOrOptionKey(["good", "better", "best"]), "opt_1");
+assert.equal(optionNameForKey("best", []), "Best");
+assert.equal(optionNameForKey("opt_1", ["Good"]), "Option 1");
+assert.deepEqual(
+  pendingClassicPackages([{ package: "better", groupName: "Better" }]).map((item) => item.key),
+  ["good", "best"],
+);
+assert.deepEqual(
+  pendingClassicPackages([
+    { package: "good", groupName: "Good" },
+    { package: "better", groupName: "Better" },
+    { package: "best", groupName: "Best" },
+  ]),
+  [],
 );
 
 console.log("estimate-packages tests passed");

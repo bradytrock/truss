@@ -128,6 +128,7 @@ export function StartEstimateDialog({
                         <span className="min-w-0">
                           <span className="block font-medium">{template.name}</span>
                           <span className="block truncate text-xs text-muted-foreground">
+                            {template.packageMode === "gbb" ? "Good / Better / Best · " : ""}
                             {template.description || JOB_MARKET_LABELS[template.market]}
                             {lines.length
                               ? ` · ${lines.length} ${lines.length === 1 ? "line" : "lines"}`

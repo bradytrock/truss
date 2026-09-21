@@ -652,6 +652,10 @@ export function mapEstimateTemplate(row: EstimateTemplateRow): EstimateTemplate 
     discountValue: Number(row.discount_value ?? 0),
     depositKind: adjustmentKind(row.deposit_kind),
     depositValue: Number(row.deposit_value ?? 0),
+    packageMode: parseEstimatePackageMode("package_mode" in row ? String(row.package_mode ?? "") : ""),
+    selectedPackage:
+      parseEstimatePackage("selected_package" in row ? String(row.selected_package ?? "") : "") ||
+      "better",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
@@ -678,6 +682,7 @@ export function mapEstimateTemplateLine(row: EstimateTemplateLineRow): EstimateT
     ),
     coverageAmount: "coverage_amount" in row && row.coverage_amount != null ? Number(row.coverage_amount) : 1,
     coverageUnit: "coverage_unit" in row && row.coverage_unit != null ? String(row.coverage_unit) : "squares",
+    package: parseLinePackage("package" in row && row.package != null ? String(row.package) : ""),
   });
 }
 
@@ -694,6 +699,8 @@ export function estimateTemplatePatch(patch: Partial<EstimateTemplate>) {
   if (patch.discountValue !== undefined) row.discount_value = patch.discountValue;
   if (patch.depositKind !== undefined) row.deposit_kind = patch.depositKind;
   if (patch.depositValue !== undefined) row.deposit_value = patch.depositValue;
+  if (patch.packageMode !== undefined) row.package_mode = patch.packageMode;
+  if (patch.selectedPackage !== undefined) row.selected_package = patch.selectedPackage;
   if (patch.updatedAt !== undefined) row.updated_at = patch.updatedAt;
   return row;
 }
@@ -715,6 +722,7 @@ export function estimateTemplateLinePatch(patch: Partial<EstimateTemplateLine>) 
   if (patch.measurementKeys !== undefined) row.measurement_key = serializeMeasurementKeys(patch.measurementKeys);
   if (patch.coverageAmount !== undefined) row.coverage_amount = patch.coverageAmount;
   if (patch.coverageUnit !== undefined) row.coverage_unit = patch.coverageUnit;
+  if (patch.package !== undefined) row.package = patch.package;
   return row;
 }
 

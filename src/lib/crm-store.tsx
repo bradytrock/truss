@@ -25,7 +25,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newPortalToken, portalInviteExpiry, portalUrl } from "@/lib/portal";
@@ -1021,7 +1021,11 @@ type CrmContextValue = CrmState & {
     contactId: string;
   }) => Promise<{ url: string; token: string } | null>;
   duplicateEstimate: (id: string) => Promise<Estimate>;
-  addEstimateTemplate: (input?: { name?: string; market?: EstimateTemplate["market"] }) => Promise<EstimateTemplate>;
+  addEstimateTemplate: (input?: {
+    name?: string;
+    market?: EstimateTemplate["market"];
+    packageMode?: EstimateTemplate["packageMode"];
+  }) => Promise<EstimateTemplate>;
   updateEstimateTemplate: (id: string, patch: Partial<EstimateTemplate>) => Promise<void>;
   removeEstimateTemplate: (id: string) => Promise<void>;
   saveEstimateAsTemplate: (estimateId: string, name: string) => Promise<EstimateTemplate>;
@@ -1049,8 +1053,17 @@ type CrmContextValue = CrmState & {
   }) => Promise<PriceList>;
   updatePriceList: (id: string, patch: Partial<Pick<PriceList, "name" | "effectiveOn">>) => Promise<void>;
   outdatePriceList: (id: string) => Promise<void>;
-  addTemplateLineFromCatalog: (templateId: string, catalogItemId: string, groupName?: string) => Promise<void>;
-  addCustomTemplateLine: (templateId: string, groupName?: string) => Promise<void>;
+  addTemplateLineFromCatalog: (
+    templateId: string,
+    catalogItemId: string,
+    groupName?: string,
+    fields?: Partial<Pick<EstimateTemplateLine, "package">>,
+  ) => Promise<void>;
+  addCustomTemplateLine: (
+    templateId: string,
+    groupName?: string,
+    fields?: Partial<Pick<EstimateTemplateLine, "package" | "title" | "description" | "quantity" | "unit" | "unitCost">>,
+  ) => Promise<void>;
   updateTemplateLine: (id: string, patch: Partial<EstimateTemplateLine>) => Promise<void>;
   removeTemplateLine: (id: string) => Promise<void>;
   reorderTemplateLine: (id: string, direction: "up" | "down") => Promise<void>;
@@ -4196,6 +4209,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         discountValue: templateFields?.discountValue,
         depositKind: templateFields?.depositKind,
         depositValue: templateFields?.depositValue,
+        packageMode: templateFields?.packageMode,
+        selectedPackage: templateFields?.selectedPackage,
       });
       const signerTokens = mintEstimateSignerTokens(estimate);
       estimate.shareToken = signerTokens.shareToken;
@@ -5161,40 +5176,53 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   };
 
   const addEstimateTemplate = useCallback(
-    async (input?: { name?: string; market?: EstimateTemplate["market"] }) => {
+    async (input?: {
+      name?: string;
+      market?: EstimateTemplate["market"];
+      packageMode?: EstimateTemplate["packageMode"];
+    }) => {
       const now = new Date().toISOString();
+      const gbb = input?.packageMode === "gbb";
       const template = fillEstimateTemplate({
         id: crypto.randomUUID(),
-        name: input?.name?.trim() || "New template",
+        name: input?.name?.trim() || (gbb ? "New GBB template" : "New template"),
         market: input?.market ?? "residential",
         createdAt: now,
         updatedAt: now,
         terms: resolveEstimateTerms({ companyDefault: companySettings.defaultEstimateTerms }),
+        packageMode: gbb ? "gbb" : "",
+        selectedPackage: gbb ? "better" : "better",
       });
       const supabase = maybeClient();
       if (!supabase) {
         setState((prev) => ({ ...prev, estimateTemplates: [template, ...prev.estimateTemplates] }));
         return template;
       }
-      const { data, error } = await supabase
-        .from("estimate_templates")
-        .insert({
-          id: template.id,
-          company_id: user.companyId,
-          name: template.name,
-          description: template.description,
-          market: template.market,
-          intro: template.intro,
-          terms: template.terms,
-          notes: template.notes,
-          tax_rate: template.taxRate,
-          discount_kind: template.discountKind,
-          discount_value: template.discountValue,
-          deposit_kind: template.depositKind,
-          deposit_value: template.depositValue,
-        })
-        .select("*")
-        .single();
+      const payload = {
+        id: template.id,
+        company_id: user.companyId,
+        name: template.name,
+        description: template.description,
+        market: template.market,
+        intro: template.intro,
+        terms: template.terms,
+        notes: template.notes,
+        tax_rate: template.taxRate,
+        discount_kind: template.discountKind,
+        discount_value: template.discountValue,
+        deposit_kind: template.depositKind,
+        deposit_value: template.depositValue,
+        package_mode: template.packageMode,
+        selected_package: template.selectedPackage,
+      };
+      let { data, error } = await supabase.from("estimate_templates").insert(payload).select("*").single();
+      if (error && isMissingEstimateTemplatePackages(error)) {
+        const { package_mode: _mode, selected_package: _pkg, ...withoutPackages } = payload;
+        const retry = await supabase.from("estimate_templates").insert(withoutPackages).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (!error && data) toast.message(missingEstimateTemplatePackagesMessage());
+      }
       if (error) {
         if (isMissingEstimateTemplates(error)) {
           setState((prev) => ({ ...prev, estimateTemplates: [template, ...prev.estimateTemplates] }));
@@ -5204,7 +5232,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error(error.message);
         throw error;
       }
-      const mapped = data ? mapEstimateTemplate(data) : template;
+      const mapped = data
+        ? fillEstimateTemplate({
+            ...mapEstimateTemplate(data),
+            packageMode: template.packageMode,
+            selectedPackage: template.selectedPackage,
+          })
+        : template;
       setState((prev) => ({ ...prev, estimateTemplates: [mapped, ...prev.estimateTemplates] }));
       return mapped;
     },
@@ -5232,6 +5266,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     const { error } = await supabase.from("estimate_templates").update(estimateTemplatePatch(next)).eq("id", id);
     if (error) {
+      if (isMissingEstimateTemplatePackages(error)) {
+        apply();
+        toast.message(missingEstimateTemplatePackagesMessage());
+        return;
+      }
       if (isMissingEstimateTemplates(error)) {
         apply();
         toast.message(missingEstimateTemplatesMessage());
@@ -5286,25 +5325,31 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }));
         return template;
       }
-      const { data, error } = await supabase
-        .from("estimate_templates")
-        .insert({
-          id: template.id,
-          company_id: user.companyId,
-          name: template.name,
-          description: template.description,
-          market: template.market,
-          intro: template.intro,
-          terms: template.terms,
-          notes: template.notes,
-          tax_rate: template.taxRate,
-          discount_kind: template.discountKind,
-          discount_value: template.discountValue,
-          deposit_kind: template.depositKind,
-          deposit_value: template.depositValue,
-        })
-        .select("*")
-        .single();
+      const payload = {
+        id: template.id,
+        company_id: user.companyId,
+        name: template.name,
+        description: template.description,
+        market: template.market,
+        intro: template.intro,
+        terms: template.terms,
+        notes: template.notes,
+        tax_rate: template.taxRate,
+        discount_kind: template.discountKind,
+        discount_value: template.discountValue,
+        deposit_kind: template.depositKind,
+        deposit_value: template.depositValue,
+        package_mode: template.packageMode,
+        selected_package: template.selectedPackage,
+      };
+      let { data, error } = await supabase.from("estimate_templates").insert(payload).select("*").single();
+      if (error && isMissingEstimateTemplatePackages(error)) {
+        const { package_mode: _mode, selected_package: _pkg, ...withoutPackages } = payload;
+        const retry = await supabase.from("estimate_templates").insert(withoutPackages).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (!error && data) toast.message(missingEstimateTemplatePackagesMessage());
+      }
       if (error) {
         if (isMissingEstimateTemplates(error)) {
           setState((prev) => ({
@@ -5318,9 +5363,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error(error.message);
         throw error;
       }
-      const mapped = data ? mapEstimateTemplate(data) : template;
+      const mapped = data
+        ? fillEstimateTemplate({
+            ...mapEstimateTemplate(data),
+            packageMode: template.packageMode,
+            selectedPackage: template.selectedPackage,
+          })
+        : template;
       if (lines.length) {
-        const payload = lines.map((line) => ({
+        const linePayload = lines.map((line) => ({
           id: line.id,
           company_id: user.companyId,
           template_id: mapped.id,
@@ -5335,9 +5386,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           optional: line.optional,
           selected: line.selected,
           taxable: line.taxable,
+          package: line.package,
         }));
-        const inserted = await supabase.from("estimate_template_lines").insert(payload);
-        if (inserted.error && !isMissingEstimateTemplates(inserted.error)) {
+        const inserted = await supabase.from("estimate_template_lines").insert(linePayload);
+        if (inserted.error && isMissingEstimateTemplatePackages(inserted.error)) {
+          const retry = await supabase.from("estimate_template_lines").insert(
+            linePayload.map(({ package: _pkg, ...row }) => row),
+          );
+          if (!retry.error) toast.message(missingEstimateTemplatePackagesMessage());
+          else if (retry.error && !isMissingEstimateTemplates(retry.error)) {
+            toast.error(retry.error.message);
+          }
+        } else if (inserted.error && !isMissingEstimateTemplates(inserted.error)) {
           toast.error(inserted.error.message);
         }
       }
@@ -5352,7 +5412,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const addTemplateLineFromCatalog = useCallback(
-    async (templateId: string, catalogItemId: string, groupName?: string) => {
+    async (
+      templateId: string,
+      catalogItemId: string,
+      groupName?: string,
+      fields?: Partial<Pick<EstimateTemplateLine, "package">>,
+    ) => {
       const item = state.catalog.find((entry) => entry.id === catalogItemId);
       if (!item) return;
       const sortOrder =
@@ -5371,6 +5436,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         unitCost: catalogProposalUnitPrice(item, companySettings),
         sortOrder,
         groupName: groupName ?? "",
+        package: fields?.package ?? "",
       });
       await persistTemplateLine(line);
     },
@@ -5378,7 +5444,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const addCustomTemplateLine = useCallback(
-    async (templateId: string, groupName?: string) => {
+    async (
+      templateId: string,
+      groupName?: string,
+      fields?: Partial<Pick<EstimateTemplateLine, "package" | "title" | "description" | "quantity" | "unit" | "unitCost">>,
+    ) => {
       const sortOrder =
         Math.max(
           0,
@@ -5388,13 +5458,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         id: crypto.randomUUID(),
         templateId,
         catalogItemId: null,
-        title: "New item",
-        description: "",
-        quantity: 1,
-        unit: "LS",
-        unitCost: 0,
+        title: fields?.title ?? "New item",
+        description: fields?.description ?? "",
+        quantity: fields?.quantity ?? 1,
+        unit: fields?.unit ?? "LS",
+        unitCost: fields?.unitCost ?? 0,
         sortOrder,
         groupName: groupName ?? "",
+        package: fields?.package ?? "",
       });
       await persistTemplateLine(line);
     },
@@ -5410,7 +5481,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }));
       return;
     }
-    const { error } = await supabase.from("estimate_template_lines").insert({
+    const payload = {
       id: line.id,
       company_id: user.companyId,
       template_id: line.templateId,
@@ -5429,7 +5500,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       measurement_key: serializeMeasurementKeys(line.measurementKeys),
       coverage_amount: line.coverageAmount ?? 1,
       coverage_unit: line.coverageUnit || "squares",
-    });
+      package: line.package,
+    };
+    let { error } = await supabase.from("estimate_template_lines").insert(payload);
+    if (error && isMissingEstimateTemplatePackages(error)) {
+      const { package: _pkg, ...withoutPackage } = payload;
+      const retry = await supabase.from("estimate_template_lines").insert(withoutPackage);
+      error = retry.error;
+      if (!error) toast.message(missingEstimateTemplatePackagesMessage());
+    }
     if (error) {
       if (isMissingEstimateTemplates(error)) {
         setState((prev) => ({
@@ -5467,6 +5546,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     const { error } = await supabase.from("estimate_template_lines").update(estimateTemplateLinePatch(patch)).eq("id", id);
     if (error) {
+      if (isMissingEstimateTemplatePackages(error)) {
+        apply();
+        toast.message(missingEstimateTemplatePackagesMessage());
+        return;
+      }
       if (isMissingEstimateTemplates(error)) {
         apply();
         toast.message(missingEstimateTemplatesMessage());

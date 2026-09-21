@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { Copy, Plus, Trash2 } from "lucide-react";
 import {
   AdjustmentFields,
   CommitInput,
@@ -12,19 +12,30 @@ import {
   PriceBookSheet,
 } from "@/components/estimate-writer";
 import { MarketField } from "@/components/market-field";
+import { PackagePicker } from "@/components/package-picker";
 import { StartEstimateButton } from "@/components/start-estimate-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCrm } from "@/lib/crm-store";
 import { DocumentTermsFields } from "@/components/document-terms-fields";
 import { ESTIMATE_TERMS_HINT } from "@/lib/document-terms";
+import {
+  groupHasMixedPackages,
+  isGbbEstimate,
+  nextClassicOrOptionKey,
+  optionKeyForGroup,
+  optionNameForKey,
+  pendingClassicPackages,
+  type EstimateOption,
+} from "@/lib/estimate-packages";
 import { amountForTemplate, linesForTemplate } from "@/lib/estimate-templates";
 import { groupEstimateLines } from "@/lib/estimate-totals";
 import { formatMoney } from "@/lib/format";
 import { defaultTaxRateForMarket, isResidentialMarket } from "@/lib/market";
-import type { EstimateTemplate } from "@/lib/types";
+import type { EstimateTemplate, EstimateTemplateLine } from "@/lib/types";
 
 export function TemplateWriter({ template }: { template: EstimateTemplate }) {
   const router = useRouter();
@@ -33,10 +44,17 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
   const [bookGroup, setBookGroup] = useState<string | undefined>();
   const [sectionName, setSectionName] = useState("");
   const [emptySections, setEmptySections] = useState<string[]>([]);
+  const [emptyOptions, setEmptyOptions] = useState<EstimateOption[]>([]);
 
   const lines = linesForTemplate(crm.estimateTemplateLines, template.id);
   const groups = groupEstimateLines(lines);
-  const pendingSections = emptySections.filter((name) => !groups.some((group) => group.name === name));
+  const gbb = isGbbEstimate(template);
+  const seededOptions = gbb ? pendingClassicPackages(lines, emptyOptions) : [];
+  const pendingOptions = [...emptyOptions, ...seededOptions];
+  const pendingSections = [
+    ...emptySections,
+    ...pendingOptions.map((item) => item.name),
+  ].filter((name, index, all) => all.indexOf(name) === index && !groups.some((group) => group.name === name));
   const displayGroups = [
     ...groups,
     ...pendingSections.map((name) => ({ name, lines: [] as typeof lines })),
@@ -45,6 +63,7 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
   const total = amountForTemplate(template, lines);
   useEffect(() => {
     setEmptySections([]);
+    setEmptyOptions([]);
     setSectionName("");
   }, [template.id]);
 
@@ -52,12 +71,65 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
     return pendingSections.at(-1) || groups.at(-1)?.name;
   }
 
+  function packageForGroup(name?: string) {
+    if (!name) return "";
+    return optionKeyForGroup(name, lines, pendingOptions);
+  }
+
+  function addOptionSection() {
+    const nameKeys = displayGroups.map((group) => group.name);
+    const key = nextClassicOrOptionKey([
+      ...lines.map((line) => line.package),
+      ...pendingOptions.map((item) => item.key),
+    ]);
+    const name = optionNameForKey(key, nameKeys);
+    if (!displayGroups.some((group) => group.name === name)) {
+      setEmptySections((prev) => [...prev, name]);
+    }
+    if (!pendingOptions.some((item) => item.key === key)) {
+      setEmptyOptions((prev) => [...prev, { key, name }]);
+    }
+    void crm.updateEstimateTemplate(template.id, {
+      packageMode: "gbb",
+      selectedPackage: gbb ? template.selectedPackage || key : key,
+    });
+  }
+
+  async function buildOptionFrom(group: { name: string; lines: EstimateTemplateLine[] }) {
+    const nameKeys = displayGroups.map((item) => item.name);
+    const key = nextClassicOrOptionKey([
+      ...lines.map((line) => line.package),
+      ...pendingOptions.map((item) => item.key),
+    ]);
+    const name = optionNameForKey(key, nameKeys);
+    if (!gbb || !template.selectedPackage) {
+      await crm.updateEstimateTemplate(template.id, { packageMode: "gbb", selectedPackage: key });
+    }
+    if (group.lines.length === 0) {
+      setEmptySections((prev) => [...prev, name]);
+      setEmptyOptions((prev) => [...prev, { key, name }]);
+      toast.success(`Started ${name} from ${group.name}.`);
+      return;
+    }
+    for (const line of group.lines) {
+      await crm.addCustomTemplateLine(template.id, name, {
+        package: key,
+        title: line.title,
+        description: line.description,
+        quantity: line.quantity,
+        unit: line.unit,
+        unitCost: line.unitCost,
+      });
+    }
+    toast.success(`Started ${name} from ${group.name}.`);
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            Company template
+            {gbb ? "Good / Better / Best template" : "Company template"}
           </p>
           <CommitInput
             className="font-heading h-auto border-0 bg-transparent px-0 text-[1.85rem] leading-[1.1] font-medium shadow-none focus-visible:ring-0"
@@ -93,6 +165,7 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
       <div className="rounded-md border bg-muted/40 px-4 py-3 sm:flex sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
           {lines.filter((line) => !line.optional || line.selected).length} included lines
+          {gbb ? " · totals follow the selected option" : ""}
         </p>
         <p className="font-heading text-xl font-medium tabular-nums">{formatMoney(total)}</p>
       </div>
@@ -113,6 +186,28 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
               }
               id="template-market"
             />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="flex items-start gap-3 rounded-md border px-3 py-3">
+              <Checkbox
+                checked={gbb}
+                onCheckedChange={(value) => {
+                  const next = Boolean(value);
+                  void crm.updateEstimateTemplate(template.id, {
+                    packageMode: next ? "gbb" : "",
+                    selectedPackage: next ? template.selectedPackage || "better" : template.selectedPackage,
+                  });
+                }}
+                className="mt-0.5"
+              />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium">Good / Better / Best options</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  Shared sections sit on every option. Each option section is a fork the homeowner can pick — they do
+                  not stack. New estimates copy this structure.
+                </span>
+              </span>
+            </label>
           </div>
           <div>
             <Label>Tax rate (%)</Label>
@@ -161,6 +256,25 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
         </CardContent>
       </Card>
 
+      {gbb ? (
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Options</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Preview totals for Good, Better, and Best. The selected option is the starting pick on new estimates.
+            </p>
+            <PackagePicker
+              estimate={template}
+              lines={lines}
+              pending={pendingOptions}
+              onSelect={(pkg) => void crm.updateEstimateTemplate(template.id, { selectedPackage: pkg })}
+            />
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="space-y-4">
         <div className="space-y-2">
           <h2 className="font-heading text-lg font-medium">Sections</h2>
@@ -184,7 +298,14 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
             <Button type="submit" variant="outline">
               Add section
             </Button>
+            <Button type="button" variant="outline" onClick={addOptionSection}>
+              Add option
+            </Button>
           </form>
+          <p className="text-xs text-muted-foreground">
+            Shared sections (tear-off, dumpster) stay on every option. Add an option, put the work that changes in that
+            section, then build the next option off it.
+          </p>
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -213,7 +334,11 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => void crm.addCustomTemplateLine(template.id, lastGroup())}
+              onClick={() =>
+                void crm.addCustomTemplateLine(template.id, lastGroup(), {
+                  package: packageForGroup(lastGroup()),
+                })
+              }
             >
               Custom item
             </Button>
@@ -231,22 +356,32 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
           displayGroups.map((group) => (
             <section key={group.name} className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <CommitInput
-                  className="h-8 max-w-xs font-medium"
-                  value={group.name}
-                  onCommit={(value) => {
-                    const next = value.trim() || "Items";
-                    if (next === group.name) return;
-                    for (const line of group.lines) {
-                      void crm.updateTemplateLine(line.id, { groupName: next });
-                    }
-                    setEmptySections((prev) =>
-                      prev
-                        .map((name) => (name === group.name ? next : name))
-                        .filter((name, index, all) => all.indexOf(name) === index),
-                    );
-                  }}
-                />
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <CommitInput
+                    className="h-8 max-w-xs font-medium"
+                    value={group.name}
+                    onCommit={(value) => {
+                      const next = value.trim() || "Items";
+                      if (next === group.name) return;
+                      for (const line of group.lines) {
+                        void crm.updateTemplateLine(line.id, { groupName: next });
+                      }
+                      setEmptySections((prev) =>
+                        prev
+                          .map((name) => (name === group.name ? next : name))
+                          .filter((name, index, all) => all.indexOf(name) === index),
+                      );
+                      setEmptyOptions((prev) =>
+                        prev.map((item) => (item.name === group.name ? { ...item, name: next } : item)),
+                      );
+                    }}
+                  />
+                  {packageForGroup(group.name) ? (
+                    <span className="rounded-full bg-[#e7effb] px-2.5 py-0.5 text-xs font-medium text-[#13295b]">
+                      Option
+                    </span>
+                  ) : null}
+                </div>
                 <div className="flex flex-wrap gap-1">
                   <Button
                     size="sm"
@@ -261,10 +396,20 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => void crm.addCustomTemplateLine(template.id, group.name)}
+                    onClick={() =>
+                      void crm.addCustomTemplateLine(template.id, group.name, {
+                        package: packageForGroup(group.name),
+                      })
+                    }
                   >
                     Custom item
                   </Button>
+                  {packageForGroup(group.name) ? (
+                    <Button size="sm" variant="ghost" onClick={() => void buildOptionFrom(group)}>
+                      <Copy />
+                      Build another option
+                    </Button>
+                  ) : null}
                 </div>
               </div>
               {group.lines.length === 0 ? (
@@ -279,6 +424,7 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
                     editable
                     showTax={!residential}
                     showQuantityFormula
+                    showPackage={gbb && groupHasMixedPackages(group.lines)}
                     onPatch={(patch) => void crm.updateTemplateLine(line.id, patch)}
                     onMove={(direction) => void crm.reorderTemplateLine(line.id, direction)}
                     onRemove={() => void crm.removeTemplateLine(line.id)}
@@ -325,7 +471,11 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
       <PriceBookSheet
         open={bookOpen}
         onOpenChange={setBookOpen}
-        onPick={(catalogItemId) => void crm.addTemplateLineFromCatalog(template.id, catalogItemId, bookGroup)}
+        onPick={(catalogItemId) =>
+          void crm.addTemplateLineFromCatalog(template.id, catalogItemId, bookGroup, {
+            package: packageForGroup(bookGroup),
+          })
+        }
       />
     </div>
   );

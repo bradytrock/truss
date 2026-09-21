@@ -111,6 +111,32 @@ export function nextOptionName(existingNames: string[]) {
   return `Option ${n}`;
 }
 
+/** Prefer unused Good / Better / Best keys, then opt_n. */
+export function nextClassicOrOptionKey(existing: Array<string | null | undefined>) {
+  const used = new Set(existing.map((value) => parseLinePackage(value)).filter(Boolean));
+  for (const key of ESTIMATE_PACKAGES) {
+    if (!used.has(key)) return key;
+  }
+  return nextOptionKey(existing);
+}
+
+export function optionNameForKey(key: string, existingNames: string[]) {
+  if (isClassicPackage(key)) return PACKAGE_LABEL[key];
+  return nextOptionName(existingNames);
+}
+
+/** Empty Good / Better / Best sections still missing from a GBB template. */
+export function pendingClassicPackages(
+  lines: Array<{ package?: string | null; groupName?: string | null }>,
+  pending: EstimateOption[] = [],
+): EstimateOption[] {
+  const existing = new Set(listEstimateOptions(lines, pending).map((item) => item.key));
+  return ESTIMATE_PACKAGES.filter((key) => !existing.has(key)).map((key) => ({
+    key,
+    name: PACKAGE_LABEL[key],
+  }));
+}
+
 export function resolveSelectedPackage(
   estimate: { selectedPackage?: string | null },
   lines: Array<{ package?: string | null; groupName?: string | null }>,

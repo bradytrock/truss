@@ -16,7 +16,7 @@ export default function EstimateTemplatesPage() {
   const crm = useCrm();
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState<"plain" | "gbb" | null>(null);
 
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -31,16 +31,22 @@ export default function EstimateTemplatesPage() {
       });
   }, [crm.estimateTemplates, query]);
 
-  async function createTemplate() {
-    setCreating(true);
+  async function createTemplate(kind: "plain" | "gbb" = "plain") {
+    setCreating(kind);
     try {
-      const template = await crm.addEstimateTemplate();
-      toast.success("Template opened. Add the sections this job type always needs.");
+      const template = await crm.addEstimateTemplate(
+        kind === "gbb" ? { name: "New GBB template", packageMode: "gbb" } : undefined,
+      );
+      toast.success(
+        kind === "gbb"
+          ? "GBB template opened. Assign shared work and Good / Better / Best options."
+          : "Template opened. Add the sections this job type always needs.",
+      );
       router.push(`/estimates/templates/${template.id}`);
     } catch {
       // Store already toasted.
     } finally {
-      setCreating(false);
+      setCreating(null);
     }
   }
 
@@ -54,7 +60,7 @@ export default function EstimateTemplatesPage() {
       <PageHeader
         eyebrow="Preconstruction"
         title="Estimate templates"
-        description="Company starting points for a hail roof, water kitchen, or bath. New estimates copy the sections, prices, cover note, and terms — then you attach the homeowner."
+        description="Company starting points for a hail roof, water kitchen, or bath — including Good / Better / Best option books. New estimates copy the sections, prices, options, cover note, and terms — then you attach the homeowner."
         actions={
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Input
@@ -66,8 +72,11 @@ export default function EstimateTemplatesPage() {
             <Button nativeButton={false} variant="outline" render={<Link href="/estimates" />}>
               All estimates
             </Button>
-            <Button disabled={creating} onClick={() => void createTemplate()}>
-              {creating ? "Creating…" : "New template"}
+            <Button disabled={Boolean(creating)} variant="outline" onClick={() => void createTemplate("plain")}>
+              {creating === "plain" ? "Creating…" : "New template"}
+            </Button>
+            <Button disabled={Boolean(creating)} onClick={() => void createTemplate("gbb")}>
+              {creating === "gbb" ? "Creating…" : "New GBB template"}
             </Button>
           </div>
         }
@@ -79,9 +88,16 @@ export default function EstimateTemplatesPage() {
           description={
             query
               ? "Clear the search."
-              : "Build a template here, or open an estimate and save it as a template so the next one is not from scratch."
+              : "Build a single-scope template, a Good / Better / Best book, or open an estimate and save it as a template so the next one is not from scratch."
           }
-          action={<Button onClick={() => void createTemplate()}>New template</Button>}
+          action={
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" onClick={() => void createTemplate("plain")}>
+                New template
+              </Button>
+              <Button onClick={() => void createTemplate("gbb")}>New GBB template</Button>
+            </div>
+          }
         />
       ) : (
         <div className="grid gap-3">
@@ -97,6 +113,7 @@ export default function EstimateTemplatesPage() {
                   <div className="min-w-0">
                     <p className="font-medium">{template.name}</p>
                     <p className="text-sm text-muted-foreground">
+                      {template.packageMode === "gbb" ? "Good / Better / Best · " : ""}
                       {template.description || JOB_MARKET_LABELS[template.market]}
                     </p>
                   </div>

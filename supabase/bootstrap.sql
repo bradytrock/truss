@@ -13516,3 +13516,20 @@ grant execute on function public.unsubscribe_email_campaign(text) to anon, authe
 
 alter table public.estimates drop constraint if exists estimates_selected_package_check;
 alter table public.estimate_lines drop constraint if exists estimate_lines_package_check;
+
+-- ========== 20260921120000_estimate_template_packages.sql ==========
+-- Good / Better / Best packages on company estimate templates.
+
+alter table public.estimate_templates
+  add column if not exists package_mode text not null default '';
+
+alter table public.estimate_templates
+  add column if not exists selected_package text not null default 'better';
+
+alter table public.estimate_template_lines
+  add column if not exists package text not null default '';
+
+alter table public.estimate_templates drop constraint if exists estimate_templates_package_mode_check;
+alter table public.estimate_templates
+  add constraint estimate_templates_package_mode_check
+  check (package_mode in ('', 'gbb'));

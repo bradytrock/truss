@@ -13,6 +13,15 @@ import { formatMoney } from "@/lib/format";
 import type { Estimate, EstimateLine } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+type PackagePickerEstimate = Pick<
+  Estimate,
+  "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue"
+> &
+  Partial<Pick<Estimate, "packageMode" | "selectedPackage" | "subtotalOverride" | "marginPercent">>;
+
+type PackagePickerLine = Pick<EstimateLine, "quantity" | "unitCost" | "optional" | "selected" | "taxable"> &
+  Partial<Pick<EstimateLine, "package" | "groupName">>;
+
 export function PackagePicker({
   estimate,
   lines,
@@ -21,8 +30,8 @@ export function PackagePicker({
   onSelect,
   className,
 }: {
-  estimate: Estimate;
-  lines: EstimateLine[];
+  estimate: PackagePickerEstimate;
+  lines: PackagePickerLine[];
   pending?: EstimateOption[];
   locked?: boolean;
   onSelect?: (pkg: EstimatePackage) => void;

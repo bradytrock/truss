@@ -1695,7 +1695,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           <DialogHeader>
             <DialogTitle>Save as company template</DialogTitle>
             <DialogDescription>
-              Sections, prices, cover note, terms, and notes are copied. The next estimate can start from this instead of a blank page.
+              Sections, prices, Good / Better / Best options, cover note, terms, and notes are copied. The next estimate can start from this instead of a blank page.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-1.5">

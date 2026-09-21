@@ -1,3 +1,4 @@
+import { parseEstimatePackage, parseEstimatePackageMode, parseLinePackage } from "@/lib/estimate-packages";
 import { DEFAULT_ESTIMATE_TERMS, estimateTotals, fillEstimateLine, linesForEstimate } from "@/lib/estimate-totals";
 import { billingEstimate, defaultTaxRateForMarket, parseMarket } from "@/lib/market";
 import type {
@@ -30,7 +31,21 @@ export function missingEstimateTemplatesMessage() {
 }
 
 export function fillEstimateTemplate(
-  template: Omit<EstimateTemplate, "description" | "intro" | "terms" | "notes" | "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue" | "updatedAt"> &
+  template: Omit<
+    EstimateTemplate,
+    | "description"
+    | "intro"
+    | "terms"
+    | "notes"
+    | "taxRate"
+    | "discountKind"
+    | "discountValue"
+    | "depositKind"
+    | "depositValue"
+    | "packageMode"
+    | "selectedPackage"
+    | "updatedAt"
+  > &
     Partial<EstimateTemplate>,
 ): EstimateTemplate {
   const market = parseMarket(template.market);
@@ -46,17 +61,31 @@ export function fillEstimateTemplate(
     discountValue: template.discountValue ?? 0,
     depositKind: template.depositKind ?? "percent",
     depositValue: template.depositValue ?? 0,
+    packageMode: parseEstimatePackageMode(template.packageMode),
+    selectedPackage: parseEstimatePackage(template.selectedPackage) || "better",
     updatedAt: template.updatedAt ?? template.createdAt,
   };
 }
 
 export function fillEstimateTemplateLine(
-  line: Omit<EstimateTemplateLine, "title" | "groupName" | "optional" | "selected" | "taxable" | "quantityFormula" | "measurementKeys" | "coverageAmount" | "coverageUnit"> &
+  line: Omit<
+    EstimateTemplateLine,
+    | "title"
+    | "groupName"
+    | "optional"
+    | "selected"
+    | "taxable"
+    | "quantityFormula"
+    | "measurementKeys"
+    | "coverageAmount"
+    | "coverageUnit"
+    | "package"
+  > &
     Partial<EstimateTemplateLine>,
 ): EstimateTemplateLine {
   const filled = fillEstimateLine({ ...line, estimateId: line.templateId });
   const { estimateId: _estimateId, ...rest } = filled;
-  return { ...rest, templateId: line.templateId };
+  return { ...rest, templateId: line.templateId, package: parseLinePackage(line.package ?? rest.package) };
 }
 
 export function linesForTemplate(lines: EstimateTemplateLine[], templateId: string) {
@@ -66,7 +95,11 @@ export function linesForTemplate(lines: EstimateTemplateLine[], templateId: stri
 }
 
 export function amountForTemplate(
-  template: Pick<EstimateTemplate, "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue" | "market">,
+  template: Pick<
+    EstimateTemplate,
+    "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue" | "market"
+  > &
+    Partial<Pick<EstimateTemplate, "packageMode" | "selectedPackage">>,
   lines: EstimateTemplateLine[],
 ) {
   const billed = billingEstimate(
@@ -79,7 +112,14 @@ export function amountForTemplate(
     },
     template.market,
   );
-  return estimateTotals(billed, lines).total;
+  return estimateTotals(
+    {
+      ...billed,
+      packageMode: parseEstimatePackageMode(template.packageMode),
+      selectedPackage: parseEstimatePackage(template.selectedPackage),
+    },
+    lines,
+  ).total;
 }
 
 export function templateFromEstimate(
@@ -101,6 +141,8 @@ export function templateFromEstimate(
     discountValue: estimate.discountValue,
     depositKind: estimate.depositKind,
     depositValue: estimate.depositValue,
+    packageMode: estimate.packageMode,
+    selectedPackage: estimate.selectedPackage,
     createdAt: now,
     updatedAt: now,
   });
@@ -126,6 +168,8 @@ export function estimateFieldsFromTemplate(template: EstimateTemplate) {
     depositKind: template.depositKind,
     depositValue: template.depositValue,
     market: template.market,
+    packageMode: parseEstimatePackageMode(template.packageMode),
+    selectedPackage: parseEstimatePackage(template.selectedPackage) || "better",
   };
 }
 

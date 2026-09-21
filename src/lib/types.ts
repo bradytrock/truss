@@ -594,6 +594,10 @@ export interface EstimateTemplate {
   discountValue: number;
   depositKind: "percent" | "amount";
   depositValue: number;
+  /** `gbb` offers mutually exclusive Good / Better / Best options. Empty is a single-scope template. */
+  packageMode: "" | "gbb";
+  /** Which option is selected for totals preview when the template is Good / Better / Best. */
+  selectedPackage: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -620,6 +624,8 @@ export interface EstimateTemplateLine {
   coverageAmount?: number;
   /** Unit for coverageAmount: squares | sqft | ft | each. */
   coverageUnit?: string;
+  /** Empty = shared / in every option. Any other key is only that option. */
+  package: string;
 }
 
 export interface Invoice {

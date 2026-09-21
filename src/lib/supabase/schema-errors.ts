@@ -74,6 +74,7 @@ export function isMissingEstimatePackages(error: { message?: string; code?: stri
     message.includes("selected_package") ||
     message.includes("select_shared_estimate_package") ||
     (message.includes("package") && message.includes("estimate_lines")) ||
+    (message.includes("package") && message.includes("estimate_template_lines")) ||
     (message.includes("'package'") && message.includes("column")) ||
     (message.includes('"package"') && message.includes("column"))
   );
@@ -81,6 +82,30 @@ export function isMissingEstimatePackages(error: { message?: string; code?: stri
 
 export function missingEstimatePackagesMessage() {
   return `Saved in this browser. Run ${ESTIMATE_PACKAGES_SQL} in the SQL editor so proposal options stay on the estimate.`;
+}
+
+export const ESTIMATE_TEMPLATE_PACKAGES_SQL =
+  "supabase/migrations/20260921120000_estimate_template_packages.sql";
+
+export function isMissingEstimateTemplatePackages(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const mentionsTemplate =
+    message.includes("estimate_template") ||
+    message.includes("estimate_templates") ||
+    message.includes("estimate_template_lines");
+  if (!mentionsTemplate && !isMissingEstimatePackages(error)) return false;
+  return (
+    message.includes("package_mode") ||
+    message.includes("selected_package") ||
+    (message.includes("package") && message.includes("estimate_template_lines")) ||
+    (message.includes("'package'") && message.includes("column")) ||
+    (message.includes('"package"') && message.includes("column"))
+  );
+}
+
+export function missingEstimateTemplatePackagesMessage() {
+  return `Saved in this browser. Run ${ESTIMATE_TEMPLATE_PACKAGES_SQL} in the SQL editor so Good / Better / Best stays on the template.`;
 }
 
 export const ESTIMATE_OPTIONS_SQL = "supabase/migrations/20260915160000_estimate_options.sql";

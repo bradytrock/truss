@@ -805,6 +805,8 @@ export type Database = {
           discount_value: number;
           deposit_kind: string;
           deposit_value: number;
+          package_mode: string;
+          selected_package: string;
           created_at: string;
           updated_at: string;
         };
@@ -822,6 +824,8 @@ export type Database = {
           discount_value?: number;
           deposit_kind?: string;
           deposit_value?: number;
+          package_mode?: string;
+          selected_package?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -848,6 +852,7 @@ export type Database = {
           measurement_key: string;
           coverage_amount: number;
           coverage_unit: string;
+          package: string;
         };
         Insert: {
           id?: string;
@@ -868,6 +873,7 @@ export type Database = {
           measurement_key?: string;
           coverage_amount?: number;
           coverage_unit?: string;
+          package?: string;
         };
         Update: Partial<Database["public"]["Tables"]["estimate_template_lines"]["Insert"]>;
         Relationships: [];

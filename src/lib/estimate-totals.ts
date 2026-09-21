@@ -190,7 +190,10 @@ export function lineLabel(line: Pick<EstimateLine, "title" | "description">) {
 export function totalsForPackage(
   estimate: Pick<Estimate, "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue"> &
     Partial<Pick<Estimate, "packageMode" | "selectedPackage" | "subtotalOverride" | "marginPercent">>,
-  lines: EstimateLine[],
+  lines: Array<
+    Pick<EstimateLine, "quantity" | "unitCost" | "optional" | "selected" | "taxable"> &
+      Partial<Pick<EstimateLine, "package" | "groupName">>
+  >,
   pkg: EstimatePackage,
 ) {
   const selected = parseEstimatePackage(estimate.selectedPackage);
@@ -204,7 +207,10 @@ export function totalsForPackage(
 export function allPackageTotals(
   estimate: Pick<Estimate, "taxRate" | "discountKind" | "discountValue" | "depositKind" | "depositValue"> &
     Partial<Pick<Estimate, "packageMode" | "selectedPackage" | "subtotalOverride" | "marginPercent">>,
-  lines: EstimateLine[],
+  lines: Array<
+    Pick<EstimateLine, "quantity" | "unitCost" | "optional" | "selected" | "taxable"> &
+      Partial<Pick<EstimateLine, "package" | "groupName">>
+  >,
 ) {
   const options = listEstimateOptions(lines);
   const keys = options.length > 0 ? options.map((item) => item.key) : [...ESTIMATE_PACKAGES];
