@@ -1,7 +1,7 @@
 "use client";
 
-import { PageHeader } from "@/components/page-chrome";
 import { PeopleSettings } from "@/components/people-settings";
+import { PeopleSettingsChrome } from "@/components/people-settings-chrome";
 import { SettingsAdminGate } from "@/components/settings-nav";
 import { INVITE_DAYS } from "@/lib/accounts";
 import { useCrm } from "@/lib/crm-store";
@@ -18,12 +18,10 @@ function PeopleSettingsBody() {
   const crm = useCrm();
   if (!crm.viewer) return null;
   return (
-    <div className="max-w-4xl space-y-5">
-      <PageHeader
-        eyebrow="Settings"
-        title="People"
-        description={`Add a roster seat, put them on a team, or email a one-time signup link into this company. Open a person to edit their whole profile — photo, contact, card URL, Google location, and email signature. Invite links join this company — they do not open a second one. Invites expire in ${INVITE_DAYS} days and cannot be reused after setup.`}
-      />
+    <PeopleSettingsChrome
+      title="People"
+      description={`Add a roster seat, put them on a team, or email a one-time signup link into this company. Open a person to edit their whole profile — photo, contact, card URL, Google location, and email signature. Invite links join this company — they do not open a second one. Invites expire in ${INVITE_DAYS} days and cannot be reused after setup.`}
+    >
       <PeopleSettings
         teams={crm.book.teams}
         staff={crm.book.staff}
@@ -38,6 +36,6 @@ function PeopleSettingsBody() {
         onRemove={crm.removeStaff}
         hideIntro
       />
-    </div>
+    </PeopleSettingsChrome>
   );
 }
