@@ -1,4 +1,5 @@
 import type {
+  CatalogItem,
   Estimate,
   EstimateLine,
   Expense,
@@ -11,7 +12,14 @@ import type {
 } from "@/lib/types";
 import { EXPENSE_ACCOUNT_LABELS } from "@/lib/types";
 import { invoiceTotal } from "@/lib/money";
-import { amountForEstimate } from "@/lib/estimate-totals";
+import {
+  amountForEstimate,
+  includedLines,
+  lineAmount,
+  linesForEstimate,
+  roundMoney,
+} from "@/lib/estimate-totals";
+import { scopedEstimateLines } from "@/lib/estimate-packages";
 import { marketForEstimate } from "@/lib/market";
 import type { JobBooksBasis } from "@/lib/job-financials";
 import { expensesForJob, paymentsForJob } from "@/lib/job-financials";
@@ -58,6 +66,17 @@ export type ProfitAndLossStatement = {
   otherExpenses: PnlSection;
   grossProfit: number;
   netIncome: number;
+};
+
+export type JobPnlComparison = {
+  estimateId: string | null;
+  estimateLabel: string | null;
+  projectedIncome: number;
+  projectedCostOfSales: number | null;
+  projectedExpenses: number;
+  projectedOther: number;
+  projectedGrossProfit: number | null;
+  projectedNetIncome: number | null;
 };
 
 function inRange(ymd: string | null | undefined, from: string | null, to: string | null) {
@@ -333,6 +352,92 @@ function buildIncomeLines(input: {
   lines.sort((a, b) => b.amount - a.amount);
   if (other) lines.push({ id: "other-income", label: "Other income", amount: other });
   return lines;
+}
+
+export function estimatesForJob(
+  job: Pick<Job, "id" | "opportunityId">,
+  estimates: Estimate[],
+) {
+  return estimates.filter(
+    (estimate) =>
+      estimate.status !== "declined" &&
+      (estimate.jobId === job.id ||
+        Boolean(job.opportunityId && estimate.opportunityId === job.opportunityId)),
+  );
+}
+
+export function preferredEstimateForJob(
+  job: Pick<Job, "id" | "opportunityId">,
+  estimates: Estimate[],
+) {
+  const related = estimatesForJob(job, estimates);
+  return (
+    related.find((estimate) => estimate.status === "accepted") ??
+    related.find((estimate) => estimate.status === "sent" || estimate.status === "viewed") ??
+    related.find((estimate) => estimate.status === "draft") ??
+    related[0] ??
+    null
+  );
+}
+
+function projectedLineCost(
+  line: Pick<EstimateLine, "quantity" | "unitCost" | "catalogItemId">,
+  catalog: CatalogItem[],
+) {
+  const item = line.catalogItemId
+    ? catalog.find((entry) => entry.id === line.catalogItemId)
+    : undefined;
+  if (item) return roundMoney(Math.max(0, item.unitCost) * line.quantity);
+  return lineAmount(line);
+}
+
+/** Sold estimate (or contract value) versus the job’s books. */
+export function compareJobProfitAndLoss(input: {
+  job: Pick<Job, "id" | "opportunityId" | "contractValue">;
+  statement: Pick<
+    ProfitAndLossStatement,
+    "income" | "costOfSales" | "expenses" | "otherExpenses" | "grossProfit" | "netIncome"
+  >;
+  estimates: Estimate[];
+  estimateLines: EstimateLine[];
+  catalog?: CatalogItem[];
+  opportunities?: Opportunity[];
+}): JobPnlComparison | null {
+  const estimate = preferredEstimateForJob(input.job, input.estimates);
+  const market = estimate
+    ? marketForEstimate(estimate, [input.job], input.opportunities ?? [])
+    : undefined;
+  const projectedIncome = estimate
+    ? amountForEstimate(estimate, input.estimateLines, market)
+    : Math.max(0, Number(input.job.contractValue) || 0);
+  if (projectedIncome <= 0 && !estimate) return null;
+
+  const lines = estimate
+    ? includedLines(scopedEstimateLines(estimate, linesForEstimate(input.estimateLines, estimate.id)))
+    : [];
+  const projectedCostOfSales =
+    lines.length > 0
+      ? roundMoney(lines.reduce((sum, line) => sum + projectedLineCost(line, input.catalog ?? []), 0))
+      : null;
+  const projectedExpenses = 0;
+  const projectedOther = 0;
+  const projectedGrossProfit =
+    projectedCostOfSales == null ? null : roundMoney(projectedIncome - projectedCostOfSales);
+  const projectedNetIncome =
+    projectedGrossProfit == null
+      ? null
+      : roundMoney(projectedGrossProfit - projectedExpenses - projectedOther);
+
+  return {
+    estimateId: estimate?.id ?? null,
+    estimateLabel: estimate ? `${estimate.number} · ${estimate.status}` : "Contract value",
+    projectedIncome,
+    projectedCostOfSales,
+    projectedExpenses,
+    projectedOther,
+    projectedGrossProfit,
+    projectedNetIncome,
+  };
 }
 
 export function buildProfitAndLoss(input: {

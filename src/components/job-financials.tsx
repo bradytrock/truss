@@ -11,8 +11,8 @@ import {
   paymentsForJob,
   type JobBooksBasis,
 } from "@/lib/job-financials";
-import { buildProfitAndLoss, jobPeriodBounds } from "@/lib/profit-and-loss";
-import { ProfitAndLossReport } from "@/components/profit-and-loss";
+import { buildProfitAndLoss, compareJobProfitAndLoss, jobPeriodBounds } from "@/lib/profit-and-loss";
+import { JobPnlComparisonTable, ProfitAndLossReport } from "@/components/profit-and-loss";
 import { EXPENSE_ACCOUNT_LABELS, type Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { LogExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
@@ -58,6 +58,18 @@ export function JobFinancials({ job }: { job: Job }) {
       period.periodLabel,
     ],
   );
+  const comparison = useMemo(
+    () =>
+      compareJobProfitAndLoss({
+        job,
+        statement,
+        estimates: crm.estimates,
+        estimateLines: crm.estimateLines,
+        catalog: crm.catalog,
+        opportunities: crm.opportunities,
+      }),
+    [crm.catalog, crm.estimateLines, crm.estimates, crm.opportunities, job, statement],
+  );
   const expenses = expensesForJob(job.id, crm.expenses).sort((a, b) =>
     b.incurredAt.localeCompare(a.incurredAt),
   );
@@ -69,7 +81,7 @@ export function JobFinancials({ job }: { job: Job }) {
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
-          Same statement as QuickBooks: income, cost of sales, gross profit, then overhead.
+          Actual books versus the sold estimate. Same statement as QuickBooks below.
         </p>
         <div className="flex flex-wrap gap-2">
           <div className="flex border">
@@ -102,6 +114,8 @@ export function JobFinancials({ job }: { job: Job }) {
           </Button>
         </div>
       </div>
+
+      {comparison ? <JobPnlComparisonTable statement={statement} comparison={comparison} /> : null}
 
       <ProfitAndLossReport statement={statement} />
 
