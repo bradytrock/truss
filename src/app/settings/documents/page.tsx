@@ -1,8 +1,10 @@
 "use client";
 
+import { Plus, Trash2 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-chrome";
 import { TermsLockPreview } from "@/components/document-terms-fields";
@@ -13,7 +15,13 @@ import {
   useCompanySettingsDraft,
 } from "@/components/company-settings-form";
 import {
-  DEFAULT_ESTIMATE_TERMS,
+  addCompanyContractType,
+  contractTypesFromCompany,
+  patchCompanyContractType,
+  removeCompanyContractType,
+  setDefaultCompanyContractType,
+} from "@/lib/contract-types";
+import {
   DEFAULT_INVOICE_TERMS,
   ESTIMATE_TERMS_HINT,
   INVOICE_TERMS_HINT,
@@ -30,6 +38,7 @@ export default function DocumentSettingsPage() {
 
 function DocumentSettingsForm() {
   const { form, dirty, pending, patch, save, discard } = useCompanySettingsDraft();
+  const contracts = contractTypesFromCompany(form);
 
   return (
     <form
@@ -43,40 +52,124 @@ function DocumentSettingsForm() {
       <PageHeader
         eyebrow="Settings"
         title="Documents"
-        description="Company admins write contract language and a proposal margin floor once. Unsigned proposals and draft invoices pick up the new language automatically. Signed proposals and sent invoices stay as they were."
+        description="Company admins keep every contract type the company needs. Unsigned proposals follow the contract you pick. Signed proposals and sent invoices stay as they were."
         actions={<SettingsSaveActions dirty={dirty} pending={pending} />}
       />
 
       <Card>
         <CardHeader className="border-b">
-          <CardTitle>Document terms</CardTitle>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>Contracts</CardTitle>
+              <CardDescription>
+                Residential, commercial, insurance, repairs — keep every contract type on file. New
+                proposals use the default. Payment sections stay editable on each document; locked
+                language comes from the contract you pick.
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => patch("contractTypes", addCompanyContractType(contracts))}
+            >
+              <Plus data-icon="inline-start" />
+              Add contract
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3 pt-4">
+          {contracts.map((contract) => (
+            <div key={contract.id} className="rounded-md border">
+              <CollapsibleTerms
+                title={contract.name}
+                preview={contract.body}
+                summary={
+                  contract.isDefault
+                    ? "Default on new proposals. Used on every unsigned proposal that uses this contract."
+                    : "Available when you start or edit a proposal."
+                }
+              >
+                <div className="grid gap-3">
+                  <div className="grid gap-1.5 sm:max-w-sm">
+                    <Label htmlFor={`contract-name-${contract.id}`}>Name</Label>
+                    <Input
+                      id={`contract-name-${contract.id}`}
+                      value={contract.name}
+                      onChange={(event) =>
+                        patch(
+                          "contractTypes",
+                          patchCompanyContractType(contracts, contract.id, {
+                            name: event.target.value,
+                          }),
+                        )
+                      }
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="radio"
+                      name="default-contract"
+                      checked={contract.isDefault}
+                      onChange={() =>
+                        patch("contractTypes", setDefaultCompanyContractType(contracts, contract.id))
+                      }
+                    />
+                    Default contract
+                  </label>
+                  <div>
+                    <Label htmlFor={`contract-body-${contract.id}`}>Contract language</Label>
+                    <Textarea
+                      id={`contract-body-${contract.id}`}
+                      rows={8}
+                      className="field-sizing-fixed mt-1.5 max-h-64 min-h-40 resize-y overflow-y-auto"
+                      style={{ fieldSizing: "fixed" }}
+                      value={contract.body}
+                      onChange={(event) =>
+                        patch(
+                          "contractTypes",
+                          patchCompanyContractType(contracts, contract.id, {
+                            body: event.target.value,
+                          }),
+                        )
+                      }
+                    />
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                      A signed proposal keeps the language it was signed with. A template with its own
+                      terms still wins when you start from it. {ESTIMATE_TERMS_HINT}
+                    </p>
+                    <TermsLockPreview value={contract.body} />
+                  </div>
+                  {contracts.length > 1 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="justify-start text-destructive"
+                      onClick={() =>
+                        patch("contractTypes", removeCompanyContractType(contracts, contract.id))
+                      }
+                    >
+                      <Trash2 data-icon="inline-start" />
+                      Remove contract
+                    </Button>
+                  ) : null}
+                </div>
+              </CollapsibleTerms>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Invoice terms</CardTitle>
           <CardDescription>
-            Payment sections stay editable on each document. Scope, schedule, changes, and contractor
-            language stay locked.
+            Payment sections stay editable on each invoice. Locked language comes from this company
+            default.
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
-          <CollapsibleTerms
-            title="Estimate terms"
-            preview={form.defaultEstimateTerms ?? DEFAULT_ESTIMATE_TERMS}
-            summary="Used on new proposals and every unsigned one. Signed proposals keep the language they were signed with."
-          >
-            <Label htmlFor="default-estimate-terms">Estimate terms</Label>
-            <Textarea
-              id="default-estimate-terms"
-              rows={8}
-              className="field-sizing-fixed mt-1.5 max-h-64 min-h-40 resize-y overflow-y-auto"
-              style={{ fieldSizing: "fixed" }}
-              value={form.defaultEstimateTerms ?? DEFAULT_ESTIMATE_TERMS}
-              onChange={(event) => patch("defaultEstimateTerms", event.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Used on new proposals and every unsigned proposal. A signed proposal keeps the language it
-              was signed with. A template with its own terms still wins when you start from it.{" "}
-              {ESTIMATE_TERMS_HINT}
-            </p>
-            <TermsLockPreview value={form.defaultEstimateTerms ?? DEFAULT_ESTIMATE_TERMS} />
-          </CollapsibleTerms>
           <CollapsibleTerms
             title="Payment terms"
             preview={form.defaultInvoiceTerms ?? DEFAULT_INVOICE_TERMS}

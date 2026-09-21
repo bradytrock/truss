@@ -33,6 +33,7 @@ export type Database = {
           google_review_url: string;
           default_estimate_terms: string | null;
           default_invoice_terms: string | null;
+          contract_types: Json;
           minimum_margin_percent: number;
           default_email_signature: string;
           default_monthly_sales_quota: number;
@@ -68,6 +69,7 @@ export type Database = {
           google_review_url?: string;
           default_estimate_terms?: string | null;
           default_invoice_terms?: string | null;
+          contract_types?: Json;
           minimum_margin_percent?: number;
           default_email_signature?: string;
           default_monthly_sales_quota?: number;
@@ -103,6 +105,7 @@ export type Database = {
           google_review_url?: string;
           default_estimate_terms?: string | null;
           default_invoice_terms?: string | null;
+          contract_types?: Json;
           minimum_margin_percent?: number;
           default_email_signature?: string;
           default_monthly_sales_quota?: number;
@@ -696,6 +699,7 @@ export type Database = {
           margin_percent: number;
           subtotal_override: number | null;
           hide_line_prices: boolean;
+          contract_type_id: string | null;
         };
         Insert: {
           id?: string;
@@ -738,6 +742,7 @@ export type Database = {
           margin_percent?: number;
           subtotal_override?: number | null;
           hide_line_prices?: boolean;
+          contract_type_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["estimates"]["Insert"]>;
         Relationships: [];

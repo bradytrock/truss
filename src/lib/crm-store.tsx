@@ -25,7 +25,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newPortalToken, portalInviteExpiry, portalUrl } from "@/lib/portal";
@@ -53,6 +53,12 @@ import {
   resolveEstimateTerms,
   resolveInvoiceTerms,
 } from "@/lib/document-terms";
+import {
+  companyEstimateTermsFor,
+  contractTypesFromCompany,
+  defaultContractType,
+  withSyncedDefaultEstimateTerms,
+} from "@/lib/contract-types";
 import { matchCatalogItem, type CatalogImportDraft } from "@/lib/catalog-csv";
 import {
   catalogItemDescription,
@@ -997,6 +1003,7 @@ type CrmContextValue = CrmState & {
     terms?: string;
     market?: Opportunity["market"];
     templateId?: string | null;
+    contractTypeId?: string | null;
   }) => Promise<Estimate>;
   updateEstimate: (id: string, patch: Partial<Estimate>) => Promise<void>;
   sendEstimate: (id: string) => Promise<void>;
@@ -4171,6 +4178,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       terms?: string;
       market?: import("@/lib/types").JobMarket;
       templateId?: string | null;
+      contractTypeId?: string | null;
     }) => {
       const opportunityId = await ensureLeadForEstimate(input);
       const number = nextNumber("EST", state.estimates.map((estimate) => estimate.number));
@@ -4212,8 +4220,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         terms: resolveEstimateTerms({
           explicit: input.terms,
           templateTerms: templateFields?.terms,
-          companyDefault: companySettings.defaultEstimateTerms,
+          companyDefault: companyEstimateTermsFor(companySettings, input.contractTypeId),
         }),
+        contractTypeId:
+          input.contractTypeId?.trim() ||
+          defaultContractType(contractTypesFromCompany(companySettings)).id,
         street: input.street ?? linked.street,
         city: input.city ?? linked.city,
         state: input.state ?? linked.state,
@@ -4280,6 +4291,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         margin_percent: estimate.marginPercent ?? 0,
         subtotal_override: estimate.subtotalOverride,
         hide_line_prices: estimate.hideLinePrices,
+        contract_type_id: estimate.contractTypeId,
       };
       let { data, error } = await supabase.from("estimates").insert(payload).select("*").single();
       if (error && (isMissingSecondSigner(error) || isMissingSignerLinks(error))) {
@@ -4313,6 +4325,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         data = retry.data;
         error = retry.error;
         if (!error && data) toast.message(missingEstimateLumpSumMessage());
+      }
+      if (error && isMissingEstimateContractType(error)) {
+        const { contract_type_id: _contractType, ...withoutContract } = payload;
+        const retry = await supabase.from("estimates").insert(withoutContract).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (!error && data) toast.message(missingContractTypesMessage());
       }
       if (error && isMissingEstimateWriter(error)) {
         const retry = await supabase
@@ -4411,17 +4430,26 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const updateEstimate = useCallback(async (id: string, patch: Partial<Estimate>, options?: { skipAudit?: boolean }) => {
     const current = state.estimates.find((estimate) => estimate.id === id);
-    const allowed = applyPaymentOnlyTerms(
-      patch,
-      current
-        ? liveEstimateTerms({
-            estimate: current,
-            companyDefault: companySettings.defaultEstimateTerms,
-          })
-        : undefined,
-    );
-    if (!allowed) return;
-    patch = allowed;
+    const switchingContract =
+      Boolean(current) &&
+      patch.contractTypeId !== undefined &&
+      patch.contractTypeId !== current?.contractTypeId;
+    if (switchingContract && current) {
+      const body = companyEstimateTermsFor(companySettings, patch.contractTypeId);
+      patch = { ...patch, terms: mergePaymentTerms(body, current.terms) };
+    } else {
+      const allowed = applyPaymentOnlyTerms(
+        patch,
+        current
+          ? liveEstimateTerms({
+              estimate: current,
+              companyDefault: companyEstimateTermsFor(companySettings, current.contractTypeId),
+            })
+          : undefined,
+      );
+      if (!allowed) return;
+      patch = allowed;
+    }
     const apply = () =>
       setState((prev) => {
         const next = {
@@ -4497,12 +4525,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         await finish();
         return;
       }
+      if (isMissingEstimateContractType(error) && patch.contractTypeId !== undefined) {
+        apply();
+        toast.message(missingContractTypesMessage());
+        await finish();
+        return;
+      }
       toast.error(error.message);
       return;
     }
     apply();
     await finish();
-  }, [companySettings.defaultEstimateTerms, recordCompanyAudit, state.estimates]);
+  }, [companySettings, recordCompanyAudit, state.estimates]);
 
   const sendEstimate = useCallback(
     async (id: string) => {
@@ -4524,7 +4558,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const ownerSignedName = current.ownerSignedName.trim() || owner.name;
       const terms = liveEstimateTerms({
         estimate: current,
-        companyDefault: companySettings.defaultEstimateTerms,
+        companyDefault: companyEstimateTermsFor(companySettings, current.contractTypeId),
       });
       const apply = () =>
         setState((prev) => {
@@ -4698,7 +4732,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const signatureImage = signature?.image || (role === "second" ? current.secondSignatureImage : current.signatureImage);
       const terms = liveEstimateTerms({
         estimate: current,
-        companyDefault: companySettings.defaultEstimateTerms,
+        companyDefault: companyEstimateTermsFor(companySettings, current.contractTypeId),
       });
       const patch =
         role === "second"
@@ -5068,6 +5102,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         postalCode: source.postalCode,
         intro: source.intro,
         terms: source.terms,
+        contractTypeId: source.contractTypeId,
       });
       const market = marketForEstimate(source, state.jobs, state.opportunities);
       const taxRate = isResidentialMarket(market)
@@ -5204,7 +5239,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         market: input?.market ?? "residential",
         createdAt: now,
         updatedAt: now,
-        terms: resolveEstimateTerms({ companyDefault: companySettings.defaultEstimateTerms }),
+        terms: resolveEstimateTerms({ companyDefault: companyEstimateTermsFor(companySettings) }),
         packageMode: gbb ? "gbb" : "",
         selectedPackage: gbb ? "better" : "better",
       });
@@ -10311,7 +10346,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         return null;
       }
       const slug = mintCompanySlug(name, requestedSlug);
-      const settings: CompanySettings = {
+      const settings = withSyncedDefaultEstimateTerms({
         name,
         slug,
         phone: storedPhone(next.phone),
@@ -10338,10 +10373,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         socialTiktok: next.socialTiktok?.trim() ?? "",
         defaultEstimateTerms: next.defaultEstimateTerms ?? null,
         defaultInvoiceTerms: next.defaultInvoiceTerms ?? null,
+        contractTypes: contractTypesFromCompany(next),
         minimumMarginPercent: clampMarginPercent(next.minimumMarginPercent),
         defaultEmailSignature: next.defaultEmailSignature?.trim() ?? "",
         defaultMonthlySalesQuota: Math.max(0, Number(next.defaultMonthlySalesQuota) || 0),
-      };
+      });
       const syncOpenDocumentTerms = async () => {
         const previousEstimates = bookRef.current.estimates;
         const previousInvoices = bookRef.current.invoices;
@@ -10419,6 +10455,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         social_tiktok: settings.socialTiktok ?? "",
         default_estimate_terms: settings.defaultEstimateTerms,
         default_invoice_terms: settings.defaultInvoiceTerms,
+        contract_types: settings.contractTypes ?? [],
         minimum_margin_percent: settings.minimumMarginPercent,
         default_email_signature: settings.defaultEmailSignature ?? "",
         default_monthly_sales_quota: settings.defaultMonthlySalesQuota ?? 0,
@@ -10456,6 +10493,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         data = retry.data;
         error = retry.error;
         if (!error) toast.message(missingDocumentTermsMessage());
+      }
+      if (error && isMissingCompanyContractTypes(error)) {
+        const { contract_types: _contractTypes, ...rest } = attempted;
+        attempted = rest;
+        const retry = await supabase
+          .from("companies")
+          .update(rest as typeof payload)
+          .eq("id", user.companyId)
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) toast.message(missingContractTypesMessage());
       }
       if (error && isMissingCatalogMargin(error)) {
         const { minimum_margin_percent: _minMargin, ...rest } = attempted;
@@ -10584,6 +10634,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         socialTiktok: settings.socialTiktok,
         defaultEstimateTerms: mapped.defaultEstimateTerms ?? settings.defaultEstimateTerms,
         defaultInvoiceTerms: mapped.defaultInvoiceTerms ?? settings.defaultInvoiceTerms,
+        contractTypes:
+          mapped.contractTypes && mapped.contractTypes.length > 0
+            ? mapped.contractTypes
+            : settings.contractTypes,
         minimumMarginPercent: mapped.minimumMarginPercent ?? settings.minimumMarginPercent,
       };
       setCompanySettings(saved);

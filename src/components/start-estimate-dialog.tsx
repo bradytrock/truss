@@ -17,6 +17,10 @@ import type { EagleviewOrder } from "@/lib/eagleview";
 import { amountForTemplate, linesForTemplate } from "@/lib/estimate-templates";
 import { formatMoney } from "@/lib/format";
 import type { StartEstimateChoices } from "@/lib/start-estimate";
+import {
+  contractTypesFromCompany,
+  defaultContractType,
+} from "@/lib/contract-types";
 import { JOB_MARKET_LABELS } from "@/lib/types";
 
 const NONE = "__none__";
@@ -38,7 +42,9 @@ export function StartEstimateDialog({
 }) {
   const crm = useCrm();
   const [templateId, setTemplateId] = useState<string>(NONE);
+  const [contractTypeId, setContractTypeId] = useState<string>("");
   const [useMeasurements, setUseMeasurements] = useState(false);
+  const contracts = useMemo(() => contractTypesFromCompany(crm.company), [crm.company]);
 
   const templates = useMemo(
     () => [...(crm.estimateTemplates ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
@@ -50,8 +56,9 @@ export function StartEstimateDialog({
     const preferred = initialTemplateId?.trim() ?? "";
     const exists = preferred && templates.some((template) => template.id === preferred);
     setTemplateId(exists ? preferred : NONE);
+    setContractTypeId(defaultContractType(contracts).id);
     setUseMeasurements(Boolean(measurementOrder));
-  }, [open, initialTemplateId, measurementOrder, templates]);
+  }, [open, initialTemplateId, measurementOrder, templates, contracts]);
 
   const measurementLabel = measurementOrder
     ? [
@@ -146,6 +153,37 @@ export function StartEstimateDialog({
             </ul>
           </div>
 
+          {contracts.length > 1 ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Contract</p>
+              <ul className="space-y-1 rounded-md border p-1">
+                {contracts.map((contract) => {
+                  const selected = contractTypeId === contract.id;
+                  return (
+                    <li key={contract.id}>
+                      <button
+                        type="button"
+                        onClick={() => setContractTypeId(contract.id)}
+                        className={`flex w-full items-start justify-between gap-3 rounded-md px-3 py-2 text-left ${
+                          selected ? "bg-muted/60" : "hover:bg-muted/40"
+                        }`}
+                      >
+                        <span className="min-w-0">
+                          <span className="block font-medium">{contract.name}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {contract.isDefault
+                              ? "Company default — used unless you pick another"
+                              : "Locked language for this proposal"}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
+
           <div className="rounded-md border px-3 py-3">
             <label className="flex items-start gap-3">
               <Checkbox
@@ -181,6 +219,7 @@ export function StartEstimateDialog({
             onClick={() =>
               void onConfirm({
                 templateId: templateId === NONE ? null : templateId,
+                contractTypeId: contractTypeId || null,
                 useMeasurements: Boolean(useMeasurements && measurementOrder),
               })
             }

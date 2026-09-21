@@ -24,6 +24,7 @@ import { estimateSignatureLines } from "@/lib/estimate-signers";
 import { coOwnerContact } from "@/lib/parties";
 import { photosForEstimateLine } from "@/lib/estimate-line-photos";
 import type { CompanySettings, Estimate, EstimateLine, JobMarket, JobPhoto } from "@/lib/types";
+import { companyEstimateTermsFor } from "@/lib/contract-types";
 import { estimateTermsValues, liveEstimateTerms } from "@/lib/document-terms";
 import { DocumentNotesBlock } from "@/components/document-notes";
 import { DocumentTermsFields } from "@/components/document-terms-fields";
@@ -152,7 +153,7 @@ export function ProposalDocument({
     });
   const terms = liveEstimateTerms({
     estimate,
-    companyDefault: letterhead.defaultEstimateTerms,
+    companyDefault: companyEstimateTermsFor(letterhead, estimate.contractTypeId),
   });
   return (
     <div className="space-y-6 rounded-md border bg-card p-5 sm:p-7">
