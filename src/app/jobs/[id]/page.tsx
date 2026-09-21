@@ -1,16 +1,15 @@
 import { redirect } from "next/navigation";
+import { jobRecordHref } from "@/lib/job-record";
 
 export default async function JobDetailRedirect({
   params,
   searchParams,
 }: PageProps<"/jobs/[id]">) {
-  const { id } = await params;
+  const resolved = await params;
   const query = await searchParams;
-  const next = new URLSearchParams();
-  next.set("job", id);
+  const id = typeof resolved.id === "string" ? resolved.id.trim() : "";
+  if (!id) redirect("/jobs");
   const tab = typeof query.tab === "string" ? query.tab : undefined;
-  if (tab) next.set("tab", tab);
   const doc = typeof query.doc === "string" ? query.doc : undefined;
-  if (doc) next.set("doc", doc);
-  redirect(`/jobs?${next.toString()}`);
+  redirect(jobRecordHref(id, { tab, doc }));
 }

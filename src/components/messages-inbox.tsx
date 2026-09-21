@@ -336,7 +336,7 @@ export function MessagesInbox() {
                       nativeButton={false}
                       variant="outline"
                       size="sm"
-                      render={<Link href={`/jobs/${selected.jobId}`} />}
+                      render={<Link href={`/jobs?job=${selected.jobId}`} />}
                     >
                       Open job
                     </Button>
@@ -354,7 +354,7 @@ export function MessagesInbox() {
                       nativeButton={false}
                       variant="outline"
                       size="sm"
-                      render={<Link href={`/jobs/${queryJob.id}`} />}
+                      render={<Link href={`/jobs?job=${queryJob.id}`} />}
                     >
                       Open job
                     </Button>

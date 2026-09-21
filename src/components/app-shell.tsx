@@ -529,7 +529,7 @@ function SearchTrigger() {
                   value={`${job.code} ${job.name} ${job.location} ${homeowner?.name ?? ""} ${phoneSearchText(homeowner?.phone)}`}
                   onSelect={() => {
                     setOpen(false);
-                    router.push(`/jobs/${job.id}`);
+                    router.push(`/jobs?job=${job.id}`);
                   }}
                 >
                   <span className="min-w-0 truncate">{job.name}</span>

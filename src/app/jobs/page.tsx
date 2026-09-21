@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { JobsBoard } from "@/components/jobs-board";
 import { JobsOwnerFilter } from "@/components/jobs-owner-filter";
 import { JobRecordWindow } from "@/components/job-window";
+import { RecordErrorBoundary } from "@/components/record-error-boundary";
 import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { CreateOpportunityDialog } from "@/components/create-records";
 import { useCrm } from "@/lib/crm-store";
@@ -41,7 +42,9 @@ function JobsBoardPage() {
   const [query, setQuery] = useState("");
   const [create, setCreate] = useState(false);
   const jobId = searchParams.get("job");
-  const openJob = jobId ? crm.getJob(jobId) : undefined;
+  const openJob = jobId
+    ? crm.getJob(jobId) ?? crm.book.jobs.find((job) => job.id === jobId)
+    : undefined;
   const viewer = crm.effectiveStaff;
   const canFilterOwners = canFilterJobsByOwner(viewer);
   const people = useMemo(
@@ -102,10 +105,14 @@ function JobsBoardPage() {
 
   useEffect(() => {
     if (!crm.hydrated || !jobId || openJob) return;
-    closeJob();
-  }, [closeJob, crm.hydrated, jobId, openJob]);
+    const timer = window.setTimeout(() => {
+      const found = crm.getJob(jobId) ?? crm.book.jobs.find((job) => job.id === jobId);
+      if (!found) closeJob();
+    }, 50);
+    return () => window.clearTimeout(timer);
+  }, [closeJob, crm.book.jobs, crm.getJob, crm.hydrated, jobId, openJob]);
 
-  const active = dedupeJobsByOpportunity(crm.jobs).filter((job) => {
+  const active = dedupeJobsByOpportunity(crm.jobs ?? []).filter((job) => {
     if (isDeletedJob(job)) return false;
     const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
     const column = workColumnFor(job, opportunity);
@@ -116,8 +123,8 @@ function JobsBoardPage() {
     const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
     const signed = acceptedAmountForJob(
       job,
-      crm.estimates,
-      crm.estimateLines,
+      crm.estimates ?? [],
+      crm.estimateLines ?? [],
       workMarket(job, opportunity),
     );
     return sum + boardValue(job, opportunity, signed);
@@ -157,7 +164,12 @@ function JobsBoardPage() {
         {active.length} open · {formatCurrency(bookValue)} on the board
         {ownerIds ? " for the people you picked" : ""}
       </p>
-      <JobsBoard query={query} ownerIds={ownerIds} onSelectJob={selectJob} />
+      <RecordErrorBoundary
+        fallbackTitle="The board could not open"
+        fallbackDescription="Reload the page. A single bad card should not keep Jobs hidden."
+      >
+        <JobsBoard query={query} ownerIds={ownerIds} onSelectJob={selectJob} />
+      </RecordErrorBoundary>
       {openJob ? (
         <JobRecordWindow
           key={openJob.id}

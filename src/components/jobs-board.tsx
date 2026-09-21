@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import {
   DndContext,
@@ -37,7 +38,7 @@ import {
   type WorkColumn,
 } from "@/lib/work-board";
 import { canDeleteJobs, jobMatchesOwnerFilter } from "@/lib/visibility";
-import { dedupeJobsByOpportunity, isDeletedJob } from "@/lib/job-record";
+import { dedupeJobsByOpportunity, isDeletedJob, jobRecordHref } from "@/lib/job-record";
 import { primaryJobPhoto } from "@/lib/photo-trash";
 import type { Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -75,7 +76,7 @@ export function JobsBoard({
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return dedupeJobsByOpportunity(crm.jobs).filter((job) => {
+    return dedupeJobsByOpportunity(crm.jobs ?? []).filter((job) => {
       if (!canTrash && isDeletedJob(job)) return false;
       const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
       if (!jobMatchesOwnerFilter(job, opportunity, ownerIds, crm.book.staff)) return false;
@@ -90,11 +91,11 @@ export function JobsBoard({
       }
       if (linkedPhones.some((phone) => phoneQueryMatches(phone, query))) return true;
       return (
-        job.code.toLowerCase().includes(needle) ||
-        job.name.toLowerCase().includes(needle) ||
-        job.location.toLowerCase().includes(needle) ||
+        (job.code ?? "").toLowerCase().includes(needle) ||
+        (job.name ?? "").toLowerCase().includes(needle) ||
+        (job.location ?? "").toLowerCase().includes(needle) ||
         customer.toLowerCase().includes(needle) ||
-        job.projectManager.toLowerCase().includes(needle) ||
+        (job.projectManager ?? "").toLowerCase().includes(needle) ||
         (opportunity?.code.toLowerCase().includes(needle) ?? false)
       );
     });
@@ -186,8 +187,8 @@ export function JobsBoard({
               const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
               const signed = acceptedAmountForJob(
                 job,
-                crm.estimates,
-                crm.estimateLines,
+                crm.estimates ?? [],
+                crm.estimateLines ?? [],
                 workMarket(job, opportunity),
               );
               return sum + boardValue(job, opportunity, signed);
@@ -268,6 +269,43 @@ function JobColumn({
   );
 }
 
+function JobOpenLink({
+  jobId,
+  overlay,
+  onSelectJob,
+  className,
+  children,
+  "aria-label": ariaLabel,
+}: {
+  jobId: string;
+  overlay?: boolean;
+  onSelectJob: (jobId: string) => void;
+  className?: string;
+  children: ReactNode;
+  "aria-label"?: string;
+}) {
+  if (overlay) {
+    return <div className={className}>{children}</div>;
+  }
+  return (
+    <Link
+      href={jobRecordHref(jobId)}
+      scroll={false}
+      className={className}
+      aria-label={ariaLabel}
+      onClick={(event) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+          return;
+        }
+        event.preventDefault();
+        onSelectJob(jobId);
+      }}
+    >
+      {children}
+    </Link>
+  );
+}
+
 function JobCard({
   job,
   customerName,
@@ -294,7 +332,7 @@ function JobCard({
     location: job.location,
     street: job.street,
   });
-  const cover = primaryJobPhoto(crm.photos, job);
+  const cover = primaryJobPhoto(crm.photos ?? [], job);
 
   return (
     <Card
@@ -309,12 +347,11 @@ function JobCard({
     >
       <CardContent className="space-y-2">
         {cover ? (
-          <button
-            type="button"
+          <JobOpenLink
+            jobId={job.id}
+            overlay={overlay}
+            onSelectJob={onSelectJob}
             className="block w-full overflow-hidden border"
-            onClick={() => {
-              if (!overlay) onSelectJob(job.id);
-            }}
             aria-label={`Open ${job.name}`}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -323,7 +360,7 @@ function JobCard({
               alt=""
               className="aspect-[16/9] w-full object-cover"
             />
-          </button>
+          </JobOpenLink>
         ) : null}
         <div className="flex items-start gap-1">
           <button
@@ -335,12 +372,11 @@ function JobCard({
           >
             <GripVertical className="size-3.5" />
           </button>
-          <button
-            type="button"
+          <JobOpenLink
+            jobId={job.id}
+            overlay={overlay}
+            onSelectJob={onSelectJob}
             className="min-w-0 flex-1 text-left"
-            onClick={() => {
-              if (!overlay) onSelectJob(job.id);
-            }}
           >
             <RecordCode code={job.code} />
             <span className="mt-0.5 block text-sm font-medium leading-snug hover:underline">
@@ -354,26 +390,25 @@ function JobCard({
                 {leadSourceLabel(job.leadSource)}
               </p>
             ) : null}
-          </button>
+          </JobOpenLink>
         </div>
-        <button
-          type="button"
+        <JobOpenLink
+          jobId={job.id}
+          overlay={overlay}
+          onSelectJob={onSelectJob}
           className="flex w-full items-center justify-between gap-2 text-left"
-          onClick={() => {
-            if (!overlay) onSelectJob(job.id);
-          }}
         >
           <span className="font-heading text-sm font-medium tabular-nums">
             {formatCurrency(
               boardValue(
                 job,
                 opportunity,
-                acceptedAmountForJob(job, crm.estimates, crm.estimateLines, market),
+                acceptedAmountForJob(job, crm.estimates ?? [], crm.estimateLines ?? [], market),
               ),
             )}
           </span>
           <MarketBadge market={parseMarket(market)} />
-        </button>
+        </JobOpenLink>
         {canTrash && deleted && !overlay ? (
           <div
             onPointerDown={(event) => event.stopPropagation()}
@@ -403,15 +438,14 @@ function JobCard({
           <p className="line-clamp-2 text-[11px] text-muted-foreground">{job.deletedReason}</p>
         ) : null}
         {details.showLocation ? (
-          <button
-            type="button"
+          <JobOpenLink
+            jobId={job.id}
+            overlay={overlay}
+            onSelectJob={onSelectJob}
             className="flex w-full items-center justify-between gap-2 text-left text-xs text-muted-foreground"
-            onClick={() => {
-              if (!overlay) onSelectJob(job.id);
-            }}
           >
             <span className="min-w-0 truncate">{details.location}</span>
-          </button>
+          </JobOpenLink>
         ) : null}
       </CardContent>
     </Card>

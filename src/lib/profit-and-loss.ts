@@ -23,6 +23,7 @@ import { scopedEstimateLines } from "@/lib/estimate-packages";
 import { marketForEstimate } from "@/lib/market";
 import type { JobBooksBasis } from "@/lib/job-financials";
 import { expensesForJob, paymentsForJob } from "@/lib/job-financials";
+import { jobRecordHref } from "@/lib/job-record";
 
 export const COST_OF_SALES_ACCOUNTS: ExpenseAccount[] = [
   "materials",
@@ -253,7 +254,7 @@ function buildIncomeLines(input: {
           id: jobId,
           label: job?.name ?? "Job income",
           amount,
-          href: `/jobs/${jobId}?tab=financials`,
+          href: jobRecordHref(jobId, { tab: "financials" }),
         };
       })
       .sort((a, b) => b.amount - a.amount);
@@ -324,7 +325,7 @@ function buildIncomeLines(input: {
         id: jobId,
         label: job?.name ?? "Construction income",
         amount,
-        href: `/jobs/${jobId}?tab=financials`,
+        href: jobRecordHref(jobId, { tab: "financials" }),
       };
     })
     .sort((a, b) => b.amount - a.amount);
@@ -346,7 +347,7 @@ function buildIncomeLines(input: {
       id: jobId,
       label: job?.name ?? "Pipeline",
       amount,
-      href: `/jobs/${jobId}?tab=financials`,
+      href: jobRecordHref(jobId, { tab: "financials" }),
     });
   }
   lines.sort((a, b) => b.amount - a.amount);

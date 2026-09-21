@@ -21,6 +21,12 @@ const nextConfig = {
   experimental: {
     proxyClientMaxBodySize: "15mb",
   },
+  async redirects() {
+    return [
+      { source: "/pipeline", destination: "/jobs", permanent: false },
+      { source: "/jobs/:id", destination: "/jobs?job=:id", permanent: false },
+    ];
+  },
   async headers() {
     return [
       {

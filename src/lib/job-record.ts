@@ -99,20 +99,29 @@ export function jobAddress(job: Pick<Job, "street" | "city" | "state" | "postalC
   );
 }
 
+/** Open the job overlay on the jobs board. Prefer this over `/jobs/:id` — that path only redirects. */
+export function jobRecordHref(jobId: string, extras?: { tab?: string; doc?: string }) {
+  const next = new URLSearchParams();
+  next.set("job", jobId);
+  if (extras?.tab) next.set("tab", extras.tab);
+  if (extras?.doc) next.set("doc", extras.doc);
+  return `/jobs?${next.toString()}`;
+}
+
 /** Open the job overlay on Paper — estimates, invoices, and material orders live there. */
 export function jobPaperHref(jobId: string) {
-  return `/jobs?job=${encodeURIComponent(jobId)}&tab=paper`;
+  return jobRecordHref(jobId, { tab: "paper" });
 }
 
 export function mapsUrl(address: string) {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
 }
 
-export function uniqueNames(names: string[]) {
+export function uniqueNames(names: Array<string | null | undefined>) {
   const seen = new Set<string>();
   const next: string[] = [];
   for (const name of names) {
-    const trimmed = name.trim();
+    const trimmed = typeof name === "string" ? name.trim() : "";
     if (!trimmed || seen.has(trimmed.toLowerCase())) continue;
     seen.add(trimmed.toLowerCase());
     next.push(trimmed);
@@ -120,11 +129,11 @@ export function uniqueNames(names: string[]) {
   return next;
 }
 
-export function uniqueIds(ids: string[]) {
+export function uniqueIds(ids: Array<string | null | undefined>) {
   const seen = new Set<string>();
   const next: string[] = [];
   for (const id of ids) {
-    const trimmed = id.trim();
+    const trimmed = typeof id === "string" ? id.trim() : "";
     if (!trimmed || seen.has(trimmed)) continue;
     seen.add(trimmed);
     next.push(trimmed);
@@ -191,7 +200,7 @@ export function primaryHomeownerPatch(
 export function fillJobRecord(job: JobDraft, opportunity?: Opportunity | null): Job {
   const parsed = parseLocation(job.location || "");
   const assigned = uniqueNames(
-    job.assigned?.length
+    Array.isArray(job.assigned) && job.assigned.length
       ? job.assigned
       : [job.projectManager, job.superintendent, job.salesRep, opportunity?.estimator].filter(
           (name): name is string => typeof name === "string" && Boolean(name) && !isNorthlineDemoName(name),
@@ -203,9 +212,11 @@ export function fillJobRecord(job: JobDraft, opportunity?: Opportunity | null): 
   ]).filter((id) => id && id !== job.primaryContactId);
   return {
     ...job,
+    name: job.name?.trim() || opportunity?.name?.trim() || "",
     code: job.code ?? "",
+    projectManager: job.projectManager ?? "",
     description: job.description?.trim() || opportunity?.notes?.trim() || "",
-    tags: uniqueNames(job.tags?.length ? job.tags : inferredTags(opportunity)),
+    tags: uniqueNames(Array.isArray(job.tags) && job.tags.length ? job.tags : inferredTags(opportunity)),
     street: job.street?.trim() || opportunity?.street?.trim() || parsed.street,
     city: job.city?.trim() || opportunity?.city?.trim() || parsed.city,
     state: job.state?.trim() || opportunity?.state?.trim() || parsed.state,
@@ -406,7 +417,8 @@ export function duplicateLeadJobs(jobs: Job[]) {
 }
 
 /** One board card per lead. A costing job is created with the lead; a reload must not add a second. */
-export function dedupeJobsByOpportunity(jobs: Job[]) {
+export function dedupeJobsByOpportunity(jobs: Job[] | null | undefined) {
+  if (!jobs?.length) return [];
   const extras = new Set(duplicateLeadJobs(jobs).flatMap((group) => group.drop.map((job) => job.id)));
   if (extras.size === 0) return jobs;
   return jobs.filter((job) => !extras.has(job.id));
