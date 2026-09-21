@@ -15,6 +15,24 @@ import { MAX_LINE_PHOTOS, normalizeLinePhotoIds, photosForEstimateLine } from "@
 import type { EstimateLine, JobPhoto } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+/** Hide Safari's broken-image "?" when a private or stale photo URL 401s/404s. */
+export function EstimatePhotoThumb({
+  src,
+  alt,
+  className,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (!src || failed) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt={alt} className={className} onError={() => setFailed(true)} />
+  );
+}
+
 export function EstimateLinePhotos({
   line,
   gallery,
@@ -40,8 +58,7 @@ export function EstimateLinePhotos({
         <ul className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
           {attached.map((photo) => (
             <li key={photo.id} className="relative">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+              <EstimatePhotoThumb
                 src={photo.imageUrl}
                 alt={photo.caption || "Line photo"}
                 className="aspect-square w-full rounded-sm border object-cover"
@@ -144,8 +161,7 @@ function LinePhotoPickerDialog({
                       full && "opacity-40",
                     )}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
+                    <EstimatePhotoThumb
                       src={photo.imageUrl}
                       alt={photo.caption || "Job photo"}
                       className="aspect-square w-full object-cover"

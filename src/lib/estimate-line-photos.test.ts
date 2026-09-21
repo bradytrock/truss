@@ -39,4 +39,25 @@ assert.match(fromEmbedded[0]?.imageUrl ?? "", /^\/api\/storage\/object\?path=/);
 
 assert.deepEqual(photosForEstimateLine({ photoIds: ["missing"] }), []);
 
+const legacy = photosForEstimateLine(
+  { photoIds: ["p3"] },
+  [
+    {
+      id: "p3",
+      jobId: "j1",
+      caption: "TAMKO",
+      category: "progress",
+      takenAt: "2026-09-21",
+      imageUrl:
+        "https://f005.backblazeb2.com/file/TheCRM/1a5cc5ce-18d4-4ea9-9bc8-50b636e1c21b/job-photos/abc53393-50da-4eb1-9ba8-97a84fedb974/6371c5fa-1b14-4e21-8262-e64801db7eb1.jpg",
+      storagePath:
+        "1a5cc5ce-18d4-4ea9-9bc8-50b636e1c21b/abc53393-50da-4eb1-9ba8-97a84fedb974/6371c5fa-1b14-4e21-8262-e64801db7eb1.jpg",
+      createdBy: "",
+    },
+  ],
+);
+assert.equal(legacy.length, 1);
+assert.match(legacy[0]?.imageUrl ?? "", /job-photos%2Fabc53393-50da-4eb1-9ba8-97a84fedb974/);
+assert.doesNotMatch(legacy[0]?.imageUrl ?? "", /backblazeb2/);
+
 console.log("estimate-line-photos.test.ts ok");

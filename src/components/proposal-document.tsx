@@ -22,6 +22,7 @@ import { formatJobSite } from "@/lib/leads";
 import { isSignaturePng } from "@/lib/estimate-signature";
 import { estimateSignatureLines } from "@/lib/estimate-signers";
 import { coOwnerContact } from "@/lib/parties";
+import { EstimatePhotoThumb } from "@/components/estimate-line-photos";
 import { photosForEstimateLine } from "@/lib/estimate-line-photos";
 import type { CompanySettings, Estimate, EstimateLine, JobMarket, JobPhoto } from "@/lib/types";
 import { estimateTermsValues, liveEstimateTerms } from "@/lib/document-terms";
@@ -372,8 +373,7 @@ function ProposalLinePhotos({
     <ul className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-4">
       {photos.map((photo) => (
         <li key={photo.id}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <EstimatePhotoThumb
             src={photo.imageUrl}
             alt={photo.caption || line.title || "Line photo"}
             className="aspect-[4/3] w-full rounded-sm border object-cover"
