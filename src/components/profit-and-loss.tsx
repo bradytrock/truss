@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { formatMoney } from "@/lib/format";
-import type { PnlSection, ProfitAndLossStatement } from "@/lib/profit-and-loss";
+import type { JobPnlComparison, PnlSection, ProfitAndLossStatement } from "@/lib/profit-and-loss";
 import { cn } from "@/lib/utils";
 
 function pnlAmount(value: number) {
@@ -62,6 +62,174 @@ function SectionBlock({
           </div>
         </>
       ) : null}
+    </div>
+  );
+}
+
+function varianceClass(delta: number, invert = false) {
+  const good = invert ? delta <= 0 : delta >= 0;
+  if (delta === 0) return "text-muted-foreground";
+  return good ? "text-emerald-700" : "text-red-700";
+}
+
+function CompareAmount({
+  value,
+  empty = false,
+  invert = false,
+}: {
+  value: number | null;
+  empty?: boolean;
+  invert?: boolean;
+}) {
+  if (empty || value == null) return <span className="text-muted-foreground">—</span>;
+  return <span className={cn("tabular-nums", varianceClass(value, invert))}>{pnlAmount(value)}</span>;
+}
+
+function ComparisonRow({
+  label,
+  projected,
+  actual,
+  invert = false,
+  emphasize = false,
+}: {
+  label: string;
+  projected: number | null;
+  actual: number;
+  invert?: boolean;
+  emphasize?: boolean;
+}) {
+  const delta = projected == null ? null : actual - projected;
+  return (
+    <tr className={cn(emphasize && "border-t font-medium")}>
+      <th className="py-1.5 text-left font-medium">{label}</th>
+      <td className="py-1.5 text-right tabular-nums text-muted-foreground">
+        {projected == null ? "—" : pnlAmount(projected)}
+      </td>
+      <td className="py-1.5 text-right tabular-nums">{pnlAmount(actual)}</td>
+      <td className="py-1.5 text-right">
+        <CompareAmount value={delta} invert={invert} />
+      </td>
+    </tr>
+  );
+}
+
+export function JobPnlComparisonTable({
+  statement,
+  comparison,
+}: {
+  statement: ProfitAndLossStatement;
+  comparison: JobPnlComparison;
+}) {
+  const actualProfit = statement.netIncome;
+  const projectedProfit = comparison.projectedNetIncome;
+  const profitDelta = projectedProfit == null ? null : actualProfit - projectedProfit;
+  const projectedMargin =
+    comparison.projectedIncome > 0 && comparison.projectedNetIncome != null
+      ? comparison.projectedNetIncome / comparison.projectedIncome
+      : null;
+  const actualMargin = statement.income.total > 0 ? statement.netIncome / statement.income.total : null;
+
+  return (
+    <div className="border bg-card px-5 py-5 sm:px-8">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h3 className="font-heading text-sm font-medium tracking-[0.14em] uppercase">
+            Actual vs projected
+          </h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {comparison.estimateId ? (
+              <>
+                Projected from{" "}
+                <Link href={`/estimates/${comparison.estimateId}`} className="hover:underline">
+                  {comparison.estimateLabel}
+                </Link>
+              </>
+            ) : (
+              `Projected from ${comparison.estimateLabel ?? "the contract"}`
+            )}
+            . Variance is actual minus projected.
+          </p>
+        </div>
+        <p className={cn("text-sm tabular-nums", profitDelta == null ? "text-muted-foreground" : varianceClass(profitDelta))}>
+          {profitDelta == null
+            ? "Profit variance —"
+            : `${profitDelta >= 0 ? "Ahead" : "Behind"} ${pnlAmount(Math.abs(profitDelta))}`}
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div className="border px-3 py-2.5">
+          <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+            Projected profit
+          </p>
+          <p className="mt-1 text-lg tabular-nums">
+            {comparison.projectedNetIncome == null ? "—" : pnlAmount(comparison.projectedNetIncome)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {projectedMargin == null ? "Margin —" : `${(projectedMargin * 100).toFixed(1)}% margin`}
+          </p>
+        </div>
+        <div className="border px-3 py-2.5">
+          <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+            Actual profit
+          </p>
+          <p className="mt-1 text-lg tabular-nums">{pnlAmount(actualProfit)}</p>
+          <p className="text-xs text-muted-foreground">
+            {actualMargin == null ? "Margin —" : `${(actualMargin * 100).toFixed(1)}% margin`}
+          </p>
+        </div>
+        <div className="border px-3 py-2.5">
+          <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+            Variance
+          </p>
+          <p className={cn("mt-1 text-lg tabular-nums", profitDelta == null ? "" : varianceClass(profitDelta))}>
+            {profitDelta == null ? "—" : pnlAmount(profitDelta)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {actualMargin == null || projectedMargin == null
+              ? "Margin pts —"
+              : `${((actualMargin - projectedMargin) * 100).toFixed(1)} pts`}
+          </p>
+        </div>
+      </div>
+
+      <table className="mt-4 w-full text-sm">
+        <thead>
+          <tr className="border-b text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+            <th className="py-1.5 text-left font-semibold"> </th>
+            <th className="py-1.5 text-right font-semibold">Projected</th>
+            <th className="py-1.5 text-right font-semibold">Actual</th>
+            <th className="py-1.5 text-right font-semibold">Variance</th>
+          </tr>
+        </thead>
+        <tbody>
+          <ComparisonRow label="Income" projected={comparison.projectedIncome} actual={statement.income.total} />
+          <ComparisonRow
+            label="Cost of sales"
+            projected={comparison.projectedCostOfSales}
+            actual={statement.costOfSales.total}
+            invert
+          />
+          <ComparisonRow
+            label="Gross profit"
+            projected={comparison.projectedGrossProfit}
+            actual={statement.grossProfit}
+            emphasize
+          />
+          <ComparisonRow
+            label="Expenses"
+            projected={comparison.projectedExpenses}
+            actual={statement.expenses.total + statement.otherExpenses.total}
+            invert
+          />
+          <ComparisonRow
+            label="Net income"
+            projected={comparison.projectedNetIncome}
+            actual={statement.netIncome}
+            emphasize
+          />
+        </tbody>
+      </table>
     </div>
   );
 }
