@@ -80,7 +80,7 @@ export function BoardScrollSlider({
   }
 
   return (
-    <div className="pointer-events-none absolute right-3 bottom-3 z-20">
+    <div className="pointer-events-none fixed right-5 bottom-5 z-40">
       <div
         ref={trackRef}
         role="slider"
