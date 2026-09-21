@@ -39,10 +39,10 @@ export function KanbanScroller({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="relative">
+    <div className="relative h-[min(42rem,calc(100dvh-13rem))]">
       <div
         ref={scrollerRef}
-        className="w-full overflow-x-auto pb-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="h-full w-full overflow-x-auto overflow-y-auto pb-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {children}
       </div>
@@ -80,7 +80,7 @@ export function BoardScrollSlider({
   }
 
   return (
-    <div className="pointer-events-none fixed right-5 bottom-5 z-40">
+    <div className="pointer-events-none absolute right-3 bottom-3 z-20">
       <div
         ref={trackRef}
         role="slider"
@@ -96,7 +96,7 @@ export function BoardScrollSlider({
           if (event.key === "ArrowLeft") onScrub(metrics.thumbStart + metrics.thumbRatio / 2 - 0.08);
         }}
         className={cn(
-          "pointer-events-auto relative h-5 w-36 cursor-ew-resize overflow-hidden rounded-md border border-black/8 bg-[#f3f4f6] shadow-[0_4px_14px_rgba(15,23,42,0.08)]",
+          "pointer-events-auto relative h-6 w-40 cursor-ew-resize overflow-hidden rounded-md border border-black/10 bg-white shadow-[0_6px_18px_rgba(15,23,42,0.12)]",
         )}
       >
         <div
@@ -108,7 +108,7 @@ export function BoardScrollSlider({
           }}
         />
         <div
-          className="absolute top-0.5 bottom-0.5 rounded-sm bg-[#c9d6ea] ring-1 ring-[#9aafd0]/70"
+          className="absolute top-0.5 bottom-0.5 rounded-sm bg-[#b8c8e4] ring-1 ring-[#8aa0c8]"
           style={{
             left: `${metrics.thumbStart * 100}%`,
             width: `${metrics.thumbRatio * 100}%`,
