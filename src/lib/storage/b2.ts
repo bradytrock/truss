@@ -11,6 +11,7 @@ import { STORAGE_KINDS, isStorageKind, type StorageKind } from "@/lib/storage/ki
 import {
   isAllowedObjectKey,
   isCompanyId,
+  legacyKindlessObjectKey,
   publicObjectUrl,
 } from "@/lib/storage/urls";
 
@@ -18,6 +19,7 @@ export { STORAGE_KINDS, isStorageKind, type StorageKind };
 export {
   isAllowedObjectKey,
   isCompanyId,
+  legacyKindlessObjectKey,
   publicObjectUrl,
   resolveStoredFileUrl,
   storageProxyPath,
@@ -156,6 +158,18 @@ export async function signedObjectUrl(path: string, expiresIn = 60 * 60 * 24 * 7
     }),
     { expiresIn },
   );
+}
+
+export async function getObjectFromB2WithFallback(path: string) {
+  try {
+    return await getObjectFromB2(path);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const missing = /NoSuchKey|NotFound|404|Key not found|NoSuchBucket/i.test(message);
+    const fallback = missing ? legacyKindlessObjectKey(path) : "";
+    if (!fallback) throw error;
+    return await getObjectFromB2(fallback);
+  }
 }
 
 export async function getObjectFromB2(path: string) {

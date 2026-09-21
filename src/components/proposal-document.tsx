@@ -22,6 +22,7 @@ import { formatJobSite } from "@/lib/leads";
 import { isSignaturePng } from "@/lib/estimate-signature";
 import { estimateSignatureLines } from "@/lib/estimate-signers";
 import { coOwnerContact } from "@/lib/parties";
+import { EstimatePhotoThumb } from "@/components/estimate-line-photos";
 import { photosForEstimateLine } from "@/lib/estimate-line-photos";
 import type { CompanySettings, Estimate, EstimateLine, JobMarket, JobPhoto } from "@/lib/types";
 import { companyEstimateTermsFor } from "@/lib/contract-types";
@@ -93,6 +94,7 @@ export function ProposalDocument({
   customer,
   company,
   market,
+  photos,
   onToggleOptional,
   selectable,
   showStatus = true,
@@ -108,6 +110,7 @@ export function ProposalDocument({
   customer: string;
   company?: CompanySettings;
   market?: JobMarket | "" | null;
+  photos?: JobPhoto[];
   onToggleOptional?: (line: EstimateLine, selected: boolean) => void;
   selectable?: boolean;
   showStatus?: boolean;
@@ -236,7 +239,7 @@ export function ProposalDocument({
                             className="mt-0.5 text-sm text-muted-foreground"
                           />
                         ) : null}
-                        <ProposalLinePhotos line={line} gallery={crm?.photos ?? []} />
+                        <ProposalLinePhotos line={line} gallery={photos ?? crm?.photos ?? []} />
                         <p className="mt-1 text-xs tabular-nums text-muted-foreground">
                           {estimate.hideLinePrices
                             ? `${line.quantity} ${line.unit}`
@@ -371,8 +374,7 @@ function ProposalLinePhotos({
     <ul className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-4">
       {photos.map((photo) => (
         <li key={photo.id}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <EstimatePhotoThumb
             src={photo.imageUrl}
             alt={photo.caption || line.title || "Line photo"}
             className="aspect-[4/3] w-full rounded-sm border object-cover"

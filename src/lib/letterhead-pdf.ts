@@ -18,15 +18,32 @@ export type PdfLetterheadDoc = {
   internal: { pageSize: { getWidth: () => number; getHeight: () => number } };
 };
 
+async function readableImageSrc(url: string) {
+  if (!url || url.startsWith("data:") || url.startsWith("blob:")) return url;
+  // Same-origin storage proxy needs cookies. `crossOrigin=anonymous` strips them
+  // and job photos 401, so fetch first and paint from a data URL.
+  if (typeof fetch !== "function") return url;
+  const response = await fetch(url, { credentials: "include" });
+  if (!response.ok) throw new Error("Could not load image.");
+  const blob = await response.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read image."));
+    reader.readAsDataURL(blob);
+  });
+}
+
 export async function loadLogoForPdf(url: string) {
   if (!url || typeof document === "undefined") return null;
   try {
+    const src = await readableImageSrc(url);
     const image = await new Promise<HTMLImageElement>((resolve, reject) => {
       const node = new Image();
-      if (!url.startsWith("data:")) node.crossOrigin = "anonymous";
+      if (!src.startsWith("data:") && !src.startsWith("blob:")) node.crossOrigin = "anonymous";
       node.onload = () => resolve(node);
       node.onerror = () => reject(new Error("Could not load logo."));
-      node.src = url;
+      node.src = src;
     });
     const maxEdge = 900;
     const naturalW = image.naturalWidth || image.width;

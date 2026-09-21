@@ -1,10 +1,22 @@
-import { uniqueIds } from "@/lib/job-record";
-import type { EstimateLine, EstimateLinePhoto, JobPhoto } from "@/lib/types";
+import { uniqueIds } from "./job-record";
+import { resolveStoredFileUrl } from "./storage/urls";
+import type { EstimateLine, EstimateLinePhoto, JobPhoto } from "./types";
 
 export const MAX_LINE_PHOTOS = 8;
 
 export function normalizeLinePhotoIds(ids: string[] | null | undefined) {
   return uniqueIds((ids ?? []).map((id) => String(id))).slice(0, MAX_LINE_PHOTOS);
+}
+
+export function resolveEstimateLinePhotoUrl(photo: {
+  imageUrl?: string | null;
+  storagePath?: string | null;
+}) {
+  return resolveStoredFileUrl({
+    storagePath: photo.storagePath,
+    url: photo.imageUrl,
+    kind: "job-photos",
+  });
 }
 
 export function photosForEstimateLine(
@@ -18,19 +30,17 @@ export function photosForEstimateLine(
     : (line.photos ?? []).map((photo) => photo.id);
   return uniqueIds(ids).flatMap((id) => {
     const fromLine = embedded.get(id);
-    if (fromLine?.imageUrl) {
-      return [{ id: fromLine.id, imageUrl: fromLine.imageUrl, caption: fromLine.caption ?? "" }];
-    }
     const fromGallery = galleryById.get(id);
-    if (fromGallery?.imageUrl) {
-      return [
-        {
-          id: fromGallery.id,
-          imageUrl: fromGallery.imageUrl,
-          caption: fromGallery.caption ?? "",
-        },
-      ];
-    }
-    return [];
+    const imageUrl =
+      resolveEstimateLinePhotoUrl(fromLine ?? {}) || resolveEstimateLinePhotoUrl(fromGallery ?? {});
+    if (!imageUrl) return [];
+    return [
+      {
+        id,
+        imageUrl,
+        caption: fromLine?.caption ?? fromGallery?.caption ?? "",
+        storagePath: fromLine?.storagePath ?? fromGallery?.storagePath ?? null,
+      },
+    ];
   });
 }

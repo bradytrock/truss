@@ -3,7 +3,7 @@ import { loadProfileCompany } from "@/lib/eagleview-server";
 import { normalizeShareToken } from "@/lib/share";
 import {
   companyIdFromObjectKey,
-  getObjectFromB2,
+  getObjectFromB2WithFallback,
   isAllowedObjectKey,
   isB2Configured,
   storageKindFromObjectKey,
@@ -72,7 +72,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const object = await getObjectFromB2(path);
+    const object = await getObjectFromB2WithFallback(path);
     if (!object.body) {
       return NextResponse.json({ error: "File not found." }, { status: 404 });
     }

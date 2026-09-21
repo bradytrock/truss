@@ -69,6 +69,7 @@ import { MarketField } from "@/components/market-field";
 import { useCrm } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord, shareEmailOwnerFromBook } from "@/lib/document-owner";
 import { cardHeaderLogo } from "@/lib/card";
+import { photosForEstimateLine } from "@/lib/estimate-line-photos";
 import { COMMON_UNITS, estimateTotals, groupEstimateLines, lineAmount, linesForEstimate, type AdjustmentKind } from "@/lib/estimate-totals";
 import {
   ESTIMATE_PACKAGES,
@@ -722,6 +723,14 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   const [signOpen, setSignOpen] = useState(false);
 
   const lines = linesForEstimate(crm.estimateLines, estimate.id);
+  const previewLines = useMemo(
+    () =>
+      lines.map((line) => ({
+        ...line,
+        photos: photosForEstimateLine(line, crm.photos),
+      })),
+    [crm.photos, lines],
+  );
   const groups = groupEstimateLines(lines);
   const pendingSections = emptySections.filter(
     (name) => !groups.some((group) => group.name === name),
@@ -1592,7 +1601,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       <ProposalDocument
       company={crm.company}
       estimate={estimate}
-      lines={lines}
+      lines={previewLines}
+      photos={crm.photos}
       customer={customer}
       market={workMarket(job, opportunity)}
       selectable={optionalOpen}

@@ -220,6 +220,7 @@ export function ShareEstimateClient({
           company={crm.company}
           estimate={fromStore}
           lines={lines}
+          photos={crm.photos}
           customer={customer}
           selectable={optionalOpen}
           showStatus={false}

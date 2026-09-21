@@ -102,6 +102,51 @@ export function objectKeyFromStoredUrl(url: string) {
 }
 
 /**
+ * Older uploads dropped the kind segment: `{companyId}/{uploadId}/file.jpg`.
+ * Inverse of that repair — used when the canonical key 404s.
+ */
+export function legacyKindlessObjectKey(path: string) {
+  const clean = path.replace(/^\/+/, "");
+  const parts = clean.split("/");
+  if (
+    parts.length >= 4 &&
+    isCompanyId(parts[0]) &&
+    isStorageKindValue(parts[1]) &&
+    isCompanyId(parts[2])
+  ) {
+    return [parts[0], ...parts.slice(2)].join("/");
+  }
+  return "";
+}
+
+function pushAllowedKey(keys: string[], key: string) {
+  const clean = key.replace(/^\/+/, "");
+  if (!clean || !isAllowedObjectKey(clean) || keys.includes(clean)) return;
+  keys.push(clean);
+}
+
+/**
+ * Object keys to try for a stored file, most reliable first.
+ * Prefer a key that is already well-formed (from the Backblaze URL or a
+ * canonical storage_path) over a repaired guess.
+ */
+export function storedObjectKeyCandidates(input: {
+  storagePath?: string | null;
+  url?: string | null;
+  kind?: StorageKind;
+}) {
+  const kind = input.kind ?? "job-files";
+  const rawPath = (input.storagePath || "").replace(/^\/+/, "");
+  const rawUrlKey = objectKeyFromStoredUrl(input.url || "");
+  const keys: string[] = [];
+  if (rawPath && isAllowedObjectKey(rawPath)) pushAllowedKey(keys, rawPath);
+  if (rawUrlKey && isAllowedObjectKey(rawUrlKey)) pushAllowedKey(keys, rawUrlKey);
+  pushAllowedKey(keys, normalizeObjectKey(rawUrlKey, kind));
+  pushAllowedKey(keys, normalizeObjectKey(rawPath, kind));
+  return keys;
+}
+
+/**
  * Prefer a relative proxy URL from storage_path so stale localhost/preview
  * origins and private Backblaze friendly URLs in row.url do not break opens.
  */
@@ -111,15 +156,8 @@ export function resolveStoredFileUrl(input: {
   publicBaseUrl?: string;
   kind?: StorageKind;
 }) {
-  const kind = input.kind ?? "job-files";
-  const fromPath = normalizeObjectKey((input.storagePath || "").replace(/^\/+/, ""), kind);
-  if (fromPath && isAllowedObjectKey(fromPath)) {
-    return publicObjectUrl(fromPath, input.publicBaseUrl);
-  }
-  const fromUrl = normalizeObjectKey(objectKeyFromStoredUrl(input.url || ""), kind);
-  if (fromUrl && isAllowedObjectKey(fromUrl)) {
-    return publicObjectUrl(fromUrl, input.publicBaseUrl);
-  }
+  const key = storedObjectKeyCandidates(input)[0];
+  if (key) return publicObjectUrl(key, input.publicBaseUrl);
   // Never hand the browser a private B2 friendly URL — it 401s as raw JSON.
   const raw = (input.url || "").trim();
   if (/backblazeb2\.com/i.test(raw)) return "";
