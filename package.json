@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "main": "scripts/start.mjs",
+  "repository": {
+    "type": "git",
+    "url": "https://origin.cursor.com/git/brady-jones/MyRoofingTools.git"
+  },
   "engines": {
     "node": ">=20"
   },
