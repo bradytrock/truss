@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createPhotoReport } from "./photo-report.ts";
+import { seedState } from "./seed.ts";
 import {
   addWorkOrderField,
   addWorkOrderItem,
@@ -173,4 +174,21 @@ if (fromLead.pages[0]?.type === "work_order") {
     fromLead.pages[0].fields.find((field) => field.key === "property")?.value,
     "900 Blake St, Denver, CO 80204",
   );
+}
+
+for (const seeded of seedState.jobs.slice(0, 8)) {
+  const opportunity = seedState.opportunities.find((item) => item.id === seeded.opportunityId) ?? null;
+  const expected = workOrderPropertyFromJob(seeded, opportunity);
+  const report = createPhotoReport({
+    job: seeded,
+    customer: "Customer",
+    photos: [],
+    author: "Brady",
+    template: "work_order",
+    opportunity,
+  });
+  assert.ok(expected, `seed job ${seeded.id} should have a site`);
+  if (report.pages[0]?.type === "work_order") {
+    assert.equal(report.pages[0].fields.find((field) => field.key === "property")?.value, expected);
+  }
 }
