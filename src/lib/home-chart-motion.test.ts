@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
 import {
   angleInSweep,
+  chartCursorTopPercent,
   donutIndexAt,
   nearestChartIndex,
   pointerInViewBox,
 } from "./home-chart-motion.ts";
+
+assert.equal(chartCursorTopPercent(0, 200), 8);
+assert.equal(chartCursorTopPercent(200, 200), 78);
+assert.equal(chartCursorTopPercent(100, 200), 50);
+assert.equal(chartCursorTopPercent(40, 0), 8);
 
 assert.equal(nearestChartIndex(10, []), -1);
 assert.equal(nearestChartIndex(12, [0, 10, 20]), 1);

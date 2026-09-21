@@ -1,3 +1,9 @@
+/** Pin the hover readout to the right edge, lined up with the active point. */
+export function chartCursorTopPercent(y: number, height: number) {
+  if (height <= 0) return 8;
+  return Math.min(78, Math.max(8, (y / height) * 100));
+}
+
 export function nearestChartIndex(x: number, xs: number[]) {
   if (xs.length === 0) return -1;
   let best = 0;

@@ -3,6 +3,7 @@
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
 import {
+  chartCursorTopPercent,
   donutIndexAt,
   nearestChartIndex,
   pointerInViewBox,
@@ -98,13 +99,16 @@ function ChartTip({
   title,
   value,
   className,
+  style,
 }: {
   title: string;
   value: string;
   className?: string;
+  style?: { top?: string };
 }) {
   return (
     <div
+      style={style}
       className={cn(
         "pointer-events-none absolute z-10 rounded-lg border border-black/8 bg-white px-2.5 py-1.5 shadow-[0_8px_20px_rgba(15,23,42,0.12)]",
         className,
@@ -304,15 +308,26 @@ export function HomeAreaChart({
           />
         ))}
         {active ? (
-          <line
-            x1={active.x}
-            x2={active.x}
-            y1={padTop}
-            y2={padTop + innerH}
-            stroke="#0176d3"
-            strokeWidth="1"
-            strokeDasharray="3 3"
-          />
+          <>
+            <line
+              x1={active.x}
+              x2={active.x}
+              y1={padTop}
+              y2={padTop + innerH}
+              stroke="#0176d3"
+              strokeWidth="1"
+              strokeDasharray="3 3"
+            />
+            <line
+              x1={active.x}
+              x2={width - padX}
+              y1={active.y}
+              y2={active.y}
+              stroke="#0176d3"
+              strokeWidth="1"
+              strokeDasharray="3 3"
+            />
+          </>
         ) : null}
         {coords.map((point, index) =>
           index % labelEvery === 0 || index === coords.length - 1 ? (
@@ -333,10 +348,8 @@ export function HomeAreaChart({
         <ChartTip
           title={active.label}
           value={format(active.value)}
-          className={cn(
-            "top-2",
-            active.x > width * 0.62 ? "right-2" : "left-2",
-          )}
+          className="right-2 -translate-y-1/2"
+          style={{ top: `${chartCursorTopPercent(active.y, height)}%` }}
         />
       ) : null}
     </div>
