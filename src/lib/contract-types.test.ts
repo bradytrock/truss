@@ -29,6 +29,12 @@ assert.equal(fromEmpty.length, 1);
 assert.equal(fromEmpty[0]?.name, "Standard");
 assert.equal(fromEmpty[0]?.isDefault, true);
 assert.equal(fromEmpty[0]?.body, DEFAULT_ESTIMATE_TERMS);
+assert.equal(companyEstimateTermsFor({ defaultEstimateTerms: null, contractTypes: [] }), "");
+assert.equal(companyEstimateTermsFor(undefined), "");
+assert.equal(
+  companyEstimateTermsFor({ defaultEstimateTerms: "T Rock contract", contractTypes: [] }),
+  "T Rock contract",
+);
 
 const fromLegacy = contractTypesFromCompany({
   defaultEstimateTerms: "Legacy company contract",

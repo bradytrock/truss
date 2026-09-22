@@ -3,10 +3,12 @@ import {
   applyCompanyTermsToOpenDocuments,
   estimateFollowsCompanyTerms,
   invoiceFollowsCompanyTerms,
+  isProductDefaultEstimateTerms,
   liveEstimateTerms,
   liveInvoiceTerms,
   mergePaymentTerms,
 } from "./document-terms.ts";
+import { DEFAULT_ESTIMATE_TERMS } from "./estimate-totals.ts";
 
 const company =
   "1. Scope of work\nNew scope language.\n\n2. Payment\nPayment 1: {{pay_1:500}}\nPayment 2: {{pay_2}}";
@@ -69,6 +71,28 @@ const shareUnsigned = liveEstimateTerms({
 });
 assert.match(shareUnsigned, /Old scope language/);
 assert.doesNotMatch(shareUnsigned, /New scope language/);
+
+assert.equal(isProductDefaultEstimateTerms(DEFAULT_ESTIMATE_TERMS), true);
+assert.equal(isProductDefaultEstimateTerms(stored), false);
+
+const noFlash = liveEstimateTerms({
+  estimate: { status: "sent", terms: stored, acceptedAt: null, secondAcceptedAt: null },
+  companyDefault: DEFAULT_ESTIMATE_TERMS,
+});
+assert.match(noFlash, /Old scope language/);
+assert.doesNotMatch(noFlash, /1\. Contract price/);
+
+const holdGeneric = liveEstimateTerms({
+  estimate: { status: "draft", terms: DEFAULT_ESTIMATE_TERMS, acceptedAt: null, secondAcceptedAt: null },
+});
+assert.equal(holdGeneric, "");
+
+const companyReady = liveEstimateTerms({
+  estimate: { status: "draft", terms: DEFAULT_ESTIMATE_TERMS, acceptedAt: null, secondAcceptedAt: null },
+  companyDefault: company,
+});
+assert.match(companyReady, /New scope language/);
+assert.doesNotMatch(companyReady, /1\. Contract price/);
 
 const shareDraftInvoice = liveInvoiceTerms({
   invoice: { status: "draft", terms: stored },
@@ -136,5 +160,23 @@ const perType = applyCompanyTermsToOpenDocuments(
 assert.match(perType.estimates[0]?.terms ?? "", /Insurance scope/);
 assert.doesNotMatch(perType.estimates[0]?.terms ?? "", /New scope language/);
 assert.match(perType.estimates[0]?.terms ?? "", /pay_1:250/);
+
+const skippedGeneric = applyCompanyTermsToOpenDocuments(
+  {
+    estimates: [
+      {
+        id: "e-keep",
+        status: "sent",
+        terms: stored,
+        acceptedAt: null,
+        secondAcceptedAt: null,
+      },
+    ],
+    invoices: [],
+  },
+  { defaultEstimateTerms: DEFAULT_ESTIMATE_TERMS, contractTypes: [] },
+);
+assert.equal(skippedGeneric.estimateCount, 0);
+assert.equal(skippedGeneric.estimates[0]?.terms, stored);
 
 console.log("document-terms.test.ts ok");
