@@ -385,6 +385,12 @@ function firstCopiedTerms(...candidates: Array<string | null | undefined>) {
   return undefined;
 }
 
+export function isProductDefaultEstimateTerms(value: string | null | undefined) {
+  const text = value?.trim() ?? "";
+  if (!text) return false;
+  return text === DEFAULT_ESTIMATE_TERMS.trim();
+}
+
 export function resolveEstimateTerms(input: {
   explicit?: string | null;
   templateTerms?: string | null;
@@ -423,14 +429,18 @@ export function liveEstimateTerms(input: {
   templateTerms?: string | null;
 }) {
   const stored = firstCopiedTerms(input.estimate.terms);
-  const company = firstCopiedTerms(input.companyDefault, input.templateTerms);
+  const companyRaw = firstCopiedTerms(input.companyDefault, input.templateTerms);
+  // The product scaffold is a create-time fallback, not company language. Using it
+  // as the live default paints generic terms for a frame before settings hydrate.
+  const company = companyRaw && !isProductDefaultEstimateTerms(companyRaw) ? companyRaw : undefined;
   if (!estimateFollowsCompanyTerms(input.estimate)) {
-    return stored ?? company ?? DEFAULT_ESTIMATE_TERMS;
+    return stored ?? company ?? "";
   }
-  // Public share payloads may omit company defaults — keep written language.
-  if (!company) return stored ?? DEFAULT_ESTIMATE_TERMS;
-  if (!stored) return company;
-  return mergePaymentTerms(company, stored);
+  if (company) {
+    if (!stored || isProductDefaultEstimateTerms(stored)) return company;
+    return mergePaymentTerms(company, stored);
+  }
+  return stored ?? "";
 }
 
 export function liveInvoiceTerms(input: {
@@ -467,9 +477,8 @@ export function applyCompanyTermsToOpenDocuments<
   let invoiceCount = 0;
   const estimates = book.estimates.map((estimate) => {
     if (!estimateFollowsCompanyTerms(estimate)) return estimate;
-    const estimateDefault = resolveEstimateTerms({
-      companyDefault: companyEstimateTermsFor(company, estimate.contractTypeId),
-    });
+    const estimateDefault = companyEstimateTermsFor(company, estimate.contractTypeId);
+    if (!estimateDefault.trim() || isProductDefaultEstimateTerms(estimateDefault)) return estimate;
     const terms = mergePaymentTerms(estimateDefault, estimate.terms);
     if (terms === estimate.terms) return estimate;
     estimateCount += 1;

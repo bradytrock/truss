@@ -85,12 +85,25 @@ export function contractTypeById(types: CompanyContractType[], id?: string | nul
   return types.find((type) => type.id === key);
 }
 
+export function companyHasConfiguredEstimateTerms(
+  company?: Pick<CompanySettings, "defaultEstimateTerms" | "contractTypes"> | null,
+) {
+  if (company?.defaultEstimateTerms?.trim()) return true;
+  return (company?.contractTypes ?? []).some((type) => type.body.trim());
+}
+
 export function companyEstimateTermsFor(
   company?: Pick<CompanySettings, "defaultEstimateTerms" | "contractTypes"> | null,
   contractTypeId?: string | null,
 ) {
-  const types = contractTypesFromCompany(company);
-  return (contractTypeById(types, contractTypeId) ?? defaultContractType(types)).body;
+  const configured = company?.contractTypes ?? [];
+  const match = contractTypeById(configured, contractTypeId);
+  if (match?.body.trim()) return match.body;
+  const fallback = company?.defaultEstimateTerms?.trim() ?? "";
+  if (fallback) return fallback;
+  const named = configured.find((type) => type.isDefault) ?? configured[0];
+  if (named?.body.trim()) return named.body;
+  return "";
 }
 
 export function addCompanyContractType(
