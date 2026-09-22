@@ -1,3 +1,4 @@
+import { phoneQueryMatches } from "@/lib/phone";
 import type { DeliveryMethod, LeadSource } from "@/lib/types";
 import { LEAD_SOURCE_LABELS, LEAD_SOURCES, LEGACY_LEAD_SOURCE_LABELS } from "@/lib/types";
 
@@ -46,4 +47,29 @@ export function leadName(first: string, last: string, site: string) {
   const full = `${first.trim()} ${last.trim()}`.trim();
   if (site) return `${last.trim() || full} — ${site}`;
   return full || "New lead";
+}
+
+/** Realtor and referral seeds name the partner who sent the lead. */
+export function leadNeedsReferrer(source: string | null | undefined) {
+  return source === "realtor" || source === "referral";
+}
+
+export function referralPartners<T extends { isReferralPartner?: boolean; name: string }>(contacts: T[]) {
+  return contacts
+    .filter((contact) => Boolean(contact.isReferralPartner))
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function matchReferralPartners<
+  T extends { isReferralPartner?: boolean; name: string; title?: string; email?: string; phone?: string },
+>(contacts: T[], query: string) {
+  const partners = referralPartners(contacts);
+  const needle = query.trim().toLowerCase();
+  if (!needle) return partners;
+  return partners.filter((contact) => {
+    if (phoneQueryMatches(contact.phone, query)) return true;
+    const haystack = `${contact.name} ${contact.title ?? ""} ${contact.email ?? ""} ${contact.phone ?? ""}`.toLowerCase();
+    return haystack.includes(needle);
+  });
 }

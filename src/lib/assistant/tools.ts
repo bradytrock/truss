@@ -133,7 +133,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
         },
         market: { type: "string", enum: ["residential", "commercial"], description: "Default residential." },
         notes: str("Anything the caller said"),
-        referralContactId: str("Required when source is referral — id of the person who sent them"),
+        referralContactId: str("Required when source is realtor or referral — id of the referral partner who sent them"),
         assignToPreviousPm: bool(
           "Required when this person is a returning client: true assigns the lead to the previous project manager, false keeps it with you (they are asked first; company admins decide if they decline).",
         ),
