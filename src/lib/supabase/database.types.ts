@@ -2500,9 +2500,80 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["email_unsubscribes"]["Insert"]>;
         Relationships: [];
       };
+      voice_agents: {
+        Row: {
+          id: string;
+          company_id: string;
+          staff_id: string;
+          elevenlabs_agent_id: string;
+          inbound_number: string;
+          webhook_token: string;
+          enabled: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          staff_id: string;
+          elevenlabs_agent_id?: string;
+          inbound_number?: string;
+          webhook_token: string;
+          enabled?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["voice_agents"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
+      voice_agent_intake: {
+        Args: {
+          p_token: string;
+          p_phone: string;
+          p_first_name?: string;
+          p_last_name?: string;
+          p_email?: string;
+          p_street?: string;
+          p_city?: string;
+          p_state?: string;
+          p_postal_code?: string;
+          p_notes?: string;
+          p_transcript?: string;
+          p_duration_seconds?: number | null;
+        };
+        Returns: Json;
+      };
+      voice_agent_lookup: {
+        Args: { p_token: string; p_phone: string; p_email?: string };
+        Returns: Json;
+      };
+      voice_agent_book: {
+        Args: {
+          p_token: string;
+          p_title: string;
+          p_starts_at: string;
+          p_ends_at?: string | null;
+          p_job_id?: string | null;
+          p_opportunity_id?: string | null;
+          p_kind?: string;
+          p_notes?: string;
+          p_location?: string;
+        };
+        Returns: Json;
+      };
+      voice_agent_log: {
+        Args: {
+          p_token: string;
+          p_body: string;
+          p_job_id?: string | null;
+          p_opportunity_id?: string | null;
+          p_type?: string;
+        };
+        Returns: Json;
+      };
       qbwc_request_vendor_sync: {
         Args: Record<string, never>;
         Returns: Json;

@@ -14,7 +14,7 @@ const SECTIONS = [
   { href: "/settings/files", label: "File directory", hint: "Warranties and PDFs", admin: true, accounting: false, automations: false },
   { href: "/settings/audit", label: "Audit trail", hint: "History and revert", admin: true, accounting: false, automations: false },
   { href: "/settings/locations", label: "Locations", hint: "Google reviews", admin: true, accounting: false, automations: false },
-  { href: "/settings/people", label: "People", hint: "Seats, invites, and teams", admin: true, accounting: false, automations: false },
+  { href: "/settings/people", label: "People", hint: "Seats, invites, teams, and voice agents", admin: true, accounting: false, automations: false },
   { href: "/settings/automations", label: "Automations", hint: "When, if, then", admin: true, accounting: false, automations: true },
   { href: "/settings/price-book", label: "Price book", hint: "Catalog and lists", admin: true, accounting: false, automations: false },
   { href: "/settings/eagleview", label: "EagleView", hint: "Roof reports", admin: true, accounting: false, automations: false },

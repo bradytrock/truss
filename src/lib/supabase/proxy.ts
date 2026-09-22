@@ -28,6 +28,10 @@ function isSharePath(path: string) {
     path.startsWith("/api/realtor-portal") ||
     path.startsWith("/api/cron/realtor-listings") ||
     path.startsWith("/api/qbwc") ||
+    path.startsWith("/api/voice/lookup") ||
+    path.startsWith("/api/voice/intake") ||
+    path.startsWith("/api/voice/book") ||
+    path.startsWith("/api/voice/log") ||
     isPublicCardPath(path)
   );
 }

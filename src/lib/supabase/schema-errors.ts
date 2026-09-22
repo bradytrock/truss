@@ -1001,3 +1001,29 @@ export function isMissingTaskDeskColumns(error: { message?: string; code?: strin
 export function missingTaskDeskMessage() {
   return `Saved without notes or reminders. Run ${TASK_DESK_SQL} in the SQL editor so task notes and due-date emails persist.`;
 }
+
+export const VOICE_AGENTS_SQL = "supabase/migrations/20260922190000_voice_agents.sql";
+
+export function isMissingVoiceAgents(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentions =
+    message.includes("voice_agents") ||
+    message.includes("voice_agent_intake") ||
+    message.includes("voice_agent_lookup") ||
+    message.includes("voice_agent_book") ||
+    message.includes("voice_agent_log");
+  return (
+    (code === "pgrst205" && mentions) ||
+    (code === "pgrst202" && mentions) ||
+    ((message.includes("schema cache") ||
+      message.includes("could not find the") ||
+      message.includes("does not exist")) &&
+      mentions)
+  );
+}
+
+export function missingVoiceAgentsMessage() {
+  return `Run ${VOICE_AGENTS_SQL} in the SQL editor so each project manager can have their own ElevenLabs agent.`;
+}
