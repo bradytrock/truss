@@ -82,10 +82,10 @@ const noFlash = liveEstimateTerms({
 assert.match(noFlash, /Old scope language/);
 assert.doesNotMatch(noFlash, /1\. Contract price/);
 
-const holdGeneric = liveEstimateTerms({
+const keepWrittenScaffold = liveEstimateTerms({
   estimate: { status: "draft", terms: DEFAULT_ESTIMATE_TERMS, acceptedAt: null, secondAcceptedAt: null },
 });
-assert.equal(holdGeneric, "");
+assert.equal(keepWrittenScaffold, DEFAULT_ESTIMATE_TERMS);
 
 const companyReady = liveEstimateTerms({
   estimate: { status: "draft", terms: DEFAULT_ESTIMATE_TERMS, acceptedAt: null, secondAcceptedAt: null },

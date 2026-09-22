@@ -433,16 +433,14 @@ export function liveEstimateTerms(input: {
   // The product scaffold is a create-time fallback, not company language. Using it
   // as the live default paints generic terms for a frame before settings hydrate.
   const company = companyRaw && !isProductDefaultEstimateTerms(companyRaw) ? companyRaw : undefined;
-  const written = stored && !isProductDefaultEstimateTerms(stored) ? stored : undefined;
   if (!estimateFollowsCompanyTerms(input.estimate)) {
-    return written ?? stored ?? company ?? "";
+    return stored ?? company ?? "";
   }
   if (company) {
-    if (!stored) return company;
-    if (!written) return company;
+    if (!stored || isProductDefaultEstimateTerms(stored)) return company;
     return mergePaymentTerms(company, stored);
   }
-  return written ?? "";
+  return stored ?? "";
 }
 
 export function liveInvoiceTerms(input: {
