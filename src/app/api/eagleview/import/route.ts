@@ -9,6 +9,7 @@ import {
   mergeEagleviewJobCustomFields,
   mergeEagleviewMeasurementOverrides,
   parseEagleviewReportText,
+  type EagleviewTextItem,
 } from "@/lib/eagleview-parse";
 import {
   attachEagleviewPdf,
@@ -105,11 +106,13 @@ async function importReport(request: Request) {
   const pdf = Buffer.from(await file.arrayBuffer());
   let extractedText = "";
   let extractedPages: string[] = [];
+  let extractedItems: EagleviewTextItem[] = [];
   let pageCount = 0;
   try {
     const extracted = await extractPdfText(pdf);
     extractedText = extracted.text;
     extractedPages = extracted.pages;
+    extractedItems = extracted.items;
     pageCount = extracted.totalPages;
   } catch (error) {
     console.error("[eagleview/import] pdf text", error);
@@ -126,7 +129,7 @@ async function importReport(request: Request) {
     }
   }
 
-  const parsed = parseEagleviewReportText(extractedText, extractedPages);
+  const parsed = parseEagleviewReportText(extractedText, extractedPages, extractedItems);
   const measurements = mergeEagleviewMeasurementOverrides(parsed, {
     totalSquares: squaresOverride,
     wastePercent: wasteOverride,

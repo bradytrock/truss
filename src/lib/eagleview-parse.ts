@@ -59,27 +59,210 @@ function pickMeasurementSection(pages: string[], fullText: string) {
   return fullText;
 }
 
+export type EagleviewTextItem = {
+  str: string;
+  x: number;
+  y: number;
+  page: number;
+};
+
+export type EagleviewSuggestedWaste = {
+  wastePercent?: number;
+  suggestedSquares?: number;
+  measuredSquares?: number;
+};
+
+const EMPTY_WASTE: EagleviewSuggestedWaste = {};
+
+function wasteTableBlock(text: string) {
+  const start = text.search(/Waste\s*Calculation/i);
+  if (start >= 0) return text.slice(start, start + 4000);
+  const alt = text.search(/Waste\s*%/i);
+  if (alt >= 0) return text.slice(alt, alt + 2500);
+  return text;
+}
+
+function parsePercentList(block: string) {
+  const row = block.match(/Waste\s*%\s*((?:\d+%\s*)+)/i);
+  if (!row) return [] as number[];
+  return [...row[1].matchAll(/(\d+)%/g)].map((match) => Number(match[1]));
+}
+
+function parseLabeledNumberList(block: string, label: RegExp) {
+  const row = block.match(new RegExp(`${label.source}\\s*((?:[\\d,]+(?:\\.\\d+)?(?:\\s+|$))+)` , "i"));
+  if (!row) return [] as number[];
+  return [...row[1].matchAll(/([\d,]+(?:\.\d+)?)/g)]
+    .map((match) => Number(match[1].replace(/,/g, "")))
+    .filter((value) => Number.isFinite(value));
+}
+
+function indexFromAlignment(headerLine: string, tokens: string[], labelLine: string, label: string) {
+  if (!/\s{3,}/.test(labelLine) && labelLine.length < headerLine.length * 0.6) return -1;
+  const found = labelLine.match(new RegExp(label, "i"));
+  if (!found || found.index == null) return -1;
+  const labelX = found.index + found[0].length / 2;
+  let best = -1;
+  let bestDist = Number.POSITIVE_INFINITY;
+  let from = 0;
+  for (let i = 0; i < tokens.length; i += 1) {
+    const at = headerLine.indexOf(tokens[i], from);
+    if (at < 0) continue;
+    from = at + tokens[i].length;
+    const dist = Math.abs(at + tokens[i].length / 2 - labelX);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = i;
+    }
+  }
+  return best;
+}
+
+function suggestedColumnIndex(block: string, wastes: number[], squares: number[]) {
+  const adjacentPct =
+    block.match(/(\d+)\s*%[^\d%]{0,28}Suggested/i) || block.match(/Suggested[^\d%]{0,28}(\d+)\s*%/i);
+  if (adjacentPct) {
+    const idx = wastes.indexOf(Number(adjacentPct[1]));
+    if (idx >= 0) return idx;
+  }
+
+  const adjacentSq =
+    block.match(/(\d+\.\d+)\s+Suggested/i) || block.match(/Suggested\s+(\d+\.\d+)/i);
+  if (adjacentSq) {
+    const value = Number(adjacentSq[1]);
+    const idx = squares.findIndex((square) => Math.abs(square - value) < 0.011);
+    if (idx >= 0) return idx;
+  }
+
+  const wasteLine = block.split(/\n/).find((line) => /Waste\s*%/i.test(line) && /%/.test(line));
+  const labelLine = block.split(/\n/).find((line) => /Suggested/i.test(line));
+  if (wasteLine && labelLine) {
+    const aligned = indexFromAlignment(
+      wasteLine,
+      wastes.map((waste) => `${waste}%`),
+      labelLine,
+      "Suggested",
+    );
+    if (aligned >= 0) return aligned;
+  }
+
+  let from = 0;
+  const positions: number[] = [];
+  for (const waste of wastes) {
+    const at = block.indexOf(`${waste}%`, from);
+    if (at < 0) break;
+    positions.push(at);
+    from = at + String(waste).length + 1;
+  }
+  const suggestedAt = block.search(/Suggested/i);
+  if (suggestedAt >= 0 && positions.length === wastes.length) {
+    for (let i = 0; i < positions.length; i += 1) {
+      const end = i + 1 < positions.length ? positions[i + 1] : block.length;
+      if (suggestedAt < positions[i] || suggestedAt >= end) continue;
+      const afterLast = i === positions.length - 1 && suggestedAt - positions[i] > 40;
+      if (afterLast) break;
+      return i;
+    }
+  }
+
+  if (wastes.length === 2) return 1;
+  return -1;
+}
+
 /**
- * EagleView waste table marks Measured / Suggested under Waste % columns.
- * Typical: 0% = Measured, next column = Suggested (often 6% / 10% / 15%).
+ * EagleView waste table: Measured is the 0% column; Suggested is the
+ * highlighted column (often 15–21%, not the first increment).
  */
-function parseSuggestedWaste(section: string) {
-  if (!/Measured\s+Suggested/i.test(section)) {
-    return { wastePercent: undefined as number | undefined, suggestedSquares: undefined as number | undefined };
-  }
-  const wasteMatch = section.match(/Waste\s*%\s*((?:\d+%\s*)+)/i);
-  const squaresMatch = section.match(/Squares\s*\*?\s*((?:[\d.]+(?:\s+|$))+)/i);
-  if (!wasteMatch || !squaresMatch) {
-    return { wastePercent: undefined, suggestedSquares: undefined };
-  }
-  const wastes = [...wasteMatch[1].matchAll(/(\d+)%/g)].map((m) => Number(m[1]));
-  const squares = [...squaresMatch[1].matchAll(/([\d.]+)/g)].map((m) => Number(m[1]));
-  // Suggested is the second column when Measured + Suggested are present.
-  const suggestedIdx = wastes.length > 1 ? 1 : 0;
+export function parseSuggestedWaste(section: string): EagleviewSuggestedWaste {
+  const block = wasteTableBlock(section);
+  if (!/Waste\s*%/i.test(block) && !/Suggested/i.test(block)) return EMPTY_WASTE;
+  const wastes = parsePercentList(block);
+  const squares = parseLabeledNumberList(block, /Squares\s*\*?/);
+  if (wastes.length === 0) return EMPTY_WASTE;
+  const idx = suggestedColumnIndex(block, wastes, squares);
+  const measuredIdx = wastes.findIndex((waste) => waste === 0);
   return {
-    wastePercent: asFinite(wastes[suggestedIdx]),
-    suggestedSquares: asFinite(squares[suggestedIdx]),
+    wastePercent: idx >= 0 ? asFinite(wastes[idx]) : undefined,
+    suggestedSquares: idx >= 0 ? asFinite(squares[idx]) : undefined,
+    measuredSquares: measuredIdx >= 0 ? asFinite(squares[measuredIdx]) : asFinite(squares[0]),
   };
+}
+
+function clusterItemsByY(items: EagleviewTextItem[], tolerance = 4) {
+  const rows: EagleviewTextItem[][] = [];
+  for (const item of [...items].sort((left, right) => right.y - left.y || left.x - right.x)) {
+    const row = rows.find((candidate) => Math.abs(candidate[0]!.y - item.y) <= tolerance);
+    if (row) row.push(item);
+    else rows.push([item]);
+  }
+  for (const row of rows) row.sort((left, right) => left.x - right.x);
+  return rows;
+}
+
+function nearestItem(items: EagleviewTextItem[], x: number) {
+  return items.reduce((best, item) => (Math.abs(item.x - x) < Math.abs(best.x - x) ? item : best));
+}
+
+function percentTokens(items: EagleviewTextItem[]) {
+  const tokens: EagleviewTextItem[] = [];
+  const sorted = [...items].sort((left, right) => left.page - right.page || right.y - left.y || left.x - right.x);
+  for (let i = 0; i < sorted.length; i += 1) {
+    const text = sorted[i]!.str.trim();
+    if (/^\d+%$/.test(text)) {
+      tokens.push({ ...sorted[i]!, str: text });
+      continue;
+    }
+    const next = sorted[i + 1];
+    if (/^\d+$/.test(text) && next && next.str.trim() === "%" && next.page === sorted[i]!.page) {
+      tokens.push({ ...sorted[i]!, str: `${text}%` });
+    }
+  }
+  return tokens;
+}
+
+/** Align the Suggested label to the waste-% and squares columns using PDF x/y. */
+export function parseSuggestedWasteFromItems(items: EagleviewTextItem[]): EagleviewSuggestedWaste {
+  if (items.length === 0) return EMPTY_WASTE;
+  const byPage = new Map<number, EagleviewTextItem[]>();
+  for (const item of items) {
+    const list = byPage.get(item.page) ?? [];
+    list.push(item);
+    byPage.set(item.page, list);
+  }
+
+  for (const pageItems of byPage.values()) {
+    const labels = pageItems.filter((item) => /^suggested$/i.test(item.str.trim()));
+    const percents = percentTokens(pageItems);
+    if (labels.length === 0 || percents.length < 3) continue;
+    const wasteRows = clusterItemsByY(percents).filter((row) => row.length >= 3);
+    if (wasteRows.length === 0) continue;
+    const wasteRow = wasteRows.sort((left, right) => right.length - left.length)[0]!;
+    const label = labels
+      .slice()
+      .sort(
+        (left, right) =>
+          Math.min(...wasteRow.map((item) => Math.abs(item.x - left.x))) -
+          Math.min(...wasteRow.map((item) => Math.abs(item.x - right.x))),
+      )[0]!;
+    const percentItem = nearestItem(wasteRow, label.x);
+    const wastePercent = Number(percentItem.str.replace("%", ""));
+    const squareItems = pageItems.filter((item) => /^\d+\.\d+$/.test(item.str.trim()));
+    const squareRows = clusterItemsByY(squareItems).filter((row) => row.length >= 3);
+    const squareRow = squareRows.sort(
+      (left, right) => Math.abs(left[0]!.y - label.y) - Math.abs(right[0]!.y - label.y),
+    )[0];
+    const suggestedSquares = squareRow
+      ? asFinite(Number(nearestItem(squareRow, label.x).str))
+      : undefined;
+    const zero = wasteRow.find((item) => item.str === "0%");
+    const measuredSquares =
+      squareRow && zero ? asFinite(Number(nearestItem(squareRow, zero.x).str)) : asFinite(squareRow?.[0] ? Number(squareRow[0].str) : undefined);
+    return {
+      wastePercent: asFinite(wastePercent),
+      suggestedSquares,
+      measuredSquares,
+    };
+  }
+  return EMPTY_WASTE;
 }
 
 function parseSummaryLengths(section: string): EagleviewMeasurements {
@@ -102,7 +285,9 @@ function parseSummaryLengths(section: string): EagleviewMeasurements {
 
   const waste = parseSuggestedWaste(section);
   const totalSquares =
-    areaSqFt != null ? Math.round((areaSqFt / 100) * 100) / 100 : waste.suggestedSquares;
+    areaSqFt != null
+      ? Math.round((areaSqFt / 100) * 100) / 100
+      : waste.measuredSquares ?? waste.suggestedSquares;
 
   return {
     totalAreaSqFt: asFinite(areaSqFt),
@@ -146,6 +331,7 @@ function parseLengthDiagram(section: string): Partial<EagleviewMeasurements> {
 export function parseEagleviewReportText(
   raw: string,
   pages?: string[],
+  items?: EagleviewTextItem[],
 ): EagleviewMeasurements & {
   reportId?: string;
   orderId?: string;
@@ -156,6 +342,19 @@ export function parseEagleviewReportText(
   const fullText = normalizedPages.join("\n");
   const section = pickMeasurementSection(normalizedPages, fullText);
   const fromSummary = parseSummaryLengths(section);
+  const wastePages = normalizedPages.filter(
+    (page) => /Waste\s*Calculation/i.test(page) || (/Waste\s*%/i.test(page) && /Suggested/i.test(page)),
+  );
+  const wasteFromItems = parseSuggestedWasteFromItems(items ?? []);
+  const wasteFromText =
+    wasteFromItems.wastePercent != null
+      ? wasteFromItems
+      : parseSuggestedWaste(wastePages.join("\n") || section || fullText);
+  if (wasteFromText.wastePercent != null) fromSummary.wastePercent = wasteFromText.wastePercent;
+  if (wasteFromText.suggestedSquares != null) fromSummary.suggestedSquares = wasteFromText.suggestedSquares;
+  if (fromSummary.totalSquares == null && wasteFromText.measuredSquares != null) {
+    fromSummary.totalSquares = wasteFromText.measuredSquares;
+  }
 
   // Fill any gaps from the Length Diagram page.
   const lengthPage =
@@ -208,7 +407,7 @@ export function parseEagleviewReportText(
 
 /** Extract plain text from a PDF buffer (EagleView digital reports). */
 export async function extractPdfText(pdf: Buffer | Uint8Array) {
-  const { extractText, getDocumentProxy } = await import("unpdf");
+  const { extractText, extractTextItems, getDocumentProxy } = await import("unpdf");
   const bytes =
     pdf instanceof Buffer
       ? new Uint8Array(pdf.buffer, pdf.byteOffset, pdf.byteLength)
@@ -224,10 +423,25 @@ export async function extractPdfText(pdf: Buffer | Uint8Array) {
   const pages = (Array.isArray(rawText) ? rawText : [rawText])
     .map((page) => (typeof page === "string" ? page : String(page ?? "")))
     .map((page) => page.replace(/\0/g, "").trim());
+  let items: EagleviewTextItem[] = [];
+  try {
+    const structured = await extractTextItems(document);
+    items = structured.items.flatMap((pageItems, pageIndex) =>
+      pageItems.map((item) => ({
+        str: (item.str ?? "").replace(/\u00a0/g, " "),
+        x: item.x,
+        y: item.y,
+        page: pageIndex + 1,
+      })),
+    );
+  } catch {
+    items = [];
+  }
   return {
     text: pages.join("\n\n"),
     pages,
     totalPages: typeof result.totalPages === "number" ? result.totalPages : pages.length,
+    items,
   };
 }
 
