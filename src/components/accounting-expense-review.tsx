@@ -12,7 +12,9 @@ import { useCrm } from "@/lib/crm-store";
 import {
   INVOICE_REVIEW_FILTERS,
   INVOICE_REVIEW_LABELS,
+  crmExpenseActors,
   expenseBlockedReason,
+  expenseLoggedByLabel,
   expenseQbPreview,
   expenseReviewStatus,
   parseInvoiceReviewFilter,
@@ -60,6 +62,7 @@ export function AccountingExpenseReview({
     };
   }, []);
 
+  const actors = useMemo(() => crmExpenseActors(crm), [crm]);
   const rows = useMemo(() => {
     return reviewableExpenses(crm.expenses).map((expense) => {
       const job = expense.jobId ? crm.getJob(expense.jobId) : undefined;
@@ -79,10 +82,11 @@ export function AccountingExpenseReview({
         blocked,
         status,
         customer,
+        loggedBy: expenseLoggedByLabel(expense.createdBy, actors),
         preview: expenseQbPreview(expense, job, customer, accounts),
       };
     });
-  }, [accounts, crm]);
+  }, [accounts, actors, crm]);
 
   const visible = rows.filter((row) =>
     filter === "all" ? row.status !== "queued" : row.status === filter,
@@ -184,7 +188,7 @@ export function AccountingExpenseReview({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[28rem] text-left text-sm">
+              <table className="w-full min-w-[34rem] text-left text-sm">
                 <thead className="border-b border-[#c9c9c9] bg-[#f3f3f3] text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
                   <tr>
                     <th className="w-10 px-3 py-2">
@@ -205,6 +209,7 @@ export function AccountingExpenseReview({
                     </th>
                     <th className="px-3 py-2">Receipt</th>
                     <th className="px-3 py-2">Vendor and job</th>
+                    <th className="px-3 py-2">Logged by</th>
                     <th className="px-3 py-2 text-right">Amount</th>
                     <th className="px-3 py-2">Status</th>
                   </tr>
@@ -234,6 +239,7 @@ export function AccountingExpenseReview({
                         <p>{row.expense.vendor || "No vendor"}</p>
                         <p className="text-xs text-[#86827b]">{row.job?.name || "Overhead"}</p>
                       </td>
+                      <td className="px-3 py-2.5">{row.loggedBy}</td>
                       <td className="px-3 py-2.5 text-right tabular-nums">{formatMoney(row.expense.amount)}</td>
                       <td className="px-3 py-2.5">
                         <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-medium", STATUS_CLASS[row.status])}>
@@ -264,6 +270,7 @@ export function AccountingExpenseReview({
                     {open.expense.vendor || "No vendor"}
                     {open.job ? ` — ${open.job.name}` : ""}
                   </p>
+                  <p className="mt-0.5 text-xs text-[#706e6b]">Logged by {open.loggedBy}</p>
                 </div>
                 <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-medium", STATUS_CLASS[open.status])}>
                   {INVOICE_REVIEW_LABELS[open.status]}
@@ -295,6 +302,8 @@ export function AccountingExpenseReview({
                     <dd className="text-right font-mono text-xs">{open.preview.customerJob}</dd>
                     <dt className="text-[#706e6b]">Ref / memo</dt>
                     <dd className="text-right">{open.preview.memo}</dd>
+                    <dt className="text-[#706e6b]">Logged by</dt>
+                    <dd className="text-right">{open.loggedBy}</dd>
                   </dl>
 
                   <ExpenseFields expenseId={open.expense.id} locked={open.status === "queued"} />

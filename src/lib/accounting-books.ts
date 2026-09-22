@@ -96,6 +96,47 @@ export function reviewableExpenses(expenses: Expense[]) {
   return expenses.filter((expense) => expense.qbStatus !== "entered");
 }
 
+const ACTOR_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function expenseActorPeople(
+  people: readonly { id?: string | null; name?: string | null }[],
+) {
+  return people.flatMap((person) => {
+    const id = person.id?.trim() ?? "";
+    const name = person.name?.trim() ?? "";
+    return id && name ? [{ id, name }] : [];
+  });
+}
+
+/** Display name for whoever logged the expense. Resolves a stored user/staff uuid. */
+export function expenseLoggedBy(
+  createdBy: string | null | undefined,
+  people: readonly { id: string; name: string }[] = [],
+) {
+  const raw = createdBy?.trim() ?? "";
+  if (!raw) return "";
+  if (!ACTOR_UUID.test(raw)) return raw;
+  return people.find((person) => person.id === raw)?.name.trim() || "";
+}
+
+export function expenseLoggedByLabel(
+  createdBy: string | null | undefined,
+  people: readonly { id: string; name: string }[] = [],
+) {
+  return expenseLoggedBy(createdBy, people) || "Unknown";
+}
+
+export function crmExpenseActors(crm: {
+  staff: readonly { id: string; name: string }[];
+  user: { id: string; name: string; staffId: string };
+}) {
+  return expenseActorPeople([
+    ...crm.staff,
+    { id: crm.user.id, name: crm.user.name },
+    { id: crm.user.staffId, name: crm.user.name },
+  ]);
+}
+
 export function expenseQbPayWith(
   method: ExpenseMethod,
   _hasJob = false,

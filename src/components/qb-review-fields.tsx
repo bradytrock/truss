@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useCrm } from "@/lib/crm-store";
+import { crmExpenseActors, expenseLoggedByLabel } from "@/lib/accounting-books";
 import { formatDate, formatMoney } from "@/lib/format";
 import { costCenterLabel } from "@/lib/job-record";
 import { lineAmount } from "@/lib/money";
@@ -393,7 +394,10 @@ export function ExpenseFields({ expenseId, locked }: { expenseId: string; locked
           }}
         />
       </Field>
-      <p className="text-xs text-muted-foreground">{expense.number} · logged {formatDate(expense.createdAt)}</p>
+      <p className="text-xs text-muted-foreground">
+        {expense.number} · logged {formatDate(expense.createdAt)} by{" "}
+        {expenseLoggedByLabel(expense.createdBy, crmExpenseActors(crm))}
+      </p>
     </div>
   );
 }

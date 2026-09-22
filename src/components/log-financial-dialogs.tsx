@@ -398,6 +398,9 @@ export function LogExpenseDialog({
               placeholder="What this is for, in QuickBooks language."
             />
           </div>
+          <p className="text-xs text-muted-foreground">
+            Logged by {crm.effectiveStaff?.name.trim() || crm.user.name.trim() || "you"}
+          </p>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel

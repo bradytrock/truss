@@ -6,6 +6,10 @@ import {
   commissionPayout,
   commissionRows,
   completedJobsWithoutInvoice,
+  crmExpenseActors,
+  expenseActorPeople,
+  expenseLoggedBy,
+  expenseLoggedByLabel,
   expenseQbPreview,
   expenseReviewStatus,
   expensesMissingJob,
@@ -290,5 +294,36 @@ assert.equal(jobCheckPreview.customerJob, "Martinez:J-12");
 const overheadCheck = expenseQbPreview({ ...bill, method: "check", jobId: null }, null);
 assert.equal(overheadCheck.txnType, "Vendor bill");
 assert.equal(overheadCheck.payAccount, "Accounts Payable");
+
+const staff = expenseActorPeople([
+  { id: "staff_nora", name: "Nora Keene" },
+  { id: "  ", name: "Skip" },
+  { id: "user-uuid", name: "  Elena Voss  " },
+]);
+assert.deepEqual(staff, [
+  { id: "staff_nora", name: "Nora Keene" },
+  { id: "user-uuid", name: "Elena Voss" },
+]);
+assert.equal(expenseLoggedBy("Tom Brennan", staff), "Tom Brennan");
+assert.equal(expenseLoggedBy("staff_nora", staff), "staff_nora");
+assert.equal(expenseLoggedBy("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", staff), "");
+assert.equal(
+  expenseLoggedBy("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", [
+    { id: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", name: "Priya Shah" },
+  ]),
+  "Priya Shah",
+);
+assert.equal(expenseLoggedByLabel("", staff), "Unknown");
+assert.equal(expenseLoggedByLabel("Nora Keene", staff), "Nora Keene");
+assert.equal(
+  expenseLoggedBy(
+    "11111111-2222-4333-8444-555555555555",
+    crmExpenseActors({
+      staff: [{ id: "staff_nora", name: "Nora Keene" }],
+      user: { id: "11111111-2222-4333-8444-555555555555", name: "Jordan Hale", staffId: "staff_jordan" },
+    }),
+  ),
+  "Jordan Hale",
+);
 
 console.log("accounting-books tests passed");

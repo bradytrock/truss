@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/table";
 import { QbStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
+import { crmExpenseActors, expenseLoggedByLabel } from "@/lib/accounting-books";
 import { formatDate, formatMoney } from "@/lib/format";
 import { invoiceTotal } from "@/lib/money";
 import { EXPENSE_ACCOUNT_LABELS, type QbSyncStatus } from "@/lib/types";
@@ -22,6 +23,7 @@ import { expensePushBlocked, invoicePushBlocked, paymentPushBlocked } from "@/li
 
 export function AccountingSyncQueues() {
   const crm = useCrm();
+  const actors = crmExpenseActors(crm);
   const invoices = crm.invoices.filter(
     (invoice) => invoice.qbStatus !== "entered" && invoice.status !== "void",
   );
@@ -124,7 +126,8 @@ export function AccountingSyncQueues() {
                     <TableCell>
                       <p className="font-medium">{expense.vendor}</p>
                       <p className="text-xs text-muted-foreground">
-                        {expense.number} · {formatDate(expense.incurredAt)}
+                        {expense.number} · {formatDate(expense.incurredAt)} · logged by{" "}
+                        {expenseLoggedByLabel(expense.createdBy, actors)}
                       </p>
                     </TableCell>
                     <TableCell className="text-sm">
