@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { QbStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
+import { crmExpenseActors, expenseLoggedByLabel } from "@/lib/accounting-books";
 import { formatDate, formatMoney } from "@/lib/format";
 import {
   expensesForJob,
@@ -24,6 +25,7 @@ export function JobFinancials({ job }: { job: Job }) {
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const period = useMemo(() => jobPeriodBounds(job), [job]);
+  const actors = useMemo(() => crmExpenseActors(crm), [crm]);
 
   const statement = useMemo(
     () =>
@@ -146,6 +148,7 @@ export function JobFinancials({ job }: { job: Job }) {
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {expense.number} · {EXPENSE_ACCOUNT_LABELS[expense.account]} · {formatDate(expense.incurredAt)}
+                    {` · logged by ${expenseLoggedByLabel(expense.createdBy, actors)}`}
                   </p>
                   {expense.memo ? <p className="text-sm leading-snug">{expense.memo}</p> : null}
                   <div className="flex flex-wrap items-center gap-2">
