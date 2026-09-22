@@ -13884,20 +13884,20 @@ begin
   end if;
 
   if action = 'attach' then
-    activity_body := 'Missed call on ' || called.name || $$'s line. Logged on this job; $$
+    activity_body := 'Missed call on ' || called.name || '''s line. Logged on this job; '
       || owner_row.name || ' was notified. No new card.'
       || duration_note || notes_note || transcript_note;
     notify_sms := coalesce(nullif(full_name, ''), 'A homeowner')
-      || ' called ' || called.name || $$'s line about $$
+      || ' called ' || called.name || '''s line about '
       || coalesce(nullif(job_code, ''), 'your job')
       || '.' || notes_note || ' Logged on the job — no new card.';
   else
-    activity_body := 'Missed call on ' || called.name || $$'s line. Opened this lead for $$
+    activity_body := 'Missed call on ' || called.name || '''s line. Opened this lead for '
       || owner_row.name || '.'
       || duration_note || notes_note || transcript_note;
     if match_kind = 'past_client' then
       notify_sms := coalesce(nullif(full_name, ''), 'A homeowner')
-        || ' called ' || called.name || $$'s line. New lead $$
+        || ' called ' || called.name || '''s line. New lead '
         || job_code || ' is on your book.' || notes_note;
     else
       notify_sms := coalesce(nullif(full_name, ''), 'A homeowner')
@@ -13946,7 +13946,7 @@ begin
     'author', author_name,
     'said', case
       when action = 'attach' then
-        'I logged this on ' || owner_row.name || $$'s job $$ || coalesce(job_code, '') || '. They will follow up.'
+        'I logged this on ' || owner_row.name || '''s job ' || coalesce(job_code, '') || '. They will follow up.'
       else
         'I opened a lead for ' || owner_row.name || ' — ' || coalesce(job_code, '') || '. They will call you back.'
     end
