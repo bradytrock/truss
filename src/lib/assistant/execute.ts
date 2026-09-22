@@ -1,4 +1,4 @@
-import { defaultDeliveryForSource, formatJobSite, leadName, leadStateOrDefault } from "@/lib/leads";
+import { defaultDeliveryForSource, formatJobSite, leadName, leadNeedsReferrer, leadStateOrDefault } from "@/lib/leads";
 import { localYmd } from "@/lib/format";
 import { isDeletedJob } from "@/lib/job-record";
 import { estimateTotals, allPackageTotals } from "@/lib/estimate-totals";
@@ -468,7 +468,9 @@ async function runTool(
       if (!phone && !email) return fail("Add a phone or email so someone can call them back.");
       if (!isLeadSource(source)) return fail("Pick a seed (website, phone, realtor, referral, …).");
       const referralContactId = arg(args, "referralContactId");
-      if (source === "referral" && !referralContactId) return fail("Referral leads need the person who sent them.");
+      if (leadNeedsReferrer(source) && !referralContactId) {
+        return fail("Realtor and referral leads need the partner who sent them.");
+      }
       const market = (arg(args, "market") === "commercial" ? "commercial" : "residential") as JobMarket;
       const street = arg(args, "street");
       const city = arg(args, "city");
@@ -548,7 +550,7 @@ async function runTool(
         originatorStaffId: crm.user.staffId,
         nextStep: "Call back within 5 minutes.",
         leadSource: source,
-        referralContactId: source === "referral" ? referralContactId : null,
+        referralContactId: leadNeedsReferrer(source) ? referralContactId : null,
         street,
         city,
         state,

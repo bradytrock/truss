@@ -328,6 +328,7 @@ export function scopeBook(
   const contacts =
     scope === "bd"
       ? state.contacts.filter((contact) => {
+          if (contact.isReferralPartner) return true;
           if (contact.ownerStaffId === effective.id) return true;
           if (partnerIds.has(contact.id)) return true;
           return opportunities.some(
@@ -336,8 +337,12 @@ export function scopeBook(
           );
         })
       : state.contacts.filter((contact) => {
+          if (contact.isReferralPartner) return true;
           if (staffIds.has(contact.ownerStaffId)) return true;
-          return opportunities.some((opportunity) => opportunity.primaryContactId === contact.id);
+          return opportunities.some(
+            (opportunity) =>
+              opportunity.primaryContactId === contact.id || opportunity.referralContactId === contact.id,
+          );
         });
 
   const clientIds = new Set<string>();

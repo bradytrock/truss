@@ -42,6 +42,8 @@ import {
   defaultDeliveryForSource,
   formatJobSite,
   leadName,
+  leadNeedsReferrer,
+  matchReferralPartners,
 } from "@/lib/leads";
 import { projectTypeForMarket } from "@/lib/market";
 import {
@@ -59,7 +61,7 @@ import { assignmentOptions } from "@/lib/visibility";
 import { hasBusinessDevelopmentSeat } from "@/lib/bd";
 import { phonesMatch } from "@/lib/job-messages";
 import { formatPhone } from "@/lib/format";
-import { formatPhoneInput, phoneQueryMatches } from "@/lib/phone";
+import { formatPhoneInput } from "@/lib/phone";
 import {
   assignsToPreviousPm,
   emailsMatch,
@@ -120,23 +122,16 @@ export function CreateOpportunityDialog({
     if (defaultAssignee) setAssigneeId(defaultAssignee);
   }, [assigneeId, defaultAssignee, open, people]);
 
-  const referralMatches = useMemo(() => {
-    const needle = referralQuery.trim().toLowerCase();
-    const visible = [...crm.contacts].sort((a, b) => {
-      if (a.isReferralPartner !== b.isReferralPartner) return a.isReferralPartner ? -1 : 1;
-      return a.name.localeCompare(b.name);
-    });
-    if (!needle) return visible.slice(0, 8);
-    return visible
-      .filter((contact) => {
-        if (phoneQueryMatches(contact.phone, referralQuery)) return true;
-        const haystack = `${contact.name} ${contact.title} ${contact.email} ${contact.phone}`.toLowerCase();
-        return haystack.includes(needle);
-      })
-      .slice(0, 8);
-  }, [crm.contacts, referralQuery]);
+  const referralMatches = useMemo(
+    () => matchReferralPartners(crm.book.contacts, referralQuery),
+    [crm.book.contacts, referralQuery],
+  );
+  const referralPartnerCount = useMemo(
+    () => crm.book.contacts.filter((contact) => contact.isReferralPartner).length,
+    [crm.book.contacts],
+  );
 
-  const selectedReferral = crm.contacts.find((contact) => contact.id === referralId);
+  const selectedReferral = crm.book.contacts.find((contact) => contact.id === referralId);
 
   function reset() {
     setAssigneeId(defaultAssignee);
@@ -220,14 +215,14 @@ export function CreateOpportunityDialog({
         originatorStaffId: crm.user.staffId,
         nextStep: "Call back within 5 minutes.",
         leadSource: source,
-        referralContactId: source === "referral" ? referralId : null,
+        referralContactId: leadNeedsReferrer(source) ? referralId : null,
         street: street.trim(),
         city: city.trim(),
         state: region.trim(),
         postalCode: postalCode.trim(),
         notes: notes.trim(),
       });
-      const referrer = source === "referral" ? selectedReferral : undefined;
+      const referrer = leadNeedsReferrer(source) ? selectedReferral : undefined;
       const returningNote = match
         ? match.job
           ? ` Returning client: ${match.contact.name}. ${match.previousStaffName || "Previous project manager"} ran ${match.job.code}. ${returningClientWhen(match)}.`
@@ -292,8 +287,8 @@ export function CreateOpportunityDialog({
       toast.error("Pick a seed.");
       return;
     }
-    if (source === "referral" && !referralId) {
-      toast.error("Search your contacts and connect the person who sent this lead.");
+    if (leadNeedsReferrer(source) && !referralId) {
+      toast.error("Choose the referral partner who sent this lead.");
       return;
     }
     const owner = assignee ?? crm.viewer;
@@ -466,7 +461,7 @@ export function CreateOpportunityDialog({
                 onValueChange={(value) => {
                   const next = String(value ?? "") as LeadSource | "";
                   setSource(next);
-                  if (next !== "referral") {
+                  if (!leadNeedsReferrer(next)) {
                     setReferralId("");
                     setReferralQuery("");
                   }
@@ -489,16 +484,16 @@ export function CreateOpportunityDialog({
               </Select>
             </Field>
 
-            {source === "referral" ? (
+            {leadNeedsReferrer(source) ? (
               <div className="grid gap-1.5">
-                <Label htmlFor="lead-referral">Referred by</Label>
+                <Label htmlFor="lead-referral">Who sent this referral</Label>
                 {selectedReferral ? (
                   <div className="flex items-center justify-between gap-2 border bg-muted/40 px-2.5 py-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{selectedReferral.name}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        {selectedReferral.title || "Contact"}
-                        {selectedReferral.isReferralPartner ? " · Referral partner" : ""}
+                        {selectedReferral.title || "Referral partner"}
+                        {selectedReferral.phone ? ` · ${formatPhone(selectedReferral.phone)}` : ""}
                       </p>
                     </div>
                     <Button
@@ -523,18 +518,18 @@ export function CreateOpportunityDialog({
                         id="lead-referral"
                         value={referralQuery}
                         onChange={(event) => setReferralQuery(event.target.value)}
-                        placeholder="Search contacts you can see..."
+                        placeholder="Search referral partners..."
                       />
                     </InputGroup>
-                    {crm.contacts.length === 0 ? (
+                    {referralPartnerCount === 0 ? (
                       <p className="text-xs text-muted-foreground">
-                        No contacts in this seat’s book. Team leads can Login As a project manager, or add the
-                        referrer as a contact first.
+                        No referral partners in the contact book yet. Add the realtor or partner as a contact
+                        and mark them as a Referral partner.
                       </p>
                     ) : referralMatches.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No matching contacts in your book.</p>
+                      <p className="text-xs text-muted-foreground">No matching referral partners.</p>
                     ) : (
-                      <ul className="max-h-40 divide-y overflow-y-auto border">
+                      <ul className="max-h-52 divide-y overflow-y-auto border">
                         {referralMatches.map((contact) => (
                           <li key={contact.id}>
                             <button
@@ -544,8 +539,7 @@ export function CreateOpportunityDialog({
                             >
                               <span className="text-sm font-medium">{contact.name}</span>
                               <span className="text-xs text-muted-foreground">
-                                {contact.title || "Contact"}
-                                {contact.isReferralPartner ? " · Referral partner" : ""}
+                                {contact.title || "Referral partner"}
                                 {contact.phone ? ` · ${formatPhone(contact.phone)}` : ""}
                               </span>
                             </button>
