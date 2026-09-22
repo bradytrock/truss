@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { TheRoofingCrmMark } from "@/components/brand";
 import { AuthWelcomePreview } from "@/components/welcome-screen";
 import { authErrorMessage } from "@/lib/auth-errors";
+import { PRODUCT_NAME } from "@/lib/product";
 import { createClient } from "@/lib/supabase/client";
 import { isWelcomePendingMetadata, queueFirstWelcome } from "@/lib/welcome";
 
@@ -95,7 +96,13 @@ function LoginForm() {
         <div className="flex w-full max-w-[22rem] flex-col items-center">
           <TheRoofingCrmMark className="auth-fade size-7 text-[#c8102e]" />
           <p
-            className="auth-rise font-script mt-4 text-center text-[2.35rem] leading-none text-white"
+            className="auth-rise font-heading mt-4 text-center text-[1.15rem] font-medium tracking-tight text-white"
+            style={{ animationDelay: "50ms" }}
+          >
+            {PRODUCT_NAME}
+          </p>
+          <p
+            className="auth-rise font-script mt-3 text-center text-[2.35rem] leading-none text-white"
             style={{ animationDelay: "90ms" }}
           >
             Where Legacy Gets Built
