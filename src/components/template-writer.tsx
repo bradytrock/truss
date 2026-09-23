@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Copy, Plus, Trash2 } from "lucide-react";
+import { EstimateAddLine } from "@/components/estimate-add-line";
 import {
   AdjustmentFields,
   CommitInput,
@@ -383,35 +384,12 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
                     </span>
                   ) : null}
                 </div>
-                <div className="flex flex-wrap gap-1">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setBookGroup(group.name);
-                      setBookOpen(true);
-                    }}
-                  >
-                    Add to section
+                {packageForGroup(group.name) ? (
+                  <Button size="sm" variant="ghost" onClick={() => void buildOptionFrom(group)}>
+                    <Copy />
+                    Build another option
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      void crm.addCustomTemplateLine(template.id, group.name, {
-                        package: packageForGroup(group.name),
-                      })
-                    }
-                  >
-                    Custom item
-                  </Button>
-                  {packageForGroup(group.name) ? (
-                    <Button size="sm" variant="ghost" onClick={() => void buildOptionFrom(group)}>
-                      <Copy />
-                      Build another option
-                    </Button>
-                  ) : null}
-                </div>
+                ) : null}
               </div>
               {group.lines.length === 0 ? (
                 <p className="border border-dashed px-3 py-4 text-sm text-muted-foreground">
@@ -432,6 +410,24 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
                   />
                 ))
               )}
+              <EstimateAddLine
+                onPickCatalog={async (id) => {
+                  await crm.addTemplateLinesFromCatalog(template.id, [id], group.name, {
+                    package: packageForGroup(group.name),
+                  });
+                  toast.success("Added 1 item.");
+                }}
+                onCustom={async (title) => {
+                  await crm.addCustomTemplateLine(template.id, group.name, {
+                    package: packageForGroup(group.name),
+                    title,
+                  });
+                }}
+                onBrowse={() => {
+                  setBookGroup(group.name);
+                  setBookOpen(true);
+                }}
+              />
             </section>
           ))
         )}

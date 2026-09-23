@@ -10,10 +10,10 @@ import {
   ChevronDown,
   Copy,
   Download,
-  Plus,
   Trash2,
 } from "lucide-react";
 import { FormattedTextEditor } from "@/components/formatted-text-editor";
+import { EstimateAddLine } from "@/components/estimate-add-line";
 import { EstimateLinePhotos } from "@/components/estimate-line-photos";
 import { EstimateFilesPanel } from "@/components/estimate-files";
 import { BackToJobButton } from "@/components/back-to-job";
@@ -22,7 +22,7 @@ import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { CollectSignatureDialog } from "@/components/signature-pad";
 import { shareContactsForEstimate, coOwnerContact, jobHomeownersForEstimate } from "@/lib/parties";
 import { EstimateStatusBadge } from "@/components/status-badge";
-import { PaperArchiveButton, PaperArchivedBanner } from "@/components/paper-archive-button";
+import { PaperArchivedBanner } from "@/components/paper-archive-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -123,6 +123,7 @@ import { formatJobSite } from "@/lib/leads";
 import { proposalScopeSummary } from "@/lib/proposal-email";
 import { proposalShareSummary } from "@/lib/proposal-summary";
 import { jobPaperHref } from "@/lib/job-record";
+import { archiveStamp } from "@/lib/paper-archive";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine, type JobPhoto } from "@/lib/types";
 import { canGenerateSignatureCertificate, canManageSettings } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
@@ -377,6 +378,9 @@ export function LineCard({
     showQuantityFormula && measurementKeys.length > 0
       ? previewCoverageQuantity({ measurementKeys, coverageAmount, coverageUnit })
       : null;
+  const [detailsOpen, setDetailsOpen] = useState(Boolean(showQuantityFormula));
+  const notePreview = line.description.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const photoCount = line.photoIds?.length || line.photos?.length || 0;
 
   function toggleMeasurementKey(key: string, checked: boolean) {
     const next = checked
@@ -391,39 +395,86 @@ export function LineCard({
     });
   }
 
+  const qtyFields = (
+    <>
+      <CommitInput
+        type="number"
+        min={0}
+        step="0.01"
+        disabled={!editable}
+        aria-label="Quantity"
+        className="h-8 w-[4.5rem]"
+        value={line.quantity}
+        onCommit={(value) => onPatch({ quantity: Number(value) || 0 })}
+      />
+      {editable ? (
+        <Select
+          value={line.unit}
+          onValueChange={(value) => onPatch({ unit: String(value ?? line.unit) })}
+          items={units.map((unit) => ({ value: unit, label: unit }))}
+        >
+          <SelectTrigger size="sm" className="w-[4.75rem]" aria-label="Unit">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {units.map((unit) => (
+              <SelectItem key={unit} value={unit}>
+                {unit}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : (
+        <p className="w-[4.75rem] text-sm">{line.unit}</p>
+      )}
+      <CommitInput
+        type="number"
+        min={0}
+        step="0.01"
+        disabled={!editable}
+        aria-label="Unit price"
+        className="h-8 w-[6.5rem] text-right"
+        value={line.unitCost}
+        onCommit={(value) => onPatch({ unitCost: Number(value) || 0 })}
+      />
+    </>
+  );
+
   return (
     <div
       className={cn(
-        "rounded-md border bg-card p-3",
+        "rounded-md border bg-card",
         line.optional && !line.selected && "border-dashed"
       )}
     >
-      <div className="flex items-start gap-2">
-        <div className="grid min-w-0 flex-1 gap-2">
-          <CommitInput
-            value={line.title}
-            disabled={!editable}
-            placeholder="Title"
-            onCommit={(value) => onPatch({ title: value })}
-          />
-          <FormattedTextEditor
-            value={line.description}
-            disabled={!editable}
-            placeholder="What the homeowner sees under the title"
-            onCommit={(value) => onPatch({ description: value })}
-          />
-        </div>
+      <div className="flex items-center gap-1.5 px-2 py-1.5 sm:gap-2">
+        <Button
+          type="button"
+          size="icon-xs"
+          variant="ghost"
+          aria-expanded={detailsOpen}
+          aria-label={detailsOpen ? "Hide line details" : "Show line details"}
+          onClick={() => setDetailsOpen((value) => !value)}
+        >
+          <ChevronDown className={cn("transition-transform", detailsOpen && "rotate-180")} />
+        </Button>
+        <CommitInput
+          value={line.title}
+          disabled={!editable}
+          placeholder="Title"
+          className="h-8 min-w-0 flex-1 border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
+          onCommit={(value) => onPatch({ title: value })}
+        />
+        <div className="hidden items-center gap-1.5 sm:flex">{qtyFields}</div>
+        <p className="w-[5.5rem] shrink-0 text-right text-sm font-medium tabular-nums">
+          {formatMoney(lineAmount(line))}
+        </p>
         {editable ? (
-          <div className="flex flex-col gap-1">
+          <div className="flex shrink-0">
             <Button size="icon-xs" variant="ghost" aria-label="Move up" onClick={() => onMove("up")}>
               <ArrowUp />
             </Button>
-            <Button
-              size="icon-xs"
-              variant="ghost"
-              aria-label="Move down"
-              onClick={() => onMove("down")}
-            >
+            <Button size="icon-xs" variant="ghost" aria-label="Move down" onClick={() => onMove("down")}>
               <ArrowDown />
             </Button>
             <Button size="icon-xs" variant="ghost" aria-label="Remove line" onClick={onRemove}>
@@ -432,61 +483,23 @@ export function LineCard({
           </div>
         ) : null}
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <div>
-          <Label className="text-xs text-muted-foreground">Qty</Label>
-          <CommitInput
-            type="number"
-            min={0}
-            step="0.01"
-            disabled={!editable}
-            value={line.quantity}
-            onCommit={(value) => onPatch({ quantity: Number(value) || 0 })}
-          />
-        </div>
-        <div>
-          <Label className="text-xs text-muted-foreground">Unit</Label>
-          {editable ? (
-            <Select
-              value={line.unit}
-              onValueChange={(value) => onPatch({ unit: String(value ?? line.unit) })}
-              items={units.map((unit) => ({ value: unit, label: unit }))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {units.map((unit) => (
-                  <SelectItem key={unit} value={unit}>
-                    {unit}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <p className="mt-1 text-sm">{line.unit}</p>
-          )}
-        </div>
-        <div>
-          <Label className="text-xs text-muted-foreground">Unit price</Label>
-          <CommitInput
-            type="number"
-            min={0}
-            step="0.01"
-            disabled={!editable}
-            className="text-right"
-            value={line.unitCost}
-            onCommit={(value) => onPatch({ unitCost: Number(value) || 0 })}
-          />
-        </div>
-        <div>
-          <Label className="text-xs text-muted-foreground">Amount</Label>
-          <p className="mt-1.5 text-right text-sm font-medium tabular-nums">
-            {formatMoney(lineAmount(line))}
-          </p>
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-4 text-sm">
+      <div className="flex items-center gap-1.5 px-3 pb-2 sm:hidden">{qtyFields}</div>
+      {!detailsOpen && (notePreview || line.optional || photoCount) ? (
+        <p className="text-muted-foreground truncate px-9 pb-2 text-xs">
+          {line.optional ? (line.selected ? "Optional · in total" : "Optional · off") : null}
+          {line.optional && (notePreview || photoCount) ? " · " : ""}
+          {notePreview || (photoCount ? `${photoCount} photo${photoCount === 1 ? "" : "s"}` : "")}
+        </p>
+      ) : null}
+      {detailsOpen ? (
+      <div className="space-y-3 border-t px-3 py-3">
+      <FormattedTextEditor
+        value={line.description}
+        disabled={!editable}
+        placeholder="What the homeowner sees under the title"
+        onCommit={(value) => onPatch({ description: value })}
+      />
+      <div className="flex flex-wrap gap-4 text-sm">
         <label className="flex items-center gap-2">
           <Checkbox
             checked={line.optional}
@@ -700,6 +713,8 @@ export function LineCard({
           onChange={editable ? onPhotosChange : undefined}
         />
       ) : null}
+      </div>
+      ) : null}
     </div>
   );
 }
@@ -723,6 +738,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [signOpen, setSignOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const lines = linesForEstimate(crm.estimateLines, estimate.id);
   const previewLines = useMemo(
@@ -888,10 +904,6 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     companySignature: crm.company.defaultEmailSignature,
   });
 
-  function lastGroup() {
-    return pendingSections.at(-1) || groups.at(-1)?.name;
-  }
-
   function packageForGroup(name?: string) {
     if (!name) return "";
     return optionKeyForGroup(name, lines, emptyOptions);
@@ -1025,72 +1037,73 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   }
 
   const actions = (
-    <div className="flex flex-wrap gap-2">
-      <Button variant="outline" disabled={pending || lines.length === 0} onClick={() => void downloadPdf()}>
-        <Download />
-        PDF
-      </Button>
+    <div className="flex flex-wrap items-center gap-2">
       {estimate.status === "draft" ? (
         <Button disabled={pending || totals.includedCount === 0} onClick={() => void openShare(true)}>
           Send for signature
+        </Button>
+      ) : estimate.status === "declined" && !relatedInvoice ? (
+        <Button disabled={pending} onClick={() => void handleReopen()}>
+          Edit and send again
+        </Button>
+      ) : canConvert ? (
+        <Button disabled={pending} onClick={() => void handleConvert()}>
+          Convert to invoice
         </Button>
       ) : (
         <Button variant="outline" disabled={pending} onClick={() => void openShare(false)}>
           Share
         </Button>
       )}
-      {estimate.status === "draft" ||
-      estimate.status === "sent" ||
-      estimate.status === "viewed" ||
-      (estimate.status === "accepted" && !hasEstimateSignature(estimate)) ? (
-        <Button
-          disabled={pending || totals.includedCount === 0}
-          onClick={() => setSignOpen(true)}
-        >
-          {estimate.status === "accepted" ? "Add signature" : "Collect signature"}
-        </Button>
-      ) : null}
-      {estimate.status === "sent" || estimate.status === "viewed" ? (
-        <Button
-          variant="outline"
-          onClick={() => {
-            void crm.declineEstimate(estimate.id);
-            toast.message("Marked declined.");
-          }}
-        >
-          Decline
-        </Button>
-      ) : null}
-      {estimate.status === "declined" && !relatedInvoice ? (
-        <Button disabled={pending} onClick={() => void handleReopen()}>
-          Edit and send again
-        </Button>
-      ) : null}
-      {canConvert ? (
-        <Button disabled={pending} variant={estimate.status === "accepted" ? "default" : "outline"} onClick={() => void handleConvert()}>
-          Convert to invoice
-        </Button>
-      ) : null}
-      {relatedInvoice ? (
-        <Button nativeButton={false} variant="outline" render={<Link href={`/invoices/${relatedInvoice.id}`} />}>
-          Open {relatedInvoice.number}
-        </Button>
-      ) : null}
-      <PaperArchiveButton
-        archivedAt={estimate.archivedAt}
-        label={estimate.number}
-        pending={pending}
-        onChange={(archivedAt) => crm.updateEstimate(estimate.id, { archivedAt })}
-      />
       <DropdownMenu>
         <DropdownMenuTrigger render={<Button variant="outline" />}>
           More
           <ChevronDown />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem disabled={pending || lines.length === 0} onClick={() => void downloadPdf()}>
+            <Download />
+            Download PDF
+          </DropdownMenuItem>
+          {estimate.status === "draft" ||
+          estimate.status === "sent" ||
+          estimate.status === "viewed" ||
+          (estimate.status === "accepted" && !hasEstimateSignature(estimate)) ? (
+            <DropdownMenuItem
+              disabled={pending || totals.includedCount === 0}
+              onClick={() => setSignOpen(true)}
+            >
+              {estimate.status === "accepted" ? "Add signature" : "Collect signature"}
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem disabled={pending} onClick={() => void openShare(false)}>
             Share link
           </DropdownMenuItem>
+          {estimate.status === "sent" || estimate.status === "viewed" ? (
+            <DropdownMenuItem
+              onClick={() => {
+                void crm.declineEstimate(estimate.id);
+                toast.message("Marked declined.");
+              }}
+            >
+              Decline
+            </DropdownMenuItem>
+          ) : null}
+          {estimate.status === "declined" && !relatedInvoice ? (
+            <DropdownMenuItem disabled={pending} onClick={() => void handleReopen()}>
+              Edit and send again
+            </DropdownMenuItem>
+          ) : null}
+          {canConvert ? (
+            <DropdownMenuItem disabled={pending} onClick={() => void handleConvert()}>
+              Convert to invoice
+            </DropdownMenuItem>
+          ) : null}
+          {relatedInvoice ? (
+            <DropdownMenuItem onClick={() => router.push(`/invoices/${relatedInvoice.id}`)}>
+              Open {relatedInvoice.number}
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuItem
             onClick={() => {
               void crm.duplicateEstimate(estimate.id).then((copy) => {
@@ -1110,6 +1123,27 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           >
             Save as template
           </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={pending}
+            onClick={() => {
+              if (estimate.archivedAt) {
+                void crm.updateEstimate(estimate.id, { archivedAt: null });
+                toast.success(`${estimate.number} is back on the job.`);
+                return;
+              }
+              if (
+                !window.confirm(
+                  `Archive ${estimate.number}? It leaves this job’s Paper list. You can restore it later.`,
+                )
+              ) {
+                return;
+              }
+              void crm.updateEstimate(estimate.id, { archivedAt: archiveStamp() });
+              toast.success(`${estimate.number} is archived.`);
+            }}
+          >
+            {estimate.archivedAt ? "Restore" : "Archive"}
+          </DropdownMenuItem>
           {canGenerateSignatureCertificate(crm.viewer) ? (
             <DropdownMenuItem disabled={pending} onClick={() => void downloadSignatureCertificate()}>
               Generate Signature Certificate
@@ -1122,9 +1156,170 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
 
   const writer = (
     <div className="space-y-4">
+      {gbb && estimateOptions.length > 0 ? (
+        <PackagePicker
+          estimate={estimate}
+          lines={lines}
+          pending={emptyOptions}
+          locked={!editable && !optionalOpen}
+          onSelect={(pkg) => void crm.updateEstimate(estimate.id, { selectedPackage: pkg })}
+        />
+      ) : null}
+
+      <div className="space-y-4">
+        {editable ? (
+          <form
+            className="flex flex-col gap-2 sm:flex-row sm:items-center"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const name = sectionName.trim() || "New section";
+              if (!displayGroups.some((group) => group.name === name)) {
+                setEmptySections((prev) => [...prev, name]);
+              }
+              setSectionName("");
+              setBookGroup(name);
+            }}
+          >
+            <Input
+              value={sectionName}
+              onChange={(event) => setSectionName(event.target.value)}
+              placeholder="New section — Roof, Allowances"
+              className="h-8 max-w-xs"
+            />
+            <Button type="submit" size="sm" variant="ghost">
+              Add section
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={addOptionSection}>
+              Add option
+            </Button>
+          </form>
+        ) : null}
+
+        {displayGroups.length === 0 ? (
+          <div className="border border-dashed px-4 py-8">
+            <p className="font-medium">No lines yet</p>
+            <p className="mt-1 max-w-md text-sm text-muted-foreground">
+              Search the price book or type a custom item. Optional work stays out of the total until you include it.
+            </p>
+            {editable ? (
+              <div className="mt-4 max-w-lg">
+                <EstimateAddLine
+                  onPickCatalog={async (id) => {
+                    const added = await crm.addEstimateLinesFromCatalog(estimate.id, [id]);
+                    if (added[0]) toast.success(`Added ${added[0].title}.`);
+                  }}
+                  onCustom={async (title) => {
+                    await crm.addCustomEstimateLine(estimate.id, undefined, { title });
+                  }}
+                  onBrowse={() => {
+                    setBookGroup(undefined);
+                    setBookOpen(true);
+                  }}
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          displayGroups.map((group) => (
+            <section key={group.name} className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 flex-1 items-center gap-2">
+                  <CommitInput
+                    className="h-8 max-w-xs font-medium"
+                    disabled={!editable}
+                    value={group.name}
+                    onCommit={(value) => {
+                      const next = value.trim() || "Items";
+                      if (next === group.name) return;
+                      for (const line of group.lines) {
+                        void crm.updateEstimateLine(line.id, { groupName: next });
+                      }
+                      setEmptySections((prev) =>
+                        prev.map((name) => (name === group.name ? next : name)).filter((name, index, all) => all.indexOf(name) === index),
+                      );
+                      setEmptyOptions((prev) =>
+                        prev.map((item) => (item.name === group.name ? { ...item, name: next } : item)),
+                      );
+                    }}
+                  />
+                  {packageForGroup(group.name) ? (
+                    <span className="rounded-full bg-[#e7effb] px-2.5 py-0.5 text-xs font-medium text-[#13295b]">
+                      Option
+                    </span>
+                  ) : null}
+                </div>
+                {editable && packageForGroup(group.name) ? (
+                  <Button size="sm" variant="ghost" onClick={() => void buildOptionFrom(group)}>
+                    <Copy />
+                    Build another option
+                  </Button>
+                ) : null}
+              </div>
+              {group.lines.length === 0 ? (
+                <p className="border border-dashed px-3 py-3 text-sm text-muted-foreground">
+                  No items in this section yet.
+                </p>
+              ) : (
+                group.lines.map((line) => (
+                  <LineCard
+                    key={line.id}
+                    line={line}
+                    editable={editable}
+                    showTax={!residential}
+                    showPackage={gbb && groupHasMixedPackages(group.lines)}
+                    galleryPhotos={jobPhotos}
+                    galleryHint={galleryHint}
+                    onPhotosChange={(photoIds) => void crm.updateEstimateLine(line.id, { photoIds })}
+                    onPatch={(patch) => void crm.updateEstimateLine(line.id, patch)}
+                    onMove={(direction) => void crm.reorderEstimateLine(line.id, direction)}
+                    onRemove={() => void crm.removeEstimateLine(line.id)}
+                  />
+                ))
+              )}
+              {editable ? (
+                <EstimateAddLine
+                  onPickCatalog={async (id) => {
+                    const added = await crm.addEstimateLinesFromCatalog(estimate.id, [id], group.name, {
+                      package: packageForGroup(group.name),
+                    });
+                    if (added[0]) toast.success(`Added ${added[0].title}.`);
+                  }}
+                  onCustom={async (title) => {
+                    await crm.addCustomEstimateLine(estimate.id, group.name, {
+                      package: packageForGroup(group.name),
+                      title,
+                    });
+                  }}
+                  onBrowse={() => {
+                    setBookGroup(group.name);
+                    setBookOpen(true);
+                  }}
+                />
+              ) : null}
+            </section>
+          ))
+        )}
+      </div>
+
+      <div>
+        <Button
+          type="button"
+          variant="ghost"
+          className="text-muted-foreground"
+          onClick={() => setDetailsOpen((value) => !value)}
+        >
+          <ChevronDown className={cn("transition-transform", detailsOpen && "rotate-180")} />
+          {detailsOpen ? "Hide details" : "Details"}
+          <span className="font-normal">
+            · cover note, tax, contract, notes
+          </span>
+        </Button>
+      </div>
+      {detailsOpen ? (
+      <div className="space-y-4">
       <Card>
         <CardHeader className="border-b">
-          <CardTitle>Proposal details</CardTitle>
+          <CardTitle>Proposal</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -1190,225 +1385,19 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                 "—"
               )}
             </p>
-            {!job ? (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Homeowner, co-owner, and job site come from the job once this proposal is attached.
-              </p>
-            ) : (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Homeowner, co-owner, and job site pull from this job.
-              </p>
-            )}
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle>Cover note</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <CommitTextarea
-            rows={3}
-            disabled={!editable}
-            value={estimate.intro}
-            placeholder="What this proposal covers, in the homeowner’s language."
-            onCommit={(value) => void crm.updateEstimate(estimate.id, { intro: value })}
-          />
-        </CardContent>
-      </Card>
-
-      {gbb && estimateOptions.length > 0 ? (
-        <Card>
-          <CardHeader className="border-b">
-            <CardTitle>Options</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              Shared sections sit on every option. Put the work that changes in each option section — those
-              items become the bullets on the homeowner cards. Options replace each other; they do not stack.
-            </p>
-            <PackagePicker
-              estimate={estimate}
-              lines={lines}
-              pending={emptyOptions}
-              locked={!editable && !optionalOpen}
-              onSelect={(pkg) => void crm.updateEstimate(estimate.id, { selectedPackage: pkg })}
+          <div className="sm:col-span-2">
+            <Label>Cover note</Label>
+            <CommitTextarea
+              rows={3}
+              disabled={!editable}
+              value={estimate.intro}
+              placeholder="What this proposal covers, in the homeowner’s language."
+              onCommit={(value) => void crm.updateEstimate(estimate.id, { intro: value })}
             />
-          </CardContent>
-        </Card>
-      ) : null}
-
-      <div className="space-y-4">
-        {editable ? (
-          <div className="space-y-2">
-            <h2 className="font-heading text-lg font-medium">Sections</h2>
-            <form
-              className="flex flex-col gap-2 sm:flex-row"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const name = sectionName.trim() || "New section";
-                if (!displayGroups.some((group) => group.name === name)) {
-                  setEmptySections((prev) => [...prev, name]);
-                }
-                setSectionName("");
-                setBookGroup(name);
-              }}
-            >
-              <Input
-                value={sectionName}
-                onChange={(event) => setSectionName(event.target.value)}
-                placeholder="New section name — Demo, Roof, Allowances"
-              />
-              <Button type="submit" variant="outline">
-                Add section
-              </Button>
-              <Button type="button" variant="outline" onClick={addOptionSection}>
-                Add option
-              </Button>
-            </form>
-            <p className="text-xs text-muted-foreground">
-              Shared sections (tear-off, dumpster) stay on every option. Add an option, put the work that
-              changes in that section, then build the next option off it.
-            </p>
           </div>
-        ) : null}
-
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="font-heading text-lg font-medium">Line items</h2>
-          {editable ? (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setBookGroup(lastGroup());
-                  setBookOpen(true);
-                }}
-              >
-                <Plus />
-                Price book
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() =>
-                  void crm.addCustomEstimateLine(estimate.id, lastGroup(), {
-                    package: packageForGroup(lastGroup()),
-                  })
-                }
-              >
-                Custom item
-              </Button>
-            </div>
-          ) : null}
-        </div>
-
-        {displayGroups.length === 0 ? (
-          <div className="border border-dashed px-4 py-8">
-            <p className="font-medium">No lines yet</p>
-            <p className="mt-1 max-w-md text-sm text-muted-foreground">
-              Add a section above, then pull items from the price book or add a lump-sum line.
-              Optional work stays out of the total until you check it.
-            </p>
-            {editable ? (
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => setBookOpen(true)}>
-                  Add from price book
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => void crm.addCustomEstimateLine(estimate.id)}>
-                  Custom item
-                </Button>
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          displayGroups.map((group) => (
-            <section key={group.name} className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 flex-1 items-center gap-2">
-                  <CommitInput
-                    className="h-8 max-w-xs font-medium"
-                    disabled={!editable}
-                    value={group.name}
-                    onCommit={(value) => {
-                      const next = value.trim() || "Items";
-                      if (next === group.name) return;
-                      for (const line of group.lines) {
-                        void crm.updateEstimateLine(line.id, { groupName: next });
-                      }
-                      setEmptySections((prev) =>
-                        prev.map((name) => (name === group.name ? next : name)).filter((name, index, all) => all.indexOf(name) === index),
-                      );
-                      setEmptyOptions((prev) =>
-                        prev.map((item) => (item.name === group.name ? { ...item, name: next } : item)),
-                      );
-                    }}
-                  />
-                  {packageForGroup(group.name) ? (
-                    <span className="rounded-full bg-[#e7effb] px-2.5 py-0.5 text-xs font-medium text-[#13295b]">
-                      Option
-                    </span>
-                  ) : null}
-                </div>
-                {editable ? (
-                  <div className="flex flex-wrap gap-1">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => {
-                        setBookGroup(group.name);
-                        setBookOpen(true);
-                      }}
-                    >
-                      Add to section
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        void crm.addCustomEstimateLine(estimate.id, group.name, {
-                          package: packageForGroup(group.name),
-                        })
-                      }
-                    >
-                      Custom item
-                    </Button>
-                    {packageForGroup(group.name) ? (
-                      <Button size="sm" variant="ghost" onClick={() => void buildOptionFrom(group)}>
-                        <Copy />
-                        Build another option
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-              {group.lines.length === 0 ? (
-                <p className="border border-dashed px-3 py-4 text-sm text-muted-foreground">
-                  No items in this section yet. Add from the price book or a custom line.
-                </p>
-              ) : (
-                group.lines.map((line) => (
-                  <LineCard
-                    key={line.id}
-                    line={line}
-                    editable={editable}
-                    showTax={!residential}
-                    showPackage={gbb && groupHasMixedPackages(group.lines)}
-                    galleryPhotos={jobPhotos}
-                    galleryHint={galleryHint}
-                    onPhotosChange={(photoIds) => void crm.updateEstimateLine(line.id, { photoIds })}
-                    onPatch={(patch) => void crm.updateEstimateLine(line.id, patch)}
-                    onMove={(direction) => void crm.reorderEstimateLine(line.id, direction)}
-                    onRemove={() => void crm.removeEstimateLine(line.id)}
-                  />
-                ))
-              )}
-            </section>
-          ))
-        )}
-      </div>
-
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader className="border-b">
           <CardTitle>Tax, discount, deposit & pricing</CardTitle>
@@ -1429,15 +1418,6 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                 ? "Residential work is not taxed."
                 : "Applied only to taxable included lines, after discount."}
             </p>
-          </div>
-          <div>
-            <Label>Valid until</Label>
-            <CommitInput
-              type="date"
-              disabled={!editable}
-              value={estimate.validUntil ?? ""}
-              onCommit={(value) => void crm.updateEstimate(estimate.id, { validUntil: value || null })}
-            />
           </div>
           <AdjustmentFields
             label="Discount"
@@ -1604,6 +1584,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           />
         </CardContent>
       </Card>
+      </div>
+      ) : null}
     </div>
   );
 
@@ -1698,27 +1680,18 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         <p className="font-heading text-xl font-medium tabular-nums">{formatMoney(totals.total)}</p>
       </div>
 
-      <div className="xl:hidden">
-        <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
-            <TabsTrigger value="write">Write</TabsTrigger>
-            <TabsTrigger value="preview">Preview</TabsTrigger>
-          </TabsList>
-          <TabsContent value="write" className="mt-4">
-            {writer}
-          </TabsContent>
-          <TabsContent value="preview" className="mt-4">
-            {preview}
-          </TabsContent>
-        </Tabs>
-      </div>
-
-      <div className="hidden gap-6 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(22rem,28rem)] xl:items-start">
-        {writer}
-        <div className="xl:sticky xl:top-4 xl:max-h-[calc(100dvh-1.5rem)] xl:overflow-y-auto">
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList>
+          <TabsTrigger value="write">Write</TabsTrigger>
+          <TabsTrigger value="preview">Preview</TabsTrigger>
+        </TabsList>
+        <TabsContent value="write" className="mt-4">
+          {writer}
+        </TabsContent>
+        <TabsContent value="preview" className="mt-4">
           {preview}
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
 
       <PriceBookSheet
         open={bookOpen}

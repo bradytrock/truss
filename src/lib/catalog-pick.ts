@@ -25,3 +25,19 @@ export function addItemsLabel(count: number) {
   if (count === 1) return "Add 1 item";
   return `Add ${count} items`;
 }
+
+/** Typeahead matches for the estimate add row. Empty query returns the first page of the book. */
+export function catalogItemsMatchingQuery<
+  T extends { name: string; costCode?: string; description?: string },
+>(items: T[], query: string, limit = 8) {
+  const q = query.trim().toLowerCase();
+  const matched = q
+    ? items.filter((item) => {
+        const name = item.name.toLowerCase();
+        const code = (item.costCode ?? "").toLowerCase();
+        const description = (item.description ?? "").toLowerCase();
+        return name.includes(q) || code.includes(q) || description.includes(q);
+      })
+    : items;
+  return matched.slice(0, Math.max(0, limit));
+}
