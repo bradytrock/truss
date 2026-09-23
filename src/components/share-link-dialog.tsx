@@ -57,6 +57,7 @@ export function ShareLinkDialog({
   scopeSummary,
   summaryLines,
   summaryTotal,
+  summaryOptions,
   companyWebsite,
   companyPhone,
   companyStreet,
@@ -90,6 +91,15 @@ export function ShareLinkDialog({
   scopeSummary?: string;
   summaryLines?: Array<{ label: string; amount: number | null }>;
   summaryTotal?: number | null;
+  summaryOptions?: Array<{
+    name: string;
+    total: number;
+    selected?: boolean;
+    recommended?: boolean;
+    highlights?: string[];
+    delta?: number | null;
+    vs?: string | null;
+  }>;
   companyWebsite?: string;
   companyPhone?: string;
   companyStreet?: string;
@@ -376,6 +386,7 @@ export function ShareLinkDialog({
           scope: scopeSummary || "",
           summaryLines,
           summaryTotal,
+          summaryOptions,
           companyWebsite: companyWebsite || "",
           companyPhone: companyPhone || "",
           companyStreet: companyStreet || "",

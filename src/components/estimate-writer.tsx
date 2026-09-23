@@ -1225,8 +1225,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Shared sections sit on every option. Each option section is a fork the homeowner can pick.
-              Options replace each other — they do not stack.
+              Shared sections sit on every option. Put the work that changes in each option section — those
+              items become the bullets on the homeowner cards. Options replace each other; they do not stack.
             </p>
             <PackagePicker
               estimate={estimate}
@@ -1756,6 +1756,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         validUntil={estimate.validUntil}
         summaryLines={shareSummary.lines}
         summaryTotal={shareSummary.total}
+        summaryOptions={shareSummary.options}
         scopeSummary={proposalScopeSummary({
           projectType: job?.projectType || opportunity?.projectType,
           packageMode: estimate.packageMode,

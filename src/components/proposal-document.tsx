@@ -16,7 +16,15 @@ import {
   lineIncluded,
   toClientFacingProposal,
 } from "@/lib/estimate-totals";
-import { isGbbEstimate, scopedEstimateLines, type EstimatePackage } from "@/lib/estimate-packages";
+import {
+  isGbbEstimate,
+  listEstimateOptions,
+  resolveSelectedPackage,
+  scopedEstimateLines,
+  sharedPackageLines,
+  uniquePackageLines,
+  type EstimatePackage,
+} from "@/lib/estimate-packages";
 import { formatDate, formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
 import { isSignaturePng } from "@/lib/estimate-signature";
@@ -88,6 +96,89 @@ export function EstimateTotals({
         </p>
       ) : null}
     </dl>
+  );
+}
+
+function gbbReceiptSections(
+  lines: EstimateLine[],
+  estimate: Pick<Estimate, "packageMode" | "selectedPackage">,
+) {
+  const selected = resolveSelectedPackage(estimate, lines);
+  const optionName = listEstimateOptions(lines).find((item) => item.key === selected)?.name;
+  const shared = sharedPackageLines(lines);
+  const unique = uniquePackageLines(lines, selected);
+  const sections: Array<{ name: string; lines: EstimateLine[] }> = [];
+  if (shared.length) {
+    sections.push({
+      name: unique.length ? "Included in every option" : "",
+      lines: shared,
+    });
+  }
+  if (unique.length) {
+    sections.push({
+      name: optionName ? `This option adds · ${optionName}` : "This option adds",
+      lines: unique,
+    });
+  }
+  return sections;
+}
+
+function ProposalLineList({
+  lines,
+  estimate,
+  selectable,
+  onToggleOptional,
+  photos,
+}: {
+  lines: EstimateLine[];
+  estimate: Estimate;
+  selectable?: boolean;
+  onToggleOptional?: (line: EstimateLine, selected: boolean) => void;
+  photos: JobPhoto[];
+}) {
+  return (
+    <ul className="divide-y">
+      {lines.map((line) => {
+        const included = lineIncluded(line);
+        return (
+          <li
+            key={line.id}
+            className={cn(
+              "flex items-start justify-between gap-4 py-3.5",
+              !included && "opacity-70",
+            )}
+          >
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                {line.optional && selectable && onToggleOptional ? (
+                  <Checkbox
+                    checked={line.selected}
+                    onCheckedChange={(value) => onToggleOptional(line, Boolean(value))}
+                    aria-label={`Include ${lineHeading(line)}`}
+                  />
+                ) : null}
+                <p className="text-[15px] leading-6">{proposalLineSummary(line)}</p>
+                {line.optional ? (
+                  <Badge variant="secondary">{included ? "Selected" : "Optional"}</Badge>
+                ) : null}
+              </div>
+              {shouldShowLineDescription(line) ? (
+                <FormattedLineText
+                  text={line.description}
+                  className="mt-0.5 text-sm text-muted-foreground"
+                />
+              ) : null}
+              <ProposalLinePhotos line={line} gallery={photos} />
+            </div>
+            {estimate.hideLinePrices ? null : (
+              <p className={cn("shrink-0 text-[15px] tabular-nums leading-6", !included && "line-through")}>
+                {formatMoney(lineAmount(line))}
+              </p>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -198,63 +289,35 @@ export function ProposalDocument({
             onSelect={onSelectPackage}
           />
           <p className="text-xs text-muted-foreground">
-            Pick one option. The items below are that option plus the shared work. Options do not stack.
+            Pick one option. Shared work is on every option. Cards list what changes. Options replace each other;
+            they do not stack.
           </p>
         </div>
       ) : null}
-      {groups.length === 0 ? (
+      {visibleLines.length === 0 ? (
         <p className="text-sm text-muted-foreground">No line items on this proposal yet.</p>
       ) : (
         <div className="space-y-5">
-          {groups.map((group) => (
-            <section key={group.name}>
-              {groups.length > 1 ? (
+          {(isGbbEstimate(estimate)
+            ? gbbReceiptSections(visibleLines, billed.estimate)
+            : groups.map((group) => ({
+                name: groups.length > 1 ? group.name : "",
+                lines: group.lines,
+              }))
+          ).map((section) => (
+            <section key={section.name || "items"}>
+              {section.name ? (
                 <h3 className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">
-                  {group.name}
+                  {section.name}
                 </h3>
               ) : null}
-              <ul className="divide-y">
-                {group.lines.map((line) => {
-                  const included = lineIncluded(line);
-                  return (
-                    <li
-                      key={line.id}
-                      className={cn(
-                        "flex items-start justify-between gap-4 py-3.5",
-                        !included && "opacity-70"
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {line.optional && selectable && onToggleOptional ? (
-                            <Checkbox
-                              checked={line.selected}
-                              onCheckedChange={(value) => onToggleOptional(line, Boolean(value))}
-                              aria-label={`Include ${lineHeading(line)}`}
-                            />
-                          ) : null}
-                          <p className="text-[15px] leading-6">{proposalLineSummary(line)}</p>
-                          {line.optional ? (
-                            <Badge variant="secondary">{included ? "Selected" : "Optional"}</Badge>
-                          ) : null}
-                        </div>
-                        {shouldShowLineDescription(line) ? (
-                          <FormattedLineText
-                            text={line.description}
-                            className="mt-0.5 text-sm text-muted-foreground"
-                          />
-                        ) : null}
-                        <ProposalLinePhotos line={line} gallery={photos ?? crm?.photos ?? []} />
-                      </div>
-                      {estimate.hideLinePrices ? null : (
-                        <p className={cn("shrink-0 text-[15px] tabular-nums leading-6", !included && "line-through")}>
-                          {formatMoney(lineAmount(line))}
-                        </p>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+              <ProposalLineList
+                lines={section.lines}
+                estimate={estimate}
+                selectable={selectable}
+                onToggleOptional={onToggleOptional}
+                photos={photos ?? crm?.photos ?? []}
+              />
             </section>
           ))}
         </div>

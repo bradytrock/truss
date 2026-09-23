@@ -85,6 +85,15 @@ export type ProposalEmailInput = {
   companyPostalCode?: string;
   summaryLines?: Array<{ label: string; amount: number | null }>;
   summaryTotal?: number | null;
+  summaryOptions?: Array<{
+    name: string;
+    total: number;
+    selected?: boolean;
+    recommended?: boolean;
+    highlights?: string[];
+    delta?: number | null;
+    vs?: string | null;
+  }>;
 };
 
 function formatEmailMoney(value: number) {
@@ -94,6 +103,50 @@ function formatEmailMoney(value: number) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
+}
+
+function proposalEmailOptionsBlock(input: ProposalEmailInput) {
+  const options = input.summaryOptions ?? [];
+  if (options.length < 2) return "";
+  const cards = options
+    .map((option) => {
+      const badge = option.selected
+        ? `<div style="padding-bottom:6px;font-size:11px;line-height:14px;font-weight:bold;letter-spacing:0.12em;text-transform:uppercase;color:#b51e28;">Your pick</div>`
+        : option.recommended
+          ? `<div style="padding-bottom:6px;font-size:11px;line-height:14px;font-weight:bold;letter-spacing:0.12em;text-transform:uppercase;color:#8a857f;">Most chosen</div>`
+          : "";
+      const highlights = (option.highlights ?? [])
+        .slice(0, 4)
+        .map((item) => `<div style="padding-top:3px;">· ${escapeHtml(item)}</div>`)
+        .join("");
+      const delta =
+        option.delta != null && option.vs
+          ? `<div style="padding-top:4px;font-size:12px;line-height:16px;color:#6b6763;">+${escapeHtml(formatEmailMoney(option.delta))} vs ${escapeHtml(option.vs)}</div>`
+          : "";
+      const border = option.selected ? "#1a1a1a" : "#e6e2dc";
+      return `<td class="stack" valign="top" width="${Math.floor(100 / options.length)}%" style="padding:0 6px;">
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid ${border};border-radius:10px;">
+                          <tr>
+                            <td style="padding:14px 16px;font-family:Helvetica,Arial,sans-serif;">
+                              ${badge}
+                              <div style="font-size:13px;line-height:18px;font-weight:bold;color:#1a1a1a;">${escapeHtml(option.name)}</div>
+                              <div style="padding-top:4px;font-size:18px;line-height:22px;font-weight:bold;color:#1a1a1a;">${escapeHtml(formatEmailMoney(option.total))}</div>
+                              ${delta}
+                              ${highlights ? `<div style="padding-top:8px;font-size:12px;line-height:16px;color:#4a4744;">${highlights}</div>` : ""}
+                            </td>
+                          </tr>
+                        </table>
+                      </td>`;
+    })
+    .join("");
+  return `
+                <tr>
+                  <td class="px" style="padding:24px 38px 0 38px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>${cards}</tr>
+                    </table>
+                  </td>
+                </tr>`;
 }
 
 function proposalEmailSummaryBlock(input: ProposalEmailInput) {
@@ -358,6 +411,7 @@ export function renderProposalEmailHtml(input: ProposalEmailInput) {
                     </table>
                   </td>
                 </tr>
+${proposalEmailOptionsBlock(input)}
 ${proposalEmailSummaryBlock(input)}
                 <tr>
                   <td class="px" align="center" style="padding:28px 44px 8px 44px;">
@@ -461,6 +515,19 @@ export function renderProposalEmailText(input: ProposalEmailInput) {
     street,
   ];
   if (cityLine) parts.push(cityLine);
+  const summaryOptions = input.summaryOptions ?? [];
+  if (summaryOptions.length > 1) {
+    parts.push("", "Options");
+    for (const option of summaryOptions) {
+      const tags = [option.selected ? "your pick" : "", option.recommended ? "most chosen" : ""]
+        .filter(Boolean)
+        .join(", ");
+      const delta =
+        option.delta != null && option.vs ? `  (+${formatEmailMoney(option.delta)} vs ${option.vs})` : "";
+      parts.push(`${option.name}${tags ? ` (${tags})` : ""}  ${formatEmailMoney(option.total)}${delta}`);
+      for (const item of option.highlights ?? []) parts.push(`  · ${item}`);
+    }
+  }
   const summaryLines = (input.summaryLines ?? []).filter((row) => row.label.trim());
   if (summaryLines.length) {
     parts.push("");

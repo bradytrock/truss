@@ -10,8 +10,13 @@ import {
   optionNameForKey,
   parseLinePackage,
   pendingClassicPackages,
+  recommendedOptionKey,
   resolveSelectedPackage,
   scopedEstimateLines,
+  sharedPackageLines,
+  uniquePackageLines,
+  optionHighlightLabels,
+  cheapestOptionKey,
 } from "./estimate-packages.ts";
 
 assert.equal(parseLinePackage(" opt_2 "), "opt_2");
@@ -88,6 +93,34 @@ assert.deepEqual(
     { package: "best", groupName: "Best" },
   ]),
   [],
+);
+
+assert.deepEqual(
+  sharedPackageLines(lines).map((line) => line.groupName),
+  ["Tear-off"],
+);
+assert.deepEqual(
+  uniquePackageLines(lines, "opt_1").map((line) => line.groupName),
+  ["Architectural", "Architectural"],
+);
+assert.deepEqual(
+  optionHighlightLabels(
+    [
+      { package: "opt_1", title: "Architectural shingles" },
+      { package: "opt_1", title: "Architectural shingles" },
+      { package: "opt_1", title: "Ridge vent" },
+      { package: "", title: "Tear-off" },
+    ],
+    "opt_1",
+  ),
+  ["Architectural shingles", "Ridge vent"],
+);
+assert.equal(recommendedOptionKey([{ key: "good" }, { key: "better" }, { key: "best" }]), "better");
+assert.equal(recommendedOptionKey([{ key: "opt_1" }, { key: "opt_2" }, { key: "opt_3" }]), "opt_2");
+assert.equal(recommendedOptionKey([{ key: "opt_1" }]), null);
+assert.equal(
+  cheapestOptionKey([{ key: "a" }, { key: "b" }], (key) => (key === "a" ? 9000 : 7000)),
+  "b",
 );
 
 console.log("estimate-packages tests passed");
