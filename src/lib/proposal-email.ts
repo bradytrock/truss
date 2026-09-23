@@ -83,7 +83,53 @@ export type ProposalEmailInput = {
   companyCity?: string;
   companyState?: string;
   companyPostalCode?: string;
+  summaryLines?: Array<{ label: string; amount: number | null }>;
+  summaryTotal?: number | null;
 };
+
+function formatEmailMoney(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
+function proposalEmailSummaryBlock(input: ProposalEmailInput) {
+  const rows = (input.summaryLines ?? []).filter((row) => row.label.trim());
+  if (!rows.length) return "";
+  const lineRows = rows
+    .map((row, index) => {
+      const top = index === 0 ? "4px" : "14px";
+      const bottom = index === rows.length - 1 ? "16px" : "14px";
+      const amount =
+        row.amount == null
+          ? `<td style="padding:${top} 0 ${bottom} 16px;border-bottom:1px solid #ece8e2;"></td>`
+          : `<td align="right" valign="top" style="padding:${top} 0 ${bottom} 16px;border-bottom:1px solid #ece8e2;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:22px;color:#1a1a1a;white-space:nowrap;">${escapeHtml(formatEmailMoney(row.amount))}</td>`;
+      return `<tr>
+                              <td valign="top" style="padding:${top} 16px ${bottom} 0;border-bottom:1px solid #ece8e2;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:22px;color:#1a1a1a;">${escapeHtml(row.label)}</td>
+                              ${amount}
+                            </tr>`;
+    })
+    .join("");
+  const total =
+    input.summaryTotal == null
+      ? ""
+      : `<tr>
+                              <td valign="top" style="padding:16px 16px 0 0;border-top:2px solid #1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:22px;font-weight:bold;color:#1a1a1a;">Total</td>
+                              <td align="right" valign="top" style="padding:16px 0 0 16px;border-top:2px solid #1a1a1a;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:22px;font-weight:bold;color:#1a1a1a;white-space:nowrap;">${escapeHtml(formatEmailMoney(input.summaryTotal))}</td>
+                            </tr>`;
+  return `
+                <tr>
+                  <td class="px" style="padding:24px 44px 0 44px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      ${lineRows}
+                      ${total}
+                    </table>
+                  </td>
+                </tr>`;
+}
 
 export function renderProposalEmailHtml(input: ProposalEmailInput) {
   const company = input.company.trim() || "Your contractor";
@@ -312,18 +358,18 @@ export function renderProposalEmailHtml(input: ProposalEmailInput) {
                     </table>
                   </td>
                 </tr>
-
+${proposalEmailSummaryBlock(input)}
                 <tr>
                   <td class="px" align="center" style="padding:28px 44px 8px 44px;">
                     <!--[if mso]>
                     <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${url}" style="height:54px;v-text-anchor:middle;width:512px;" arcsize="15%" strokecolor="#b51e28" fillcolor="#b51e28">
                       <w:anchorlock/>
-                      <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:17px;font-weight:bold;">Review &amp; sign proposal</center>
+                      <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:17px;font-weight:bold;">Review &amp; sign</center>
                     </v:roundrect>
                     <![endif]-->
                     <!--[if !mso]><!-->
-                    <a href="${url}" class="btn" style="display:block;background:#b51e28;border-radius:8px;padding:17px 24px;font-family:Helvetica,Arial,sans-serif;font-size:17px;line-height:20px;font-weight:bold;color:#ffffff;text-decoration:none;text-align:center;mso-hide:all;">
-                      Review &amp; sign proposal &nbsp;&rarr;
+                    <a href="${url}" class="btn" style="display:block;background:#b51e28;border-radius:999px;padding:17px 24px;font-family:Helvetica,Arial,sans-serif;font-size:17px;line-height:20px;font-weight:bold;color:#ffffff;text-decoration:none;text-align:center;mso-hide:all;">
+                      Review &amp; sign
                     </a>
                     <!--<![endif]-->
                   </td>
@@ -415,7 +461,17 @@ export function renderProposalEmailText(input: ProposalEmailInput) {
     street,
   ];
   if (cityLine) parts.push(cityLine);
-  parts.push("", "Scope", scope, "", "Valid through", expires, "", "Review & sign proposal:", input.url);
+  const summaryLines = (input.summaryLines ?? []).filter((row) => row.label.trim());
+  if (summaryLines.length) {
+    parts.push("");
+    for (const row of summaryLines) {
+      parts.push(row.amount == null ? row.label : `${row.label}  ${formatEmailMoney(row.amount)}`);
+    }
+    if (input.summaryTotal != null) {
+      parts.push(`Total  ${formatEmailMoney(input.summaryTotal)}`);
+    }
+  }
+  parts.push("", "Scope", scope, "", "Valid through", expires, "", "Review & sign:", input.url);
   if (pmName) {
     parts.push("", "Your project manager", pmName, "Questions? Call or text me directly.");
     if (input.owner?.phone?.trim()) parts.push(formatPhone(input.owner.phone));

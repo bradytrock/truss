@@ -172,6 +172,8 @@ export function defaultShareEmailHtml(input: {
   companyCity?: string;
   companyState?: string;
   companyPostalCode?: string;
+  summaryLines?: Array<{ label: string; amount: number | null }>;
+  summaryTotal?: number | null;
 }) {
   if (input.kind === "estimate") {
     return renderProposalEmailHtml(input);
@@ -350,6 +352,8 @@ export function defaultShareEmailText(input: {
   companyCity?: string;
   companyState?: string;
   companyPostalCode?: string;
+  summaryLines?: Array<{ label: string; amount: number | null }>;
+  summaryTotal?: number | null;
 }) {
   if (input.kind === "estimate") {
     return renderProposalEmailText(input);

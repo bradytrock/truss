@@ -121,6 +121,7 @@ import { currentCatalog } from "@/lib/price-lists";
 import { billingEstimate, defaultTaxRateForMarket, isResidentialMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { formatJobSite } from "@/lib/leads";
 import { proposalScopeSummary } from "@/lib/proposal-email";
+import { proposalShareSummary } from "@/lib/proposal-summary";
 import { jobPaperHref } from "@/lib/job-record";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine, type JobPhoto } from "@/lib/types";
 import { canGenerateSignatureCertificate, canManageSettings } from "@/lib/visibility";
@@ -732,6 +733,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       })),
     [crm.photos, lines],
   );
+  const shareSummary = useMemo(() => proposalShareSummary(estimate, lines), [estimate, lines]);
   const groups = groupEstimateLines(lines);
   const pendingSections = emptySections.filter(
     (name) => !groups.some((group) => group.name === name),
@@ -1752,6 +1754,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         jobState={estimate.state}
         jobPostalCode={estimate.postalCode}
         validUntil={estimate.validUntil}
+        summaryLines={shareSummary.lines}
+        summaryTotal={shareSummary.total}
         scopeSummary={proposalScopeSummary({
           projectType: job?.projectType || opportunity?.projectType,
           packageMode: estimate.packageMode,

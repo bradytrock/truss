@@ -203,7 +203,7 @@ export function ShareEstimateClient({
             />
             {canSign ? (
               <Button disabled={signing} onClick={() => setSignOpen(true)}>
-                Sign and approve
+                Review & sign
               </Button>
             ) : null}
           </>
@@ -295,7 +295,7 @@ export function ShareEstimateClient({
           />
           {canSignRemote ? (
             <Button disabled={signing} onClick={() => setSignOpen(true)}>
-              Sign and approve
+              Review & sign
             </Button>
           ) : null}
         </>

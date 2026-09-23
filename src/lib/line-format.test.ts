@@ -4,6 +4,7 @@ import {
   firstPlainLine,
   invoiceLineDescription,
   linePlainText,
+  proposalLineSummary,
   lineTextToSafeHtml,
   parseLineFormat,
   shouldShowLineDescription,
@@ -60,6 +61,19 @@ assert.equal(
     description: "- Tear-off\n- Underlayment",
   }),
   "Roofing System\n\n- Tear-off\n- Underlayment",
+);
+
+assert.equal(
+  proposalLineSummary({ title: "Architectural shingles", quantity: 32, unit: "sq" }),
+  "Architectural shingles · 32 sq",
+);
+assert.equal(
+  proposalLineSummary({ title: "Tear-off & disposal", quantity: 1, unit: "LS" }),
+  "Tear-off & disposal",
+);
+assert.equal(
+  proposalLineSummary({ title: "Ridge vent", quantity: 38.5, unit: "ft" }),
+  "Ridge vent · 38.5 ft",
 );
 
 console.log("line-format tests passed");

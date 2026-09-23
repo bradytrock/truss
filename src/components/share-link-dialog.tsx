@@ -55,6 +55,8 @@ export function ShareLinkDialog({
   jobPostalCode,
   validUntil,
   scopeSummary,
+  summaryLines,
+  summaryTotal,
   companyWebsite,
   companyPhone,
   companyStreet,
@@ -86,6 +88,8 @@ export function ShareLinkDialog({
   jobPostalCode?: string;
   validUntil?: string | null;
   scopeSummary?: string;
+  summaryLines?: Array<{ label: string; amount: number | null }>;
+  summaryTotal?: number | null;
   companyWebsite?: string;
   companyPhone?: string;
   companyStreet?: string;
@@ -370,6 +374,8 @@ export function ShareLinkDialog({
           postalCode: jobPostalCode || "",
           validUntil: validUntil || null,
           scope: scopeSummary || "",
+          summaryLines,
+          summaryTotal,
           companyWebsite: companyWebsite || "",
           companyPhone: companyPhone || "",
           companyStreet: companyStreet || "",

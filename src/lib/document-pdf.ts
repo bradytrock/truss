@@ -28,8 +28,8 @@ import {
 } from "@/lib/document-terms";
 import type { ProjectManagerContact } from "@/lib/document-owner";
 import {
-  firstPlainLine,
   parseLineFormat,
+  proposalLineSummary,
   shouldShowLineDescription,
   type FormatBlock,
   type InlineRun,
@@ -559,19 +559,22 @@ export async function buildEstimatePdf(raw: {
     );
   }
 
-  for (const group of groupEstimateLines(visibleLines)) {
+  const pdfGroups = groupEstimateLines(visibleLines);
+  for (const group of pdfGroups) {
     y = ensureSpace(doc, y, 28);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(90, 90, 90);
-    doc.text(group.name.toUpperCase(), 54, y);
-    y += 8;
+    if (pdfGroups.length > 1) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(90, 90, 90);
+      doc.text(group.name.toUpperCase(), 54, y);
+      y += 8;
+    }
     doc.setTextColor(220, 220, 220);
     doc.line(54, y, right, y);
     y += 14;
     for (const line of group.lines) {
       const included = lineIncluded(line);
-      const label = line.title || firstPlainLine(line.description);
+      const label = proposalLineSummary(line);
       const detail = shouldShowLineDescription(line) ? line.description : "";
       y = ensureSpace(doc, y, 40);
       doc.setFont("helvetica", included ? "bold" : "normal");
@@ -584,14 +587,6 @@ export async function buildEstimatePdf(raw: {
       y += 13;
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
-      doc.text(
-        input.estimate.hideLinePrices
-          ? `${line.quantity} ${line.unit}`
-          : `${line.quantity} ${line.unit} × ${formatMoney(line.unitCost)}`,
-        54,
-        y,
-      );
-      y += 12;
       if (detail) {
         doc.setTextColor(70, 70, 70);
         y = writeFormattedText(doc, detail, 54, y, 360, { fontSize: 9, lineHeight: 11 });
