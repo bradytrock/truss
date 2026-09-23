@@ -74,10 +74,7 @@ import {
   isLivePriceList,
 } from "@/lib/price-lists";
 import { fillMaterialOrder, fillMaterialOrderLine, lineFromCatalogItem } from "@/lib/material-orders";
-import {
-  findMaterialOrderEvent,
-  materialOrderDeliveryDraft,
-} from "@/lib/material-order-calendar";
+import { applyMaterialOrderDeliverySync } from "@/lib/material-order-calendar";
 import {
   fillMaterialOrderTemplate,
   fillMaterialOrderTemplateLine,
@@ -8632,34 +8629,28 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       .then(async () => {
         const book = bookRef.current;
         const job = book.jobs.find((item) => item.id === order.jobId);
-        const mappedId = materialOrderEventIdsRef.current.get(order.id);
-        const existing =
-          book.events.find((event) => event.id === mappedId) ??
-          findMaterialOrderEvent(book.events, order.id);
-        const draft = materialOrderDeliveryDraft({
+        const eventId = await applyMaterialOrderDeliverySync({
           order,
+          events: book.events,
+          existingId: materialOrderEventIdsRef.current.get(order.id),
           location: job ? jobAddress(job) : "",
           assignee: job?.projectManager || user.name,
           opportunityId: job?.opportunityId ?? null,
           clientId: job?.clientId ?? null,
+          add: async (draft) => {
+            const created = await addScheduleEvent(draft);
+            if (!bookRef.current.events.some((event) => event.id === created.id)) {
+              bookRef.current = { ...bookRef.current, events: [...bookRef.current.events, created] };
+            }
+            return created;
+          },
+          update: async (id, draft) => {
+            await updateScheduleEvent(id, draft);
+          },
+          remove: deleteScheduleEvent,
         });
-        if (!draft) {
-          if (existing) {
-            materialOrderEventIdsRef.current.delete(order.id);
-            await deleteScheduleEvent(existing.id);
-          }
-          return;
-        }
-        if (existing) {
-          materialOrderEventIdsRef.current.set(order.id, existing.id);
-          await updateScheduleEvent(existing.id, draft);
-          return;
-        }
-        const created = await addScheduleEvent(draft);
-        materialOrderEventIdsRef.current.set(order.id, created.id);
-        if (!bookRef.current.events.some((event) => event.id === created.id)) {
-          bookRef.current = { ...bookRef.current, events: [...bookRef.current.events, created] };
-        }
+        if (eventId) materialOrderEventIdsRef.current.set(order.id, eventId);
+        else materialOrderEventIdsRef.current.delete(order.id);
       });
     materialOrderSyncsRef.current.set(
       order.id,

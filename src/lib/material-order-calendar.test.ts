@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  applyMaterialOrderDeliverySync,
   findMaterialOrderEvent,
   isMaterialOrderEvent,
   materialOrderDeliveryDraft,
@@ -71,5 +72,101 @@ assert.equal(
   }),
   null,
 );
+
+const order = {
+  id: "mo-1",
+  number: "MO-1044",
+  vendor: "ABC Supply",
+  notes: "Stage in driveway",
+  neededBy: "2026-10-02",
+  jobId: "job-1",
+};
+const context = {
+  location: "100 Main, Plano, TX",
+  assignee: "Alex Rivera",
+  opportunityId: "opp-1" as string | null,
+  clientId: null as string | null,
+};
+
+{
+  const added: string[] = [];
+  const createdId = await applyMaterialOrderDeliverySync({
+    order,
+    events: [],
+    ...context,
+    add: async (next) => {
+      added.push(next.title);
+      return { id: "evt-1" };
+    },
+    update: async () => {
+      throw new Error("should create, not update");
+    },
+    remove: async () => {
+      throw new Error("should create, not remove");
+    },
+  });
+  assert.equal(createdId, "evt-1");
+  assert.equal(added.length, 1);
+}
+
+{
+  const updated: string[] = [];
+  const id = await applyMaterialOrderDeliverySync({
+    order: { ...order, neededBy: "2026-10-09", vendor: "SRS" },
+    events: [{ id: "evt-1", notes: "material-order:mo-1\nMO-1044" }],
+    existingId: "evt-1",
+    ...context,
+    add: async () => {
+      throw new Error("should update, not create");
+    },
+    update: async (eventId, next) => {
+      updated.push(`${eventId}:${next.title}`);
+    },
+    remove: async () => {
+      throw new Error("should update, not remove");
+    },
+  });
+  assert.equal(id, "evt-1");
+  assert.deepEqual(updated, ["evt-1:Material delivery · SRS"]);
+}
+
+{
+  const removed: string[] = [];
+  const id = await applyMaterialOrderDeliverySync({
+    order: { ...order, neededBy: null },
+    events: [{ id: "evt-1", notes: "material-order:mo-1\nMO-1044" }],
+    existingId: "evt-1",
+    ...context,
+    add: async () => {
+      throw new Error("should remove, not create");
+    },
+    update: async () => {
+      throw new Error("should remove, not update");
+    },
+    remove: async (eventId) => {
+      removed.push(eventId);
+    },
+  });
+  assert.equal(id, null);
+  assert.deepEqual(removed, ["evt-1"]);
+}
+
+{
+  const id = await applyMaterialOrderDeliverySync({
+    order: { ...order, neededBy: null },
+    events: [],
+    ...context,
+    add: async () => {
+      throw new Error("should no-op");
+    },
+    update: async () => {
+      throw new Error("should no-op");
+    },
+    remove: async () => {
+      throw new Error("should no-op");
+    },
+  });
+  assert.equal(id, null);
+}
 
 console.log("material-order-calendar.test.ts ok");

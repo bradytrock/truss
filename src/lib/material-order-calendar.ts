@@ -34,6 +34,8 @@ export function materialOrderDeliveryNotes(input: { orderId: string; number: str
   return extra ? `${marker}\n${input.number}\n${extra}` : `${marker}\n${input.number}`;
 }
 
+export type MaterialOrderDeliveryDraft = NonNullable<ReturnType<typeof materialOrderDeliveryDraft>>;
+
 export function materialOrderDeliveryDraft(input: {
   order: {
     id: string;
@@ -66,4 +68,39 @@ export function materialOrderDeliveryDraft(input: {
       notes: input.order.notes,
     }),
   };
+}
+
+export async function applyMaterialOrderDeliverySync(input: {
+  order: {
+    id: string;
+    number: string;
+    vendor: string;
+    notes: string;
+    neededBy: string | null;
+    jobId: string;
+  };
+  events: { id: string; notes: string }[];
+  existingId?: string;
+  location: string;
+  assignee: string;
+  opportunityId: string | null;
+  clientId: string | null;
+  add: (draft: MaterialOrderDeliveryDraft) => Promise<{ id: string }>;
+  update: (id: string, draft: MaterialOrderDeliveryDraft) => Promise<void>;
+  remove: (id: string) => Promise<void>;
+}) {
+  const existing =
+    input.events.find((event) => event.id === input.existingId) ??
+    findMaterialOrderEvent(input.events, input.order.id);
+  const draft = materialOrderDeliveryDraft(input);
+  if (!draft) {
+    if (existing) await input.remove(existing.id);
+    return null;
+  }
+  if (existing) {
+    await input.update(existing.id, draft);
+    return existing.id;
+  }
+  const created = await input.add(draft);
+  return created.id;
 }
