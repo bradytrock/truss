@@ -1,5 +1,6 @@
 import type { CompanySettings, Job, MaterialOrder, MaterialOrderLine } from "@/lib/types";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatDate, formatMoney, formatPhone } from "@/lib/format";
+import { materialOrderOrderedByLine } from "@/lib/material-order-header";
 import { formatJobSite } from "@/lib/leads";
 import { writePdfLetterhead } from "@/lib/letterhead-pdf";
 import { downloadBlob } from "@/lib/share";
@@ -44,6 +45,8 @@ export async function downloadMaterialOrderPdf(input: {
   company: CompanySettings;
   customer: string;
   orderedBy?: string;
+  orderedByPhone?: string;
+  orderedByEmail?: string;
   projectManager?: ProjectManagerContact | null;
 }) {
   const { jsPDF } = await import("jspdf");
@@ -86,9 +89,18 @@ export async function downloadMaterialOrderPdf(input: {
     doc.text(`Deliver by ${formatDate(input.order.neededBy)}`, 54, y);
     y += 14;
   }
-  if (input.orderedBy?.trim()) {
-    doc.text(`Ordered by ${input.orderedBy.trim()}`, 54, y);
-    y += 14;
+  const orderedByPhone = formatPhone(input.orderedByPhone);
+  const orderedByLine = materialOrderOrderedByLine({
+    name: input.orderedBy,
+    phone: orderedByPhone === "—" ? "" : orderedByPhone,
+    email: input.orderedByEmail,
+  });
+  if (orderedByLine) {
+    const wrapped = doc.splitTextToSize(orderedByLine, 504);
+    for (const piece of wrapped) {
+      doc.text(piece, 54, y);
+      y += 14;
+    }
   }
   const manager = input.projectManager?.name.trim() ?? "";
   if (manager && manager !== input.orderedBy?.trim()) {

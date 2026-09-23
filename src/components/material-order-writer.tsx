@@ -21,7 +21,8 @@ import { VendorPicker } from "@/components/vendor-picker";
 import { BackToJobButton } from "@/components/back-to-job";
 import { MaterialOrderItems } from "@/components/material-order-items";
 import { useCrm } from "@/lib/crm-store";
-import { formatMoney } from "@/lib/format";
+import { formatMoney, formatPhone } from "@/lib/format";
+import { materialOrderOrderedByLine } from "@/lib/material-order-header";
 import { jobAddress, jobPaperHref } from "@/lib/job-record";
 import type { MaterialOrder } from "@/lib/types";
 import { canManageSettings } from "@/lib/visibility";
@@ -65,13 +66,22 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
     fallbackStaffId: crm.user.staffId,
     companyPhone: letterhead.phone,
   });
-  const orderedBy =
-    documentOwnerStaff({
-      job,
-      opportunity,
-      staff: crm.staff,
-      fallbackStaffId: crm.user.staffId,
-    })?.name || crm.user.name;
+  const owner = documentOwnerStaff({
+    job,
+    opportunity,
+    staff: crm.staff,
+    fallbackStaffId: crm.user.staffId,
+  });
+  const orderedBy = owner?.name || crm.user.name;
+  const orderedByEmail = owner?.email?.trim() || crm.effectiveStaff?.email?.trim() || letterhead.email || "";
+  const orderedByPhoneRaw = owner?.phone?.trim() || crm.effectiveStaff?.phone?.trim() || letterhead.phone || "";
+  const formattedOrderedByPhone = formatPhone(orderedByPhoneRaw);
+  const orderedByPhone = formattedOrderedByPhone === "—" ? "" : formattedOrderedByPhone;
+  const orderedByLine = materialOrderOrderedByLine({
+    name: orderedBy,
+    phone: orderedByPhone,
+    email: orderedByEmail,
+  });
 
   async function downloadPdf() {
     if (lines.length === 0) {
@@ -87,6 +97,8 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
         company: letterhead,
         customer,
         orderedBy,
+        orderedByPhone,
+        orderedByEmail,
         projectManager,
       });
     } catch (error) {
@@ -122,6 +134,9 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
             <p className="mt-0.5 text-sm text-muted-foreground">
               {jobAddress(job) || customer || "Add a job-site address on the job."}
             </p>
+          ) : null}
+          {orderedByLine ? (
+            <p className="mt-0.5 text-sm text-muted-foreground">{orderedByLine}</p>
           ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
