@@ -172,6 +172,17 @@ export function defaultShareEmailHtml(input: {
   companyCity?: string;
   companyState?: string;
   companyPostalCode?: string;
+  summaryLines?: Array<{ label: string; amount: number | null }>;
+  summaryTotal?: number | null;
+  summaryOptions?: Array<{
+    name: string;
+    total: number;
+    selected?: boolean;
+    recommended?: boolean;
+    highlights?: string[];
+    delta?: number | null;
+    vs?: string | null;
+  }>;
 }) {
   if (input.kind === "estimate") {
     return renderProposalEmailHtml(input);
@@ -350,6 +361,17 @@ export function defaultShareEmailText(input: {
   companyCity?: string;
   companyState?: string;
   companyPostalCode?: string;
+  summaryLines?: Array<{ label: string; amount: number | null }>;
+  summaryTotal?: number | null;
+  summaryOptions?: Array<{
+    name: string;
+    total: number;
+    selected?: boolean;
+    recommended?: boolean;
+    highlights?: string[];
+    delta?: number | null;
+    vs?: string | null;
+  }>;
 }) {
   if (input.kind === "estimate") {
     return renderProposalEmailText(input);

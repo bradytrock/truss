@@ -279,6 +279,29 @@ export function lineHeading(line: { title?: string | null; description?: string 
   return firstPlainLine(String(line.description ?? "")) || "Item";
 }
 
+function formatProposalQuantity(value: number) {
+  if (!Number.isFinite(value)) return "";
+  if (Number.isInteger(value)) return String(value);
+  return String(value);
+}
+
+/** Client-facing line label: "Architectural shingles · 32 sq". Drops 1 LS / 1 EA. */
+export function proposalLineSummary(line: {
+  title?: string | null;
+  description?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
+}) {
+  const title = lineHeading(line);
+  const qty = Number(line.quantity);
+  const unit = String(line.unit ?? "").trim();
+  if (!Number.isFinite(qty) || qty <= 0) return title;
+  const lump = qty === 1 && /^(ls|ea)$/i.test(unit);
+  if (lump) return title;
+  const qtyLabel = formatProposalQuantity(qty);
+  return unit ? `${title} · ${qtyLabel} ${unit}` : `${title} · ${qtyLabel}`;
+}
+
 export function shouldShowLineDescription(line: { title?: string | null; description?: string | null }) {
   const title = String(line.title ?? "").trim();
   const description = String(line.description ?? "").trim();

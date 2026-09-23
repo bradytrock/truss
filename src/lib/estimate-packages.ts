@@ -56,6 +56,60 @@ export function optionBlurb(key: string) {
   return "This option plus the shared work on the proposal.";
 }
 
+export function sharedPackageLines<T extends { package?: string | null }>(lines: T[]): T[] {
+  return lines.filter((line) => parseLinePackage(line.package) === "");
+}
+
+export function uniquePackageLines<T extends { package?: string | null }>(
+  lines: T[],
+  pkg: string,
+): T[] {
+  const key = parseLinePackage(pkg);
+  if (!key) return [];
+  return lines.filter((line) => parseLinePackage(line.package) === key);
+}
+
+export function optionHighlightLabels(
+  lines: Array<{ package?: string | null; title?: string | null; description?: string | null }>,
+  pkg: string,
+  limit = 4,
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of uniquePackageLines(lines, pkg)) {
+    const title = String(line.title ?? "").trim();
+    const fromDescription = String(line.description ?? "")
+      .replace(/<[^>]+>/g, " ")
+      .split(/\r?\n/)
+      .map((part) => part.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "").replace(/\*\*/g, "").trim())
+      .find(Boolean);
+    const label = title || fromDescription || "";
+    const dedupe = label.toLowerCase();
+    if (!label || seen.has(dedupe)) continue;
+    seen.add(dedupe);
+    out.push(label);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/** Better if present, otherwise the middle of three options. */
+export function recommendedOptionKey(options: Array<{ key: string }>): string | null {
+  if (options.length < 2) return null;
+  const better = options.find((item) => item.key === "better");
+  if (better) return better.key;
+  if (options.length >= 3) return options[1]?.key ?? null;
+  return null;
+}
+
+export function cheapestOptionKey(
+  options: Array<{ key: string }>,
+  totalFor: (key: string) => number,
+): string | null {
+  if (options.length === 0) return null;
+  return options.reduce((best, item) => (totalFor(item.key) < totalFor(best.key) ? item : best)).key;
+}
+
 export function listEstimateOptions(
   lines: Array<{ package?: string | null; groupName?: string | null }>,
   pending: EstimateOption[] = [],

@@ -16,7 +16,15 @@ import {
   lineIncluded,
   toClientFacingProposal,
 } from "@/lib/estimate-totals";
-import { isGbbEstimate, scopedEstimateLines, type EstimatePackage } from "@/lib/estimate-packages";
+import {
+  isGbbEstimate,
+  listEstimateOptions,
+  resolveSelectedPackage,
+  scopedEstimateLines,
+  sharedPackageLines,
+  uniquePackageLines,
+  type EstimatePackage,
+} from "@/lib/estimate-packages";
 import { formatDate, formatMoney } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
 import { isSignaturePng } from "@/lib/estimate-signature";
@@ -30,7 +38,7 @@ import { estimateTermsValues, liveEstimateTerms } from "@/lib/document-terms";
 import { DocumentNotesBlock } from "@/components/document-notes";
 import { DocumentTermsFields } from "@/components/document-terms-fields";
 import { FormattedLineText } from "@/components/formatted-line-text";
-import { lineHeading, shouldShowLineDescription } from "@/lib/line-format";
+import { lineHeading, proposalLineSummary, shouldShowLineDescription } from "@/lib/line-format";
 import { cn } from "@/lib/utils";
 
 export function EstimateTotals({
@@ -43,12 +51,15 @@ export function EstimateTotals({
   className?: string;
 }) {
   const totals = estimateTotals(estimate, lines);
+  const showBreakdown = totals.discount > 0 || totals.tax > 0;
   return (
-    <dl className={cn("space-y-1.5 text-sm", className)}>
-      <div className="flex justify-between gap-4">
-        <dt className="text-muted-foreground">Subtotal</dt>
-        <dd className="tabular-nums">{formatMoney(totals.subtotal)}</dd>
-      </div>
+    <dl className={cn("space-y-3 text-[15px]", className)}>
+      {showBreakdown ? (
+        <div className="flex justify-between gap-4">
+          <dt className="text-muted-foreground">Subtotal</dt>
+          <dd className="tabular-nums">{formatMoney(totals.subtotal)}</dd>
+        </div>
+      ) : null}
       {totals.discount > 0 ? (
         <div className="flex justify-between gap-4">
           <dt className="text-muted-foreground">
@@ -64,7 +75,7 @@ export function EstimateTotals({
           <dd className="tabular-nums">{formatMoney(totals.tax)}</dd>
         </div>
       ) : null}
-      <div className="flex justify-between gap-4 border-t pt-2 font-medium">
+      <div className="flex justify-between gap-4 border-t-2 border-foreground pt-3 font-medium">
         <dt>Total</dt>
         <dd className="tabular-nums">{formatMoney(totals.total)}</dd>
       </div>
@@ -85,6 +96,89 @@ export function EstimateTotals({
         </p>
       ) : null}
     </dl>
+  );
+}
+
+function gbbReceiptSections(
+  lines: EstimateLine[],
+  estimate: Pick<Estimate, "packageMode" | "selectedPackage">,
+) {
+  const selected = resolveSelectedPackage(estimate, lines);
+  const optionName = listEstimateOptions(lines).find((item) => item.key === selected)?.name;
+  const shared = sharedPackageLines(lines);
+  const unique = uniquePackageLines(lines, selected);
+  const sections: Array<{ name: string; lines: EstimateLine[] }> = [];
+  if (shared.length) {
+    sections.push({
+      name: unique.length ? "Included in every option" : "",
+      lines: shared,
+    });
+  }
+  if (unique.length) {
+    sections.push({
+      name: optionName ? `This option adds · ${optionName}` : "This option adds",
+      lines: unique,
+    });
+  }
+  return sections;
+}
+
+function ProposalLineList({
+  lines,
+  estimate,
+  selectable,
+  onToggleOptional,
+  photos,
+}: {
+  lines: EstimateLine[];
+  estimate: Estimate;
+  selectable?: boolean;
+  onToggleOptional?: (line: EstimateLine, selected: boolean) => void;
+  photos: JobPhoto[];
+}) {
+  return (
+    <ul className="divide-y">
+      {lines.map((line) => {
+        const included = lineIncluded(line);
+        return (
+          <li
+            key={line.id}
+            className={cn(
+              "flex items-start justify-between gap-4 py-3.5",
+              !included && "opacity-70",
+            )}
+          >
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                {line.optional && selectable && onToggleOptional ? (
+                  <Checkbox
+                    checked={line.selected}
+                    onCheckedChange={(value) => onToggleOptional(line, Boolean(value))}
+                    aria-label={`Include ${lineHeading(line)}`}
+                  />
+                ) : null}
+                <p className="text-[15px] leading-6">{proposalLineSummary(line)}</p>
+                {line.optional ? (
+                  <Badge variant="secondary">{included ? "Selected" : "Optional"}</Badge>
+                ) : null}
+              </div>
+              {shouldShowLineDescription(line) ? (
+                <FormattedLineText
+                  text={line.description}
+                  className="mt-0.5 text-sm text-muted-foreground"
+                />
+              ) : null}
+              <ProposalLinePhotos line={line} gallery={photos} />
+            </div>
+            {estimate.hideLinePrices ? null : (
+              <p className={cn("shrink-0 text-[15px] tabular-nums leading-6", !included && "line-through")}>
+                {formatMoney(lineAmount(line))}
+              </p>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -195,71 +289,40 @@ export function ProposalDocument({
             onSelect={onSelectPackage}
           />
           <p className="text-xs text-muted-foreground">
-            Pick one option. The items below are that option plus the shared work. Options do not stack.
+            Pick one option. Shared work is on every option. Cards list what changes. Options replace each other;
+            they do not stack.
           </p>
         </div>
       ) : null}
-      {groups.length === 0 ? (
+      {visibleLines.length === 0 ? (
         <p className="text-sm text-muted-foreground">No line items on this proposal yet.</p>
       ) : (
         <div className="space-y-5">
-          {groups.map((group) => (
-            <section key={group.name}>
-              <h3 className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">
-                {group.name}
-              </h3>
-              <ul className="divide-y border-y">
-                {group.lines.map((line) => {
-                  const included = lineIncluded(line);
-                  return (
-                    <li
-                      key={line.id}
-                      className={cn(
-                        "flex items-start justify-between gap-3 py-3",
-                        !included && "opacity-70"
-                      )}
-                    >
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {line.optional && selectable && onToggleOptional ? (
-                            <Checkbox
-                              checked={line.selected}
-                              onCheckedChange={(value) => onToggleOptional(line, Boolean(value))}
-                              aria-label={`Include ${lineHeading(line)}`}
-                            />
-                          ) : null}
-                          <p className="font-medium">{lineHeading(line)}</p>
-                          {line.optional ? (
-                            <Badge variant="secondary">{included ? "Selected" : "Optional"}</Badge>
-                          ) : null}
-                        </div>
-                        {shouldShowLineDescription(line) ? (
-                          <FormattedLineText
-                            text={line.description}
-                            className="mt-0.5 text-sm text-muted-foreground"
-                          />
-                        ) : null}
-                        <ProposalLinePhotos line={line} gallery={photos ?? crm?.photos ?? []} />
-                        <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                          {estimate.hideLinePrices
-                            ? `${line.quantity} ${line.unit}`
-                            : `${line.quantity} ${line.unit} × ${formatMoney(line.unitCost)}`}
-                        </p>
-                      </div>
-                      {estimate.hideLinePrices ? null : (
-                        <p className={cn("shrink-0 tabular-nums", !included && "line-through")}>
-                          {formatMoney(lineAmount(line))}
-                        </p>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+          {(isGbbEstimate(estimate)
+            ? gbbReceiptSections(visibleLines, billed.estimate)
+            : groups.map((group) => ({
+                name: groups.length > 1 ? group.name : "",
+                lines: group.lines,
+              }))
+          ).map((section) => (
+            <section key={section.name || "items"}>
+              {section.name ? (
+                <h3 className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">
+                  {section.name}
+                </h3>
+              ) : null}
+              <ProposalLineList
+                lines={section.lines}
+                estimate={estimate}
+                selectable={selectable}
+                onToggleOptional={onToggleOptional}
+                photos={photos ?? crm?.photos ?? []}
+              />
             </section>
           ))}
         </div>
       )}
-      <EstimateTotals estimate={billed.estimate} lines={visibleLines} className="ml-auto max-w-xs" />
+      <EstimateTotals estimate={billed.estimate} lines={visibleLines} />
       <DocumentNotesBlock notes={estimate.notes} />
       <div className="break-inside-auto">
         <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Terms</h3>

@@ -263,7 +263,8 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Preview totals for Good, Better, and Best. The selected option is the starting pick on new estimates.
+              Preview the comparison cards. Unique items on each option become the bullets homeowners see.
+              The selected option is the starting pick on new estimates.
             </p>
             <PackagePicker
               estimate={template}

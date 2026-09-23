@@ -2,11 +2,16 @@ import type { CompanySettings, Estimate, EstimateLine, EstimateSignatureEvent, I
 import { companyEstimateTermsFor } from "@/lib/contract-types";
 import { estimateTotals, groupEstimateLines, lineAmount, lineIncluded, toClientFacingProposal, totalsForPackage } from "@/lib/estimate-totals";
 import {
+  cheapestOptionKey,
   isGbbEstimate,
   listEstimateOptions,
+  optionHighlightLabels,
   optionLabel,
+  recommendedOptionKey,
   resolveSelectedPackage,
   scopedEstimateLines,
+  sharedPackageLines,
+  uniquePackageLines,
 } from "@/lib/estimate-packages";
 import { formatDate, formatMoney, formatPhone, formatDateTimeUtc } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
@@ -28,8 +33,8 @@ import {
 } from "@/lib/document-terms";
 import type { ProjectManagerContact } from "@/lib/document-owner";
 import {
-  firstPlainLine,
   parseLineFormat,
+  proposalLineSummary,
   shouldShowLineDescription,
   type FormatBlock,
   type InlineRun,
@@ -538,16 +543,47 @@ export async function buildEstimatePdf(raw: {
     doc.text("OPTIONS", 54, y);
     y += 14;
     const options = listEstimateOptions(input.lines);
+    const recommended = recommendedOptionKey(options);
+    const totalFor = (key: string) => totalsForPackage(input.estimate, input.lines, key).total;
+    const baseline = cheapestOptionKey(options, totalFor);
+    const baselineName = options.find((item) => item.key === baseline)?.name;
     for (const option of options) {
-      const amount = totalsForPackage(input.estimate, input.lines, option.key).total;
+      const amount = totalFor(option.key);
       const active = option.key === selectedPackage;
+      const marks = [
+        active ? "this proposal" : "",
+        !active && option.key === recommended ? "most chosen" : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      y = ensureSpace(doc, y, 36);
       doc.setFont("helvetica", active ? "bold" : "normal");
       doc.setFontSize(10);
       doc.setTextColor(active ? 28 : 70, active ? 28 : 70, active ? 28 : 70);
-      const label = active ? `${option.name} — this proposal` : option.name;
+      const label = marks ? `${option.name} — ${marks}` : option.name;
       doc.text(label, 54, y);
       doc.text(formatMoney(amount), right, y, { align: "right" });
-      y += 14;
+      y += 13;
+      if (baseline && option.key !== baseline && baselineName) {
+        const delta = amount - totalFor(baseline);
+        if (delta > 0) {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(9);
+          doc.setTextColor(90, 90, 90);
+          doc.text(`+${formatMoney(delta)} vs ${baselineName}`, 54, y);
+          y += 12;
+        }
+      }
+      const highlights = optionHighlightLabels(input.lines, option.key);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(90, 90, 90);
+      for (const item of highlights) {
+        y = ensureSpace(doc, y, 14);
+        doc.text(`· ${item}`, 64, y);
+        y += 12;
+      }
+      y += 4;
     }
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
@@ -559,19 +595,47 @@ export async function buildEstimatePdf(raw: {
     );
   }
 
-  for (const group of groupEstimateLines(visibleLines)) {
+  const selectedName = listEstimateOptions(input.lines).find((item) => item.key === selectedPackage)?.name;
+  const pdfGroups = isGbbEstimate(input.estimate)
+    ? [
+        ...(sharedPackageLines(visibleLines).length
+          ? [
+              {
+                name: uniquePackageLines(visibleLines, selectedPackage).length
+                  ? "Included in every option"
+                  : "",
+                lines: sharedPackageLines(visibleLines),
+              },
+            ]
+          : []),
+        ...(uniquePackageLines(visibleLines, selectedPackage).length
+          ? [
+              {
+                name: selectedName ? `This option adds · ${selectedName}` : "This option adds",
+                lines: uniquePackageLines(visibleLines, selectedPackage),
+              },
+            ]
+          : []),
+      ]
+    : groupEstimateLines(visibleLines).map((group, _, all) => ({
+        name: all.length > 1 ? group.name : "",
+        lines: group.lines,
+      }));
+  for (const group of pdfGroups) {
     y = ensureSpace(doc, y, 28);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(90, 90, 90);
-    doc.text(group.name.toUpperCase(), 54, y);
-    y += 8;
+    if (pdfGroups.length > 1) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(90, 90, 90);
+      doc.text(group.name.toUpperCase(), 54, y);
+      y += 8;
+    }
     doc.setTextColor(220, 220, 220);
     doc.line(54, y, right, y);
     y += 14;
     for (const line of group.lines) {
       const included = lineIncluded(line);
-      const label = line.title || firstPlainLine(line.description);
+      const label = proposalLineSummary(line);
       const detail = shouldShowLineDescription(line) ? line.description : "";
       y = ensureSpace(doc, y, 40);
       doc.setFont("helvetica", included ? "bold" : "normal");
@@ -584,14 +648,6 @@ export async function buildEstimatePdf(raw: {
       y += 13;
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
-      doc.text(
-        input.estimate.hideLinePrices
-          ? `${line.quantity} ${line.unit}`
-          : `${line.quantity} ${line.unit} × ${formatMoney(line.unitCost)}`,
-        54,
-        y,
-      );
-      y += 12;
       if (detail) {
         doc.setTextColor(70, 70, 70);
         y = writeFormattedText(doc, detail, 54, y, 360, { fontSize: 9, lineHeight: 11 });

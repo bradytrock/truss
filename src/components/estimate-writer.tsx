@@ -121,6 +121,7 @@ import { currentCatalog } from "@/lib/price-lists";
 import { billingEstimate, defaultTaxRateForMarket, isResidentialMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { formatJobSite } from "@/lib/leads";
 import { proposalScopeSummary } from "@/lib/proposal-email";
+import { proposalShareSummary } from "@/lib/proposal-summary";
 import { jobPaperHref } from "@/lib/job-record";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine, type JobPhoto } from "@/lib/types";
 import { canGenerateSignatureCertificate, canManageSettings } from "@/lib/visibility";
@@ -732,6 +733,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       })),
     [crm.photos, lines],
   );
+  const shareSummary = useMemo(() => proposalShareSummary(estimate, lines), [estimate, lines]);
   const groups = groupEstimateLines(lines);
   const pendingSections = emptySections.filter(
     (name) => !groups.some((group) => group.name === name),
@@ -1223,8 +1225,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Shared sections sit on every option. Each option section is a fork the homeowner can pick.
-              Options replace each other — they do not stack.
+              Shared sections sit on every option. Put the work that changes in each option section — those
+              items become the bullets on the homeowner cards. Options replace each other; they do not stack.
             </p>
             <PackagePicker
               estimate={estimate}
@@ -1752,6 +1754,9 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         jobState={estimate.state}
         jobPostalCode={estimate.postalCode}
         validUntil={estimate.validUntil}
+        summaryLines={shareSummary.lines}
+        summaryTotal={shareSummary.total}
+        summaryOptions={shareSummary.options}
         scopeSummary={proposalScopeSummary({
           projectType: job?.projectType || opportunity?.projectType,
           packageMode: estimate.packageMode,
