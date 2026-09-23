@@ -187,22 +187,22 @@ function asText(value: unknown) {
 
 function parseStaffList(raw: unknown): LeadAssignStaff[] {
   if (!Array.isArray(raw)) return [];
-  return raw
-    .map((item) => {
-      if (!item || typeof item !== "object") return null;
-      const row = item as Record<string, unknown>;
-      const id = asText(row.id ?? row.staffId).trim();
-      if (!id) return null;
-      return {
-        id,
-        name: asText(row.name),
-        email: asText(row.email),
-        teamId: asText(row.teamId ?? row.team_id) || null,
-        role: asText(row.role),
-        locked: Boolean(row.locked),
-      } satisfies LeadAssignStaff;
-    })
-    .filter((item): item is LeadAssignStaff => Boolean(item));
+  const staff: LeadAssignStaff[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as Record<string, unknown>;
+    const id = asText(row.id ?? row.staffId).trim();
+    if (!id) continue;
+    staff.push({
+      id,
+      name: asText(row.name),
+      email: asText(row.email),
+      teamId: asText(row.teamId ?? row.team_id) || null,
+      role: asText(row.role),
+      locked: Boolean(row.locked),
+    });
+  }
+  return staff;
 }
 
 export function parseVoiceLeadAssignContext(raw: unknown): {
