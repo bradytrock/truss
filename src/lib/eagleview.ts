@@ -226,7 +226,7 @@ export function measurementsFromEagleviewReport(report: Record<string, unknown>)
   const waste =
     direct.wastePercent ??
     nested.wastePercent ??
-    num("WastePercent", "SuggestedWastePercent", "waste");
+    num("WastePercent", "SuggestedWastePercent", "SuggestedWaste", "waste");
   const pitch =
     direct.pitchSummary ||
     nested.pitchSummary ||
@@ -237,7 +237,10 @@ export function measurementsFromEagleviewReport(report: Record<string, unknown>)
     totalSquares: squares,
     totalAreaSqFt: direct.totalAreaSqFt ?? nested.totalAreaSqFt ?? num("TotalArea", "AreaSquareFeet"),
     wastePercent: waste,
-    suggestedSquares: direct.suggestedSquares ?? nested.suggestedSquares ?? num("SuggestedSquares"),
+    suggestedSquares:
+      direct.suggestedSquares ??
+      nested.suggestedSquares ??
+      num("SuggestedSquares", "SquaresWithWaste", "WasteSquares"),
     pitchSummary: pitch,
     ridgesLf: direct.ridgesLf ?? nested.ridgesLf ?? num("LengthRidges", "RidgeLength", "Ridges"),
     hipsLf: direct.hipsLf ?? nested.hipsLf ?? num("LengthHips", "HipLength", "Hips"),
