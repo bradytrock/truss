@@ -67,6 +67,8 @@ assert.deepEqual(
   ["ABC Supply", "Zebra Waste"],
 );
 assert.equal(rows[0]?.statusLabel, "Active");
+assert.equal(rows[0]?.kind, "quickbooks");
+assert.equal(rows[0]?.nameKey, "abc supply");
 assert.equal(rows[1]?.statusLabel, "Inactive");
 assert.equal(rows[1]?.typeLine, "Hauling");
 assert.equal(visibleVendorRows(rows, "zebra")[0]?.id, "v2");

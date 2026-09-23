@@ -11,6 +11,7 @@ import {
   type EagleviewOrderStatus,
 } from "@/lib/eagleview";
 import { fillMaterialOrder, fillMaterialOrderLine } from "@/lib/material-orders";
+import { fillVendorFeedback, fillVendorPrice, fillVendorProfile } from "@/lib/vendor-profile";
 import { fillMaterialOrderTemplate, fillMaterialOrderTemplateLine } from "@/lib/material-order-templates";
 import { parseContractTypes } from "@/lib/contract-types";
 import { fillEstimate, fillEstimateLine } from "@/lib/estimate-totals";
@@ -53,6 +54,9 @@ import type {
   QbReviewIntent,
   QbReviewKind,
   QbVendor,
+  VendorFeedback,
+  VendorPrice,
+  VendorProfile,
   ScheduleEvent,
   StaffMember,
   Task,
@@ -990,6 +994,60 @@ export function mapQbVendor(row: Database["public"]["Tables"]["qb_vendors"]["Row
     balance: vendorText(extra, "balance"),
     notes: vendorText(extra, "notes"),
   };
+}
+
+export function mapVendorProfile(row: Database["public"]["Tables"]["vendor_profiles"]["Row"]): VendorProfile {
+  return fillVendorProfile({
+    id: row.id,
+    name: row.name,
+    nameKey: row.name_key,
+    notes: row.notes,
+    updatedBy: row.updated_by,
+    updatedAt: row.updated_at,
+    createdAt: row.created_at,
+  });
+}
+
+export function mapVendorFeedback(row: Database["public"]["Tables"]["vendor_feedback"]["Row"]): VendorFeedback {
+  return fillVendorFeedback({
+    id: row.id,
+    profileId: row.profile_id,
+    body: row.body,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  });
+}
+
+export function mapVendorPrice(row: Database["public"]["Tables"]["vendor_prices"]["Row"]): VendorPrice {
+  return fillVendorPrice({
+    id: row.id,
+    profileId: row.profile_id,
+    name: row.name,
+    unit: row.unit,
+    unitCost: Number(row.unit_cost),
+    notes: row.notes,
+    sortOrder: row.sort_order,
+  });
+}
+
+export function vendorProfilePatch(patch: Partial<VendorProfile>) {
+  const row: Database["public"]["Tables"]["vendor_profiles"]["Update"] = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.nameKey !== undefined) row.name_key = patch.nameKey;
+  if (patch.notes !== undefined) row.notes = patch.notes;
+  if (patch.updatedBy !== undefined) row.updated_by = patch.updatedBy;
+  if (patch.updatedAt !== undefined) row.updated_at = patch.updatedAt;
+  return row;
+}
+
+export function vendorPricePatch(patch: Partial<VendorPrice>) {
+  const row: Database["public"]["Tables"]["vendor_prices"]["Update"] = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.unit !== undefined) row.unit = patch.unit;
+  if (patch.unitCost !== undefined) row.unit_cost = patch.unitCost;
+  if (patch.notes !== undefined) row.notes = patch.notes;
+  if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder;
+  return row;
 }
 
 export function expensePatch(patch: Partial<Expense>) {

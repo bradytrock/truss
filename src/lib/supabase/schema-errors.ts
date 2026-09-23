@@ -707,6 +707,27 @@ export function missingMaterialOrdersMessage() {
   return `Saved in this browser. Run ${MATERIAL_ORDERS_SQL} in the SQL editor (or a fresh bootstrap) so material orders persist for the office and the field.`;
 }
 
+export const VENDOR_PROFILES_SQL = "supabase/migrations/20260923120000_vendor_profiles.sql";
+
+export function isMissingVendorProfiles(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentionsTable =
+    message.includes("vendor_profiles") ||
+    message.includes("vendor_feedback") ||
+    message.includes("vendor_prices") ||
+    message.includes("vendor_profile");
+  return (
+    (code === "pgrst205" && mentionsTable) ||
+    ((message.includes("schema cache") || message.includes("could not find the")) && mentionsTable)
+  );
+}
+
+export function missingVendorProfilesMessage() {
+  return `Saved in this browser. Run ${VENDOR_PROFILES_SQL} in the SQL editor (or a fresh bootstrap) so vendor notes, feedback, and pricing stay on the company book.`;
+}
+
 export const PAPER_ARCHIVE_SQL = "supabase/migrations/20260916140000_paper_archive.sql";
 
 export function isMissingPaperArchive(error: { message?: string; code?: string } | null | undefined) {
