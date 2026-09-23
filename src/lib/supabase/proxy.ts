@@ -1,5 +1,6 @@
 import { isPublicAppPath, isPublicCardPath } from "@/lib/auth-paths";
 import { isLegalPath } from "@/lib/legal";
+import { DEMO_SCHEDULE_URL, shouldForceDemo, subscriptionActiveFromRpc } from "@/lib/subscription";
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import {
@@ -8,6 +9,10 @@ import {
   SB_KEY_COOKIE,
   SB_URL_COOKIE,
 } from "@/lib/supabase/env";
+
+function redirectToDemo() {
+  return NextResponse.redirect(DEMO_SCHEDULE_URL);
+}
 
 function redirectToLogin(request: NextRequest) {
   const login = request.nextUrl.clone();
@@ -74,6 +79,19 @@ export async function updateSession(request: NextRequest) {
 
   const { data } = await supabase.auth.getUser();
   const signedIn = Boolean(data.user);
+  const subscriptionActive = signedIn
+    ? subscriptionActiveFromRpc(await supabase.rpc("company_subscription_active"))
+    : false;
+
+  if (signedIn && shouldForceDemo({ signedIn, pathname: path, subscriptionActive })) {
+    if (path.startsWith("/api/")) {
+      return NextResponse.json(
+        { error: "This company needs an active subscription. Schedule a demo at TheRoofingCRM.com." },
+        { status: 402 },
+      );
+    }
+    return redirectToDemo();
+  }
 
   if (signedIn && path.startsWith("/login")) {
     const next = request.nextUrl.searchParams.get("next");

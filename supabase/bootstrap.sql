@@ -14233,6 +14233,53 @@ grant select, insert, update, delete on public.staff_device_locations to authent
 comment on table public.staff_device_locations is
   'Latest GPS ping per seat from the mobile app (storm mode) or the desk map.';
 
+alter table public.companies
+  add column if not exists subscription_active boolean not null default true;
+alter table public.companies
+  alter column subscription_active set default false;
+
+create or replace function public.keep_company_subscription()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_op = 'UPDATE' and current_user in ('authenticated', 'anon') then
+    new.subscription_active := old.subscription_active;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists keep_company_subscription on public.companies;
+create trigger keep_company_subscription
+  before update on public.companies
+  for each row execute function public.keep_company_subscription();
+
+create or replace function public.company_subscription_active()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (
+      select c.subscription_active
+      from public.profiles p
+      join public.companies c on c.id = p.company_id
+      where p.id = auth.uid()
+      limit 1
+    ),
+    false
+  );
+$$;
+
+revoke all on function public.company_subscription_active() from public;
+grant execute on function public.company_subscription_active() to authenticated;
+
+comment on column public.companies.subscription_active is
+  'Host-managed. False until the company has an active TheRoofingCRM subscription.';
+
 alter table public.staff_device_locations replica identity full;
 do $$
 begin
