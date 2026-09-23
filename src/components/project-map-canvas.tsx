@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { initials } from "@/lib/format";
 import {
   PROJECT_MAP_CENTER,
+  clusterJobPins,
+  crewMapLabel,
   type CrewFreshness,
 } from "@/lib/project-map";
 
@@ -58,12 +59,14 @@ export function ProjectMapCanvas({
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<L.LayerGroup | null>(null);
   const fitKeyRef = useRef<string | null>(null);
+  const focusRef = useRef<string | null>(null);
   const onJob = useRef(onSelectJob);
   const onOpen = useRef(onOpenJob);
   const onCrew = useRef(onSelectCrew);
   onJob.current = onSelectJob;
   onOpen.current = onOpenJob;
   onCrew.current = onSelectCrew;
+  const [zoom, setZoom] = useState(8);
 
   useEffect(() => {
     if (!el.current || mapRef.current) return;
@@ -77,12 +80,15 @@ export function ProjectMapCanvas({
     }).addTo(map);
     layersRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
+    const onZoom = () => setZoom(map.getZoom());
+    map.on("zoomend", onZoom);
     const resize = () => map.invalidateSize();
     const timer = window.setTimeout(resize, 80);
     window.addEventListener("resize", resize);
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener("resize", resize);
+      map.off("zoomend", onZoom);
       map.remove();
       mapRef.current = null;
       layersRef.current = null;
@@ -95,9 +101,32 @@ export function ProjectMapCanvas({
     if (!map || !group) return;
     group.clearLayers();
     const points: L.LatLngExpression[] = [];
+    const selectedPin = selectedJobId ? jobs.find((job) => job.id === selectedJobId) : undefined;
 
     if (showProjects) {
-      for (const job of jobs) {
+      const clusters = clusterJobPins(jobs, zoom);
+      for (const cluster of clusters) {
+        const members = jobs.filter((job) => cluster.jobIds.includes(job.id));
+        const count = members.length;
+        if (count > 1) {
+          const selected = Boolean(selectedJobId && cluster.jobIds.includes(selectedJobId));
+          const icon = L.divIcon({
+            className: "project-map-cluster",
+            iconSize: [36, 36],
+            iconAnchor: [18, 18],
+            html: `<button type="button" class="project-map-cluster-btn${selected ? " is-selected" : ""}" aria-label="${count} jobs">${count}</button>`,
+          });
+          const marker = L.marker([cluster.lat, cluster.lng], { icon, zIndexOffset: selected ? 500 : 200 });
+          marker.on("click", () => {
+            const bounds = L.latLngBounds(members.map((job) => [job.lat, job.lng] as L.LatLngTuple));
+            map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+          });
+          marker.addTo(group);
+          points.push([cluster.lat, cluster.lng]);
+          continue;
+        }
+        const job = members[0];
+        if (!job) continue;
         const selected = job.id === selectedJobId;
         const icon = L.divIcon({
           className: "project-map-pin",
@@ -124,15 +153,17 @@ export function ProjectMapCanvas({
       for (const person of crew) {
         const selected = person.staffId === selectedStaffId;
         const live = person.freshness === "live";
+        const label = crewMapLabel(person.name);
+        const width = Math.min(168, Math.max(72, label.length * 8 + 28));
         const icon = L.divIcon({
           className: "project-map-crew",
-          iconSize: [32, 32],
-          iconAnchor: [16, 16],
-          html: `<button type="button" aria-label="${escapeAttr(person.name)}" style="width:32px;height:32px;border-radius:999px;border:${selected ? "3px solid #181818" : "2px solid #fff"};background:${live ? "#111" : "#6b7280"};color:#fff;font:600 11px/1 'IBM Plex Sans',sans-serif;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 6px rgba(0,0,0,.4);cursor:pointer">${escapeHtml(initials(person.name) || "?")}</button>`,
+          iconSize: [width, 28],
+          iconAnchor: [width / 2, 14],
+          html: `<button type="button" class="project-map-crew-pill${live ? " is-live" : ""}${selected ? " is-selected" : ""}" aria-label="${escapeAttr(person.name)}">${escapeHtml(label)}</button>`,
         });
         const marker = L.marker([person.lat, person.lng], { icon, zIndexOffset: selected ? 800 : 600 });
         marker.on("click", () => onCrew.current(person.staffId));
-        marker.bindTooltip(`${person.name} · ${person.updatedLabel}`, { direction: "top", offset: [0, -12] });
+        marker.bindTooltip(`${person.name} · ${person.updatedLabel}`, { direction: "top", offset: [0, -14] });
         marker.addTo(group);
         points.push([person.lat, person.lng]);
       }
@@ -145,10 +176,14 @@ export function ProjectMapCanvas({
       } else {
         map.setView([PROJECT_MAP_CENTER.lat, PROJECT_MAP_CENTER.lng], 8, { animate: false });
       }
+    } else if (selectedPin && focusRef.current !== selectedPin.id) {
+      focusRef.current = selectedPin.id;
+      map.flyTo([selectedPin.lat, selectedPin.lng], Math.max(map.getZoom(), 14), { duration: 0.4 });
     }
-  }, [jobs, crew, showProjects, showCrew, selectedJobId, selectedStaffId, fitKey]);
+    if (!selectedJobId) focusRef.current = null;
+  }, [jobs, crew, showProjects, showCrew, selectedJobId, selectedStaffId, fitKey, zoom]);
 
-  return <div ref={el} className="project-map-leaflet h-full min-h-[420px] w-full" />;
+  return <div ref={el} className="project-map-leaflet h-full min-h-[280px] w-full" />;
 }
 
 function jobPopup(job: ProjectMapJobPin, onOpen: () => void) {

@@ -3,8 +3,10 @@
 import dynamic from "next/dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { LocateFixed } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { JobRecordWindow } from "@/components/job-window";
+import { MapJobResultList, MapSearchBar } from "@/components/map-job-list";
 import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
 import { jobAddress, isDeletedJob } from "@/lib/job-record";
@@ -13,6 +15,7 @@ import {
   addressNeedsGeocode,
   crewFreshness,
   jobHasCoords,
+  jobMatchesMapSearch,
   jobMatchesProjectYear,
   parseMapYear,
   PROJECT_PIN_COLORS,
@@ -25,8 +28,9 @@ import {
 } from "@/lib/project-map";
 import { missingStormMapMessage } from "@/lib/supabase/schema-errors";
 import { staffForReports } from "@/lib/visibility";
-import { WORK_COLUMN_LABELS, type WorkColumn } from "@/lib/work-board";
+import { workColumnFor, WORK_COLUMN_LABELS, type WorkColumn } from "@/lib/work-board";
 import type { Job } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 const ProjectMapCanvas = dynamic(
   () => import("@/components/project-map-canvas").then((mod) => mod.ProjectMapCanvas),
@@ -52,6 +56,9 @@ function MapPageInner() {
   const [sharing, setSharing] = useState(false);
   const [mapError, setMapError] = useState("");
   const [geocoding, setGeocoding] = useState(false);
+  const [query, setQuery] = useState("");
+  const [stages, setStages] = useState<WorkColumn[]>([]);
+  const [listOpen, setListOpen] = useState(false);
   const geocodeTried = useRef(new Set<string>());
   const shareWatch = useRef<number | null>(null);
   const selectedStaffId = searchParams.get("crew");
@@ -70,7 +77,17 @@ function MapPageInner() {
   const years = useMemo(() => projectYears(jobs), [jobs]);
   const year = parseMapYear(searchParams.get("year"), years);
   const yearJobs = useMemo(() => jobs.filter((job) => jobMatchesProjectYear(job, year)), [jobs, year]);
-  const mappedJobs = useMemo(() => yearJobs.filter(jobHasCoords), [yearJobs]);
+  const listedJobs = useMemo(
+    () =>
+      yearJobs.filter((job) => {
+        const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
+        if (stages.length && !stages.includes(workColumnFor(job, opportunity))) return false;
+        const homeowner = crm.getContact(job.primaryContactId)?.name?.trim() || "";
+        return jobMatchesMapSearch(job, query, [homeowner, jobAddress(job)]);
+      }),
+    [crm, query, stages, yearJobs],
+  );
+  const mappedJobs = useMemo(() => listedJobs.filter(jobHasCoords), [listedJobs]);
   const needGeocode = useMemo(() => yearJobs.filter(addressNeedsGeocode), [yearJobs]);
   const selectedJob = jobId ? jobs.find((job) => job.id === jobId) ?? crm.getJob(jobId) : undefined;
   const recordJob = recordJobId
@@ -138,6 +155,12 @@ function MapPageInner() {
     },
     [replaceParams],
   );
+
+  const toggleStage = useCallback((column: WorkColumn) => {
+    setStages((current) =>
+      current.includes(column) ? current.filter((item) => item !== column) : [...current, column],
+    );
+  }, []);
 
   const openJobRecord = useCallback((id: string) => {
     setRecordJobId(id);
@@ -275,45 +298,43 @@ function MapPageInner() {
 
   if (!crm.hydrated) return <LoadingScreen />;
 
+  const searchBar = (
+    <MapSearchBar
+      query={query}
+      onQuery={setQuery}
+      years={years}
+      year={year}
+      onYear={setYear}
+      stages={stages}
+      onToggleStage={toggleStage}
+      showCrew={showCrew}
+      onToggleCrew={() => setShowCrew((value) => !value)}
+    />
+  );
+
   return (
-    <div className="space-y-4">
+    <div className="lg:space-y-4">
       {crm.hydrateError ? <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} /> : null}
       {mapError ? <ErrorBanner message={mapError} onRetry={() => { setMapError(""); void loadCrew(); void geocodeMissing(); }} /> : null}
-      <PageHeader
-        eyebrow="Field"
-        title="Map"
-        description="Every job site we can place, filtered by project year, plus anyone whose phone is signed in and pinging."
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant={showProjects ? "default" : "outline"} onClick={() => setShowProjects((value) => !value)}>
-              Projects {mappedJobs.length}
-            </Button>
-            <Button variant={showCrew ? "default" : "outline"} onClick={() => setShowCrew((value) => !value)}>
-              Crew {liveCrew.filter((row) => row.freshness === "live").length}
-            </Button>
-            <Button variant={sharing ? "secondary" : "outline"} onClick={sharing ? stopSharing : startSharing}>
-              {sharing ? "Stop sharing" : "Share my location"}
-            </Button>
-          </div>
-        }
-      />
-      <div className="flex flex-wrap items-center gap-1.5">
-        {years.map((item) => (
-          <Button key={item} size="sm" variant={year === item ? "default" : "outline"} onClick={() => setYear(item)}>
-            {item}
-          </Button>
-        ))}
-        <Button size="sm" variant={year === "all" ? "default" : "outline"} onClick={() => setYear("all")}>
-          All years
-        </Button>
-        <p className="ml-2 text-sm text-[#706e6b]">
-          {mappedJobs.length} placed
-          {needGeocode.length ? ` · ${needGeocode.length} still looking up` : ""}
-          {geocoding ? " · mapping sites…" : ""}
-        </p>
+      <div className="hidden lg:block">
+        <PageHeader
+          eyebrow="Field"
+          title="Map"
+          description="Job sites and live crew. Search an address, filter by year or stage, and tap a name pill to see who is pinging."
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant={showProjects ? "default" : "outline"} onClick={() => setShowProjects((value) => !value)}>
+                Projects {mappedJobs.length}
+              </Button>
+              <Button variant={sharing ? "secondary" : "outline"} onClick={sharing ? stopSharing : startSharing}>
+                {sharing ? "Stop sharing" : "Share my location"}
+              </Button>
+            </div>
+          }
+        />
       </div>
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="overflow-hidden rounded-sm border border-[#c9c9c9] bg-[#eceae6] shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
+      <div className="relative -mx-5 -mb-5 flex min-h-[calc(100dvh-5.5rem)] flex-col overflow-hidden bg-[#eceae6] lg:mx-0 lg:mb-0 lg:min-h-[680px] lg:grid lg:grid-cols-[22rem_minmax(0,1fr)] lg:overflow-hidden lg:rounded-xl lg:border">
+        <div className="absolute inset-0 lg:relative lg:order-2">
           <ProjectMapCanvas
             jobs={showProjects ? pins : []}
             crew={showCrew ? liveCrew : []}
@@ -321,33 +342,95 @@ function MapPageInner() {
             selectedStaffId={selectedStaffId}
             showProjects={showProjects}
             showCrew={showCrew}
-            fitKey={`${year}|${showProjects}|${showCrew}|${pins.length}|${liveCrew.length}`}
+            fitKey={`${year}|${query}|${stages.join(",")}|${showProjects}|${showCrew}|${pins.length}|${liveCrew.length}`}
             onSelectJob={selectJob}
             onOpenJob={openJobRecord}
             onSelectCrew={selectCrew}
           />
+          <div className="absolute top-3 right-3 z-10 hidden flex-col gap-2 lg:flex">
+            <Button
+              size="icon"
+              variant={sharing ? "secondary" : "outline"}
+              className="bg-background shadow-sm"
+              onClick={sharing ? stopSharing : startSharing}
+              aria-label={sharing ? "Stop sharing location" : "Share my location"}
+            >
+              <LocateFixed />
+            </Button>
+          </div>
+          {geocoding || needGeocode.length ? (
+            <p className="pointer-events-none absolute bottom-28 left-3 z-10 rounded-full bg-background/90 px-3 py-1 text-xs text-muted-foreground shadow-sm lg:bottom-3">
+              {geocoding ? "Mapping sites…" : `${needGeocode.length} still looking up`}
+            </p>
+          ) : null}
         </div>
-        <aside className="space-y-3">
-          {selectedCrew ? (
-            <CrewCard
-              name={selectedCrew.name}
-              freshness={selectedCrew.freshness}
-              updatedLabel={selectedCrew.updatedLabel}
-              nearby={nearbyJobs(yearJobs, selectedCrew.lat, selectedCrew.lng)}
-              onSelectJob={selectJob}
-            />
-          ) : selectedJob ? (
-            <JobCard
-              job={selectedJob}
-              homeowner={crm.getContact(selectedJob.primaryContactId)?.name?.trim() || ""}
-              onOpen={() => openJobRecord(selectedJob.id)}
-            />
-          ) : (
-            <div className="border border-[#c9c9c9] bg-white px-4 py-4 text-sm leading-relaxed text-[#706e6b]">
-              {year === "all" ? "All years" : year} · tap a pin for the job or a black initial for a live phone.
-            </div>
+
+        <div className="absolute top-3 right-3 left-3 z-20 lg:hidden">
+          {searchBar}
+          <div className="mt-2 flex justify-end">
+            <Button
+              size="icon"
+              variant={sharing ? "secondary" : "outline"}
+              className="bg-background shadow-sm"
+              onClick={sharing ? stopSharing : startSharing}
+              aria-label={sharing ? "Stop sharing location" : "Share my location"}
+            >
+              <LocateFixed />
+            </Button>
+          </div>
+        </div>
+
+        <aside
+          className={cn(
+            "absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-2xl border-t bg-background shadow-[0_-8px_28px_rgba(0,0,0,0.12)] transition-[height] lg:static lg:order-1 lg:h-auto lg:max-h-none lg:rounded-none lg:border-r lg:border-t-0 lg:shadow-none",
+            listOpen ? "h-[58%]" : "h-[8.25rem]",
           )}
-          <Legend />
+        >
+          <button
+            type="button"
+            className="flex w-full flex-col items-center pt-2 lg:hidden"
+            onClick={() => setListOpen((value) => !value)}
+            aria-expanded={listOpen}
+          >
+            <span className="h-1.5 w-10 rounded-full bg-muted-foreground/30" />
+            <span className="sr-only">{listOpen ? "Collapse job list" : "Expand job list"}</span>
+          </button>
+          <div className="hidden border-b p-3 lg:block">{searchBar}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <MapJobResultList
+              jobs={listedJobs}
+              photos={crm.photos}
+              opportunities={crm.opportunities}
+              selectedJobId={jobId}
+              onSelect={(id) => {
+                selectJob(id);
+                setListOpen(false);
+              }}
+            />
+            {selectedCrew ? (
+              <div className="mt-3">
+                <CrewCard
+                  name={selectedCrew.name}
+                  freshness={selectedCrew.freshness}
+                  updatedLabel={selectedCrew.updatedLabel}
+                  nearby={nearbyJobs(listedJobs, selectedCrew.lat, selectedCrew.lng)}
+                  onSelectJob={selectJob}
+                />
+              </div>
+            ) : null}
+            {selectedJob ? (
+              <div className="mt-3 hidden lg:block">
+                <JobCard
+                  job={selectedJob}
+                  homeowner={crm.getContact(selectedJob.primaryContactId)?.name?.trim() || ""}
+                  onOpen={() => openJobRecord(selectedJob.id)}
+                />
+              </div>
+            ) : null}
+            <div className="mt-3 hidden lg:block">
+              <Legend />
+            </div>
+          </div>
         </aside>
       </div>
       {recordJob ? <JobRecordWindow key={recordJob.id} job={recordJob} onClose={closeJobRecord} /> : null}

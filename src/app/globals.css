@@ -394,6 +394,50 @@
   font-family: var(--font-plex-sans), "IBM Plex Sans", sans-serif;
 }
 
+.project-map-cluster-btn {
+  display: flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #c43b3b;
+  color: #fff;
+  font: 700 13px/1 var(--font-plex-sans), "IBM Plex Sans", sans-serif;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+}
+
+.project-map-cluster-btn.is-selected {
+  border-color: #181818;
+}
+
+.project-map-crew-pill {
+  display: inline-flex;
+  height: 28px;
+  max-width: 168px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: #6b7280;
+  color: #fff;
+  font: 600 12px/1 var(--font-plex-sans), "IBM Plex Sans", sans-serif;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+  cursor: pointer;
+}
+
+.project-map-crew-pill.is-live {
+  background: #111;
+}
+
+.project-map-crew-pill.is-selected {
+  border-color: #181818;
+}
+
 .project-map-popup-wrap .leaflet-popup-content-wrapper,
 .project-map-popup-wrap .leaflet-popup-tip {
   background: #fff;

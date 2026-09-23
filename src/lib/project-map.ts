@@ -17,8 +17,13 @@ export {
   parseMapYear,
   isValidLatLng,
   parsePresenceBody,
+  crewMapLabel,
+  jobMatchesMapSearch,
+  clusterCellDegrees,
+  clusterJobPins,
   type CrewFreshness,
   type MapCrewPing,
+  type MapPinCluster,
 } from "./project-map-logic";
 
 export const PROJECT_PIN_COLORS: Record<WorkColumn, string> = {

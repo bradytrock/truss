@@ -120,6 +120,66 @@ export function isValidLatLng(lat: number, lng: number) {
   return Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
 }
 
+export function crewMapLabel(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= 2) return parts.join(" ") || "Crew";
+  return `${parts[0]} ${parts[parts.length - 1]}`;
+}
+
+export function jobMatchesMapSearch(
+  job: { name?: string; code?: string; street?: string; city?: string; state?: string; location?: string },
+  query: string,
+  extras: string[] = [],
+) {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const hay = [job.name, job.code, job.street, job.city, job.state, job.location, ...extras]
+    .filter((part) => typeof part === "string" && part.trim())
+    .join(" ")
+    .toLowerCase();
+  return hay.includes(q);
+}
+
+export function clusterCellDegrees(zoom: number) {
+  if (zoom >= 15) return 0;
+  if (zoom >= 13) return 0.003;
+  if (zoom >= 11) return 0.012;
+  if (zoom >= 9) return 0.04;
+  return 0.1;
+}
+
+export type MapPinCluster = {
+  id: string;
+  lat: number;
+  lng: number;
+  jobIds: string[];
+};
+
+export function clusterJobPins(
+  pins: Array<{ id: string; lat: number; lng: number }>,
+  zoom: number,
+): MapPinCluster[] {
+  const cell = clusterCellDegrees(zoom);
+  if (cell <= 0) {
+    return pins.map((pin) => ({ id: pin.id, lat: pin.lat, lng: pin.lng, jobIds: [pin.id] }));
+  }
+  const buckets = new Map<string, MapPinCluster>();
+  for (const pin of pins) {
+    const key = `${Math.round(pin.lng / cell)}:${Math.round(pin.lat / cell)}`;
+    const bucket = buckets.get(key);
+    if (!bucket) {
+      buckets.set(key, { id: pin.id, lat: pin.lat, lng: pin.lng, jobIds: [pin.id] });
+      continue;
+    }
+    bucket.jobIds.push(pin.id);
+    const n = bucket.jobIds.length;
+    bucket.lat = (bucket.lat * (n - 1) + pin.lat) / n;
+    bucket.lng = (bucket.lng * (n - 1) + pin.lng) / n;
+    bucket.id = `cluster:${key}`;
+  }
+  return [...buckets.values()];
+}
+
 export function parsePresenceBody(body: Record<string, unknown>) {
   const lat = typeof body.lat === "number" ? body.lat : Number(body.lat);
   const lng = typeof body.lng === "number" ? body.lng : Number(body.lng);

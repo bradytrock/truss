@@ -12,6 +12,10 @@ import {
   projectYear,
   projectYears,
   visibleCrew,
+  crewMapLabel,
+  jobMatchesMapSearch,
+  clusterCellDegrees,
+  clusterJobPins,
 } from "./project-map-logic.ts";
 
 assert.equal(projectYear({ startDate: "2026-03-15", code: "BJ010124-A" }), 2026);
@@ -91,3 +95,12 @@ assert.equal(ok.lat, 32.8);
 assert.equal(ok.accuracy, 12);
 assert.equal(parsePresenceBody({ lat: 200, lng: -96.8 }).error, "Need a valid latitude and longitude.");
 assert.equal(parsePresenceBody({ lat: "nope", lng: -96.8 }).error, "Need a valid latitude and longitude.");
+
+assert.equal(crewMapLabel("Kyle Marty"), "Kyle Marty");
+assert.equal(crewMapLabel("Kyle James Marty"), "Kyle Marty");
+assert.equal(jobMatchesMapSearch({ name: "Jones", street: "907 Shadow Ridge", city: "Highland Village" }, "shadow"), true);
+assert.equal(jobMatchesMapSearch({ name: "Jones", street: "907 Shadow Ridge" }, "dallas", ["Lisa Roach"]), false);
+assert.equal(jobMatchesMapSearch({ name: "Jones" }, "lisa", ["Lisa Roach"]), true);
+assert.equal(clusterCellDegrees(16), 0);
+assert.equal(clusterJobPins([{ id: "a", lat: 32.96, lng: -97.05 }, { id: "b", lat: 33.2, lng: -96.7 }], 16).length, 2);
+assert.equal(clusterJobPins([{ id: "a", lat: 32.9, lng: -97.0 }, { id: "b", lat: 32.91, lng: -97.01 }], 8)[0]?.jobIds.length, 2);
