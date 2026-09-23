@@ -13,12 +13,15 @@ do $$ begin
   'estimating',
   'bid_submitted',
   'interview',
+  'supplementing',
   'awarded',
   'lost'
 );
 exception
   when duplicate_object then null;
 end $$;
+
+alter type public.pipeline_stage add value if not exists 'supplementing';
 
 do $$ begin
   create type public.job_status as enum (
@@ -14460,3 +14463,7 @@ exception
   when duplicate_object then null;
   when undefined_object then null;
 end $$;
+
+-- ========== 20260923150000_pipeline_supplementing.sql ==========
+-- Add Supplementing as a pipeline stage between Follow-up and Job Sold.
+alter type public.pipeline_stage add value if not exists 'supplementing';

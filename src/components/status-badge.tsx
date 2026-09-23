@@ -35,6 +35,7 @@ const stageClass: Record<PipelineStage, string> = {
   estimating: quiet,
   bid_submitted: hot,
   interview: hot,
+  supplementing: hot,
   awarded: done,
   lost: mute,
 };
@@ -84,6 +85,7 @@ const workClass: Record<WorkColumn, string> = {
   lead: quiet,
   estimating: quiet,
   proposal_sent: hot,
+  supplementing: hot,
   in_progress: hot,
   punch: hot,
   complete: done,

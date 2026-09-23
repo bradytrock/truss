@@ -2504,7 +2504,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         })
         .eq("id", id);
       if (error) {
-        toast.error(error.message);
+        toast.error(
+          isInvalidEnumValue(error)
+            ? `Cannot move to ${STAGE_LABELS[stage]}. Run the pipeline supplementing migration in the SQL editor.`
+            : error.message,
+        );
         return null;
       }
 

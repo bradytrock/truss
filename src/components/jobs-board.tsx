@@ -47,6 +47,7 @@ const columnAccent: Record<WorkColumn, string> = {
   lead: "bg-foreground/25",
   estimating: "bg-foreground/40",
   proposal_sent: "bg-primary",
+  supplementing: "bg-primary",
   in_progress: "bg-primary",
   punch: "bg-foreground",
   complete: "bg-foreground/40",

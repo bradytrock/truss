@@ -422,7 +422,15 @@ function CrewCard({
 }
 
 function Legend() {
-  const items: WorkColumn[] = ["lead", "estimating", "proposal_sent", "in_progress", "punch", "complete"];
+  const items: WorkColumn[] = [
+    "lead",
+    "estimating",
+    "proposal_sent",
+    "supplementing",
+    "in_progress",
+    "punch",
+    "complete",
+  ];
   return (
     <div className="border border-[#c9c9c9] bg-white px-4 py-3 text-xs text-[#706e6b]">
       <p className="mb-2 text-[11px] font-semibold tracking-wide uppercase">Pins</p>

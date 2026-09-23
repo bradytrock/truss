@@ -3,6 +3,7 @@ export const PIPELINE_STAGES = [
   "estimating",
   "bid_submitted",
   "interview",
+  "supplementing",
   "awarded",
   "lost",
 ] as const;
@@ -1299,6 +1300,7 @@ export const STAGE_LABELS: Record<PipelineStage, string> = {
   estimating: "Estimating",
   bid_submitted: "Proposal sent",
   interview: "Follow-up",
+  supplementing: "Supplementing",
   awarded: "Job Sold",
   lost: "Lost",
 };
@@ -1308,6 +1310,7 @@ export const STAGE_PROBABILITY: Record<PipelineStage, number> = {
   estimating: 30,
   bid_submitted: 45,
   interview: 65,
+  supplementing: 80,
   awarded: 100,
   lost: 0,
 };
