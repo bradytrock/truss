@@ -37,6 +37,7 @@ export type Database = {
           minimum_margin_percent: number;
           default_email_signature: string;
           default_monthly_sales_quota: number;
+          subscription_active: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -73,6 +74,7 @@ export type Database = {
           minimum_margin_percent?: number;
           default_email_signature?: string;
           default_monthly_sales_quota?: number;
+          subscription_active?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -109,6 +111,7 @@ export type Database = {
           minimum_margin_percent?: number;
           default_email_signature?: string;
           default_monthly_sales_quota?: number;
+          subscription_active?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -2605,6 +2608,10 @@ export type Database = {
           p_type?: string;
         };
         Returns: Json;
+      };
+      company_subscription_active: {
+        Args: Record<string, never>;
+        Returns: boolean;
       };
       qbwc_request_vendor_sync: {
         Args: Record<string, never>;

@@ -118,6 +118,7 @@ import {
   wouldLeaveNoAdmin,
 } from "@/lib/accounts";
 import { isPublicAppPath } from "@/lib/auth-paths";
+import { DEMO_SCHEDULE_URL, companySubscriptionActive } from "@/lib/subscription";
 import { defaultTaxRateForMarket, isResidentialMarket, marketForEstimate, parseMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { logoExtension, validateLogoFile } from "@/lib/company-logo";
 import { deleteViaApi, uploadViaApi } from "@/lib/storage/client-upload";
@@ -1401,6 +1402,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       .select("*")
       .eq("id", profile.company_id)
       .maybeSingle();
+    if (!companyError && !companySubscriptionActive(companyRow)) {
+      await supabase.auth.signOut();
+      if (epoch !== bookEpoch.current) return;
+      window.location.replace(DEMO_SCHEDULE_URL);
+      return;
+    }
     const settings = companyRow
       ? mapCompany(companyRow)
       : companyError
