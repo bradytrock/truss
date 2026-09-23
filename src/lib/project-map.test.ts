@@ -16,6 +16,13 @@ import {
   jobMatchesMapSearch,
   clusterCellDegrees,
   clusterJobPins,
+  geoShareErrorMessage,
+  preferFresherPing,
+  resolveSeatStaffId,
+  shouldPostPresence,
+  shouldStopSharingOnGeoError,
+  GEO_PERMISSION_DENIED,
+  GEO_TIMEOUT,
 } from "./project-map-logic.ts";
 
 assert.equal(projectYear({ startDate: "2026-03-15", code: "BJ010124-A" }), 2026);
@@ -104,3 +111,39 @@ assert.equal(jobMatchesMapSearch({ name: "Jones" }, "lisa", ["Lisa Roach"]), tru
 assert.equal(clusterCellDegrees(16), 0);
 assert.equal(clusterJobPins([{ id: "a", lat: 32.96, lng: -97.05 }, { id: "b", lat: 33.2, lng: -96.7 }], 16).length, 2);
 assert.equal(clusterJobPins([{ id: "a", lat: 32.9, lng: -97.0 }, { id: "b", lat: 32.91, lng: -97.01 }], 8)[0]?.jobIds.length, 2);
+
+assert.equal(geoShareErrorMessage({ insecure: true }).includes("https"), true);
+assert.equal(geoShareErrorMessage({ code: GEO_PERMISSION_DENIED }).includes("blocked"), true);
+assert.equal(shouldStopSharingOnGeoError(GEO_PERMISSION_DENIED), true);
+assert.equal(shouldStopSharingOnGeoError(GEO_TIMEOUT), false);
+assert.equal(shouldStopSharingOnGeoError(undefined), false);
+assert.equal(shouldPostPresence(null, 1000), true);
+assert.equal(shouldPostPresence(0, 9_000), false);
+assert.equal(shouldPostPresence(0, 10_000), true);
+
+const livePing = {
+  staffId: "me",
+  name: "Pat",
+  lat: 32.8,
+  lng: -96.8,
+  accuracy: 20,
+  heading: null,
+  updatedAt: "2026-09-23T12:00:10.000Z",
+};
+assert.deepEqual(
+  preferFresherPing(
+    [{ ...livePing, updatedAt: "2026-09-23T12:00:00.000Z", lat: 32.7 }],
+    livePing,
+  ),
+  [livePing],
+);
+assert.equal(resolveSeatStaffId({ profileStaffId: "seat-1" }), "seat-1");
+assert.equal(
+  resolveSeatStaffId({
+    email: "pat@example.com",
+    roster: [{ id: "seat-2", email: "pat@example.com", name: "Pat" }],
+  }),
+  "seat-2",
+);
+
+console.log("project-map tests passed");

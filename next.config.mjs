@@ -41,6 +41,10 @@ const nextConfig = {
         source: "/api/share/:path*",
         headers: [{ key: "Cache-Control", value: "private, no-store, max-age=0" }],
       },
+      {
+        source: "/:path*",
+        headers: [{ key: "Permissions-Policy", value: "geolocation=(self)" }],
+      },
     ];
   },
   env: {

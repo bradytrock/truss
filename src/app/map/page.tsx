@@ -14,12 +14,18 @@ import { initials } from "@/lib/format";
 import {
   addressNeedsGeocode,
   crewFreshness,
+  GEO_WATCH_COARSE,
+  GEO_WATCH_PRECISE,
+  geoShareErrorMessage,
   jobHasCoords,
   jobMatchesMapSearch,
   jobMatchesProjectYear,
   parseMapYear,
   PROJECT_PIN_COLORS,
   projectYears,
+  shouldPostPresence,
+  shouldStopSharingOnGeoError,
+  staffIdsForLiveMap,
   visibleCrew,
   workPinColor,
   workPinLabel,
@@ -61,6 +67,7 @@ function MapPageInner() {
   const [listOpen, setListOpen] = useState(false);
   const geocodeTried = useRef(new Set<string>());
   const shareWatch = useRef<number | null>(null);
+  const lastPresenceAt = useRef<number | null>(null);
   const selectedStaffId = searchParams.get("crew");
   const jobId = searchParams.get("job");
   const [recordJobId, setRecordJobId] = useState<string | null>(null);
@@ -97,8 +104,11 @@ function MapPageInner() {
   const viewer = crm.effectiveStaff;
   const visibleStaffIds = useMemo(() => {
     if (!viewer) return new Set<string>();
-    return new Set(staffForReports(viewer, crm.book.staff).map((member) => member.id));
-  }, [crm.book.staff, viewer]);
+    return staffIdsForLiveMap(
+      staffForReports(viewer, crm.book.staff).map((member) => member.id),
+      [viewer.id, crm.user.staffId],
+    );
+  }, [crm.book.staff, crm.user.staffId, viewer]);
 
   const liveCrew = useMemo(() => {
     const now = Date.now();
@@ -247,31 +257,47 @@ function MapPageInner() {
 
   const startSharing = useCallback(() => {
     if (!navigator.geolocation) {
-      setMapError("This browser cannot share a location.");
+      setMapError(geoShareErrorMessage({ unsupported: true }));
+      return;
+    }
+    if (typeof window !== "undefined" && !window.isSecureContext) {
+      setMapError(geoShareErrorMessage({ insecure: true }));
       return;
     }
     setSharing(true);
-    shareWatch.current = navigator.geolocation.watchPosition(
-      (position) => {
-        void fetch("/api/map/presence", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-            heading: Number.isFinite(position.coords.heading) ? position.coords.heading : null,
-          }),
-        }).then((response) => {
-          if (response.ok) void loadCrew();
-        });
-      },
-      () => {
-        setMapError("Location was blocked. Allow it in the browser, or ping from the phone.");
-        stopSharing();
-      },
-      { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 },
-    );
+    setMapError("");
+    const watch = (options: PositionOptions, fallback: PositionOptions | null) => {
+      if (shareWatch.current != null) navigator.geolocation.clearWatch(shareWatch.current);
+      shareWatch.current = navigator.geolocation.watchPosition(
+        (position) => {
+          const now = Date.now();
+          if (!shouldPostPresence(lastPresenceAt.current, now)) return;
+          lastPresenceAt.current = now;
+          void fetch("/api/map/presence", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              heading: Number.isFinite(position.coords.heading) ? position.coords.heading : null,
+            }),
+          }).then((response) => {
+            if (response.ok) void loadCrew();
+          });
+        },
+        (error) => {
+          setMapError(geoShareErrorMessage({ code: error.code }));
+          if (shouldStopSharingOnGeoError(error.code)) {
+            stopSharing();
+            return;
+          }
+          if (fallback) watch(fallback, null);
+        },
+        options,
+      );
+    };
+    watch(GEO_WATCH_PRECISE, GEO_WATCH_COARSE);
   }, [loadCrew, stopSharing]);
 
   useEffect(() => () => stopSharing(), [stopSharing]);

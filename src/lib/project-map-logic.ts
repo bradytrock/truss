@@ -199,3 +199,100 @@ export function parsePresenceBody(body: Record<string, unknown>) {
     heading: Number.isFinite(heading) ? heading : null,
   };
 }
+
+/** W3C GeolocationPositionError codes. */
+export const GEO_PERMISSION_DENIED = 1;
+export const GEO_POSITION_UNAVAILABLE = 2;
+export const GEO_TIMEOUT = 3;
+
+/** First watch: GPS when the device has it. Timeout is long so a laptop Wi‑Fi fix can still land. */
+export const GEO_WATCH_PRECISE = {
+  enableHighAccuracy: true,
+  maximumAge: 15000,
+  timeout: 45000,
+} as const;
+
+/** Fallback after timeout / unavailable — network / IP location on a desk browser. */
+export const GEO_WATCH_COARSE = {
+  enableHighAccuracy: false,
+  maximumAge: 60000,
+  timeout: 60000,
+} as const;
+
+export const PRESENCE_POST_MIN_MS = 10_000;
+
+export function shouldStopSharingOnGeoError(code: number | undefined) {
+  return code === GEO_PERMISSION_DENIED;
+}
+
+export function geoShareErrorMessage(input: {
+  code?: number;
+  insecure?: boolean;
+  unsupported?: boolean;
+}) {
+  if (input.unsupported) return "This browser cannot share a location.";
+  if (input.insecure) {
+    return "Location needs a secure (https) page. Open the live site, not a local http tab.";
+  }
+  if (input.code === GEO_PERMISSION_DENIED) {
+    return "Location was blocked. Allow it in the browser, or ping from the phone.";
+  }
+  if (input.code === GEO_TIMEOUT) {
+    return "Location is taking longer than usual. Trying a less precise fix.";
+  }
+  if (input.code === GEO_POSITION_UNAVAILABLE) {
+    return "Could not find a precise position. Trying again with network location.";
+  }
+  return "Could not read your location yet. Still trying.";
+}
+
+export function shouldPostPresence(lastPostedAt: number | null, now: number, minMs = PRESENCE_POST_MIN_MS) {
+  if (lastPostedAt == null) return true;
+  return now - lastPostedAt >= minMs;
+}
+
+export function mergeCrewPing(rows: MapCrewPing[], ping: MapCrewPing): MapCrewPing[] {
+  return [...rows.filter((row) => row.staffId !== ping.staffId), ping];
+}
+
+/** Keep a just-shared ping if the poll is older or missing that seat. */
+export function preferFresherPing(rows: MapCrewPing[], ping: MapCrewPing | null | undefined): MapCrewPing[] {
+  if (!ping) return rows;
+  const existing = rows.find((row) => row.staffId === ping.staffId);
+  if (existing && Date.parse(existing.updatedAt) >= Date.parse(ping.updatedAt)) return rows;
+  return mergeCrewPing(rows, ping);
+}
+
+/** Reports scope plus the signed-in seat, so Login As still shows your own live pin. */
+export function staffIdsForLiveMap(
+  scopedIds: readonly string[],
+  selfIds: readonly (string | null | undefined)[],
+) {
+  const next = new Set(scopedIds.filter(Boolean));
+  for (const id of selfIds) {
+    if (id) next.add(id);
+  }
+  return next;
+}
+
+export function resolveSeatStaffId(input: {
+  profileStaffId?: string | null;
+  email?: string | null;
+  fullName?: string | null;
+  roster?: Array<{ id: string; name?: string | null; email?: string | null }>;
+}) {
+  const linked = input.profileStaffId?.trim() ?? "";
+  if (linked) return linked;
+  const roster = input.roster ?? [];
+  const email = input.email?.trim().toLowerCase() ?? "";
+  if (email) {
+    const byEmail = roster.find((row) => (row.email ?? "").trim().toLowerCase() === email);
+    if (byEmail) return byEmail.id;
+  }
+  const name = input.fullName?.trim().toLowerCase() ?? "";
+  if (name) {
+    const byName = roster.find((row) => (row.name ?? "").trim().toLowerCase() === name);
+    if (byName) return byName.id;
+  }
+  return "";
+}

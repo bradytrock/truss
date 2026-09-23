@@ -91,9 +91,16 @@ export async function POST(request: Request) {
     );
   }
 
+  const { data: seat } = await auth.supabase
+    .from("team_members")
+    .select("name")
+    .eq("company_id", auth.companyId)
+    .eq("id", auth.staffId)
+    .maybeSingle();
+
   const ping: MapCrewPing = {
     staffId: auth.staffId,
-    name: "",
+    name: seat?.name?.trim() || "",
     lat: parsed.lat,
     lng: parsed.lng,
     accuracy: parsed.accuracy,
