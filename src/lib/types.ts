@@ -334,6 +334,11 @@ export interface Job {
   city: string;
   state: string;
   postalCode: string;
+  /** Geocoded job site. Null until the desk map (or a save) looks it up. */
+  lat?: number | null;
+  lng?: number | null;
+  geocodedAt?: string | null;
+  geocodeQuery?: string;
   salesRep: string;
   assigned: string[];
   subcontractorIds: string[];

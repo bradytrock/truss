@@ -342,6 +342,16 @@ export function mapJob(row: JobRow): Job {
     city: row.city ?? "",
     state: row.state ?? "",
     postalCode: row.postal_code ?? "",
+    lat: "lat" in row ? (((row as { lat?: number | null }).lat) ?? null) : null,
+    lng: "lng" in row ? (((row as { lng?: number | null }).lng) ?? null) : null,
+    geocodedAt:
+      "geocoded_at" in row
+        ? (((row as { geocoded_at?: string | null }).geocoded_at) ?? null)
+        : null,
+    geocodeQuery:
+      "geocode_query" in row
+        ? String((row as { geocode_query?: string | null }).geocode_query ?? "")
+        : "",
     salesRep: row.sales_rep ?? "",
     assigned: row.assigned ?? [],
     subcontractorIds: row.subcontractor_ids ?? [],
@@ -474,6 +484,10 @@ export function jobPatch(patch: Partial<Job>) {
   if (patch.city !== undefined) row.city = patch.city;
   if (patch.state !== undefined) row.state = patch.state;
   if (patch.postalCode !== undefined) row.postal_code = patch.postalCode;
+  if (patch.lat !== undefined) row.lat = patch.lat ?? null;
+  if (patch.lng !== undefined) row.lng = patch.lng ?? null;
+  if (patch.geocodedAt !== undefined) row.geocoded_at = patch.geocodedAt ?? null;
+  if (patch.geocodeQuery !== undefined) row.geocode_query = patch.geocodeQuery;
   if (patch.salesRep !== undefined) row.sales_rep = patch.salesRep;
   if (patch.assigned !== undefined) row.assigned = patch.assigned;
   if (patch.subcontractorIds !== undefined) row.subcontractor_ids = patch.subcontractorIds;

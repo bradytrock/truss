@@ -20,6 +20,10 @@ export type JobDraft = Omit<
   | "city"
   | "state"
   | "postalCode"
+  | "lat"
+  | "lng"
+  | "geocodedAt"
+  | "geocodeQuery"
   | "salesRep"
   | "assigned"
   | "subcontractorIds"
@@ -43,6 +47,10 @@ export type JobDraft = Omit<
       | "city"
       | "state"
       | "postalCode"
+      | "lat"
+      | "lng"
+      | "geocodedAt"
+      | "geocodeQuery"
       | "salesRep"
       | "assigned"
       | "subcontractorIds"
@@ -221,6 +229,10 @@ export function fillJobRecord(job: JobDraft, opportunity?: Opportunity | null): 
     city: job.city?.trim() || opportunity?.city?.trim() || parsed.city,
     state: job.state?.trim() || opportunity?.state?.trim() || parsed.state,
     postalCode: job.postalCode?.trim() || opportunity?.postalCode?.trim() || parsed.postalCode,
+    lat: job.lat ?? null,
+    lng: job.lng ?? null,
+    geocodedAt: job.geocodedAt ?? null,
+    geocodeQuery: job.geocodeQuery ?? "",
     assigned,
     subcontractorIds: uniqueIds(job.subcontractorIds ?? []),
     relatedContactIds: related,

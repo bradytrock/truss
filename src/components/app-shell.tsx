@@ -76,6 +76,7 @@ function navSections(options: { bdOnly: boolean }): NavSection[] {
           { href: "/", label: "Home" },
           { href: "/messages", label: "Inbox" },
           { href: "/jobs", label: "Jobs" },
+          { href: "/map", label: "Map" },
           { href: "/contacts", label: "Agents & contacts" },
           { href: "/tasks", label: "Tasks" },
           { href: "/photos", label: "Photos" },
@@ -90,6 +91,7 @@ function navSections(options: { bdOnly: boolean }): NavSection[] {
         { href: "/", label: "Home" },
         { href: "/messages", label: "Inbox" },
         { href: "/jobs", label: "Jobs" },
+        { href: "/map", label: "Map" },
         { href: "/contacts", label: "Contacts" },
         { href: "/calendar", label: "Calendar" },
         { href: "/tasks", label: "Tasks" },
@@ -141,6 +143,7 @@ function itemIsActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   if (href === "/accounting") return pathname === "/accounting" || pathname.startsWith("/accounting/");
   if (href === "/jobs") return pathname.startsWith("/jobs") || pathname.startsWith("/material-orders");
+  if (href === "/map") return pathname === "/map" || pathname.startsWith("/map?");
   if (href === "/messages") return isInboxPath(pathname);
   if (href === "/settings") return pathname.startsWith("/settings");
   return pathname === href || pathname.startsWith(`${href}/`);
