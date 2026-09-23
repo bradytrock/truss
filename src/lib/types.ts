@@ -807,6 +807,34 @@ export interface QbVendor {
   notes: string;
 }
 
+export interface VendorProfile {
+  id: string;
+  name: string;
+  nameKey: string;
+  notes: string;
+  updatedBy: string;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface VendorFeedback {
+  id: string;
+  profileId: string;
+  body: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface VendorPrice {
+  id: string;
+  profileId: string;
+  name: string;
+  unit: string;
+  unitCost: number;
+  notes: string;
+  sortOrder: number;
+}
+
 export interface ScheduleEvent {
   id: string;
   title: string;
@@ -1240,6 +1268,9 @@ export interface CrmState {
   materialOrderTemplates: MaterialOrderTemplate[];
   materialOrderTemplateLines: MaterialOrderTemplateLine[];
   qbVendors: QbVendor[];
+  vendorProfiles: VendorProfile[];
+  vendorFeedback: VendorFeedback[];
+  vendorPrices: VendorPrice[];
   qbReviewComments: QbReviewComment[];
   events: ScheduleEvent[];
   photos: JobPhoto[];

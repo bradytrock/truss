@@ -25,6 +25,9 @@ import {
   mapPayment,
   mapExpense,
   mapQbVendor,
+  mapVendorFeedback,
+  mapVendorPrice,
+  mapVendorProfile,
   mapQbReviewComment,
   mapScheduleEvent,
   mapStaff,
@@ -111,6 +114,9 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     companyAuditRes,
     expensesRes,
     qbVendorsRes,
+    vendorProfilesRes,
+    vendorFeedbackRes,
+    vendorPricesRes,
     qbReviewCommentsRes,
     calendarAccountsRes,
     calendarSharesRes,
@@ -180,6 +186,13 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       .limit(2000),
     supabase.from("expenses").select("*").eq("company_id", companyId).order("incurred_at", { ascending: false }),
     supabase.from("qb_vendors").select("*").eq("company_id", companyId).order("name"),
+    supabase.from("vendor_profiles").select("*").eq("company_id", companyId).order("name"),
+    supabase
+      .from("vendor_feedback")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("created_at", { ascending: false }),
+    supabase.from("vendor_prices").select("*").eq("company_id", companyId).order("sort_order"),
     supabase.from("qb_review_comments").select("*").eq("company_id", companyId).order("created_at"),
     supabase.from("calendar_accounts").select("*").eq("company_id", companyId),
     supabase.from("calendar_shares").select("*").eq("company_id", companyId),
@@ -291,6 +304,9 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     payments: paymentsRes.error ? [] : mapRows(paymentsRes.data, mapPayment),
     expenses: expensesRes.error ? [] : (expensesRes.data ?? []).map(mapExpense),
     qbVendors: qbVendorsRes.error ? [] : (qbVendorsRes.data ?? []).map(mapQbVendor),
+    vendorProfiles: vendorProfilesRes.error ? [] : (vendorProfilesRes.data ?? []).map(mapVendorProfile),
+    vendorFeedback: vendorFeedbackRes.error ? [] : (vendorFeedbackRes.data ?? []).map(mapVendorFeedback),
+    vendorPrices: vendorPricesRes.error ? [] : (vendorPricesRes.data ?? []).map(mapVendorPrice),
     qbReviewComments: qbReviewCommentsRes.error
       ? []
       : (qbReviewCommentsRes.data ?? []).map(mapQbReviewComment),

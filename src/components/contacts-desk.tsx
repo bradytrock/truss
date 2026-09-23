@@ -40,6 +40,15 @@ import {
   type ContactBookRow,
   type ContactFilter,
 } from "@/lib/contact-book";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { VendorProfilePanel } from "@/components/vendor-profile-panel";
 import { buildVendorBook, visibleVendorRows, type VendorBookRow } from "@/lib/vendor-book";
 import { useCrm } from "@/lib/crm-store";
 import { formatDateShort, initials, localYmd } from "@/lib/format";
@@ -60,6 +69,9 @@ export function ContactsDesk() {
   const [editOpen, setEditOpen] = useState(false);
   const [fullOpen, setFullOpen] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [vendorName, setVendorName] = useState("");
+  const [vendorOpen, setVendorOpen] = useState(false);
+  const [vendorBusy, setVendorBusy] = useState(false);
   const [note, setNote] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [addingTask, setAddingTask] = useState(false);
@@ -94,7 +106,32 @@ export function ContactsDesk() {
     ],
   );
 
-  const vendorRows = useMemo(() => buildVendorBook(crm.book.qbVendors), [crm.book.qbVendors]);
+  const tradeNames = useMemo(() => {
+    const ids = new Set((crm.book.jobs ?? []).flatMap((job) => job.subcontractorIds ?? []));
+    return (crm.book.contacts ?? [])
+      .filter((contact) => ids.has(contact.id))
+      .map((contact) => contact.name);
+  }, [crm.book.contacts, crm.book.jobs]);
+  const vendorRows = useMemo(
+    () =>
+      buildVendorBook(crm.book.qbVendors ?? [], {
+        profiles: crm.book.vendorProfiles,
+        feedback: crm.book.vendorFeedback,
+        prices: crm.book.vendorPrices,
+        expenses: crm.book.expenses,
+        materialOrders: crm.book.materialOrders,
+        tradeNames,
+      }),
+    [
+      crm.book.expenses,
+      crm.book.materialOrders,
+      crm.book.qbVendors,
+      crm.book.vendorFeedback,
+      crm.book.vendorPrices,
+      crm.book.vendorProfiles,
+      tradeNames,
+    ],
+  );
   const visible = useMemo(() => visibleContactRows(rows, filter, query), [filter, query, rows]);
   const visibleVendors = useMemo(
     () => (showingVendors ? visibleVendorRows(vendorRows, query) : []),
@@ -104,7 +141,9 @@ export function ContactsDesk() {
   const openContact = !showingVendors && contactId ? crm.getContact(contactId) : undefined;
   const selected = openContact ? rows.find((row) => row.id === openContact.id) : undefined;
   const selectedVendor = showingVendors
-    ? vendorRows.find((row) => row.id === vendorId)
+    ? vendorRows.find(
+        (row) => row.id === vendorId || row.profileId === vendorId || row.nameKey === vendorId,
+      )
     : undefined;
 
   const replaceParams = useCallback(
@@ -324,14 +363,25 @@ export function ContactsDesk() {
             <Upload data-icon="inline-start" />
             Import
           </Button>
-          <Button
-            type="button"
-            className="rounded-lg bg-[#1d1d1f] text-white hover:bg-black"
-            onClick={() => setCreateOpen(true)}
-          >
-            <Plus data-icon="inline-start" />
-            New contact
-          </Button>
+          {showingVendors ? (
+            <Button
+              type="button"
+              className="rounded-lg bg-[#1d1d1f] text-white hover:bg-black"
+              onClick={() => setVendorOpen(true)}
+            >
+              <Plus data-icon="inline-start" />
+              New vendor
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              className="rounded-lg bg-[#1d1d1f] text-white hover:bg-black"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus data-icon="inline-start" />
+              New contact
+            </Button>
+          )}
         </div>
       </div>
 
@@ -344,7 +394,9 @@ export function ContactsDesk() {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={
-              showingVendors ? "Vendor name, phone, email, or address" : "Name, address, phone, or email"
+              showingVendors
+                ? "Vendor, trade, notes, or pricing"
+                : "Name, address, phone, or email"
             }
             aria-label="Search contacts"
             className="h-10 flex-1 bg-transparent text-sm outline-none"
@@ -497,6 +549,52 @@ export function ContactsDesk() {
         </aside>
       </div>
 
+      <Dialog open={vendorOpen} onOpenChange={setVendorOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>New vendor or trade</DialogTitle>
+            <DialogDescription>
+              Adds a company-wide profile for notes, crew feedback, and pricing. Anyone here can open it.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={vendorName}
+            onChange={(event) => setVendorName(event.target.value)}
+            placeholder="ABC Supply or Joe’s Gutters"
+            autoFocus
+          />
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setVendorOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={vendorBusy || !vendorName.trim()}
+              onClick={() => {
+                void (async () => {
+                  setVendorBusy(true);
+                  try {
+                    const profile = await crm.ensureVendorProfile(vendorName);
+                    if (!profile) return;
+                    setVendorName("");
+                    setVendorOpen(false);
+                    replaceParams((params) => {
+                      params.set("filter", "vendors");
+                      params.set("vendor", profile.id);
+                      params.delete("contact");
+                    });
+                    toast.success("Vendor profile added");
+                  } finally {
+                    setVendorBusy(false);
+                  }
+                })();
+              }}
+            >
+              Add profile
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <CreateClientDialog open={createOpen} onOpenChange={setCreateOpen} />
       <ContactNewSeedDialog contact={openContact ?? null} open={jobOpen} onOpenChange={setJobOpen} />
       {openContact ? (
@@ -517,15 +615,15 @@ function emptyFilterCopy(filter: ContactFilter) {
   if (filter === "cust") return "No customers with active jobs.";
   if (filter === "past") return "No past customers yet.";
   if (filter === "vendors") {
-    return "No vendors pulled yet. Run the Web Connector so QuickBooks payees show up here.";
+    return "No vendors or trades yet. Add a profile, or pull QuickBooks payees with the Web Connector.";
   }
   return "Add a contact to start the book.";
 }
 
-function vendorStatusChip(active: boolean) {
-  return active
-    ? { label: "Active", chip: "bg-[#e6f3ea] text-[#1f7a3f]" }
-    : { label: "Inactive", chip: "bg-[#f7ebe8] text-[#8a2f22]" };
+function vendorStatusChip(label: VendorBookRow["statusLabel"]) {
+  if (label === "Inactive") return { label, chip: "bg-[#f7ebe8] text-[#8a2f22]" };
+  if (label === "On file") return { label, chip: "bg-[#eef3fb] text-[#1c4a8a]" };
+  return { label: "Active", chip: "bg-[#e6f3ea] text-[#1f7a3f]" };
 }
 
 function VendorRow({
@@ -539,7 +637,7 @@ function VendorRow({
   selected: boolean;
   onOpen: () => void;
 }) {
-  const status = vendorStatusChip(row.isActive);
+  const status = vendorStatusChip(row.statusLabel);
   return (
     <div
       role="option"
@@ -601,7 +699,7 @@ function VendorPanel({
   onPrev: () => void;
   onNext: () => void;
 }) {
-  const status = vendorStatusChip(row.isActive);
+  const status = vendorStatusChip(row.statusLabel);
   const tel = digitsOnly(row.phoneRaw);
   const fields = [
     ["Company", row.companyName],
@@ -653,7 +751,11 @@ function VendorPanel({
               {row.name}
             </h2>
             <p className="text-sm text-[#6e6e73]">
-              QuickBooks vendor
+              {row.kind === "quickbooks"
+                ? "QuickBooks vendor"
+                : row.kind === "trade"
+                  ? "Subcontractor / trade"
+                  : "Used on jobs"}
               {row.typeLine && row.typeLine !== "Vendor" ? ` · ${row.typeLine}` : ""}
             </p>
           </div>
@@ -691,18 +793,22 @@ function VendorPanel({
           )}
         </div>
 
-        <section>
-          <SectionHead label="QuickBooks" />
-          <div className="overflow-hidden rounded-xl shadow-[0_0_0_1px_rgba(28,25,22,0.08)]">
-            <FieldRow label="Status" value={status.label} />
-            {fields.map(([label, value]) =>
-              value ? <FieldRow key={label} label={label} value={value} copy={value} /> : null,
-            )}
-            {row.syncedAt ? (
-              <FieldRow label="Synced" value={formatDateShort(row.syncedAt)} />
-            ) : null}
-          </div>
-        </section>
+        <VendorProfilePanel row={row} />
+
+        {row.kind === "quickbooks" ? (
+          <section className="mt-6">
+            <SectionHead label="QuickBooks" />
+            <div className="overflow-hidden rounded-xl shadow-[0_0_0_1px_rgba(28,25,22,0.08)]">
+              <FieldRow label="Status" value={status.label} />
+              {fields.map(([label, value]) =>
+                value ? <FieldRow key={label} label={label} value={value} copy={value} /> : null,
+              )}
+              {row.syncedAt ? (
+                <FieldRow label="Synced" value={formatDateShort(row.syncedAt)} />
+              ) : null}
+            </div>
+          </section>
+        ) : null}
       </div>
     </>
   );

@@ -1138,6 +1138,74 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["qb_vendors"]["Insert"]>;
         Relationships: [];
       };
+      vendor_profiles: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          name_key: string;
+          notes: string;
+          updated_by: string;
+          updated_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          name_key: string;
+          notes?: string;
+          updated_by?: string;
+          updated_at?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["vendor_profiles"]["Insert"]>;
+        Relationships: [];
+      };
+      vendor_feedback: {
+        Row: {
+          id: string;
+          company_id: string;
+          profile_id: string;
+          body: string;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          profile_id: string;
+          body: string;
+          created_by?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["vendor_feedback"]["Insert"]>;
+        Relationships: [];
+      };
+      vendor_prices: {
+        Row: {
+          id: string;
+          company_id: string;
+          profile_id: string;
+          name: string;
+          unit: string;
+          unit_cost: number;
+          notes: string;
+          sort_order: number;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          profile_id: string;
+          name: string;
+          unit?: string;
+          unit_cost?: number;
+          notes?: string;
+          sort_order?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["vendor_prices"]["Insert"]>;
+        Relationships: [];
+      };
       qb_review_comments: {
         Row: {
           id: string;

@@ -30,7 +30,7 @@ export const CONTACT_FILTER_OPTIONS: { value: ContactFilter; label: string }[] =
   { value: "cust", label: "Customers" },
   { value: "past", label: "Past" },
   { value: "tasks", label: "Needs a call" },
-  { value: "vendors", label: "Vendors" },
+  { value: "vendors", label: "Vendors & trades" },
 ];
 
 const AVATAR_TONES = [

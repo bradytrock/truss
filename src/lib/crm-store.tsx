@@ -25,7 +25,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newPortalToken, portalInviteExpiry, portalUrl } from "@/lib/portal";
@@ -76,6 +76,7 @@ import {
 import { fillMaterialOrder, fillMaterialOrderLine, lineFromCatalogItem } from "@/lib/material-orders";
 import { nextMaterialOrderNumber } from "@/lib/material-order-number";
 import { applyMaterialOrderDeliverySync } from "@/lib/material-order-calendar";
+import { fillVendorFeedback, fillVendorPrice, fillVendorProfile, findVendorProfile, vendorProfileName } from "@/lib/vendor-profile";
 import {
   fillMaterialOrderTemplate,
   fillMaterialOrderTemplateLine,
@@ -174,6 +175,9 @@ import {
   paymentPatch,
   invoiceLinePatch,
   mapQbReviewComment,
+  mapVendorFeedback,
+  mapVendorPrice,
+  mapVendorProfile,
   mapScheduleEvent,
   mapStaff,
   mapTask,
@@ -246,6 +250,9 @@ import {
   type InvoiceLine,
   type Payment,
   type QbReviewComment,
+  type VendorFeedback,
+  type VendorPrice,
+  type VendorProfile,
   type QbReviewIntent,
   type QbReviewKind,
   type QbSyncStatus,
@@ -378,6 +385,9 @@ const emptyState: CrmState = {
   materialOrderTemplates: [],
   materialOrderTemplateLines: [],
   qbVendors: [],
+  vendorProfiles: [],
+  vendorFeedback: [],
+  vendorPrices: [],
   qbReviewComments: [],
   calendarAccounts: [],
   calendarShares: [],
@@ -1204,6 +1214,13 @@ type CrmContextValue = CrmState & {
     intent?: QbReviewIntent;
     mentionedStaffIds?: string[];
   }) => Promise<QbReviewComment | null>;
+  ensureVendorProfile: (name: string) => Promise<VendorProfile | null>;
+  updateVendorProfileNotes: (name: string, notes: string) => Promise<VendorProfile | null>;
+  addVendorFeedback: (name: string, body: string) => Promise<VendorFeedback | null>;
+  removeVendorFeedback: (id: string) => Promise<void>;
+  addVendorPrice: (name: string, input: { name: string; unit?: string; unitCost?: number; notes?: string }) => Promise<VendorPrice | undefined>;
+  updateVendorPrice: (id: string, patch: Partial<VendorPrice>) => Promise<void>;
+  removeVendorPrice: (id: string) => Promise<void>;
   addScheduleEvent: (input: Omit<ScheduleEvent, "id">) => Promise<ScheduleEvent>;
   updateScheduleEvent: (id: string, patch: Partial<Omit<ScheduleEvent, "id">>) => Promise<ScheduleEvent>;
   deleteScheduleEvent: (id: string) => Promise<void>;
@@ -8445,6 +8462,312 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [state.staff, user.companyId, user.name, user.staffId],
   );
 
+  const ensureVendorProfile = useCallback(
+    async (name: string) => {
+      const display = vendorProfileName(name);
+      if (!display) {
+        toast.error("Enter a vendor or trade name.");
+        return null;
+      }
+      const existing = findVendorProfile(bookRef.current.vendorProfiles ?? [], { name: display });
+      if (existing) return existing;
+      const profile = fillVendorProfile({
+        id: crypto.randomUUID(),
+        name: display,
+        updatedBy: user.name,
+      });
+      const apply = (saved: VendorProfile) =>
+        setState((prev) => ({
+          ...prev,
+          vendorProfiles: [saved, ...(prev.vendorProfiles ?? [])],
+        }));
+      const supabase = maybeClient();
+      if (!supabase) {
+        apply(profile);
+        return profile;
+      }
+      const { data, error } = await supabase
+        .from("vendor_profiles")
+        .insert({
+          id: profile.id,
+          company_id: user.companyId,
+          name: profile.name,
+          name_key: profile.nameKey,
+          notes: profile.notes,
+          updated_by: profile.updatedBy,
+          updated_at: profile.updatedAt,
+          created_at: profile.createdAt,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        if (error && isMissingVendorProfiles(error)) {
+          toast.message(missingVendorProfilesMessage());
+          apply(profile);
+          return profile;
+        }
+        if (error?.code === "23505") {
+          const found = await supabase
+            .from("vendor_profiles")
+            .select("*")
+            .eq("company_id", user.companyId)
+            .eq("name_key", profile.nameKey)
+            .maybeSingle();
+          if (found.data) {
+            const saved = mapVendorProfile(found.data);
+            apply(saved);
+            return saved;
+          }
+        }
+        toast.error(error?.message ?? "Could not save the vendor profile.");
+        return null;
+      }
+      const saved = mapVendorProfile(data);
+      apply(saved);
+      return saved;
+    },
+    [user.companyId, user.name],
+  );
+
+  const updateVendorProfileNotes = useCallback(
+    async (name: string, notes: string) => {
+      const profile = await ensureVendorProfile(name);
+      if (!profile) return null;
+      const next = fillVendorProfile({
+        ...profile,
+        notes,
+        updatedBy: user.name,
+        updatedAt: new Date().toISOString(),
+      });
+      const apply = () =>
+        setState((prev) => ({
+          ...prev,
+          vendorProfiles: (prev.vendorProfiles ?? []).map((item) => (item.id === next.id ? next : item)),
+        }));
+      const supabase = maybeClient();
+      if (!supabase) {
+        apply();
+        return next;
+      }
+      const { data, error } = await supabase
+        .from("vendor_profiles")
+        .update({
+          notes: next.notes,
+          updated_by: next.updatedBy,
+          updated_at: next.updatedAt,
+        })
+        .eq("id", next.id)
+        .select("*")
+        .single();
+      if (error) {
+        if (isMissingVendorProfiles(error)) {
+          toast.message(missingVendorProfilesMessage());
+          apply();
+          return next;
+        }
+        toast.error(error.message);
+        return null;
+      }
+      const saved = data ? mapVendorProfile(data) : next;
+      setState((prev) => ({
+        ...prev,
+        vendorProfiles: (prev.vendorProfiles ?? []).map((item) => (item.id === saved.id ? saved : item)),
+      }));
+      return saved;
+    },
+    [ensureVendorProfile, user.name],
+  );
+
+  const addVendorFeedback = useCallback(
+    async (name: string, body: string) => {
+      const text = body.trim();
+      if (!text) {
+        toast.error("Write the feedback first.");
+        return null;
+      }
+      const profile = await ensureVendorProfile(name);
+      if (!profile) return null;
+      const item = fillVendorFeedback({
+        id: crypto.randomUUID(),
+        profileId: profile.id,
+        body: text,
+        createdBy: user.name,
+      });
+      const apply = (saved: VendorFeedback) =>
+        setState((prev) => ({
+          ...prev,
+          vendorFeedback: [saved, ...(prev.vendorFeedback ?? [])],
+        }));
+      const supabase = maybeClient();
+      if (!supabase) {
+        apply(item);
+        return item;
+      }
+      const { data, error } = await supabase
+        .from("vendor_feedback")
+        .insert({
+          id: item.id,
+          company_id: user.companyId,
+          profile_id: item.profileId,
+          body: item.body,
+          created_by: item.createdBy,
+          created_at: item.createdAt,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        if (error && isMissingVendorProfiles(error)) {
+          toast.message(missingVendorProfilesMessage());
+          apply(item);
+          return item;
+        }
+        toast.error(error?.message ?? "Could not save the feedback.");
+        return null;
+      }
+      const saved = mapVendorFeedback(data);
+      apply(saved);
+      return saved;
+    },
+    [ensureVendorProfile, user.companyId, user.name],
+  );
+
+  const removeVendorFeedback = useCallback(async (id: string) => {
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        vendorFeedback: (prev.vendorFeedback ?? []).filter((item) => item.id !== id),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("vendor_feedback").delete().eq("id", id);
+    if (error) {
+      if (isMissingVendorProfiles(error)) {
+        toast.message(missingVendorProfilesMessage());
+        apply();
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
+
+  const addVendorPrice = useCallback(
+    async (name: string, input: { name: string; unit?: string; unitCost?: number; notes?: string }) => {
+      const profile = await ensureVendorProfile(name);
+      if (!profile) return;
+      const sortOrder =
+        Math.max(0, ...(bookRef.current.vendorPrices ?? []).filter((item) => item.profileId === profile.id).map((item) => item.sortOrder)) +
+        1;
+      const item = fillVendorPrice({
+        id: crypto.randomUUID(),
+        profileId: profile.id,
+        name: input.name,
+        unit: input.unit,
+        unitCost: input.unitCost,
+        notes: input.notes,
+        sortOrder,
+      });
+      const apply = (saved: VendorPrice) =>
+        setState((prev) => ({
+          ...prev,
+          vendorPrices: [...(prev.vendorPrices ?? []), saved],
+        }));
+      const supabase = maybeClient();
+      if (!supabase) {
+        apply(item);
+        return item;
+      }
+      const { data, error } = await supabase
+        .from("vendor_prices")
+        .insert({
+          id: item.id,
+          company_id: user.companyId,
+          profile_id: item.profileId,
+          name: item.name,
+          unit: item.unit,
+          unit_cost: item.unitCost,
+          notes: item.notes,
+          sort_order: item.sortOrder,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        if (error && isMissingVendorProfiles(error)) {
+          toast.message(missingVendorProfilesMessage());
+          apply(item);
+          return item;
+        }
+        toast.error(error?.message ?? "Could not save the price.");
+        return;
+      }
+      const saved = mapVendorPrice(data);
+      apply(saved);
+      return saved;
+    },
+    [ensureVendorProfile, user.companyId],
+  );
+
+  const updateVendorPrice = useCallback(async (id: string, patch: Partial<VendorPrice>) => {
+    const current = (bookRef.current.vendorPrices ?? []).find((item) => item.id === id);
+    const next = current ? fillVendorPrice({ ...current, ...patch }) : null;
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        vendorPrices: (prev.vendorPrices ?? []).map((item) =>
+          item.id === id ? fillVendorPrice({ ...item, ...patch }) : item,
+        ),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("vendor_prices").update({
+      ...(patch.name !== undefined ? { name: next?.name } : {}),
+      ...(patch.unit !== undefined ? { unit: next?.unit } : {}),
+      ...(patch.unitCost !== undefined ? { unit_cost: next?.unitCost } : {}),
+      ...(patch.notes !== undefined ? { notes: next?.notes } : {}),
+    }).eq("id", id);
+    if (error) {
+      if (isMissingVendorProfiles(error)) {
+        toast.message(missingVendorProfilesMessage());
+        apply();
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
+
+  const removeVendorPrice = useCallback(async (id: string) => {
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        vendorPrices: (prev.vendorPrices ?? []).filter((item) => item.id !== id),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("vendor_prices").delete().eq("id", id);
+    if (error) {
+      if (isMissingVendorProfiles(error)) {
+        toast.message(missingVendorProfilesMessage());
+        apply();
+        return;
+      }
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
+
   const persistCalendar = useCallback(
     (accounts: CalendarAccount[], shares: CalendarShare[]) => {
       if (!isSupabaseConfigured()) {
@@ -12081,6 +12404,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateInvoiceLine,
       setQbStatus,
       addQbReviewComment,
+      ensureVendorProfile,
+      updateVendorProfileNotes,
+      addVendorFeedback,
+      removeVendorFeedback,
+      addVendorPrice,
+      updateVendorPrice,
+      removeVendorPrice,
       addScheduleEvent,
       updateScheduleEvent,
       deleteScheduleEvent,
@@ -12258,6 +12588,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateInvoiceLine,
       setQbStatus,
       addQbReviewComment,
+      ensureVendorProfile,
+      updateVendorProfileNotes,
+      addVendorFeedback,
+      removeVendorFeedback,
+      addVendorPrice,
+      updateVendorPrice,
+      removeVendorPrice,
       addScheduleEvent,
       updateScheduleEvent,
       deleteScheduleEvent,
