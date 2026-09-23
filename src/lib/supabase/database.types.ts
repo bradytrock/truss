@@ -2606,6 +2606,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      voice_lead_assign_context: {
+        Args: { p_token: string; p_opportunity_id: string };
+        Returns: Json;
+      };
       qbwc_request_vendor_sync: {
         Args: Record<string, never>;
         Returns: Json;
