@@ -12,7 +12,7 @@ import {
   projectYear,
   projectYears,
   visibleCrew,
-} from "./project-map.ts";
+} from "./project-map-logic.ts";
 
 assert.equal(projectYear({ startDate: "2026-03-15", code: "BJ010124-A" }), 2026);
 assert.equal(projectYear({ startDate: "", code: "BJ091225-A" }), 2025);
