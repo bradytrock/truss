@@ -3058,6 +3058,7 @@ export type Database = {
         | "estimating"
         | "bid_submitted"
         | "interview"
+        | "supplementing"
         | "awarded"
         | "lost";
       job_status: "precon" | "in_progress" | "punch" | "complete" | "on_hold";

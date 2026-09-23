@@ -25,6 +25,7 @@ export const PROJECT_PIN_COLORS: Record<WorkColumn, string> = {
   lead: "#3b6fd4",
   estimating: "#6b5ce7",
   proposal_sent: "#c47b2b",
+  supplementing: "#0f766e",
   in_progress: "#1f7a4d",
   punch: "#b45309",
   complete: "#4b5563",

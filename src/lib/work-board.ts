@@ -1,9 +1,10 @@
-import type { Job, JobStatus, Opportunity, PipelineStage } from "@/lib/types";
+import type { Job, JobStatus, Opportunity, PipelineStage } from "./types";
 
 export const WORK_COLUMNS = [
   "lead",
   "estimating",
   "proposal_sent",
+  "supplementing",
   "in_progress",
   "punch",
   "complete",
@@ -18,6 +19,7 @@ export const WORK_COLUMN_LABELS: Record<WorkColumn, string> = {
   lead: "Lead",
   estimating: "Estimating",
   proposal_sent: "Proposal sent",
+  supplementing: "Supplementing",
   in_progress: "In progress",
   punch: "Punch list",
   complete: "Complete",
@@ -37,6 +39,7 @@ export function workColumnFor(
   if (job.status === "in_progress") return "in_progress";
   if (job.status === "on_hold") return "on_hold";
   if (opportunity?.stage === "awarded") return "in_progress";
+  if (opportunity?.stage === "supplementing") return "supplementing";
   if (opportunity?.stage === "bid_submitted" || opportunity?.stage === "interview") return "proposal_sent";
   if (opportunity?.stage === "estimating") return "estimating";
   if (opportunity) return "lead";
@@ -62,6 +65,8 @@ export function patchForWorkColumn(column: WorkColumn): {
       return { status: "precon", stage: "estimating" };
     case "proposal_sent":
       return { status: "precon", stage: "bid_submitted" };
+    case "supplementing":
+      return { status: "precon", stage: "supplementing" };
     case "in_progress":
       return { status: "in_progress", stage: "awarded" };
     case "punch":

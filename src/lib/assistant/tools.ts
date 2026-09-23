@@ -177,7 +177,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   },
   {
     name: "move_job",
-    description: "Move a job on the board: lead, estimating, proposal_sent, in_progress, punch, complete, on_hold, lost.",
+    description: "Move a job on the board: lead, estimating, proposal_sent, supplementing, in_progress, punch, complete, on_hold, lost.",
     status: "Moving the job…",
     gate: "any",
     parameters: object(
@@ -185,7 +185,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
         job: str("Job id or code"),
         column: {
           type: "string",
-          enum: ["lead", "estimating", "proposal_sent", "in_progress", "punch", "complete", "on_hold", "lost"],
+          enum: ["lead", "estimating", "proposal_sent", "supplementing", "in_progress", "punch", "complete", "on_hold", "lost"],
         },
       },
       ["job", "column"],

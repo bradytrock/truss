@@ -38,6 +38,7 @@ const columnAccent: Record<PipelineStage, string> = {
   estimating: "bg-foreground/40",
   bid_submitted: "bg-primary",
   interview: "bg-primary",
+  supplementing: "bg-primary",
   awarded: "bg-foreground",
   lost: "bg-foreground/15",
 };

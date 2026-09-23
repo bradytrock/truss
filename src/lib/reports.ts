@@ -59,6 +59,7 @@ const QUALIFIED_STAGES: ReadonlySet<PipelineStage> = new Set([
   "estimating",
   "bid_submitted",
   "interview",
+  "supplementing",
   "awarded",
 ]);
 
