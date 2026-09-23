@@ -52,11 +52,11 @@ export function PaperCoverHeader({
               {line}
             </p>
           ))}
-          {lines.contactLines.map((line) => (
-            <p key={line} className="text-xs leading-relaxed" style={{ color: PAPER_MUTED_HEX }}>
-              {line}
+          {lines.contact ? (
+            <p className="text-xs leading-relaxed" style={{ color: PAPER_MUTED_HEX }}>
+              {lines.contact}
             </p>
-          ))}
+          ) : null}
           {lines.license ? (
             <p className="text-[11px]" style={{ color: PAPER_MUTED_HEX }}>
               {lines.license}
@@ -65,9 +65,9 @@ export function PaperCoverHeader({
         </div>
       </div>
       <div className="shrink-0 text-right">
-        <p className="text-[22px] font-bold tracking-wide">{paperKindLabel(kind)}</p>
+        <p className="text-[15px] font-bold tracking-wide">{paperKindLabel(kind)}</p>
         <p className="mt-0.5 text-sm" style={{ color: PAPER_RED_HEX }}>
-          No. {number}
+          {number}
         </p>
       </div>
     </div>
@@ -77,7 +77,7 @@ export function PaperCoverHeader({
 export function PaperSiteTitle({ title, locality }: { title: string; locality?: string }) {
   return (
     <div>
-      <h2 className="text-[26px] leading-tight font-semibold text-balance">{title}</h2>
+      <h2 className="text-[18px] leading-tight font-semibold text-balance">{title}</h2>
       {locality ? (
         <p className="mt-1 text-sm" style={{ color: PAPER_MUTED_HEX }}>
           {locality}
@@ -259,5 +259,9 @@ export function PaperFooter({ company }: { company: CompanySettings }) {
 }
 
 export function PaperTermsColumns({ children }: { children: ReactNode }) {
-  return <div className="max-w-3xl space-y-3 text-[15px] leading-7">{children}</div>;
+  return (
+    <div className="columns-1 gap-x-8 text-[13px] leading-5 sm:columns-2 [column-fill:_auto]">
+      {children}
+    </div>
+  );
 }

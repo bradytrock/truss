@@ -23,7 +23,6 @@ import {
   type EstimatePackage,
 } from "@/lib/estimate-packages";
 import { formatDate, formatMoney } from "@/lib/format";
-import { formatJobSite } from "@/lib/leads";
 import { isSignaturePng } from "@/lib/estimate-signature";
 import { estimateSignatureLines } from "@/lib/estimate-signers";
 import { coOwnerContact } from "@/lib/parties";
@@ -287,7 +286,7 @@ export function ProposalDocument({
         left={{
           label: "Prepared for",
           name: customer,
-          lines: [formatJobSite(estimate)].filter(Boolean),
+          lines: [],
         }}
         right={paperManagerCard(manager)}
       />
