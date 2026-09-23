@@ -1,3 +1,5 @@
+import { leadAssignNeedsEmail } from "@/lib/lead-assign-email";
+import { sendVoiceLeadAssignEmails } from "@/lib/lead-assign-email-server";
 import { looksLikePhone } from "@/lib/phone";
 import { sendblueText } from "@/lib/sendblue";
 import { createAnonClient } from "@/lib/supabase/anon";
@@ -91,6 +93,16 @@ export async function voiceIntake(
   if (error) return { ok: false, error: error.message } satisfies VoiceRpcResult;
   const result = asResult(data);
   if (!result.ok) return result;
+  if (result.action === "create" && result.opportunityId && leadAssignNeedsEmail(result)) {
+    try {
+      await sendVoiceLeadAssignEmails(supabase, {
+        token,
+        opportunityId: result.opportunityId,
+      });
+    } catch {
+      // SMS notify still runs even if the assignment email fails.
+    }
+  }
   const notify = await notifyOwningPm(token, result);
   return { ...result, staffNotified: notify.notified };
 }
