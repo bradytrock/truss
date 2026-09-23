@@ -2,16 +2,10 @@ import type { CompanySettings, Estimate, EstimateLine, EstimateSignatureEvent, I
 import { companyEstimateTermsFor } from "@/lib/contract-types";
 import { estimateTotals, groupEstimateLines, lineAmount, lineIncluded, toClientFacingProposal, totalsForPackage } from "@/lib/estimate-totals";
 import {
-  cheapestOptionKey,
+  gbbPrintSections,
   isGbbEstimate,
   listEstimateOptions,
-  optionHighlightLabels,
-  optionLabel,
-  recommendedOptionKey,
-  resolveSelectedPackage,
   scopedEstimateLines,
-  sharedPackageLines,
-  uniquePackageLines,
 } from "@/lib/estimate-packages";
 import { formatDate, formatMoney, formatPhone, formatDateTimeUtc } from "@/lib/format";
 import { formatJobSite } from "@/lib/leads";
@@ -48,6 +42,9 @@ type Doc = {
   splitTextToSize: (text: string, width: number) => string[];
   getTextWidth: (text: string) => number;
   line: (x1: number, y1: number, x2: number, y2: number) => void;
+  rect: (x: number, y: number, w: number, h: number, style?: string) => void;
+  setDrawColor: (r: number, g?: number, b?: number) => void;
+  setLineWidth: (width: number) => void;
   addPage: () => void;
   addImage: (
     imageData: string,
@@ -74,6 +71,12 @@ function ensureSpace(doc: Doc, y: number, needed: number) {
   if (y + needed < pageBottom(doc)) return y;
   doc.addPage();
   return 54;
+}
+
+function writeCheckbox(doc: Doc, x: number, y: number) {
+  doc.setDrawColor(28, 28, 28);
+  doc.setLineWidth(0.9);
+  doc.rect(x, y - 8, 10, 10, "S");
 }
 
 function startNextPage(doc: Doc) {
@@ -504,9 +507,10 @@ export async function buildEstimatePdf(raw: {
   const right = width - 54;
   let y = await writePdfLetterhead(doc, input.company, 54, 54, { showContact: false });
   const site = formatJobSite(input.estimate);
-  const visibleLines = scopedEstimateLines(input.estimate, input.lines);
+  const gbb = isGbbEstimate(input.estimate);
+  const visibleLines = gbb ? input.lines : scopedEstimateLines(input.estimate, input.lines);
   const totals = estimateTotals(input.estimate, input.lines);
-  const selectedPackage = resolveSelectedPackage(input.estimate, input.lines);
+  const estimateOptions = listEstimateOptions(input.lines);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
@@ -534,96 +538,35 @@ export async function buildEstimatePdf(raw: {
     y += 6;
     y = writeParagraph(doc, input.estimate.intro, y);
   }
-  if (isGbbEstimate(input.estimate)) {
-    y += 8;
-    y = ensureSpace(doc, y, 70);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(90, 90, 90);
-    doc.text("OPTIONS", 54, y);
-    y += 14;
-    const options = listEstimateOptions(input.lines);
-    const recommended = recommendedOptionKey(options);
-    const totalFor = (key: string) => totalsForPackage(input.estimate, input.lines, key).total;
-    const baseline = cheapestOptionKey(options, totalFor);
-    const baselineName = options.find((item) => item.key === baseline)?.name;
-    for (const option of options) {
-      const amount = totalFor(option.key);
-      const active = option.key === selectedPackage;
-      const marks = [
-        active ? "this proposal" : "",
-        !active && option.key === recommended ? "most chosen" : "",
-      ]
-        .filter(Boolean)
-        .join(" · ");
-      y = ensureSpace(doc, y, 36);
-      doc.setFont("helvetica", active ? "bold" : "normal");
-      doc.setFontSize(10);
-      doc.setTextColor(active ? 28 : 70, active ? 28 : 70, active ? 28 : 70);
-      const label = marks ? `${option.name} — ${marks}` : option.name;
-      doc.text(label, 54, y);
-      doc.text(formatMoney(amount), right, y, { align: "right" });
-      y += 13;
-      if (baseline && option.key !== baseline && baselineName) {
-        const delta = amount - totalFor(baseline);
-        if (delta > 0) {
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(9);
-          doc.setTextColor(90, 90, 90);
-          doc.text(`+${formatMoney(delta)} vs ${baselineName}`, 54, y);
-          y += 12;
-        }
-      }
-      const highlights = optionHighlightLabels(input.lines, option.key);
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(90, 90, 90);
-      for (const item of highlights) {
-        y = ensureSpace(doc, y, 14);
-        doc.text(`· ${item}`, 64, y);
-        y += 12;
-      }
-      y += 4;
-    }
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.setTextColor(70, 70, 70);
+  if (gbb && estimateOptions.length > 0) {
+    y += 6;
     y = writeParagraph(
       doc,
-      `This proposal is ${optionLabel(selectedPackage)} plus shared work. Options replace each other; they do not stack.`,
+      "Check one option. Shared work is included in every option. Options replace each other; they do not stack.",
       y,
     );
   }
 
-  const selectedName = listEstimateOptions(input.lines).find((item) => item.key === selectedPackage)?.name;
-  const pdfGroups = isGbbEstimate(input.estimate)
-    ? [
-        ...(sharedPackageLines(visibleLines).length
-          ? [
-              {
-                name: uniquePackageLines(visibleLines, selectedPackage).length
-                  ? "Included in every option"
-                  : "",
-                lines: sharedPackageLines(visibleLines),
-              },
-            ]
-          : []),
-        ...(uniquePackageLines(visibleLines, selectedPackage).length
-          ? [
-              {
-                name: selectedName ? `This option adds · ${selectedName}` : "This option adds",
-                lines: uniquePackageLines(visibleLines, selectedPackage),
-              },
-            ]
-          : []),
-      ]
+  const pdfGroups = gbb
+    ? gbbPrintSections(visibleLines)
     : groupEstimateLines(visibleLines).map((group, _, all) => ({
+        kind: "shared" as const,
+        key: "",
         name: all.length > 1 ? group.name : "",
         lines: group.lines,
       }));
   for (const group of pdfGroups) {
-    y = ensureSpace(doc, y, 28);
-    if (pdfGroups.length > 1) {
+    y = ensureSpace(doc, y, 36);
+    if (group.kind === "option") {
+      const amount = totalsForPackage(input.estimate, input.lines, group.key).total;
+      writeCheckbox(doc, 54, y);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(28, 28, 28);
+      doc.text(group.name.toUpperCase(), 70, y);
+      doc.text(formatMoney(amount), right, y, { align: "right" });
+      y += 10;
+    } else if (pdfGroups.length > 1 && group.name) {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9);
       doc.setTextColor(90, 90, 90);
@@ -686,44 +629,78 @@ export async function buildEstimatePdf(raw: {
 
   y = ensureSpace(doc, y, 90);
   const boxLeft = right - 200;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(70, 70, 70);
-  const rows: Array<[string, string]> = [["Subtotal", formatMoney(totals.subtotal)]];
-  if (totals.discount > 0) {
-    rows.push([
-      input.estimate.discountKind === "percent"
-        ? `Discount (${input.estimate.discountValue}%)`
-        : "Discount",
-      `-${formatMoney(totals.discount)}`,
-    ]);
-  }
-  if (totals.tax > 0) rows.push([`Tax (${input.estimate.taxRate}%)`, formatMoney(totals.tax)]);
-  rows.forEach(([label, value], index) => {
-    doc.text(label, boxLeft, y + index * 14);
-    doc.text(value, right, y + index * 14, { align: "right" });
-  });
-  y += rows.length * 14 + 6;
-  doc.setTextColor(200, 200, 200);
-  doc.line(boxLeft, y, right, y);
-  y += 16;
-  doc.setFont("times", "bold");
-  doc.setFontSize(13);
-  doc.setTextColor(28, 28, 28);
-  doc.text("Total", boxLeft, y);
-  doc.text(formatMoney(totals.total), right, y, { align: "right" });
-  y += 16;
-  if (totals.deposit > 0) {
+  if (gbb && estimateOptions.length > 0) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(70, 70, 70);
+    y = writeParagraph(doc, "The option you check is the contract total.", y);
+    y += 4;
+    for (const option of estimateOptions) {
+      const amount = totalsForPackage(input.estimate, input.lines, option.key).total;
+      y = ensureSpace(doc, y, 18);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(28, 28, 28);
+      doc.text(option.name, boxLeft, y);
+      doc.text(formatMoney(amount), right, y, { align: "right" });
+      y += 18;
+    }
+    if (input.estimate.depositKind === "percent" && input.estimate.depositValue > 0) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(70, 70, 70);
+      y += 4;
+      doc.text(`Deposit due is ${input.estimate.depositValue}% of the option you check.`, boxLeft, y);
+      y += 16;
+    } else if (totals.deposit > 0) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(70, 70, 70);
+      y += 4;
+      doc.text("Deposit due", boxLeft, y);
+      doc.text(formatMoney(totals.deposit), right, y, { align: "right" });
+      y += 16;
+    }
+  } else {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.setTextColor(70, 70, 70);
-    const depositLabel =
-      input.estimate.depositKind === "percent"
-        ? `Deposit due (${input.estimate.depositValue}%)`
-        : "Deposit due";
-    doc.text(depositLabel, boxLeft, y);
-    doc.text(formatMoney(totals.deposit), right, y, { align: "right" });
+    const rows: Array<[string, string]> = [["Subtotal", formatMoney(totals.subtotal)]];
+    if (totals.discount > 0) {
+      rows.push([
+        input.estimate.discountKind === "percent"
+          ? `Discount (${input.estimate.discountValue}%)`
+          : "Discount",
+        `-${formatMoney(totals.discount)}`,
+      ]);
+    }
+    if (totals.tax > 0) rows.push([`Tax (${input.estimate.taxRate}%)`, formatMoney(totals.tax)]);
+    rows.forEach(([label, value], index) => {
+      doc.text(label, boxLeft, y + index * 14);
+      doc.text(value, right, y + index * 14, { align: "right" });
+    });
+    y += rows.length * 14 + 6;
+    doc.setTextColor(200, 200, 200);
+    doc.line(boxLeft, y, right, y);
     y += 16;
+    doc.setFont("times", "bold");
+    doc.setFontSize(13);
+    doc.setTextColor(28, 28, 28);
+    doc.text("Total", boxLeft, y);
+    doc.text(formatMoney(totals.total), right, y, { align: "right" });
+    y += 16;
+    if (totals.deposit > 0) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(70, 70, 70);
+      const depositLabel =
+        input.estimate.depositKind === "percent"
+          ? `Deposit due (${input.estimate.depositValue}%)`
+          : "Deposit due";
+      doc.text(depositLabel, boxLeft, y);
+      doc.text(formatMoney(totals.deposit), right, y, { align: "right" });
+      y += 16;
+    }
   }
   if (totals.optionalCount > 0) {
     y += 6;

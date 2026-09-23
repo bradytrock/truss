@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useCrmOptional } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord, type ProjectManagerContact } from "@/lib/document-owner";
-import { PackagePicker } from "@/components/package-picker";
 import { billingEstimate, workMarket } from "@/lib/market";
 import {
   estimateTotals,
@@ -15,14 +14,14 @@ import {
   lineAmount,
   lineIncluded,
   toClientFacingProposal,
+  totalsForPackage,
 } from "@/lib/estimate-totals";
 import {
+  gbbPrintSections,
   isGbbEstimate,
   listEstimateOptions,
   resolveSelectedPackage,
   scopedEstimateLines,
-  sharedPackageLines,
-  uniquePackageLines,
   type EstimatePackage,
 } from "@/lib/estimate-packages";
 import { formatDate, formatMoney } from "@/lib/format";
@@ -51,6 +50,32 @@ export function EstimateTotals({
   className?: string;
 }) {
   const totals = estimateTotals(estimate, lines);
+  const options = isGbbEstimate(estimate) ? listEstimateOptions(lines) : [];
+  if (options.length > 0) {
+    return (
+      <dl className={cn("space-y-3 text-[15px]", className)}>
+        {options.map((option) => (
+          <div key={option.key} className="flex justify-between gap-4 border-t-2 border-foreground pt-3 font-medium first:border-t-0 first:pt-0">
+            <dt>{option.name}</dt>
+            <dd className="tabular-nums">{formatMoney(totalsForPackage(estimate, lines, option.key).total)}</dd>
+          </div>
+        ))}
+        <p className="pt-1 text-xs font-normal text-muted-foreground">
+          Check one option. That option’s price is the contract total.
+        </p>
+        {estimate.depositKind === "percent" && estimate.depositValue > 0 ? (
+          <p className="text-xs text-muted-foreground">
+            Deposit due is {estimate.depositValue}% of the option you check.
+          </p>
+        ) : totals.deposit > 0 ? (
+          <div className="flex justify-between gap-4 text-muted-foreground">
+            <dt>Deposit due</dt>
+            <dd className="tabular-nums">{formatMoney(totals.deposit)}</dd>
+          </div>
+        ) : null}
+      </dl>
+    );
+  }
   const showBreakdown = totals.discount > 0 || totals.tax > 0;
   return (
     <dl className={cn("space-y-3 text-[15px]", className)}>
@@ -99,29 +124,6 @@ export function EstimateTotals({
   );
 }
 
-function gbbReceiptSections(
-  lines: EstimateLine[],
-  estimate: Pick<Estimate, "packageMode" | "selectedPackage">,
-) {
-  const selected = resolveSelectedPackage(estimate, lines);
-  const optionName = listEstimateOptions(lines).find((item) => item.key === selected)?.name;
-  const shared = sharedPackageLines(lines);
-  const unique = uniquePackageLines(lines, selected);
-  const sections: Array<{ name: string; lines: EstimateLine[] }> = [];
-  if (shared.length) {
-    sections.push({
-      name: unique.length ? "Included in every option" : "",
-      lines: shared,
-    });
-  }
-  if (unique.length) {
-    sections.push({
-      name: optionName ? `This option adds · ${optionName}` : "This option adds",
-      lines: unique,
-    });
-  }
-  return sections;
-}
 
 function ProposalLineList({
   lines,
@@ -237,8 +239,17 @@ export function ProposalDocument({
     ),
     lines,
   );
-  const visibleLines = scopedEstimateLines(billed.estimate, billed.lines);
+  const gbb = isGbbEstimate(estimate);
+  const visibleLines = gbb ? billed.lines : scopedEstimateLines(billed.estimate, billed.lines);
   const groups = groupEstimateLines(visibleLines);
+  const printSections = gbb
+    ? gbbPrintSections(visibleLines)
+    : groups.map((group) => ({
+        kind: "shared" as const,
+        key: "",
+        name: groups.length > 1 ? group.name : "",
+        lines: group.lines,
+      }));
   const manager =
     projectManager ??
     documentProjectManager({
@@ -279,34 +290,39 @@ export function ProposalDocument({
       {estimate.intro ? (
         <p className="text-sm leading-relaxed whitespace-pre-wrap">{estimate.intro}</p>
       ) : null}
-      {isGbbEstimate(estimate) ? (
-        <div className="space-y-2">
-          <h3 className="text-[11px] font-semibold tracking-[0.16em] uppercase">Choose an option</h3>
-          <PackagePicker
-            estimate={billed.estimate}
-            lines={billed.lines}
-            locked={!selectable || !onSelectPackage}
-            onSelect={onSelectPackage}
-          />
-          <p className="text-xs text-muted-foreground">
-            Pick one option. Shared work is on every option. Cards list what changes. Options replace each other;
-            they do not stack.
-          </p>
-        </div>
+      {gbb && printSections.some((section) => section.kind === "option") ? (
+        <p className="text-sm text-muted-foreground">
+          Check one option. Shared work is included in every option. Options replace each other; they do not stack.
+        </p>
       ) : null}
       {visibleLines.length === 0 ? (
         <p className="text-sm text-muted-foreground">No line items on this proposal yet.</p>
       ) : (
         <div className="space-y-5">
-          {(isGbbEstimate(estimate)
-            ? gbbReceiptSections(visibleLines, billed.estimate)
-            : groups.map((group) => ({
-                name: groups.length > 1 ? group.name : "",
-                lines: group.lines,
-              }))
-          ).map((section) => (
-            <section key={section.name || "items"}>
-              {section.name ? (
+          {printSections.map((section) => (
+            <section key={section.key || section.name || "items"}>
+              {section.kind === "option" ? (
+                <label className="mb-2 flex items-center gap-2.5">
+                  <Checkbox
+                    checked={
+                      selectable && onSelectPackage
+                        ? resolveSelectedPackage(billed.estimate, billed.lines) === section.key
+                        : false
+                    }
+                    disabled={!selectable || !onSelectPackage}
+                    onCheckedChange={(value) => {
+                      if (value) onSelectPackage?.(section.key);
+                    }}
+                    aria-label={`Choose ${section.name}`}
+                  />
+                  <h3 className="min-w-0 flex-1 text-[11px] font-semibold tracking-[0.16em] uppercase">
+                    {section.name}
+                  </h3>
+                  <span className="text-[15px] font-medium tabular-nums">
+                    {formatMoney(totalsForPackage(billed.estimate, billed.lines, section.key).total)}
+                  </span>
+                </label>
+              ) : section.name ? (
                 <h3 className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">
                   {section.name}
                 </h3>

@@ -69,6 +69,39 @@ export function uniquePackageLines<T extends { package?: string | null }>(
   return lines.filter((line) => parseLinePackage(line.package) === key);
 }
 
+export type GbbPrintSection<T> = {
+  kind: "shared" | "option";
+  key: string;
+  name: string;
+  lines: T[];
+};
+
+/** One document: shared work once, then every option as its own section. */
+export function gbbPrintSections<T extends { package?: string | null; groupName?: string | null }>(
+  lines: T[],
+): GbbPrintSection<T>[] {
+  const options = listEstimateOptions(lines);
+  const shared = sharedPackageLines(lines);
+  const sections: GbbPrintSection<T>[] = [];
+  if (shared.length) {
+    sections.push({
+      kind: "shared",
+      key: "",
+      name: options.length ? "Included in every option" : "",
+      lines: shared,
+    });
+  }
+  for (const option of options) {
+    sections.push({
+      kind: "option",
+      key: option.key,
+      name: option.name,
+      lines: uniquePackageLines(lines, option.key),
+    });
+  }
+  return sections;
+}
+
 export function optionHighlightLabels(
   lines: Array<{ package?: string | null; title?: string | null; description?: string | null }>,
   pkg: string,

@@ -147,6 +147,30 @@ async function main() {
   assert.doesNotMatch(markedUp, /Margin/);
   assert.match(markedUp, /\$1,200\.00/);
 
+  const gbbText = await textFromPdf(
+    await buildEstimatePdf({
+      estimate: { ...estimate, packageMode: "gbb", selectedPackage: "better", number: "EST-GBB" },
+      lines: [
+        { ...lines[0]!, id: "shared", title: "Tear-off", description: "", package: "", unitCost: 2000 },
+        { ...lines[0]!, id: "good", title: "3-tab shingles", description: "", package: "good", groupName: "Good", unitCost: 4000 },
+        { ...lines[0]!, id: "better", title: "Architectural shingles", description: "", package: "better", groupName: "Better", unitCost: 6000 },
+        { ...lines[0]!, id: "best", title: "Designer shingles", description: "", package: "best", groupName: "Best", unitCost: 8000 },
+      ],
+      company,
+      customer: "Shawn Gregory",
+    }),
+  );
+  assert.match(gbbText, /Included in every option/i);
+  assert.match(gbbText, /GOOD/);
+  assert.match(gbbText, /BETTER/);
+  assert.match(gbbText, /BEST/);
+  assert.match(gbbText, /Tear-off/);
+  assert.match(gbbText, /3-tab shingles/);
+  assert.match(gbbText, /Architectural shingles/);
+  assert.match(gbbText, /Designer shingles/);
+  assert.match(gbbText, /Check one option/);
+  assert.doesNotMatch(gbbText, /This proposal is/);
+
   const invoiceText = await textFromPdf(
     await buildInvoicePdf({
       invoice,

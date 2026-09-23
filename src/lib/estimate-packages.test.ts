@@ -17,6 +17,7 @@ import {
   uniquePackageLines,
   optionHighlightLabels,
   cheapestOptionKey,
+  gbbPrintSections,
 } from "./estimate-packages.ts";
 
 assert.equal(parseLinePackage(" opt_2 "), "opt_2");
@@ -121,6 +122,17 @@ assert.equal(recommendedOptionKey([{ key: "opt_1" }]), null);
 assert.equal(
   cheapestOptionKey([{ key: "a" }, { key: "b" }], (key) => (key === "a" ? 9000 : 7000)),
   "b",
+);
+
+const printed = gbbPrintSections([
+  { package: "", groupName: "Demo", title: "Tear-off" },
+  { package: "good", groupName: "Good", title: "3-tab" },
+  { package: "better", groupName: "Better", title: "Architectural" },
+  { package: "best", groupName: "Best", title: "Designer" },
+]);
+assert.deepEqual(
+  printed.map((section) => `${section.kind}:${section.name}:${section.lines.length}`),
+  ["shared:Included in every option:1", "option:Good:1", "option:Better:1", "option:Best:1"],
 );
 
 console.log("estimate-packages tests passed");
