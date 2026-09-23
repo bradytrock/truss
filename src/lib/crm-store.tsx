@@ -74,6 +74,7 @@ import {
   isLivePriceList,
 } from "@/lib/price-lists";
 import { fillMaterialOrder, fillMaterialOrderLine, lineFromCatalogItem } from "@/lib/material-orders";
+import { nextMaterialOrderNumber } from "@/lib/material-order-number";
 import { applyMaterialOrderDeliverySync } from "@/lib/material-order-calendar";
 import {
   fillMaterialOrderTemplate,
@@ -7508,9 +7509,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const template = input.templateId
         ? (state.materialOrderTemplates ?? []).find((item) => item.id === input.templateId)
         : undefined;
+      const job = state.jobs.find((item) => item.id === input.jobId);
       const order = fillMaterialOrder({
         id: crypto.randomUUID(),
-        number: nextNumber("MO", (state.materialOrders ?? []).map((item) => item.number)),
+        number: nextMaterialOrderNumber({
+          address: job ? jobAddress(job) : "",
+          existing: (state.materialOrders ?? []).map((item) => item.number),
+        }),
         jobId: input.jobId,
         vendor: input.vendor ?? template?.vendor ?? "",
         notes: input.notes ?? template?.notes ?? "",
@@ -7588,6 +7593,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return saved;
     },
     [
+      state.jobs,
       state.materialOrders,
       state.materialOrderTemplates,
       state.materialOrderTemplateLines,
