@@ -189,7 +189,7 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
           />
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="mo-needed">Needed by</Label>
+          <Label htmlFor="mo-needed">Deliver by</Label>
           <Input
             id="mo-needed"
             type="date"
@@ -198,6 +198,9 @@ export function MaterialOrderWriter({ order }: { order: MaterialOrder }) {
               void crm.updateMaterialOrder(order.id, { neededBy: event.target.value || null })
             }
           />
+          <p className="text-xs text-muted-foreground">
+            Adds a production event on the calendar for this date.
+          </p>
         </div>
       </section>
 
