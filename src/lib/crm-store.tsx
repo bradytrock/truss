@@ -35,7 +35,7 @@ import {
   realtorPortalUrl,
 } from "@/lib/realtor-portal";
 import { newShareToken, shareUrl } from "@/lib/share";
-import { fillJobRecord, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId, jobInsertPayload, jobsFilledFromLeads, jobPatchFromLead, leadOverviewBackfill } from "@/lib/job-record";
+import { fillJobRecord, jobAddress, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId, jobInsertPayload, jobsFilledFromLeads, jobPatchFromLead, leadOverviewBackfill } from "@/lib/job-record";
 import { livePhotos } from "@/lib/photo-trash";
 import {
   amountForEstimate,
@@ -74,6 +74,8 @@ import {
   isLivePriceList,
 } from "@/lib/price-lists";
 import { fillMaterialOrder, fillMaterialOrderLine, lineFromCatalogItem } from "@/lib/material-orders";
+import { nextMaterialOrderNumber } from "@/lib/material-order-number";
+import { applyMaterialOrderDeliverySync } from "@/lib/material-order-calendar";
 import {
   fillMaterialOrderTemplate,
   fillMaterialOrderTemplateLine,
@@ -1310,6 +1312,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const bookRef = useRef(state);
   bookRef.current = state;
   const enqueueAutomationEventRef = useRef<(event: AutomationEvent) => void>(() => undefined);
+  const syncMaterialOrderDeliveryRef = useRef<(order: MaterialOrder) => void>(() => undefined);
+  const materialOrderEventIdsRef = useRef(new Map<string, string>());
+  const materialOrderSyncsRef = useRef(new Map<string, Promise<void>>());
   const fileJobCodeReviewRef = useRef<(job: Job, fromName: string, toName: string) => void>(() => undefined);
   const filingJobCodeReviews = useRef(new Set<string>());
   const auditRef = useRef<
@@ -7504,9 +7509,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const template = input.templateId
         ? (state.materialOrderTemplates ?? []).find((item) => item.id === input.templateId)
         : undefined;
+      const job = state.jobs.find((item) => item.id === input.jobId);
       const order = fillMaterialOrder({
         id: crypto.randomUUID(),
-        number: nextNumber("MO", (state.materialOrders ?? []).map((item) => item.number)),
+        number: nextMaterialOrderNumber({
+          address: job ? jobAddress(job) : "",
+          existing: (state.materialOrders ?? []).map((item) => item.number),
+        }),
         jobId: input.jobId,
         vendor: input.vendor ?? template?.vendor ?? "",
         notes: input.notes ?? template?.notes ?? "",
@@ -7528,6 +7537,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           materialOrders: [order, ...(prev.materialOrders ?? [])],
           materialOrderLines: [...(prev.materialOrderLines ?? []), ...copiedLines],
         }));
+        syncMaterialOrderDeliveryRef.current(order);
         return order;
       }
       const payload = {
@@ -7549,6 +7559,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             materialOrders: [order, ...(prev.materialOrders ?? [])],
             materialOrderLines: [...(prev.materialOrderLines ?? []), ...copiedLines],
           }));
+          syncMaterialOrderDeliveryRef.current(order);
           return order;
         }
         toast.error(error?.message ?? "Could not save the material order.");
@@ -7578,9 +7589,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         materialOrders: [saved, ...(prev.materialOrders ?? [])],
         materialOrderLines: [...(prev.materialOrderLines ?? []), ...copiedLines],
       }));
+      syncMaterialOrderDeliveryRef.current(saved);
       return saved;
     },
     [
+      state.jobs,
       state.materialOrders,
       state.materialOrderTemplates,
       state.materialOrderTemplateLines,
@@ -7590,6 +7603,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const updateMaterialOrder = useCallback(async (id: string, patch: Partial<MaterialOrder>) => {
+    const current = (bookRef.current.materialOrders ?? []).find((order) => order.id === id);
+    const next = current ? fillMaterialOrder({ ...current, ...patch }) : null;
     const apply = () =>
       setState((prev) => ({
         ...prev,
@@ -7600,6 +7615,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     const supabase = maybeClient();
     if (!supabase) {
       apply();
+      if (next) syncMaterialOrderDeliveryRef.current(next);
       return true;
     }
     const { error } = await supabase.from("material_orders").update(materialOrderPatch(patch)).eq("id", id);
@@ -7607,6 +7623,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (isMissingMaterialOrders(error)) {
         toast.message(missingMaterialOrdersMessage());
         apply();
+        if (next) syncMaterialOrderDeliveryRef.current(next);
         return true;
       }
       if (isMissingPaperArchive(error) && patch.archivedAt !== undefined) {
@@ -7618,6 +7635,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return false;
     }
     apply();
+    if (next) syncMaterialOrderDeliveryRef.current(next);
     return true;
   }, []);
 
@@ -8501,7 +8519,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const updateScheduleEvent = useCallback(
     async (id: string, patch: Partial<Omit<ScheduleEvent, "id">>) => {
-      const current = state.events.find((event) => event.id === id);
+      const current =
+        bookRef.current.events.find((event) => event.id === id) ??
+        state.events.find((event) => event.id === id);
       if (!current) throw new Error("Event not found.");
       const next: ScheduleEvent = { ...current, ...patch, id };
       const supabase = requireClient();
@@ -8565,7 +8585,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const deleteScheduleEvent = useCallback(
     async (id: string) => {
-      const current = state.events.find((event) => event.id === id);
+      const current =
+        bookRef.current.events.find((event) => event.id === id) ??
+        state.events.find((event) => event.id === id);
       if (!current) return;
       const supabase = requireClient();
       if (!supabase) {
@@ -8605,6 +8627,42 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     },
     [recordCompanyAudit, state.events],
   );
+
+  syncMaterialOrderDeliveryRef.current = (order) => {
+    const previous = materialOrderSyncsRef.current.get(order.id) ?? Promise.resolve();
+    const next = previous
+      .catch(() => undefined)
+      .then(async () => {
+        const book = bookRef.current;
+        const job = book.jobs.find((item) => item.id === order.jobId);
+        const eventId = await applyMaterialOrderDeliverySync({
+          order,
+          events: book.events,
+          existingId: materialOrderEventIdsRef.current.get(order.id),
+          location: job ? jobAddress(job) : "",
+          assignee: job?.projectManager || user.name,
+          opportunityId: job?.opportunityId ?? null,
+          clientId: job?.clientId ?? null,
+          add: async (draft) => {
+            const created = await addScheduleEvent(draft);
+            if (!bookRef.current.events.some((event) => event.id === created.id)) {
+              bookRef.current = { ...bookRef.current, events: [...bookRef.current.events, created] };
+            }
+            return created;
+          },
+          update: async (id, draft) => {
+            await updateScheduleEvent(id, draft);
+          },
+          remove: deleteScheduleEvent,
+        });
+        if (eventId) materialOrderEventIdsRef.current.set(order.id, eventId);
+        else materialOrderEventIdsRef.current.delete(order.id);
+      });
+    materialOrderSyncsRef.current.set(
+      order.id,
+      next.then(() => undefined).catch(() => undefined),
+    );
+  };
 
   const upsertAccount = useCallback(
     async (account: CalendarAccount) => {

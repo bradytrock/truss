@@ -83,7 +83,7 @@ export async function downloadMaterialOrderPdf(input: {
     y += 14;
   }
   if (input.order.neededBy) {
-    doc.text(`Needed by ${formatDate(input.order.neededBy)}`, 54, y);
+    doc.text(`Deliver by ${formatDate(input.order.neededBy)}`, 54, y);
     y += 14;
   }
   if (input.orderedBy?.trim()) {
