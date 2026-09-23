@@ -934,6 +934,7 @@ export type CompanyAuditEntityType =
   | "estimate"
   | "estimate_file"
   | "invoice"
+  | "invoice_file"
   | "company_file"
   | "payment"
   | "expense"
@@ -1006,6 +1007,20 @@ export interface JobFile {
 export interface EstimateFile {
   id: string;
   estimateId: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  url: string;
+  storagePath: string;
+  createdBy: string;
+  createdAt: string;
+  bucket?: string;
+}
+
+/** File attached to an invoice (specs, insurance docs, copies from the company directory). */
+export interface InvoiceFile {
+  id: string;
+  invoiceId: string;
   name: string;
   mimeType: string;
   sizeBytes: number;
@@ -1279,6 +1294,7 @@ export interface CrmState {
   companyAuditEvents: CompanyAuditEvent[];
   jobFiles: JobFile[];
   estimateFiles: EstimateFile[];
+  invoiceFiles: InvoiceFile[];
   companyFiles: CompanyFile[];
   photoReports: PhotoReport[];
   calendarAccounts: CalendarAccount[];

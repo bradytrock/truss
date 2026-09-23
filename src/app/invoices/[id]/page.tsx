@@ -12,6 +12,7 @@ import { RecordPaymentDialog } from "@/components/create-ops-dialogs";
 import { CommitTextarea } from "@/components/estimate-writer";
 import { RecordProperty } from "@/components/app-shell";
 import { InvoiceDocument } from "@/components/invoice-document";
+import { InvoiceFilesPanel } from "@/components/invoice-files";
 import { InvoicePayPanel } from "@/components/document-pay-panel";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
@@ -232,6 +233,18 @@ export default function InvoiceDetailPage() {
             token={record.shareToken}
             payable={status !== "void" && status !== "draft"}
           />
+
+          <Card>
+            <CardHeader className="border-b">
+              <CardTitle>Attachments</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <InvoiceFilesPanel
+                invoiceId={record.id}
+                disabled={record.status === "void"}
+              />
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader className="border-b">

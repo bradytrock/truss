@@ -68,6 +68,7 @@ export const seedState: CrmState = {
   companyAuditEvents: [],
   jobFiles: [],
   estimateFiles: [],
+  invoiceFiles: [],
   companyFiles: [],
   photoReports: [],
   expenses: demoOps.expenses,

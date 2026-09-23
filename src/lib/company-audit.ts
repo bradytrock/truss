@@ -9,6 +9,7 @@ export const COMPANY_AUDIT_ENTITY_LABELS: Record<CompanyAuditEntityType, string>
   estimate: "Estimate",
   estimate_file: "Estimate file",
   invoice: "Invoice",
+  invoice_file: "Invoice file",
   company_file: "Company file",
   payment: "Payment",
   expense: "Expense",
@@ -183,6 +184,7 @@ export function parseCompanyAuditEntityType(value: unknown): CompanyAuditEntityT
     case "estimate":
     case "estimate_file":
     case "invoice":
+    case "invoice_file":
     case "company_file":
     case "payment":
     case "expense":
@@ -243,6 +245,7 @@ export function canRevertCompanyAudit(event: CompanyAuditEvent) {
   if (NON_REVERTIBLE.has(event.action)) return false;
   if (event.entityType === "job_file" && event.action === "deleted") return false;
   if (event.entityType === "estimate_file" && event.action === "deleted") return false;
+  if (event.entityType === "invoice_file" && event.action === "deleted") return false;
   if (event.entityType === "company_file" && event.action === "deleted") return false;
   return (
     event.action === "updated" ||

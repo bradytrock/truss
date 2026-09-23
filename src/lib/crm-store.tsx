@@ -25,7 +25,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newPortalToken, portalInviteExpiry, portalUrl } from "@/lib/portal";
@@ -125,6 +125,7 @@ import { DEMO_SCHEDULE_URL, companySubscriptionActive } from "@/lib/subscription
 import { defaultTaxRateForMarket, isResidentialMarket, marketForEstimate, parseMarket, projectTypeForMarket, workMarket } from "@/lib/market";
 import { logoExtension, validateLogoFile } from "@/lib/company-logo";
 import { deleteViaApi, uploadViaApi } from "@/lib/storage/client-upload";
+import { copyCompanyFileViaApi, documentFileRelativePath } from "@/lib/document-file-copy";
 import {
   readFileDataUrl,
   withJobFileField,
@@ -158,6 +159,7 @@ import {
   mapJobPhoto,
   mapJobFile,
   mapEstimateFile,
+  mapInvoiceFile,
   mapCompanyFile,
   mapPhotoReport,
   mapOpportunity,
@@ -221,6 +223,7 @@ import {
   type Job,
   type JobFile,
   type EstimateFile,
+  type InvoiceFile,
   type CompanyFile,
   type CompanyFileCategory,
   type CompanyAuditAction,
@@ -377,6 +380,7 @@ const emptyState: CrmState = {
   companyAuditEvents: [],
   jobFiles: [],
   estimateFiles: [],
+  invoiceFiles: [],
   companyFiles: [],
   photoReports: [],
   expenses: [],
@@ -1293,6 +1297,16 @@ type CrmContextValue = CrmState & {
   revokeJobFileShare: (id: string) => Promise<boolean>;
   addEstimateFiles: (estimateId: string, files: File[]) => Promise<EstimateFile[]>;
   deleteEstimateFile: (id: string) => Promise<boolean>;
+  attachCompanyFileToEstimate: (
+    estimateId: string,
+    companyFileId: string,
+  ) => Promise<EstimateFile | null>;
+  addInvoiceFiles: (invoiceId: string, files: File[]) => Promise<InvoiceFile[]>;
+  deleteInvoiceFile: (id: string) => Promise<boolean>;
+  attachCompanyFileToInvoice: (
+    invoiceId: string,
+    companyFileId: string,
+  ) => Promise<InvoiceFile | null>;
   addCompanyFiles: (
     files: File[],
     options?: { category?: CompanyFileCategory; notes?: string },
@@ -10530,6 +10544,319 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [recordCompanyAudit, state.estimateFiles, state.estimates],
   );
 
+  const attachCompanyFileToEstimate = useCallback(
+    async (estimateId: string, companyFileId: string) => {
+      const source = (state.companyFiles ?? []).find((file) => file.id === companyFileId);
+      if (!source) {
+        toast.error("That directory file was not found.");
+        return null;
+      }
+      const estimate = state.estimates.find((item) => item.id === estimateId);
+      if (!estimate) {
+        toast.error("Estimate not found.");
+        return null;
+      }
+      const supabase = requireClient();
+      if (!supabase) throw new Error("Connect a Supabase project to save.");
+      if (!user.companyId || user.companyId === "local") {
+        toast.error("Connect a Supabase project to attach files.");
+        return null;
+      }
+
+      const fileId = crypto.randomUUID();
+      const relativePath = documentFileRelativePath(estimateId, fileId, source.name);
+      let copied: { storagePath: string; url: string; bucket?: string };
+      try {
+        copied = await copyCompanyFileViaApi(source, "estimate-files", relativePath);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not copy that file onto the estimate.");
+        return null;
+      }
+
+      const author = (effectiveStaff?.name || user.name).trim();
+      const { data, error } = await supabase
+        .from("estimate_files")
+        .insert({
+          id: fileId,
+          company_id: user.companyId,
+          estimate_id: estimateId,
+          name: source.name,
+          mime_type: source.mimeType || "application/octet-stream",
+          size_bytes: source.sizeBytes,
+          storage_path: copied.storagePath,
+          url: copied.url,
+          created_by: author,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        if (isMissingEstimateFiles(error)) toast.error(missingEstimateFilesMessage());
+        else toast.error(error?.message ?? "Could not attach that file to the estimate.");
+        return null;
+      }
+      const mapped = { ...mapEstimateFile(data), bucket: copied.bucket };
+      setState((prev) => ({
+        ...prev,
+        estimateFiles: [mapped, ...(prev.estimateFiles ?? [])],
+      }));
+      void recordCompanyAudit({
+        entityType: "estimate_file",
+        entityId: mapped.id,
+        action: "created",
+        after: mapped,
+        label: mapped.name,
+        detail: `Attached company file “${source.name}” to estimate`,
+        relatedJobId: estimate.jobId,
+        relatedOpportunityId: estimate.opportunityId,
+      });
+      return mapped;
+    },
+    [
+      effectiveStaff?.name,
+      recordCompanyAudit,
+      state.companyFiles,
+      state.estimates,
+      user.companyId,
+      user.name,
+    ],
+  );
+
+  const addInvoiceFiles = useCallback(
+    async (invoiceId: string, files: File[]) => {
+      const supabase = requireClient();
+      if (!supabase) throw new Error("Connect a Supabase project to save.");
+      if (!user.companyId || user.companyId === "local") {
+        toast.error("Connect a Supabase project to attach files.");
+        return [];
+      }
+      const invoice = state.invoices.find((item) => item.id === invoiceId);
+      if (!invoice) {
+        toast.error("Invoice not found.");
+        return [];
+      }
+      const author = (effectiveStaff?.name || user.name).trim();
+      const saved: InvoiceFile[] = [];
+
+      for (const file of files) {
+        if (file.size > 25 * 1024 * 1024) {
+          toast.error(`${file.name} is over 25 MB.`);
+          continue;
+        }
+        const fileId = crypto.randomUUID();
+        const relativePath = documentFileRelativePath(invoiceId, fileId, file.name);
+
+        let uploaded: { bucket: string; storagePath: string; url: string } | null = null;
+        try {
+          const result = await uploadViaApi("invoice-files", file, relativePath);
+          uploaded = {
+            bucket: result.bucket,
+            storagePath: result.path,
+            url: result.publicUrl,
+          };
+        } catch (error) {
+          if (file.size <= 1_000_000) {
+            try {
+              uploaded = { bucket: "inline", storagePath: "", url: await readFileDataUrl(file) };
+            } catch {
+              toast.error(error instanceof Error ? error.message : `Could not attach ${file.name}.`);
+              continue;
+            }
+          } else {
+            toast.error(error instanceof Error ? error.message : `Could not attach ${file.name}.`);
+            continue;
+          }
+        }
+
+        if (!uploaded) {
+          toast.error(`Could not attach ${file.name}.`);
+          continue;
+        }
+
+        const record: InvoiceFile = {
+          id: fileId,
+          invoiceId,
+          name: file.name.replace(/^.*[/\\]/, "").trim() || "Untitled",
+          mimeType: file.type || "",
+          sizeBytes: file.size,
+          url: uploaded.url,
+          storagePath: uploaded.storagePath,
+          createdBy: author,
+          createdAt: new Date().toISOString(),
+          bucket: uploaded.bucket,
+        };
+
+        const { data, error } = await supabase
+          .from("invoice_files")
+          .insert({
+            id: record.id,
+            company_id: user.companyId,
+            invoice_id: record.invoiceId,
+            name: record.name,
+            mime_type: record.mimeType || "application/octet-stream",
+            size_bytes: record.sizeBytes,
+            storage_path: record.storagePath,
+            url: record.url,
+            created_by: record.createdBy,
+          })
+          .select("*")
+          .single();
+
+        if (error || !data) {
+          if (isMissingInvoiceFiles(error)) toast.error(missingInvoiceFilesMessage());
+          else toast.error(error?.message ?? `Could not save ${file.name}.`);
+          if (uploaded.storagePath && uploaded.bucket !== "inline") {
+            try {
+              await deleteViaApi(uploaded.storagePath, "invoice-files");
+            } catch {
+              /* orphan ok */
+            }
+          }
+          continue;
+        }
+
+        saved.push({ ...mapInvoiceFile(data), bucket: uploaded.bucket });
+      }
+
+      if (saved.length > 0) {
+        setState((prev) => ({
+          ...prev,
+          invoiceFiles: [...saved, ...(prev.invoiceFiles ?? [])],
+        }));
+        for (const file of saved) {
+          void recordCompanyAudit({
+            entityType: "invoice_file",
+            entityId: file.id,
+            action: "uploaded",
+            after: file,
+            label: file.name,
+            relatedJobId: invoice.jobId,
+          });
+        }
+      }
+      return saved;
+    },
+    [
+      effectiveStaff?.name,
+      recordCompanyAudit,
+      state.invoices,
+      user.companyId,
+      user.name,
+    ],
+  );
+
+  const deleteInvoiceFile = useCallback(
+    async (id: string) => {
+      const current = (state.invoiceFiles ?? []).find((file) => file.id === id);
+      if (!current) return false;
+      const invoice = state.invoices.find((item) => item.id === current.invoiceId);
+      const supabase = maybeClient();
+      if (supabase) {
+        if (current.storagePath && current.bucket !== "inline") {
+          try {
+            await deleteViaApi(current.storagePath, "invoice-files");
+          } catch {
+            // Row delete still proceeds; orphaned B2 objects are harmless.
+          }
+        }
+        const { error } = await supabase.from("invoice_files").delete().eq("id", id);
+        if (error && !isMissingInvoiceFiles(error)) {
+          toast.error(error.message);
+          return false;
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        invoiceFiles: (prev.invoiceFiles ?? []).filter((file) => file.id !== id),
+      }));
+      void recordCompanyAudit({
+        entityType: "invoice_file",
+        entityId: id,
+        action: "deleted",
+        before: current,
+        label: current.name,
+        relatedJobId: invoice?.jobId ?? null,
+      });
+      return true;
+    },
+    [recordCompanyAudit, state.invoiceFiles, state.invoices],
+  );
+
+  const attachCompanyFileToInvoice = useCallback(
+    async (invoiceId: string, companyFileId: string) => {
+      const source = (state.companyFiles ?? []).find((file) => file.id === companyFileId);
+      if (!source) {
+        toast.error("That directory file was not found.");
+        return null;
+      }
+      const invoice = state.invoices.find((item) => item.id === invoiceId);
+      if (!invoice) {
+        toast.error("Invoice not found.");
+        return null;
+      }
+      const supabase = requireClient();
+      if (!supabase) throw new Error("Connect a Supabase project to save.");
+      if (!user.companyId || user.companyId === "local") {
+        toast.error("Connect a Supabase project to attach files.");
+        return null;
+      }
+
+      const fileId = crypto.randomUUID();
+      const relativePath = documentFileRelativePath(invoiceId, fileId, source.name);
+      let copied: { storagePath: string; url: string; bucket?: string };
+      try {
+        copied = await copyCompanyFileViaApi(source, "invoice-files", relativePath);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not copy that file onto the invoice.");
+        return null;
+      }
+
+      const author = (effectiveStaff?.name || user.name).trim();
+      const { data, error } = await supabase
+        .from("invoice_files")
+        .insert({
+          id: fileId,
+          company_id: user.companyId,
+          invoice_id: invoiceId,
+          name: source.name,
+          mime_type: source.mimeType || "application/octet-stream",
+          size_bytes: source.sizeBytes,
+          storage_path: copied.storagePath,
+          url: copied.url,
+          created_by: author,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        if (isMissingInvoiceFiles(error)) toast.error(missingInvoiceFilesMessage());
+        else toast.error(error?.message ?? "Could not attach that file to the invoice.");
+        return null;
+      }
+      const mapped = { ...mapInvoiceFile(data), bucket: copied.bucket };
+      setState((prev) => ({
+        ...prev,
+        invoiceFiles: [mapped, ...(prev.invoiceFiles ?? [])],
+      }));
+      void recordCompanyAudit({
+        entityType: "invoice_file",
+        entityId: mapped.id,
+        action: "created",
+        after: mapped,
+        label: mapped.name,
+        detail: `Attached company file “${source.name}” to invoice`,
+        relatedJobId: invoice.jobId,
+      });
+      return mapped;
+    },
+    [
+      effectiveStaff?.name,
+      recordCompanyAudit,
+      state.companyFiles,
+      state.invoices,
+      user.companyId,
+      user.name,
+    ],
+  );
+
   const addCompanyFiles = useCallback(
     async (files: File[], options?: { category?: CompanyFileCategory; notes?: string }) => {
       const supabase = requireClient();
@@ -12446,6 +12773,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       revokeJobFileShare,
       addEstimateFiles,
       deleteEstimateFile,
+      attachCompanyFileToEstimate,
+      addInvoiceFiles,
+      deleteInvoiceFile,
+      attachCompanyFileToInvoice,
       addCompanyFiles,
       updateCompanyFile,
       deleteCompanyFile,
@@ -12630,6 +12961,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       revokeJobFileShare,
       addEstimateFiles,
       deleteEstimateFile,
+      attachCompanyFileToEstimate,
+      addInvoiceFiles,
+      deleteInvoiceFile,
+      attachCompanyFileToInvoice,
       addCompanyFiles,
       updateCompanyFile,
       deleteCompanyFile,

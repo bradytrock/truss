@@ -19,6 +19,7 @@ import {
   mapJobPhoto,
   mapJobFile,
   mapEstimateFile,
+  mapInvoiceFile,
   mapCompanyFile,
   mapPhotoReport,
   mapOpportunity,
@@ -129,6 +130,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     returningClientLeadsRes,
     jobFilesRes,
     estimateFilesRes,
+    invoiceFilesRes,
     companyFilesRes,
     materialOrdersRes,
     materialOrderLinesRes,
@@ -213,6 +215,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     supabase.from("returning_client_leads").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("job_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("estimate_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    supabase.from("invoice_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("company_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("material_orders").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("material_order_lines").select("*").eq("company_id", companyId).order("sort_order"),
@@ -325,6 +328,9 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     estimateFiles: estimateFilesRes.error
       ? []
       : (estimateFilesRes.data ?? []).map(mapEstimateFile),
+    invoiceFiles: invoiceFilesRes.error
+      ? []
+      : (invoiceFilesRes.data ?? []).map(mapInvoiceFile),
     companyFiles: companyFilesRes.error ? [] : mapRows(companyFilesRes.data, mapCompanyFile),
     photoReports: photoReportsRes.error ? [] : (photoReportsRes.data ?? []).map(mapPhotoReport),
     calendarAccounts: calendarAccountsRes.error

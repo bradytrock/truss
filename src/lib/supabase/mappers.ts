@@ -1207,6 +1207,34 @@ export function mapEstimateFile(row: {
   };
 }
 
+export function mapInvoiceFile(row: {
+  id: string;
+  invoice_id: string;
+  name: string;
+  mime_type?: string | null;
+  size_bytes?: number | null;
+  storage_path: string;
+  url: string;
+  created_by?: string | null;
+  created_at: string;
+}): import("@/lib/types").InvoiceFile {
+  return {
+    id: row.id,
+    invoiceId: row.invoice_id,
+    name: row.name,
+    mimeType: row.mime_type ?? "",
+    sizeBytes: Number(row.size_bytes) || 0,
+    url: resolveStoredFileUrl({
+      storagePath: row.storage_path,
+      url: row.url,
+      kind: "invoice-files",
+    }),
+    storagePath: normalizeObjectKey(row.storage_path, "invoice-files") || row.storage_path,
+    createdBy: row.created_by ?? "",
+    createdAt: row.created_at,
+  };
+}
+
 export function mapCompanyFile(
   row: Database["public"]["Tables"]["company_files"]["Row"],
 ): import("@/lib/types").CompanyFile {
