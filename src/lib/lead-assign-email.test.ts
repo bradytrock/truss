@@ -5,6 +5,7 @@ import {
   leadAssignEmailSubject,
   leadAssignEmailText,
   leadAssignPropertyAddress,
+  leadAssignNeedsEmail,
   leadAssignRecipients,
   parseLeadAssignOpportunityId,
   parseVoiceLeadAssignContext,
@@ -153,6 +154,17 @@ assert.deepEqual(
   }),
   [{ role: "team_lead", staffId: "staff_luis", name: "Luis Chen", email: "luis@company.test" }],
 );
+
+assert.equal(
+  leadAssignNeedsEmail({ ownerStaffId: "staff_alex", originatorStaffId: "staff_alex" }),
+  false,
+);
+assert.equal(
+  leadAssignNeedsEmail({ ownerStaffId: "staff_alex", originatorStaffId: "staff_priya" }),
+  true,
+);
+assert.equal(leadAssignNeedsEmail({ ownerStaffId: "staff_alex", originatorStaffId: "" }), true);
+assert.equal(leadAssignNeedsEmail({ ownerStaffId: "", originatorStaffId: "staff_priya" }), false);
 
 assert.equal(parseLeadAssignOpportunityId({ opportunityId: "  abc  " }), "abc");
 assert.equal(parseLeadAssignOpportunityId({}), "");

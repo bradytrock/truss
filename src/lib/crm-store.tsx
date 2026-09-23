@@ -288,7 +288,7 @@ import {
   codeReviewAudience,
 } from "@/lib/job-code";
 import { formatJobSite } from "@/lib/leads";
-import { requestLeadAssignNotification } from "@/lib/lead-assign-email";
+import { leadAssignNeedsEmail, requestLeadAssignNotification } from "@/lib/lead-assign-email";
 import { defaultEstimateValidUntil, localYmd } from "@/lib/format";
 import { fillPayment, fileToDataUrl } from "@/lib/job-financials";
 import {
@@ -2950,7 +2950,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           relatedOpportunityId: opportunity.id,
           relatedJobId: pipelineJob?.id ?? null,
         });
-        void requestLeadAssignNotification(opportunity.id);
+        if (leadAssignNeedsEmail(opportunity)) void requestLeadAssignNotification(opportunity.id);
         return Object.assign(opportunity, { costingJob: pipelineJob });
       }
       const base = {
@@ -3153,7 +3153,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         relatedOpportunityId: opportunity.id,
         relatedJobId: pipelineJob?.id ?? null,
       });
-      void requestLeadAssignNotification(opportunity.id);
+      if (leadAssignNeedsEmail(opportunity)) void requestLeadAssignNotification(opportunity.id);
       return Object.assign(opportunity, { costingJob: pipelineJob });
     },
     [addActivity, recordCompanyAudit, state.jobs, state.opportunities, state.staff, user.companyId, user.name, user.staffId]

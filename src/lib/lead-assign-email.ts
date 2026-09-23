@@ -176,6 +176,17 @@ export function leadAssignRecipients(input: {
   return out;
 }
 
+/** Skip the notice when the person who opened the lead kept it. */
+export function leadAssignNeedsEmail(input: {
+  ownerStaffId?: string | null;
+  originatorStaffId?: string | null;
+}) {
+  const owner = input.ownerStaffId?.trim() ?? "";
+  if (!owner) return false;
+  const originator = input.originatorStaffId?.trim() ?? "";
+  return !originator || originator !== owner;
+}
+
 export function parseLeadAssignOpportunityId(body: Record<string, unknown>) {
   const raw = typeof body.opportunityId === "string" ? body.opportunityId : "";
   return raw.trim();

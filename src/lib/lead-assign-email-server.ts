@@ -3,6 +3,7 @@ import {
   leadAssignEmailHtml,
   leadAssignEmailSubject,
   leadAssignEmailText,
+  leadAssignNeedsEmail,
   leadAssignPropertyAddress,
   leadAssignRecipients,
   parseLeadAssignOpportunityId,
@@ -103,7 +104,7 @@ export async function sendLeadAssignEmailsForOpportunity(
   const { data: opportunity, error: opportunityError } = await supabase
     .from("opportunities")
     .select(
-      "id, company_id, primary_contact_id, owner_staff_id, estimator, location, street, city, state, postal_code, notes",
+      "id, company_id, primary_contact_id, owner_staff_id, originator_staff_id, estimator, location, street, city, state, postal_code, notes",
     )
     .eq("id", opportunityId)
     .eq("company_id", input.companyId)
@@ -116,7 +117,12 @@ export async function sendLeadAssignEmailsForOpportunity(
   }
 
   const ownerId = opportunity.owner_staff_id?.trim() ?? "";
-  if (!ownerId) {
+  if (
+    !leadAssignNeedsEmail({
+      ownerStaffId: ownerId,
+      originatorStaffId: opportunity.originator_staff_id,
+    })
+  ) {
     return { ok: true, sent: 0, failed: 0, skipped: 1 };
   }
 

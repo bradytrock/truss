@@ -1,3 +1,4 @@
+import { leadAssignNeedsEmail } from "@/lib/lead-assign-email";
 import { sendVoiceLeadAssignEmails } from "@/lib/lead-assign-email-server";
 import { looksLikePhone } from "@/lib/phone";
 import { sendblueText } from "@/lib/sendblue";
@@ -92,7 +93,7 @@ export async function voiceIntake(
   if (error) return { ok: false, error: error.message } satisfies VoiceRpcResult;
   const result = asResult(data);
   if (!result.ok) return result;
-  if (result.action === "create" && result.opportunityId) {
+  if (result.action === "create" && result.opportunityId && leadAssignNeedsEmail(result)) {
     try {
       await sendVoiceLeadAssignEmails(supabase, {
         token,
