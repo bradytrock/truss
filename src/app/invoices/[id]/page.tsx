@@ -119,6 +119,16 @@ export default function InvoiceDetailPage() {
       company: letterhead,
       customer,
       projectManager,
+      jobCode: job?.code,
+      site: job
+        ? {
+            street: job.street,
+            city: job.city,
+            state: job.state,
+            postalCode: job.postalCode,
+            name: job.name,
+          }
+        : { name: record.name },
     });
   }
 

@@ -198,6 +198,7 @@ export function ShareEstimateClient({
                   primaryCustomer: primaryName,
                   secondCustomer: secondName,
                   photos: crm.photos,
+                  jobCode: job?.code,
                 }).catch(() => toast.error("Could not build the PDF."))
               }
             />

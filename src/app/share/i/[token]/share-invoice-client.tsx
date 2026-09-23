@@ -79,6 +79,16 @@ export function ShareInvoiceClient({
                 company: letterhead,
                 customer,
                 projectManager,
+                jobCode: job?.code,
+                site: job
+                  ? {
+                      street: job.street,
+                      city: job.city,
+                      state: job.state,
+                      postalCode: job.postalCode,
+                      name: job.name,
+                    }
+                  : { name: fromStore.name },
               }).catch(() => toast.error("Could not build the PDF."))
             }
           />

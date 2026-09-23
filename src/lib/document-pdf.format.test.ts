@@ -127,13 +127,19 @@ async function main() {
       lines,
       company,
       customer: "Shawn Gregory",
+      jobCode: "JH091426-A",
     }),
   );
+  assert.match(estimateText, /ESTIMATE/);
+  assert.match(estimateText, /PREPARED FOR/i);
+  assert.match(estimateText, /9174 Shadowridge Drive/);
   assert.match(estimateText, /Roofing System/);
   assert.match(estimateText, /TAMKO Heritage/);
   assert.match(estimateText, /Tear-off to the decking/);
   assert.match(estimateText, /Synthetic underlayment/);
   assert.match(estimateText, /Hip and ridge shingles/);
+  assert.match(estimateText, /TOTAL/);
+  assert.match(estimateText, /AUTHORIZATION/);
   assert.doesNotMatch(estimateText, /Margin/);
 
   const markedUp = await textFromPdf(
@@ -180,6 +186,9 @@ async function main() {
       customer: "Shawn Gregory",
     }),
   );
+  assert.match(invoiceText, /INVOICE/);
+  assert.match(invoiceText, /BILL TO/i);
+  assert.match(invoiceText, /BALANCE/);
   assert.match(invoiceText, /Roofing System/);
   assert.match(invoiceText, /TAMKO Heritage/);
   assert.match(invoiceText, /Tear-off to the decking/);

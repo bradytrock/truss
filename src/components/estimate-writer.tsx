@@ -975,6 +975,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       primaryCustomer: contact?.name,
       secondCustomer: secondSignerName,
       photos: crm.photos,
+      jobCode: job?.code,
     });
   }
 

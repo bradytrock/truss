@@ -1,7 +1,5 @@
 "use client";
 
-import { CompanyLetterhead } from "@/components/company-letterhead";
-import { ProjectManagerBlock } from "@/components/project-manager-block";
 import { InvoiceStatusBadge } from "@/components/status-badge";
 import { useCrmOptional } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord, type ProjectManagerContact } from "@/lib/document-owner";
@@ -9,9 +7,24 @@ import type { CompanySettings, Invoice, InvoiceLine, InvoiceStatus, Payment } fr
 import { invoiceTermsValues, liveInvoiceTerms } from "@/lib/document-terms";
 import { DocumentNotesBlock } from "@/components/document-notes";
 import { DocumentTermsFields } from "@/components/document-terms-fields";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatMoney } from "@/lib/format";
 import { FormattedLineText } from "@/components/formatted-line-text";
 import { invoiceBalance, invoiceTotal, lineAmount, paidOnInvoice } from "@/lib/money";
+import { paperInvoiceMeta, paperQtyLabel, paperSiteTitle } from "@/lib/document-paper";
+import {
+  PaperCoverHeader,
+  PaperFooter,
+  PaperMetaRow,
+  PaperPartyCards,
+  PaperSectionLabel,
+  PaperSheet,
+  PaperSiteTitle,
+  PaperTableHead,
+  PaperTableRow,
+  PaperTermsColumns,
+  PaperTotals,
+  paperManagerCard,
+} from "@/components/document-paper-chrome";
 
 export function InvoiceDocument({
   invoice,
@@ -66,79 +79,86 @@ export function InvoiceDocument({
     invoice,
     companyDefault: letterhead.defaultInvoiceTerms,
   });
+  const site = paperSiteTitle({
+    street: job?.street,
+    city: job?.city,
+    state: job?.state,
+    postalCode: job?.postalCode,
+    name: invoice.name,
+    kindTitle: "Invoice",
+  });
 
   return (
-    <div className="space-y-6 rounded-md border bg-card p-5 sm:p-7">
-      <CompanyLetterhead company={letterhead} showContact={false} />
-      <div className="flex flex-col gap-3 border-b pb-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-            {invoice.number}
-          </p>
-          <h2 className="font-heading mt-1 text-2xl font-medium text-balance">{invoice.name}</h2>
-          <p className="mt-2 text-sm text-muted-foreground">Bill to {customer}</p>
-        </div>
-        <div className="text-sm sm:text-right">
-          {showStatus ? <InvoiceStatusBadge status={status} /> : null}
-          <p className={showStatus ? "mt-2 text-muted-foreground" : "text-muted-foreground"}>
-            Issued {formatDate(invoice.issuedAt)}
-          </p>
-          <p className="text-muted-foreground">Due {formatDate(invoice.dueAt)}</p>
-        </div>
+    <PaperSheet className="space-y-6 p-5 sm:p-7">
+      <PaperCoverHeader company={letterhead} kind="invoice" number={invoice.number} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <PaperSiteTitle title={site.title} locality={site.locality} />
+        {showStatus ? <InvoiceStatusBadge status={status} /> : null}
       </div>
-      <ProjectManagerBlock manager={manager} />
+      <PaperMetaRow
+        items={paperInvoiceMeta({
+          number: invoice.number,
+          issuedAt: invoice.issuedAt,
+          dueAt: invoice.dueAt,
+          jobCode: job?.code,
+        })}
+      />
+      <PaperPartyCards
+        left={{ label: "Bill to", name: customer, lines: [site.locality].filter(Boolean) }}
+        right={paperManagerCard(manager)}
+      />
       {sorted.length === 0 ? (
         <p className="text-sm text-muted-foreground">No line items on this invoice.</p>
       ) : (
-        <ul className="divide-y border-y">
-          {sorted.map((line) => (
-            <li key={line.id} className="flex items-start justify-between gap-3 py-3">
-              <div className="min-w-0">
-                <FormattedLineText
-                  text={line.description}
-                  className="text-sm text-muted-foreground [&_p:first-child]:font-medium [&_p:first-child]:text-foreground"
-                />
-                <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                  {line.quantity} {line.unit} × {formatMoney(line.unitCost)}
-                </p>
-              </div>
-              <p className="shrink-0 tabular-nums">{formatMoney(lineAmount(line))}</p>
-            </li>
-          ))}
-        </ul>
+        <div className="overflow-x-auto">
+          <PaperTableHead />
+          <div className="divide-y">
+            {sorted.map((line) => (
+              <PaperTableRow
+                key={line.id}
+                heading={
+                  <FormattedLineText
+                    text={line.description}
+                    className="text-sm text-muted-foreground [&_p:first-child]:font-medium [&_p:first-child]:text-foreground"
+                  />
+                }
+                qty={paperQtyLabel(line.quantity)}
+                unit={line.unit || ""}
+                rate={formatMoney(line.unitCost)}
+                amount={formatMoney(lineAmount(line))}
+              />
+            ))}
+          </div>
+        </div>
       )}
-      <dl className="ml-auto max-w-xs space-y-1.5 text-sm">
-        <div className="flex justify-between gap-4">
-          <dt className="text-muted-foreground">Total</dt>
-          <dd className="tabular-nums">{formatMoney(total)}</dd>
-        </div>
-        <div className="flex justify-between gap-4">
-          <dt className="text-muted-foreground">Paid</dt>
-          <dd className="tabular-nums">{formatMoney(paid)}</dd>
-        </div>
-        <div className="flex justify-between gap-4 border-t pt-2 font-medium">
-          <dt>Balance due</dt>
-          <dd className="tabular-nums">{formatMoney(balance)}</dd>
-        </div>
-      </dl>
+      <PaperTotals
+        rows={[
+          { label: "Total", value: formatMoney(total) },
+          { label: "Paid", value: formatMoney(paid) },
+        ]}
+        pill={{ label: "BALANCE", value: formatMoney(balance) }}
+      />
       <DocumentNotesBlock notes={invoice.notes} />
-      <div className="break-inside-auto">
-        <h3 className="mb-1 text-[11px] font-semibold tracking-[0.16em] uppercase">Payment terms</h3>
-        <DocumentTermsFields
-          value={terms}
-          values={invoiceTermsValues({
-            invoice,
-            lines,
-            payments,
-            customer,
-            company: letterhead,
-          })}
-          disabled={!onTermsChange}
-          emptyLabel="No payment terms on this invoice."
-          hint=""
-          onCommit={onTermsChange ?? (() => {})}
-        />
+      <div className="break-inside-auto space-y-2">
+        <PaperSectionLabel>Payment terms</PaperSectionLabel>
+        <PaperTermsColumns>
+          <DocumentTermsFields
+            value={terms}
+            values={invoiceTermsValues({
+              invoice,
+              lines,
+              payments,
+              customer,
+              company: letterhead,
+            })}
+            disabled={!onTermsChange}
+            emptyLabel="No payment terms on this invoice."
+            hint=""
+            onCommit={onTermsChange ?? (() => {})}
+          />
+        </PaperTermsColumns>
       </div>
-    </div>
+      <PaperFooter company={letterhead} />
+    </PaperSheet>
   );
 }
