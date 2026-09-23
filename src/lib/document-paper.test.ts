@@ -53,6 +53,7 @@ assert.equal(company.name, "T Rock Roofing");
 assert.ok(company.address.some((line) => line.includes("1 Main")));
 assert.match(company.contact, /214/);
 assert.match(company.contact, /office@example.com/);
+assert.deepEqual(company.contactLines.slice(0, 2).map((line) => line.includes("214") || line.includes("office@example.com")), [true, true]);
 assert.equal(company.license, "License TACL123");
 
 assert.match(paperFooterLeft({ name: "T Rock Roofing", phone: "2145550100", email: "office@example.com" }), /T Rock Roofing/);

@@ -56,7 +56,7 @@ export function paperCompanyLines(company: {
     postalCode: company.postalCode ?? "",
   });
   const phone = formatPhone(company.phone ?? "");
-  const contact = [
+  const contactLines = [
     phone && phone !== "—" ? phone : "",
     company.email?.trim() ?? "",
     company.website?.trim() ?? "",
@@ -64,7 +64,8 @@ export function paperCompanyLines(company: {
   return {
     name: company.name.trim() || "Company",
     address,
-    contact: contact.join(" · "),
+    contactLines,
+    contact: contactLines.join(" · "),
     license: company.licenseNumber?.trim() ? `License ${company.licenseNumber.trim()}` : "",
   };
 }

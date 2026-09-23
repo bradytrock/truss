@@ -51,7 +51,6 @@ import {
   paperQtyLabel,
   paperRescissionCopy,
   paperSiteTitle,
-  paperSplitColumns,
   type PaperKind,
   type PaperMetaItem,
 } from "@/lib/document-paper";
@@ -88,7 +87,8 @@ type EnsureFn = (y: number, needed: number) => number;
 type PdfInk = Awaited<ReturnType<typeof loadLogoForPdf>>;
 type AuthLine = ReturnType<typeof estimateSignatureLines>[number];
 
-const TERMS_BODY_SIZE = 7.5;
+const TERMS_BODY_SIZE = 9;
+const TERMS_LINE = 12;
 
 async function createDoc() {
   const { jsPDF } = await import("jspdf");
@@ -405,8 +405,8 @@ async function writeCoverHeader(
   let textX = PAPER_INSET;
   let logoBottom = 22;
   if (logo) {
-    const maxH = 42;
-    const maxW = 108;
+    const maxH = 36;
+    const maxW = 72;
     const scale = Math.min(maxW / logo.width, maxH / logo.height);
     const w = logo.width * scale;
     const h = logo.height * scale;
@@ -414,35 +414,34 @@ async function writeCoverHeader(
     textX = PAPER_INSET + w + 12;
     logoBottom = 18 + h;
   }
+  const kindLabel = paperKindLabel(kind);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  const kindW = Math.max(doc.getTextWidth(kindLabel), 96);
+  const textMax = Math.max(160, right - kindW - 20 - textX);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   ink(doc, PAPER_INK);
-  doc.text(lines.name, textX, 28);
+  const nameLines = doc.splitTextToSize(lines.name, textMax);
+  doc.text(nameLines, textX, 28);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   ink(doc, PAPER_MUTED);
-  let next = 40;
-  for (const line of lines.address) {
-    doc.text(line, textX, next);
-    next += 10;
-  }
-  if (lines.contact) {
-    doc.text(lines.contact, textX, next);
-    next += 10;
-  }
-  if (lines.license) {
-    doc.text(lines.license, textX, next);
-    next += 10;
+  let next = 28 + (Array.isArray(nameLines) ? nameLines.length : 1) * 12;
+  for (const line of [...lines.address, ...lines.contactLines, lines.license].filter(Boolean)) {
+    const wrapped = doc.splitTextToSize(line, textMax);
+    doc.text(wrapped, textX, next);
+    next += (Array.isArray(wrapped) ? wrapped.length : 1) * 10;
   }
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
+  doc.setFontSize(18);
   ink(doc, PAPER_INK);
-  doc.text(paperKindLabel(kind), right, 34, { align: "right" });
+  doc.text(kindLabel, right, 32, { align: "right" });
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   ink(doc, PAPER_RED);
-  doc.text(`No. ${number}`, right, 48, { align: "right" });
-  const y = Math.max(next, logoBottom, 56) + 18;
+  doc.text(`No. ${number}`, right, 46, { align: "right" });
+  const y = Math.max(next, logoBottom, 56) + 16;
   draw(doc, PAPER_LINE);
   doc.setLineWidth(0.7);
   doc.line(PAPER_INSET, y - 10, right, y - 10);
@@ -498,8 +497,21 @@ function writePartyCards(
   const colW = right
     ? (rightEdge - PAPER_INSET - gap) / 2
     : rightEdge - PAPER_INSET;
-  const height = 72;
   const cards = right ? [left, right] : [left];
+  const inner = colW - 20;
+  const heights = cards.map((card) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    const name = doc.splitTextToSize(card.name || "—", inner);
+    let extra = 0;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    for (const line of card.lines.filter(Boolean).slice(0, 3)) {
+      extra += (Array.isArray(doc.splitTextToSize(line, inner)) ? doc.splitTextToSize(line, inner).length : 1) * 11;
+    }
+    return 28 + (Array.isArray(name) ? name.length : 1) * 12 + extra + 12;
+  });
+  const height = Math.max(64, ...heights);
   cards.forEach((card, index) => {
     const x = PAPER_INSET + index * (colW + gap);
     fill(doc, PAPER_CARD);
@@ -507,22 +519,23 @@ function writePartyCards(
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7);
     ink(doc, PAPER_MUTED);
-    doc.text(card.label.toUpperCase(), x + 10, y + 16);
+    doc.text(card.label.toUpperCase(), x + 10, y + 14);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     ink(doc, PAPER_INK);
-    const name = doc.splitTextToSize(card.name || "—", colW - 20);
-    doc.text(name, x + 10, y + 32);
+    const name = doc.splitTextToSize(card.name || "—", inner);
+    doc.text(name, x + 10, y + 28);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
     ink(doc, PAPER_MUTED);
-    let cy = y + 32 + (Array.isArray(name) ? name.length : 1) * 11;
-    for (const line of card.lines.filter(Boolean).slice(0, 2)) {
-      doc.text(line, x + 10, cy);
-      cy += 11;
+    let cy = y + 28 + (Array.isArray(name) ? name.length : 1) * 12;
+    for (const line of card.lines.filter(Boolean).slice(0, 3)) {
+      const wrapped = doc.splitTextToSize(line, inner);
+      doc.text(wrapped, x + 10, cy);
+      cy += (Array.isArray(wrapped) ? wrapped.length : 1) * 11;
     }
   });
-  return y + height + 16;
+  return y + height + 14;
 }
 
 type TableCols = {
@@ -652,55 +665,44 @@ function stampFooters(doc: Doc, company: CompanySettings) {
   }
 }
 
-function writeTwoColumnTerms(
+function writeTermsSections(
   doc: Doc,
   terms: string,
   startY: number,
   pager: ReturnType<typeof createPager>,
 ) {
   const sections = parseTermsSections(terms);
-  if (!sections.length) return startY;
-  const gap = 18;
-  const colW = (contentRight(doc) - PAPER_INSET - gap) / 2;
-  const [left, right] = paperSplitColumns(sections);
-  const columns = [left, right];
-  const xs = [PAPER_INSET, PAPER_INSET + colW + gap];
-  let bottom = startY;
-  columns.forEach((blocks, index) => {
-    let y = startY;
-    const x = xs[index] ?? PAPER_INSET;
-    for (const section of blocks) {
-      const heading = section.heading.trim();
-      const bodyLines = wrapText(doc, section.body, colW, TERMS_BODY_SIZE);
-      const needed = (heading ? 14 : 0) + bodyLines.length * 9.5 + 10;
-      if (y + needed > contentBottom(doc) && y > startY + 8) {
-        y = pager.addPage();
-      }
-      if (heading) {
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(8);
-        ink(doc, PAPER_INK);
-        const head = doc.splitTextToSize(heading, colW);
-        doc.text(head, x, y);
-        y += (Array.isArray(head) ? head.length : 1) * 10 + 2;
-      }
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(TERMS_BODY_SIZE);
-      ink(doc, { r: 50, g: 50, b: 50 });
-      for (const line of bodyLines) {
-        if (y + 10 > contentBottom(doc)) y = pager.addPage();
-        if (line) doc.text(line, x, y);
-        y += line ? 9.5 : 6;
-      }
-      y += 10;
-      bottom = Math.max(bottom, y);
+  if (!sections.length) {
+    return writeParagraph(doc, terms, startY, contentRight(doc) - PAPER_INSET, TERMS_BODY_SIZE, pager.ensure);
+  }
+  const width = contentRight(doc) - PAPER_INSET;
+  let y = startY;
+  for (const section of sections) {
+    const heading = section.heading.trim();
+    const bodyLines = wrapText(doc, section.body, width, TERMS_BODY_SIZE);
+    y = pager.ensure(y, (heading ? 16 : 0) + TERMS_LINE * 2);
+    if (heading) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      ink(doc, PAPER_INK);
+      const head = doc.splitTextToSize(heading, width);
+      doc.text(head, PAPER_INSET, y);
+      y += (Array.isArray(head) ? head.length : 1) * 13;
     }
-  });
-  return bottom;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(TERMS_BODY_SIZE);
+    ink(doc, { r: 45, g: 45, b: 45 });
+    for (const line of bodyLines) {
+      y = pager.ensure(y, TERMS_LINE + 2);
+      if (line) doc.text(line, PAPER_INSET, y);
+      y += line ? TERMS_LINE : 7;
+    }
+    y += 10;
+  }
+  return y;
 }
 
-function writeInitials(doc: Doc, y: number, ensure: EnsureFn) {
-  y = ensure(y + 8, 28);
+function writeInitials(doc: Doc, y: number) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   ink(doc, PAPER_MUTED);
@@ -709,7 +711,7 @@ function writeInitials(doc: Doc, y: number, ensure: EnsureFn) {
   doc.setLineWidth(0.7);
   doc.line(PAPER_INSET + 56, y + 1, PAPER_INSET + 140, y + 1);
   doc.line(PAPER_INSET + 156, y + 1, PAPER_INSET + 240, y + 1);
-  return y + 18;
+  return y + 20;
 }
 
 function signatureInkHeight(inkImage: PdfInk, colWidth: number) {
@@ -769,12 +771,12 @@ async function writePaperAuthorization(
   ensure: EnsureFn,
 ) {
   const right = contentRight(doc);
-  y = ensure(y, 40);
+  y = ensure(y, 220);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
+  doc.setFontSize(13);
   ink(doc, PAPER_INK);
   doc.text("AUTHORIZATION", PAPER_INSET, y);
-  y += 14;
+  y += 18;
   fill(doc, PAPER_CARD);
   doc.roundedRect(PAPER_INSET, y, right - PAPER_INSET, 36, 4, 4, "F");
   doc.setFont("helvetica", "bold");
@@ -993,6 +995,11 @@ export async function buildEstimatePdf(raw: {
     y += 4;
   }
 
+  draw(doc, { r: 220, g: 220, b: 220 });
+  doc.setLineWidth(0.6);
+  doc.line(PAPER_INSET, y, contentRight(doc), y);
+  y += 16;
+
   const summaryRows: Array<[string, string]> = [];
   if (gbb && estimateOptions.length > 0) {
     y = writeParagraph(doc, "The option you check is the contract total.", y, contentRight(doc) - PAPER_INSET, 9, pager.ensure);
@@ -1071,15 +1078,17 @@ export async function buildEstimatePdf(raw: {
   if (filledTerms.trim()) {
     y = pager.addPage();
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
+    doc.setFontSize(13);
     ink(doc, PAPER_INK);
     doc.text("TERMS", PAPER_INSET, y);
-    y += 16;
-    y = writeTwoColumnTerms(doc, filledTerms, y, pager);
-    y = writeInitials(doc, y, pager.ensure);
+    y += 18;
+    y = writeTermsSections(doc, filledTerms, y, pager);
+    if (y + 28 < contentBottom(doc)) {
+      y = writeInitials(doc, y + 8);
+    }
   }
 
-  y = pager.addPage();
+  y = pager.ensure(y + 16, 220);
   await writePaperAuthorization(
     doc,
     input.estimate,
@@ -1257,11 +1266,11 @@ export async function buildInvoicePdf(input: {
   if (paymentTerms.trim()) {
     y = pager.addPage();
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
+    doc.setFontSize(13);
     ink(doc, PAPER_INK);
     doc.text("PAYMENT TERMS", PAPER_INSET, y);
-    y += 16;
-    writeTwoColumnTerms(doc, paymentTerms, y, pager);
+    y += 18;
+    writeTermsSections(doc, paymentTerms, y, pager);
   }
 
   stampFooters(doc, input.company);

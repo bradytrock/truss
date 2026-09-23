@@ -52,11 +52,11 @@ export function PaperCoverHeader({
               {line}
             </p>
           ))}
-          {lines.contact ? (
-            <p className="text-xs leading-relaxed" style={{ color: PAPER_MUTED_HEX }}>
-              {lines.contact}
+          {lines.contactLines.map((line) => (
+            <p key={line} className="text-xs leading-relaxed" style={{ color: PAPER_MUTED_HEX }}>
+              {line}
             </p>
-          ) : null}
+          ))}
           {lines.license ? (
             <p className="text-[11px]" style={{ color: PAPER_MUTED_HEX }}>
               {lines.license}
@@ -259,5 +259,5 @@ export function PaperFooter({ company }: { company: CompanySettings }) {
 }
 
 export function PaperTermsColumns({ children }: { children: ReactNode }) {
-  return <div className="columns-1 gap-6 sm:columns-2">{children}</div>;
+  return <div className="max-w-3xl space-y-3 text-[15px] leading-7">{children}</div>;
 }

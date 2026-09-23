@@ -113,11 +113,14 @@ const invoiceLines: InvoiceLine[] = [
   },
 ];
 
-async function textFromPdf(blob: Blob) {
+async function pagesFromPdf(blob: Blob) {
   const buffer = new Uint8Array(await blob.arrayBuffer());
   const extracted = await extractText(buffer);
-  const pages = Array.isArray(extracted.text) ? extracted.text : [extracted.text];
-  return pages.join("\n");
+  return Array.isArray(extracted.text) ? extracted.text : [extracted.text];
+}
+
+async function textFromPdf(blob: Blob) {
+  return (await pagesFromPdf(blob)).join("\n");
 }
 
 async function main() {
@@ -192,6 +195,37 @@ async function main() {
   assert.match(invoiceText, /Roofing System/);
   assert.match(invoiceText, /TAMKO Heritage/);
   assert.match(invoiceText, /Tear-off to the decking/);
+
+  const legalTerms = [
+    "1. Contract price",
+    "Pay the listed total when you sign.",
+    "",
+    "2. Scope of work",
+    "The work is the included items listed above.",
+    "",
+    "3. Schedule",
+    "Work starts after you sign.",
+    "",
+    "4. Changes",
+    "Changes are written as a change order.",
+    "",
+    "5. Contractor",
+    "T Rock Roofing is the contractor named on this proposal.",
+  ].join("\n");
+  const legalPages = await pagesFromPdf(
+    await buildEstimatePdf({
+      estimate: { ...estimate, terms: legalTerms, number: "EST-LEGAL" },
+      lines,
+      company,
+      customer: "Shawn Gregory",
+    }),
+  );
+  const legalText = legalPages.join("\n");
+  assert.ok(legalPages.length <= 3, `legal estimate should stay tight, got ${legalPages.length} pages`);
+  assert.match(legalText, /Contract price/);
+  assert.match(legalText, /Scope of work/);
+  assert.match(legalText, /AUTHORIZATION/);
+  assert.match(legalText, /Pay the listed total/);
 
   console.log("document-pdf format tests passed");
 }
