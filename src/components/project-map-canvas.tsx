@@ -17,6 +17,9 @@ export type ProjectMapJobPin = {
   lng: number;
   color: string;
   label: string;
+  address: string;
+  homeowner: string;
+  projectManager: string;
 };
 
 export type ProjectMapCrewPin = {
@@ -37,6 +40,7 @@ export function ProjectMapCanvas({
   showCrew,
   fitKey,
   onSelectJob,
+  onOpenJob,
   onSelectCrew,
 }: {
   jobs: ProjectMapJobPin[];
@@ -47,14 +51,18 @@ export function ProjectMapCanvas({
   showCrew: boolean;
   fitKey: string;
   onSelectJob: (id: string) => void;
+  onOpenJob: (id: string) => void;
   onSelectCrew: (id: string) => void;
 }) {
   const el = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<L.LayerGroup | null>(null);
+  const fitKeyRef = useRef<string | null>(null);
   const onJob = useRef(onSelectJob);
+  const onOpen = useRef(onOpenJob);
   const onCrew = useRef(onSelectCrew);
   onJob.current = onSelectJob;
+  onOpen.current = onOpenJob;
   onCrew.current = onSelectCrew;
 
   useEffect(() => {
@@ -98,9 +106,16 @@ export function ProjectMapCanvas({
           html: `<button type="button" aria-label="${escapeAttr(job.code || job.name)}" style="width:18px;height:18px;border-radius:999px;border:${selected ? "3px solid #181818" : "2px solid #fff"};background:${job.color};box-shadow:0 1px 4px rgba(0,0,0,.35);cursor:pointer"></button>`,
         });
         const marker = L.marker([job.lat, job.lng], { icon, zIndexOffset: selected ? 400 : 100 });
+        const popup = jobPopup(job, () => onOpen.current(job.id));
+        marker.bindPopup(popup, {
+          closeButton: true,
+          maxWidth: 280,
+          className: "project-map-popup-wrap",
+          offset: [0, -4],
+        });
         marker.on("click", () => onJob.current(job.id));
-        marker.bindTooltip(`${job.code || "Job"} · ${job.label}`, { direction: "top", offset: [0, -8] });
         marker.addTo(group);
+        if (selected) marker.openPopup();
         points.push([job.lat, job.lng]);
       }
     }
@@ -123,14 +138,39 @@ export function ProjectMapCanvas({
       }
     }
 
-    if (points.length) {
-      map.fitBounds(L.latLngBounds(points), { padding: [48, 48], maxZoom: 12, animate: false });
-    } else {
-      map.setView([PROJECT_MAP_CENTER.lat, PROJECT_MAP_CENTER.lng], 8, { animate: false });
+    if (fitKeyRef.current !== fitKey) {
+      fitKeyRef.current = fitKey;
+      if (points.length) {
+        map.fitBounds(L.latLngBounds(points), { padding: [48, 48], maxZoom: 12, animate: false });
+      } else {
+        map.setView([PROJECT_MAP_CENTER.lat, PROJECT_MAP_CENTER.lng], 8, { animate: false });
+      }
     }
   }, [jobs, crew, showProjects, showCrew, selectedJobId, selectedStaffId, fitKey]);
 
   return <div ref={el} className="project-map-leaflet h-full min-h-[420px] w-full" />;
+}
+
+function jobPopup(job: ProjectMapJobPin, onOpen: () => void) {
+  const root = document.createElement("div");
+  root.className = "project-map-popup";
+  const row = (label: string, value: string) =>
+    `<div class="project-map-popup-row"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || "—")}</strong></div>`;
+  root.innerHTML = `
+    <p class="project-map-popup-code">${escapeHtml(job.code || "Job")}</p>
+    <p class="project-map-popup-title">${escapeHtml(job.name || job.address || "Untitled")}</p>
+    ${row("Address", job.address || "No site yet")}
+    ${row("Homeowner", job.homeowner || "No homeowner")}
+    ${row("Project manager", job.projectManager || "Unassigned")}
+    <button type="button" class="project-map-popup-open">Open job</button>
+  `;
+  const button = root.querySelector("button");
+  button?.addEventListener("click", (event) => {
+    L.DomEvent.stop(event);
+    onOpen();
+  });
+  L.DomEvent.disableClickPropagation(root);
+  return root;
 }
 
 function escapeHtml(value: string) {

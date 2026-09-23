@@ -56,6 +56,7 @@ function MapPageInner() {
   const shareWatch = useRef<number | null>(null);
   const selectedStaffId = searchParams.get("crew");
   const jobId = searchParams.get("job");
+  const [recordJobId, setRecordJobId] = useState<string | null>(null);
 
   const jobs = useMemo(
     () =>
@@ -71,7 +72,10 @@ function MapPageInner() {
   const yearJobs = useMemo(() => jobs.filter((job) => jobMatchesProjectYear(job, year)), [jobs, year]);
   const mappedJobs = useMemo(() => yearJobs.filter(jobHasCoords), [yearJobs]);
   const needGeocode = useMemo(() => yearJobs.filter(addressNeedsGeocode), [yearJobs]);
-  const openJob = jobId ? jobs.find((job) => job.id === jobId) ?? crm.getJob(jobId) : undefined;
+  const selectedJob = jobId ? jobs.find((job) => job.id === jobId) ?? crm.getJob(jobId) : undefined;
+  const recordJob = recordJobId
+    ? jobs.find((job) => job.id === recordJobId) ?? crm.getJob(recordJobId)
+    : undefined;
 
   const viewer = crm.effectiveStaff;
   const visibleStaffIds = useMemo(() => {
@@ -109,12 +113,14 @@ function MapPageInner() {
         params.set("year", String(next));
         params.delete("job");
       });
+      setRecordJobId(null);
     },
     [replaceParams],
   );
 
   const selectJob = useCallback(
     (id: string) => {
+      setRecordJobId(null);
       replaceParams((params) => {
         params.set("job", id);
         params.delete("crew");
@@ -133,11 +139,17 @@ function MapPageInner() {
     [replaceParams],
   );
 
-  const closeJob = useCallback(() => {
+  const openJobRecord = useCallback((id: string) => {
+    setRecordJobId(id);
     replaceParams((params) => {
-      params.delete("job");
+      params.set("job", id);
+      params.delete("crew");
     });
   }, [replaceParams]);
+
+  const closeJobRecord = useCallback(() => {
+    setRecordJobId(null);
+  }, []);
 
   const loadCrew = useCallback(async () => {
     const response = await fetch("/api/map/presence", { cache: "no-store" });
@@ -253,6 +265,9 @@ function MapPageInner() {
           lng: job.lng as number,
           color: workPinColor(job, opportunity),
           label: workPinLabel(job, opportunity),
+          address: jobAddress(job),
+          homeowner: crm.getContact(job.primaryContactId)?.name?.trim() || "",
+          projectManager: job.projectManager?.trim() || "",
         };
       }),
     [crm, mappedJobs],
@@ -308,6 +323,7 @@ function MapPageInner() {
             showCrew={showCrew}
             fitKey={`${year}|${showProjects}|${showCrew}|${pins.length}|${liveCrew.length}`}
             onSelectJob={selectJob}
+            onOpenJob={openJobRecord}
             onSelectCrew={selectCrew}
           />
         </div>
@@ -318,10 +334,14 @@ function MapPageInner() {
               freshness={selectedCrew.freshness}
               updatedLabel={selectedCrew.updatedLabel}
               nearby={nearbyJobs(yearJobs, selectedCrew.lat, selectedCrew.lng)}
-              onOpenJob={selectJob}
+              onSelectJob={selectJob}
             />
-          ) : openJob ? (
-            <JobCard job={openJob} onOpen={() => selectJob(openJob.id)} />
+          ) : selectedJob ? (
+            <JobCard
+              job={selectedJob}
+              homeowner={crm.getContact(selectedJob.primaryContactId)?.name?.trim() || ""}
+              onOpen={() => openJobRecord(selectedJob.id)}
+            />
           ) : (
             <div className="border border-[#c9c9c9] bg-white px-4 py-4 text-sm leading-relaxed text-[#706e6b]">
               {year === "all" ? "All years" : year} · tap a pin for the job or a black initial for a live phone.
@@ -330,23 +350,31 @@ function MapPageInner() {
           <Legend />
         </aside>
       </div>
-      {openJob ? <JobRecordWindow key={openJob.id} job={openJob} onClose={closeJob} /> : null}
+      {recordJob ? <JobRecordWindow key={recordJob.id} job={recordJob} onClose={closeJobRecord} /> : null}
     </div>
   );
 }
 
-function JobCard({ job, onOpen }: { job: Job; onOpen: () => void }) {
+function JobCard({
+  job,
+  homeowner,
+  onOpen,
+}: {
+  job: Job;
+  homeowner: string;
+  onOpen: () => void;
+}) {
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="w-full border border-[#c9c9c9] bg-white px-4 py-3 text-left shadow-[0_2px_2px_rgba(0,0,0,0.05)]"
-    >
+    <div className="border border-[#c9c9c9] bg-white px-4 py-3 text-left shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
       <p className="font-mono text-xs tracking-wide text-[#706e6b]">{job.code || "Job"}</p>
       <p className="mt-0.5 font-medium text-[#181818]">{job.name || jobAddress(job) || "Untitled"}</p>
-      <p className="mt-1 text-sm text-[#706e6b]">{jobAddress(job) || "No site yet"}</p>
-      <p className="mt-1 text-sm text-[#706e6b]">{job.projectManager || "Unassigned"}</p>
-    </button>
+      <p className="mt-2 text-sm text-[#181818]">{jobAddress(job) || "No site yet"}</p>
+      <p className="mt-1 text-sm text-[#706e6b]">Homeowner · {homeowner || "No homeowner"}</p>
+      <p className="mt-1 text-sm text-[#706e6b]">PM · {job.projectManager || "Unassigned"}</p>
+      <Button className="mt-3" onClick={onOpen}>
+        Open job
+      </Button>
+    </div>
   );
 }
 
@@ -355,13 +383,13 @@ function CrewCard({
   freshness,
   updatedLabel,
   nearby,
-  onOpenJob,
+  onSelectJob,
 }: {
   name: string;
   freshness: CrewFreshness;
   updatedLabel: string;
   nearby: Job[];
-  onOpenJob: (id: string) => void;
+  onSelectJob: (id: string) => void;
 }) {
   return (
     <div className="border border-[#c9c9c9] bg-white px-4 py-3 shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
@@ -381,7 +409,7 @@ function CrewCard({
             <button
               key={job.id}
               type="button"
-              onClick={() => onOpenJob(job.id)}
+              onClick={() => onSelectJob(job.id)}
               className="block w-full text-left text-sm text-[#181818] hover:underline"
             >
               {job.code || job.name}
