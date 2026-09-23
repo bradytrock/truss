@@ -16,6 +16,7 @@ import { FormattedTextEditor } from "@/components/formatted-text-editor";
 import { EstimateAddLine } from "@/components/estimate-add-line";
 import { EstimateLinePhotos } from "@/components/estimate-line-photos";
 import { EstimateFilesPanel } from "@/components/estimate-files";
+import { EstimateHomeowners } from "@/components/estimate-homeowners";
 import { BackToJobButton } from "@/components/back-to-job";
 import { ProposalDocument } from "@/components/proposal-document";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
@@ -1156,6 +1157,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
 
   const writer = (
     <div className="space-y-4">
+      <EstimateHomeowners job={job} primaryId={estimate.contactId} disabled={!editable} />
       {gbb && estimateOptions.length > 0 ? (
         <PackagePicker
           estimate={estimate}

@@ -200,6 +200,43 @@ export function jobHomeownersForEstimate(
   return { contactId, secondContactId };
 }
 
+/** Estimates come from jobs. A second signer is only offered when the job has exactly one homeowner. */
+export function canAddSecondHomeowner(
+  job: Pick<Job, "primaryContactId" | "relatedContactIds" | "subcontractorIds"> | undefined,
+  contacts: Contact[],
+) {
+  if (!job) return false;
+  const primary = (job.primaryContactId || "").trim();
+  if (!primary) return false;
+  return homeownersOnJob(job, contacts).length === 1;
+}
+
+export function relatedContactIdsWithHomeowner(relatedContactIds: string[], contactId: string) {
+  const id = contactId.trim();
+  if (!id || relatedContactIds.includes(id)) return relatedContactIds;
+  return [...relatedContactIds, id];
+}
+
+export function secondHomeownerDraft(input: {
+  name: string;
+  email?: string;
+  phone?: string;
+  clientId?: string | null;
+  ownerStaffId: string;
+}): Omit<Contact, "id"> {
+  return {
+    clientId: input.clientId ?? null,
+    name: input.name.trim(),
+    title: "Homeowner",
+    email: (input.email ?? "").trim(),
+    phone: (input.phone ?? "").trim(),
+    ownerStaffId: input.ownerStaffId,
+    isReferralPartner: false,
+    listingWatchUrl: "",
+    listingWatchEnabled: false,
+  };
+}
+
 export function applyCoOwnerToEstimate<
   T extends { contactId: string | null; secondContactId: string | null; jobId: string | null },
 >(estimate: T, jobs: Job[], contacts: Contact[]): T {
