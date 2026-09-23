@@ -1,4 +1,4 @@
-import type { Job, JobStatus, Opportunity, PipelineStage } from "@/lib/types";
+import type { Job, JobStatus, Opportunity, PipelineStage } from "./types.ts";
 
 export const WORK_COLUMNS = [
   "lead",

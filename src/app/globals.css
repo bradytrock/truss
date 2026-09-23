@@ -381,6 +381,19 @@
   animation-iteration-count: infinite;
 }
 
+.project-map-leaflet .leaflet-div-icon {
+  background: transparent;
+  border: none;
+}
+
+.project-map-leaflet {
+  z-index: 0;
+}
+
+.project-map-leaflet .leaflet-tooltip {
+  font-family: var(--font-plex-sans), "IBM Plex Sans", sans-serif;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .home-module-enter,
   .home-chart-line,

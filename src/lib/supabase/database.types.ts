@@ -402,6 +402,10 @@ export type Database = {
           city: string;
           state: string;
           postal_code: string;
+          lat: number | null;
+          lng: number | null;
+          geocoded_at: string | null;
+          geocode_query: string;
           sales_rep: string;
           assigned: string[];
           subcontractor_ids: string[];
@@ -437,6 +441,10 @@ export type Database = {
           city?: string;
           state?: string;
           postal_code?: string;
+          lat?: number | null;
+          lng?: number | null;
+          geocoded_at?: string | null;
+          geocode_query?: string;
           sales_rep?: string;
           assigned?: string[];
           subcontractor_ids?: string[];
@@ -451,6 +459,30 @@ export type Database = {
           deleted_by?: string;
         };
         Update: Partial<Database["public"]["Tables"]["jobs"]["Insert"]>;
+        Relationships: [];
+      };
+      staff_device_locations: {
+        Row: {
+          id: string;
+          company_id: string;
+          staff_id: string;
+          lat: number;
+          lng: number;
+          accuracy: number | null;
+          heading: number | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          staff_id: string;
+          lat: number;
+          lng: number;
+          accuracy?: number | null;
+          heading?: number | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["staff_device_locations"]["Insert"]>;
         Relationships: [];
       };
       activities: {

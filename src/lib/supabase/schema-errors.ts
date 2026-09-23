@@ -1027,3 +1027,34 @@ export function isMissingVoiceAgents(error: { message?: string; code?: string } 
 export function missingVoiceAgentsMessage() {
   return `Run ${VOICE_AGENTS_SQL} in the SQL editor so each project manager can have their own ElevenLabs agent.`;
 }
+
+export const STORM_MAP_SQL = "supabase/migrations/20260923120000_storm_map.sql";
+
+export function isMissingJobCoords(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("geocode_query") ||
+    ((message.includes("'lat'") || message.includes('"lat"') || message.includes("column lat")) &&
+      (message.includes("jobs") || message.includes("schema cache") || message.includes("could not find"))) ||
+    ((message.includes("'lng'") || message.includes('"lng"')) && message.includes("jobs"))
+  );
+}
+
+export function isMissingStaffDeviceLocations(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentions = message.includes("staff_device_locations");
+  return (
+    (code === "pgrst205" && mentions) ||
+    ((message.includes("schema cache") ||
+      message.includes("could not find the") ||
+      message.includes("does not exist")) &&
+      mentions)
+  );
+}
+
+export function missingStormMapMessage() {
+  return `Run ${STORM_MAP_SQL} in the SQL editor so the field map can keep job pins and live crew locations.`;
+}

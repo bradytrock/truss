@@ -43,6 +43,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "Account: name, email, password (stored by our auth provider), title, role, company name, and optional phone, photo, and email signature.",
       "Job book: contacts, leads, jobs, estimates, invoices, expenses, payments, tasks, notes, calendar events, training progress, and company files.",
       "Field media: job photos, receipts, logos, and other files you upload. Photo storage is built so a deleted shot can be restored; do not upload anything you cannot keep.",
+      "Field location: the last GPS ping from a signed-in phone (storm mode) or the desk map, so the office can see where the crew is. Homeowners do not see those dots.",
       "Messages: SMS and iMessage threads you send or receive through the connected text provider, plus Gmail you connect and mail Truss sends on your behalf.",
       "Payments: checkout and deposit status through Stripe. We do not store full card numbers.",
       "Public activity on a digital card: anonymous opens and taps (call, text, email, site, payment) so the office can see which card was used. Link-preview crawlers are filtered out.",
