@@ -31,7 +31,7 @@ function isSharePath(path: string) {
     path.startsWith("/api/share") ||
     path.startsWith("/api/portal") ||
     path.startsWith("/api/realtor-portal") ||
-    path.startsWith("/api/cron/realtor-listings") ||
+    path.startsWith("/api/cron") ||
     path.startsWith("/api/qbwc") ||
     path.startsWith("/api/voice/lookup") ||
     path.startsWith("/api/voice/intake") ||

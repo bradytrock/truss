@@ -2,10 +2,12 @@
 const TRUSS_SUPABASE_URL = "https://cxrgdjvkmvnuztubxldh.supabase.co";
 const TRUSS_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_Fs_dTxYT2nBFYVjLLG6vpg_n5b_NSa1";
 
+const onVercel = Boolean(process.env.VERCEL);
+
 const nextConfig = {
-  // Hostinger and similar PaaS start from .next/standalone. Keep this explicit so
-  // deploys do not fail with "no standalone server" if a TypeScript config wrapper fails.
-  output: "standalone",
+  // Self-host (GoDaddy / Docker) needs the standalone server. Vercel builds its own
+  // output — `output: "standalone"` there skips the platform adapter.
+  ...(onVercel ? {} : { output: "standalone" }),
   // Cloud Agent / Cursor preview proxies rewrite the browser host away from localhost.
   // Use ** so multi-label hosts like p-3847-pod-....agent.cvm.dev are allowed.
   // "null" covers sandboxed preview iframes that send Origin: null (opaque origin).

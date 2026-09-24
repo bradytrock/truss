@@ -22,6 +22,8 @@ assert.equal(isSubscriptionExemptPath("/privacy"), true);
 assert.equal(isSubscriptionExemptPath("/share/e/abc"), true);
 assert.equal(isSubscriptionExemptPath("/api/voice/intake"), true);
 assert.equal(isSubscriptionExemptPath("/api/cron/tasks"), true);
+assert.equal(isSubscriptionExemptPath("/api/cron/automations"), true);
+assert.equal(isSubscriptionExemptPath("/api/cron/realtor-listings"), true);
 assert.equal(isSubscriptionExemptPath("/"), false);
 assert.equal(isSubscriptionExemptPath("/jobs"), false);
 assert.equal(isSubscriptionExemptPath("/api/messages/send"), false);
