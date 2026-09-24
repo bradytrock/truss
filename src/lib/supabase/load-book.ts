@@ -38,6 +38,9 @@ import {
   mapTrainingBulletin,
   mapTrainingProgress,
   mapMessage,
+  mapCompanyProfile,
+  mapMessageThreadMember,
+  mapMessageThreadOpen,
   mapGmailAccount,
   mapGmailMessage,
   mapReturningClientLead,
@@ -125,6 +128,9 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     trainingBulletinsRes,
     photoReportsRes,
     messagesRes,
+    profilesRes,
+    threadMembersRes,
+    threadOpensRes,
     gmailAccountsRes,
     gmailMessagesRes,
     returningClientLeadsRes,
@@ -206,6 +212,9 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       ascending: false,
     }),
     supabase.from("messages").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    supabase.from("profiles").select("*").eq("company_id", companyId).order("full_name"),
+    supabase.from("message_thread_members").select("*").eq("company_id", companyId),
+    supabase.from("message_thread_opens").select("*").eq("company_id", companyId),
     supabase.from("gmail_accounts").select("*").eq("company_id", companyId),
     supabase
       .from("gmail_messages")
@@ -346,6 +355,13 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       ? []
       : (trainingBulletinsRes.data ?? []).map(mapTrainingBulletin),
     messages: messagesRes.error ? [] : (messagesRes.data ?? []).map(mapMessage),
+    companyProfiles: profilesRes.error ? [] : (profilesRes.data ?? []).map(mapCompanyProfile),
+    messageThreadMembers: threadMembersRes.error
+      ? []
+      : (threadMembersRes.data ?? []).map(mapMessageThreadMember),
+    messageThreadOpens: threadOpensRes.error
+      ? []
+      : (threadOpensRes.data ?? []).map(mapMessageThreadOpen),
     gmailAccounts: gmailAccountsRes.error ? [] : (gmailAccountsRes.data ?? []).map(mapGmailAccount),
     gmailMessages: gmailMessagesRes.error ? [] : (gmailMessagesRes.data ?? []).map(mapGmailMessage),
     returningClientLeads: returningClientLeadsRes.error

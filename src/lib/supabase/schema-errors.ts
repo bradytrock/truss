@@ -584,6 +584,32 @@ export function missingMessagesMessage() {
   return `Saved in this browser. Run ${MESSAGES_SQL} in the SQL editor so texts stay on the job and in Messages.`;
 }
 
+export const MESSAGE_THREAD_SQL = "supabase/migrations/20260924120000_message_thread_opens.sql";
+
+export function isMissingThreadMembers(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    (error.code === "PGRST204" ||
+      error.code === "PGRST205" ||
+      message.includes("schema cache") ||
+      message.includes("could not find the")) &&
+    message.includes("message_thread_members")
+  );
+}
+
+export function isMissingThreadOpens(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    (error.code === "PGRST204" ||
+      error.code === "PGRST205" ||
+      message.includes("schema cache") ||
+      message.includes("could not find the")) &&
+    message.includes("message_thread_opens")
+  );
+}
+
 export const GMAIL_SQL = "supabase/migrations/20260901120000_gmail.sql";
 export const GMAIL_SEND_SQL = "supabase/migrations/20260901140000_gmail_send.sql";
 

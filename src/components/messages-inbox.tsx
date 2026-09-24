@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronsUpDown, Mail, MessageSquare, Phone, Search, Send, Smartphone } from "lucide-react";
+import { ChevronLeft, ChevronsUpDown, Mail, MessageSquare, Phone, Search, Send, Smartphone, UserPlus, X } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -23,15 +23,33 @@ import { EmptyState, ErrorBanner, LoadingScreen } from "@/components/page-chrome
 import { InboxChannelSwitch } from "@/components/inbox-channel-switch";
 import { useCrm } from "@/lib/crm-store";
 import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   contactForPhone,
   contactsForTexting,
+  conversationThreadKey,
   filterMessageThreads,
   jobForContact,
   messageThreads,
   messagesHref,
   phoneKey,
+  resolveInboxThreadKey,
   type MessageThread,
 } from "@/lib/job-messages";
+import {
+  addedThreadPeople,
+  addableThreadPeople,
+  implicitThreadCrew,
+  openedAtFor,
+  threadUnreadCount,
+  viewerFromStaff,
+  visibleInboxThreads,
+} from "@/lib/message-threads";
 import {
   formatDate,
   formatInboxTime,
@@ -48,11 +66,41 @@ export function MessagesInbox() {
   const crm = useCrm();
   const router = useRouter();
   const params = useSearchParams();
-  const threads = useMemo(
-    () => messageThreads(crm.messages, crm.contacts, crm.jobs, crm.opportunities),
-    [crm.messages, crm.contacts, crm.jobs, crm.opportunities],
+  const book = crm.book;
+  const allThreads = useMemo(
+    () => messageThreads(book.messages, book.contacts, book.jobs, book.opportunities),
+    [book.messages, book.contacts, book.jobs, book.opportunities],
   );
-  const textable = useMemo(() => contactsForTexting(crm.contacts), [crm.contacts]);
+  const viewer = useMemo(() => {
+    if (!crm.effectiveStaff) return null;
+    return viewerFromStaff(
+      crm.effectiveStaff,
+      book.companyProfiles,
+      crm.impersonatedStaff
+        ? undefined
+        : { profileId: crm.user.id, profileRole: crm.user.role },
+    );
+  }, [
+    book.companyProfiles,
+    crm.effectiveStaff,
+    crm.impersonatedStaff,
+    crm.user.id,
+    crm.user.role,
+  ]);
+  const threads = useMemo(
+    () =>
+      viewer
+        ? visibleInboxThreads(allThreads, viewer, {
+            staff: book.staff,
+            profiles: book.companyProfiles,
+            members: book.messageThreadMembers,
+            jobs: book.jobs,
+            opportunities: book.opportunities,
+          })
+        : allThreads,
+    [allThreads, book.companyProfiles, book.jobs, book.messageThreadMembers, book.opportunities, book.staff, viewer],
+  );
+  const textable = useMemo(() => contactsForTexting(book.contacts), [book.contacts]);
 
   const wantedJob = params.get("job");
   const wantedContact = params.get("contact");
@@ -60,29 +108,34 @@ export function MessagesInbox() {
   const composeParam = params.get("compose") === "1";
 
   const queryContact = useMemo(() => {
-    if (wantedContact) return crm.contacts.find((row) => row.id === wantedContact);
+    if (wantedContact) return book.contacts.find((row) => row.id === wantedContact);
     if (wantedJob) {
-      const job = crm.jobs.find((row) => row.id === wantedJob);
-      return job ? crm.contacts.find((row) => row.id === job.primaryContactId) : undefined;
+      const job = book.jobs.find((row) => row.id === wantedJob);
+      return job ? book.contacts.find((row) => row.id === job.primaryContactId) : undefined;
     }
     return undefined;
-  }, [wantedContact, wantedJob, crm.contacts, crm.jobs]);
+  }, [wantedContact, wantedJob, book.contacts, book.jobs]);
 
   const queryJob = useMemo(
-    () => (wantedJob ? crm.jobs.find((row) => row.id === wantedJob) : undefined),
-    [wantedJob, crm.jobs],
+    () => (wantedJob ? book.jobs.find((row) => row.id === wantedJob) : undefined),
+    [wantedJob, book.jobs],
   );
 
   const queryThread = useMemo(() => {
-    if (wantedThread) return threads.find((thread) => thread.key === wantedThread);
+    const resolved = resolveInboxThreadKey(wantedThread, book.contacts);
+    if (resolved) return threads.find((thread) => thread.key === resolved);
     if (queryContact) {
+      const key = conversationThreadKey({ contactId: queryContact.id, phone: queryContact.phone });
       return threads.find(
         (thread) =>
-          thread.contactId === queryContact.id || phoneKey(thread.phone) === phoneKey(queryContact.phone),
+          thread.key === key ||
+          thread.contactId === queryContact.id ||
+          thread.contactIds.includes(queryContact.id) ||
+          phoneKey(thread.phone) === phoneKey(queryContact.phone),
       );
     }
     return undefined;
-  }, [wantedThread, queryContact, threads]);
+  }, [wantedThread, queryContact, threads, book.contacts]);
 
   const [query, setQuery] = useState("");
   const [draftPhone, setDraftPhone] = useState("");
@@ -91,13 +144,15 @@ export function MessagesInbox() {
   const [sending, setSending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
+  const [peopleOpen, setPeopleOpen] = useState(false);
+  const [peopleQuery, setPeopleQuery] = useState("");
 
   const showCompose =
     composeParam || (!wantedThread && Boolean(queryContact) && !queryThread);
   const selected = showCompose
     ? null
-    : (wantedThread ? threads.find((row) => row.key === wantedThread) : undefined) ??
-      queryThread ??
+    : queryThread ??
+      (wantedThread ? threads.find((row) => row.key === wantedThread) : undefined) ??
       (wantedThread || wantedContact || wantedJob ? null : threads[0] ?? null);
 
   const visibleThreads = useMemo(() => filterMessageThreads(threads, query), [query, threads]);
@@ -110,20 +165,21 @@ export function MessagesInbox() {
   }, [queryContact?.id, queryContact?.phone]);
 
   const composeContact =
-    (draftContactId ? crm.contacts.find((row) => row.id === draftContactId) : undefined) ??
-    contactForPhone(crm.contacts, draftPhone);
+    (draftContactId ? book.contacts.find((row) => row.id === draftContactId) : undefined) ??
+    contactForPhone(book.contacts, draftPhone);
   const sendTo = selected?.phone || draftPhone;
   const jobHint =
     queryJob?.id ??
     selected?.jobId ??
-    (composeContact ? jobForContact(crm.jobs, crm.opportunities, composeContact.id)?.id : "") ??
+    (composeContact ? jobForContact(book.jobs, book.opportunities, composeContact.id)?.id : "") ??
     "";
   const contactHint = queryContact?.id ?? selected?.contactId ?? composeContact?.id ?? "";
   const conversationOpen = showCompose || Boolean(selected);
 
   const openThread = useCallback(
     (key: string) => {
-      const thread = threads.find((item) => item.key === key);
+      const thread = threads.find((item) => item.key === key) ?? allThreads.find((item) => item.key === key);
+      void crm.markThreadOpened(key);
       router.replace(
         messagesHref({
           thread: key,
@@ -133,7 +189,7 @@ export function MessagesInbox() {
         { scroll: false },
       );
     },
-    [router, threads],
+    [allThreads, crm, router, threads],
   );
 
   const openCompose = useCallback(() => {
@@ -164,7 +220,10 @@ export function MessagesInbox() {
       });
       if (ok) {
         setBody("");
-        const key = contactHint || phoneKey(sendTo);
+        const key = conversationThreadKey({
+          contactId: contactHint || composeContact?.id,
+          phone: sendTo,
+        });
         if (key) router.replace(messagesHref({ thread: key }), { scroll: false });
       }
     } finally {
@@ -177,10 +236,15 @@ export function MessagesInbox() {
     jobHint,
     contactHint,
     selected?.contact?.name,
+    composeContact?.id,
     composeContact?.name,
     queryContact?.name,
     router,
   ]);
+
+  useEffect(() => {
+    if (selected?.key) void crm.markThreadOpened(selected.key);
+  }, [crm, selected?.key]);
 
   const pickerPeople = useMemo(() => {
     const needle = pickerQuery.trim().toLowerCase();
@@ -252,6 +316,10 @@ export function MessagesInbox() {
                   <ThreadRow
                     thread={thread}
                     active={!showCompose && selected?.key === thread.key}
+                    unreadCount={threadUnreadCount(
+                      thread,
+                      openedAtFor(book.messageThreadOpens, crm.user.id, thread.key),
+                    )}
                     onOpen={openThread}
                   />
                 )}
@@ -301,6 +369,15 @@ export function MessagesInbox() {
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    aria-label="People on this conversation"
+                    onClick={() => setPeopleOpen(true)}
+                  >
+                    <UserPlus />
+                  </Button>
                   {selected.contact?.email ? (
                     <Button
                       nativeButton={false}
@@ -453,7 +530,7 @@ export function MessagesInbox() {
                   value={draftPhone}
                   onValueChange={(value) => {
                     setDraftPhone(value);
-                    const match = contactForPhone(crm.contacts, value);
+                    const match = contactForPhone(book.contacts, value);
                     setDraftContactId(match?.id ?? "");
                   }}
                   placeholder="Mobile number"
@@ -498,6 +575,18 @@ export function MessagesInbox() {
           </form>
         </section>
       </div>
+      {selected ? (
+        <ThreadPeopleSheet
+          open={peopleOpen}
+          onOpenChange={(open) => {
+            setPeopleOpen(open);
+            if (!open) setPeopleQuery("");
+          }}
+          thread={selected}
+          query={peopleQuery}
+          onQueryChange={setPeopleQuery}
+        />
+      ) : null}
     </div>
   );
 }
@@ -505,10 +594,12 @@ export function MessagesInbox() {
 function ThreadRow({
   thread,
   active,
+  unreadCount,
   onOpen,
 }: {
   thread: MessageThread;
   active: boolean;
+  unreadCount: number;
   onOpen: (key: string) => void;
 }) {
   return (
@@ -527,12 +618,21 @@ function ThreadRow({
       </Avatar>
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">
-          <span className="truncate text-sm font-medium">{thread.title}</span>
+          <span className={cn("truncate text-sm", unreadCount > 0 ? "font-semibold" : "font-medium")}>
+            {thread.title}
+          </span>
           <span className="shrink-0 text-[10px] text-muted-foreground">
             {formatInboxTime(thread.lastAt)}
           </span>
         </span>
-        <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{thread.preview}</span>
+        <span
+          className={cn(
+            "mt-0.5 line-clamp-2 text-xs",
+            unreadCount > 0 ? "text-foreground" : "text-muted-foreground",
+          )}
+        >
+          {thread.preview}
+        </span>
         {thread.job ? (
           <span className="mt-1 block truncate text-[11px] text-muted-foreground">
             {thread.job.code ? `${thread.job.code} · ` : ""}
@@ -540,7 +640,178 @@ function ThreadRow({
           </span>
         ) : null}
       </span>
+      {unreadCount > 0 ? (
+        <span className="mt-1 inline-flex min-w-5 items-center justify-center rounded-full bg-destructive px-1.5 text-[10px] font-semibold text-destructive-foreground">
+          {unreadCount > 99 ? "99+" : unreadCount}
+        </span>
+      ) : null}
     </button>
+  );
+}
+
+function ThreadPeopleSheet({
+  open,
+  onOpenChange,
+  thread,
+  query,
+  onQueryChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  thread: MessageThread;
+  query: string;
+  onQueryChange: (value: string) => void;
+}) {
+  const crm = useCrm();
+  const book = crm.book;
+  const crew = useMemo(
+    () => implicitThreadCrew(thread, book.staff, book.companyProfiles, book.jobs, book.opportunities),
+    [book.companyProfiles, book.jobs, book.opportunities, book.staff, thread],
+  );
+  const added = useMemo(
+    () => addedThreadPeople(thread.key, book.companyProfiles, book.messageThreadMembers),
+    [book.companyProfiles, book.messageThreadMembers, thread.key],
+  );
+  const addable = useMemo(() => {
+    const people = addableThreadPeople(
+      thread,
+      book.staff,
+      book.companyProfiles,
+      book.messageThreadMembers,
+      book.jobs,
+      book.opportunities,
+    );
+    const needle = query.trim().toLowerCase();
+    if (!needle) return people;
+    return people.filter((person) => {
+      if (person.name.toLowerCase().includes(needle)) return true;
+      return person.title.toLowerCase().includes(needle);
+    });
+  }, [
+    book.companyProfiles,
+    book.jobs,
+    book.messageThreadMembers,
+    book.opportunities,
+    book.staff,
+    query,
+    thread,
+  ]);
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="gap-0">
+        <SheetHeader className="border-b">
+          <SheetTitle>People</SheetTitle>
+          <SheetDescription>
+            Crew on this job stay here. Anyone you add can see this conversation.
+          </SheetDescription>
+        </SheetHeader>
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4">
+          <section>
+            <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+              On this job
+            </p>
+            {crew.length === 0 ? (
+              <p className="mt-2 text-sm text-muted-foreground">No one is attached to this job yet.</p>
+            ) : (
+              <ul className="mt-2 divide-y">
+                {crew.map((person) => (
+                  <li key={person.id} className="flex items-center gap-3 py-2">
+                    <Avatar size="sm">
+                      <AvatarFallback className="bg-primary/10 text-primary">
+                        {initials(person.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">{person.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {person.title || "On this job"}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <section>
+            <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+              Added
+            </p>
+            {added.length === 0 ? (
+              <p className="mt-2 text-sm text-muted-foreground">No one has been added to this thread.</p>
+            ) : (
+              <ul className="mt-2 divide-y">
+                {added.map(({ member, profile }) => (
+                  <li key={member.id} className="flex items-center gap-3 py-2">
+                    <Avatar size="sm">
+                      <AvatarFallback className="bg-primary/10 text-primary">
+                        {initials(profile.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium">{profile.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {profile.title || "Added"}
+                      </span>
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label={`Remove ${profile.name}`}
+                      onClick={() => void crm.removeThreadMember(thread.key, profile.id)}
+                    >
+                      <X />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <section>
+            <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+              Add people
+            </p>
+            <div className="relative mt-2">
+              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(event) => onQueryChange(event.target.value)}
+                placeholder="Search the company"
+                className="pl-8"
+              />
+            </div>
+            {addable.length === 0 ? (
+              <p className="mt-2 text-sm text-muted-foreground">Everyone who can be added is already here.</p>
+            ) : (
+              <ul className="mt-2 divide-y">
+                {addable.map((person) => (
+                  <li key={person.id}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 py-2 text-left hover:bg-muted/50"
+                      onClick={() => void crm.addThreadMember(thread.key, person.id)}
+                    >
+                      <Avatar size="sm">
+                        <AvatarFallback className="bg-primary/10 text-primary">
+                          {initials(person.name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium">{person.name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {person.title || "Add to conversation"}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 

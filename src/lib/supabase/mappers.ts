@@ -65,6 +65,10 @@ import type {
   TrainingBulletin,
   TrainingProgress,
   TextMessage,
+  CompanyProfile,
+  MessageThreadMember,
+  MessageThreadOpen,
+  SeatRole,
   GmailAccount,
   GmailMessage,
   ReturningClientLead,
@@ -314,6 +318,8 @@ export function mapOpportunity(row: OpportunityRow): Opportunity {
     lostReason: row.lost_reason ?? undefined,
     ownerStaffId: row.owner_staff_id ?? "",
     originatorStaffId: row.originator_staff_id ?? row.owner_staff_id ?? "",
+    assignedTo: row.assigned_to ?? undefined,
+    createdBy: row.created_by ?? undefined,
     leadSource: (row.lead_source ?? "") as Opportunity["leadSource"],
     referralContactId: row.referral_contact_id,
     street: row.street ?? "",
@@ -1324,12 +1330,48 @@ export function mapMessage(row: MessageRow): TextMessage {
     opportunityId: row.opportunity_id,
     direction: row.direction === "inbound" ? "inbound" : "outbound",
     phone: row.phone,
+    fromNumber: row.from_number ?? "",
+    toNumber: row.to_number ?? "",
     body: row.body,
     handle: row.handle,
     status: row.status,
     mediaUrl: row.media_url,
     createdAt: row.created_at,
     createdBy: row.created_by,
+  };
+}
+
+export function mapCompanyProfile(row: Database["public"]["Tables"]["profiles"]["Row"]): CompanyProfile {
+  return {
+    id: row.id,
+    staffId: row.staff_id,
+    name: row.full_name,
+    title: row.title,
+    role: row.role as SeatRole,
+  };
+}
+
+export function mapMessageThreadMember(
+  row: Database["public"]["Tables"]["message_thread_members"]["Row"],
+): MessageThreadMember {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    threadKey: row.thread_key,
+    profileId: row.profile_id,
+    addedBy: row.added_by ?? "",
+  };
+}
+
+export function mapMessageThreadOpen(
+  row: Database["public"]["Tables"]["message_thread_opens"]["Row"],
+): MessageThreadOpen {
+  return {
+    id: row.id,
+    companyId: row.company_id,
+    profileId: row.profile_id,
+    threadKey: row.thread_key,
+    openedAt: row.opened_at,
   };
 }
 

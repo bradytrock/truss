@@ -337,6 +337,8 @@ export type Database = {
           lost_reason: string | null;
           owner_staff_id: string | null;
           originator_staff_id: string | null;
+          assigned_to: string | null;
+          created_by: string | null;
           created_at: string;
           code: string;
           lead_source: string;
@@ -367,6 +369,8 @@ export type Database = {
           lost_reason?: string | null;
           owner_staff_id?: string | null;
           originator_staff_id?: string | null;
+          assigned_to?: string | null;
+          created_by?: string | null;
           created_at?: string;
           code?: string;
           lead_source?: string;
@@ -1941,6 +1945,8 @@ export type Database = {
           handle: string;
           status: string;
           media_url: string;
+          from_number?: string | null;
+          to_number?: string | null;
           created_at: string;
           created_by: string;
         };
@@ -1952,6 +1958,8 @@ export type Database = {
           opportunity_id?: string | null;
           direction?: string;
           phone?: string;
+          from_number?: string | null;
+          to_number?: string | null;
           body?: string;
           handle?: string;
           status?: string;
@@ -1960,6 +1968,42 @@ export type Database = {
           created_by?: string;
         };
         Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;
+        Relationships: [];
+      };
+      message_thread_members: {
+        Row: {
+          id: string;
+          company_id: string;
+          thread_key: string;
+          profile_id: string;
+          added_by: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          thread_key: string;
+          profile_id: string;
+          added_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["message_thread_members"]["Insert"]>;
+        Relationships: [];
+      };
+      message_thread_opens: {
+        Row: {
+          id: string;
+          company_id: string;
+          profile_id: string;
+          thread_key: string;
+          opened_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          profile_id: string;
+          thread_key: string;
+          opened_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["message_thread_opens"]["Insert"]>;
         Relationships: [];
       };
       returning_client_leads: {

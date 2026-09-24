@@ -25,7 +25,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newPortalToken, portalInviteExpiry, portalUrl } from "@/lib/portal";
@@ -186,6 +186,8 @@ import {
   taskPatch,
   mapTrainingBulletin,
   mapMessage,
+  mapMessageThreadMember,
+  mapMessageThreadOpen,
   mapGmailAccount,
   mapGmailMessage,
   mapReturningClientLead,
@@ -400,6 +402,9 @@ const emptyState: CrmState = {
   trainingProgress: [],
   trainingBulletins: [],
   messages: [],
+  companyProfiles: [],
+  messageThreadMembers: [],
+  messageThreadOpens: [],
   returningClientLeads: [],
   eagleviewOrders: [],
   automations: [],
@@ -1015,6 +1020,9 @@ type CrmContextValue = CrmState & {
     opportunityId?: string | null;
     name?: string;
   }) => Promise<void>;
+  markThreadOpened: (threadKey: string) => Promise<void>;
+  addThreadMember: (threadKey: string, profileId: string) => Promise<boolean>;
+  removeThreadMember: (threadKey: string, profileId: string) => Promise<boolean>;
   toggleTask: (id: string) => Promise<void>;
   addTask: (input: TaskDraft) => Promise<Task | null>;
   updateTask: (id: string, patch: Partial<Omit<Task, "id">>) => Promise<void>;
@@ -2343,6 +2351,130 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return true;
     },
     [logOutboundText],
+  );
+
+  const markThreadOpened = useCallback(
+    async (threadKey: string) => {
+      const key = threadKey.trim();
+      if (!key || !looksLikeUuid(user.id) || !user.companyId) return;
+      const openedAt = new Date().toISOString();
+      setState((prev) => {
+        const existing = prev.messageThreadOpens.find(
+          (row) => row.profileId === user.id && row.threadKey === key,
+        );
+        if (existing && existing.openedAt >= openedAt) return prev;
+        return {
+          ...prev,
+          messageThreadOpens: existing
+            ? prev.messageThreadOpens.map((row) =>
+                row.id === existing.id ? { ...row, openedAt } : row,
+              )
+            : [
+                {
+                  id: crypto.randomUUID(),
+                  companyId: user.companyId,
+                  profileId: user.id,
+                  threadKey: key,
+                  openedAt,
+                },
+                ...prev.messageThreadOpens,
+              ],
+        };
+      });
+      const supabase = maybeClient();
+      if (!supabase) return;
+      const { error } = await supabase.from("message_thread_opens").upsert(
+        {
+          company_id: user.companyId,
+          profile_id: user.id,
+          thread_key: key,
+          opened_at: openedAt,
+        },
+        { onConflict: "company_id,profile_id,thread_key" },
+      );
+      if (error && !isMissingThreadOpens(error)) toast.error(error.message);
+    },
+    [user.companyId, user.id],
+  );
+
+  const addThreadMember = useCallback(
+    async (threadKey: string, profileId: string) => {
+      const key = threadKey.trim();
+      if (!key || !looksLikeUuid(profileId) || !user.companyId) return false;
+      if (
+        state.messageThreadMembers.some(
+          (row) => row.threadKey === key && row.profileId === profileId,
+        )
+      ) {
+        return true;
+      }
+      const row = {
+        id: crypto.randomUUID(),
+        companyId: user.companyId,
+        threadKey: key,
+        profileId,
+        addedBy: looksLikeUuid(user.id) ? user.id : "",
+      };
+      setState((prev) => ({
+        ...prev,
+        messageThreadMembers: [row, ...prev.messageThreadMembers],
+      }));
+      const supabase = maybeClient();
+      if (!supabase) return true;
+      const { data, error } = await supabase
+        .from("message_thread_members")
+        .insert({
+          id: row.id,
+          company_id: row.companyId,
+          thread_key: row.threadKey,
+          profile_id: row.profileId,
+          added_by: looksLikeUuid(user.id) ? user.id : null,
+        })
+        .select("*")
+        .single();
+      if (error) {
+        if (!isMissingThreadMembers(error)) toast.error(error.message);
+        return isMissingThreadMembers(error);
+      }
+      if (data) {
+        setState((prev) => ({
+          ...prev,
+          messageThreadMembers: [
+            mapMessageThreadMember(data),
+            ...prev.messageThreadMembers.filter((item) => item.id !== row.id),
+          ],
+        }));
+      }
+      return true;
+    },
+    [state.messageThreadMembers, user.companyId, user.id],
+  );
+
+  const removeThreadMember = useCallback(
+    async (threadKey: string, profileId: string) => {
+      const key = threadKey.trim();
+      if (!key || !profileId) return false;
+      setState((prev) => ({
+        ...prev,
+        messageThreadMembers: prev.messageThreadMembers.filter(
+          (row) => !(row.threadKey === key && row.profileId === profileId),
+        ),
+      }));
+      const supabase = maybeClient();
+      if (!supabase || !user.companyId) return true;
+      const { error } = await supabase
+        .from("message_thread_members")
+        .delete()
+        .eq("company_id", user.companyId)
+        .eq("thread_key", key)
+        .eq("profile_id", profileId);
+      if (error && !isMissingThreadMembers(error)) {
+        toast.error(error.message);
+        return false;
+      }
+      return true;
+    },
+    [user.companyId],
   );
 
   const notifyStaffByText = useCallback(async (member: StaffMember | undefined, content: string) => {
@@ -12664,6 +12796,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       sendTextMessage,
       logOutboundText,
       logOutboundEmail,
+      markThreadOpened,
+      addThreadMember,
+      removeThreadMember,
       toggleTask,
       addTask,
       updateTask,
@@ -12852,6 +12987,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       sendTextMessage,
       logOutboundText,
       logOutboundEmail,
+      markThreadOpened,
+      addThreadMember,
+      removeThreadMember,
       toggleTask,
       addTask,
       updateTask,
