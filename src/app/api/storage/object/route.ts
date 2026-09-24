@@ -3,6 +3,7 @@ import { loadProfileCompany } from "@/lib/eagleview-server";
 import { normalizeShareToken } from "@/lib/share";
 import {
   companyIdFromObjectKey,
+  b2FailureMessage,
   getObjectFromB2WithFallback,
   isAllowedObjectKey,
   isB2Configured,
@@ -93,7 +94,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not read that file.";
+    const message = b2FailureMessage(error, "Could not read that file.");
     const missing = /NoSuchKey|NotFound|404|Key not found|NoSuchBucket/i.test(message);
     console.error("[storage/object]", error);
     return NextResponse.json(

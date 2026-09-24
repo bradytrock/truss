@@ -17,6 +17,7 @@ import {
   ListObjectsV2Command,
   DeleteObjectsCommand,
 } from "@aws-sdk/client-s3";
+import { resolveB2Location } from "../src/lib/storage/b2-region.mjs";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -52,9 +53,11 @@ if (!UUID_RE.test(companyId)) {
 const keyId = process.env.B2_KEY_ID?.trim() || "";
 const applicationKey = process.env.B2_APPLICATION_KEY?.trim() || "";
 const bucket = process.env.B2_BUCKET?.trim() || "";
-const region = process.env.B2_REGION?.trim() || "us-west-004";
-const endpoint =
-  process.env.B2_ENDPOINT?.trim() || `https://s3.${region}.backblazeb2.com`;
+const { region, endpoint } = resolveB2Location({
+  keyId,
+  region: process.env.B2_REGION,
+  endpoint: process.env.B2_ENDPOINT,
+});
 
 if (!keyId || !applicationKey || !bucket) {
   console.error("Set B2_KEY_ID, B2_APPLICATION_KEY, and B2_BUCKET.");
@@ -66,6 +69,8 @@ const client = new S3Client({
   region,
   credentials: { accessKeyId: keyId, secretAccessKey: applicationKey },
   forcePathStyle: true,
+  requestChecksumCalculation: "WHEN_REQUIRED",
+  responseChecksumValidation: "WHEN_REQUIRED",
 });
 
 const prefixes = [`${companyId}/`, ...KINDS.map((kind) => `${kind}/${companyId}/`)];

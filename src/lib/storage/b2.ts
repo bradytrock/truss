@@ -8,6 +8,7 @@ import {
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { STORAGE_KINDS, isStorageKind, type StorageKind } from "@/lib/storage/kinds";
+import { resolveB2Location } from "@/lib/storage/b2-region.mjs";
 import {
   isAllowedObjectKey,
   isCompanyId,
@@ -29,12 +30,28 @@ export function b2Config() {
   const keyId = process.env.B2_KEY_ID?.trim() || "";
   const applicationKey = process.env.B2_APPLICATION_KEY?.trim() || "";
   const bucket = process.env.B2_BUCKET?.trim() || "";
-  const region = process.env.B2_REGION?.trim() || "us-west-004";
-  const endpoint =
-    process.env.B2_ENDPOINT?.trim() ||
-    (region ? `https://s3.${region}.backblazeb2.com` : "");
+  const located = resolveB2Location({
+    keyId,
+    region: process.env.B2_REGION,
+    endpoint: process.env.B2_ENDPOINT,
+  });
   const publicBaseUrl = process.env.B2_PUBLIC_BASE_URL?.trim().replace(/\/+$/, "") || "";
-  return { keyId, applicationKey, bucket, region, endpoint, publicBaseUrl };
+  return {
+    keyId,
+    applicationKey,
+    bucket,
+    region: located.region,
+    endpoint: located.endpoint,
+    publicBaseUrl,
+  };
+}
+
+/** Turn Backblaze's opaque invalid-key response into the region it was sent to. */
+export function b2FailureMessage(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message : fallback;
+  if (!/is not valid/i.test(message)) return message;
+  const { endpoint, region } = b2Config();
+  return `${message} This host is calling ${endpoint} (${region}). Use a non-master application key for that bucket in B2_KEY_ID and B2_APPLICATION_KEY.`;
 }
 
 export function isB2Configured() {
@@ -75,6 +92,10 @@ export function getB2Client() {
       secretAccessKey: applicationKey,
     },
     forcePathStyle: true,
+    // AWS SDK v3 checksums are not implemented by B2 and fail PutObject/GetObject
+    // once the key is accepted. Send a checksum only when the operation requires one.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
   return cachedClient;
 }
