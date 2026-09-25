@@ -1,4 +1,4 @@
-import { sendblueText } from "@/lib/sendblue";
+import { sendText } from "@/lib/text-provider";
 import { createAnonClient } from "@/lib/supabase/anon";
 
 export type RealtorListingWatch = {
@@ -146,7 +146,7 @@ async function notifyOwnerOfNewListings(input: {
   const extra =
     input.listings.length > 1 ? ` (+${input.listings.length - 1} more)` : "";
   const content = `New listing from ${input.contactName}: ${label}${price}${extra}. Open Truss to follow up.`;
-  await sendblueText({ to: input.ownerPhone, content });
+  await sendText({ to: input.ownerPhone, content });
 }
 
 export async function listRealtorListingWatches() {

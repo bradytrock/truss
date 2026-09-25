@@ -1,7 +1,9 @@
 /**
- * Reads SENDBLUE_* from Supabase Edge Function secrets (Project Settings → Edge Functions → Secrets)
- * and sends an iMessage / SMS via Sendblue. The Next.js website cannot see those secrets otherwise.
+ * Sends SMS / iMessage via myCRMSIM (preferred) or Sendblue.
+ * Secrets live on the Edge Function (Project Settings → Edge Functions → Secrets).
  */
+const MYCRMSIM_SEND_URL =
+  "https://r6bszuuso6.execute-api.ap-southeast-2.amazonaws.com/prod/webhook";
 const SENDBLUE_SEND_URL = "https://api.sendblue.co/api/send-message";
 
 const cors = {
@@ -32,19 +34,24 @@ function toE164(value: string) {
   return "";
 }
 
+function env(name: string) {
+  return (Deno.env.get(name) ?? "").trim();
+}
+
+function mycrmsimConfigured() {
+  return Boolean(env("MYCRMSIM_LOCATION_ID"));
+}
+
 function sendblueCredentials() {
-  const keyId = (
-    Deno.env.get("SENDBLUE_API_KEY_ID") ||
-    Deno.env.get("SENDBLUE_API_KEY") ||
-    ""
-  ).trim();
-  const secret = (
-    Deno.env.get("SENDBLUE_API_SECRET_KEY") ||
-    Deno.env.get("SENDBLUE_API_SECRET") ||
-    ""
-  ).trim();
-  const from = toE164(Deno.env.get("SENDBLUE_FROM_NUMBER") || "");
+  const keyId = env("SENDBLUE_API_KEY_ID") || env("SENDBLUE_API_KEY");
+  const secret = env("SENDBLUE_API_SECRET_KEY") || env("SENDBLUE_API_SECRET");
+  const from = toE164(env("SENDBLUE_FROM_NUMBER"));
   return { keyId, secret, from };
+}
+
+function fromLabel() {
+  const from = toE164(env("MYCRMSIM_FROM_NUMBER")) || sendblueCredentials().from;
+  return from ? `ending ${from.slice(-4)}` : "";
 }
 
 Deno.serve(async (request) => {
@@ -52,12 +59,16 @@ Deno.serve(async (request) => {
     return new Response("ok", { headers: cors });
   }
 
-  const { keyId, secret, from } = sendblueCredentials();
-  const configured = Boolean(keyId && secret && from);
-  const fromNumber = from ? `ending ${from.slice(-4)}` : "";
+  const configured = mycrmsimConfigured() || Boolean(
+    sendblueCredentials().keyId && sendblueCredentials().secret && sendblueCredentials().from,
+  );
 
   if (request.method === "GET") {
-    return json({ configured, fromNumber });
+    return json({
+      configured,
+      fromNumber: fromLabel(),
+      provider: mycrmsimConfigured() ? "mycrmsim" : configured ? "sendblue" : "none",
+    });
   }
 
   if (request.method !== "POST") {
@@ -76,7 +87,40 @@ Deno.serve(async (request) => {
   if (!to) return json({ error: "That phone number is not valid." }, 400);
   if (!content) return json({ error: "Write a message before sending." }, 400);
 
-  if (!configured) {
+  if (mycrmsimConfigured()) {
+    const channelRaw = env("MYCRMSIM_CHANNEL").toLowerCase();
+    const channel = ["sms", "imessage", "whatsapp", "rcs"].includes(channelRaw) ? channelRaw : "sms";
+    const handle = crypto.randomUUID();
+    const response = await fetch(env("MYCRMSIM_SEND_URL") || MYCRMSIM_SEND_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        location_id: env("MYCRMSIM_LOCATION_ID"),
+        user_id: (typeof body.userId === "string" && body.userId.trim()) || env("MYCRMSIM_USER_ID") || "truss",
+        phone: to,
+        message: content,
+        message_id: handle,
+        channel,
+      }),
+    });
+    let payload: Record<string, unknown> = {};
+    try {
+      payload = (await response.json()) as Record<string, unknown>;
+    } catch {
+      payload = {};
+    }
+    if (!response.ok) {
+      const error =
+        (typeof payload.error === "string" && payload.error) ||
+        (typeof payload.message === "string" && payload.message) ||
+        `myCRMSIM returned ${response.status}.`;
+      return json({ ok: false, error }, 502);
+    }
+    return json({ ok: true, mocked: false, configured: true, provider: "mycrmsim", to, handle });
+  }
+
+  const { keyId, secret, from } = sendblueCredentials();
+  if (!keyId || !secret || !from) {
     return json({ ok: true, mocked: true, to, configured: false });
   }
 
@@ -113,7 +157,7 @@ Deno.serve(async (request) => {
   if (status === "ERROR") {
     const error =
       (typeof payload.error_message === "string" && payload.error_message) ||
-      "Sendblue could not send that text.";
+      "Could not send that text.";
     return json({ ok: false, error }, 502);
   }
 

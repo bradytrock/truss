@@ -2343,7 +2343,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       if (data.mocked) {
         toast.message(
-          "Sendblue is not connected on this host. The text is logged on the job. Add SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY, and SENDBLUE_FROM_NUMBER on Vercel, or deploy supabase/functions/send-text.",
+          "Texts are not connected on this host. The text is logged on the job. Add MYCRMSIM_LOCATION_ID on Vercel and point myCRMSIM’s workspace webhook at /api/messages/inbound?token=…",
         );
       } else {
         toast.success("Text sent.");
@@ -2487,7 +2487,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ to, content }),
       });
     } catch {
-      // Lead still saved if Sendblue is down.
+      // Lead still saved if the text provider is down.
     }
   }, []);
 

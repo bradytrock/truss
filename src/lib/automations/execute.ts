@@ -1,6 +1,6 @@
 import { applyAutomationMerge, type Automation, type AutomationAction, type AutomationMergeContext } from "@/lib/automations";
 import { sendResendEmail } from "@/lib/resend-mail";
-import { sendblueText } from "@/lib/sendblue";
+import { sendText } from "@/lib/text-provider";
 
 export type ExecuteActionResult = {
   ok: boolean;
@@ -91,7 +91,7 @@ async function runAction(
   const phone =
     to === "customer" ? input.customerPhone : to === "staff" ? staff?.phone : input.ownerPhone;
   if (!phone) return { ok: false, delivery: "", error: "No mobile number for that recipient." };
-  const result = await sendblueText({ to: phone, content: body });
+  const result = await sendText({ to: phone, content: body });
   if (!result.ok) return { ok: false, delivery: "", error: result.error };
   return { ok: true, delivery: result.mocked ? "Text mocked" : "Text sent", error: "" };
 }

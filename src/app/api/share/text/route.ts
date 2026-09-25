@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { looksLikePhone } from "@/lib/phone";
-import { isSendblueConfiguredLocally, sendblueStatus, sendblueText } from "@/lib/sendblue";
+import { sendText, textProviderStatus } from "@/lib/text-provider";
 import { requestOrigin, shareUrlAllowed } from "@/lib/share-text";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  return NextResponse.json(await sendblueStatus());
+  return NextResponse.json(await textProviderStatus());
 }
 
 export async function POST(request: Request) {
@@ -34,22 +35,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "The text has to include the share link." }, { status: 400 });
   }
 
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   try {
-    const result = await sendblueText({ to, content });
+    const status = await textProviderStatus();
+    const result = await sendText({ to, content, userId: user?.id });
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 502 });
     }
     return NextResponse.json({
       ok: true,
       mocked: result.mocked,
-      configured: isSendblueConfiguredLocally() || !result.mocked,
+      configured: status.configured || !result.mocked,
+      provider: status.provider,
       to: result.to,
       handle: result.handle,
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Could not reach Sendblue." },
-      { status: 502 }
+      { error: error instanceof Error ? error.message : "Could not reach the texting service." },
+      { status: 502 },
     );
   }
 }

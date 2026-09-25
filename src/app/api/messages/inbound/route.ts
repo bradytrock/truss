@@ -1,7 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { digitsOnly } from "@/lib/phone";
-import { sendblueFromNumber } from "@/lib/sendblue";
+import { parseTextWebhookPayload } from "@/lib/mycrmsim";
 import { getSupabaseKey, getSupabaseUrl } from "@/lib/supabase/env";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -11,29 +10,20 @@ function webhookToken() {
   return process.env.MESSAGES_WEBHOOK_TOKEN?.trim() || "";
 }
 
-function asString(value: unknown) {
-  return typeof value === "string" ? value : "";
+function bearerToken(request: Request) {
+  const header = request.headers.get("authorization")?.trim() || "";
+  if (header.toLowerCase().startsWith("bearer ")) return header.slice(7).trim();
+  return "";
 }
 
-function last10(value: string) {
-  return digitsOnly(value).slice(-10);
-}
-
-function flatten(body: Record<string, unknown>) {
-  const nested = body.message;
-  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
-    return { ...body, ...(nested as Record<string, unknown>) };
-  }
-  return body;
-}
-
-function isOutboundPayload(body: Record<string, unknown>) {
-  if (body.is_outbound === true) return true;
-  const from = asString(body.from_number) || asString(body.number);
-  const ours = sendblueFromNumber();
-  const fromKey = last10(from);
-  const oursKey = last10(ours);
-  return Boolean(oursKey && fromKey && fromKey === oursKey);
+function webhookAuthorized(request: Request) {
+  const expected = webhookToken();
+  if (!expected) return true;
+  const url = new URL(request.url);
+  const header = request.headers.get("x-webhook-token")?.trim() || "";
+  const query = url.searchParams.get("token")?.trim() || "";
+  const bearer = bearerToken(request);
+  return header === expected || query === expected || bearer === expected;
 }
 
 export async function GET() {
@@ -41,14 +31,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const expected = webhookToken();
-  if (expected) {
-    const url = new URL(request.url);
-    const header = request.headers.get("x-webhook-token")?.trim() || "";
-    const query = url.searchParams.get("token")?.trim() || "";
-    if (header !== expected && query !== expected) {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-    }
+  if (!webhookAuthorized(request)) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
   let raw: Record<string, unknown> = {};
@@ -58,24 +42,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  const body = flatten(raw);
-  if (isOutboundPayload(body)) {
-    return NextResponse.json({ ok: true, skipped: true, reason: "outbound" });
+  const event = parseTextWebhookPayload(raw);
+  if (event.kind !== "inbound") {
+    return NextResponse.json({ ok: true, skipped: true, reason: event.kind === "skip" ? event.reason : event.kind });
   }
-
-  const from = asString(body.from_number) || asString(body.number);
-  const content = asString(body.content);
-  const handle = asString(body.message_handle);
-  const mediaUrl = asString(body.media_url);
-  const sentAt = asString(body.date_sent) || null;
 
   const supabase = createClient<Database>(getSupabaseUrl(), getSupabaseKey());
   const { data, error } = await supabase.rpc("ingest_inbound_text", {
-    p_from: from,
-    p_body: content,
-    p_handle: handle,
-    p_media_url: mediaUrl,
-    p_sent_at: sentAt,
+    p_from: event.from,
+    p_body: event.body,
+    p_handle: event.handle,
+    p_media_url: event.mediaUrl,
+    p_sent_at: event.sentAt,
   });
 
   if (error) {
