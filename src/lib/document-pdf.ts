@@ -90,9 +90,31 @@ type AuthLine = ReturnType<typeof estimateSignatureLines>[number];
 const TERMS_BODY_SIZE = 8.5;
 const TERMS_LINE = 11;
 
+function pdfSafe(value: string) {
+  return String(value ?? "")
+    .replace(/\u2192/g, "->")
+    .replace(/\u2022/g, "-")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/\u2026/g, "...")
+    .replace(/\u00A0/g, " ")
+    .replace(/[^\u0000-\u00FF]/g, "");
+}
+
 async function createDoc() {
   const { jsPDF } = await import("jspdf");
-  return new jsPDF({ unit: "pt", format: "letter" }) as unknown as Doc;
+  const doc = new jsPDF({ unit: "pt", format: "letter" });
+  const rawText = doc.text.bind(doc);
+  const rawWidth = doc.getTextWidth.bind(doc);
+  const rawSplit = doc.splitTextToSize.bind(doc);
+  doc.text = ((text: string | string[], x: number, y: number, options?: { align?: "left" | "right" | "center" }) => {
+    if (Array.isArray(text)) return rawText(text.map((line) => pdfSafe(line)), x, y, options);
+    return rawText(pdfSafe(text), x, y, options);
+  }) as typeof doc.text;
+  doc.getTextWidth = ((text: string) => rawWidth(pdfSafe(text))) as typeof doc.getTextWidth;
+  doc.splitTextToSize = ((text: string, size: number) => rawSplit(pdfSafe(text), size)) as typeof doc.splitTextToSize;
+  return doc as unknown as Doc;
 }
 
 function pageWidth(doc: Doc) {
@@ -128,8 +150,8 @@ function writeRedRule(doc: Doc) {
   doc.rect(0, 0, pageWidth(doc), 5, "F");
 }
 
-function wrapText(doc: Doc, text: string, width: number, fontSize = 10) {
-  doc.setFont("helvetica", "normal");
+function wrapText(doc: Doc, text: string, width: number, fontSize = 10, style: "normal" | "bold" = "normal") {
+  doc.setFont("helvetica", style);
   doc.setFontSize(fontSize);
   const paragraphs = String(text ?? "").replace(/\r\n/g, "\n").split("\n");
   const lines: string[] = [];
@@ -158,11 +180,12 @@ function writeParagraph(
   const lines = wrapText(doc, text, width, fontSize);
   const lineHeight = fontSize <= 8 ? 9.5 : 13;
   const blankHeight = fontSize <= 8 ? 6 : 8;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(fontSize);
-  ink(doc, { r: 40, g: 40, b: 40 });
+  const color = { r: 40, g: 40, b: 40 };
   for (const line of lines) {
     y = ensure(y, line ? lineHeight + 2 : 12);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(fontSize);
+    ink(doc, color);
     if (line) doc.text(line, PAPER_INSET, y);
     y += line ? lineHeight : blankHeight;
   }
@@ -195,6 +218,23 @@ function flattenRuns(runs: InlineRun[]): PdfWord[] {
   return words;
 }
 
+function piecesThatFit(doc: Doc, text: string, maxWidth: number) {
+  if (maxWidth <= 0 || doc.getTextWidth(text) <= maxWidth) return [text];
+  const parts: string[] = [];
+  let chunk = "";
+  for (const char of text) {
+    const next = chunk + char;
+    if (chunk && doc.getTextWidth(next) > maxWidth) {
+      parts.push(chunk);
+      chunk = char;
+    } else {
+      chunk = next;
+    }
+  }
+  if (chunk) parts.push(chunk);
+  return parts.length ? parts : [text];
+}
+
 function writeFormattedRuns(
   doc: Doc,
   runs: InlineRun[],
@@ -202,6 +242,7 @@ function writeFormattedRuns(
   startY: number,
   maxWidth: number,
   lineHeight: number,
+  fontSize: number,
   ensure: EnsureFn,
 ) {
   const words = flattenRuns(runs);
@@ -209,6 +250,10 @@ function writeFormattedRuns(
   let y = startY;
   let cx = x;
   let spacePending = false;
+  const paintFont = (bold: boolean) => {
+    doc.setFont("helvetica", bold ? "bold" : "normal");
+    doc.setFontSize(fontSize);
+  };
   for (const word of words) {
     if (word.newline) {
       y = ensure(y + lineHeight, lineHeight);
@@ -216,18 +261,23 @@ function writeFormattedRuns(
       spacePending = false;
       continue;
     }
-    doc.setFont("helvetica", word.bold ? "bold" : "normal");
-    const gap = spacePending ? doc.getTextWidth(" ") : 0;
-    const width = doc.getTextWidth(word.text);
-    if (cx > x && cx + gap + width > x + maxWidth) {
-      y = ensure(y + lineHeight, lineHeight);
-      cx = x;
-      spacePending = false;
-    } else if (spacePending) {
-      cx += gap;
+    paintFont(word.bold);
+    const parts = piecesThatFit(doc, word.text, maxWidth);
+    for (let index = 0; index < parts.length; index++) {
+      const part = parts[index] ?? "";
+      const gap = index === 0 && spacePending ? doc.getTextWidth(" ") : 0;
+      const width = doc.getTextWidth(part);
+      if ((cx > x && cx + gap + width > x + maxWidth) || index > 0) {
+        y = ensure(y + lineHeight, lineHeight);
+        cx = x;
+        spacePending = false;
+        paintFont(word.bold);
+      } else if (gap) {
+        cx += gap;
+      }
+      doc.text(part, cx, y);
+      cx += width;
     }
-    doc.text(word.text, cx, y);
-    cx += width;
     spacePending = word.spaceAfter;
   }
   return y + lineHeight;
@@ -243,6 +293,7 @@ function writeFormattedText(
     fontSize?: number;
     lineHeight?: number;
     firstParagraphBold?: boolean;
+    color?: { r: number; g: number; b: number };
     ensure?: EnsureFn;
   },
 ) {
@@ -250,7 +301,14 @@ function writeFormattedText(
   if (!blocks.length) return y;
   const fontSize = options?.fontSize ?? 9;
   const lineHeight = options?.lineHeight ?? (fontSize <= 9 ? 11 : 12);
-  const ensure = options?.ensure ?? ((next: number) => next);
+  const baseEnsure = options?.ensure ?? ((next: number) => next);
+  const color = options?.color;
+  const ensure: EnsureFn = (next, needed) => {
+    const yAfter = baseEnsure(next, needed);
+    if (color) ink(doc, color);
+    doc.setFontSize(fontSize);
+    return yAfter;
+  };
   let ordered = 0;
   doc.setFontSize(fontSize);
   for (let index = 0; index < blocks.length; index++) {
@@ -259,11 +317,12 @@ function writeFormattedText(
     if (block.type === "li") {
       if (block.ordered) ordered += 1;
       else ordered = 0;
-      const marker = block.ordered ? `${ordered}.` : "•";
+      const marker = block.ordered ? `${ordered}.` : "-";
       const indent = block.ordered ? 16 : 12;
       doc.setFont("helvetica", "normal");
+      doc.setFontSize(fontSize);
       doc.text(marker, x, y);
-      y = writeFormattedRuns(doc, block.runs, x + indent, y, maxWidth - indent, lineHeight, ensure);
+      y = writeFormattedRuns(doc, block.runs, x + indent, y, maxWidth - indent, lineHeight, fontSize, ensure);
       continue;
     }
     ordered = 0;
@@ -271,7 +330,7 @@ function writeFormattedText(
       options?.firstParagraphBold && index === 0
         ? block.runs.map((run) => ({ ...run, bold: true }))
         : block.runs;
-    y = writeFormattedRuns(doc, runs, x, y, maxWidth, lineHeight, ensure);
+    y = writeFormattedRuns(doc, runs, x, y, maxWidth, lineHeight, fontSize, ensure);
   }
   return y;
 }
@@ -574,7 +633,7 @@ function writeTableHeader(doc: Doc, cols: TableCols, y: number) {
   doc.text("UNIT", cols.unitX, y, { align: "right" });
   if (!cols.hidePrices) {
     doc.text("RATE", cols.rateX, y, { align: "right" });
-    doc.text("AMOUNT", cols.amountX - 6, y, { align: "right" });
+    doc.text("AMOUNT", cols.amountX, y, { align: "right" });
   }
   return y + 16;
 }
@@ -633,7 +692,16 @@ function writeSignCta(doc: Doc, y: number, page: number) {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   ink(doc, PAPER_RED);
-  doc.text(`Sign on page ${page}  →`, contentRight(doc), y, { align: "right" });
+  doc.text(`Sign on page ${page} ->`, contentRight(doc), y, { align: "right" });
+}
+
+function repeatingTableEnsure(doc: Doc, ensure: EnsureFn, cols: TableCols): EnsureFn {
+  return (y, needed) => {
+    const before = doc.getNumberOfPages();
+    const next = ensure(y, needed);
+    if (doc.getNumberOfPages() === before) return next;
+    return writeTableHeader(doc, cols, next);
+  };
 }
 
 function stampFooters(doc: Doc, company: CompanySettings) {
@@ -664,7 +732,7 @@ function termPieces(doc: Doc, terms: string, colW: number): TermPiece[] {
   const pieces: TermPiece[] = [];
   for (const section of source) {
     if (section.heading.trim()) {
-      for (const headLine of wrapText(doc, section.heading.trim(), colW, 8.5)) {
+      for (const headLine of wrapText(doc, section.heading.trim(), colW, 8.5, "bold")) {
         if (headLine) pieces.push({ kind: "heading", text: headLine });
       }
     }
@@ -816,6 +884,7 @@ async function writePaperAuthorization(
 ) {
   const right = contentRight(doc);
   y = ensure(y, 220);
+  const page = doc.getNumberOfPages();
   doc.setFont("helvetica", "bold");
   doc.setFontSize(13);
   ink(doc, PAPER_INK);
@@ -864,7 +933,7 @@ async function writePaperAuthorization(
   ink(doc, PAPER_MUTED);
   const pmBits = [manager?.title.trim() || "Project Manager", manager?.phone?.trim() || "", manager?.email.trim() || ""].filter(Boolean);
   if (pmBits.length) doc.text(pmBits.join(" · "), PAPER_INSET, y);
-  return y + 16;
+  return { y: y + 16, page };
 }
 
 function managerCard(manager: ProjectManagerContact | null | undefined, companyPhone?: string) {
@@ -950,6 +1019,7 @@ export async function buildEstimatePdf(raw: {
 
   y = pager.ensure(y, 36);
   y = writeTableHeader(doc, cols, y);
+  const ensureRow = repeatingTableEnsure(doc, pager.ensure, cols);
 
   const pdfGroups = gbb
     ? gbbPrintSections(visibleLines)
@@ -961,7 +1031,7 @@ export async function buildEstimatePdf(raw: {
       }));
 
   for (const group of pdfGroups) {
-    y = pager.ensure(y, 28);
+    y = ensureRow(y, group.kind === "option" ? 44 : 28);
     if (group.kind === "option") {
       const amount = totalsForPackage(input.estimate, input.lines, group.key).total;
       writeCheckbox(doc, PAPER_INSET, y);
@@ -969,7 +1039,7 @@ export async function buildEstimatePdf(raw: {
       doc.setFontSize(10);
       ink(doc, PAPER_INK);
       doc.text(group.name.toUpperCase(), PAPER_INSET + 16, y);
-      doc.text(formatMoney(amount), contentRight(doc), y, { align: "right" });
+      doc.text(formatMoney(amount), cols.amountX, y, { align: "right" });
       y += 16;
     } else if (pdfGroups.length > 1 && group.name) {
       doc.setFont("helvetica", "bold");
@@ -982,12 +1052,20 @@ export async function buildEstimatePdf(raw: {
       const included = lineIncluded(line);
       const heading = lineHeading(line);
       const detail = shouldShowLineDescription(line) ? line.description : "";
-      y = pager.ensure(y, 28);
+      doc.setFont("helvetica", included ? "bold" : "normal");
+      doc.setFontSize(10);
+      const headingLines = doc.splitTextToSize(heading, cols.descW);
+      const headingPieces = (Array.isArray(headingLines) ? headingLines : [headingLines]).flatMap((piece) =>
+        String(piece).split("\n"),
+      );
+      const headingH = Math.max(12, Math.max(headingPieces.length, 1) * 12);
+      y = ensureRow(y, headingH + 2);
       doc.setFont("helvetica", included ? "bold" : "normal");
       doc.setFontSize(10);
       ink(doc, included ? PAPER_INK : PAPER_MUTED);
-      const headingLines = doc.splitTextToSize(heading, cols.descW);
-      doc.text(headingLines, cols.descX, y);
+      headingPieces.forEach((text, index) => {
+        doc.text(text, cols.descX, y + index * 12);
+      });
       writeMoneyCols(
         doc,
         cols,
@@ -997,17 +1075,19 @@ export async function buildEstimatePdf(raw: {
         formatMoney(line.unitCost),
         formatMoney(lineAmount(line)),
       );
-      y += Math.max(12, (Array.isArray(headingLines) ? headingLines.length : 1) * 12);
+      y += headingH;
       if (detail) {
-        ink(doc, { r: 70, g: 70, b: 70 });
+        const detailColor = { r: 70, g: 70, b: 70 };
+        ink(doc, detailColor);
         y = writeFormattedText(doc, detail, cols.descX, y, cols.descW, {
           fontSize: 8.5,
           lineHeight: 11,
-          ensure: pager.ensure,
+          color: detailColor,
+          ensure: ensureRow,
         });
       }
       if (line.optional) {
-        y = pager.ensure(y, 12);
+        y = ensureRow(y, 12);
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8);
         ink(doc, PAPER_MUTED);
@@ -1020,7 +1100,7 @@ export async function buildEstimatePdf(raw: {
         const gap = 8;
         const perRow = 4;
         for (let index = 0; index < linePhotos.length; index += perRow) {
-          y = pager.ensure(y, thumb + 10);
+          y = ensureRow(y, thumb + 10);
           const row = linePhotos.slice(index, index + perRow);
           for (let col = 0; col < row.length; col++) {
             const photo = row[col];
@@ -1078,14 +1158,17 @@ export async function buildEstimatePdf(raw: {
       ]);
     }
   }
-  const ctaY = writeTotalsStack(
+  y = writeTotalsStack(
     doc,
     summaryRows,
     { label: "TOTAL", amount: formatMoney(totals.total) },
     y,
     pager.ensure,
   );
-  y = ctaY + 8;
+  y += 6;
+  y = pager.ensure(y, 14);
+  const signCue = { page: doc.getNumberOfPages(), y };
+  y += 16;
   if (totals.optionalCount > 0) {
     y = writeParagraph(
       doc,
@@ -1133,7 +1216,7 @@ export async function buildEstimatePdf(raw: {
   }
 
   y = pager.ensure(y + 16, 220);
-  await writePaperAuthorization(
+  const authorization = await writePaperAuthorization(
     doc,
     input.estimate,
     {
@@ -1148,9 +1231,8 @@ export async function buildEstimatePdf(raw: {
     pager.ensure,
   );
 
-  const pages = doc.getNumberOfPages();
-  doc.setPage(1);
-  writeSignCta(doc, ctaY + 12, pages);
+  doc.setPage(signCue.page);
+  writeSignCta(doc, signCue.y, authorization.page);
   stampFooters(doc, input.company);
   return doc.output("blob");
 }
@@ -1250,17 +1332,12 @@ export async function buildInvoicePdf(input: {
 
   y = pager.ensure(y, 36);
   y = writeTableHeader(doc, cols, y);
+  const ensureRow = repeatingTableEnsure(doc, pager.ensure, cols);
   const lines = [...input.lines].sort((a, b) => a.sortOrder - b.sortOrder);
   for (const line of lines) {
-    y = pager.ensure(y, 28);
+    y = ensureRow(y, 28);
     const amountY = y;
     ink(doc, PAPER_INK);
-    y = writeFormattedText(doc, line.description, cols.descX, y, cols.descW, {
-      fontSize: 9,
-      lineHeight: 12,
-      firstParagraphBold: true,
-      ensure: pager.ensure,
-    });
     writeMoneyCols(
       doc,
       cols,
@@ -1270,6 +1347,13 @@ export async function buildInvoicePdf(input: {
       formatMoney(line.unitCost),
       formatMoney(invoiceLineAmount(line)),
     );
+    y = writeFormattedText(doc, line.description, cols.descX, y, cols.descW, {
+      fontSize: 9,
+      lineHeight: 12,
+      firstParagraphBold: true,
+      color: PAPER_INK,
+      ensure: ensureRow,
+    });
     y += 10;
   }
 
