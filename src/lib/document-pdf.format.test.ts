@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { extractText } from "unpdf";
+import { getDocument, OPS } from "unpdf/pdfjs";
 import { buildEstimatePdf, buildInvoicePdf } from "./document-pdf.ts";
 import type { CompanySettings, Estimate, EstimateLine, Invoice, InvoiceLine } from "./types.ts";
 
@@ -123,16 +124,43 @@ async function textFromPdf(blob: Blob) {
   return (await pagesFromPdf(blob)).join("\n");
 }
 
+async function assertStreetClearsHeaderRule(blob: Blob, street: string) {
+  const data = new Uint8Array(await blob.arrayBuffer());
+  const doc = await getDocument({ data, disableWorker: true, isEvalSupported: false }).promise;
+  const page = await doc.getPage(1);
+  const text = await page.getTextContent();
+  const streetItem = text.items.find((item) => "str" in item && item.str.includes(street));
+  assert.ok(streetItem && "transform" in streetItem, `missing street ${street}`);
+  const baseline = streetItem.transform[5];
+  const ops = await page.getOperatorList();
+  const rules = ops.fnArray.flatMap((fn, index) => {
+    if (fn !== OPS.constructPath) return [];
+    const path = ops.argsArray[index]?.[1];
+    const chunks = Array.isArray(path) ? path : [path];
+    const points = chunks.flatMap((chunk) => Array.from(chunk ?? []));
+    const ys = points.filter((_, i) => i % 3 === 2);
+    const xs = points.filter((_, i) => i % 3 === 1);
+    if (ys.length < 2 || xs.length < 2) return [];
+    const y = ys[0];
+    if (!ys.every((value) => value === y)) return [];
+    if (Math.max(...xs) - Math.min(...xs) < 400) return [];
+    return [y];
+  });
+  const rule = rules.find((y) => y > baseline && y - baseline < 40);
+  assert.ok(rule, `header rule should sit just above ${street}`);
+  assert.ok(rule - baseline >= 15, `header rule cuts the street (gap ${rule - baseline})`);
+}
+
 async function main() {
-  const estimateText = await textFromPdf(
-    await buildEstimatePdf({
-      estimate,
-      lines,
-      company,
-      customer: "Shawn Gregory",
-      jobCode: "JH091426-A",
-    }),
-  );
+  const estimatePdf = await buildEstimatePdf({
+    estimate,
+    lines,
+    company,
+    customer: "Shawn Gregory",
+    jobCode: "JH091426-A",
+  });
+  await assertStreetClearsHeaderRule(estimatePdf, "9174 Shadowridge Drive");
+  const estimateText = await textFromPdf(estimatePdf);
   assert.match(estimateText, /ESTIMATE/);
   assert.match(estimateText, /PREPARED FOR/i);
   assert.match(estimateText, /9174 Shadowridge Drive/);

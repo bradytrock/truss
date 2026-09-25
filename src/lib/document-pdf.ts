@@ -441,11 +441,12 @@ async function writeCoverHeader(
   doc.setFontSize(9);
   ink(doc, PAPER_RED);
   doc.text(number, right, 42, { align: "right" });
-  const y = Math.max(next, logoBottom) + 12;
+  const ruleY = Math.max(next, logoBottom) + 6;
   draw(doc, PAPER_LINE);
   doc.setLineWidth(0.8);
-  doc.line(PAPER_INSET, y - 6, right, y - 6);
-  return y;
+  doc.line(PAPER_INSET, ruleY, right, ruleY);
+  // 14pt Helvetica caps are about 10pt. Keep the street baseline under the rule.
+  return ruleY + 16;
 }
 
 function writeSiteBlock(
