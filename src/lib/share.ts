@@ -3,6 +3,7 @@ import { normalizeLinePhotoIds, resolveEstimateLinePhotoUrl } from "@/lib/estima
 import { parseEstimatePackage, parseEstimatePackageMode, parseLinePackage } from "@/lib/estimate-packages";
 import { parsePageTemplate, parsePhotoReportPages } from "@/lib/photo-report";
 import { parseContractTypes } from "@/lib/contract-types";
+import { resolveStoredFileUrl } from "@/lib/storage/urls";
 import type { CompanySettings, EstimateLinePhoto, Job, JobPhoto, PhotoReport } from "@/lib/types";
 import type { ProjectManagerContact } from "@/lib/document-owner";
 
@@ -227,6 +228,16 @@ export type SharedEstimatePayload = {
   }>;
   payments?: SharedInvoicePayload["payments"];
   projectManager?: ProjectManagerContact | null;
+  files: SharedEstimateFile[];
+};
+
+export type SharedEstimateFile = {
+  id: string;
+  name: string;
+  mimeType: string;
+  sizeBytes: number;
+  url: string;
+  createdAt: string;
 };
 
 export type SharedInvoicePayload = {
@@ -412,7 +423,66 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
     }),
     payments: parseSharedPayments(raw.payments, ""),
     projectManager: parseProjectManager(raw.projectManager),
+    files: parseSharedEstimateFiles(raw.files),
   };
+}
+
+function shareQueryParam(url: string) {
+  const raw = url.trim();
+  if (!raw) return "";
+  try {
+    const parsed =
+      raw.startsWith("http://") || raw.startsWith("https://")
+        ? new URL(raw)
+        : new URL(raw, "http://local.invalid");
+    return parsed.searchParams.get("share")?.trim() || "";
+  } catch {
+    return "";
+  }
+}
+
+/** Keep a guest share token if this payload is parsed again after the proxy URL was stamped. */
+function withPreservedShare(resolved: string, sourceUrl: string) {
+  const share = shareQueryParam(sourceUrl);
+  if (!resolved || !share) return resolved;
+  try {
+    const absolute = resolved.startsWith("http://") || resolved.startsWith("https://");
+    const parsed = absolute ? new URL(resolved) : new URL(resolved, "http://local.invalid");
+    if (!parsed.searchParams.get("share")) parsed.searchParams.set("share", share);
+    if (absolute) return parsed.toString();
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return resolved;
+  }
+}
+
+function parseSharedEstimateFiles(raw: unknown): SharedEstimateFile[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(isRecord).flatMap((file) => {
+    const id = asString(file.id);
+    const name = asString(file.name).trim();
+    const sourceUrl = asString(file.url);
+    const storagePath = asString(file.storagePath) || asString(file.storage_path);
+    const url = withPreservedShare(
+      resolveStoredFileUrl({
+        storagePath,
+        url: sourceUrl,
+        kind: "estimate-files",
+      }),
+      sourceUrl,
+    );
+    if (!id || !name || !url) return [];
+    return [
+      {
+        id,
+        name,
+        mimeType: asString(file.mimeType) || asString(file.mime_type),
+        sizeBytes: Math.max(0, asNumber(file.sizeBytes ?? file.size_bytes)),
+        url,
+        createdAt: asString(file.createdAt) || asString(file.created_at),
+      },
+    ];
+  });
 }
 
 export function parseSharedInvoice(raw: unknown): SharedInvoicePayload | null {
