@@ -227,6 +227,20 @@ async function main() {
   assert.match(legalText, /AUTHORIZATION/);
   assert.match(legalText, /Pay the listed total/);
 
+  const attachmentText = await textFromPdf(
+    await buildEstimatePdf({
+      estimate: { ...estimate, notes: "See the warranty.", number: "EST-FILES" },
+      lines,
+      company,
+      customer: "Shawn Gregory",
+      files: [{ name: "Warranty.pdf" }, { name: "  " }, { name: "Color sheet.pdf" }],
+    }),
+  );
+  assert.match(attachmentText, /ATTACHMENTS/);
+  assert.match(attachmentText, /Warranty\.pdf/);
+  assert.match(attachmentText, /Color sheet\.pdf/);
+  assert.match(attachmentText, /See the warranty/);
+
   console.log("document-pdf format tests passed");
 }
 

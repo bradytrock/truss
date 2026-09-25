@@ -894,6 +894,7 @@ export async function buildEstimatePdf(raw: {
   contractorName?: string;
   photos?: JobPhoto[];
   jobCode?: string | null;
+  files?: Array<{ name: string }>;
 }) {
   const clientFacing = toClientFacingProposal(raw.estimate, raw.lines);
   const input = { ...raw, estimate: clientFacing.estimate, lines: clientFacing.lines };
@@ -1106,6 +1107,23 @@ export async function buildEstimatePdf(raw: {
     doc.text("NOTES", PAPER_INSET, y);
     y += 12;
     y = writeParagraph(doc, input.estimate.notes, y, contentRight(doc) - PAPER_INSET, 9, pager.ensure);
+  }
+  const attachmentNames = (input.files ?? []).map((file) => file.name.trim()).filter(Boolean);
+  if (attachmentNames.length) {
+    y = pager.ensure(y + 6, 24);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    ink(doc, PAPER_MUTED);
+    doc.text("ATTACHMENTS", PAPER_INSET, y);
+    y += 12;
+    y = writeParagraph(
+      doc,
+      attachmentNames.join("\n"),
+      y,
+      contentRight(doc) - PAPER_INSET,
+      9,
+      pager.ensure,
+    );
   }
 
   const estimateTerms = liveEstimateTerms({

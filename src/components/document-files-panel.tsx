@@ -45,6 +45,7 @@ export function DocumentFilesPanel({
   onPickDirectory,
   onRemove,
   onOpened,
+  audienceHint = "private to signed-in teammates",
 }: {
   files: DocumentAttachFile[];
   disabled?: boolean;
@@ -55,6 +56,7 @@ export function DocumentFilesPanel({
   onPickDirectory: (file: CompanyFile) => Promise<DocumentAttachFile | null>;
   onRemove: (file: DocumentAttachFile) => Promise<boolean>;
   onOpened?: (file: DocumentAttachFile) => void;
+  audienceHint?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -111,7 +113,7 @@ export function DocumentFilesPanel({
           <p className="text-sm text-muted-foreground">
             {files.length === 0
               ? "No attachments yet."
-              : `${files.length} file${files.length === 1 ? "" : "s"} · private to signed-in teammates`}
+              : `${files.length} file${files.length === 1 ? "" : "s"} · ${audienceHint}`}
           </p>
         </div>
         <input
@@ -201,7 +203,39 @@ export function DocumentFilesPanel({
   );
 }
 
-function FileThumb({ file }: { file: DocumentAttachFile }) {
+export function DocumentFileLinks({
+  files,
+}: {
+  files: Array<{
+    id: string;
+    name: string;
+    mimeType: string;
+    sizeBytes: number;
+    url: string;
+    createdAt?: string;
+  }>;
+}) {
+  if (!files.length) return null;
+  return (
+    <ul className="space-y-1.5">
+      {files.map((file) => (
+        <li key={file.id} className="flex items-center gap-2 rounded-md border px-3 py-2">
+          <FileThumb file={file} />
+          <a href={file.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1 text-left">
+            <span className="block truncate text-sm font-medium">{file.name}</span>
+            <span className="mt-0.5 block text-xs text-muted-foreground">
+              {[formatFileSize(file.sizeBytes), file.createdAt ? formatDate(file.createdAt) : null]
+                .filter(Boolean)
+                .join(" · ")}
+            </span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function FileThumb({ file }: { file: { name: string; mimeType: string; url: string } }) {
   if (file.mimeType.startsWith("image/")) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
@@ -220,7 +254,7 @@ function FileThumb({ file }: { file: DocumentAttachFile }) {
   );
 }
 
-function iconForFile(file: DocumentAttachFile) {
+function iconForFile(file: { name: string; mimeType: string }) {
   const mime = file.mimeType.toLowerCase();
   const name = file.name.toLowerCase();
   if (mime.startsWith("video/") || /\.(mp4|mov|m4v|webm)$/.test(name)) return Film;
