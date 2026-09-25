@@ -67,7 +67,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "Supabase — sign-in, database, and realtime updates.",
       "Backblaze B2 — file and photo storage.",
       "Stripe — card checkout and deposits.",
-      "Sendblue — outbound and inbound texts.",
+      "myCRMSIM — outbound and inbound texts.",
       "Resend — estimate, invoice, invite, and other product email (from no-reply@trockroofer.com).",
       "Google — Calendar and Gmail if a seat connects their Google account.",
       "QuickBooks Desktop — via the Web Connector when you approve a push.",
@@ -156,7 +156,7 @@ export const TERMS_SECTIONS: LegalSection[] = [
   {
     heading: "Payments and integrations",
     paragraphs: [
-      "Card charges go through Stripe. Texts go through Sendblue. Mail you send from Truss goes through Resend. Calendar and Gmail use Google if a seat connects them. QuickBooks Desktop uses the Web Connector you install. EagleView reports are ordered under your credentials.",
+      "Card charges go through Stripe. Texts go through myCRMSIM. Mail you send from Truss goes through Resend. Calendar and Gmail use Google if a seat connects them. QuickBooks Desktop uses the Web Connector you install. EagleView reports are ordered under your credentials.",
       "Those companies have their own terms. If an integration is down or misconfigured, work may not leave Truss.",
     ],
   },

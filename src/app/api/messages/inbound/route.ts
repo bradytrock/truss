@@ -1,82 +1,70 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { digitsOnly } from "@/lib/phone";
-import { sendblueFromNumber } from "@/lib/sendblue";
+import { parseMycrmsimWebhook } from "@/lib/mycrmsim";
 import { getSupabaseKey, getSupabaseUrl } from "@/lib/supabase/env";
 import type { Database } from "@/lib/supabase/database.types";
 
 export const runtime = "nodejs";
 
-function webhookToken() {
-  return process.env.MESSAGES_WEBHOOK_TOKEN?.trim() || "";
-}
-
-function asString(value: unknown) {
-  return typeof value === "string" ? value : "";
-}
-
-function last10(value: string) {
-  return digitsOnly(value).slice(-10);
-}
-
-function flatten(body: Record<string, unknown>) {
-  const nested = body.message;
-  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
-    return { ...body, ...(nested as Record<string, unknown>) };
-  }
-  return body;
-}
-
-function isOutboundPayload(body: Record<string, unknown>) {
-  if (body.is_outbound === true) return true;
-  const from = asString(body.from_number) || asString(body.number);
-  const ours = sendblueFromNumber();
-  const fromKey = last10(from);
-  const oursKey = last10(ours);
-  return Boolean(oursKey && fromKey && fromKey === oursKey);
+function webhookToken(request: Request) {
+  const url = new URL(request.url);
+  return (
+    request.headers.get("x-webhook-token")?.trim() ||
+    url.searchParams.get("token")?.trim() ||
+    ""
+  );
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, provider: "mycrmsim" });
 }
 
 export async function POST(request: Request) {
-  const expected = webhookToken();
-  if (expected) {
-    const url = new URL(request.url);
-    const header = request.headers.get("x-webhook-token")?.trim() || "";
-    const query = url.searchParams.get("token")?.trim() || "";
-    if (header !== expected && query !== expected) {
-      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-    }
-  }
-
-  let raw: Record<string, unknown> = {};
+  let raw: unknown = {};
   try {
-    raw = (await request.json()) as Record<string, unknown>;
+    raw = await request.json();
   } catch {
-    return NextResponse.json({ ok: true, skipped: true });
+    return NextResponse.json({ ok: true, skipped: true, reason: "unreadable" });
   }
 
-  const body = flatten(raw);
-  if (isOutboundPayload(body)) {
-    return NextResponse.json({ ok: true, skipped: true, reason: "outbound" });
+  const event = parseMycrmsimWebhook(raw);
+  if (event.kind === "ignore") {
+    return NextResponse.json({ ok: true, skipped: true, reason: "ignored" });
   }
 
-  const from = asString(body.from_number) || asString(body.number);
-  const content = asString(body.content);
-  const handle = asString(body.message_handle);
-  const mediaUrl = asString(body.media_url);
-  const sentAt = asString(body.date_sent) || null;
-
+  const token = webhookToken(request);
   const supabase = createClient<Database>(getSupabaseUrl(), getSupabaseKey());
-  const { data, error } = await supabase.rpc("ingest_inbound_text", {
-    p_from: from,
-    p_body: content,
-    p_handle: handle,
-    p_media_url: mediaUrl,
-    p_sent_at: sentAt,
-  });
+  const shared = {
+    p_location_id: event.locationId,
+    p_token: token,
+    p_phone: "phone" in event ? event.phone : "",
+  };
+
+  const args =
+    event.kind === "status"
+      ? {
+          ...shared,
+          p_kind: "status",
+          p_message_id: event.messageId,
+          p_status: event.status,
+        }
+      : event.kind === "call"
+        ? {
+            ...shared,
+            p_kind: "call",
+            p_body: event.message,
+            p_is_me: event.isMe,
+          }
+        : {
+            ...shared,
+            p_kind: "message",
+            p_body: event.message,
+            p_message_id: event.messageId,
+            p_is_me: event.isMe,
+            p_media_url: event.mediaUrl,
+          };
+
+  const { data, error } = await supabase.rpc("ingest_mycrmsim_event", args);
 
   if (error) {
     if (
@@ -88,10 +76,15 @@ export async function POST(request: Request) {
       return NextResponse.json({
         ok: true,
         skipped: true,
-        reason: "run_messages_sql",
+        reason: "run_mycrmsim_sql",
       });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  const payload = data && typeof data === "object" ? (data as { ok?: boolean; error?: string }) : null;
+  if (payload?.ok === false) {
+    return NextResponse.json(payload, { status: payload.error === "Unauthorized." ? 401 : 400 });
   }
 
   return NextResponse.json(data ?? { ok: true });

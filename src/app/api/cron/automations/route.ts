@@ -136,6 +136,8 @@ export async function GET(request: Request) {
       customerEmail: String(row.contact_email ?? ""),
       ownerPhone: String(row.owner_phone ?? ""),
       ownerEmail: String(row.owner_email ?? ""),
+      companyId,
+      userId: "automation",
       staffById: () => ({
         phone: String(row.owner_phone ?? ""),
         email: String(row.owner_email ?? ""),

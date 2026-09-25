@@ -1,8 +1,10 @@
 /**
- * Reads SENDBLUE_* from Supabase Edge Function secrets (Project Settings → Edge Functions → Secrets)
- * and sends an iMessage / SMS via Sendblue. The Next.js website cannot see those secrets otherwise.
+ * Optional Edge Function sender for myCRMSIM.
+ * The Next.js app sends from Settings → Texts (per company). This function is the
+ * host-level fallback when MYCRMSIM_LOCATION_ID is set as an Edge Function secret.
  */
-const SENDBLUE_SEND_URL = "https://api.sendblue.co/api/send-message";
+const MYCRMSIM_SEND_URL =
+  "https://r6bszuuso6.execute-api.ap-southeast-2.amazonaws.com/prod/webhook";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -32,32 +34,20 @@ function toE164(value: string) {
   return "";
 }
 
-function sendblueCredentials() {
-  const keyId = (
-    Deno.env.get("SENDBLUE_API_KEY_ID") ||
-    Deno.env.get("SENDBLUE_API_KEY") ||
-    ""
-  ).trim();
-  const secret = (
-    Deno.env.get("SENDBLUE_API_SECRET_KEY") ||
-    Deno.env.get("SENDBLUE_API_SECRET") ||
-    ""
-  ).trim();
-  const from = toE164(Deno.env.get("SENDBLUE_FROM_NUMBER") || "");
-  return { keyId, secret, from };
-}
+const CHANNELS = ["sms", "imessage", "whatsapp", "rcs"];
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: cors });
   }
 
-  const { keyId, secret, from } = sendblueCredentials();
-  const configured = Boolean(keyId && secret && from);
-  const fromNumber = from ? `ending ${from.slice(-4)}` : "";
+  const locationId = (Deno.env.get("MYCRMSIM_LOCATION_ID") ?? "").trim();
+  const channelRaw = (Deno.env.get("MYCRMSIM_CHANNEL") ?? "sms").trim().toLowerCase();
+  const channel = CHANNELS.includes(channelRaw) ? channelRaw : "sms";
+  const configured = Boolean(locationId);
 
   if (request.method === "GET") {
-    return json({ configured, fromNumber });
+    return json({ configured, channel });
   }
 
   if (request.method !== "POST") {
@@ -73,24 +63,25 @@ Deno.serve(async (request) => {
 
   const to = toE164(typeof body.to === "string" ? body.to : "");
   const content = typeof body.content === "string" ? body.content.trim() : "";
+  const userId = typeof body.userId === "string" && body.userId.trim() ? body.userId.trim() : "truss";
   if (!to) return json({ error: "That phone number is not valid." }, 400);
   if (!content) return json({ error: "Write a message before sending." }, 400);
 
   if (!configured) {
-    return json({ ok: true, mocked: true, to, configured: false });
+    return json({ ok: true, mocked: true, to, configured: false, handle: `mock_${Date.now()}` });
   }
 
-  const response = await fetch(SENDBLUE_SEND_URL, {
+  const messageId = crypto.randomUUID();
+  const response = await fetch(MYCRMSIM_SEND_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "sb-api-key-id": keyId,
-      "sb-api-secret-key": secret,
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      from_number: from,
-      number: to,
-      content,
+      location_id: locationId,
+      user_id: userId,
+      phone: to,
+      message: content,
+      message_id: messageId,
+      channel,
     }),
   });
 
@@ -103,17 +94,9 @@ Deno.serve(async (request) => {
 
   if (!response.ok) {
     const error =
-      (typeof payload.error_message === "string" && payload.error_message) ||
+      (typeof payload.error === "string" && payload.error) ||
       (typeof payload.message === "string" && payload.message) ||
-      `Sendblue returned ${response.status}.`;
-    return json({ ok: false, error }, 502);
-  }
-
-  const status = typeof payload.status === "string" ? payload.status : "";
-  if (status === "ERROR") {
-    const error =
-      (typeof payload.error_message === "string" && payload.error_message) ||
-      "Sendblue could not send that text.";
+      `myCRMSIM returned ${response.status}.`;
     return json({ ok: false, error }, 502);
   }
 
@@ -122,6 +105,6 @@ Deno.serve(async (request) => {
     mocked: false,
     configured: true,
     to,
-    handle: typeof payload.message_handle === "string" ? payload.message_handle : "",
+    handle: messageId,
   });
 });
