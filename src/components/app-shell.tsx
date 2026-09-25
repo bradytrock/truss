@@ -579,7 +579,7 @@ function SearchTrigger() {
             </CommandGroup>
             <CommandGroup heading="Inbox">
               <CommandItem
-                value="inbox messages texts sms sendblue homeowner"
+                value="inbox messages texts sms mycrmsim homeowner"
                 onSelect={() => {
                   setOpen(false);
                   router.push("/messages");

@@ -1,4 +1,4 @@
-import { sendblueText } from "@/lib/sendblue";
+import { sendCompanyText } from "@/lib/mycrmsim-server";
 import { createAnonClient } from "@/lib/supabase/anon";
 
 export type RealtorListingWatch = {
@@ -132,6 +132,8 @@ function parseWatches(raw: unknown): RealtorListingWatch[] {
 }
 
 async function notifyOwnerOfNewListings(input: {
+  companyId: string;
+  userId: string;
   ownerPhone: string;
   contactName: string;
   listings: Array<{ title?: string; address?: string; price?: number | null }>;
@@ -146,7 +148,12 @@ async function notifyOwnerOfNewListings(input: {
   const extra =
     input.listings.length > 1 ? ` (+${input.listings.length - 1} more)` : "";
   const content = `New listing from ${input.contactName}: ${label}${price}${extra}. Open Truss to follow up.`;
-  await sendblueText({ to: input.ownerPhone, content });
+  await sendCompanyText({
+    companyId: input.companyId,
+    userId: input.userId,
+    to: input.ownerPhone,
+    content,
+  });
 }
 
 export async function listRealtorListingWatches() {
@@ -196,6 +203,8 @@ export async function browseRealtorListingWatch(watch: RealtorListingWatch) {
   if (!browseError && newListings.length > 0) {
     try {
       await notifyOwnerOfNewListings({
+        companyId: watch.companyId,
+        userId: watch.ownerStaffId || "realtor",
         ownerPhone,
         contactName,
         listings: newListings,

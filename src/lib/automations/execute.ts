@@ -1,6 +1,6 @@
 import { applyAutomationMerge, type Automation, type AutomationAction, type AutomationMergeContext } from "@/lib/automations";
 import { sendResendEmail } from "@/lib/resend-mail";
-import { sendblueText } from "@/lib/sendblue";
+import { sendCompanyText } from "@/lib/mycrmsim-server";
 
 export type ExecuteActionResult = {
   ok: boolean;
@@ -17,6 +17,8 @@ export async function executeAutomationActions(input: {
   ownerEmail?: string;
   staffById: (id: string) => { phone?: string; email?: string; name?: string } | undefined;
   createTask?: (title: string) => Promise<void>;
+  companyId: string;
+  userId?: string;
   dryRun?: boolean;
 }): Promise<ExecuteActionResult> {
   const notes: string[] = [];
@@ -42,6 +44,8 @@ async function runAction(
     ownerEmail?: string;
     staffById: (id: string) => { phone?: string; email?: string; name?: string } | undefined;
     createTask?: (title: string) => Promise<void>;
+    companyId: string;
+    userId?: string;
   },
 ): Promise<ExecuteActionResult> {
   const body = applyAutomationMerge(action.body ?? "", input.merge);
@@ -91,7 +95,12 @@ async function runAction(
   const phone =
     to === "customer" ? input.customerPhone : to === "staff" ? staff?.phone : input.ownerPhone;
   if (!phone) return { ok: false, delivery: "", error: "No mobile number for that recipient." };
-  const result = await sendblueText({ to: phone, content: body });
+  const result = await sendCompanyText({
+    companyId: input.companyId,
+    userId: input.userId || "automation",
+    to: phone,
+    content: body,
+  });
   if (!result.ok) return { ok: false, delivery: "", error: result.error };
   return { ok: true, delivery: result.mocked ? "Text mocked" : "Text sent", error: "" };
 }

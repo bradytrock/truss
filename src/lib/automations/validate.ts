@@ -87,7 +87,7 @@ export function validateAutomationDraft(
   });
 
   if (automationNeedsSmsNumber(draft.actions) && options.smsConfigured === false) {
-    fieldErrors.sms = "Provision a sending number before saving a text action.";
+    fieldErrors.sms = "Connect myCRMSIM under Settings → Texts before saving a text action.";
     errors.push(fieldErrors.sms);
   }
 

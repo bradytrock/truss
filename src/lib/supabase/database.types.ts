@@ -1554,6 +1554,39 @@ export type Database = {
         };
         Relationships: [];
       };
+      mycrmsim_connections: {
+        Row: {
+          company_id: string;
+          location_id: string;
+          channel: string;
+          webhook_token: string;
+          linked: boolean;
+          linked_at: string | null;
+          updated_at: string;
+          created_at: string;
+        };
+        Insert: {
+          company_id: string;
+          location_id?: string;
+          channel?: string;
+          webhook_token?: string;
+          linked?: boolean;
+          linked_at?: string | null;
+          updated_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          company_id?: string;
+          location_id?: string;
+          channel?: string;
+          webhook_token?: string;
+          linked?: boolean;
+          linked_at?: string | null;
+          updated_at?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       eagleview_connections: {
         Row: {
           company_id: string;
@@ -3044,6 +3077,28 @@ export type Database = {
           p_media_url?: string;
           p_sent_at?: string | null;
         };
+        Returns: Json;
+      };
+      ingest_mycrmsim_event: {
+        Args: {
+          p_location_id: string;
+          p_token: string;
+          p_kind: string;
+          p_phone?: string;
+          p_body?: string;
+          p_message_id?: string;
+          p_status?: string;
+          p_is_me?: boolean;
+          p_media_url?: string;
+        };
+        Returns: Json;
+      };
+      mycrmsim_outbound_config: {
+        Args: { p_company_id: string };
+        Returns: Json;
+      };
+      mycrmsim_config_for_voice: {
+        Args: { p_token: string };
         Returns: Json;
       };
       eagleview_ingest_webhook: {

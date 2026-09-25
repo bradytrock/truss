@@ -67,6 +67,8 @@ export async function POST(request: Request) {
     customerEmail: contact?.email,
     ownerPhone: owner?.phone,
     ownerEmail: owner?.email,
+    companyId,
+    userId: user.id,
     staffById: (id) => book.state.staff.find((item) => item.id === id),
     createTask: async (title) => {
       await supabase.from("tasks").insert({

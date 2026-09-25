@@ -1,6 +1,6 @@
 /**
- * Receive webhook for Sendblue inbound texts.
- * Same ingest path as /api/messages/inbound — use whichever URL you put in Sendblue.
+ * Receive webhook for myCRMSIM inbound texts, status, and calls.
+ * Same ingest path as /api/messages/inbound — use whichever URL you put on the workspace.
  */
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -12,32 +12,13 @@ function json(body: unknown, status = 200) {
 }
 
 function asString(value: unknown) {
-  return typeof value === "string" ? value : "";
+  return typeof value === "string" ? value.trim() : "";
 }
 
-function digitsOnly(value: string) {
-  return value.replace(/\D/g, "");
-}
-
-function last10(value: string) {
-  return digitsOnly(value).slice(-10);
-}
-
-function flatten(body: Record<string, unknown>) {
-  const nested = body.message;
-  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
-    return { ...body, ...(nested as Record<string, unknown>) };
-  }
-  return body;
-}
-
-function isOutboundPayload(body: Record<string, unknown>) {
-  if (body.is_outbound === true) return true;
-  const from = asString(body.from_number) || asString(body.number);
-  const ours = (Deno.env.get("SENDBLUE_FROM_NUMBER") ?? "").trim();
-  const fromKey = last10(from);
-  const oursKey = last10(ours);
-  return Boolean(oursKey && fromKey && fromKey === oursKey);
+function firstMedia(value: unknown) {
+  if (!Array.isArray(value)) return "";
+  const found = value.find((item) => typeof item === "string" && item.trim());
+  return typeof found === "string" ? found.trim() : "";
 }
 
 Deno.serve(async (request) => {
@@ -45,20 +26,10 @@ Deno.serve(async (request) => {
     return new Response("ok", { headers: cors });
   }
   if (request.method === "GET") {
-    return json({ ok: true });
+    return json({ ok: true, provider: "mycrmsim" });
   }
   if (request.method !== "POST") {
     return json({ error: "Method not allowed." }, 405);
-  }
-
-  const expected = (Deno.env.get("MESSAGES_WEBHOOK_TOKEN") ?? "").trim();
-  if (expected) {
-    const url = new URL(request.url);
-    const header = request.headers.get("x-webhook-token")?.trim() || "";
-    const query = url.searchParams.get("token")?.trim() || "";
-    if (header !== expected && query !== expected) {
-      return json({ error: "Unauthorized." }, 401);
-    }
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -67,19 +38,45 @@ Deno.serve(async (request) => {
     return json({ error: "Missing Supabase service credentials." }, 500);
   }
 
-  let raw: Record<string, unknown> = {};
+  let body: Record<string, unknown> = {};
   try {
-    raw = (await request.json()) as Record<string, unknown>;
+    body = (await request.json()) as Record<string, unknown>;
   } catch {
-    return json({ ok: true, skipped: true });
+    return json({ ok: true, skipped: true, reason: "unreadable" });
   }
 
-  const body = flatten(raw);
-  if (isOutboundPayload(body)) {
-    return json({ ok: true, skipped: true, reason: "outbound" });
+  const type = asString(body.type || body.event).toUpperCase().replace(/[\s_]/g, "-");
+  const locationId = asString(body.location_id || body.locationId);
+  const phone = asString(body.phone || body.from || body.number);
+  const message = asString(body.message || body.content || body.body);
+  const messageId = asString(body.message_id || body.messageId);
+  const status = asString(body.status).toUpperCase();
+  const isMe = body.isMe === true || body.is_me === true;
+  const mediaUrl = firstMedia(body.attachments) || asString(body.media_url);
+
+  let kind = "";
+  if (
+    type === "STATUS" ||
+    type === "STATUS-UPDATE" ||
+    type.startsWith("STATUS-") ||
+    (status && messageId && type !== "MESSAGE" && type !== "CALL")
+  ) {
+    kind = "status";
+  } else if (type === "CALL" || type.endsWith("-CALL")) {
+    kind = "call";
+  } else if (type === "MESSAGE" || (locationId && (phone || message))) {
+    kind = "message";
+  } else {
+    return json({ ok: true, skipped: true, reason: "ignored" });
   }
 
-  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/ingest_inbound_text`, {
+  const url = new URL(request.url);
+  const token =
+    request.headers.get("x-webhook-token")?.trim() ||
+    url.searchParams.get("token")?.trim() ||
+    "";
+
+  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/ingest_mycrmsim_event`, {
     method: "POST",
     headers: {
       apikey: serviceKey,
@@ -87,11 +84,15 @@ Deno.serve(async (request) => {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      p_from: asString(body.from_number) || asString(body.number),
-      p_body: asString(body.content),
-      p_handle: asString(body.message_handle),
-      p_media_url: asString(body.media_url),
-      p_sent_at: asString(body.date_sent) || null,
+      p_location_id: locationId,
+      p_token: token,
+      p_kind: kind,
+      p_phone: phone,
+      p_body: message,
+      p_message_id: messageId,
+      p_status: status,
+      p_is_me: isMe,
+      p_media_url: mediaUrl,
     }),
   });
 

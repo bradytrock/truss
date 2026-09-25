@@ -568,6 +568,24 @@ export function missingCompanyAuditMessage() {
 }
 
 export const MESSAGES_SQL = "supabase/migrations/20260825120000_messages.sql";
+export const MYCRMSIM_SQL = "supabase/migrations/20260925120000_mycrmsim.sql";
+
+export function isMissingMycrmsim(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    (error.code === "PGRST202" ||
+      error.code === "PGRST204" ||
+      error.code === "PGRST205" ||
+      message.includes("schema cache") ||
+      message.includes("could not find the")) &&
+    (message.includes("mycrmsim") || message.includes("ingest_mycrmsim"))
+  );
+}
+
+export function missingMycrmsimMessage() {
+  return `Run ${MYCRMSIM_SQL} in the SQL editor so Settings → Texts can store the myCRMSIM workspace.`;
+}
 
 export function isMissingMessages(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
