@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { extractText } from "unpdf";
+import { extractText, extractTextItems } from "unpdf";
 import { buildEstimatePdf, buildInvoicePdf } from "./document-pdf.ts";
 import type { CompanySettings, Estimate, EstimateLine, Invoice, InvoiceLine } from "./types.ts";
 
@@ -123,6 +123,31 @@ async function textFromPdf(blob: Blob) {
   return (await pagesFromPdf(blob)).join("\n");
 }
 
+type PdfItem = { str: string; x: number; y: number; width: number; height: number };
+
+async function itemsFromPdf(blob: Blob) {
+  const buffer = new Uint8Array(await blob.arrayBuffer());
+  const extracted = await extractTextItems(buffer);
+  return extracted.items as PdfItem[][];
+}
+
+function pageText(items: PdfItem[]) {
+  return items.map((item) => item.str).join(" ");
+}
+
+function assertClearOfFooter(items: PdfItem[][]) {
+  for (const [index, page] of items.entries()) {
+    for (const item of page) {
+      if (item.height <= 0 || !item.str.trim() || item.y >= 40) continue;
+      assert.match(
+        item.str,
+        /Page \d+ of \d+|T Rock|Roofing|Dallas|office@|469|214/,
+        `page ${index + 1} text sits in the footer: ${item.str}`,
+      );
+    }
+  }
+}
+
 async function main() {
   const estimateText = await textFromPdf(
     await buildEstimatePdf({
@@ -226,6 +251,124 @@ async function main() {
   assert.match(legalText, /Scope of work/);
   assert.match(legalText, /AUTHORIZATION/);
   assert.match(legalText, /Pay the listed total/);
+
+  const materials: Array<[string, number, string, number]> = [
+    ["Beacon/QXO Delivery Fee", 1, "ea", 164.29],
+    ["CertainTeed Landmark AR", 168, "sq", 145.5],
+    ["CertainTeed XT-25 3-Tab", 1, "lf", 150],
+    ["TriBuilt Synthetic", 5.25, "roll", 130.5],
+    ["TriBuilt Starter Strip (100 LF) OC", 2.97, "bdl", 86.84],
+    ["TriBuilt Ice and Water 2 sq", 1, "roll", 122.5],
+    ["Metal Valley 20'x50'", 2.46, "roll", 136.57],
+    ['Nails 1" Plastic Caps Hand Drive', 5.25, "box", 36.19],
+    ['Drip Edge 2"x2" Painted', 40.2, "pc", 14.43],
+    ["TriBuilt Paint - All Colors", 1, "ea", 13.1],
+    ['Coil Nails 1 1/2"', 5.25, "box", 91.43],
+    ["CertainTeed Shadow Ridge (30 LF)", 1, "bdl", 133.43],
+  ];
+  const gbbLines: EstimateLine[] = [];
+  let lineNo = 0;
+  for (const pkg of ["good", "better", "best"]) {
+    for (const [title, qty, unit, cost] of materials) {
+      gbbLines.push({
+        ...lines[0]!,
+        id: `gbb_${lineNo++}`,
+        title,
+        description: "",
+        quantity: qty,
+        unit,
+        unitCost: cost,
+        package: pkg,
+        groupName: pkg,
+      });
+    }
+  }
+  const longEstimate = await itemsFromPdf(
+    await buildEstimatePdf({
+      estimate: { ...estimate, packageMode: "gbb", selectedPackage: "good", number: "EST-1053", terms: legalTerms },
+      lines: gbbLines,
+      company,
+      customer: "Jones",
+      jobCode: "BJ092126-E",
+    }),
+  );
+  assert.ok(longEstimate.length > 1, "a full Good/Better/Best estimate runs past page 1");
+  const longJoined = longEstimate.map(pageText);
+  if (!/TOTAL/.test(longJoined[0] ?? "")) {
+    assert.doesNotMatch(longJoined[0] ?? "", /Sign on page/, "sign cue must not float over page 1 line items");
+  }
+  const signPage = longJoined.findIndex((text) => /Sign on page \d+ ->/.test(text));
+  assert.ok(signPage >= 0, "estimate should point at the authorization page");
+  assert.match(longJoined[signPage] ?? "", /TOTAL/);
+  const signMatch = (longJoined[signPage] ?? "").match(/Sign on page (\d+) ->/);
+  const authPage = Number(signMatch?.[1] ?? "0") - 1;
+  assert.match(longJoined[authPage] ?? "", /AUTHORIZATION/);
+  const signItems = longEstimate[signPage]!.filter((item) => item.height > 0 && /Sign on page/.test(item.str));
+  assert.ok(signItems.length >= 1);
+  const signY = signItems[0]!.y;
+  const crowded = longEstimate[signPage]!.filter(
+    (item) => item.height > 0 && Math.abs(item.y - signY) < 6 && /\$\d/.test(item.str),
+  );
+  assert.equal(crowded.length, 0, "sign cue overlaps an amount");
+  const continued = longEstimate.findIndex((items, index) => index > 0 && /TriBuilt|CertainTeed/.test(pageText(items)));
+  assert.ok(continued > 0);
+  assert.match(pageText(longEstimate[continued]!), /DESCRIPTION/);
+  assert.match(pageText(longEstimate[continued]!), /AMOUNT/);
+  assertClearOfFooter(longEstimate);
+
+  const token = `UNBROKEN${"X".repeat(48)}`;
+  const wideItems = await itemsFromPdf(
+    await buildEstimatePdf({
+      estimate: { ...estimate, number: "EST-WIDE", terms: "" },
+      lines: [{ ...lines[0]!, title: "Wide line", description: token, unitCost: 10 }],
+      company,
+      customer: "Shawn Gregory",
+    }),
+  );
+  const wideBits = wideItems.flat().filter((item) => item.str.includes("UNBROKEN") || item.str.includes("XXXX"));
+  assert.ok(wideBits.length >= 1);
+  for (const bit of wideBits) {
+    assert.ok(bit.x + bit.width < 360, `description runs into the amount column: ${bit.str}`);
+  }
+
+  const scope = [
+    "StartMarker roof system",
+    ...Array.from({ length: 70 }, (_, index) => `Scope line ${index + 1} synthetic underlayment and drip edge.`),
+    "EndMarker underlayment note",
+  ].join("\n");
+  const longInvoice = await itemsFromPdf(
+    await buildInvoicePdf({
+      invoice: { ...invoice, number: "INV-LONG", terms: "" },
+      lines: [{ ...invoiceLines[0]!, description: scope, unitCost: 4200 }],
+      payments: [],
+      company,
+      customer: "Shawn Gregory",
+    }),
+  );
+  const start = longInvoice
+    .map((items, index) => ({ index, item: items.find((entry) => entry.str.includes("StartMarker")) }))
+    .find((entry) => entry.item);
+  assert.ok(start?.item, "invoice description starts on a page");
+  const linedUp = longInvoice[start!.index]!.find(
+    (item) => item.str === "$4,200.00" && Math.abs(item.y - start!.item!.y) < 2,
+  );
+  assert.ok(linedUp, "invoice amount stays on the first description line");
+  for (const [index, items] of longInvoice.entries()) {
+    for (const item of items) {
+      if (item.str !== "$4,200.00") continue;
+      const hit = items.find(
+        (other) =>
+          /Scope line|EndMarker/.test(other.str) && Math.abs(other.y - item.y) < 3,
+      );
+      assert.equal(hit, undefined, `amount overlaps ${hit?.str ?? ""} on invoice page ${index + 1}`);
+    }
+  }
+  const invoiceContinued = longInvoice.findIndex(
+    (items, index) => index > 0 && /Scope line/.test(pageText(items)),
+  );
+  assert.ok(invoiceContinued > 0);
+  assert.match(pageText(longInvoice[invoiceContinued]!), /DESCRIPTION/);
+  assertClearOfFooter(longInvoice);
 
   console.log("document-pdf format tests passed");
 }
