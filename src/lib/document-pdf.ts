@@ -48,6 +48,7 @@ import {
   paperInvoiceMeta,
   paperIssuedAt,
   paperKindLabel,
+  paperOptionChoiceCopy,
   paperQtyLabel,
   paperRescissionCopy,
   paperSiteTitle,
@@ -938,7 +939,7 @@ export async function buildEstimatePdf(raw: {
   if (gbb && estimateOptions.length > 0) {
     y = writeParagraph(
       doc,
-      "Check one option. Shared work is included in every option. Options replace each other; they do not stack.",
+      paperOptionChoiceCopy(),
       y,
       contentRight(doc) - PAPER_INSET,
       9,

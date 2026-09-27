@@ -8,6 +8,7 @@ import {
   paperIssuedAt,
   paperKindLabel,
   paperMetaBlank,
+  paperOptionChoiceCopy,
   paperQtyLabel,
   paperRescissionCopy,
   paperSiteTitle,
@@ -59,6 +60,8 @@ assert.equal(company.license, "License TACL123");
 assert.match(paperFooterLeft({ name: "T Rock Roofing", phone: "2145550100", email: "office@example.com" }), /T Rock Roofing/);
 assert.match(paperAuthorizationCopy("T Rock Roofing"), /T Rock Roofing/);
 assert.match(paperRescissionCopy(), /third business day/i);
+assert.equal(paperOptionChoiceCopy(), "Check one option. Its price is the total for the job.");
+assert.doesNotMatch(paperOptionChoiceCopy(), /stack|shared work/i);
 
 const estimateMeta = paperEstimateMeta({
   number: "EST-FORMAT",
