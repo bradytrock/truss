@@ -523,9 +523,6 @@ function writePartyCards(
     }
     bottom = Math.max(bottom, cy);
   });
-  draw(doc, { r: 220, g: 220, b: 220 });
-  doc.setLineWidth(0.5);
-  doc.line(PAPER_INSET, bottom + 6, rightEdge, bottom + 6);
   return bottom + 16;
 }
 
