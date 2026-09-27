@@ -205,7 +205,7 @@ async function main() {
   assert.match(gbbText, /3-tab shingles/);
   assert.match(gbbText, /Architectural shingles/);
   assert.match(gbbText, /Designer shingles/);
-  assert.match(gbbText, /Check one option\. Its price is the total for the job\./);
+  assert.match(gbbText, /Please choose the option you prefer/);
   assert.doesNotMatch(gbbText, /do not stack/);
   assert.doesNotMatch(gbbText, /This proposal is/);
 

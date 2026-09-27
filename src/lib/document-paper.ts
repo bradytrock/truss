@@ -126,7 +126,7 @@ export function paperInvoiceMeta(input: {
 }
 
 export function paperOptionChoiceCopy() {
-  return "Check one option. Its price is the total for the job.";
+  return "Please choose the option you prefer. The price shown with it is the full amount for that selection.";
 }
 
 export function paperAuthorizationCopy(companyName: string) {
