@@ -24,7 +24,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useCrm } from "@/lib/crm-store";
 import { localYmd } from "@/lib/format";
-import { compressReceipt, isReceiptPhoto } from "@/lib/job-financials";
+import { compressReceipt } from "@/lib/job-financials";
+import { isReceiptUpload } from "@/lib/receipt-extract";
 import { costCenterLabel } from "@/lib/job-record";
 import { invoiceBalance } from "@/lib/money";
 import { matchVendorName, vendorChoices } from "@/lib/qb-vendors";
@@ -76,8 +77,8 @@ function ReceiptFields({
 }) {
   async function handle(file: File | undefined) {
     if (!file) return;
-    if (!isReceiptPhoto(file) && file.type !== "application/pdf") {
-      toast.error("Use a photo of the receipt.");
+    if (!isReceiptUpload(file)) {
+      toast.error("Use a photo or PDF of the receipt.");
       return;
     }
     try {
@@ -94,7 +95,11 @@ function ReceiptFields({
       <p className="text-xs text-muted-foreground">
         Required. Camera or library. The image stays on the record.
       </p>
-      {previewUrl ? (
+      {previewUrl.startsWith("data:application/pdf") ? (
+        <div className="flex h-32 items-center justify-center border bg-muted text-sm text-muted-foreground">
+          PDF attached
+        </div>
+      ) : previewUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={previewUrl} alt="Receipt" className="max-h-48 w-full border object-contain bg-muted" />
       ) : (
@@ -243,17 +248,13 @@ export function LogExpenseDialog({
               setFile(nextFile);
               setPreview(dataUrl);
               setExtractedByAi(false);
-              if (!isReceiptPhoto(nextFile)) {
-                toast.message("AI reads a photo of the receipt, not a PDF. You can still type the fields and save.");
-                return;
-              }
               void applyExpenseExtract(dataUrl);
             }}
           />
           <Button
             type="button"
             variant="outline"
-            disabled={!preview || reading || Boolean(file && !isReceiptPhoto(file))}
+            disabled={!preview || reading}
             onClick={() => void applyExpenseExtract(preview)}
           >
             {reading ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
@@ -261,8 +262,8 @@ export function LogExpenseDialog({
           </Button>
           {aiReady === false ? (
             <p className="text-xs text-muted-foreground">
-              This host has no OPENAI_API_KEY, so AI cannot fill the fields. The photo still saves on the
-              expense.
+              This host has no OPENAI_API_KEY or ANTHROPIC_API_KEY, so AI cannot fill the fields. The photo
+              still saves on the expense.
             </p>
           ) : null}
           <div className="grid gap-1.5">
@@ -539,17 +540,13 @@ export function LogPaymentDialog({
             onFile={(nextFile, dataUrl) => {
               setFile(nextFile);
               setPreview(dataUrl);
-              if (!isReceiptPhoto(nextFile)) {
-                toast.message("AI reads a photo of the check, not a PDF. You can still type the fields and save.");
-                return;
-              }
               void applyPaymentExtract(dataUrl);
             }}
           />
           <Button
             type="button"
             variant="outline"
-            disabled={!preview || reading || Boolean(file && !isReceiptPhoto(file))}
+            disabled={!preview || reading}
             onClick={() => void applyPaymentExtract(preview)}
           >
             {reading ? <LoaderCircle className="animate-spin" /> : <Camera />}
@@ -557,8 +554,8 @@ export function LogPaymentDialog({
           </Button>
           {aiReady === false ? (
             <p className="text-xs text-muted-foreground">
-              This host has no OPENAI_API_KEY, so AI cannot fill the fields. The photo still saves on the
-              payment.
+              This host has no OPENAI_API_KEY or ANTHROPIC_API_KEY, so AI cannot fill the fields. The photo
+              still saves on the payment.
             </p>
           ) : null}
           <div className="grid gap-1.5">

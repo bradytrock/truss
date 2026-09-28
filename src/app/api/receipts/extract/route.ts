@@ -1,5 +1,15 @@
 import { NextResponse } from "next/server";
 import { guessExpenseAccount, isExpenseAccount, isExpenseMethod } from "@/lib/job-financials";
+import {
+  ANTHROPIC_RECEIPT_MODELS,
+  anthropicReceiptBody,
+  anthropicUserError,
+  explainReceiptFailure,
+  parseReceiptDataUrl,
+  shouldRetryAnthropicModel,
+  type ProviderMiss,
+  type ReceiptUpload,
+} from "@/lib/receipt-extract";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -108,50 +118,46 @@ async function extractWithOpenAi(imageDataUrl: string, kind: ExtractKind): Promi
   return { ok: false, error: lastError };
 }
 
-async function extractWithAnthropic(imageDataUrl: string, kind: ExtractKind): Promise<ProviderResult> {
+function usefulExtract(data: Record<string, unknown>, kind: ExtractKind) {
+  if (asNumber(data.amount) > 0) return true;
+  return kind === "expense" && Boolean(asString(data.vendor));
+}
+
+async function extractWithAnthropic(
+  upload: Extract<ReceiptUpload, { ok: true }>,
+  kind: ExtractKind,
+): Promise<ProviderResult> {
   const key = process.env.ANTHROPIC_API_KEY?.trim();
   if (!key) return { ok: false, error: "ANTHROPIC_API_KEY is not set on this host.", missingKey: true };
-  const match = imageDataUrl.match(/^data:(image\/[\w+.-]+);base64,(.+)$/);
-  if (!match) return { ok: false, error: "Send a JPEG or PNG of the receipt." };
-  const mediaType = match[1] === "image/jpg" ? "image/jpeg" : match[1];
-  if (!["image/jpeg", "image/png", "image/gif", "image/webp"].includes(mediaType)) {
-    return { ok: false, error: "Send a JPEG or PNG of the receipt." };
-  }
   const prompt = kind === "expense" ? expensePrompt() : paymentPrompt();
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 400,
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: prompt },
-            {
-              type: "image",
-              source: { type: "base64", media_type: mediaType, data: match[2] },
-            },
-          ],
-        },
-      ],
-    }),
-  });
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    console.error("Receipt Anthropic error", response.status, detail.slice(0, 500));
-    return { ok: false, error: "Anthropic could not read that photo. Try a clearer shot of the vendor and total." };
+  let lastError = "Anthropic could not read that file. Try a clearer shot of the vendor and total.";
+  for (const model of ANTHROPIC_RECEIPT_MODELS) {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(anthropicReceiptBody(model, prompt, upload)),
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      console.error("Receipt Anthropic error", model, response.status, detail.slice(0, 500));
+      lastError = anthropicUserError(response.status, detail);
+      if (shouldRetryAnthropicModel(response.status, detail)) continue;
+      return { ok: false, error: lastError };
+    }
+    const body = (await response.json()) as { content?: Array<{ type?: string; text?: string }> };
+    const text = body.content?.find((part) => part.type === "text")?.text ?? "";
+    const parsed = parseJsonObject(text);
+    if (!parsed) {
+      lastError = "Anthropic did not return receipt fields. Try a clearer photo.";
+      continue;
+    }
+    return { ok: true, data: parsed };
   }
-  const body = (await response.json()) as { content?: Array<{ type?: string; text?: string }> };
-  const text = body.content?.find((part) => part.type === "text")?.text ?? "";
-  const parsed = parseJsonObject(text);
-  if (!parsed) return { ok: false, error: "The model did not return receipt fields. Try a clearer photo." };
-  return { ok: true, data: parsed };
+  return { ok: false, error: lastError };
 }
 
 export async function GET() {
@@ -178,52 +184,53 @@ export async function POST(request: Request) {
     }
     const image = asString(body.image);
     const kind: ExtractKind = body.kind === "payment" ? "payment" : "expense";
-    if (!image.startsWith("data:image")) {
-      return NextResponse.json(
-        { error: "AI reads a photo of the receipt, not a PDF. Photograph the slip and try again." },
-        { status: 400 },
-      );
+    const upload = parseReceiptDataUrl(image);
+    if (!upload.ok) {
+      return NextResponse.json({ error: upload.error }, { status: 400 });
     }
-    const openai = await extractWithOpenAi(image, kind);
-    const extracted = openai.ok ? openai : await extractWithAnthropic(image, kind);
-    if (extracted.ok) {
+    const openai: ProviderResult | ProviderMiss =
+      upload.kind === "pdf"
+        ? { ok: false, error: "OpenAI reads photos, not PDFs.", skipped: true }
+        : await extractWithOpenAi(image, kind);
+    const openaiUseful = openai.ok && usefulExtract(openai.data, kind);
+    const extracted = openaiUseful ? openai : await extractWithAnthropic(upload, kind);
+    const chosen = extracted.ok ? extracted : openai.ok ? openai : extracted;
+    if (chosen.ok) {
       if (kind === "expense") {
-        const vendor = asString(extracted.data.vendor);
-        const accountRaw = asString(extracted.data.account);
-        const methodRaw = asString(extracted.data.method);
+        const vendor = asString(chosen.data.vendor);
+        const accountRaw = asString(chosen.data.account);
+        const methodRaw = asString(chosen.data.method);
         return NextResponse.json({
           ok: true,
           source: "ai",
           vendor,
-          amount: asNumber(extracted.data.amount),
-          date: asString(extracted.data.date),
-          memo: asString(extracted.data.memo),
+          amount: asNumber(chosen.data.amount),
+          date: asString(chosen.data.date),
+          memo: asString(chosen.data.memo),
           account: isExpenseAccount(accountRaw)
             ? accountRaw
-            : guessExpenseAccount(vendor, asString(extracted.data.memo)),
+            : guessExpenseAccount(vendor, asString(chosen.data.memo)),
           method: isExpenseMethod(methodRaw) ? methodRaw : "credit_card",
         });
       }
       return NextResponse.json({
         ok: true,
         source: "ai",
-        amount: asNumber(extracted.data.amount),
-        date: asString(extracted.data.date),
-        method: asString(extracted.data.method) || "check",
-        reference: asString(extracted.data.reference),
+        amount: asNumber(chosen.data.amount),
+        date: asString(chosen.data.date),
+        method: asString(chosen.data.method) || "check",
+        reference: asString(chosen.data.reference),
       });
     }
     const openaiFailed = !openai.ok ? openai : null;
-    const fallbackFailed = !extracted.ok ? extracted : null;
-    const missing = Boolean(openaiFailed?.missingKey && fallbackFailed?.missingKey);
+    const anthropicFailed = !extracted.ok ? extracted : null;
     return NextResponse.json({
       ok: false,
       source: "manual",
-      message: missing
-        ? "No AI key is configured on this host (OPENAI_API_KEY, or ANTHROPIC_API_KEY as a fallback). Fill the fields from the photo — the image still stays on the record."
-        : openaiFailed && !openaiFailed.missingKey
-          ? openaiFailed.error
-          : (fallbackFailed?.error ?? openaiFailed?.error ?? "Could not read the receipt."),
+      message:
+        upload.kind === "pdf" && anthropicFailed?.missingKey
+          ? "PDF receipts are read by Anthropic. Set ANTHROPIC_API_KEY on this host, or upload a JPEG of the slip."
+          : explainReceiptFailure(openaiFailed, anthropicFailed),
     });
   } catch (error) {
     console.error("Receipt extract failed", error);
