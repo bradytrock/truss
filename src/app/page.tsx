@@ -677,7 +677,7 @@ export default function HomePage() {
         return (
           <RelatedList
             title="Recent activity"
-            description="Calls, walks, and stage moves across the book."
+            description="Interactions (Calls, Texts, and Inspections), & Job Progress"
           >
             {feed.length === 0 ? (
               <p className="px-5 py-6 text-sm text-[#706e6b]">
