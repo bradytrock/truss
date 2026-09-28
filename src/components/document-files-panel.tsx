@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { CompanyFilePickerList } from "@/components/company-files";
+import { FileDropZone } from "@/components/file-drop-zone";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -61,18 +62,21 @@ export function DocumentFilesPanel({
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [attachingFromDirectory, setAttachingFromDirectory] = useState(false);
 
-  async function attach(list: FileList | null) {
-    if (!list?.length || disabled) return;
+  async function attach(list: FileList | File[] | null) {
+    const incoming = list ? Array.from(list) : [];
+    if (!incoming.length || disabled) return;
     setUploading(true);
     try {
-      const saved = await onUpload(Array.from(list));
+      const saved = await onUpload(incoming);
       if (saved.length === 1) {
         toast.success(`Attached ${saved[0].name}.`);
       } else if (saved.length > 1) {
         toast.success(`Attached ${saved.length} files.`);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not attach files.");
+      toast.error(
+        error instanceof Error ? error.message : "Could not attach files.",
+      );
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -89,7 +93,11 @@ export function DocumentFilesPanel({
         setDirectoryOpen(false);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not attach from directory.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not attach from directory.",
+      );
     } finally {
       setAttachingFromDirectory(false);
     }
@@ -110,7 +118,7 @@ export function DocumentFilesPanel({
         <div className="min-w-0">
           <p className="text-sm text-muted-foreground">
             {files.length === 0
-              ? "No attachments yet."
+              ? "Drop files here, or use Attach."
               : `${files.length} file${files.length === 1 ? "" : "s"} · private to signed-in teammates`}
           </p>
         </div>
@@ -157,46 +165,76 @@ export function DocumentFilesPanel({
           />
         </DialogContent>
       </Dialog>
-      {files.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{emptyHint}</p>
-      ) : (
-        <ul className="space-y-1.5">
-          {files.map((file) => (
-            <li key={file.id} className="flex items-center gap-2 rounded-md border px-3 py-2">
-              <FileThumb file={file} />
-              <a
-                href={file.url}
-                target="_blank"
-                rel="noreferrer"
-                className="min-w-0 flex-1 text-left"
-                onClick={() => onOpened?.(file)}
-              >
-                <span className="block truncate text-sm font-medium">{file.name}</span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">
-                  {[
-                    formatFileSize(file.sizeBytes),
-                    file.createdBy.trim() || null,
-                    formatDate(file.createdAt),
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </span>
-              </a>
-              <Button
-                type="button"
-                size="icon-sm"
-                variant="ghost"
-                className="shrink-0"
-                disabled={disabled}
-                onClick={() => void remove(file)}
-                aria-label={`Remove ${file.name}`}
-              >
-                <Trash2 className="size-3.5" />
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
+      <FileDropZone
+        disabled={disabled || busy}
+        onFiles={(dropped) => void attach(dropped)}
+      >
+        {(dragOver) => (
+          <div
+            className={cn(
+              "space-y-2 rounded-md border border-dashed px-3 py-3 transition-colors",
+              dragOver ? "border-primary bg-muted/40" : "border-border",
+            )}
+          >
+            <div
+              className={cn("px-1 text-center", files.length === 0 && "py-4")}
+              aria-label="Drop files to attach them"
+            >
+              <p className="text-sm font-medium">
+                {dragOver ? "Drop to attach" : "Drop files here"}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {files.length === 0
+                  ? emptyHint
+                  : "Drop more files here, or use Attach."}
+              </p>
+            </div>
+            {files.length > 0 ? (
+              <ul className="space-y-1.5">
+                {files.map((file) => (
+                  <li
+                    key={file.id}
+                    className="flex items-center gap-2 rounded-md border px-3 py-2"
+                  >
+                    <FileThumb file={file} />
+                    <a
+                      href={file.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() => onOpened?.(file)}
+                    >
+                      <span className="block truncate text-sm font-medium">
+                        {file.name}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {[
+                          formatFileSize(file.sizeBytes),
+                          file.createdBy.trim() || null,
+                          formatDate(file.createdAt),
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </a>
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="ghost"
+                      className="shrink-0"
+                      disabled={disabled}
+                      onClick={() => void remove(file)}
+                      aria-label={`Remove ${file.name}`}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        )}
+      </FileDropZone>
     </section>
   );
 }
@@ -205,7 +243,11 @@ function FileThumb({ file }: { file: DocumentAttachFile }) {
   if (file.mimeType.startsWith("image/")) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={file.url} alt="" className="size-10 shrink-0 rounded-sm object-cover" />
+      <img
+        src={file.url}
+        alt=""
+        className="size-10 shrink-0 rounded-sm object-cover"
+      />
     );
   }
   const Icon = iconForFile(file);
@@ -223,7 +265,8 @@ function FileThumb({ file }: { file: DocumentAttachFile }) {
 function iconForFile(file: DocumentAttachFile) {
   const mime = file.mimeType.toLowerCase();
   const name = file.name.toLowerCase();
-  if (mime.startsWith("video/") || /\.(mp4|mov|m4v|webm)$/.test(name)) return Film;
+  if (mime.startsWith("video/") || /\.(mp4|mov|m4v|webm)$/.test(name))
+    return Film;
   if (
     mime.includes("spreadsheet") ||
     mime.includes("excel") ||
@@ -231,7 +274,11 @@ function iconForFile(file: DocumentAttachFile) {
   ) {
     return FileSpreadsheet;
   }
-  if (mime.includes("zip") || mime.includes("compressed") || /\.(zip|rar|7z)$/.test(name)) {
+  if (
+    mime.includes("zip") ||
+    mime.includes("compressed") ||
+    /\.(zip|rar|7z)$/.test(name)
+  ) {
     return FileArchive;
   }
   if (mime.startsWith("image/")) return ImageIcon;

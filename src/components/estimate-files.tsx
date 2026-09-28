@@ -17,7 +17,7 @@ export function EstimateFilesPanel({
     <DocumentFilesPanel
       files={files}
       disabled={disabled}
-      emptyHint="Attach from your device or copy a warranty, product sheet, or template from Settings → File directory."
+      emptyHint="Or copy a warranty, product sheet, or template from Settings → File directory. Attach still opens the file picker."
       directoryTitle="Company file directory"
       directoryDescription="Copy a warranty, product sheet, or template onto this estimate. The original stays in Settings → File directory."
       onUpload={(list) => crm.addEstimateFiles(estimateId, list)}
