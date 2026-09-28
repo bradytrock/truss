@@ -1,4 +1,4 @@
-import { WORK_COLUMN_LABELS, isWorkColumn } from "@/lib/work-board";
+import { WORK_COLUMN_LABELS, canonicalizeWorkColumn, isWorkColumn } from "@/lib/work-board";
 import {
   AUTOMATION_ACTION_LABELS,
   AUTOMATION_CONDITION_FIELD_LABELS,
@@ -12,7 +12,8 @@ import {
 
 export function stageDisplayName(stage: string | undefined, labels: Record<string, string> = WORK_COLUMN_LABELS) {
   if (!stage) return "a stage";
-  return labels[stage] || (isWorkColumn(stage) ? WORK_COLUMN_LABELS[stage] : stage);
+  const canonical = canonicalizeWorkColumn(stage) ?? stage;
+  return labels[canonical] || (isWorkColumn(canonical) ? WORK_COLUMN_LABELS[canonical] : canonical);
 }
 
 export function summarizeTrigger(

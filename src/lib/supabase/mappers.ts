@@ -86,7 +86,7 @@ import {
   type AutomationTemplate,
   type AutomationTriggerKind,
 } from "@/lib/automations";
-import { isWorkColumn } from "@/lib/work-board";
+import { canonicalizeWorkColumn } from "@/lib/work-board";
 
 type ClientRow = Database["public"]["Tables"]["clients"]["Row"];
 type ContactRow = Database["public"]["Tables"]["contacts"]["Row"];
@@ -1597,7 +1597,7 @@ function parseActions(raw: Json): AutomationAction[] {
 
 function parseTriggerConfig(raw: Json): Automation["triggerConfig"] {
   const row = asRecord(raw);
-  const stage = typeof row.stage === "string" && isWorkColumn(row.stage) ? row.stage : undefined;
+  const stage = typeof row.stage === "string" ? canonicalizeWorkColumn(row.stage) ?? undefined : undefined;
   const days = typeof row.days === "number" ? row.days : Number(row.days);
   return {
     ...(stage ? { stage } : {}),

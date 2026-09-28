@@ -83,10 +83,9 @@ export function JobStatusBadge({ status }: { status: JobStatus }) {
 
 const workClass: Record<WorkColumn, string> = {
   lead: quiet,
-  estimating: quiet,
   proposal_sent: hot,
-  supplementing: hot,
   in_progress: hot,
+  supplementing: hot,
   punch: hot,
   complete: done,
   on_hold: mute,

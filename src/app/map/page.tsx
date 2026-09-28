@@ -34,7 +34,7 @@ import {
 } from "@/lib/project-map";
 import { missingStormMapMessage } from "@/lib/supabase/schema-errors";
 import { staffForReports } from "@/lib/visibility";
-import { workColumnFor, WORK_COLUMN_LABELS, type WorkColumn } from "@/lib/work-board";
+import { workColumnFor, WORK_COLUMN_LABELS, WORK_COLUMNS, type WorkColumn } from "@/lib/work-board";
 import type { Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -531,15 +531,9 @@ function CrewCard({
 }
 
 function Legend() {
-  const items: WorkColumn[] = [
-    "lead",
-    "estimating",
-    "proposal_sent",
-    "supplementing",
-    "in_progress",
-    "punch",
-    "complete",
-  ];
+  const items: WorkColumn[] = WORK_COLUMNS.filter(
+    (column) => column !== "on_hold" && column !== "lost" && column !== "deleted",
+  );
   return (
     <div className="border border-[#c9c9c9] bg-white px-4 py-3 text-xs text-[#706e6b]">
       <p className="mb-2 text-[11px] font-semibold tracking-wide uppercase">Pins</p>
