@@ -316,8 +316,10 @@ import { sampleGmailMessages } from "@/lib/demo-emails";
 import {
   companyAdminsForNotice,
   isOpenReturningClientStatus,
+  isReturningClientTask,
   returningClientNoticeKind,
   returningClientSms,
+  returningClientTaskAssignees,
   returningClientTaskTitle,
   returningClientWhen,
   type ReturningClientMatch,
@@ -4221,11 +4223,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         when: returningClientWhen(input.previous),
       });
       const title = returningClientTaskTitle(kind, contactName);
-      const audience =
+      const smsAudience =
         kind === "pending"
           ? companyAdminsForNotice(state.staff, [openerId, input.previous.previousStaffId].filter(Boolean))
           : state.staff.filter((member) => member.id === input.previous.previousStaffId && !member.locked);
-      for (const member of audience) {
+      for (const member of returningClientTaskAssignees(kind, state.staff, input.previous.previousStaffId)) {
         try {
           await addTask({
             title,
@@ -4237,6 +4239,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         } catch {
           // Local book or missing tasks table — notice still stands.
         }
+      }
+      for (const member of smsAudience) {
         await notifyStaffByText(member, sms);
       }
     },
@@ -4377,27 +4381,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             completedAt: notice.completedAt,
           }),
         });
-        const title = returningClientTaskTitle("pending", contactName);
         const audience = companyAdminsForNotice(state.staff, [actor.id, notice.previousStaffId].filter(Boolean));
         for (const member of audience) {
-          try {
-            await addTask({
-              title,
-              dueAt: localYmd(new Date()),
-              relatedType: "opportunity",
-              relatedId: notice.opportunityId,
-              assignee: member.name,
-            });
-          } catch {
-            // Notice still stands.
-          }
           await notifyStaffByText(member, sms);
         }
+      }
+      for (const task of state.tasks) {
+        if (task.completed || task.relatedId !== notice.opportunityId || !isReturningClientTask(task)) continue;
+        await updateTask(task.id, { completed: true });
       }
     },
     [
       addActivity,
-      addTask,
       assignOpportunityOwner,
       effectiveStaff,
       notifyStaffByText,
@@ -4405,6 +4400,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       state.jobs,
       state.returningClientLeads,
       state.staff,
+      state.tasks,
+      updateTask,
       viewer,
     ],
   );

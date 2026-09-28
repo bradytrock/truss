@@ -226,6 +226,29 @@ export function companyAdminsForNotice(staff: StaffMember[], exceptIds: string[]
   return filtered.length ? filtered : unlocked;
 }
 
+/**
+ * A task goes only to the previous project manager when they still need to act.
+ * A pending decision stays on Home for company admins — one task per admin was
+ * assigning the same lead to people who had nothing to do with it.
+ */
+export function returningClientTaskAssignees(
+  kind: ReturningClientNoticeKind,
+  staff: StaffMember[],
+  previousStaffId: string,
+) {
+  if (kind === "pending") return [];
+  return staff.filter((member) => member.id === previousStaffId && !member.locked);
+}
+
+export function isReturningClientTask(task: { title?: string | null }) {
+  const title = task.title?.trim() ?? "";
+  return (
+    title.startsWith("Past client called back:") ||
+    title.startsWith("Take or decline returning-client lead:") ||
+    title.startsWith("Decide returning-client lead:")
+  );
+}
+
 export function returningClientSms(
   kind: ReturningClientNoticeKind,
   input: {

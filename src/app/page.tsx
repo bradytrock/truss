@@ -181,7 +181,7 @@ export default function HomePage() {
     stats.pipelineValue,
   ]);
 
-  const upcomingTasks = sortTasks(filterTasks(crm.tasks, "open", crm.effectiveStaff?.name || crm.user.name || "")).slice(
+  const upcomingTasks = sortTasks(filterTasks(crm.tasks, "mine", crm.effectiveStaff?.name || crm.user.name || "")).slice(
     0,
     8,
   );
