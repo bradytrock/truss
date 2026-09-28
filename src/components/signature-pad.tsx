@@ -16,9 +16,9 @@ import { Label } from "@/components/ui/label";
 import { parseEstimateSignature } from "@/lib/estimate-signature";
 import { ESIGN_CONSENT_TEXT } from "@/lib/estimate-signature-audit";
 import {
-  DESKTOP_TYPE_SIGNATURE_QUERY,
   TYPED_SIGNATURE_MAX_CHARS,
   normalizeTypedSignature,
+  readDesktopCanTypeSignature,
   renderTypedSignaturePng,
 } from "@/lib/typed-signature";
 import { cn } from "@/lib/utils";
@@ -167,11 +167,18 @@ export function SignaturePad({
 function useDesktopCanTypeSignature() {
   const [canType, setCanType] = useState(false);
   useEffect(() => {
-    const media = window.matchMedia(DESKTOP_TYPE_SIGNATURE_QUERY);
-    const apply = () => setCanType(media.matches);
+    const queries = [
+      "(any-pointer: fine), (pointer: fine)",
+      "(any-hover: hover), (hover: hover)",
+      "(pointer: coarse)",
+      "(min-width: 1024px)",
+    ].map((query) => window.matchMedia(query));
+    const apply = () => setCanType(readDesktopCanTypeSignature());
     apply();
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
+    for (const media of queries) media.addEventListener("change", apply);
+    return () => {
+      for (const media of queries) media.removeEventListener("change", apply);
+    };
   }, []);
   return canType;
 }

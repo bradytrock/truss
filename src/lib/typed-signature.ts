@@ -1,9 +1,29 @@
 /** Matches SIGNATURE_MAX_CHARS in estimate-signature.ts. A typed mark is stored as the same PNG. */
 export const TYPED_SIGNATURE_PNG_MAX = 180_000;
 
-/** Mouse and trackpad computers. Phones and tablets stay on the drawing pad. */
-export const DESKTOP_TYPE_SIGNATURE_QUERY =
-  "(hover: hover) and (pointer: fine) and (min-width: 1024px)";
+/** A computer with a mouse, trackpad, or keyboard. Phones and tablets stay on the drawing pad. */
+export function desktopCanTypeSignature(input: {
+  finePointer: boolean;
+  hover: boolean;
+  coarsePointer: boolean;
+  wide: boolean;
+  touchPoints: number;
+}) {
+  if (input.coarsePointer && !input.finePointer) return false;
+  if (input.finePointer || input.hover) return true;
+  return input.wide && input.touchPoints === 0 && !input.coarsePointer;
+}
+
+export function readDesktopCanTypeSignature() {
+  if (typeof window === "undefined") return false;
+  return desktopCanTypeSignature({
+    finePointer: window.matchMedia("(any-pointer: fine), (pointer: fine)").matches,
+    hover: window.matchMedia("(any-hover: hover), (hover: hover)").matches,
+    coarsePointer: window.matchMedia("(pointer: coarse)").matches,
+    wide: window.matchMedia("(min-width: 1024px)").matches,
+    touchPoints: navigator.maxTouchPoints || 0,
+  });
+}
 
 export const TYPED_SIGNATURE_MAX_CHARS = 80;
 
