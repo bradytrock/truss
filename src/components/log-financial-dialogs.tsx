@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useId, useState, type FormEvent } from "react";
 import { Camera, LoaderCircle, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCrm } from "@/lib/crm-store";
 import { localYmd } from "@/lib/format";
 import { compressReceipt, isReceiptPhoto } from "@/lib/job-financials";
+import { isPdfFile } from "@/lib/job-files";
 import { costCenterLabel } from "@/lib/job-record";
 import { invoiceBalance } from "@/lib/money";
 import { matchVendorName, vendorChoices } from "@/lib/qb-vendors";
@@ -69,53 +70,68 @@ function extractError(result: Record<string, unknown>) {
 
 function ReceiptFields({
   previewUrl,
+  fileName,
   onFile,
 }: {
   previewUrl: string;
+  fileName?: string;
   onFile: (file: File, dataUrl: string) => void;
 }) {
+  const inputId = useId();
+  const showingPdf = fileName
+    ? isPdfFile({ name: fileName, type: "" })
+    : previewUrl.startsWith("data:application/pdf");
+
   async function handle(file: File | undefined) {
     if (!file) return;
-    if (!isReceiptPhoto(file) && file.type !== "application/pdf") {
-      toast.error("Use a photo of the receipt.");
+    if (!isReceiptPhoto(file) && !isPdfFile(file)) {
+      toast.error("Use a photo or PDF of the receipt.");
       return;
     }
+    const receipt =
+      isPdfFile(file) && file.type !== "application/pdf"
+        ? new File([file], file.name, { type: "application/pdf", lastModified: file.lastModified })
+        : file;
     try {
-      const next = await compressReceipt(file);
+      const next = await compressReceipt(receipt);
       onFile(next.file, next.dataUrl);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not open that photo.");
+      toast.error(error instanceof Error ? error.message : "Could not open that file.");
     }
   }
 
   return (
     <div className="grid gap-2">
-      <Label>Receipt photo</Label>
+      <Label htmlFor={inputId}>Receipt</Label>
       <p className="text-xs text-muted-foreground">
-        Required. Camera or library. The image stays on the record.
+        Required. A photo or a PDF. It stays on the record.
       </p>
       {previewUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={previewUrl} alt="Receipt" className="max-h-48 w-full border object-contain bg-muted" />
+        showingPdf ? (
+          <div className="flex h-32 flex-col items-center justify-center gap-1 border bg-muted px-3 text-sm">
+            <span className="font-medium">PDF attached</span>
+            {fileName ? (
+              <span className="max-w-full truncate text-xs text-muted-foreground">{fileName}</span>
+            ) : null}
+          </div>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={previewUrl} alt="Receipt" className="max-h-48 w-full border object-contain bg-muted" />
+        )
       ) : (
         <div className="flex h-32 items-center justify-center border border-dashed text-sm text-muted-foreground">
-          No photo yet
+          No receipt yet
         </div>
       )}
-      <div className="grid gap-2 sm:grid-cols-2">
-        <Input
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={(event) => void handle(event.target.files?.[0])}
-        />
-        <Input
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
-          onChange={(event) => void handle(event.target.files?.[0])}
-        />
-      </div>
-      <p className="text-[11px] text-muted-foreground">First field opens the camera on a phone. Second is the library.</p>
+      <Input
+        id={inputId}
+        type="file"
+        accept="image/*,application/pdf,.pdf"
+        onChange={(event) => void handle(event.target.files?.[0])}
+      />
+      <p className="text-[11px] text-muted-foreground">
+        Photo or PDF. On a phone, take a picture or choose a file.
+      </p>
     </div>
   );
 }
@@ -197,7 +213,7 @@ export function LogExpenseDialog({
     event.preventDefault();
     const value = Number(amount);
     if (!file && !preview) {
-      toast.error("Photograph the receipt.");
+      toast.error("Add a photo or PDF of the receipt.");
       return;
     }
     const assignedJobId = defaultJobId || jobId;
@@ -233,12 +249,13 @@ export function LogExpenseDialog({
           <DialogDescription>
             Same idea as a QuickBooks check or credit-card expense: vendor, account, job, and the
             receipt. Job costs post onto Customer:Job. Office and insurance can stay on the company.
-            The photo is required even if you type the numbers.
+            The receipt is required even if you type the numbers.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="grid gap-3">
           <ReceiptFields
             previewUrl={preview}
+            fileName={file?.name}
             onFile={(nextFile, dataUrl) => {
               setFile(nextFile);
               setPreview(dataUrl);
@@ -502,7 +519,7 @@ export function LogPaymentDialog({
       return;
     }
     if (!file && !preview) {
-      toast.error("Photograph the check, remit, or deposit slip.");
+      toast.error("Add a photo or PDF of the check, remit, or deposit slip.");
       return;
     }
     setPending(true);
@@ -536,6 +553,7 @@ export function LogPaymentDialog({
         <form onSubmit={onSubmit} className="grid gap-3">
           <ReceiptFields
             previewUrl={preview}
+            fileName={file?.name}
             onFile={(nextFile, dataUrl) => {
               setFile(nextFile);
               setPreview(dataUrl);
