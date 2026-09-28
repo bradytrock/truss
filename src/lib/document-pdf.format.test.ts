@@ -144,17 +144,20 @@ async function main() {
   assert.match(estimateText, /TOTAL/);
   assert.match(estimateText, /AUTHORIZATION/);
   assert.doesNotMatch(estimateText, /Margin/);
+  assert.doesNotMatch(estimateText, /\bLS\b/);
 
   const markedUp = await textFromPdf(
     await buildEstimatePdf({
       estimate: { ...estimate, marginPercent: 20 },
-      lines: [{ ...lines[0]!, unitCost: 1000, title: "Tear-off" }],
+      lines: [{ ...lines[0]!, unitCost: 1000, title: "Tear-off", unit: "sq" }],
       company,
       customer: "Shawn Gregory",
     }),
   );
   assert.doesNotMatch(markedUp, /Margin/);
   assert.match(markedUp, /\$1,200\.00/);
+  assert.match(markedUp, /\bsq\b/);
+  assert.doesNotMatch(markedUp, /\bLS\b/);
 
   const gbbText = await textFromPdf(
     await buildEstimatePdf({
@@ -195,6 +198,7 @@ async function main() {
   assert.match(invoiceText, /Roofing System/);
   assert.match(invoiceText, /TAMKO Heritage/);
   assert.match(invoiceText, /Tear-off to the decking/);
+  assert.doesNotMatch(invoiceText, /\bLS\b/);
 
   const legalTerms = [
     "1. Contract price",

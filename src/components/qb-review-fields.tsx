@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useCrm } from "@/lib/crm-store";
 import { crmExpenseActors, expenseLoggedByLabel } from "@/lib/accounting-books";
 import { formatDate, formatMoney } from "@/lib/format";
+import { quantityUnitLabel } from "@/lib/line-format";
 import { costCenterLabel } from "@/lib/job-record";
 import { lineAmount } from "@/lib/money";
 import { isReceiptPdf, type QbReviewItem } from "@/lib/qb-review";
@@ -224,7 +225,7 @@ function InvoiceFields({ invoiceId, locked }: { invoiceId: string; locked: boole
               }}
             />
             <p className="text-xs text-muted-foreground sm:col-span-3">
-              {line.quantity} {line.unit} · {formatMoney(lineAmount(line))}
+              {quantityUnitLabel(line.quantity, line.unit)} · {formatMoney(lineAmount(line))}
             </p>
           </div>
         ))}

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { useCrm } from "@/lib/crm-store";
 import { formatDate } from "@/lib/format";
+import { quantityUnitLabel } from "@/lib/line-format";
 import { DEFAULT_QB_BANK, DEFAULT_QB_CC, DEFAULT_QB_ITEM, workFromBook } from "@/lib/qbwc/work";
 import { qbwcFile } from "@/lib/qbwc/soap";
 import { requestForStep, STEP_LABELS, INVOICE_PREVIEW_STEPS } from "@/lib/qbwc/steps";
@@ -457,7 +458,7 @@ function QbPreviewDialog({
               {preview.work.lines.map((line, index) => (
                 <li key={`${line.description}-${index}`} className="flex justify-between gap-3">
                   <span className="min-w-0 truncate">
-                    {line.quantity} {line.unit} · {line.description}
+                    {quantityUnitLabel(line.quantity, line.unit)} · {line.description}
                   </span>
                   <span className="shrink-0 tabular-nums">{line.unitCost.toFixed(2)}</span>
                 </li>

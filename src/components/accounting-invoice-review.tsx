@@ -21,6 +21,7 @@ import {
   type InvoiceReviewStatus,
 } from "@/lib/accounting-books";
 import { formatMoney } from "@/lib/format";
+import { quantityUnitLabel } from "@/lib/line-format";
 import { invoiceTotal, lineAmount } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import type { Invoice } from "@/lib/types";
@@ -274,7 +275,7 @@ export function AccountingInvoiceReview({
                         <td className="py-2">
                           {line.description || "Line"}
                           <div className="text-xs text-[#86827b]">
-                            {line.quantity} {line.unit} · {formatMoney(line.unitCost)}
+                            {quantityUnitLabel(line.quantity, line.unit)} · {formatMoney(line.unitCost)}
                           </div>
                         </td>
                         <td className="py-2 text-right tabular-nums">{formatMoney(lineAmount(line))}</td>

@@ -285,6 +285,22 @@ function formatProposalQuantity(value: number) {
   return String(value);
 }
 
+/** Lump sum is an internal unit. Customers should not see "LS" on an estimate or invoice. */
+export function isLumpSumUnit(unit: string | null | undefined) {
+  const value = String(unit ?? "").trim();
+  return /^l\s*\.?\s*s\.?$/i.test(value) || /^lump\s*sum$/i.test(value);
+}
+
+export function customerUnitLabel(unit: string | null | undefined) {
+  const value = String(unit ?? "").trim();
+  return isLumpSumUnit(value) ? "" : value;
+}
+
+export function quantityUnitLabel(quantity: number, unit: string | null | undefined) {
+  const qty = Number.isFinite(quantity) ? String(quantity) : "";
+  return [qty, customerUnitLabel(unit)].filter(Boolean).join(" ");
+}
+
 /** Client-facing line label: "Architectural shingles · 32 sq". Drops 1 LS / 1 EA. */
 export function proposalLineSummary(line: {
   title?: string | null;
@@ -294,9 +310,10 @@ export function proposalLineSummary(line: {
 }) {
   const title = lineHeading(line);
   const qty = Number(line.quantity);
-  const unit = String(line.unit ?? "").trim();
+  const rawUnit = String(line.unit ?? "").trim();
+  const unit = customerUnitLabel(rawUnit);
   if (!Number.isFinite(qty) || qty <= 0) return title;
-  const lump = qty === 1 && /^(ls|ea)$/i.test(unit);
+  const lump = qty === 1 && (isLumpSumUnit(rawUnit) || /^ea$/i.test(unit));
   if (lump) return title;
   const qtyLabel = formatProposalQuantity(qty);
   return unit ? `${title} · ${qtyLabel} ${unit}` : `${title} · ${qtyLabel}`;

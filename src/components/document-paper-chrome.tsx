@@ -12,6 +12,7 @@ import {
   type PaperKind,
   type PaperMetaItem,
 } from "@/lib/document-paper";
+import { customerUnitLabel } from "@/lib/line-format";
 import { cn } from "@/lib/utils";
 import type { CompanySettings } from "@/lib/types";
 
@@ -197,7 +198,7 @@ export function PaperTableRow({
         {extra}
       </div>
       <p className="pt-0.5 text-right text-sm tabular-nums">{qty}</p>
-      <p className="pt-0.5 text-right text-sm">{unit}</p>
+      <p className="pt-0.5 text-right text-sm">{customerUnitLabel(unit)}</p>
       {hidePrices ? null : (
         <>
           <p className="pt-0.5 text-right text-sm tabular-nums">{rate}</p>
