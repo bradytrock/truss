@@ -25,7 +25,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newPortalToken, portalInviteExpiry, portalUrl } from "@/lib/portal";
@@ -165,6 +165,7 @@ import {
   mapOpportunity,
   mapPayment,
   mapExpense,
+  mapForecastedExpense,
   expensePatch,
   mapMaterialOrder,
   mapMaterialOrderLine,
@@ -245,6 +246,7 @@ import {
   type TrainingProgress,
   type Expense,
   type ExpenseAccount,
+  type ForecastedExpense,
   type ExpenseMethod,
   type MaterialOrder,
   type MaterialOrderLine,
@@ -384,6 +386,7 @@ const emptyState: CrmState = {
   companyFiles: [],
   photoReports: [],
   expenses: [],
+  forecastedExpenses: [],
   materialOrders: [],
   materialOrderLines: [],
   materialOrderTemplates: [],
@@ -716,6 +719,7 @@ async function pruneDuplicateLeadJobs(supabase: ReturnType<typeof createClient>,
         "invoices",
         "payments",
         "expenses",
+        "forecasted_expenses",
         "schedule_events",
         "job_photos",
         "job_files",
@@ -1182,6 +1186,15 @@ type CrmContextValue = CrmState & {
     file?: File;
     extractedByAi?: boolean;
   }) => Promise<Expense | null>;
+  addForecastedExpense: (input: {
+    jobId: string;
+    vendor: string;
+    account: ExpenseAccount;
+    amount: number;
+    expectedAt: string;
+    memo: string;
+  }) => Promise<ForecastedExpense | null>;
+  removeForecastedExpense: (id: string) => Promise<boolean>;
   addMaterialOrder: (input: {
     jobId: string;
     vendor?: string;
@@ -7533,6 +7546,168 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [addActivity, recordCompanyAudit, state.expenses, user.companyId, user.id, user.name, user.staffId],
   );
 
+  const addForecastedExpense = useCallback(
+    async (input: {
+      jobId: string;
+      vendor: string;
+      account: ExpenseAccount;
+      amount: number;
+      expectedAt: string;
+      memo: string;
+    }) => {
+      if (!input.jobId) {
+        toast.error("Pick the job. A forecasted expense stays on that job’s financials.");
+        return null;
+      }
+      if (!input.amount || input.amount <= 0) {
+        toast.error("Enter an amount.");
+        return null;
+      }
+      if (!input.vendor.trim()) {
+        toast.error("Enter the vendor.");
+        return null;
+      }
+      const forecast: ForecastedExpense = {
+        id: crypto.randomUUID(),
+        number: nextNumber("FEST", (state.forecastedExpenses ?? []).map((item) => item.number)),
+        jobId: input.jobId,
+        vendor: input.vendor.trim(),
+        account: input.account,
+        amount: input.amount,
+        expectedAt: input.expectedAt,
+        memo: input.memo.trim(),
+        createdAt: new Date().toISOString(),
+        createdBy: user.name,
+      };
+      const money = forecast.amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
+      const note = `Forecasted estimate ${forecast.number} · ${forecast.vendor} · ${money}.`;
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({
+          ...prev,
+          forecastedExpenses: [forecast, ...(prev.forecastedExpenses ?? [])],
+        }));
+        await addActivity({
+          entityType: "job",
+          entityId: forecast.jobId ?? input.jobId,
+          type: "note",
+          body: note,
+        });
+        toast.success(`${forecast.number} saved as a forecasted estimate.`);
+        return forecast;
+      }
+      const payload = {
+        id: forecast.id,
+        company_id: user.companyId,
+        number: forecast.number,
+        job_id: forecast.jobId,
+        vendor: forecast.vendor,
+        account: forecast.account,
+        amount: forecast.amount,
+        expected_at: forecast.expectedAt,
+        memo: forecast.memo,
+        created_by: forecast.createdBy,
+      };
+      let { data: savedRow, error: saveError } = await supabase
+        .from("forecasted_expenses")
+        .insert(payload)
+        .select("*")
+        .single();
+      const uuidRetry = withCreatedByRetry(payload, user, saveError);
+      if (uuidRetry) {
+        const retry = await supabase.from("forecasted_expenses").insert(uuidRetry).select("*").single();
+        savedRow = retry.data;
+        saveError = retry.error;
+      }
+      if (saveError || !savedRow) {
+        if (saveError && isMissingForecastedExpenses(saveError)) {
+          toast.message(missingForecastedExpensesMessage());
+          setState((prev) => ({
+            ...prev,
+            forecastedExpenses: [forecast, ...(prev.forecastedExpenses ?? [])],
+          }));
+          await addActivity({
+            entityType: "job",
+            entityId: input.jobId,
+            type: "note",
+            body: note,
+          });
+          return forecast;
+        }
+        toast.error(saveError?.message ?? "Could not save the forecasted expense.");
+        return null;
+      }
+      const saved = { ...mapForecastedExpense(savedRow), createdBy: user.name };
+      setState((prev) => ({
+        ...prev,
+        forecastedExpenses: [saved, ...(prev.forecastedExpenses ?? [])],
+      }));
+      if (saved.jobId) {
+        await addActivity({
+          entityType: "job",
+          entityId: saved.jobId,
+          type: "note",
+          body: `Forecasted estimate ${saved.number} · ${saved.vendor} · ${saved.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })}.`,
+        });
+      }
+      toast.success(`${saved.number} saved as a forecasted estimate.`);
+      void recordCompanyAudit({
+        entityType: "forecasted_expense",
+        entityId: saved.id,
+        action: "created",
+        after: saved,
+        label: saved.number || saved.vendor,
+        detail: `${saved.number} · ${saved.vendor}`,
+        relatedJobId: saved.jobId,
+      });
+      return saved;
+    },
+    [addActivity, recordCompanyAudit, state.forecastedExpenses, user.companyId, user.id, user.name, user.staffId],
+  );
+
+  const removeForecastedExpense = useCallback(
+    async (id: string) => {
+      const current = (state.forecastedExpenses ?? []).find((item) => item.id === id);
+      if (!current) return false;
+      setState((prev) => ({
+        ...prev,
+        forecastedExpenses: (prev.forecastedExpenses ?? []).filter((item) => item.id !== id),
+      }));
+      const supabase = maybeClient();
+      if (supabase) {
+        const { error } = await supabase.from("forecasted_expenses").delete().eq("id", id);
+        if (error && !isMissingForecastedExpenses(error)) {
+          setState((prev) => ({
+            ...prev,
+            forecastedExpenses: [current, ...(prev.forecastedExpenses ?? [])],
+          }));
+          toast.error(error.message);
+          return false;
+        }
+      }
+      if (current.jobId) {
+        await addActivity({
+          entityType: "job",
+          entityId: current.jobId,
+          type: "note",
+          body: `Removed forecasted estimate ${current.number} · ${current.vendor}.`,
+        });
+      }
+      toast.success(`${current.number} removed.`);
+      void recordCompanyAudit({
+        entityType: "forecasted_expense",
+        entityId: current.id,
+        action: "deleted",
+        before: current,
+        label: current.number || current.vendor,
+        detail: `Removed ${current.number}`,
+        relatedJobId: current.jobId,
+      });
+      return true;
+    },
+    [addActivity, recordCompanyAudit, state.forecastedExpenses],
+  );
+
   const addMaterialOrder = useCallback(
     async (input: {
       jobId: string;
@@ -12715,6 +12890,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       voidInvoice,
       recordPayment,
       addExpense,
+      addForecastedExpense,
+      removeForecastedExpense,
       addMaterialOrder,
       updateMaterialOrder,
       addMaterialOrderLineFromCatalog,
@@ -12903,6 +13080,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       voidInvoice,
       recordPayment,
       addExpense,
+      addForecastedExpense,
+      removeForecastedExpense,
       addMaterialOrder,
       updateMaterialOrder,
       addMaterialOrderLineFromCatalog,

@@ -25,6 +25,7 @@ import {
   mapOpportunity,
   mapPayment,
   mapExpense,
+  mapForecastedExpense,
   mapQbVendor,
   mapVendorFeedback,
   mapVendorPrice,
@@ -114,6 +115,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     photoAuditRes,
     companyAuditRes,
     expensesRes,
+    forecastedExpensesRes,
     qbVendorsRes,
     vendorProfilesRes,
     vendorFeedbackRes,
@@ -187,6 +189,11 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       .order("created_at", { ascending: false })
       .limit(2000),
     supabase.from("expenses").select("*").eq("company_id", companyId).order("incurred_at", { ascending: false }),
+    supabase
+      .from("forecasted_expenses")
+      .select("*")
+      .eq("company_id", companyId)
+      .order("expected_at", { ascending: false }),
     supabase.from("qb_vendors").select("*").eq("company_id", companyId).order("name"),
     supabase.from("vendor_profiles").select("*").eq("company_id", companyId).order("name"),
     supabase
@@ -306,6 +313,9 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     invoiceLines: invoiceLinesRes.error ? [] : mapRows(invoiceLinesRes.data, mapInvoiceLine),
     payments: paymentsRes.error ? [] : mapRows(paymentsRes.data, mapPayment),
     expenses: expensesRes.error ? [] : (expensesRes.data ?? []).map(mapExpense),
+    forecastedExpenses: forecastedExpensesRes.error
+      ? []
+      : (forecastedExpensesRes.data ?? []).map(mapForecastedExpense),
     qbVendors: qbVendorsRes.error ? [] : (qbVendorsRes.data ?? []).map(mapQbVendor),
     vendorProfiles: vendorProfilesRes.error ? [] : (vendorProfilesRes.data ?? []).map(mapVendorProfile),
     vendorFeedback: vendorFeedbackRes.error ? [] : (vendorFeedbackRes.data ?? []).map(mapVendorFeedback),

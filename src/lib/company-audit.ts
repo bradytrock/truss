@@ -13,6 +13,7 @@ export const COMPANY_AUDIT_ENTITY_LABELS: Record<CompanyAuditEntityType, string>
   company_file: "Company file",
   payment: "Payment",
   expense: "Expense",
+  forecasted_expense: "Forecasted expense",
   task: "Task",
   schedule_event: "Calendar event",
   message: "Message",
@@ -188,6 +189,7 @@ export function parseCompanyAuditEntityType(value: unknown): CompanyAuditEntityT
     case "company_file":
     case "payment":
     case "expense":
+    case "forecasted_expense":
     case "task":
     case "schedule_event":
     case "message":

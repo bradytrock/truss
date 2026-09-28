@@ -46,7 +46,7 @@ import {
   CreateInvoiceDialog,
 } from "@/components/create-ops-dialogs";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
-import { LogExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
+import { LogExpenseDialog, LogForecastedExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
 import { canViewReports, canManageSettings, canManageAutomations, canViewAccounting } from "@/lib/visibility";
 import { groupLoginAsTargets, readLoginAsRecent, recentLoginAsTargets, rememberLoginAsRecent } from "@/lib/login-as";
 import { isInboxPath } from "@/lib/inbox";
@@ -156,7 +156,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const startEstimate = startEstimateFlow.prompt;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [create, setCreate] = useState<
-    "opportunity" | "client" | "invoice" | "event" | "expense" | "payment" | "task" | null
+    "opportunity" | "client" | "invoice" | "event" | "expense" | "forecast" | "payment" | "task" | null
   >(null);
 
   const launcherApps = appLauncherItems();
@@ -169,10 +169,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         <DropdownMenuItem onClick={() => setCreate("task")}>New task</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => setCreate("expense")}>Log expense</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setCreate("forecast")}>Log forecasted expense</DropdownMenuItem>
       </>
     ) : (
       <>
         <DropdownMenuItem onClick={() => setCreate("expense")}>Log expense</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setCreate("forecast")}>Log forecasted expense</DropdownMenuItem>
         <DropdownMenuItem onClick={() => setCreate("payment")}>Log payment</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => setCreate("opportunity")}>New lead</DropdownMenuItem>
@@ -297,6 +299,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       <LogExpenseDialog
         open={create === "expense"}
         onOpenChange={(open) => setCreate(open ? "expense" : null)}
+      />
+      <LogForecastedExpenseDialog
+        key={create === "forecast" ? "forecast-open" : "forecast-closed"}
+        open={create === "forecast"}
+        onOpenChange={(open) => setCreate(open ? "forecast" : null)}
       />
       <LogPaymentDialog
         open={create === "payment"}

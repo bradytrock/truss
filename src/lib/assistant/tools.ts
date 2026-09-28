@@ -338,6 +338,38 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
     ),
   },
   {
+    name: "log_forecasted_expense",
+    description:
+      "Log a forecasted estimate of a job cost that has not been incurred yet. It shows under Forecasted expenses on the job financials and rolls into the projected column. No receipt. It does not post to QuickBooks. Amount is dollars. The job is required.",
+    status: "Logging the forecasted expense…",
+    gate: "any",
+    parameters: object(
+      {
+        job: str("Job id or code. Required."),
+        vendor: str("Vendor you expect to pay"),
+        amount: num("Expected amount in dollars"),
+        account: {
+          type: "string",
+          enum: [
+            "materials",
+            "subcontractors",
+            "equipment_rental",
+            "dumpsters",
+            "permits",
+            "labor",
+            "fuel",
+            "office",
+            "insurance",
+            "other",
+          ],
+        },
+        date: str("Expected date YYYY-MM-DD. Default today."),
+        memo: str("What the cost is for"),
+      },
+      ["job", "vendor", "amount"],
+    ),
+  },
+  {
     name: "log_payment",
     description: "Record a payment against an invoice or job. Confirm with the user unless a check photo was just attached.",
     status: "Recording the payment…",
