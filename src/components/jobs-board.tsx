@@ -254,7 +254,7 @@ function JobColumn({
         <div className="flex items-center gap-1.5">
           <span className={cn("size-1.5 rounded-full", columnAccent[column])} />
           <h2 className="min-w-0 truncate text-sm font-medium">{WORK_COLUMN_LABELS[column]}</h2>
-          <span className="ml-auto text-xs tabular-nums text-muted-foreground">{count}</span>
+          <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">{count}</span>
         </div>
         <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
           {count === 0
