@@ -91,6 +91,8 @@ import {
   mintEstimateSignerTokens,
   nextEstimateSignature,
   resolveProjectOwner,
+  signatureFieldsForRole,
+  signingRoleForName,
   type HomeownerSigner,
 } from "@/lib/estimate-signers";
 import {
@@ -1043,7 +1045,7 @@ type CrmContextValue = CrmState & {
     id: string,
     signature?: { name: string; image: string },
     signer?: HomeownerSigner,
-  ) => Promise<void>;
+  ) => Promise<Estimate["status"] | null>;
   declineEstimate: (id: string) => Promise<void>;
   reopenEstimate: (id: string) => Promise<void>;
   markEstimateViewed: (id: string) => Promise<void>;
@@ -4977,31 +4979,39 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       signer: HomeownerSigner = "primary",
     ) => {
       const current = state.estimates.find((estimate) => estimate.id === id);
-      if (!current) return;
-      const role: HomeownerSigner =
-        signer === "second" && estimateNeedsSecondSignature(current) ? "second" : "primary";
+      if (!current) return null;
+      const primaryContact = current.contactId
+        ? state.contacts.find((contact) => contact.id === current.contactId)
+        : undefined;
+      const secondContact = current.secondContactId
+        ? state.contacts.find((contact) => contact.id === current.secondContactId)
+        : undefined;
+      const signatureName =
+        signature?.name.trim() ||
+        (signer === "second" ? current.secondSignatureName : current.signatureName);
+      const signatureImage =
+        signature?.image || (signer === "second" ? current.secondSignatureImage : current.signatureImage);
+      const role = signingRoleForName(current, signer, signatureName, {
+        primary: primaryContact?.name,
+        second: secondContact?.name,
+      });
       const now = new Date().toISOString();
       const next = nextEstimateSignature(current, role, now);
-      const signatureName = signature?.name.trim() || (role === "second" ? current.secondSignatureName : current.signatureName);
-      const signatureImage = signature?.image || (role === "second" ? current.secondSignatureImage : current.signatureImage);
+      const signedFields = signatureFieldsForRole(current, {
+        role,
+        name: signatureName,
+        image: signatureImage,
+        secondName: secondContact?.name,
+      });
       const terms = liveEstimateTerms({
         estimate: current,
         companyDefault: companyEstimateTermsFor(companySettings, current.contractTypeId),
       });
-      const patch =
-        role === "second"
-          ? {
-              ...next,
-              secondSignatureName: signatureName,
-              secondSignatureImage: signatureImage,
-              terms,
-            }
-          : {
-              ...next,
-              signatureName,
-              signatureImage,
-              terms,
-            };
+      const patch = {
+        ...next,
+        ...signedFields,
+        terms,
+      };
       const apply = () =>
         setState((prev) => ({
           ...prev,
@@ -5015,7 +5025,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         if (error && isMissingSignerLinks(error) && role === "second") {
           apply();
           toast.message(missingSignerLinksMessage());
-          return;
+          return patch.status ?? current.status;
         }
         if (error && isMissingSignatureColumn(error)) {
           const retry = await supabase
@@ -5030,7 +5040,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
         if (error) {
           toast.error(isAmbiguousSignJobId(error) ? ambiguousSignJobIdMessage() : error.message);
-          return;
+          return null;
         }
       }
       apply();
@@ -5046,16 +5056,42 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         relatedOpportunityId: current.opportunityId,
       });
       if (signature?.name) {
-        void recordEstimateSignatureEvent({
-          estimateId: id,
-          kind: "signed",
-          signerRole: role,
-          contactId: role === "second" ? current.secondContactId : current.contactId,
-          signerName: signatureName,
-          token: role === "second" ? current.secondShareToken : current.shareToken,
-          consented: true,
-          capturedInOffice: true,
-        });
+        const events =
+          role === "both"
+            ? [
+                {
+                  signerRole: "primary" as const,
+                  contactId: current.contactId,
+                  signerName: signedFields.signatureName || signatureName,
+                  token: current.shareToken,
+                },
+                {
+                  signerRole: "second" as const,
+                  contactId: current.secondContactId,
+                  signerName: signedFields.secondSignatureName || secondContact?.name || signatureName,
+                  token: current.secondShareToken,
+                },
+              ]
+            : [
+                {
+                  signerRole: role,
+                  contactId: role === "second" ? current.secondContactId : current.contactId,
+                  signerName: signatureName,
+                  token: role === "second" ? current.secondShareToken : current.shareToken,
+                },
+              ];
+        for (const event of events) {
+          void recordEstimateSignatureEvent({
+            estimateId: id,
+            kind: "signed",
+            signerRole: event.signerRole,
+            contactId: event.contactId,
+            signerName: event.signerName,
+            token: event.token,
+            consented: true,
+            capturedInOffice: true,
+          });
+        }
       }
       const opportunityId = current.opportunityId || (await ensureLeadForEstimate(current));
       if (opportunityId && opportunityId !== current.opportunityId) {
@@ -5070,9 +5106,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             ? `${signatureName} signed proposal ${current.number}. Waiting on the other homeowner.`
             : `A homeowner signed proposal ${current.number}. Waiting on the other homeowner.`,
         });
-        return;
+        return next.status ?? current.status;
       }
-      if (current.status === "accepted" || next.status !== "accepted") return;
+      if (current.status === "accepted" || next.status !== "accepted") {
+        return next.status ?? current.status;
+      }
       const total = amountForEstimate(
         current,
         state.estimateLines,
@@ -5111,12 +5149,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             : `Proposal ${current.number} is signed. Job value updated from the signed estimate.`,
         });
       }
+      return "accepted";
     },
     [
       addActivity,
       companySettings.defaultEstimateTerms,
       ensureLeadForEstimate,
       moveOpportunity,
+      state.contacts,
       state.estimateLines,
       state.estimates,
       state.jobs,

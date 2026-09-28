@@ -21,6 +21,88 @@ export function primaryNameFromJoined(customer: string, second?: string | null) 
   return joined;
 }
 
+function normalizeSignerName(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** True when the printed name is both homeowners, e.g. "Jenn Whitby and Tom Whitby". */
+export function signatureCoversBothHomeowners(
+  printedName: string,
+  primaryName: string,
+  secondName?: string | null,
+) {
+  const primary = primaryName.trim();
+  const second = secondName?.trim() ?? "";
+  if (!primary || !second) return false;
+  if (normalizeSignerName(primary) === normalizeSignerName(second)) return false;
+  const printed = normalizeSignerName(printedName);
+  if (!printed) return false;
+  const forward = normalizeSignerName(joinCustomerNames(primary, second));
+  const reverse = normalizeSignerName(joinCustomerNames(second, primary));
+  return printed === forward || printed === reverse;
+}
+
+export function signingRoleForName(
+  estimate: Pick<Estimate, "secondContactId">,
+  requested: HomeownerSigner,
+  printedName: string,
+  names: { primary?: string | null; second?: string | null },
+): EstimateSigner {
+  if (
+    estimateNeedsSecondSignature(estimate) &&
+    signatureCoversBothHomeowners(printedName, names.primary ?? "", names.second)
+  ) {
+    return "both";
+  }
+  return requested === "second" && estimateNeedsSecondSignature(estimate) ? "second" : "primary";
+}
+
+export function signatureFieldsForRole(
+  estimate: Pick<
+    Estimate,
+    "signatureName" | "signatureImage" | "secondSignatureName" | "secondSignatureImage"
+  >,
+  input: {
+    role: EstimateSigner;
+    name: string;
+    image: string;
+    secondName?: string | null;
+  },
+): Pick<Estimate, "signatureName" | "signatureImage" | "secondSignatureName" | "secondSignatureImage"> {
+  if (input.role === "second") {
+    return {
+      signatureName: estimate.signatureName,
+      signatureImage: estimate.signatureImage,
+      secondSignatureName: input.name,
+      secondSignatureImage: input.image,
+    };
+  }
+  if (input.role !== "both") {
+    return {
+      signatureName: input.name,
+      signatureImage: input.image,
+      secondSignatureName: estimate.secondSignatureName,
+      secondSignatureImage: estimate.secondSignatureImage,
+    };
+  }
+  const secondPrinted = input.secondName?.trim() || input.name;
+  const keepPrimary = isSignaturePng(estimate.signatureImage);
+  const keepSecond = isSignaturePng(estimate.secondSignatureImage);
+  return {
+    signatureName: keepPrimary && estimate.signatureName.trim() ? estimate.signatureName : input.name,
+    signatureImage: keepPrimary ? estimate.signatureImage : input.image,
+    secondSignatureName:
+      keepSecond && estimate.secondSignatureName.trim() ? estimate.secondSignatureName : secondPrinted,
+    secondSignatureImage: keepSecond ? estimate.secondSignatureImage : input.image,
+  };
+}
+
 export function estimateNeedsSecondSignature(estimate: Pick<Estimate, "secondContactId">) {
   return Boolean(estimate.secondContactId);
 }

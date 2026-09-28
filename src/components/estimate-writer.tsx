@@ -1768,9 +1768,14 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         onSubmit={async ({ name, image }) => {
           setPending(true);
           try {
-            await crm.acceptEstimate(estimate.id, { name, image });
+            const status = await crm.acceptEstimate(estimate.id, { name, image });
+            if (!status) return;
             setSignOpen(false);
-            toast.success("Signed. The signature is on the estimate and the PDF.");
+            toast.success(
+              status === "accepted"
+                ? "Signed. The signature is on the estimate and the PDF."
+                : "Signature saved. This proposal is accepted once the other homeowner signs.",
+            );
           } finally {
             setPending(false);
           }
