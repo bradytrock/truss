@@ -1,10 +1,10 @@
 import { estimateTotals } from "@/lib/estimate-totals";
 import type { Estimate, EstimateLine, EstimateSignatureEvent, SignatureEventKind, SignatureEventRole } from "@/lib/types";
 
-export const ESIGN_CONSENT_VERSION = "2026-08-29";
+export const ESIGN_CONSENT_VERSION = "2026-09-28";
 
 export const ESIGN_CONSENT_TEXT =
-  "I agree to use electronic records and signatures. Drawing my signature and tapping Sign and approve is my legal signature on this proposal, the same as signing on paper.";
+  "I agree to use electronic records and signatures. Drawing or typing my signature and tapping Sign and approve is my legal signature on this proposal, the same as signing on paper.";
 
 export type { EstimateSignatureEvent, SignatureEventKind, SignatureEventRole };
 
