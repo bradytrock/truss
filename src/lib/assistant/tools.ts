@@ -100,7 +100,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   {
     name: "create_lead",
     description:
-      "Open a new lead: homeowner, job site, seed, and residential vs commercial. Creates the costing job. Reuse an existing contact when the phone, email, or unique partial phone already matches. If that person is a returning client with a previous project manager, you MUST ask the user whether to assign the lead to that PM, then retry with assignToPreviousPm true or false. Do not create the lead until they answer.",
+      "Open a new lead: homeowner, job site, seed, and residential vs commercial. Creates the costing job. Reuse an existing contact when the phone, email, or unique partial phone already matches. If that person is a returning client, create the job anyway. Company admins are notified that it came from the previous project manager's book. Set assignToPreviousPm true only when the user explicitly wants that project manager to own it.",
     status: "Opening a lead…",
     gate: "any",
     parameters: object(
@@ -135,7 +135,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
         notes: str("Anything the caller said"),
         referralContactId: str("Required when source is realtor or referral — id of the referral partner who sent them"),
         assignToPreviousPm: bool(
-          "Required when this person is a returning client: true assigns the lead to the previous project manager, false keeps it with you (they are asked first; company admins decide if they decline).",
+          "Optional. True assigns the lead to the previous project manager. Otherwise the job stays with you and company admins are notified.",
         ),
       },
       ["firstName", "lastName", "source"],

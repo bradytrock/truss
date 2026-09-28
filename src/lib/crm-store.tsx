@@ -317,8 +317,10 @@ import {
   companyAdminsForNotice,
   isOpenReturningClientStatus,
   isReturningClientTask,
+  returningClientBookNotice,
   returningClientNoticeKind,
   returningClientSms,
+  returningClientSmsAudience,
   returningClientTaskAssignees,
   returningClientTaskTitle,
   returningClientWhen,
@@ -4199,12 +4201,22 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         pending: input.previous.assignable
           ? `Company admins will confirm this assignment. ${pm} ran ${job}.`
           : `${pm} no longer has an unlocked seat. Company admins were notified.`,
+        notified: `Company admins were notified. ${returningClientBookNotice({
+          openerName,
+          previousStaffName: pm,
+          jobCode: input.previous.job?.code,
+        })}`,
       };
       toast.message(toastByKind[kind]);
       const activityByKind: Record<ReturningClientNoticeKind, string> = {
         assigned: `${openerName} assigned this returning-client lead to ${pm}, who ran ${job}. ${returningClientWhen(input.previous)}`,
         offered: `${openerName} opened this returning-client lead and kept another assignee. ${pm} was asked to take it. ${returningClientWhen(input.previous)}`,
         pending: `${openerName} opened this returning-client lead without assigning ${pm}. Company admins decide. ${returningClientWhen(input.previous)}`,
+        notified: `${returningClientBookNotice({
+          openerName,
+          previousStaffName: pm,
+          jobCode: input.previous.job?.code,
+        })} ${returningClientWhen(input.previous)}`,
       };
       await addActivity({
         entityType: "opportunity",
@@ -4223,10 +4235,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         when: returningClientWhen(input.previous),
       });
       const title = returningClientTaskTitle(kind, contactName);
-      const smsAudience =
-        kind === "pending"
-          ? companyAdminsForNotice(state.staff, [openerId, input.previous.previousStaffId].filter(Boolean))
-          : state.staff.filter((member) => member.id === input.previous.previousStaffId && !member.locked);
+      const smsAudience = returningClientSmsAudience(
+        kind,
+        state.staff,
+        input.previous.previousStaffId,
+        kind === "notified"
+          ? [openerId].filter(Boolean)
+          : [openerId, input.previous.previousStaffId].filter(Boolean),
+      );
       for (const member of returningClientTaskAssignees(kind, state.staff, input.previous.previousStaffId)) {
         try {
           await addTask({
@@ -4272,7 +4288,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           return;
         }
       } else if (decision === "dismiss") {
-        if (notice.status !== "assigned" || !isPm) {
+        if (notice.status === "notified") {
+          if (!isAdmin) {
+            toast.error("Only a company admin can dismiss this notice.");
+            return;
+          }
+        } else if (notice.status !== "assigned" || !isPm) {
           toast.error("Only that project manager can dismiss this notice.");
           return;
         }

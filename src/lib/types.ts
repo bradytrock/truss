@@ -1228,6 +1228,7 @@ export type ReturningClientLeadStatus =
   | "assigned"
   | "offered"
   | "pending"
+  | "notified"
   | "reassigned"
   | "kept"
   | "dismissed";

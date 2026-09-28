@@ -362,7 +362,7 @@ export default function HomePage() {
         return (
           <RelatedList
             title="Returning clients"
-            description="Past clients called back. The previous project manager is asked first."
+            description="When someone opens a job from another project manager's book, company admins are notified."
           >
               <ul className="divide-y divide-black/5 px-5 pb-2">
                 {returningNotices.map((notice) => {
@@ -379,7 +379,9 @@ export default function HomePage() {
                         {opportunity?.name && opportunity.code ? ` · ${opportunity.name}` : ""}
                       </Link>
                       <p className="mt-0.5 text-xs text-muted-foreground">
-                        {notice.status === "assigned"
+                        {notice.status === "notified"
+                          ? `${notice.openedByName} created a job from ${notice.previousStaffName || "another project manager"}'s book${jobBit}.`
+                          : notice.status === "assigned"
                           ? `${notice.openedByName} assigned this past client to you${jobBit}.${when}`
                           : notice.status === "offered"
                             ? `${notice.openedByName} opened this lead and did not assign it to you. You ran the last job${jobBit}.${when}`
@@ -403,7 +405,7 @@ export default function HomePage() {
                             </Button>
                           </>
                         ) : null}
-                        {notice.status === "assigned" ? (
+                        {notice.status === "assigned" || notice.status === "notified" ? (
                           <Button
                             size="sm"
                             variant="outline"

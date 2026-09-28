@@ -39,10 +39,8 @@ import {
 } from "@/lib/job-emails";
 import { phonesMatch } from "@/lib/job-messages";
 import {
-  askTrussReturningClientPrompt,
   emailsMatch,
   findReturningClient,
-  needsReturningClientConfirm,
   returningClientWhen,
 } from "@/lib/returning-client";
 
@@ -489,19 +487,8 @@ async function runTool(
         estimates: book.estimates,
       });
       let ownerId = crm.effectiveStaff?.id || crm.user.staffId;
-      if (needsReturningClientConfirm(returning, ownerId)) {
-        const assignToPm = asBoolean(args.assignToPreviousPm);
-        if (assignToPm === undefined) {
-          return fail(askTrussReturningClientPrompt(returning!));
-        }
-        if (assignToPm) {
-          if (!returning?.assignable || !returning.previousStaffId) {
-            return fail(
-              `${returning?.previousStaffName || "That project manager"} no longer has an unlocked seat. Ask whether to keep the lead with you, then retry create_lead with assignToPreviousPm false.`,
-            );
-          }
-          ownerId = returning.previousStaffId;
-        }
+      if (asBoolean(args.assignToPreviousPm) === true && returning?.assignable && returning.previousStaffId) {
+        ownerId = returning.previousStaffId;
       }
       const existing =
         returning?.contact ??
@@ -582,9 +569,7 @@ async function runTool(
           }${
             returning.previousStaffId === ownerId
               ? " Assigned to that project manager."
-              : returning.assignable
-                ? " That project manager was asked to take it. Company admins decide if they decline."
-                : " Company admins were notified because that project manager no longer has an unlocked seat."
+              : " The job was created. Company admins were notified that it came from that book."
           }`
         : "";
       return ok(
