@@ -16,6 +16,7 @@ export const extraExpenses: Expense[] = [
   {
     id: "exp_alvarez_abc",
     number: "EXP-4001",
+    invoiceNumber: "S1044821",
     jobId: "job_alvarez_roof",
     vendor: "ABC Supply — Denver",
     account: "materials",
@@ -33,6 +34,7 @@ export const extraExpenses: Expense[] = [
   {
     id: "exp_alvarez_dump",
     number: "EXP-4002",
+    invoiceNumber: "18842",
     jobId: "job_alvarez_roof",
     vendor: "Front Range Roll-Off",
     account: "dumpsters",
@@ -50,6 +52,7 @@ export const extraExpenses: Expense[] = [
   {
     id: "exp_alvarez_hd",
     number: "EXP-4003",
+    invoiceNumber: "6291844",
     jobId: "job_alvarez_roof",
     vendor: "Home Depot",
     account: "materials",
@@ -67,6 +70,7 @@ export const extraExpenses: Expense[] = [
   {
     id: "exp_hart_sunbelt",
     number: "EXP-4004",
+    invoiceNumber: "SB-77120",
     jobId: "job_hart_water",
     vendor: "Sunbelt Rentals",
     account: "equipment_rental",
@@ -84,6 +88,7 @@ export const extraExpenses: Expense[] = [
   {
     id: "exp_blake_cab",
     number: "EXP-4005",
+    invoiceNumber: "CC-5501",
     jobId: "job_blake_kitchen",
     vendor: "Crystal Cabinet Works",
     account: "materials",
@@ -101,6 +106,7 @@ export const extraExpenses: Expense[] = [
   {
     id: "exp_office_adobe",
     number: "EXP-4006",
+    invoiceNumber: "",
     jobId: null,
     vendor: "USPS",
     account: "office",
@@ -118,6 +124,7 @@ export const extraExpenses: Expense[] = [
   {
     id: "exp_bd_nari",
     number: "EXP-4007",
+    invoiceNumber: "",
     jobId: null,
     vendor: "NARI Colorado",
     account: "office",
@@ -135,6 +142,7 @@ export const extraExpenses: Expense[] = [
   {
     id: "exp_bd_ads",
     number: "EXP-4008",
+    invoiceNumber: "",
     jobId: null,
     vendor: "Google Ads",
     account: "office",
@@ -152,6 +160,7 @@ export const extraExpenses: Expense[] = [
   {
     id: "exp_bd_chamber",
     number: "EXP-4009",
+    invoiceNumber: "",
     jobId: null,
     vendor: "Cherry Creek Chamber",
     account: "office",

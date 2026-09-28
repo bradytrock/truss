@@ -54,6 +54,7 @@ const expenseWork: QbExpenseWork = {
   kind: "expense",
   expenseId: "exp-1",
   number: "EXP-1001",
+  invoiceNumber: "",
   vendor: "Silva's Sheet Metal LLC",
   accountName: "Subcontractors",
   amount: 2800,
@@ -93,11 +94,25 @@ assert.doesNotMatch(billXml, /<BillAddRq/);
 
 const billedOnJob = requestForStep("expense_add", { ...expenseWork, jobListId: "80000012-1789520000" });
 assert.match(billedOnJob, /<BillAddRq/);
+assert.match(billedOnJob, /<RefNumber>EXP-1001<\/RefNumber>/);
 assert.match(billedOnJob, /<VendorRef>[\s\S]*Silva&apos;s Sheet Metal LLC/);
 assert.match(billedOnJob, /<CustomerRef>[\s\S]*<ListID>80000012-1789520000<\/ListID>/);
 assert.match(billedOnJob, /<BillableStatus>NotBillable<\/BillableStatus>/);
 assert.doesNotMatch(billedOnJob, /<CustomerRef>[\s\S]*<FullName>/);
 assert.doesNotMatch(billedOnJob, /<CheckAddRq/);
+const billedWithInvoice = requestForStep("expense_add", {
+  ...expenseWork,
+  jobListId: "80000012-1789520000",
+  invoiceNumber: "88421",
+});
+assert.match(billedWithInvoice, /<RefNumber>88421<\/RefNumber>/);
+assert.doesNotMatch(billedWithInvoice, /<RefNumber>EXP-1001<\/RefNumber>/);
+const billedLongInvoice = requestForStep("expense_add", {
+  ...expenseWork,
+  jobListId: "80000012-1789520000",
+  invoiceNumber: "INV-2026-99999",
+});
+assert.match(billedLongInvoice, /<RefNumber>INV-2026-99<\/RefNumber>/);
 assert.doesNotMatch(billAddXml({
   requestId: "e-no-job",
   vendor: "Vendor",
@@ -234,6 +249,19 @@ const apPayload = parseWorkPayload({
   jobListId: "80000012-1789520000",
 });
 assert.equal(apPayload && apPayload.kind === "expense" && apPayload.payWith, "bill");
+assert.equal(apPayload && apPayload.kind === "expense" && apPayload.invoiceNumber, "");
+const invoicedPayload = parseWorkPayload({
+  kind: "expense",
+  expenseId: "exp-inv",
+  number: "EXP-1002",
+  invoiceNumber: "88421",
+  vendor: "ABC Supply",
+  payWith: "credit_card",
+});
+assert.equal(invoicedPayload && invoicedPayload.kind === "expense" && invoicedPayload.invoiceNumber, "88421");
+if (invoicedPayload && invoicedPayload.kind === "expense") {
+  assert.match(requestForStep("expense_add", invoicedPayload), /<RefNumber>88421<\/RefNumber>/);
+}
 if (apPayload && apPayload.kind === "expense") {
   const apXml = requestForStep("expense_add", apPayload);
   assert.match(apXml, /<BillAddRq/);

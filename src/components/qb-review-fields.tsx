@@ -296,6 +296,20 @@ export function ExpenseFields({ expenseId, locked }: { expenseId: string; locked
           }}
         />
       </Field>
+      <Field label="Invoice number">
+        <Input
+          key={`${expense.id}:${expense.invoiceNumber}`}
+          defaultValue={expense.invoiceNumber}
+          disabled={locked}
+          placeholder="Vendor invoice or receipt number"
+          onBlur={(event) => {
+            const invoiceNumber = event.target.value.trim();
+            if (invoiceNumber !== expense.invoiceNumber) {
+              void crm.updateExpense(expense.id, { invoiceNumber });
+            }
+          }}
+        />
+      </Field>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Amount">
           <Input

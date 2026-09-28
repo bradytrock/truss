@@ -5,6 +5,7 @@ import { invoiceBalance, invoiceTotal } from "@/lib/money";
 import {
   DEFAULT_QB_CC,
   expensePushBlocked,
+  expenseQbRefNumber,
   expenseRequiresJob,
   invoicePushBlocked,
 } from "@/lib/qbwc/work";
@@ -171,7 +172,7 @@ export function expenseQbPreview(
         ? accounts?.ccAccount?.trim() || DEFAULT_QB_CC
         : "Accounts Payable",
     memo: expense.memo.trim() || expense.number,
-    refNumber: expense.number,
+    refNumber: expenseQbRefNumber(expense),
     customerJob: jobLabel,
     hasJob,
   };

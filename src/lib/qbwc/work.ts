@@ -96,6 +96,8 @@ export type QbExpenseWork = {
   kind: "expense";
   expenseId: string;
   number: string;
+  /** Vendor invoice or receipt number. Empty when the slip has none. */
+  invoiceNumber: string;
   vendor: string;
   accountName: string;
   amount: number;
@@ -321,6 +323,12 @@ export function paymentCustomerRef(work: QbPaymentWork, useAlias = false) {
   return work.hasJob ? jobFullName(work, useAlias) : billedCustomerName(work, useAlias);
 }
 
+/** QuickBooks RefNumber: the vendor invoice when we logged one, otherwise the CRM expense number. */
+export function expenseQbRefNumber(input: { number: string; invoiceNumber?: string | null }) {
+  const invoice = input.invoiceNumber?.trim() ?? "";
+  return invoice || input.number;
+}
+
 /** Leftover check from an earlier mistaken CheckAdd. */
 export function expenseReplacesCheck(work: QbExpenseWork) {
   return work.payWith === "bill" && Boolean(work.replaceTxnId?.trim()) && work.replaceTxnKind !== "bill";
@@ -353,6 +361,7 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
       kind: "expense",
       expenseId,
       number: asString(row.number, expenseId),
+      invoiceNumber: asString(row.invoiceNumber),
       vendor,
       accountName: asString(row.accountName, "Other"),
       amount: asNumber(row.amount),
