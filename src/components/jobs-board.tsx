@@ -20,14 +20,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { KanbanScroller } from "@/components/board-scroll-slider";
 import { EmptyState, RecordCode } from "@/components/page-chrome";
-import { MarketBadge } from "@/components/status-badge";
+import { BoardEstimateTagBadge, MarketBadge } from "@/components/status-badge";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency } from "@/lib/format";
 import { leadSourceLabel } from "@/lib/leads";
 import { phoneQueryMatches } from "@/lib/phone";
 import { parseMarket, workMarket } from "@/lib/market";
-import { acceptedAmountForJob } from "@/lib/estimate-totals";
+import { acceptedAmountForJob, boardEstimateTags } from "@/lib/estimate-totals";
+import { estimatesForJob } from "@/lib/won";
 import {
   WORK_COLUMNS,
   WORK_COLUMN_LABELS,
@@ -334,6 +335,7 @@ function JobCard({
     street: job.street,
   });
   const cover = primaryJobPhoto(crm.photos ?? [], job);
+  const estimateTags = boardEstimateTags(estimatesForJob(job, crm.estimates ?? []));
 
   return (
     <Card
@@ -397,18 +399,27 @@ function JobCard({
           jobId={job.id}
           overlay={overlay}
           onSelectJob={onSelectJob}
-          className="flex w-full items-center justify-between gap-2 text-left"
+          className="flex w-full flex-col gap-1.5 text-left"
         >
-          <span className="font-heading text-sm font-medium tabular-nums">
-            {formatCurrency(
-              boardValue(
-                job,
-                opportunity,
-                acceptedAmountForJob(job, crm.estimates ?? [], crm.estimateLines ?? [], market),
-              ),
-            )}
+          <span className="flex w-full items-center justify-between gap-2">
+            <span className="font-heading text-sm font-medium tabular-nums">
+              {formatCurrency(
+                boardValue(
+                  job,
+                  opportunity,
+                  acceptedAmountForJob(job, crm.estimates ?? [], crm.estimateLines ?? [], market),
+                ),
+              )}
+            </span>
+            <MarketBadge market={parseMarket(market)} />
           </span>
-          <MarketBadge market={parseMarket(market)} />
+          {estimateTags.length > 0 ? (
+            <span className="flex flex-wrap gap-1">
+              {estimateTags.map((tag) => (
+                <BoardEstimateTagBadge key={tag} tag={tag} />
+              ))}
+            </span>
+          ) : null}
         </JobOpenLink>
         {canTrash && deleted && !overlay ? (
           <div

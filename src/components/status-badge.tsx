@@ -1,4 +1,8 @@
 import { Badge } from "@/components/ui/badge";
+import {
+  BOARD_ESTIMATE_TAG_LABELS,
+  type BoardEstimateTag,
+} from "@/lib/board-estimate-tags";
 import { cn } from "@/lib/utils";
 import {
   CLIENT_TYPE_LABELS,
@@ -126,6 +130,20 @@ export function EstimateStatusBadge({ status }: { status: EstimateStatus }) {
   return (
     <Badge variant="outline" className={cn(estimateClass[status])}>
       {ESTIMATE_STATUS_LABELS[status]}
+    </Badge>
+  );
+}
+
+const boardEstimateClass: Record<BoardEstimateTag, string> = {
+  signed: done,
+  viewed: hot,
+  sent: hot,
+};
+
+export function BoardEstimateTagBadge({ tag }: { tag: BoardEstimateTag }) {
+  return (
+    <Badge variant="outline" className={cn(boardEstimateClass[tag])}>
+      {BOARD_ESTIMATE_TAG_LABELS[tag]}
     </Badge>
   );
 }

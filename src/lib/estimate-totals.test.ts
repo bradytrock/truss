@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { featuredEstimateForJob, estimateTotals, toClientFacingProposal } from "./estimate-totals.ts";
+import { BOARD_ESTIMATE_TAG_LABELS } from "./board-estimate-tags.ts";
+import { boardEstimateTags, featuredEstimateForJob, estimateTotals, toClientFacingProposal } from "./estimate-totals.ts";
 import type { Estimate } from "./types.ts";
 
 const estimate = {
@@ -107,5 +108,36 @@ const featured = featuredEstimateForJob([draft, signed]);
 assert.equal(featured?.id, "est_signed");
 assert.equal(featuredEstimateForJob([draft])?.id, "est_draft");
 assert.equal(featuredEstimateForJob([draft, { ...signed, archivedAt: "2026-09-16T00:00:00.000Z" }])?.id, "est_draft");
+
+assert.deepEqual(boardEstimateTags([estimateRow({ id: "s", status: "sent" })]), ["sent"]);
+assert.deepEqual(boardEstimateTags([estimateRow({ id: "v", status: "viewed" })]), ["viewed"]);
+assert.deepEqual(boardEstimateTags([signed]), ["signed"]);
+assert.deepEqual(boardEstimateTags([draft]), []);
+assert.deepEqual(boardEstimateTags([estimateRow({ id: "d", status: "declined" })]), []);
+assert.deepEqual(boardEstimateTags([{ ...signed, archivedAt: "2026-09-16T00:00:00.000Z" }]), []);
+assert.deepEqual(
+  boardEstimateTags([
+    estimateRow({ id: "s", status: "sent" }),
+    estimateRow({ id: "s2", status: "sent" }),
+    estimateRow({ id: "v", status: "viewed" }),
+    signed,
+  ]),
+  ["signed", "viewed", "sent"],
+);
+assert.deepEqual(
+  boardEstimateTags([
+    estimateRow({
+      id: "partial",
+      status: "viewed",
+      acceptedAt: "2026-09-12T00:00:00.000Z",
+      secondContactId: "contact_2",
+      secondAcceptedAt: null,
+    }),
+  ]),
+  ["viewed"],
+);
+assert.equal(BOARD_ESTIMATE_TAG_LABELS.signed, "Estimate Signed");
+assert.equal(BOARD_ESTIMATE_TAG_LABELS.sent, "Estimate Sent");
+assert.equal(BOARD_ESTIMATE_TAG_LABELS.viewed, "Estimate Viewed");
 
 console.log("estimate-totals.test.ts ok");
