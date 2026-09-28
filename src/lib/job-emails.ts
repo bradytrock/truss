@@ -97,7 +97,8 @@ export function suggestedJobsForPeople(
       !isDeletedJob(job) &&
       !unique.some((item) => item.id === job.id) &&
       ((job.primaryContactId ? contactIds.includes(job.primaryContactId) : false) ||
-        job.relatedContactIds.some((id) => contactIds.includes(id))),
+        (Array.isArray(job.relatedContactIds) &&
+          job.relatedContactIds.some((id) => contactIds.includes(id)))),
   );
   return [...unique, ...extras].slice(0, 6);
 }
@@ -148,7 +149,7 @@ export function mailThreads(
   }
   return [...groups.entries()]
     .map(([key, items]) => {
-      const sorted = [...items].sort((a, b) => a.receivedAt.localeCompare(b.receivedAt));
+      const sorted = [...items].sort((a, b) => (a.receivedAt || "").localeCompare(b.receivedAt || ""));
       const last = sorted[sorted.length - 1];
       const counterpart = counterpartEmail(last);
       const contact =
@@ -167,7 +168,7 @@ export function mailThreads(
         )[0];
       return {
         key,
-        subject: last.subject.trim() || "(no subject)",
+        subject: (last.subject || "").trim() || "(no subject)",
         fromName: counterpartName(last, contact),
         fromEmail: counterpart,
         contactId: contact?.id ?? last.contactId,
@@ -175,9 +176,9 @@ export function mailThreads(
         contact,
         relatedContacts,
         job: taggedJobId ? jobs.find((item) => item.id === taggedJobId) : job,
-        preview: previewOf(last.snippet || last.bodyText),
+        preview: previewOf(last.snippet || last.bodyText || ""),
         messages: sorted,
-        lastAt: last.receivedAt,
+        lastAt: last.receivedAt || "",
         unreadHint: last.direction === "inbound",
       };
     })
@@ -196,8 +197,8 @@ export function filterMailThreads(threads: MailThread[], query: string) {
     if (thread.job?.code?.toLowerCase().includes(needle)) return true;
     return thread.messages.some(
       (message) =>
-        message.bodyText.toLowerCase().includes(needle) ||
-        message.toEmail.toLowerCase().includes(needle),
+        (message.bodyText || "").toLowerCase().includes(needle) ||
+        (message.toEmail || "").toLowerCase().includes(needle),
     );
   });
 }
