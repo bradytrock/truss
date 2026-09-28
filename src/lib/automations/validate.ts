@@ -1,4 +1,4 @@
-import { isWorkColumn } from "@/lib/work-board";
+import { canonicalizeWorkColumn } from "@/lib/work-board";
 import { unknownAutomationMergeFields } from "@/lib/automations/merge";
 import {
   AUTOMATION_ACTIONS,
@@ -96,7 +96,8 @@ export function validateAutomationDraft(
 
 export function validateTriggerConfig(kind: AutomationTriggerKind, config: AutomationTriggerConfig) {
   if (kind === "job_stage_changed" || kind === "job_stage_after_days") {
-    if (!config.stage || !isWorkColumn(config.stage) || config.stage === "deleted") {
+    const stage = canonicalizeWorkColumn(String(config.stage ?? ""));
+    if (!stage || stage === "deleted") {
       return "Pick a stage.";
     }
   }

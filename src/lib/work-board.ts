@@ -2,10 +2,9 @@ import type { Job, JobStatus, Opportunity, PipelineStage } from "./types";
 
 export const WORK_COLUMNS = [
   "lead",
-  "estimating",
   "proposal_sent",
-  "supplementing",
   "in_progress",
+  "supplementing",
   "punch",
   "complete",
   "on_hold",
@@ -17,16 +16,21 @@ export type WorkColumn = (typeof WORK_COLUMNS)[number];
 
 export const WORK_COLUMN_LABELS: Record<WorkColumn, string> = {
   lead: "Lead",
-  estimating: "Estimating",
   proposal_sent: "Proposal sent",
-  supplementing: "Supplementing",
   in_progress: "In progress",
+  supplementing: "Supplementing",
   punch: "Punch list",
   complete: "Complete",
   on_hold: "On hold",
   lost: "Lost",
   deleted: "Deleted",
 };
+
+/** Older boards and automations used a separate Estimating column. It is Supplementing now. */
+export function canonicalizeWorkColumn(value: string): WorkColumn | null {
+  if (value === "estimating") return "supplementing";
+  return isWorkColumn(value) ? value : null;
+}
 
 export function workColumnFor(
   job: Pick<Job, "status" | "opportunityId" | "deletedAt">,
@@ -39,9 +43,8 @@ export function workColumnFor(
   if (job.status === "in_progress") return "in_progress";
   if (job.status === "on_hold") return "on_hold";
   if (opportunity?.stage === "awarded") return "in_progress";
-  if (opportunity?.stage === "supplementing") return "supplementing";
+  if (opportunity?.stage === "supplementing" || opportunity?.stage === "estimating") return "supplementing";
   if (opportunity?.stage === "bid_submitted" || opportunity?.stage === "interview") return "proposal_sent";
-  if (opportunity?.stage === "estimating") return "estimating";
   if (opportunity) return "lead";
   return "in_progress";
 }
@@ -61,8 +64,6 @@ export function patchForWorkColumn(column: WorkColumn): {
   switch (column) {
     case "lead":
       return { status: "precon", stage: "pursuing" };
-    case "estimating":
-      return { status: "precon", stage: "estimating" };
     case "proposal_sent":
       return { status: "precon", stage: "bid_submitted" };
     case "supplementing":

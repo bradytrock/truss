@@ -1,5 +1,5 @@
 import type { Contact, Job, Opportunity, StaffMember } from "@/lib/types";
-import { workColumnFor, type WorkColumn } from "@/lib/work-board";
+import { canonicalizeWorkColumn, workColumnFor, type WorkColumn } from "@/lib/work-board";
 import {
   type Automation,
   type AutomationCondition,
@@ -13,9 +13,9 @@ export function automationMatchesEvent(automation: Automation, event: Automation
     case "job_created":
       return event.kind === "job_created";
     case "job_stage_changed":
-      return event.kind === "job_stage_changed" && event.stage === automation.triggerConfig.stage;
+      return event.kind === "job_stage_changed" && sameBoardColumn(event.stage, automation.triggerConfig.stage);
     case "job_stage_after_days":
-      return event.kind === "job_stage_changed" && event.stage === automation.triggerConfig.stage;
+      return event.kind === "job_stage_changed" && sameBoardColumn(event.stage, automation.triggerConfig.stage);
     case "invoice_paid":
       return event.kind === "invoice_paid";
     case "estimate_sent_after_days":
@@ -25,6 +25,11 @@ export function automationMatchesEvent(automation: Automation, event: Automation
     default:
       return false;
   }
+}
+
+function sameBoardColumn(left: string | undefined, right: string | undefined) {
+  if (!left || !right) return false;
+  return (canonicalizeWorkColumn(left) ?? left) === (canonicalizeWorkColumn(right) ?? right);
 }
 
 export function automationIsDelayed(kind: AutomationTriggerKind) {

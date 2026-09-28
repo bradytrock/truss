@@ -6,7 +6,7 @@ import { isGbbEstimate, parseEstimatePackage, parseEstimatePackageMode, parseLin
 import { invoiceBalance, invoiceTotal } from "@/lib/money";
 import { compressReceipt, guessExpenseAccount, isExpenseAccount, isExpenseMethod, jobProfitAndLoss } from "@/lib/job-financials";
 import { projectTypeForMarket, workMarket } from "@/lib/market";
-import { isWorkColumn, WORK_COLUMN_LABELS } from "@/lib/work-board";
+import { canonicalizeWorkColumn, WORK_COLUMN_LABELS } from "@/lib/work-board";
 import { fileFromDataUrl, asBoolean, asNumber, asString, parseLocalDateTime } from "@/lib/assistant/files";
 import { money } from "@/lib/assistant/context";
 import type { AssistantToolCall, AssistantToolResult } from "@/lib/assistant/types";
@@ -655,8 +655,8 @@ async function runTool(
     case "move_job": {
       const job = resolveJob(crm, arg(args, "job"));
       if (!job) return fail("No job matches that.");
-      const column = arg(args, "column");
-      if (!isWorkColumn(column) || column === "deleted") return fail("Pick a board column.");
+      const column = canonicalizeWorkColumn(arg(args, "column"));
+      if (!column || column === "deleted") return fail("Pick a board column.");
       await crm.moveWork(job.id, column);
       return ok(
         { id: job.id, column, label: WORK_COLUMN_LABELS[column] },

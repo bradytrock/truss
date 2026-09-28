@@ -1313,13 +1313,18 @@ export interface CrmState {
 
 export const STAGE_LABELS: Record<PipelineStage, string> = {
   pursuing: "Lead",
-  estimating: "Estimating",
+  estimating: "Supplementing",
   bid_submitted: "Proposal sent",
   interview: "Follow-up",
   supplementing: "Supplementing",
   awarded: "Job Sold",
   lost: "Lost",
 };
+
+/** Pursuit stages shown in pickers. Older `estimating` rows display as Supplementing. */
+export const SELECTABLE_PIPELINE_STAGES = PIPELINE_STAGES.filter(
+  (stage) => stage !== "estimating",
+);
 
 export const STAGE_PROBABILITY: Record<PipelineStage, number> = {
   pursuing: 15,

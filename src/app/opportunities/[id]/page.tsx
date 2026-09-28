@@ -31,7 +31,7 @@ import {
   DELIVERY_LABELS,
   JOB_MARKET_LABELS,
   JOB_MARKETS,
-  PIPELINE_STAGES,
+  SELECTABLE_PIPELINE_STAGES,
   STAGE_LABELS,
   type JobMarket,
   type PipelineStage,
@@ -128,11 +128,11 @@ export default function OpportunityDetailPage() {
             {formatCurrencyFull(opportunity.value)}
           </p>
           <Select
-            value={opportunity.stage}
+            value={opportunity.stage === "estimating" ? "supplementing" : opportunity.stage}
             onValueChange={(value) => {
               if (value) handleStage(value as PipelineStage);
             }}
-            items={PIPELINE_STAGES.map((stage) => ({
+            items={SELECTABLE_PIPELINE_STAGES.map((stage) => ({
               value: stage,
               label: STAGE_LABELS[stage],
             }))}
@@ -141,7 +141,7 @@ export default function OpportunityDetailPage() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {PIPELINE_STAGES.map((stage) => (
+              {SELECTABLE_PIPELINE_STAGES.map((stage) => (
                 <SelectItem key={stage} value={stage}>
                   {STAGE_LABELS[stage]}
                 </SelectItem>

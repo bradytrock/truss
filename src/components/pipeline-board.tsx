@@ -25,7 +25,7 @@ import { daysUntil, formatCurrency, formatDateShort } from "@/lib/format";
 import { leadSourceLabel } from "@/lib/leads";
 import { parseMarket } from "@/lib/market";
 import {
-  PIPELINE_STAGES,
+  SELECTABLE_PIPELINE_STAGES,
   STAGE_LABELS,
   type Opportunity,
   type PipelineStage,
@@ -81,9 +81,10 @@ export function PipelineBoard({ query }: { query: string }) {
     if (!opportunity) return;
 
     const overId = String(over.id);
-    const overStage = PIPELINE_STAGES.includes(overId as PipelineStage)
+    const dropped = (SELECTABLE_PIPELINE_STAGES as readonly PipelineStage[]).includes(overId as PipelineStage)
       ? (overId as PipelineStage)
       : opportunities.find((item) => item.id === overId)?.stage;
+    const overStage = dropped === "estimating" ? "supplementing" : dropped;
 
     if (!overStage || overStage === opportunity.stage) return;
     void (async () => {
@@ -125,8 +126,12 @@ export function PipelineBoard({ query }: { query: string }) {
     >
       <KanbanScroller>
         <div className="flex min-h-[32rem] gap-3 pb-3">
-          {PIPELINE_STAGES.map((stage) => {
-            const cards = filtered.filter((opportunity) => opportunity.stage === stage);
+          {SELECTABLE_PIPELINE_STAGES.map((stage) => {
+            const cards = filtered.filter((opportunity) =>
+              stage === "supplementing"
+                ? opportunity.stage === "supplementing" || opportunity.stage === "estimating"
+                : opportunity.stage === stage,
+            );
             const total = cards.reduce((sum, opportunity) => sum + opportunity.value, 0);
             return (
               <PipelineColumn

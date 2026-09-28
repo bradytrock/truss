@@ -12,19 +12,13 @@ import { formatDate } from "@/lib/format";
 import { jobAddress } from "@/lib/job-record";
 import { PROJECT_PIN_COLORS, workPinColor, workPinLabel } from "@/lib/project-map";
 import { primaryJobPhoto } from "@/lib/photo-trash";
-import { WORK_COLUMN_LABELS, type WorkColumn } from "@/lib/work-board";
+import { WORK_COLUMN_LABELS, WORK_COLUMNS, type WorkColumn } from "@/lib/work-board";
 import type { Job, JobPhoto, Opportunity } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const STAGE_FILTERS: WorkColumn[] = [
-  "lead",
-  "estimating",
-  "proposal_sent",
-  "supplementing",
-  "in_progress",
-  "punch",
-  "complete",
-];
+const STAGE_FILTERS: WorkColumn[] = WORK_COLUMNS.filter(
+  (column) => column !== "on_hold" && column !== "lost" && column !== "deleted",
+);
 
 export function MapSearchBar({
   query,

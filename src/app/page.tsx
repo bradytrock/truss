@@ -115,11 +115,15 @@ export default function HomePage() {
       .filter((event) => localYmd(new Date(event.startsAt)) === todayKey)
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
     const byStage = PIPELINE_STAGES.filter(
-      (stage) => stage !== "awarded" && stage !== "lost"
+      (stage) => stage !== "awarded" && stage !== "lost" && stage !== "estimating",
     ).map((stage) => ({
       stage,
       value: open
-        .filter((opportunity) => opportunity.stage === stage)
+        .filter((opportunity) =>
+          stage === "supplementing"
+            ? opportunity.stage === "supplementing" || opportunity.stage === "estimating"
+            : opportunity.stage === stage,
+        )
         .reduce((sum, opportunity) => sum + opportunity.value, 0),
     }));
     const maxStage = Math.max(...byStage.map((item) => item.value), 1);
