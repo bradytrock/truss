@@ -217,7 +217,10 @@ export function CompanyFilesPanel() {
                           event.preventDefault();
                           void rename(file);
                         }
-                        if (event.key === "Escape") setEditingId(null);
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }
                       }}
                     />
                   ) : (

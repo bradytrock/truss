@@ -5,6 +5,7 @@ import { Minus, Square, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ContactRecord } from "@/components/contact-record";
 import { EditContactDialog } from "@/components/create-records";
+import { escapeDismissesOverlay } from "@/lib/draft-escape";
 import type { Contact } from "@/lib/types";
 
 export function ContactRecordWindow({ contact, onClose }: { contact: Contact; onClose: () => void }) {
@@ -14,7 +15,7 @@ export function ContactRecordWindow({ contact, onClose }: { contact: Contact; on
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (editOpen) return;
-      if (event.key === "Escape" && !event.defaultPrevented) onClose();
+      if (escapeDismissesOverlay(event)) onClose();
     }
     document.addEventListener("keydown", onKey);
     const previous = document.body.style.overflow;

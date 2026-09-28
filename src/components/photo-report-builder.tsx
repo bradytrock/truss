@@ -51,6 +51,7 @@ import { PhotoReportPagePreview } from "@/components/photo-report-preview";
 import { WorkOrderEditor } from "@/components/work-order-editor";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { useCrm } from "@/lib/crm-store";
+import { escapeDismissesOverlay } from "@/lib/draft-escape";
 import { downloadPhotoReportPdf } from "@/lib/photo-report-pdf";
 import {
   emptyCoverPage,
@@ -137,13 +138,13 @@ export function PhotoReportBuilder({
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
+      if (!escapeDismissesOverlay(event)) return;
       event.preventDefault();
-      event.stopImmediatePropagation();
+      event.stopPropagation();
       onClose();
     }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
   }, [onClose]);
 
   useEffect(() => {

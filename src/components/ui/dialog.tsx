@@ -5,10 +5,16 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { DraftEscapeProvider, useDraftEscape, useDraftRootRef } from "@/components/ui/draft-escape"
 import { XIcon } from "lucide-react"
 
-function Dialog({ ...props }: DialogPrimitive.Root.Props) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+function Dialog({ onOpenChange, ...props }: DialogPrimitive.Root.Props) {
+  const draft = useDraftEscape(onOpenChange)
+  return (
+    <DraftEscapeProvider value={draft.context}>
+      <DialogPrimitive.Root data-slot="dialog" {...props} onOpenChange={draft.onOpenChange} />
+    </DraftEscapeProvider>
+  )
 }
 
 function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
@@ -43,10 +49,12 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  ref,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
 }) {
+  const draftRef = useDraftRootRef(ref)
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -57,6 +65,7 @@ function DialogContent({
           className
         )}
         {...props}
+        ref={draftRef}
       >
         {children}
         {showCloseButton && (

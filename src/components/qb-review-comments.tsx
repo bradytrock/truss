@@ -92,6 +92,8 @@ export function MentionComposer({
     [crm.staff, query],
   );
   const [highlight, setHighlight] = useState(0);
+  const [dismissedQuery, setDismissedQuery] = useState<string | null>(null);
+  const menuHidden = query != null && dismissedQuery === query;
 
   function pick(member: StaffMember) {
     onChange(insertMention(value, member.name));
@@ -111,7 +113,7 @@ export function MentionComposer({
           setHighlight(0);
         }}
         onKeyDown={(event) => {
-          if (query == null || options.length === 0) return;
+          if (query == null || options.length === 0 || menuHidden) return;
           if (event.key === "ArrowDown") {
             event.preventDefault();
             setHighlight((current) => (current + 1) % options.length);
@@ -124,11 +126,12 @@ export function MentionComposer({
             if (member) pick(member);
           } else if (event.key === "Escape") {
             event.preventDefault();
-            onChange(value.replace(/(?:^|\s)@([^\n@]*)$/, (chunk) => (/^\s/.test(chunk) ? chunk[0] : "")));
+            event.stopPropagation();
+            setDismissedQuery(query);
           }
         }}
       />
-      {query != null && options.length > 0 ? (
+      {query != null && options.length > 0 && !menuHidden ? (
         <ul className="absolute inset-x-0 bottom-full z-20 mb-1 max-h-48 overflow-auto rounded-md border bg-popover py-1 shadow-md">
           {options.map((member, index) => (
             <li key={member.id}>

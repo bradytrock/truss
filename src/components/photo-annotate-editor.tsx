@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { isTextEntryElement } from "@/lib/draft-escape";
 import {
   PHOTO_ANNOTATE_COLORS,
   arrowHead,
@@ -83,6 +84,7 @@ export function PhotoAnnotateEditor({
           commitText();
           return;
         }
+        if (isTextEntryElement(event.target)) return;
         onClose();
       }
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
