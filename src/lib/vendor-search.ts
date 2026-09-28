@@ -1,4 +1,4 @@
-export const VENDOR_SEARCH_MIN = 4;
+export const VENDOR_SEARCH_MIN = 3;
 
 export function vendorSearchNeedle(query: string) {
   return query.trim().toLowerCase();
