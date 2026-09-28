@@ -34,6 +34,7 @@ import { CreatePageDialog } from "@/components/create-page-dialog";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
 import { JobFilesPanel } from "@/components/job-files";
 import { JobEagleviewPanel } from "@/components/job-eagleview";
+import { JobCompanyCamPanel } from "@/components/job-companycam";
 import { JobPhotosPanel } from "@/components/job-photos-panel";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { JobFinancials } from "@/components/job-financials";
@@ -1407,6 +1408,7 @@ export function JobRecord({
         </TabsContent>
 
         <TabsContent value="photos" className="mt-0">
+          <JobCompanyCamPanel jobId={job.id} disabled={deleted} />
           <JobPhotosPanel
             jobId={job.id}
             disabled={deleted}

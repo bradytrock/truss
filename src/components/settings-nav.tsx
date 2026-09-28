@@ -18,6 +18,7 @@ const SECTIONS = [
   { href: "/settings/automations", label: "Automations", hint: "When, if, then", admin: true, accounting: false, automations: true },
   { href: "/settings/price-book", label: "Price book", hint: "Catalog and lists", admin: true, accounting: false, automations: false },
   { href: "/settings/eagleview", label: "EagleView", hint: "Roof reports", admin: true, accounting: false, automations: false },
+  { href: "/settings/companycam", label: "CompanyCam", hint: "Job photos", admin: true, accounting: false, automations: false },
   { href: "/settings/quickbooks", label: "QuickBooks", hint: "Web Connector", admin: true, accounting: true, automations: false },
 ] as const;
 
