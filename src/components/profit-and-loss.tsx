@@ -20,7 +20,7 @@ function LineRow({ line, depth }: { line: PnlLine; depth: number }) {
 
   if (!expandable) {
     return (
-      <li className={cn("flex items-baseline gap-1 py-0.5 text-sm", pad)}>
+      <li className={cn("flex min-w-0 items-baseline gap-1 py-0.5 text-sm", pad)}>
         {depth === 0 ? <span className="size-3 shrink-0" aria-hidden /> : null}
         {line.href ? (
           <Link href={line.href} className="min-w-0 flex-1 truncate hover:underline">
@@ -35,7 +35,7 @@ function LineRow({ line, depth }: { line: PnlLine; depth: number }) {
   }
 
   return (
-    <li>
+    <li className="min-w-0">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
@@ -49,7 +49,7 @@ function LineRow({ line, depth }: { line: PnlLine; depth: number }) {
         <span className="shrink-0 tabular-nums text-muted-foreground">{pnlAmount(line.amount)}</span>
       </button>
       {open ? (
-        <ul>
+        <ul className="min-w-0">
           {children.map((child) => (
             <LineRow key={child.id} line={child} depth={depth + 1} />
           ))}
@@ -89,7 +89,7 @@ function SectionBlock({
       </button>
       {open ? (
         <>
-          <ul>
+          <ul className="min-w-0">
             {lines.map((line) => (
               <LineRow key={line.id} line={line} depth={0} />
             ))}
@@ -291,7 +291,7 @@ export function ProfitAndLossReport({
   }
 
   return (
-    <div className={cn("border bg-card px-5 py-8 sm:px-10", className)}>
+    <div className={cn("min-w-0 max-w-full border bg-card px-5 py-8 sm:px-10", className)}>
       <header className="mb-6 text-center">
         <p className="text-sm">{statement.companyName}</p>
         <h2 className="font-heading mt-1 text-lg font-medium tracking-[0.14em] uppercase">
