@@ -224,7 +224,7 @@ export const COOKIE_SECTIONS: LegalSection[] = [
   {
     heading: "Product experience",
     paragraphs: [
-      "Microsoft Clarity records how pages are used — clicks, scrolls, and session replays — so we can see where the product is confusing. Clarity sets its own cookies in the browser. This is product analytics, not advertising, and it is not sold.",
+      "Microsoft Clarity records how pages are used — clicks, scrolls, and session replays — so we can see where the product is confusing. Clarity sets its own cookies in the browser. Passwords, email addresses, phone numbers, and text you type into notes are masked in the recording. This is product analytics, not advertising, and it is not sold.",
     ],
   },
   {
