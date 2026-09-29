@@ -17,7 +17,13 @@ import { PhoneInput } from "@/components/phone-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { formatPhoneInput, looksLikePhone } from "@/lib/phone";
+import { firstName, formatPhoneInput, looksLikePhone } from "@/lib/phone";
+import {
+  emailTemplateHasOverride,
+  resolveSystemEmail,
+  type CompanyEmailTemplates,
+  type SystemEmailKind,
+} from "@/lib/email-templates";
 import { copyText } from "@/lib/share";
 import type { ShareRecipient } from "@/lib/parties";
 import {
@@ -33,6 +39,19 @@ import { formatResendFromDisplay, RESEND_FROM_ADDRESS } from "@/lib/resend-from"
 
 type SendblueStatus = { configured: boolean; fromNumber: string };
 type ResendStatus = { configured: boolean; from: string; domain?: string };
+
+function shareEmailKind(kind: ShareDocumentKind): SystemEmailKind {
+  if (kind === "invoice") return "invoice";
+  if (kind === "page") return "page";
+  return "estimate";
+}
+
+function shareAddressClause(kind: ShareDocumentKind, propertyAddress: string, documentNumber: string) {
+  const address = propertyAddress.trim();
+  if (address) return ` for ${address}`;
+  if (kind === "invoice" && documentNumber.trim()) return ` (${documentNumber.trim()})`;
+  return "";
+}
 
 export function ShareLinkDialog({
   open,
@@ -60,6 +79,7 @@ export function ShareLinkDialog({
   companyCity,
   companyState,
   companyPostalCode,
+  emailTemplates,
   onDownloadPdf,
   onTexted,
   onEmailed,
@@ -90,6 +110,7 @@ export function ShareLinkDialog({
   companyCity?: string;
   companyState?: string;
   companyPostalCode?: string;
+  emailTemplates?: CompanyEmailTemplates;
   onDownloadPdf?: () => Promise<void> | void;
   onTexted?: (sent: {
     to: string;
@@ -140,17 +161,40 @@ export function ShareLinkDialog({
     [companyName, documentName, documentNumber, kind, primary?.name, url],
   );
 
-  const composedSubject = useMemo(
-    () =>
-      defaultShareEmailSubject({
+  const composedSubject = useMemo(() => {
+    const company = companyName?.trim() || "Office";
+    const copy = resolveSystemEmail(shareEmailKind(kind), emailTemplates, {
+      name: firstName(primary?.name || ""),
+      company,
+      address: propertyAddress?.trim() || "",
+      addressClause: shareAddressClause(kind, propertyAddress || "", documentNumber || ""),
+      number: documentNumber?.trim() || "",
+      nameLabel: documentName?.trim() ? ` (${documentName.trim()})` : "",
+      document: documentName?.trim() || "a document",
+      managerLine: sender?.name?.trim()
+        ? `${firstName(sender.name)} put this together after walking your roof. `
+        : "",
+    });
+    if (!emailTemplates?.[shareEmailKind(kind)]?.subject?.trim()) {
+      return defaultShareEmailSubject({
         kind,
-        company: companyName || "Office",
+        company,
         number: documentNumber || "",
         name: documentName || "",
         propertyAddress: propertyAddress || "",
-      }),
-    [companyName, documentName, documentNumber, kind, propertyAddress],
-  );
+      });
+    }
+    return copy.subject;
+  }, [
+    companyName,
+    documentName,
+    documentNumber,
+    emailTemplates,
+    kind,
+    primary?.name,
+    propertyAddress,
+    sender?.name,
+  ]);
 
   useEffect(() => {
     if (!open) return;
@@ -353,10 +397,29 @@ export function ShareLinkDialog({
       let mocked = false;
       for (const target of ready) {
         const theirUrl = target.url || url;
+        const company = companyName?.trim() || "the office";
+        const emailKind = shareEmailKind(kind);
+        const copy = emailTemplateHasOverride(emailTemplates, emailKind)
+          ? resolveSystemEmail(emailKind, emailTemplates, {
+          name: firstName(target.name),
+          company,
+          address: propertyAddress?.trim() || "",
+          addressClause: shareAddressClause(kind, propertyAddress || "", documentNumber || ""),
+          number: documentNumber?.trim() || "",
+          nameLabel: documentName?.trim() ? ` (${documentName.trim()})` : "",
+          document: documentName?.trim() || "a document",
+          managerLine: senderName
+            ? `${firstName(senderName)} put this together after walking your roof. `
+            : "",
+          })
+          : null;
         const payload = {
           kind,
-          company: companyName || "the office",
+          company,
           customer: target.name,
+          ...(copy
+            ? { headline: copy.headline, message: copy.message, buttonLabel: copy.button }
+            : {}),
           number: documentNumber || "",
           name: documentName || "",
           url: theirUrl,

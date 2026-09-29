@@ -1729,6 +1729,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
         companyCity={crm.company.city}
         companyState={crm.company.state}
         companyPostalCode={crm.company.postalCode}
+        emailTemplates={crm.company.emailTemplates}
         jobStreet={estimate.street}
         jobCity={estimate.city}
         jobState={estimate.state}

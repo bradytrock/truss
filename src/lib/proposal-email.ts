@@ -56,6 +56,12 @@ export type ProposalEmailInput = {
   state?: string;
   postalCode?: string;
   validUntil?: string | null;
+  /** Replaces the hero line. Blank keeps the built-in greeting. */
+  headline?: string;
+  /** Replaces the paragraph under the hero. Blank keeps the built-in intro. */
+  intro?: string;
+  /** Replaces the Review & sign label. Blank keeps the built-in label. */
+  buttonLabel?: string;
   companyWebsite?: string;
   companyPhone?: string;
   companyStreet?: string;
@@ -108,6 +114,17 @@ export function renderProposalEmailHtml(input: ProposalEmailInput) {
   const owner = input.owner;
   const pmName = owner?.name?.trim() ?? "";
   const pmFirst = escapeHtml(firstName(pmName || "your project manager"));
+  const defaultHeadline = `Hi ${firstName(input.customer)}, your estimate from ${company} is ready.`;
+  const defaultIntro = `${pmName ? `${firstName(pmName)} put this together after walking your roof. ` : ""}Take a look, pick the option that fits, and sign right from your phone.`;
+  const headlineHtml =
+    !input.headline?.trim() || input.headline.trim() === defaultHeadline
+      ? `Hi ${customerFirst}, your estimate from ${companyEsc} is&nbsp;ready.`
+      : escapeHtml(input.headline.trim());
+  const introHtml =
+    !input.intro?.trim() || input.intro.trim() === defaultIntro
+      ? `${pmName ? `${pmFirst} put this together after walking your roof. ` : ""}Take a look, pick the option that fits, and sign right from your phone.`
+      : escapeHtml(input.intro.trim()).replaceAll("\n", "<br>");
+  const buttonHtml = escapeHtml(input.buttonLabel?.trim() || "Review & sign");
   const pmFull = escapeHtml(pmName);
   const pmPhone = owner?.phone?.trim() ?? "";
   const pmPhoneLabel = pmPhone ? formatPhone(pmPhone) : "";
@@ -244,10 +261,10 @@ export function renderProposalEmailHtml(input: ProposalEmailInput) {
                             </tr>
                           </table>
                           <div class="hero-title" style="padding-top:18px;font-family:Georgia,'Times New Roman',serif;font-size:34px;line-height:40px;font-weight:normal;color:#ffffff;letter-spacing:-0.01em;">
-                            Hi ${customerFirst}, your estimate from ${companyEsc} is&nbsp;ready.
+                            ${headlineHtml}
                           </div>
                           <div style="padding-top:12px;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:24px;color:#c9c5bf;">
-                            ${pmName ? `${pmFirst} put this together after walking your roof. ` : ""}Take a look, pick the option that fits, and sign right from your phone.
+                            ${introHtml}
                           </div>
                         </td>
                       </tr>
@@ -283,12 +300,12 @@ export function renderProposalEmailHtml(input: ProposalEmailInput) {
                     <!--[if mso]>
                     <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${url}" style="height:54px;v-text-anchor:middle;width:512px;" arcsize="15%" strokecolor="#b51e28" fillcolor="#b51e28">
                       <w:anchorlock/>
-                      <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:17px;font-weight:bold;">Review &amp; sign</center>
+                      <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:17px;font-weight:bold;">${buttonHtml}</center>
                     </v:roundrect>
                     <![endif]-->
                     <!--[if !mso]><!-->
                     <a href="${url}" class="btn" style="display:block;background:#b51e28;border-radius:999px;padding:17px 24px;font-family:Helvetica,Arial,sans-serif;font-size:17px;line-height:20px;font-weight:bold;color:#ffffff;text-decoration:none;text-align:center;mso-hide:all;">
-                      Review &amp; sign
+                      ${buttonHtml}
                     </a>
                     <!--<![endif]-->
                   </td>
@@ -365,16 +382,17 @@ export function renderProposalEmailText(input: ProposalEmailInput) {
   const parts = [
     `Your roofing proposal for ${street} is ready to review and sign — takes about two minutes, no account needed.`,
     "",
-    `Hi ${who}, your estimate from ${company} is ready.`,
-    pmName
-      ? `${pmFirst} put this together after walking your roof. Take a look, pick the option that fits, and sign right from your phone.`
-      : "Take a look, pick the option that fits, and sign right from your phone.",
+    input.headline?.trim() || `Hi ${who}, your estimate from ${company} is ready.`,
+    input.intro?.trim() ||
+      (pmName
+        ? `${pmFirst} put this together after walking your roof. Take a look, pick the option that fits, and sign right from your phone.`
+        : "Take a look, pick the option that fits, and sign right from your phone."),
     "",
     "Job address",
     street,
   ];
   if (cityLine) parts.push(cityLine);
-  parts.push("", "Valid through", expires, "", "Review & sign:", input.url);
+  parts.push("", "Valid through", expires, "", `${input.buttonLabel?.trim() || "Review & sign"}:`, input.url);
   if (pmName) {
     parts.push("", "Your project manager", pmName, "Questions? Call or text me directly.");
     if (input.owner?.phone?.trim()) parts.push(formatPhone(input.owner.phone));

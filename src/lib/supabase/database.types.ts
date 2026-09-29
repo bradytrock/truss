@@ -36,6 +36,7 @@ export type Database = {
           contract_types: Json;
           minimum_margin_percent: number;
           default_email_signature: string;
+          email_templates: Json;
           default_monthly_sales_quota: number;
           subscription_active: boolean;
           created_at: string;
@@ -73,6 +74,7 @@ export type Database = {
           contract_types?: Json;
           minimum_margin_percent?: number;
           default_email_signature?: string;
+          email_templates?: Json;
           default_monthly_sales_quota?: number;
           subscription_active?: boolean;
           created_at?: string;
@@ -110,6 +112,7 @@ export type Database = {
           contract_types?: Json;
           minimum_margin_percent?: number;
           default_email_signature?: string;
+          email_templates?: Json;
           default_monthly_sales_quota?: number;
           subscription_active?: boolean;
           created_at?: string;
@@ -3010,6 +3013,10 @@ export type Database = {
       };
       automation_share_context: {
         Args: { p_token: string };
+        Returns: Json;
+      };
+      company_email_templates: {
+        Args: { p_company_id: string };
         Returns: Json;
       };
       due_task_reminders: {

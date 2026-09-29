@@ -1,5 +1,14 @@
 import { loadProfileCompany } from "@/lib/eagleview-server";
 import {
+  emailTemplateHasOverride,
+  resolveSystemEmail,
+  systemEmailHtml,
+  systemEmailText,
+  type CompanyEmailTemplates,
+} from "@/lib/email-templates";
+import { loadCompanyEmailTemplates } from "@/lib/email-templates-server";
+import { firstName } from "@/lib/phone";
+import {
   leadAssignEmailHtml,
   leadAssignEmailSubject,
   leadAssignEmailText,
@@ -44,6 +53,7 @@ export async function sendLeadAssignEmails(input: {
   recipients: LeadAssignRecipient[];
   companyName: string;
   replyTo: string;
+  emailTemplates?: CompanyEmailTemplates;
 }): Promise<LeadAssignNotifyResult> {
   if (input.recipients.length === 0) {
     return { ok: true, sent: 0, failed: 0, skipped: 1 };
@@ -63,21 +73,44 @@ export async function sendLeadAssignEmails(input: {
     senderName: "Office",
     companyName: input.companyName.trim() || "Truss",
   });
-  const text = leadAssignEmailText(input.fields);
-  const html = leadAssignEmailHtml(input.fields);
+  const builtinText = leadAssignEmailText(input.fields);
+  const customTemplates = emailTemplateHasOverride(input.emailTemplates, "lead_assign")
+    ? input.emailTemplates
+    : null;
   let sent = 0;
   let failed = 0;
 
   for (const recipient of input.recipients) {
+    const roleSubject = leadAssignEmailSubject(
+      recipient.role,
+      input.fields.assignedToName,
+      input.fields.propertyAddress,
+    );
+    const copy = customTemplates
+      ? resolveSystemEmail("lead_assign", customTemplates, {
+          name: firstName(recipient.name),
+          company: input.companyName,
+          address: input.fields.propertyAddress.trim() || "—",
+          homeownerName: input.fields.homeownerName.trim() || "—",
+          homeownerPhone: input.fields.homeownerPhone.trim() || "—",
+          homeownerEmail: input.fields.homeownerEmail.trim() || "—",
+          notes: input.fields.notes.trim() || "—",
+          roleSubject,
+        })
+      : null;
     const result = await sendResendEmail({
       to: recipient.email,
-      subject: leadAssignEmailSubject(
-        recipient.role,
-        input.fields.assignedToName,
-        input.fields.propertyAddress,
-      ),
-      text,
-      html,
+      subject: copy?.subject || roleSubject,
+      text: copy
+        ? systemEmailText({ headline: copy.headline, message: copy.message })
+        : builtinText,
+      html: copy
+        ? systemEmailHtml({
+            headline: copy.headline,
+            message: copy.message,
+            button: copy.button,
+          })
+        : leadAssignEmailHtml(input.fields),
       from,
       replyTo,
     });
@@ -179,6 +212,7 @@ export async function sendLeadAssignEmailsForOpportunity(
     replyTo:
       (looksLikeEmail(company?.email ?? "") ? company!.email.trim() : "") ||
       (looksLikeEmail(input.replyToFallback ?? "") ? input.replyToFallback!.trim() : ""),
+    emailTemplates: await loadCompanyEmailTemplates(supabase, input.companyId),
   });
 }
 
@@ -207,6 +241,7 @@ export async function sendVoiceLeadAssignEmails(
     recipients: leadAssignRecipients(context),
     companyName: context.companyName,
     replyTo: context.companyEmail,
+    emailTemplates: await loadCompanyEmailTemplates(supabase, context.companyId),
   });
 }
 

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { loadCompanyEmailTemplates } from "@/lib/email-templates-server";
 import { loadProfileCompany } from "@/lib/eagleview-server";
 import { requestOrigin } from "@/lib/share-text";
 import { emailCompanyAdminsStripeRevoke } from "@/lib/stripe-admin-email";
@@ -127,6 +128,7 @@ export async function POST(request: Request) {
           revokeAtLabel,
           replyTo,
           admins: recipients,
+          emailTemplates: await loadCompanyEmailTemplates(auth.supabase, auth.profile.company_id),
         })
       : { sent: 0, failed: recipients.length, configured: false };
     return NextResponse.json({

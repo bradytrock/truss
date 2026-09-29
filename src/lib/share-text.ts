@@ -171,17 +171,26 @@ export function defaultShareEmailHtml(input: {
   companyCity?: string;
   companyState?: string;
   companyPostalCode?: string;
+  headline?: string;
+  message?: string;
+  buttonLabel?: string;
 }) {
   if (input.kind === "estimate") {
-    return renderProposalEmailHtml(input);
+    return renderProposalEmailHtml({
+      ...input,
+      intro: input.message,
+    });
   }
-  const who = escapeHtml(firstName(input.customer));
   const company = escapeHtml(input.company.trim() || "the contractor");
   const url = escapeHtml(input.url);
-  const cta = ctaLabel(input.kind);
+  const cta = input.buttonLabel?.trim() || ctaLabel(input.kind);
   const eyebrow = escapeHtml(documentEyebrow(input));
-  const lead = escapeHtml(documentLead(input));
-  const support = escapeHtml(supportingLine(input.kind));
+  const customMessage = input.message?.trim() ?? "";
+  const lead = customMessage
+    ? escapeHtml(customMessage).replaceAll("\n", "<br>")
+    : escapeHtml(documentLead(input));
+  const support = customMessage ? "" : escapeHtml(supportingLine(input.kind));
+  const headline = escapeHtml(input.headline?.trim() || `Hi ${firstName(input.customer)}`);
   const logo = absoluteShareAssetUrl(input.logoUrl || "", input.origin);
   const logoSrc = escapeHtml(logo);
   const signOff = signOffBlock(input.owner);
@@ -283,7 +292,7 @@ export function defaultShareEmailHtml(input: {
             <tr>
               <td style="padding:40px 40px 0;">
                 <p style="margin:0 0 18px;font-size:12px;line-height:1.2;letter-spacing:0.2em;text-transform:uppercase;color:#0f766e;font-weight:700;">${eyebrow}</p>
-                <h1 style="margin:0;font-size:36px;line-height:1.08;font-weight:800;letter-spacing:-0.04em;color:#0a0a0a;">Hi ${who}</h1>
+                <h1 style="margin:0;font-size:36px;line-height:1.08;font-weight:800;letter-spacing:-0.04em;color:#0a0a0a;">${headline}</h1>
               </td>
             </tr>
             <tr>
@@ -304,9 +313,13 @@ export function defaultShareEmailHtml(input: {
             </td></tr>`
                 : ""
             }
-            <tr>
+            ${
+              support
+                ? `<tr>
               <td style="padding:18px 40px 32px;font-size:15px;line-height:1.6;color:#737373;">${support}</td>
-            </tr>
+            </tr>`
+                : ""
+            }
             <tr>
               <td style="padding:0 40px 8px;">
                 <a href="${url}" style="display:block;background:#0a0a0a;color:#ffffff;text-decoration:none;padding:18px 24px;font-size:16px;font-weight:700;letter-spacing:-0.01em;text-align:center;">${escapeHtml(cta)}&nbsp;&nbsp;&#8594;</a>
@@ -348,24 +361,29 @@ export function defaultShareEmailText(input: {
   companyCity?: string;
   companyState?: string;
   companyPostalCode?: string;
+  headline?: string;
+  message?: string;
+  buttonLabel?: string;
 }) {
   if (input.kind === "estimate") {
-    return renderProposalEmailText(input);
+    return renderProposalEmailText({
+      ...input,
+      intro: input.message,
+    });
   }
   const who = firstName(input.customer);
-  const lead = documentLead(input);
-  const support = supportingLine(input.kind);
+  const customMessage = input.message?.trim() ?? "";
+  const lead = customMessage || documentLead(input);
+  const support = customMessage ? "" : supportingLine(input.kind);
   const parts = [
     documentEyebrow(input).toUpperCase(),
     "",
-    `Hi ${who},`,
+    input.headline?.trim() || `Hi ${who},`,
     "",
     lead,
-    support,
-    "",
-    `${ctaLabel(input.kind)}:`,
-    input.url,
   ];
+  if (support) parts.push(support);
+  parts.push("", `${input.buttonLabel?.trim() || ctaLabel(input.kind)}:`, input.url);
   const signOff = signOffBlock(input.owner);
   if (signOff) {
     parts.push("", signOff);

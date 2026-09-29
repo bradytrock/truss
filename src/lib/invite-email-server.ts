@@ -1,6 +1,14 @@
-import { inviteSignupUrl } from "@/lib/accounts";
+import { INVITE_DAYS, inviteSignupUrl } from "@/lib/accounts";
 import { appOrigin } from "@/lib/app-origin";
 import { loadProfileCompany } from "@/lib/eagleview-server";
+import {
+  emailTemplateHasOverride,
+  resolveSystemEmail,
+  systemEmailHtml,
+  systemEmailText,
+} from "@/lib/email-templates";
+import { loadCompanyEmailTemplates } from "@/lib/email-templates-server";
+import { firstName } from "@/lib/phone";
 import {
   canEmailInvite,
   inviteEmailAllowed,
@@ -69,6 +77,7 @@ export async function sendStaffInviteEmails(body: Record<string, unknown>) {
 
   const origin = await appOrigin();
   const from = formatResendFrom({ senderName: String(inviterName), companyName });
+  const emailTemplates = await loadCompanyEmailTemplates(supabase, companyId);
   const results: InviteEmailSendResult[] = [];
 
   for (const staffId of staffIds) {
@@ -156,11 +165,29 @@ export async function sendStaffInviteEmails(body: Record<string, unknown>) {
       inviterName: String(inviterName),
       signupUrl,
     };
+    const custom = emailTemplateHasOverride(emailTemplates, "invite")
+      ? resolveSystemEmail("invite", emailTemplates, {
+          name: firstName(seat.name),
+          company: companyName,
+          inviter: String(inviterName),
+          seat: seat.title?.trim() ? ` as ${seat.title.trim()}` : "",
+          days: String(INVITE_DAYS),
+        })
+      : null;
     const sent = await sendResendEmail({
       to,
-      subject: inviteEmailSubject(companyName),
-      html: inviteEmailHtml(payload),
-      text: inviteEmailText(payload),
+      subject: custom?.subject || inviteEmailSubject(companyName),
+      html: custom
+        ? systemEmailHtml({
+            headline: custom.headline,
+            message: custom.message,
+            button: custom.button,
+            url: signupUrl,
+          })
+        : inviteEmailHtml(payload),
+      text: custom
+        ? systemEmailText({ headline: custom.headline, message: custom.message, url: signupUrl })
+        : inviteEmailText(payload),
       from,
       replyTo,
     });

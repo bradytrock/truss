@@ -24,6 +24,17 @@ assert.match(html, /100 Main St/);
 assert.match(html, /Valid through/);
 assert.match(html, /Review &amp; sign/);
 assert.doesNotMatch(html, /Takes about two minutes\. No account or app required\./);
+
+const custom = renderProposalEmailHtml({
+  ...input,
+  headline: "Hello Dana — your T Rock Roofing estimate is here.",
+  intro: "Open the estimate when you are ready.",
+  buttonLabel: "View estimate",
+});
+assert.match(custom, /Hello Dana — your T Rock Roofing estimate is here\./);
+assert.match(custom, /Open the estimate when you are ready\./);
+assert.match(custom, /View estimate/);
+assert.doesNotMatch(custom, /your estimate from T Rock Roofing is/);
 assert.match(html, /https:\/\/app\.example\.com\/e\/token/);
 assert.doesNotMatch(html, />Scope</);
 assert.doesNotMatch(html, /Restoration/);

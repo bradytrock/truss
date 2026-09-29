@@ -1,5 +1,13 @@
 import { applyAutomationMerge, type Automation, type AutomationAction, type AutomationMergeContext } from "@/lib/automations";
 import { resolveJobValue } from "@/lib/automations/job-effects";
+import {
+  emailTemplateHasOverride,
+  resolveSystemEmail,
+  systemEmailHtml,
+  systemEmailText,
+  type CompanyEmailTemplates,
+} from "@/lib/email-templates";
+import { firstName } from "@/lib/phone";
 import { RESEND_FROM_ADDRESS, sendResendEmail } from "@/lib/resend-mail";
 import { sendblueText } from "@/lib/sendblue";
 import type { WorkColumn } from "@/lib/work-board";
@@ -32,6 +40,7 @@ export async function executeAutomationActions(input: {
   addNote?: (body: string) => Promise<void>;
   estimateTotal?: number | null;
   dryRun?: boolean;
+  emailTemplates?: CompanyEmailTemplates;
 }): Promise<ExecuteActionResult> {
   const notes: string[] = [];
   const errors: string[] = [];
@@ -158,7 +167,16 @@ async function runAction(
           : to === "staff"
             ? staff?.email
             : input.ownerEmail;
-    const text = automationEmailText(subject || "A note from your contractor", body);
+    const builtinSubject = subject || "A note from your contractor";
+    const text = automationEmailText(builtinSubject, body);
+    const custom = emailTemplateHasOverride(input.emailTemplates, "automation")
+      ? resolveSystemEmail("automation", input.emailTemplates, {
+          name: firstName(input.merge.contactName || ""),
+          company: input.merge.companyName || "",
+          subject: builtinSubject,
+          message: body,
+        })
+      : null;
     if (phone && text) {
       const texted = await sendblueText({ to: phone, content: text });
       if (texted.ok && !texted.mocked) {
@@ -169,9 +187,20 @@ async function runAction(
     if (!email) return { ok: false, delivery: "", error: "No email address or mobile number for that recipient." };
     const result = await sendResendEmail({
       to: email,
-      subject: subject || "A note from your contractor",
-      text: body,
-      html: `<p>${body.replace(/\n/g, "<br/>")}</p>`,
+      subject: custom?.subject || builtinSubject,
+      text: custom
+        ? systemEmailText({
+            headline: custom.headline === custom.subject ? "" : custom.headline,
+            message: custom.message,
+          })
+        : body,
+      html: custom
+        ? systemEmailHtml({
+            headline: custom.headline === custom.subject ? "" : custom.headline,
+            message: custom.message,
+            button: custom.button,
+          })
+        : `<p>${body.replace(/\n/g, "<br/>")}</p>`,
       replyTo: input.ownerEmail || RESEND_FROM_ADDRESS,
     });
     if (!result.ok) return { ok: false, delivery: "", error: result.error };

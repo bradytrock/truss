@@ -14,6 +14,7 @@ import {
   useCompanySettingsDraft,
 } from "@/components/company-settings-form";
 import { CompanyStripeSettings } from "@/components/company-stripe-settings";
+import { EmailTemplateSettings } from "@/components/email-template-settings";
 import { LEGAL_EMAIL, LEGAL_PAGES } from "@/lib/legal";
 
 export default function CompanySettingsPage() {
@@ -356,6 +357,22 @@ function CompanySettingsForm() {
               card.
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="border-b">
+          <CardTitle>Email templates</CardTitle>
+          <CardDescription>
+            Wording for every email the system sends. Change a subject, headline, message, or
+            button here and the next send uses it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-2 pt-4">
+          <EmailTemplateSettings
+            templates={form.emailTemplates}
+            onChange={(emailTemplates) => patch("emailTemplates", emailTemplates)}
+          />
         </CardContent>
       </Card>
 

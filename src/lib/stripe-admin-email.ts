@@ -1,4 +1,12 @@
 import { formatResendFrom, isResendConfigured, sendResendEmail } from "@/lib/resend-mail";
+import {
+  emailTemplateHasOverride,
+  resolveSystemEmail,
+  systemEmailHtml,
+  systemEmailText,
+  type CompanyEmailTemplates,
+} from "@/lib/email-templates";
+import { firstName } from "@/lib/phone";
 
 function escapeHtml(value: string) {
   return value
@@ -64,6 +72,7 @@ export async function emailCompanyAdminsStripeRevoke(input: {
   revokeAtLabel: string;
   replyTo: string;
   admins: Array<{ name: string; email: string }>;
+  emailTemplates?: CompanyEmailTemplates;
 }) {
   if (!isResendConfigured()) {
     return { sent: 0, failed: input.admins.length, configured: false };
@@ -83,11 +92,25 @@ export async function emailCompanyAdminsStripeRevoke(input: {
       requestedBy: input.requestedBy,
       revokeAtLabel: input.revokeAtLabel,
     };
+    const builtinSubject = stripeRevokeEmailSubject(input.company);
+    const builtinText = stripeRevokeEmailText(payload);
+    const custom = emailTemplateHasOverride(input.emailTemplates, "stripe_revoke")
+      ? resolveSystemEmail("stripe_revoke", input.emailTemplates, {
+          name: firstName(admin.name),
+          company: input.company,
+          requestedBy: input.requestedBy,
+          when: input.revokeAtLabel,
+        })
+      : null;
     const result = await sendResendEmail({
       to,
-      subject: stripeRevokeEmailSubject(input.company),
-      html: stripeRevokeEmailHtml(payload),
-      text: stripeRevokeEmailText(payload),
+      subject: custom?.subject || builtinSubject,
+      html: custom
+        ? systemEmailHtml({ headline: custom.headline, message: custom.message, button: custom.button })
+        : stripeRevokeEmailHtml(payload),
+      text: custom
+        ? systemEmailText({ headline: custom.headline, message: custom.message })
+        : builtinText,
       from,
       replyTo: input.replyTo,
     });

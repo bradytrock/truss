@@ -1,4 +1,5 @@
 import { executeAutomationActions } from "@/lib/automations/execute";
+import { loadCompanyEmailTemplates } from "@/lib/email-templates-server";
 import { mergeForJob, plannedRunsForEvent, runsAfterStageChange } from "@/lib/automations/queue";
 import type { AutomationEventKind, AutomationRun } from "@/lib/automations/types";
 import { createAnonClient } from "@/lib/supabase/anon";
@@ -22,6 +23,7 @@ export async function dispatchShareAutomation(input: {
   const company = {
     name: context.company_name || "Your company",
     phone: context.company_phone || "",
+    emailTemplates: await loadCompanyEmailTemplates(supabase, context.company_id),
   } as CompanySettings;
   const job = context.job_id
     ? fillJobRecord({
@@ -152,6 +154,7 @@ async function runPlanned(
     const executed = await executeAutomationActions({
       automation,
       merge: mergeForJob({ book, company, job, estimateTotal }),
+      emailTemplates: company.emailTemplates,
       estimateTotal,
       customerPhone: contact?.phone,
       customerEmail: contact?.email,

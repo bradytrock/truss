@@ -9999,6 +9999,27 @@ notify pgrst, 'reload schema';
 alter table public.companies
   add column if not exists default_email_signature text not null default '';
 
+alter table public.companies
+  add column if not exists email_templates jsonb not null default '{}'::jsonb;
+
+comment on column public.companies.email_templates is
+  'Per-email subject, headline, message, and button overrides. Empty fields use the built-in wording.';
+
+create or replace function public.company_email_templates(p_company_id uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(email_templates, '{}'::jsonb)
+  from public.companies
+  where id = p_company_id;
+$$;
+
+revoke all on function public.company_email_templates(uuid) from public;
+grant execute on function public.company_email_templates(uuid) to anon, authenticated;
+
 alter table public.team_members
   add column if not exists email_signature text not null default '';
 
@@ -14339,6 +14360,7 @@ begin
     'ok', true,
     'companyName', coalesce(company_row.name, ''),
     'companyEmail', coalesce(company_row.email, ''),
+    'companyId', agent.company_id,
     'ownerStaffId', owner_row.id,
     'assignedToName', coalesce(nullif(trim(owner_row.name), ''), opp.estimator, ''),
     'homeownerName', coalesce(contact_row.name, ''),
@@ -15820,7 +15842,8 @@ begin
       'address', coalesce(v_address, ''),
       'contactName', coalesce(v_contact_name, ''),
       'companyName', coalesce(v_company.name, ''),
-      'companyEmail', coalesce(v_company.email, '')
+      'companyEmail', coalesce(v_company.email, ''),
+      'companyId', est.company_id
     )
   );
 end;
