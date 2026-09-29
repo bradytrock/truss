@@ -145,7 +145,6 @@ export function CreateOpportunityDialog({
     setReferralId("");
     setReferralQuery("");
     setNotes("");
-    setConfirmOpen(false);
   }
 
   function handleOpenChange(next: boolean) {
