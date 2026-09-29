@@ -15397,7 +15397,7 @@ end $$;
 
 notify pgrst, 'reload schema';
 
--- ========== 20260929180000_estimate_prepared_for_contact.sql ==========
+-- ========== 20260929181000_estimate_prepared_for_contact.sql ==========
 -- Include the client's phone and email on shared proposals so Prepared for
 -- matches the office copy.
 create or replace function public.shared_estimate(p_token text)
