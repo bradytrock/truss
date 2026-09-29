@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { JobDocumentReview } from "@/components/job-document-review";
 import { JobRecord } from "@/components/job-record";
 import { RecordErrorBoundary } from "@/components/record-error-boundary";
+import { escapeDismissesOverlay } from "@/lib/draft-escape";
 import { parseJobDocParam } from "@/lib/qb-review";
 import type { Job } from "@/lib/types";
 
@@ -14,7 +15,7 @@ export function JobRecordWindow({ job, onClose }: { job: Job; onClose: () => voi
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape" && !event.defaultPrevented) onClose();
+      if (escapeDismissesOverlay(event)) onClose();
     }
     document.addEventListener("keydown", onKey);
     const previous = document.body.style.overflow;

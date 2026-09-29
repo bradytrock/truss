@@ -5,10 +5,16 @@ import { Dialog as SheetPrimitive } from "@base-ui/react/dialog"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { DraftEscapeProvider, useDraftEscape, useDraftRootRef } from "@/components/ui/draft-escape"
 import { XIcon } from "lucide-react"
 
-function Sheet({ ...props }: SheetPrimitive.Root.Props) {
-  return <SheetPrimitive.Root data-slot="sheet" {...props} />
+function Sheet({ onOpenChange, ...props }: SheetPrimitive.Root.Props) {
+  const draft = useDraftEscape(onOpenChange)
+  return (
+    <DraftEscapeProvider value={draft.context}>
+      <SheetPrimitive.Root data-slot="sheet" {...props} onOpenChange={draft.onOpenChange} />
+    </DraftEscapeProvider>
+  )
 }
 
 function SheetTrigger({ ...props }: SheetPrimitive.Trigger.Props) {
@@ -41,11 +47,13 @@ function SheetContent({
   children,
   side = "right",
   showCloseButton = true,
+  ref,
   ...props
 }: SheetPrimitive.Popup.Props & {
   side?: "top" | "right" | "bottom" | "left"
   showCloseButton?: boolean
 }) {
+  const draftRef = useDraftRootRef(ref)
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -57,6 +65,7 @@ function SheetContent({
           className
         )}
         {...props}
+        ref={draftRef}
       >
         {children}
         {showCloseButton && (

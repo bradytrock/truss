@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { escapeDismissesOverlay } from "@/lib/draft-escape";
 import type { GoogleOverlayEvent } from "@/lib/google-calendar-demo";
 import {
   applyMinutesToDay,
@@ -337,11 +338,11 @@ export function CalendarWeekGrid({
     if (!quickOpen && !selectedCrmId) return;
 
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setQuickOpen(false);
-        setSelection(null);
-        setSelectedCrmId(null);
-      }
+      if (!escapeDismissesOverlay(e)) return;
+      if (quickOpen && quickTitle.trim()) return;
+      setQuickOpen(false);
+      setSelection(null);
+      setSelectedCrmId(null);
     }
 
     function onDocPointer(e: PointerEvent) {
@@ -360,7 +361,7 @@ export function CalendarWeekGrid({
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onDocPointer);
     };
-  }, [quickOpen, selectedCrmId]);
+  }, [quickOpen, quickTitle, selectedCrmId]);
 
   function beginCreate(dayKey: string, clientY: number, top: number) {
     const startMin = yToMinutes(clientY, top);
