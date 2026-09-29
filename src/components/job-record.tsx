@@ -38,6 +38,8 @@ import { JobCompanyCamPanel } from "@/components/job-companycam";
 import { JobPhotosPanel } from "@/components/job-photos-panel";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { JobFinancials } from "@/components/job-financials";
+import { JobInsurancePanel } from "@/components/job-insurance-panel";
+import { claimTotals } from "@/lib/insurance";
 import { AutomationRuns } from "@/components/automation-runs";
 import { PaperArchiveButton } from "@/components/paper-archive-button";
 import { Badge } from "@/components/ui/badge";
@@ -124,7 +126,7 @@ import { materialOrderLinesFor, materialOrderTotal } from "@/lib/material-orders
 import { archivedPaper, livePaper } from "@/lib/paper-archive";
 import { MaterialOrderFromTemplateDialog } from "@/components/material-order-from-template-dialog";
 
-const JOB_TABS = ["overview", "photos", "files", "financials", "paper", "fields"] as const;
+const JOB_TABS = ["overview", "photos", "files", "insurance", "financials", "paper", "fields"] as const;
 type JobTab = (typeof JOB_TABS)[number];
 
 function parseJobTab(raw: string | null): JobTab {
@@ -383,6 +385,8 @@ export function JobRecord({
   }
 
   const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
+  const claim = (crm.jobInsurance ?? []).find((item) => item.jobId === job.id);
+  const claimMath = claim ? claimTotals(claim) : null;
   const client = crm.getClient(job.clientId);
   const primary = crm.getContact(job.primaryContactId);
   const photos = livePhotos(crm.photos, job.id);
@@ -1144,6 +1148,12 @@ export function JobRecord({
               Paper
               <span className="ml-1 text-muted-foreground">{estimates.length + invoices.length}</span>
             </TabsTrigger>
+            <TabsTrigger value="insurance">
+              Insurance
+              {claimMath?.openCount ? (
+                <span className="ml-1 text-muted-foreground">{claimMath.openCount}</span>
+              ) : null}
+            </TabsTrigger>
             <TabsTrigger value="financials">Financials</TabsTrigger>
             <TabsTrigger value="fields">Custom fields</TabsTrigger>
           </TabsList>
@@ -1156,7 +1166,7 @@ export function JobRecord({
         </div>
 
         <TabsContent value="overview" className="mt-0">
-          <div className="mb-6 grid gap-3 sm:grid-cols-3">
+          <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard
               eyebrow="Estimate"
               title={featuredEstimate?.number ?? "No estimate yet"}
@@ -1209,6 +1219,23 @@ export function JobRecord({
                 <p>{jobFiles[0].name}</p>
               ) : (
                 <p>Photo reports and job files land here.</p>
+              )}
+            </SummaryCard>
+            <SummaryCard
+              eyebrow="Insurance"
+              title={claim?.carrier || "No claim yet"}
+              onClick={() => setJobTab("insurance")}
+            >
+              {claim && claimMath ? (
+                <>
+                  <p>
+                    {claim.claimNumber || "No claim number"}
+                    {claimMath.openCount ? ` · ${claimMath.openCount} supplement${claimMath.openCount === 1 ? "" : "s"} open` : ""}
+                  </p>
+                  <p className="mt-1">{formatCurrencyFull(claimMath.outstanding)} still to collect</p>
+                </>
+              ) : (
+                <p>Carrier, supplements, and insurance checks.</p>
               )}
             </SummaryCard>
             <SummaryCard
@@ -1519,6 +1546,10 @@ export function JobRecord({
               </p>
             )}
           </section>
+        </TabsContent>
+
+        <TabsContent value="insurance" className="mt-0">
+          <JobInsurancePanel job={job} readOnly={deleted} />
         </TabsContent>
 
         <TabsContent value="financials" className="mt-0">

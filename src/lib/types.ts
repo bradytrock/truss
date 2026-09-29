@@ -1298,6 +1298,8 @@ export interface CrmState {
   payments: Payment[];
   expenses: Expense[];
   forecastedExpenses: ForecastedExpense[];
+  /** One insurance claim per job: carrier, supplements, and checks. */
+  jobInsurance: import("@/lib/insurance").JobInsurance[];
   materialOrders: MaterialOrder[];
   materialOrderLines: MaterialOrderLine[];
   materialOrderTemplates: MaterialOrderTemplate[];

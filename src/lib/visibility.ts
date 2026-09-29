@@ -374,6 +374,7 @@ export function scopeBook(
     if (scope === "bd" && !expense.jobId && expense.createdBy === effective.name) return true;
     return false;
   });
+  const jobInsurance = (state.jobInsurance ?? []).filter((item) => jobIds.has(item.jobId));
   const forecastedExpenses = (state.forecastedExpenses ?? []).filter((item) => {
     if (item.jobId && jobIds.has(item.jobId)) return true;
     if (scope === "bd" && !item.jobId && item.createdBy === effective.name) return true;
@@ -427,6 +428,7 @@ export function scopeBook(
     payments,
     expenses,
     forecastedExpenses,
+    jobInsurance,
     materialOrders,
     materialOrderLines: (state.materialOrderLines ?? []).filter((line) =>
       materialOrderIds.has(line.materialOrderId),

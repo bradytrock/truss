@@ -26,6 +26,13 @@ import { resolveStoredFileUrl, normalizeObjectKey } from "@/lib/storage/urls";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { parseQbStatus } from "@/lib/types";
 import { isExpenseAccount } from "@/lib/job-financials";
+import {
+  isClaimPeril,
+  isClaimStatus,
+  parseChecks,
+  parseSupplements,
+  type JobInsurance,
+} from "@/lib/insurance";
 import { parseReturningClientStatus } from "@/lib/returning-client";
 import type {
   Activity,
@@ -977,6 +984,34 @@ export function mapForecastedExpense(
     memo: row.memo,
     createdAt: row.created_at,
     createdBy: row.created_by,
+  };
+}
+
+export function mapJobInsurance(row: Database["public"]["Tables"]["job_insurance"]["Row"]): JobInsurance {
+  const peril = row.peril;
+  const status = row.status;
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    carrier: row.carrier,
+    claimNumber: row.claim_number,
+    policyNumber: row.policy_number,
+    dateOfLoss: row.date_of_loss,
+    peril: isClaimPeril(peril) ? peril : "",
+    status: isClaimStatus(status) ? status : "intake",
+    deductible: Number(row.deductible),
+    rcv: Number(row.rcv),
+    acv: Number(row.acv),
+    depreciation: Number(row.depreciation),
+    recoverable: row.recoverable,
+    overheadProfit: Number(row.overhead_profit),
+    mortgageCompany: row.mortgage_company,
+    loanNumber: row.loan_number,
+    adjusterContactId: row.adjuster_contact_id,
+    notes: row.notes,
+    supplements: parseSupplements(row.supplements),
+    checks: parseChecks(row.checks),
+    updatedAt: row.updated_at,
   };
 }
 

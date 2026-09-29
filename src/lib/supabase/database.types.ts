@@ -1110,6 +1110,58 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["forecasted_expenses"]["Insert"]>;
         Relationships: [];
       };
+      job_insurance: {
+        Row: {
+          id: string;
+          company_id: string;
+          job_id: string;
+          carrier: string;
+          claim_number: string;
+          policy_number: string;
+          date_of_loss: string | null;
+          peril: string;
+          status: string;
+          deductible: number;
+          rcv: number;
+          acv: number;
+          depreciation: number;
+          recoverable: boolean;
+          overhead_profit: number;
+          mortgage_company: string;
+          loan_number: string;
+          adjuster_contact_id: string | null;
+          notes: string;
+          supplements: Json;
+          checks: Json;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          job_id: string;
+          carrier?: string;
+          claim_number?: string;
+          policy_number?: string;
+          date_of_loss?: string | null;
+          peril?: string;
+          status?: string;
+          deductible?: number;
+          rcv?: number;
+          acv?: number;
+          depreciation?: number;
+          recoverable?: boolean;
+          overhead_profit?: number;
+          mortgage_company?: string;
+          loan_number?: string;
+          adjuster_contact_id?: string | null;
+          notes?: string;
+          supplements?: Json;
+          checks?: Json;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["job_insurance"]["Insert"]>;
+        Relationships: [];
+      };
       qb_vendors: {
         Row: {
           id: string;

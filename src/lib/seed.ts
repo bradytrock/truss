@@ -4,6 +4,7 @@ import { backfillRecordCodes } from "@/lib/job-code";
 import { fillJobRecord, JOB_RECORD_EXTRAS, jobsFromOpenLeads } from "@/lib/job-record";
 import { NORTHLINE_STAFF, NORTHLINE_TEAMS, type CrmState } from "@/lib/types";
 import { extraForecastedExpenses } from "@/lib/demo-financials";
+import { extraJobInsurance } from "@/lib/demo-insurance";
 import { demoOps, NORTHLINE_PRICE_LIST_ID } from "@/lib/demo-ops";
 import { extraMessages } from "@/lib/demo-messages";
 import {
@@ -74,6 +75,7 @@ export const seedState: CrmState = {
   photoReports: [],
   expenses: demoOps.expenses,
   forecastedExpenses: extraForecastedExpenses,
+  jobInsurance: extraJobInsurance,
   materialOrders: [],
   materialOrderLines: [],
   materialOrderTemplates: [],
