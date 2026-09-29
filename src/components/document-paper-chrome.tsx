@@ -203,7 +203,6 @@ export function PaperTableRow({
         <div className="min-w-0 break-words">
           <div className="text-[15px] leading-6">{heading}</div>
           {detail}
-          {extra}
           <PaperMobileFacts
             qty={qty}
             unitLabel={unitLabel}
@@ -220,6 +219,7 @@ export function PaperTableRow({
             <p className="hidden pt-0.5 text-right text-sm font-medium tabular-nums @lg:block">{amount}</p>
           </>
         )}
+        {extra ? <div className="col-span-full min-w-0">{extra}</div> : null}
       </div>
     </div>
   );

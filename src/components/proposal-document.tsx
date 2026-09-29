@@ -1,8 +1,18 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { EstimateStatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useCrmOptional } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord, type ProjectManagerContact } from "@/lib/document-owner";
 import { billingEstimate, workMarket } from "@/lib/market";
@@ -28,7 +38,7 @@ import { estimateSignatureLines } from "@/lib/estimate-signers";
 import { customerContactDetails, coOwnerContact } from "@/lib/parties";
 import { EstimatePhotoThumb } from "@/components/estimate-line-photos";
 import { photosForEstimateLine } from "@/lib/estimate-line-photos";
-import type { CompanySettings, Estimate, EstimateLine, JobMarket, JobPhoto } from "@/lib/types";
+import type { CompanySettings, Estimate, EstimateLine, EstimateLinePhoto, JobMarket, JobPhoto } from "@/lib/types";
 import { companyEstimateTermsFor } from "@/lib/contract-types";
 import { estimateTermsValues, liveEstimateTerms } from "@/lib/document-terms";
 import { DocumentNotesBlock } from "@/components/document-notes";
@@ -496,18 +506,124 @@ function ProposalLinePhotos({
   gallery: JobPhoto[];
 }) {
   const photos = photosForEstimateLine(line, gallery);
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const fallbackAlt = line.title?.trim() || "Line photo";
   if (!photos.length) return null;
   return (
-    <ul className="mt-2 grid grid-cols-3 gap-1.5 sm:grid-cols-4">
-      {photos.map((photo) => (
-        <li key={photo.id}>
-          <EstimatePhotoThumb
+    <>
+      <ul
+        className={cn(
+          "mt-2 grid gap-2.5 sm:gap-3",
+          photos.length === 1 ? "max-w-xl grid-cols-1" : "grid-cols-2",
+        )}
+      >
+        {photos.map((photo, index) => {
+          const label = photo.caption?.trim() || fallbackAlt;
+          return (
+            <li key={photo.id} className="min-w-0">
+              <button
+                type="button"
+                className="block w-full cursor-zoom-in overflow-hidden rounded-md border bg-[#f3f3f3] text-left outline-none focus-visible:ring-2 focus-visible:ring-[#1c1c1c]/30"
+                aria-label={`View ${label} larger`}
+                onClick={() => setOpenIndex(index)}
+              >
+                <EstimatePhotoThumb
+                  src={photo.imageUrl}
+                  alt={label}
+                  className="aspect-[4/3] w-full object-cover"
+                />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <ProposalPhotoDialog
+        photos={photos}
+        openIndex={openIndex}
+        fallbackAlt={fallbackAlt}
+        onOpenIndex={setOpenIndex}
+      />
+    </>
+  );
+}
+
+function ProposalPhotoDialog({
+  photos,
+  openIndex,
+  fallbackAlt,
+  onOpenIndex,
+}: {
+  photos: EstimateLinePhoto[];
+  openIndex: number | null;
+  fallbackAlt: string;
+  onOpenIndex: (index: number | null) => void;
+}) {
+  const count = photos.length;
+  const safeIndex = openIndex !== null && openIndex >= 0 && openIndex < count ? openIndex : null;
+  const photo = safeIndex !== null ? photos[safeIndex] : null;
+  const label = photo?.caption?.trim() || fallbackAlt;
+
+  useEffect(() => {
+    if (safeIndex === null || count < 2) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+      event.preventDefault();
+      const delta = event.key === "ArrowRight" ? 1 : -1;
+      onOpenIndex(((safeIndex ?? 0) + delta + count) % count);
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [count, onOpenIndex, safeIndex]);
+
+  return (
+    <Dialog
+      open={photo !== null}
+      onOpenChange={(open) => {
+        if (!open) onOpenIndex(null);
+      }}
+    >
+      <DialogContent className="max-h-[min(94dvh,56rem)] gap-3 sm:max-w-5xl">
+        <DialogHeader>
+          <DialogTitle className="pr-8 leading-snug text-balance">{label}</DialogTitle>
+          {count > 1 && safeIndex !== null ? (
+            <DialogDescription className="tabular-nums">
+              {safeIndex + 1} of {count}
+            </DialogDescription>
+          ) : (
+            <DialogDescription className="sr-only">Full size photo</DialogDescription>
+          )}
+        </DialogHeader>
+        {photo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
             src={photo.imageUrl}
-            alt={photo.caption || line.title || "Line photo"}
-            className="aspect-[4/3] w-full rounded-sm border object-cover"
+            alt={label}
+            className="max-h-[min(70dvh,44rem)] w-full rounded-md bg-[#111] object-contain"
           />
-        </li>
-      ))}
-    </ul>
+        ) : null}
+        {count > 1 && safeIndex !== null ? (
+          <div className="flex items-center justify-between gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenIndex((safeIndex + count - 1) % count)}
+            >
+              <ChevronLeft />
+              Previous
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => onOpenIndex((safeIndex + 1) % count)}
+            >
+              Next
+              <ChevronRight />
+            </Button>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
   );
 }
