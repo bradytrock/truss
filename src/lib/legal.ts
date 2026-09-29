@@ -1,7 +1,7 @@
 export const LEGAL_BRAND = "Truss";
 export const LEGAL_SITE = "https://myroofingtools.com";
 export const LEGAL_EMAIL = "privacy@trockroofer.com";
-export const LEGAL_UPDATED = "September 20, 2026";
+export const LEGAL_UPDATED = "September 29, 2026";
 
 export const LEGAL_PAGES = [
   { href: "/privacy", label: "Privacy Policy", id: "privacy" },
@@ -48,7 +48,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "Payments: checkout and deposit status through Stripe. We do not store full card numbers.",
       "Public activity on a digital card: anonymous opens and taps (call, text, email, site, payment) so the office can see which card was used. Link-preview crawlers are filtered out.",
       "E-sign trail on a proposal: IP address, device, the unique link, consent, and a hash of the document. That certificate is office-only.",
-      "Technical: sign-in session, browser local data (for example your Home layout), and basic server logs.",
+      "Technical: sign-in session, browser local data (for example your Home layout), basic server logs, and Microsoft Clarity recordings of how pages are used.",
     ],
   },
   {
@@ -73,6 +73,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "QuickBooks Desktop — via the Web Connector when you approve a push.",
       "EagleView — when you order or pull a roof report.",
       "OpenAI or Anthropic — only when someone uses the assistant.",
+      "Microsoft Clarity — page usage and session recordings so we can see how the product is used.",
     ],
   },
   {
@@ -85,7 +86,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
   {
     heading: "Cookies and local storage",
     paragraphs: [
-      "Truss uses a sign-in cookie so you stay logged in, and local storage for things like your Home module layout. See the Cookie Policy for the short list. We do not run advertising pixels.",
+      "Truss uses a sign-in cookie so you stay logged in, local storage for things like your Home module layout, and Microsoft Clarity to record how pages are used. See the Cookie Policy for the short list. We do not run advertising pixels.",
     ],
   },
   {
@@ -205,7 +206,7 @@ export const TERMS_SECTIONS: LegalSection[] = [
 ];
 
 export const COOKIE_INTRO =
-  "Truss uses a short list of cookies and local storage so you can stay signed in and keep the desk the way you left it. We do not use advertising cookies.";
+  "Truss uses a short list of cookies and local storage so you can stay signed in, keep the desk the way you left it, and so we can see how pages are used. We do not use advertising cookies.";
 
 export const COOKIE_SECTIONS: LegalSection[] = [
   {
@@ -218,6 +219,12 @@ export const COOKIE_SECTIONS: LegalSection[] = [
     heading: "Local storage",
     paragraphs: [
       "The browser may keep a Home layout (which modules you hid or resized), a recent Login As list, and similar desk preferences on that device. Clearing site data resets those. It does not delete the job book.",
+    ],
+  },
+  {
+    heading: "Product experience",
+    paragraphs: [
+      "Microsoft Clarity records how pages are used — clicks, scrolls, and session replays — so we can see where the product is confusing. Clarity sets its own cookies in the browser. This is product analytics, not advertising, and it is not sold.",
     ],
   },
   {
