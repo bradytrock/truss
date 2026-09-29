@@ -12,6 +12,9 @@ const gregory = boardCardDetails({
 });
 assert(!gregory.showCustomer, "last name already in title");
 assert(!gregory.showLocation, "address already in title");
+assert(gregory.title === "Gregory — 9144 Shadow Ridge Drive", "street stays on the title line");
+assert(gregory.streetLine === "", "street is not repeated");
+assert(gregory.locality === "Highland Village, TX 75077", "city state zip drop below the street");
 
 const distinct = boardCardDetails({
   title: "Roof replacement",
@@ -21,6 +24,9 @@ const distinct = boardCardDetails({
 });
 assert(distinct.showCustomer, "customer is extra");
 assert(distinct.showLocation, "location is extra");
+assert(distinct.title === "Roof replacement", "title stays the job name");
+assert(distinct.streetLine === "9144 Shadow Ridge Drive", "street gets its own full line");
+assert(distinct.locality === "Highland Village, TX 75077", "city state zip sit under the street");
 
 const missing = boardCardDetails({
   title: undefined as unknown as string,
@@ -30,6 +36,21 @@ const missing = boardCardDetails({
 assert(missing.title === "", "nullish title does not throw");
 assert(!missing.showCustomer, "nullish customer is hidden");
 assert(!missing.showLocation, "nullish location is hidden");
+assert(missing.streetLine === "", "nullish street is hidden");
+assert(missing.locality === "", "nullish locality is hidden");
+
+const structured = boardCardDetails({
+  title: "Whitby — 100 falcon Ct, Argyle, TX 76226",
+  customerName: "Whitby",
+  location: "100 falcon Ct, Argyle, TX 76226",
+  street: "100 falcon Ct",
+  city: "Argyle",
+  state: "TX",
+  postalCode: "76226",
+});
+assert(structured.title === "Whitby — 100 falcon Ct", "structured street stays with the name");
+assert(structured.locality === "Argyle, TX 76226", "structured city state zip");
+assert(structured.streetLine === "", "structured street is not repeated");
 
 const precon = { status: "precon" as const, opportunityId: "opp-1", deletedAt: null };
 assert(workColumnFor(precon, { stage: "supplementing" }) === "supplementing", "supplementing stays its own column");
