@@ -9,20 +9,27 @@ import { crmExpenseActors, expenseLoggedByLabel } from "@/lib/accounting-books";
 import { formatDate, formatMoney } from "@/lib/format";
 import {
   expensesForJob,
+  forecastedExpensesForJob,
   paymentsForJob,
   type JobBooksBasis,
 } from "@/lib/job-financials";
-import { buildProfitAndLoss, compareJobProfitAndLoss, jobPeriodBounds } from "@/lib/profit-and-loss";
+import {
+  applyForecastedExpenses,
+  buildProfitAndLoss,
+  compareJobProfitAndLoss,
+  jobPeriodBounds,
+} from "@/lib/profit-and-loss";
 import { JobPnlComparisonTable, ProfitAndLossReport } from "@/components/profit-and-loss";
 import { EXPENSE_ACCOUNT_LABELS, type Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { LogExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
+import { LogExpenseDialog, LogForecastedExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
 import { jobDocumentHref, latestReturnNote } from "@/lib/qb-review";
 
 export function JobFinancials({ job }: { job: Job }) {
   const crm = useCrm();
   const [basis, setBasis] = useState<JobBooksBasis>("accrual");
   const [expenseOpen, setExpenseOpen] = useState(false);
+  const [forecastOpen, setForecastOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const period = useMemo(() => jobPeriodBounds(job), [job]);
   const actors = useMemo(() => crmExpenseActors(crm), [crm]);
@@ -60,18 +67,29 @@ export function JobFinancials({ job }: { job: Job }) {
       period.periodLabel,
     ],
   );
+  const forecasts = useMemo(
+    () =>
+      forecastedExpensesForJob(job.id, crm.forecastedExpenses ?? []).sort((a, b) =>
+        b.expectedAt.localeCompare(a.expectedAt),
+      ),
+    [crm.forecastedExpenses, job.id],
+  );
   const comparison = useMemo(
     () =>
-      compareJobProfitAndLoss({
-        job,
-        statement,
-        estimates: crm.estimates,
-        estimateLines: crm.estimateLines,
-        catalog: crm.catalog,
-        opportunities: crm.opportunities,
-      }),
-    [crm.catalog, crm.estimateLines, crm.estimates, crm.opportunities, job, statement],
+      applyForecastedExpenses(
+        compareJobProfitAndLoss({
+          job,
+          statement,
+          estimates: crm.estimates,
+          estimateLines: crm.estimateLines,
+          catalog: crm.catalog,
+          opportunities: crm.opportunities,
+        }),
+        forecasts,
+      ),
+    [crm.catalog, crm.estimateLines, crm.estimates, crm.opportunities, forecasts, job, statement],
   );
+  const forecastTotal = forecasts.reduce((sum, item) => sum + item.amount, 0);
   const expenses = expensesForJob(job.id, crm.expenses).sort((a, b) =>
     b.incurredAt.localeCompare(a.incurredAt),
   );
@@ -111,6 +129,9 @@ export function JobFinancials({ job }: { job: Job }) {
           <Button size="sm" variant="outline" onClick={() => setExpenseOpen(true)}>
             Log expense
           </Button>
+          <Button size="sm" variant="outline" onClick={() => setForecastOpen(true)}>
+            Log forecasted expense
+          </Button>
           <Button size="sm" onClick={() => setPaymentOpen(true)}>
             Log payment
           </Button>
@@ -120,6 +141,51 @@ export function JobFinancials({ job }: { job: Job }) {
       {comparison ? <JobPnlComparisonTable statement={statement} comparison={comparison} /> : null}
 
       <ProfitAndLossReport statement={statement} />
+
+      <div>
+        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Forecasted expenses</p>
+          {forecasts.length > 0 ? (
+            <p className="text-xs tabular-nums text-muted-foreground">{formatMoney(forecastTotal)}</p>
+          ) : null}
+        </div>
+        {forecasts.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No forecasted expenses on this job yet. Log an expected cost before the receipt exists.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {forecasts.map((forecast) => (
+              <li key={forecast.id} className="space-y-1 border p-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium">{forecast.vendor}</p>
+                  <span className="tabular-nums text-sm">{formatMoney(forecast.amount)}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Forecasted estimate {forecast.number} · {EXPENSE_ACCOUNT_LABELS[forecast.account]} ·{" "}
+                  {formatDate(forecast.expectedAt)}
+                  {` · logged by ${expenseLoggedByLabel(forecast.createdBy, actors)}`}
+                </p>
+                {forecast.memo ? <p className="text-sm leading-snug">{forecast.memo}</p> : null}
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:underline"
+                  aria-label={`Remove forecasted estimate ${forecast.number}`}
+                  onClick={() => void crm.removeForecastedExpense(forecast.id)}
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {forecasts.length > 0 ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Job costs (materials, labor, dumpsters, permits, and similar) move projected cost of sales.
+            Fuel, office, and insurance move projected expenses. Nothing here posts to QuickBooks.
+          </p>
+        ) : null}
+      </div>
 
       <div>
         <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">Vendor bills</p>
@@ -245,6 +311,12 @@ export function JobFinancials({ job }: { job: Job }) {
         )}
       </div>
 
+      <LogForecastedExpenseDialog
+        key={forecastOpen ? "forecast-open" : "forecast-closed"}
+        open={forecastOpen}
+        onOpenChange={setForecastOpen}
+        defaultJobId={job.id}
+      />
       <LogExpenseDialog open={expenseOpen} onOpenChange={setExpenseOpen} defaultJobId={job.id} />
       <LogPaymentDialog open={paymentOpen} onOpenChange={setPaymentOpen} defaultJobId={job.id} />
     </div>

@@ -2,6 +2,7 @@ import type {
   Expense,
   ExpenseAccount,
   ExpenseMethod,
+  ForecastedExpense,
   Invoice,
   InvoiceLine,
   Job,
@@ -62,6 +63,10 @@ export function paymentsForJob(jobId: string, payments: Payment[], invoices: Inv
 
 export function expensesForJob(jobId: string, expenses: Expense[]) {
   return expenses.filter((expense) => expense.jobId === jobId);
+}
+
+export function forecastedExpensesForJob(jobId: string, forecasts: ForecastedExpense[]) {
+  return forecasts.filter((item) => item.jobId === jobId);
 }
 
 export type JobBooksBasis = "accrual" | "cash";

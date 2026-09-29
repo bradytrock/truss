@@ -1,5 +1,5 @@
 import { fillPayment } from "@/lib/job-financials";
-import type { Expense } from "@/lib/types";
+import type { Expense, ForecastedExpense } from "@/lib/types";
 
 const RECEIPT_SHINGLES =
   "https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1200&q=80";
@@ -196,6 +196,33 @@ export const PAYMENT_JOBS: Record<string, string> = {
   pay_r6: "job_copper_200",
   pay_r7: "job_alvarez_roof",
 };
+
+export const extraForecastedExpenses: ForecastedExpense[] = [
+  {
+    id: "fest_alvarez_dump",
+    number: "FEST-1001",
+    jobId: "job_alvarez_roof",
+    vendor: "Front Range Roll-Off",
+    account: "dumpsters",
+    amount: 700,
+    expectedAt: "2026-09-02",
+    memo: "Second 30-yard if the tear-off runs long.",
+    createdAt: "2026-08-20T15:00:00.000Z",
+    createdBy: "Nora Keene",
+  },
+  {
+    id: "fest_alvarez_permit",
+    number: "FEST-1002",
+    jobId: "job_alvarez_roof",
+    vendor: "City of Denver",
+    account: "permits",
+    amount: 185,
+    expectedAt: "2026-08-28",
+    memo: "Roof permit if the supplement adds a second layer.",
+    createdAt: "2026-08-20T15:05:00.000Z",
+    createdBy: "Nora Keene",
+  },
+];
 
 export function seedPaymentsFromExtra(
   payments: Array<{

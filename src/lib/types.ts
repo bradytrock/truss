@@ -737,6 +737,20 @@ export interface Expense {
   createdBy: string;
 }
 
+/** Expected job cost that has not been incurred. Not a receipt and not a QuickBooks transaction. */
+export interface ForecastedExpense {
+  id: string;
+  number: string;
+  jobId: string | null;
+  vendor: string;
+  account: ExpenseAccount;
+  amount: number;
+  expectedAt: string;
+  memo: string;
+  createdAt: string;
+  createdBy: string;
+}
+
 export interface MaterialOrder {
   id: string;
   number: string;
@@ -940,6 +954,7 @@ export type CompanyAuditEntityType =
   | "company_file"
   | "payment"
   | "expense"
+  | "forecasted_expense"
   | "task"
   | "schedule_event"
   | "message"
@@ -1282,6 +1297,7 @@ export interface CrmState {
   invoiceLines: InvoiceLine[];
   payments: Payment[];
   expenses: Expense[];
+  forecastedExpenses: ForecastedExpense[];
   materialOrders: MaterialOrder[];
   materialOrderLines: MaterialOrderLine[];
   materialOrderTemplates: MaterialOrderTemplate[];

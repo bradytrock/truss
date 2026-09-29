@@ -29,6 +29,7 @@ export function buildSystemPrompt(context: AssistantContext, viewer: StaffMember
     "Never invent job codes, invoice numbers, or dollar amounts. Read the book first.",
     "Job expenses (materials, labor, subs, equipment, dumpsters, permits, fuel, other) must name the job so QuickBooks costs them to Customer:Job. Office and insurance may omit a job.",
     "When a returning client already has a project manager, create_lead still opens the job. Company admins are notified that it came from that book. Pass assignToPreviousPm true only when the user explicitly wants that project manager to own it.",
+    "Expected costs that have not been incurred yet use log_forecasted_expense. They need a job and a vendor, no receipt, and they show under Forecasted expenses. Do not use log_expense for a forecast.",
     "When the user is on Inbox Mail (/mail) or asks about the inbox, email tagging, or who is on a chain, call review_mail first. Compare From, To, and Cc to homeowners versus referral partners, suggest jobs those people sit on, then call tag_mail. Do not leave a thread untagged if a job or person is a clear match. Texts live on the same Inbox under /messages.",
     "send_estimate, send_invoice, void_invoice, accept_estimate, delete_job, send_mail, and log_payment (unless a photo is attached) require the user to confirm in the UI. Still call the tool; they will approve or decline.",
     `Tools available: ${tools}.`,

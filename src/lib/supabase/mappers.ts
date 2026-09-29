@@ -25,6 +25,7 @@ import { storedPhone } from "@/lib/phone";
 import { resolveStoredFileUrl, normalizeObjectKey } from "@/lib/storage/urls";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { parseQbStatus } from "@/lib/types";
+import { isExpenseAccount } from "@/lib/job-financials";
 import { parseReturningClientStatus } from "@/lib/returning-client";
 import type {
   Activity,
@@ -50,6 +51,7 @@ import type {
   PriceList,
   PhotoReport,
   Expense,
+  ForecastedExpense,
   QbReviewComment,
   QbReviewIntent,
   QbReviewKind,
@@ -956,6 +958,23 @@ export function mapExpense(row: Database["public"]["Tables"]["expenses"]["Row"])
     receiptStoragePath: row.receipt_storage_path,
     qbStatus: parseQbStatus(row.qb_status),
     extractedByAi: Boolean(row.extracted_by_ai),
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+  };
+}
+
+export function mapForecastedExpense(
+  row: Database["public"]["Tables"]["forecasted_expenses"]["Row"],
+): ForecastedExpense {
+  return {
+    id: row.id,
+    number: row.number,
+    jobId: row.job_id,
+    vendor: row.vendor,
+    account: isExpenseAccount(row.account) ? row.account : "other",
+    amount: Number(row.amount),
+    expectedAt: row.expected_at,
+    memo: row.memo,
     createdAt: row.created_at,
     createdBy: row.created_by,
   };

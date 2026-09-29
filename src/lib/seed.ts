@@ -3,6 +3,7 @@ import { seedTrainingBulletins, seedTrainingProgress } from "@/lib/training/seed
 import { backfillRecordCodes } from "@/lib/job-code";
 import { fillJobRecord, JOB_RECORD_EXTRAS, jobsFromOpenLeads } from "@/lib/job-record";
 import { NORTHLINE_STAFF, NORTHLINE_TEAMS, type CrmState } from "@/lib/types";
+import { extraForecastedExpenses } from "@/lib/demo-financials";
 import { demoOps, NORTHLINE_PRICE_LIST_ID } from "@/lib/demo-ops";
 import { extraMessages } from "@/lib/demo-messages";
 import {
@@ -72,6 +73,7 @@ export const seedState: CrmState = {
   companyFiles: [],
   photoReports: [],
   expenses: demoOps.expenses,
+  forecastedExpenses: extraForecastedExpenses,
   materialOrders: [],
   materialOrderLines: [],
   materialOrderTemplates: [],

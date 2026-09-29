@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import {
+  applyForecastedExpenses,
   compareJobProfitAndLoss,
   preferredEstimateForJob,
   type ProfitAndLossStatement,
 } from "./profit-and-loss.ts";
-import type { CatalogItem, Estimate, EstimateLine } from "./types.ts";
+import type { CatalogItem, Estimate, EstimateLine, ForecastedExpense } from "./types.ts";
 
 function estimate(partial: Partial<Estimate> & Pick<Estimate, "id" | "status">): Estimate {
   return {
@@ -132,5 +133,34 @@ assert.equal(
   }),
   null,
 );
+
+const forecast: ForecastedExpense = {
+  id: "fest1",
+  number: "FEST-1001",
+  jobId: "job1",
+  vendor: "Front Range Roll-Off",
+  account: "dumpsters",
+  amount: 700,
+  expectedAt: "2026-09-02",
+  memo: "Second box",
+  createdAt: "2026-08-20T15:00:00.000Z",
+  createdBy: "Nora Keene",
+};
+const withForecast = applyForecastedExpenses(compared, [forecast]);
+assert.equal(withForecast?.projectedCostOfSales, 50 * 80 + 400 + 700);
+assert.equal(withForecast?.projectedExpenses, 0);
+assert.equal(withForecast?.projectedGrossProfit, (50 * 112 + 400) - (50 * 80 + 400 + 700));
+assert.equal(applyForecastedExpenses(null, [forecast]), null);
+assert.equal(applyForecastedExpenses(compared, []), compared);
+
+const contractWithForecast = applyForecastedExpenses(contractOnly, [forecast]);
+assert.equal(contractWithForecast?.projectedCostOfSales, null);
+assert.equal(contractWithForecast?.projectedNetIncome, null);
+
+const officeForecast: ForecastedExpense = { ...forecast, id: "fest2", account: "fuel", amount: 120 };
+const withOffice = applyForecastedExpenses(compared, [officeForecast]);
+assert.equal(withOffice?.projectedCostOfSales, 50 * 80 + 400);
+assert.equal(withOffice?.projectedExpenses, 120);
+assert.equal(withOffice?.projectedNetIncome, (50 * 112 + 400) - (50 * 80 + 400) - 120);
 
 console.log("profit-and-loss.test.ts ok");

@@ -217,6 +217,24 @@ export function missingFinancialsMessage() {
   return `Saved in this browser. Run ${PROJECT_FINANCIALS_SQL} in the SQL editor to keep receipts and the QuickBooks queue in Postgres.`;
 }
 
+export const FORECASTED_EXPENSES_SQL = "supabase/migrations/20260928240000_forecasted_expenses.sql";
+
+export function isMissingForecastedExpenses(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("schema cache") ||
+    message.includes("Could not find the") ||
+    message.includes("forecasted_expenses")
+  );
+}
+
+export function missingForecastedExpensesMessage() {
+  return `Saved in this browser. Run ${FORECASTED_EXPENSES_SQL} in the SQL editor so forecasted expenses stay on the job.`;
+}
+
 export function isMissingOriginator(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
   const message = error.message ?? "";

@@ -715,3 +715,168 @@ export function LogPaymentDialog({
     </Dialog>
   );
 }
+
+export function LogForecastedExpenseDialog({
+  open,
+  onOpenChange,
+  defaultJobId,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  defaultJobId?: string | null;
+}) {
+  const crm = useCrm();
+  const [vendor, setVendor] = useState("");
+  const [amount, setAmount] = useState("");
+  const [expectedAt, setExpectedAt] = useState(localYmd(new Date()));
+  const [account, setAccount] = useState<ExpenseAccount>("materials");
+  const [jobId, setJobId] = useState(defaultJobId ?? "");
+  const [memo, setMemo] = useState("");
+  const [pending, setPending] = useState(false);
+  const vendors = vendorChoices(crm.qbVendors ?? [], crm.expenses);
+  const jobs = jobChoices(crm);
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    const assignedJobId = defaultJobId || jobId;
+    if (!assignedJobId) {
+      toast.error("Pick the job. Forecasted expenses stay on that job’s financials.");
+      return;
+    }
+    setPending(true);
+    try {
+      const saved = await crm.addForecastedExpense({
+        jobId: assignedJobId,
+        vendor,
+        account,
+        amount: Number(amount),
+        expectedAt,
+        memo,
+      });
+      if (saved) onOpenChange(false);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Log forecasted expense</DialogTitle>
+          <DialogDescription>
+            A forecasted estimate of a cost that has not been incurred. It shows on the job under
+            Forecasted expenses and rolls into the projected column. It does not need a receipt and
+            does not post to QuickBooks.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="grid gap-3">
+          <div className="grid gap-1.5">
+            <Label>Vendor</Label>
+            <VendorPicker
+              value={vendor}
+              onChange={setVendor}
+              names={vendors.fromQb.map((item) => item.name)}
+              extraNames={vendors.extras}
+              emptyHint={
+                vendors.fromQb.length === 0
+                  ? "No vendors pulled yet. Type the payee you expect to use."
+                  : "No matching vendor. Type the name you expect to pay."
+              }
+            />
+            <input type="text" value={vendor} onChange={() => undefined} required className="sr-only" tabIndex={-1} />
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="fest-amt">Amount</Label>
+              <Input
+                id="fest-amt"
+                type="number"
+                min={0}
+                step="0.01"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+                required
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="fest-date">Expected date</Label>
+              <Input
+                id="fest-date"
+                type="date"
+                value={expectedAt}
+                onChange={(event) => setExpectedAt(event.target.value)}
+                required
+              />
+            </div>
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Account</Label>
+            <Select
+              value={account}
+              onValueChange={(value) => setAccount(value as ExpenseAccount)}
+              items={EXPENSE_ACCOUNTS.map((item) => ({
+                value: item,
+                label: EXPENSE_ACCOUNT_LABELS[item],
+              }))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPENSE_ACCOUNTS.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {EXPENSE_ACCOUNT_LABELS[item]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label>Job</Label>
+            <p className="text-xs text-muted-foreground">
+              {defaultJobId
+                ? "Logged on this job’s financials."
+                : "Required. The forecasted estimate shows under Forecasted expenses on that job."}
+            </p>
+            <Select
+              value={jobId}
+              onValueChange={(value) => setJobId(String(value ?? ""))}
+              disabled={Boolean(defaultJobId)}
+              items={jobs}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Choose a job" />
+              </SelectTrigger>
+              <SelectContent>
+                {jobs.map((job) => (
+                  <SelectItem key={job.value} value={job.value}>
+                    {job.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="fest-memo">Memo</Label>
+            <Textarea
+              id="fest-memo"
+              value={memo}
+              onChange={(event) => setMemo(event.target.value)}
+              placeholder="What you expect to spend, and why"
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Saving…" : "Save forecast"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

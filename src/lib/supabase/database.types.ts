@@ -1080,6 +1080,36 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["expenses"]["Insert"]>;
         Relationships: [];
       };
+      forecasted_expenses: {
+        Row: {
+          id: string;
+          company_id: string;
+          number: string;
+          job_id: string | null;
+          vendor: string;
+          account: string;
+          amount: number;
+          expected_at: string;
+          memo: string;
+          created_at: string;
+          created_by: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          number: string;
+          job_id?: string | null;
+          vendor?: string;
+          account?: string;
+          amount?: number;
+          expected_at?: string;
+          memo?: string;
+          created_at?: string;
+          created_by?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["forecasted_expenses"]["Insert"]>;
+        Relationships: [];
+      };
       qb_vendors: {
         Row: {
           id: string;

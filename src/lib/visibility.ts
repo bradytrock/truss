@@ -374,6 +374,11 @@ export function scopeBook(
     if (scope === "bd" && !expense.jobId && expense.createdBy === effective.name) return true;
     return false;
   });
+  const forecastedExpenses = (state.forecastedExpenses ?? []).filter((item) => {
+    if (item.jobId && jobIds.has(item.jobId)) return true;
+    if (scope === "bd" && !item.jobId && item.createdBy === effective.name) return true;
+    return false;
+  });
   const materialOrders = (state.materialOrders ?? []).filter((order) => jobIds.has(order.jobId));
   const materialOrderIds = new Set(materialOrders.map((order) => order.id));
   const photos = state.photos;
@@ -421,6 +426,7 @@ export function scopeBook(
     invoices,
     payments,
     expenses,
+    forecastedExpenses,
     materialOrders,
     materialOrderLines: (state.materialOrderLines ?? []).filter((line) =>
       materialOrderIds.has(line.materialOrderId),

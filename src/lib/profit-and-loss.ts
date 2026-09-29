@@ -4,6 +4,7 @@ import type {
   EstimateLine,
   Expense,
   ExpenseAccount,
+  ForecastedExpense,
   Invoice,
   InvoiceLine,
   Job,
@@ -435,6 +436,46 @@ export function compareJobProfitAndLoss(input: {
     estimateId: estimate?.id ?? null,
     estimateLabel: estimate ? `${estimate.number} · ${estimate.status}` : "Contract value",
     projectedIncome,
+    projectedCostOfSales,
+    projectedExpenses,
+    projectedOther,
+    projectedGrossProfit,
+    projectedNetIncome,
+  };
+}
+
+function forecastSum(items: ForecastedExpense[], accounts: readonly ExpenseAccount[]) {
+  return roundMoney(
+    items.reduce((sum, item) => (accounts.includes(item.account) ? sum + item.amount : sum), 0),
+  );
+}
+
+/**
+ * Fold logged forecasted expenses into the projected column.
+ * Job-cost accounts join cost of sales. Fuel, office, and insurance join expenses.
+ */
+export function applyForecastedExpenses(
+  comparison: JobPnlComparison | null,
+  forecasts: ForecastedExpense[],
+): JobPnlComparison | null {
+  if (!comparison || forecasts.length === 0) return comparison;
+  const costOfSales = forecastSum(forecasts, COST_OF_SALES_ACCOUNTS);
+  const expenses = forecastSum(forecasts, OPERATING_EXPENSE_ACCOUNTS);
+  const other = forecastSum(forecasts, OTHER_EXPENSE_ACCOUNTS);
+  const projectedCostOfSales =
+    comparison.projectedCostOfSales == null
+      ? null
+      : roundMoney(comparison.projectedCostOfSales + costOfSales);
+  const projectedExpenses = roundMoney(comparison.projectedExpenses + expenses);
+  const projectedOther = roundMoney(comparison.projectedOther + other);
+  const projectedGrossProfit =
+    projectedCostOfSales == null ? null : roundMoney(comparison.projectedIncome - projectedCostOfSales);
+  const projectedNetIncome =
+    projectedGrossProfit == null
+      ? null
+      : roundMoney(projectedGrossProfit - projectedExpenses - projectedOther);
+  return {
+    ...comparison,
     projectedCostOfSales,
     projectedExpenses,
     projectedOther,

@@ -812,6 +812,29 @@ async function runTool(
         job ? { href: `/jobs?job=${job.id}`, label: `Open ${job.code || job.name}` } : { href: "/accounting", label: "Open accounting" },
       );
     }
+    case "log_forecasted_expense": {
+      const vendor = arg(args, "vendor");
+      const amount = asNumber(args.amount);
+      const job = resolveJob(crm, arg(args, "job"));
+      if (!job) return fail("Name the job. Forecasted expenses stay on that job’s financials.");
+      if (!vendor || !amount) return fail("Vendor and amount are required.");
+      const accountValue: ExpenseAccount = isExpenseAccount(arg(args, "account"))
+        ? (arg(args, "account") as ExpenseAccount)
+        : guessExpenseAccount(vendor, arg(args, "memo"));
+      const forecast = await crm.addForecastedExpense({
+        jobId: job.id,
+        vendor,
+        account: EXPENSE_ACCOUNTS.includes(accountValue) ? accountValue : "other",
+        amount,
+        expectedAt: arg(args, "date") || localYmd(new Date()),
+        memo: arg(args, "memo"),
+      });
+      if (!forecast) return fail("Could not save the forecasted expense.");
+      return ok(
+        { id: forecast.id, number: forecast.number, vendor, amount },
+        { href: `/jobs?job=${job.id}`, label: `Open ${job.code || job.name}` },
+      );
+    }
     case "log_payment": {
       const amount = asNumber(args.amount);
       if (!amount) return fail("Amount is required.");
