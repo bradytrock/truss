@@ -53,7 +53,7 @@ function openaiUserError(status: number, detail: string) {
 }
 
 function expensePrompt() {
-  return 'Read this receipt. Return JSON only: {"vendor":"","amount":0,"date":"YYYY-MM-DD","memo":"","account":"materials|subcontractors|equipment_rental|dumpsters|permits|labor|fuel|office|insurance|other","method":"credit_card|debit|check|ach|cash"}';
+  return 'Read this receipt. Return JSON only: {"vendor":"","invoiceNumber":"","amount":0,"date":"YYYY-MM-DD","memo":"","account":"materials|subcontractors|equipment_rental|dumpsters|permits|labor|fuel|office|insurance|other","method":"credit_card|debit|check|ach|cash"}. invoiceNumber is the vendor invoice, ticket, or receipt number printed on the slip. Leave invoiceNumber empty when none is printed.';
 }
 
 function paymentPrompt() {
@@ -195,6 +195,7 @@ export async function POST(request: Request) {
           ok: true,
           source: "ai",
           vendor,
+          invoiceNumber: asString(extracted.data.invoiceNumber),
           amount: asNumber(extracted.data.amount),
           date: asString(extracted.data.date),
           memo: asString(extracted.data.memo),

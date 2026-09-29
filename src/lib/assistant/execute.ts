@@ -188,7 +188,7 @@ async function extractReceipt(kind: "expense" | "payment", file: File) {
       body: JSON.stringify({ image: compressed.dataUrl, kind }),
     });
     const body = (await response.json().catch(() => null)) as
-      | { ok?: boolean; vendor?: string; amount?: number; date?: string; memo?: string; account?: string; method?: string; reference?: string }
+      | { ok?: boolean; vendor?: string; invoiceNumber?: string; amount?: number; date?: string; memo?: string; account?: string; method?: string; reference?: string }
       | null;
     return { file: compressed.file, extracted: body?.ok ? body : null };
   } catch {
@@ -768,6 +768,7 @@ async function runTool(
       let method: ExpenseMethod = isExpenseMethod(arg(args, "method")) ? (arg(args, "method") as ExpenseMethod) : "credit_card";
       let date = arg(args, "date") || localYmd(new Date());
       let memo = arg(args, "memo");
+      let invoiceNumber = arg(args, "invoiceNumber");
       let file: File | undefined;
       let extractedByAi = false;
       if (extras.attachment) {
@@ -783,6 +784,7 @@ async function runTool(
             if (read.extracted.method && isExpenseMethod(read.extracted.method)) method = read.extracted.method;
             if (!arg(args, "date") && read.extracted.date) date = read.extracted.date;
             if (!memo && read.extracted.memo) memo = read.extracted.memo;
+            if (!invoiceNumber && read.extracted.invoiceNumber) invoiceNumber = read.extracted.invoiceNumber;
           }
         }
       }
@@ -795,6 +797,7 @@ async function runTool(
       const expense = await crm.addExpense({
         jobId: job?.id ?? null,
         vendor,
+        invoiceNumber,
         account: accountValue,
         amount,
         incurredAt: date,

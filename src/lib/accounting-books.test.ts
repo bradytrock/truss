@@ -235,7 +235,7 @@ const profits = jobProfitRows({
   invoices: [invoice({ id: "open", number: "INV-1", jobId: "job_1" })],
   invoiceLines: [line("open", 18640)],
   payments: [],
-  expenses: [{ id: "e1", number: "EX-1", jobId: "job_1", vendor: "ABC", account: "materials", amount: 11200, incurredAt: "2026-09-01", method: "check", memo: "", receiptUrl: "", receiptStoragePath: null, qbStatus: "entered", extractedByAi: false, createdAt: "2026-09-01", createdBy: "" }],
+  expenses: [{ id: "e1", number: "EX-1", invoiceNumber: "", jobId: "job_1", vendor: "ABC", account: "materials", amount: 11200, incurredAt: "2026-09-01", method: "check", memo: "", receiptUrl: "", receiptStoragePath: null, qbStatus: "entered", extractedByAi: false, createdAt: "2026-09-01", createdBy: "" }],
   basis: "accrual",
 });
 assert.equal(profits.length, 1);
@@ -273,6 +273,17 @@ assert.equal(preview.vendor, "ABC Supply");
 assert.equal(preview.accountName, "Job materials");
 assert.equal(preview.customerJob, "Martinez:J-12");
 assert.equal(preview.memo, "Ridge vent");
+assert.equal(preview.refNumber, "EX-104");
+assert.equal(
+  expenseQbPreview({ ...bill, invoiceNumber: "88421" }, job({ id: "job_1", name: "Martinez", code: "J-12" }), "Martinez")
+    .refNumber,
+  "88421",
+);
+assert.equal(
+  expenseQbPreview({ ...bill, invoiceNumber: "  " }, job({ id: "job_1", name: "Martinez", code: "J-12" }), "Martinez")
+    .refNumber,
+  "EX-104",
+);
 
 const achPreview = expenseQbPreview(
   { ...bill, method: "ach" },

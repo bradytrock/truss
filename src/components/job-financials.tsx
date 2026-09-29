@@ -147,7 +147,9 @@ export function JobFinancials({ job }: { job: Job }) {
                     <span className="tabular-nums text-sm">{formatMoney(expense.amount)}</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {expense.number} · {EXPENSE_ACCOUNT_LABELS[expense.account]} · {formatDate(expense.incurredAt)}
+                    {expense.number}
+                    {expense.invoiceNumber.trim() ? ` · invoice ${expense.invoiceNumber.trim()}` : ""} ·{" "}
+                    {EXPENSE_ACCOUNT_LABELS[expense.account]} · {formatDate(expense.incurredAt)}
                     {` · logged by ${expenseLoggedByLabel(expense.createdBy, actors)}`}
                   </p>
                   {expense.memo ? <p className="text-sm leading-snug">{expense.memo}</p> : null}

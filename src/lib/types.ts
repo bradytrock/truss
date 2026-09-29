@@ -720,6 +720,8 @@ export interface Payment {
 export interface Expense {
   id: string;
   number: string;
+  /** Vendor invoice or receipt number. Empty when the slip has none. */
+  invoiceNumber: string;
   jobId: string | null;
   vendor: string;
   account: ExpenseAccount;

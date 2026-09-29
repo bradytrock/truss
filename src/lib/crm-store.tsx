@@ -1177,6 +1177,7 @@ type CrmContextValue = CrmState & {
   addExpense: (input: {
     jobId: string | null;
     vendor: string;
+    invoiceNumber?: string;
     account: ExpenseAccount;
     amount: number;
     incurredAt: string;
@@ -7415,6 +7416,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     async (input: {
       jobId: string | null;
       vendor: string;
+      invoiceNumber?: string;
       account: ExpenseAccount;
       amount: number;
       incurredAt: string;
@@ -7462,6 +7464,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const expense: Expense = {
         id: crypto.randomUUID(),
         number: nextNumber("EXP", state.expenses.map((item) => item.number)),
+        invoiceNumber: input.invoiceNumber?.trim() ?? "",
         jobId: input.jobId,
         vendor: input.vendor.trim(),
         account: input.account,
@@ -7483,7 +7486,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             entityType: "job",
             entityId: expense.jobId,
             type: "note",
-            body: `${expense.number} · ${expense.vendor} · ${expense.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })}.`,
+            body: `${expense.number}${expense.invoiceNumber ? ` · invoice ${expense.invoiceNumber}` : ""} · ${expense.vendor} · ${expense.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })}.`,
           });
         }
         toast.success(`${expense.number} saved with the receipt.`);
@@ -7493,6 +7496,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         id: expense.id,
         company_id: user.companyId,
         number: expense.number,
+        invoice_number: expense.invoiceNumber,
         job_id: expense.jobId,
         vendor: expense.vendor,
         account: expense.account,
@@ -7533,7 +7537,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           entityType: "job",
           entityId: saved.jobId,
           type: "note",
-          body: `${saved.number} · ${saved.vendor} · ${saved.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })}.`,
+          body: `${saved.number}${saved.invoiceNumber ? ` · invoice ${saved.invoiceNumber}` : ""} · ${saved.vendor} · ${saved.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })}.`,
         });
       }
       toast.success(`${saved.number} saved with the receipt.`);

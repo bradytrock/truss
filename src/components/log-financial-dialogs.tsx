@@ -149,6 +149,7 @@ export function LogExpenseDialog({
   const [file, setFile] = useState<File | undefined>();
   const [preview, setPreview] = useState("");
   const [vendor, setVendor] = useState("");
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [amount, setAmount] = useState("");
   const [incurredAt, setIncurredAt] = useState(localYmd(new Date()));
   const [account, setAccount] = useState<ExpenseAccount>("materials");
@@ -167,6 +168,7 @@ export function LogExpenseDialog({
     setFile(undefined);
     setPreview("");
     setVendor("");
+    setInvoiceNumber("");
     setAmount("");
     setIncurredAt(localYmd(new Date()));
     setAccount("materials");
@@ -189,6 +191,9 @@ export function LogExpenseDialog({
       if (result.ok) {
         if (typeof result.vendor === "string") {
           setVendor(matchVendorName(result.vendor, vendorNames) || result.vendor);
+        }
+        if (typeof result.invoiceNumber === "string" && result.invoiceNumber.trim()) {
+          setInvoiceNumber(result.invoiceNumber.trim());
         }
         if (typeof result.amount === "number" && result.amount) setAmount(String(result.amount));
         if (typeof result.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(result.date)) {
@@ -226,6 +231,7 @@ export function LogExpenseDialog({
       const saved = await crm.addExpense({
         jobId: assignedJobId || null,
         vendor,
+        invoiceNumber,
         account,
         amount: value,
         incurredAt,
@@ -300,6 +306,20 @@ export function LogExpenseDialog({
               }
             />
             <input type="text" value={vendor} onChange={() => undefined} required className="sr-only" tabIndex={-1} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="exp-invoice">Invoice number</Label>
+            <p className="text-xs text-muted-foreground">
+              The number printed on the vendor invoice or receipt. QuickBooks keeps the first 11
+              characters as the bill or charge reference.
+            </p>
+            <Input
+              id="exp-invoice"
+              value={invoiceNumber}
+              onChange={(event) => setInvoiceNumber(event.target.value)}
+              placeholder="88421"
+              autoComplete="off"
+            />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">

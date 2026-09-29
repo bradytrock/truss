@@ -233,7 +233,12 @@ export function AccountingExpenseReview({
                       </td>
                       <td className="px-3 py-2.5">
                         <p className="font-medium text-[#181818]">{row.expense.number}</p>
-                        <p className="text-xs text-[#86827b]">{formatDate(row.expense.incurredAt)}</p>
+                        <p className="text-xs text-[#86827b]">
+                          {row.expense.invoiceNumber.trim()
+                            ? `Invoice ${row.expense.invoiceNumber.trim()} · `
+                            : ""}
+                          {formatDate(row.expense.incurredAt)}
+                        </p>
                       </td>
                       <td className="px-3 py-2.5">
                         <p>{row.expense.vendor || "No vendor"}</p>
@@ -300,7 +305,9 @@ export function AccountingExpenseReview({
                     <dd className="text-right">{open.preview.paidWith}</dd>
                     <dt className="text-[#706e6b]">Customer:Job</dt>
                     <dd className="text-right font-mono text-xs">{open.preview.customerJob}</dd>
-                    <dt className="text-[#706e6b]">Ref / memo</dt>
+                    <dt className="text-[#706e6b]">Invoice number</dt>
+                    <dd className="text-right">{open.expense.invoiceNumber.trim() || "Not logged"}</dd>
+                    <dt className="text-[#706e6b]">Memo</dt>
                     <dd className="text-right">{open.preview.memo}</dd>
                     <dt className="text-[#706e6b]">Logged by</dt>
                     <dd className="text-right">{open.loggedBy}</dd>
@@ -311,6 +318,15 @@ export function AccountingExpenseReview({
                   <div className="space-y-2">
                     <CheckRow ok={Boolean(open.expense.vendor.trim())} label={open.expense.vendor.trim() ? "Vendor is the QuickBooks payee" : "Add a vendor"} />
                     <CheckRow ok={open.expense.amount > 0} label={open.expense.amount > 0 ? "Amount is on the receipt" : "Enter the amount from the receipt"} />
+                    <CheckRow
+                      ok={Boolean(open.expense.invoiceNumber.trim())}
+                      warn={!open.expense.invoiceNumber.trim()}
+                      label={
+                        open.expense.invoiceNumber.trim()
+                          ? `Invoice ${open.expense.invoiceNumber.trim()} is the QuickBooks reference`
+                          : "No invoice number — QuickBooks will use the expense number"
+                      }
+                    />
                     <CheckRow
                       ok={!open.blocked}
                       warn={open.status === "held"}

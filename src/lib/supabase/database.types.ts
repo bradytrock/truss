@@ -1039,6 +1039,7 @@ export type Database = {
           id: string;
           company_id: string;
           number: string;
+          invoice_number: string;
           job_id: string | null;
           vendor: string;
           account: string;
@@ -1059,6 +1060,7 @@ export type Database = {
           id?: string;
           company_id: string;
           number: string;
+          invoice_number?: string;
           job_id?: string | null;
           vendor?: string;
           account?: string;

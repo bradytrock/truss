@@ -311,6 +311,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
       {
         job: str("Job id or code. Required for job costs (materials, labor, subs, and similar)."),
         vendor: str("Vendor name"),
+        invoiceNumber: str("Vendor invoice or receipt number printed on the slip"),
         amount: num("Amount in dollars"),
         account: {
           type: "string",

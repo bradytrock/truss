@@ -921,6 +921,7 @@ export function mapExpense(row: Database["public"]["Tables"]["expenses"]["Row"])
   return {
     id: row.id,
     number: row.number,
+    invoiceNumber: row.invoice_number ?? "",
     jobId: row.job_id,
     vendor: row.vendor,
     account:
@@ -1053,6 +1054,7 @@ export function vendorPricePatch(patch: Partial<VendorPrice>) {
 export function expensePatch(patch: Partial<Expense>) {
   const row: Database["public"]["Tables"]["expenses"]["Update"] = {};
   if (patch.jobId !== undefined) row.job_id = patch.jobId;
+  if (patch.invoiceNumber !== undefined) row.invoice_number = patch.invoiceNumber.trim();
   if (patch.vendor !== undefined) row.vendor = patch.vendor;
   if (patch.account !== undefined) row.account = patch.account;
   if (patch.amount !== undefined) row.amount = patch.amount;

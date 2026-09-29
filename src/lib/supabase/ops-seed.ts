@@ -440,6 +440,7 @@ export async function insertOperations(
         id: remap(expense.id, ids),
         company_id: companyId,
         number: expense.number,
+        invoice_number: expense.invoiceNumber,
         job_id: jobId,
         vendor: expense.vendor,
         account: expense.account,

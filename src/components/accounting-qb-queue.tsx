@@ -126,7 +126,9 @@ export function AccountingSyncQueues() {
                     <TableCell>
                       <p className="font-medium">{expense.vendor}</p>
                       <p className="text-xs text-muted-foreground">
-                        {expense.number} · {formatDate(expense.incurredAt)} · logged by{" "}
+                        {expense.number}
+                        {expense.invoiceNumber.trim() ? ` · invoice ${expense.invoiceNumber.trim()}` : ""} ·{" "}
+                        {formatDate(expense.incurredAt)} · logged by{" "}
                         {expenseLoggedByLabel(expense.createdBy, actors)}
                       </p>
                     </TableCell>

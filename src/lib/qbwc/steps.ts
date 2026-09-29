@@ -20,6 +20,7 @@ import {
 import {
   billedCustomerName,
   customerFullName,
+  expenseQbRefNumber,
   expenseRepairsBill,
   jobFullName,
   paymentCustomerRef,
@@ -134,7 +135,7 @@ function expenseRequest(requestId: string, work: QbwcWork, useAlias: boolean) {
   const line = {
     requestId,
     vendor: work.vendor,
-    refNumber: work.number,
+    refNumber: expenseQbRefNumber(work),
     txnDate: work.txnDate,
     memo: work.memo || work.number,
     accountName: work.accountName,
