@@ -66,7 +66,6 @@ import {
   assignsToPreviousPm,
   emailsMatch,
   findReturningClient,
-  needsReturningClientConfirm,
   returningClientBannerTitle,
   returningClientWhen,
   type ReturningClientMatch,
@@ -98,7 +97,6 @@ export function CreateOpportunityDialog({
   const [referralQuery, setReferralQuery] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const assignee = people.find((member) => member.id === assigneeId);
   const isMe = Boolean(assignee && assignee.id === crm.user.staffId);
@@ -114,7 +112,6 @@ export function CreateOpportunityDialog({
       estimates: crm.book.estimates,
     });
   }, [phone, email, crm.book.contacts, crm.book.jobs, crm.book.opportunities, crm.book.staff, crm.book.estimates]);
-  const openerIsPreviousPm = Boolean(returning?.previousStaffId && returning.previousStaffId === crm.user.staffId);
 
   useEffect(() => {
     if (!open) return;
@@ -267,7 +264,6 @@ export function CreateOpportunityDialog({
       // Store already toasted the error.
     } finally {
       setSaving(false);
-      setConfirmOpen(false);
     }
   }
 
@@ -292,15 +288,10 @@ export function CreateOpportunityDialog({
       return;
     }
     const owner = assignee ?? crm.viewer;
-    if (needsReturningClientConfirm(returning, owner?.id)) {
-      setConfirmOpen(true);
-      return;
-    }
     await openLead(owner?.id || crm.user.staffId);
   }
 
   return (
-    <>
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent
         side="right"
@@ -399,11 +390,7 @@ export function CreateOpportunityDialog({
                 <p className="text-sm text-muted-foreground">
                   {assignsToPreviousPm(returning, assigneeId)
                     ? "This lead will stay with that project manager."
-                    : returning.assignable
-                      ? "You can send it back to them when you save."
-                      : returning.previousStaffName
-                        ? `${returning.previousStaffName} no longer has an unlocked seat, so company admins will decide.`
-                        : ""}
+                    : `${returning.previousStaffName || "The previous project manager"} ran the last job. Saving creates this job and notifies company admins.`}
                 </p>
               </div>
             ) : null}
@@ -575,49 +562,6 @@ export function CreateOpportunityDialog({
         </form>
       </SheetContent>
     </Sheet>
-    <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Returning client</DialogTitle>
-          <DialogDescription>
-            This person is already in the book. Send the lead to the previous project manager, or keep
-            your assignment.
-          </DialogDescription>
-        </DialogHeader>
-        {returning ? (
-          <ReturningClientFacts match={returning} assigneeName={assignee?.name} />
-        ) : null}
-        <p className="text-sm text-muted-foreground">
-          {openerIsPreviousPm
-            ? "You were the project manager on the last job. If you assign this lead to someone else, company admins confirm that call."
-            : returning?.assignable
-              ? "If you keep your assignment, that project manager is asked first. Company admins decide only if they decline."
-              : returning?.previousStaffName
-                ? `${returning.previousStaffName} no longer has an unlocked seat, so company admins will decide.`
-                : "Keep your assignment, or send it back if that project manager still has a seat."}
-        </p>
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={saving}
-            onClick={() => void openLead(assigneeId || crm.user.staffId)}
-          >
-            Keep my assignment
-          </Button>
-          {returning?.assignable && returning.previousStaffId ? (
-            <Button
-              type="button"
-              disabled={saving}
-              onClick={() => void openLead(returning.previousStaffId)}
-            >
-              Assign to {returning.previousStaffName}
-            </Button>
-          ) : null}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-    </>
   );
 }
 

@@ -20,12 +20,13 @@ export const RETURNING_CLIENT_STATUSES = [
   "assigned",
   "offered",
   "pending",
+  "notified",
   "reassigned",
   "kept",
   "dismissed",
 ] as const;
 
-export type ReturningClientNoticeKind = "assigned" | "offered" | "pending";
+export type ReturningClientNoticeKind = "assigned" | "offered" | "pending" | "notified";
 
 export type ReturningClientMatchOn = "phone" | "email" | "partial_phone";
 
@@ -177,7 +178,7 @@ export function assignsToPreviousPm(match: ReturningClientMatch | null, assignee
   return match.previousStaffId === assigneeId;
 }
 
-/** Ask before saving when a past PM is known and the assignee is not that person. */
+/** True when the assignee is not the previous project manager. Saving is not blocked; company admins are notified. */
 export function needsReturningClientConfirm(
   match: ReturningClientMatch | null,
   assigneeId: string | null | undefined,
@@ -197,12 +198,11 @@ export function returningClientNoticeKind(
   const openerIsPm = Boolean(match.previousStaffId && match.previousStaffId === openerStaffId);
   if (toPm) return openerIsPm ? null : "assigned";
   if (openerIsPm) return "pending";
-  if (match.assignable && match.previousStaffId) return "offered";
-  return "pending";
+  return "notified";
 }
 
 export function isOpenReturningClientStatus(status: ReturningClientLeadStatus) {
-  return status === "assigned" || status === "offered" || status === "pending";
+  return status === "assigned" || status === "offered" || status === "pending" || status === "notified";
 }
 
 export function actionableReturningClientNotices(
@@ -215,7 +215,7 @@ export function actionableReturningClientNotices(
     if (notice.status === "offered" || notice.status === "assigned") {
       return notice.previousStaffId === actor.id;
     }
-    if (notice.status === "pending") return isAdmin;
+    if (notice.status === "pending" || notice.status === "notified") return isAdmin;
     return false;
   });
 }
@@ -224,6 +224,52 @@ export function companyAdminsForNotice(staff: StaffMember[], exceptIds: string[]
   const unlocked = staff.filter((member) => member.role === "company_admin" && !member.locked && !member.restricted);
   const filtered = unlocked.filter((member) => !exceptIds.includes(member.id));
   return filtered.length ? filtered : unlocked;
+}
+
+/**
+ * A task goes only to the previous project manager when they still need to act.
+ * A pending decision stays on Home for company admins — one task per admin was
+ * assigning the same lead to people who had nothing to do with it.
+ */
+export function returningClientTaskAssignees(
+  kind: ReturningClientNoticeKind,
+  staff: StaffMember[],
+  previousStaffId: string,
+) {
+  if (kind === "pending" || kind === "notified") return [];
+  return staff.filter((member) => member.id === previousStaffId && !member.locked);
+}
+
+/** Texts go to company admins when they need to know. The previous PM is texted only when the lead was assigned to them. */
+export function returningClientSmsAudience(
+  kind: ReturningClientNoticeKind,
+  staff: StaffMember[],
+  previousStaffId: string,
+  exceptIds: string[] = [],
+) {
+  if (kind === "notified") return companyAdminsForNotice(staff, exceptIds);
+  if (kind === "pending") return companyAdminsForNotice(staff, exceptIds);
+  return staff.filter((member) => member.id === previousStaffId && !member.locked);
+}
+
+export function returningClientBookNotice(input: {
+  openerName: string;
+  previousStaffName: string;
+  jobCode?: string;
+}) {
+  const opener = input.openerName.trim() || "Someone";
+  const pm = input.previousStaffName.trim() || "another project manager";
+  const code = input.jobCode?.trim();
+  return code ? `${opener} created a job from ${pm}'s book (${code}).` : `${opener} created a job from ${pm}'s book.`;
+}
+
+export function isReturningClientTask(task: { title?: string | null }) {
+  const title = task.title?.trim() ?? "";
+  return (
+    title.startsWith("Past client called back:") ||
+    title.startsWith("Take or decline returning-client lead:") ||
+    title.startsWith("Decide returning-client lead:")
+  );
 }
 
 export function returningClientSms(
@@ -244,6 +290,13 @@ export function returningClientSms(
   if (kind === "offered") {
     return `${input.openerName} opened a returning-client lead for ${who}.${job} ${input.when}. Take it or decline on Home in Truss.`;
   }
+  if (kind === "notified") {
+    return `${returningClientBookNotice({
+      openerName: input.openerName,
+      previousStaffName: input.previousStaffName,
+      jobCode: input.jobCode,
+    })} Open Home in Truss.`;
+  }
   return `${input.openerName} opened a returning-client lead for ${who}. Previous PM: ${input.previousStaffName}. Decide on Home in Truss.`;
 }
 
@@ -261,8 +314,8 @@ export function askTrussReturningClientPrompt(match: ReturningClientMatch) {
     `This person is already in the book (${match.contact.name}).`,
     `${pm} was the project manager${job}.`,
     `${returningClientWhen(match)}.`,
-    `Ask the user whether to assign this lead to ${pm}.`,
-    "Then retry create_lead with the same fields and assignToPreviousPm true or false.",
+    "Create the job. Company admins are notified that it came from that book.",
+    `Assign it to ${pm} only if the user explicitly asks.`,
   ].join(" ");
 }
 
@@ -271,6 +324,7 @@ export function parseReturningClientStatus(value: string | null | undefined): Re
     value === "assigned" ||
     value === "offered" ||
     value === "pending" ||
+    value === "notified" ||
     value === "reassigned" ||
     value === "kept" ||
     value === "dismissed"
