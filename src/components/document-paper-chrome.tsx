@@ -195,7 +195,6 @@ export function PaperTableRow({
       <div className="min-w-0">
         <div className="text-[15px] leading-6">{heading}</div>
         {detail}
-        {extra}
       </div>
       <p className="pt-0.5 text-right text-sm tabular-nums">{qty}</p>
       <p className="pt-0.5 text-right text-sm">{customerUnitLabel(unit)}</p>
@@ -205,6 +204,7 @@ export function PaperTableRow({
           <p className="pt-0.5 text-right text-sm font-medium tabular-nums">{amount}</p>
         </>
       )}
+      {extra ? <div className="col-span-full min-w-0">{extra}</div> : null}
     </div>
   );
 }
