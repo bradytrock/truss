@@ -12,6 +12,7 @@ import type {
   Payment,
 } from "@/lib/types";
 import { EXPENSE_ACCOUNT_LABELS } from "@/lib/types";
+import { formatDate } from "@/lib/format";
 import { invoiceTotal } from "@/lib/money";
 import {
   amountForEstimate,
@@ -44,6 +45,8 @@ export type PnlLine = {
   label: string;
   amount: number;
   href?: string;
+  /** Invoices, payments, or vendor bills rolled into this line. Omitted when the line is already that document. */
+  children?: PnlLine[];
 };
 
 export type PnlSectionId = "income" | "cos" | "expenses" | "other";
@@ -89,19 +92,91 @@ function inRange(ymd: string | null | undefined, from: string | null, to: string
   return true;
 }
 
-function sumByAccount(expenses: Expense[], accounts: readonly ExpenseAccount[]): PnlLine[] {
-  const totals = new Map<ExpenseAccount, number>();
+function rollup(id: string, label: string, children: PnlLine[], href?: string): PnlLine {
+  return {
+    id,
+    label,
+    amount: children.reduce((sum, line) => sum + line.amount, 0),
+    ...(href ? { href } : {}),
+    ...(children.length > 0 ? { children } : {}),
+  };
+}
+
+function expenseDetailLine(expense: Expense, jobs: Job[], nameJob: boolean): PnlLine {
+  const invoice = expense.invoiceNumber.trim();
+  const vendor = expense.vendor.trim() || "Vendor bill";
+  const job = nameJob && expense.jobId ? jobs.find((item) => item.id === expense.jobId) : undefined;
+  const parts = [formatDate(expense.incurredAt)];
+  if (job?.name) parts.push(job.name);
+  parts.push(vendor);
+  if (invoice) parts.push(`invoice ${invoice}`);
+  else if (expense.number.trim()) parts.push(expense.number.trim());
+  return {
+    id: expense.id,
+    label: parts.join(" · "),
+    amount: expense.amount,
+    href: expense.jobId
+      ? jobRecordHref(expense.jobId, { tab: "files", doc: `expense:${expense.id}` })
+      : expense.receiptUrl || undefined,
+  };
+}
+
+function sumByAccount(
+  expenses: Expense[],
+  accounts: readonly ExpenseAccount[],
+  jobs: Job[],
+  nameJob: boolean,
+): PnlLine[] {
+  const grouped = new Map<ExpenseAccount, Expense[]>();
   for (const expense of expenses) {
     if (!accounts.includes(expense.account)) continue;
-    totals.set(expense.account, (totals.get(expense.account) ?? 0) + expense.amount);
+    const list = grouped.get(expense.account) ?? [];
+    list.push(expense);
+    grouped.set(expense.account, list);
   }
-  return accounts
-    .filter((account) => (totals.get(account) ?? 0) !== 0)
-    .map((account) => ({
-      id: account,
-      label: EXPENSE_ACCOUNT_LABELS[account],
-      amount: totals.get(account) ?? 0,
-    }));
+  return accounts.flatMap((account) => {
+    const items = (grouped.get(account) ?? [])
+      .slice()
+      .sort(
+        (a, b) =>
+          a.incurredAt.localeCompare(b.incurredAt) ||
+          a.vendor.localeCompare(b.vendor) ||
+          a.id.localeCompare(b.id),
+      );
+    if (items.length === 0) return [];
+    const line = rollup(
+      account,
+      EXPENSE_ACCOUNT_LABELS[account],
+      items.map((expense) => expenseDetailLine(expense, jobs, nameJob)),
+    );
+    return line.amount === 0 ? [] : [line];
+  });
+}
+
+function invoiceDetailLine(invoice: Invoice, invoiceLines: InvoiceLine[], dated: boolean): PnlLine {
+  const name = invoice.name.trim();
+  const core = name ? `${invoice.number} · ${name}` : invoice.number;
+  return {
+    id: invoice.id,
+    label: dated ? `${formatDate(invoice.issuedAt)} · ${core}` : core,
+    amount: invoiceTotal(invoice.id, invoiceLines),
+    href: `/invoices/${invoice.id}`,
+  };
+}
+
+function paymentDetailLine(payment: Payment, invoices: Invoice[], dated: boolean): PnlLine {
+  const invoice = payment.invoiceId
+    ? invoices.find((item) => item.id === payment.invoiceId)
+    : undefined;
+  const reference = payment.reference.trim();
+  const head = invoice?.number ?? "Payment";
+  const core = reference ? `${head} · ${payment.method} · ${reference}` : `${head} · ${payment.method}`;
+  return {
+    id: payment.id,
+    label: dated ? `${formatDate(payment.paidAt)} · ${core}` : core,
+    amount: payment.amount,
+    href: invoice ? `/invoices/${invoice.id}` : undefined,
+  };
 }
 
 function section(
@@ -224,19 +299,17 @@ function buildIncomeLines(input: {
   to: string | null;
 }): PnlLine[] {
   if (input.basis === "cash") {
-    const payments = input.payments.filter((payment) => inRange(payment.paidAt, input.from, input.to));
+    const payments = input.payments
+      .filter((payment) => inRange(payment.paidAt, input.from, input.to))
+      .slice()
+      .sort((a, b) => a.paidAt.localeCompare(b.paidAt) || a.id.localeCompare(b.id));
     if (input.jobId) {
-      const jobPayments = paymentsForJob(input.jobId, payments, input.invoices);
-      return jobPayments.map((payment) => ({
-        id: payment.id,
-        label: payment.reference
-          ? `Payment · ${payment.method} · ${payment.reference}`
-          : `Payment · ${payment.method}`,
-        amount: payment.amount,
-      }));
+      return paymentsForJob(input.jobId, payments, input.invoices).map((payment) =>
+        paymentDetailLine(payment, input.invoices, false),
+      );
     }
-    const byJob = new Map<string, number>();
-    let unapplied = 0;
+    const byJob = new Map<string, PnlLine[]>();
+    const unapplied: PnlLine[] = [];
     for (const payment of payments) {
       const invoice = payment.invoiceId
         ? input.invoices.find((item) => item.id === payment.invoiceId)
@@ -244,66 +317,57 @@ function buildIncomeLines(input: {
       const jobId =
         payment.jobId ??
         (invoice ? jobIdForInvoice(invoice, input.estimates, input.jobs) : null);
+      const detail = paymentDetailLine(payment, input.invoices, true);
       if (!jobId) {
-        unapplied += payment.amount;
+        unapplied.push(detail);
         continue;
       }
-      byJob.set(jobId, (byJob.get(jobId) ?? 0) + payment.amount);
+      const list = byJob.get(jobId) ?? [];
+      list.push(detail);
+      byJob.set(jobId, list);
     }
     const lines: PnlLine[] = [...byJob.entries()]
-      .map(([jobId, amount]) => {
+      .map(([jobId, items]) => {
         const job = input.jobs.find((item) => item.id === jobId);
-        return {
-          id: jobId,
-          label: job?.name ?? "Job income",
-          amount,
-          href: jobRecordHref(jobId, { tab: "financials" }),
-        };
+        return rollup(jobId, job?.name ?? "Job income", items, jobRecordHref(jobId, { tab: "financials" }));
       })
       .sort((a, b) => b.amount - a.amount);
-    if (unapplied) {
-      lines.push({ id: "unapplied", label: "Unapplied payments", amount: unapplied });
+    if (unapplied.length) {
+      const line = rollup("unapplied", "Unapplied payments", unapplied);
+      if (line.amount !== 0) lines.push(line);
     }
     return lines;
   }
 
   const invoices = postedInvoices(input.invoices, input.from, input.to);
-  const invoicedByJob = new Map<string, PnlLine[]>();
-  const invoicedJobs = new Set<string>();
-  let other = 0;
+  const invoicedByJob = new Map<string, Invoice[]>();
+  const otherInvoices: Invoice[] = [];
   for (const invoice of invoices) {
-    const amount = invoiceTotal(invoice.id, input.invoiceLines);
     const jobId = jobIdForInvoice(invoice, input.estimates, input.jobs);
     if (input.jobId) {
       if (jobId !== input.jobId) continue;
       const list = invoicedByJob.get(input.jobId) ?? [];
-      list.push({
-        id: invoice.id,
-        label: `${invoice.number} · ${invoice.name}`,
-        amount,
-        href: `/invoices/${invoice.id}`,
-      });
+      list.push(invoice);
       invoicedByJob.set(input.jobId, list);
-      invoicedJobs.add(input.jobId);
       continue;
     }
     if (!jobId) {
-      other += amount;
+      otherInvoices.push(invoice);
       continue;
     }
-    invoicedJobs.add(jobId);
     const list = invoicedByJob.get(jobId) ?? [];
-    list.push({
-      id: invoice.id,
-      label: invoice.name,
-      amount,
-      href: `/invoices/${invoice.id}`,
-    });
+    list.push(invoice);
     invoicedByJob.set(jobId, list);
   }
 
+  const invoiceLinesFor = (list: Invoice[], dated: boolean) =>
+    list
+      .slice()
+      .sort((a, b) => a.issuedAt.localeCompare(b.issuedAt) || a.number.localeCompare(b.number))
+      .map((invoice) => invoiceDetailLine(invoice, input.invoiceLines, dated));
+
   if (input.jobId) {
-    const billed = invoicedByJob.get(input.jobId) ?? [];
+    const billed = invoiceLinesFor(invoicedByJob.get(input.jobId) ?? [], false);
     if (billed.length) return billed;
     return liveEstimates(input.estimates, input.from, input.to)
       .filter((estimate) => jobIdForEstimate(estimate, input.jobs) === input.jobId)
@@ -320,16 +384,16 @@ function buildIncomeLines(input: {
       }));
   }
 
+  const invoicedJobs = new Set(invoicedByJob.keys());
   const lines: PnlLine[] = [...invoicedByJob.entries()]
     .map(([jobId, items]) => {
       const job = input.jobs.find((item) => item.id === jobId);
-      const amount = items.reduce((sum, item) => sum + item.amount, 0);
-      return {
-        id: jobId,
-        label: job?.name ?? "Construction income",
-        amount,
-        href: jobRecordHref(jobId, { tab: "financials" }),
-      };
+      return rollup(
+        jobId,
+        job?.name ?? "Construction income",
+        invoiceLinesFor(items, true),
+        jobRecordHref(jobId, { tab: "financials" }),
+      );
     })
     .sort((a, b) => b.amount - a.amount);
 
@@ -354,7 +418,8 @@ function buildIncomeLines(input: {
     });
   }
   lines.sort((a, b) => b.amount - a.amount);
-  if (other) lines.push({ id: "other-income", label: "Other income", amount: other });
+  const other = rollup("other-income", "Other income", invoiceLinesFor(otherInvoices, true));
+  if (other.amount) lines.push(other);
   return lines;
 }
 
@@ -529,26 +594,27 @@ export function buildProfitAndLoss(input: {
     "Construction income",
     incomeLines,
   );
+  const nameJob = !jobId;
   const costOfSales = section(
     "cos",
     "Cost of Sales",
     "Total Cost of Sales",
     "Cost of sales",
-    sumByAccount(jobExpenses, COST_OF_SALES_ACCOUNTS),
+    sumByAccount(jobExpenses, COST_OF_SALES_ACCOUNTS, input.jobs, nameJob),
   );
   const expenses = section(
     "expenses",
     "Expenses",
     "Total Expenses",
     "General and admin expenses",
-    sumByAccount(jobExpenses, OPERATING_EXPENSE_ACCOUNTS),
+    sumByAccount(jobExpenses, OPERATING_EXPENSE_ACCOUNTS, input.jobs, nameJob),
   );
   const otherExpenses = section(
     "other",
     "Other Expenses",
     "Total Other Expenses",
     "Other Expense",
-    sumByAccount(jobExpenses, OTHER_EXPENSE_ACCOUNTS),
+    sumByAccount(jobExpenses, OTHER_EXPENSE_ACCOUNTS, input.jobs, nameJob),
   );
   const grossProfit = income.total - costOfSales.total;
   const netIncome = grossProfit - expenses.total - otherExpenses.total;

@@ -4,12 +4,59 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { formatMoney } from "@/lib/format";
-import type { JobPnlComparison, PnlSection, ProfitAndLossStatement } from "@/lib/profit-and-loss";
+import type { JobPnlComparison, PnlLine, PnlSection, ProfitAndLossStatement } from "@/lib/profit-and-loss";
 import { cn } from "@/lib/utils";
 
 function pnlAmount(value: number) {
   const text = formatMoney(Math.abs(value));
   return value < 0 ? `(${text})` : text;
+}
+
+function LineRow({ line, depth }: { line: PnlLine; depth: number }) {
+  const children = line.children ?? [];
+  const expandable = children.length > 0;
+  const [open, setOpen] = useState(false);
+  const pad = depth === 0 ? "pl-5" : "pl-14";
+
+  if (!expandable) {
+    return (
+      <li className={cn("flex min-w-0 items-baseline gap-1 py-0.5 text-sm", pad)}>
+        {depth === 0 ? <span className="size-3 shrink-0" aria-hidden /> : null}
+        {line.href ? (
+          <Link href={line.href} className="min-w-0 flex-1 truncate hover:underline">
+            {line.label}
+          </Link>
+        ) : (
+          <span className="min-w-0 flex-1 truncate">{line.label}</span>
+        )}
+        <span className="shrink-0 tabular-nums text-muted-foreground">{pnlAmount(line.amount)}</span>
+      </li>
+    );
+  }
+
+  return (
+    <li className="min-w-0">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className={cn("flex w-full items-center gap-1 py-0.5 text-left text-sm hover:bg-muted/50", pad)}
+        aria-expanded={open}
+      >
+        <ChevronRight
+          className={cn("size-3 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")}
+        />
+        <span className="min-w-0 flex-1 truncate">{line.label}</span>
+        <span className="shrink-0 tabular-nums text-muted-foreground">{pnlAmount(line.amount)}</span>
+      </button>
+      {open ? (
+        <ul className="min-w-0">
+          {children.map((child) => (
+            <LineRow key={child.id} line={child} depth={depth + 1} />
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  );
 }
 
 function SectionBlock({
@@ -42,18 +89,9 @@ function SectionBlock({
       </button>
       {open ? (
         <>
-          <ul>
+          <ul className="min-w-0">
             {lines.map((line) => (
-              <li key={line.id} className="flex items-baseline justify-between gap-4 py-0.5 pl-8 text-sm">
-                {line.href ? (
-                  <Link href={line.href} className="min-w-0 truncate hover:underline">
-                    {line.label}
-                  </Link>
-                ) : (
-                  <span className="min-w-0 truncate">{line.label}</span>
-                )}
-                <span className="shrink-0 tabular-nums text-muted-foreground">{pnlAmount(line.amount)}</span>
-              </li>
+              <LineRow key={line.id} line={line} depth={0} />
             ))}
           </ul>
           <div className="mt-1 flex items-baseline justify-between gap-4 border-t py-1.5 pl-5 text-sm font-medium">
@@ -253,7 +291,7 @@ export function ProfitAndLossReport({
   }
 
   return (
-    <div className={cn("border bg-card px-5 py-8 sm:px-10", className)}>
+    <div className={cn("min-w-0 max-w-full border bg-card px-5 py-8 sm:px-10", className)}>
       <header className="mb-6 text-center">
         <p className="text-sm">{statement.companyName}</p>
         <h2 className="font-heading mt-1 text-lg font-medium tracking-[0.14em] uppercase">
@@ -303,8 +341,8 @@ export function ProfitAndLossReport({
       </div>
       <p className="mt-5 text-center text-[11px] text-muted-foreground">
         {statement.basis === "cash"
-          ? "Cash basis — income is money received. Cost of sales and expenses are receipts on the books."
-          : "Accrual basis — income is invoiced work. Cost of sales and expenses are receipts on the books."}
+          ? "Cash basis — income is money received. Cost of sales and expenses are receipts on the books. Open a total to see each payment or bill."
+          : "Accrual basis — income is invoiced work. Cost of sales and expenses are receipts on the books. Open a total to see each invoice or bill."}
       </p>
     </div>
   );

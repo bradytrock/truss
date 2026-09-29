@@ -1,11 +1,23 @@
 import assert from "node:assert/strict";
+import { formatDate } from "./format.ts";
 import {
   applyForecastedExpenses,
+  buildProfitAndLoss,
   compareJobProfitAndLoss,
   preferredEstimateForJob,
   type ProfitAndLossStatement,
 } from "./profit-and-loss.ts";
-import type { CatalogItem, Estimate, EstimateLine, ForecastedExpense } from "./types.ts";
+import type {
+  CatalogItem,
+  Estimate,
+  EstimateLine,
+  Expense,
+  ForecastedExpense,
+  Invoice,
+  InvoiceLine,
+  Job,
+  Payment,
+} from "./types.ts";
 
 function estimate(partial: Partial<Estimate> & Pick<Estimate, "id" | "status">): Estimate {
   return {
@@ -162,5 +174,252 @@ const withOffice = applyForecastedExpenses(compared, [officeForecast]);
 assert.equal(withOffice?.projectedCostOfSales, 50 * 80 + 400);
 assert.equal(withOffice?.projectedExpenses, 120);
 assert.equal(withOffice?.projectedNetIncome, (50 * 112 + 400) - (50 * 80 + 400) - 120);
+
+function job(partial: Partial<Job> & Pick<Job, "id" | "name">): Job {
+  return {
+    code: partial.id,
+    opportunityId: null,
+    clientId: null,
+    primaryContactId: null,
+    status: "in_progress",
+    contractValue: 0,
+    startDate: "2026-09-01",
+    substantialCompletion: null,
+    superintendent: "",
+    projectManager: "",
+    location: "",
+    ownerStaffId: "",
+    description: "",
+    tags: [],
+    street: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    salesRep: "",
+    assigned: [],
+    subcontractorIds: [],
+    relatedContactIds: [],
+    customFields: [],
+    projectType: "",
+    market: "residential",
+    leadSource: "",
+    primaryPhotoId: null,
+    deletedAt: null,
+    deletedReason: "",
+    deletedBy: "",
+    ...partial,
+  } as Job;
+}
+
+function invoice(partial: Partial<Invoice> & Pick<Invoice, "id" | "number">): Invoice {
+  return {
+    name: partial.name ?? "",
+    clientId: null,
+    jobId: partial.jobId ?? null,
+    estimateId: null,
+    status: partial.status ?? "sent",
+    issuedAt: partial.issuedAt ?? "2026-09-04",
+    dueAt: null,
+    notes: "",
+    terms: "",
+    shareToken: "",
+    qbStatus: "not_in_qb",
+    ...partial,
+  };
+}
+
+function invoiceLine(invoiceId: string, unitCost: number, id = `line_${invoiceId}`): InvoiceLine {
+  return { id, invoiceId, description: "Work", quantity: 1, unit: "LS", unitCost, sortOrder: 0 };
+}
+
+function payment(partial: Partial<Payment> & Pick<Payment, "id" | "amount" | "paidAt">): Payment {
+  return {
+    invoiceId: partial.invoiceId ?? null,
+    jobId: partial.jobId ?? null,
+    method: partial.method ?? "check",
+    reference: partial.reference ?? "",
+    receiptUrl: "",
+    receiptStoragePath: null,
+    qbStatus: "not_in_qb",
+    createdBy: "",
+    ...partial,
+  };
+}
+
+function expense(partial: Partial<Expense> & Pick<Expense, "id" | "amount" | "account">): Expense {
+  return {
+    number: partial.number ?? partial.id.toUpperCase(),
+    invoiceNumber: partial.invoiceNumber ?? "",
+    jobId: partial.jobId ?? null,
+    vendor: partial.vendor ?? "Vendor",
+    incurredAt: partial.incurredAt ?? "2026-09-02",
+    method: partial.method ?? "check",
+    memo: "",
+    receiptUrl: "",
+    receiptStoragePath: null,
+    qbStatus: "not_in_qb",
+    extractedByAi: false,
+    createdAt: "2026-09-02T12:00:00.000Z",
+    createdBy: "",
+    ...partial,
+  };
+}
+
+const falcon = job({ id: "job_falcon", name: "EST-1057 · 100 Falcon Ct" });
+const hart = job({ id: "job_hart", name: "Hart water" });
+const books = {
+  companyName: "Northline",
+  jobs: [falcon, hart],
+  invoices: [
+    invoice({ id: "inv_late", number: "INV-199", name: "Draw 2", jobId: falcon.id, issuedAt: "2026-09-10" }),
+    invoice({ id: "inv_early", number: "INV-200", name: "Draw 1", jobId: falcon.id, issuedAt: "2026-09-04" }),
+    invoice({ id: "inv_draft", number: "INV-DRAFT", name: "Draft", jobId: falcon.id, status: "draft" }),
+    invoice({ id: "inv_other", number: "INV-9", name: "Loose bill", jobId: null, issuedAt: "2026-09-12" }),
+    invoice({ id: "inv_old", number: "INV-1", name: "August", jobId: falcon.id, issuedAt: "2026-08-02" }),
+  ],
+  invoiceLines: [
+    invoiceLine("inv_late", 400),
+    invoiceLine("inv_early", 100),
+    invoiceLine("inv_draft", 999),
+    invoiceLine("inv_other", 50),
+    invoiceLine("inv_old", 80),
+  ],
+  payments: [
+    payment({ id: "pay_1", amount: 60, paidAt: "2026-09-15", invoiceId: "inv_early", reference: "4419" }),
+    payment({ id: "pay_loose", amount: 15, paidAt: "2026-09-16", method: "cash" }),
+    payment({ id: "pay_old", amount: 80, paidAt: "2026-08-03", invoiceId: "inv_old", jobId: falcon.id }),
+  ],
+  expenses: [
+    expense({
+      id: "exp_mat",
+      amount: 80,
+      account: "materials",
+      jobId: falcon.id,
+      vendor: "ABC Supply",
+      invoiceNumber: "S1044821",
+      incurredAt: "2026-09-02",
+    }),
+    expense({
+      id: "exp_hd",
+      amount: 20,
+      account: "materials",
+      jobId: falcon.id,
+      vendor: "Home Depot",
+      incurredAt: "2026-09-18",
+      number: "EXP-4003",
+    }),
+    expense({
+      id: "exp_sub",
+      amount: 300,
+      account: "subcontractors",
+      jobId: hart.id,
+      vendor: "Peak Roofing",
+      invoiceNumber: "PR-12",
+      incurredAt: "2026-09-08",
+    }),
+    expense({
+      id: "exp_fuel",
+      amount: 40,
+      account: "fuel",
+      jobId: null,
+      vendor: "Shell",
+      incurredAt: "2026-09-03",
+      number: "EXP-FUEL",
+    }),
+    expense({
+      id: "exp_old",
+      amount: 500,
+      account: "materials",
+      jobId: falcon.id,
+      vendor: "Old Yard",
+      invoiceNumber: "OLD",
+      incurredAt: "2026-08-01",
+    }),
+  ],
+  estimates: [] as Estimate[],
+  estimateLines: [] as EstimateLine[],
+  from: "2026-09-01",
+  to: "2026-09-30",
+  periodLabel: "September 2026",
+};
+
+const accrual = buildProfitAndLoss({ ...books, basis: "accrual" });
+const falconIncome = accrual.income.lines.find((line) => line.id === falcon.id);
+assert.equal(falconIncome?.amount, 500);
+assert.deepEqual(
+  falconIncome?.children?.map((line) => line.label),
+  [
+    `${formatDate("2026-09-04")} · INV-200 · Draw 1`,
+    `${formatDate("2026-09-10")} · INV-199 · Draw 2`,
+  ],
+);
+assert.equal(
+  falconIncome?.children?.reduce((sum, line) => sum + line.amount, 0),
+  falconIncome?.amount,
+);
+assert.equal(falconIncome?.children?.some((line) => line.id === "inv_draft"), false);
+assert.equal(falconIncome?.children?.[0].href, "/invoices/inv_early");
+const otherIncome = accrual.income.lines.find((line) => line.id === "other-income");
+assert.equal(otherIncome?.amount, 50);
+assert.equal(otherIncome?.children?.[0].label, `${formatDate("2026-09-12")} · INV-9 · Loose bill`);
+
+const materials = accrual.costOfSales.lines.find((line) => line.id === "materials");
+assert.equal(materials?.amount, 100);
+assert.deepEqual(
+  materials?.children?.map((line) => line.label),
+  [
+    `${formatDate("2026-09-02")} · EST-1057 · 100 Falcon Ct · ABC Supply · invoice S1044821`,
+    `${formatDate("2026-09-18")} · EST-1057 · 100 Falcon Ct · Home Depot · EXP-4003`,
+  ],
+);
+assert.equal(materials?.children?.[0].href, "/jobs?job=job_falcon&tab=files&doc=expense%3Aexp_mat");
+const subs = accrual.costOfSales.lines.find((line) => line.id === "subcontractors");
+assert.match(subs?.children?.[0].label ?? "", /Hart water · Peak Roofing · invoice PR-12/);
+const fuel = accrual.expenses.lines.find((line) => line.id === "fuel");
+assert.equal(fuel?.children?.[0].label, `${formatDate("2026-09-03")} · Shell · EXP-FUEL`);
+assert.equal(accrual.costOfSales.total, 400);
+assert.equal(accrual.grossProfit, accrual.income.total - accrual.costOfSales.total);
+
+const jobBooks = buildProfitAndLoss({
+  ...books,
+  basis: "accrual",
+  job: falcon,
+  from: null,
+  to: null,
+  periodLabel: "Job",
+});
+assert.deepEqual(
+  jobBooks.income.lines.map((line) => line.label),
+  ["INV-1 · August", "INV-200 · Draw 1", "INV-199 · Draw 2"],
+);
+assert.equal(jobBooks.income.lines.every((line) => !line.children), true);
+const jobMaterials = jobBooks.costOfSales.lines.find((line) => line.id === "materials");
+const abc = jobMaterials?.children?.find((line) => line.id === "exp_mat");
+assert.equal(abc?.label.includes("Falcon"), false);
+assert.match(abc?.label ?? "", /ABC Supply · invoice S1044821/);
+assert.equal(jobMaterials?.amount, 600);
+
+const cash = buildProfitAndLoss({ ...books, basis: "cash" });
+const cashFalcon = cash.income.lines.find((line) => line.id === falcon.id);
+assert.equal(cashFalcon?.amount, 60);
+assert.equal(cashFalcon?.children?.[0].label, `${formatDate("2026-09-15")} · INV-200 · check · 4419`);
+assert.equal(cashFalcon?.children?.[0].href, "/invoices/inv_early");
+const unapplied = cash.income.lines.find((line) => line.id === "unapplied");
+assert.equal(unapplied?.amount, 15);
+assert.match(unapplied?.children?.[0].label ?? "", /Payment · cash/);
+
+const jobCash = buildProfitAndLoss({
+  ...books,
+  basis: "cash",
+  job: falcon,
+  from: null,
+  to: null,
+  periodLabel: "Job",
+});
+assert.deepEqual(
+  jobCash.income.lines.map((line) => line.label),
+  ["INV-1 · check", "INV-200 · check · 4419"],
+);
+assert.equal(jobCash.income.lines.every((line) => !line.children), true);
 
 console.log("profit-and-loss.test.ts ok");
