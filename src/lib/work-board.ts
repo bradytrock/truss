@@ -1,3 +1,4 @@
+import { parseLocation } from "@/lib/job-record";
 import type { Job, JobStatus, Opportunity, PipelineStage } from "./types";
 
 export const WORK_COLUMNS = [
@@ -87,32 +88,67 @@ export function isWorkColumn(value: string): value is WorkColumn {
   return WORK_COLUMNS.includes(value as WorkColumn);
 }
 
+function addressAfterDash(title: string) {
+  const match = title.match(/\s[—–-]\s(.+)$/);
+  return match?.[1]?.trim() ?? "";
+}
+
+function stripTrailing(value: string, suffix: string) {
+  const hay = value.trim();
+  const needle = suffix.trim();
+  if (!needle || !hay.toLowerCase().endsWith(needle.toLowerCase())) return hay;
+  return hay.slice(0, hay.length - needle.length).replace(/[\s,]+$/u, "").trim();
+}
+
+function localityLine(city: string, state: string, postalCode: string) {
+  const cityState = [city, state].filter(Boolean).join(", ");
+  return [cityState, postalCode].filter(Boolean).join(" ");
+}
+
 /** What to show on a board card after the title — skip lines already in the name. */
 export function boardCardDetails(input: {
   title: string;
   customerName: string;
   location: string;
   street?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
 }) {
   const title = (input.title ?? "").trim();
   const customer = (input.customerName ?? "").trim();
   const location = (input.location ?? "").trim();
+  const embedded = addressAfterDash(title);
+  const parsed = parseLocation(location || embedded);
+  const street = (input.street?.trim() || parsed.street).trim();
+  const city = (input.city?.trim() || parsed.city).trim();
+  const state = (input.state?.trim() || parsed.state).trim();
+  const postalCode = (input.postalCode?.trim() || parsed.postalCode).trim();
+  const locality = localityLine(city, state, postalCode);
+  const headline = locality ? stripTrailing(title, locality) : title;
+  const displayTitle = headline || street || location;
   const haystack = title.toLowerCase();
+  const displayHay = displayTitle.toLowerCase();
   const last = customer.split(/\s+/).filter(Boolean).at(-1) ?? "";
   const showCustomer =
     Boolean(customer) &&
     !haystack.includes(customer.toLowerCase()) &&
     !(last.length > 1 && haystack.includes(last.toLowerCase()));
-  const street = input.street?.trim() ?? "";
   const showLocation =
     Boolean(location) &&
     !haystack.includes(location.toLowerCase()) &&
     !(street.length > 3 && haystack.includes(street.toLowerCase()));
+  const streetInTitle = street.length > 3 && displayHay.includes(street.toLowerCase());
+  const localityInTitle = Boolean(locality) && displayHay.includes(locality.toLowerCase());
   return {
-    title: title || location,
+    title: displayTitle,
     showCustomer,
     customer,
     showLocation,
     location,
+    /** Street on its own line when the title does not already contain it. */
+    streetLine: streetInTitle ? "" : street,
+    /** City, state, and zip, kept off the street line. */
+    locality: localityInTitle ? "" : locality,
   };
 }

@@ -220,6 +220,9 @@ function OpportunityCard({
     customerName,
     location: opportunity.location,
     street: opportunity.street,
+    city: opportunity.city,
+    state: opportunity.state,
+    postalCode: opportunity.postalCode,
   });
 
   return (
@@ -233,24 +236,37 @@ function OpportunityCard({
       )}
     >
       <CardContent className="space-y-2">
-        <div className="flex items-start gap-1">
-          <button
-            type="button"
-            className="mt-0.5 cursor-grab touch-none text-muted-foreground hover:text-foreground"
-            aria-label="Drag pursuit"
-            {...listeners}
-            {...attributes}
-          >
-            <GripVertical className="size-3.5" />
-          </button>
-          <div className="min-w-0 flex-1">
-            <RecordCode code={opportunity.code} />
+        <div>
+          <div className="flex items-start gap-1">
+            <button
+              type="button"
+              className="mt-0.5 cursor-grab touch-none text-muted-foreground hover:text-foreground"
+              aria-label="Drag pursuit"
+              {...listeners}
+              {...attributes}
+            >
+              <GripVertical className="size-3.5" />
+            </button>
+            <div className="min-w-0 flex-1">
+              <RecordCode code={opportunity.code} />
+            </div>
+          </div>
+          <div className="mt-0.5 w-full">
             <Link
               href={`/opportunities/${opportunity.id}`}
-              className="mt-0.5 block text-sm font-medium leading-snug hover:underline"
+              className="block text-sm font-medium leading-snug hover:underline"
             >
               {details.title}
             </Link>
+            {details.streetLine ? (
+              <p className="mt-0.5 text-sm font-medium leading-snug">{details.streetLine}</p>
+            ) : null}
+            {details.locality ? (
+              <p className="mt-0.5 text-xs leading-snug">{details.locality}</p>
+            ) : null}
+            {details.showLocation && !details.streetLine && !details.locality ? (
+              <p className="mt-0.5 text-sm leading-snug">{details.location}</p>
+            ) : null}
             {details.showCustomer ? (
               <p className="mt-0.5 truncate text-xs text-muted-foreground">{details.customer}</p>
             ) : null}
@@ -268,10 +284,8 @@ function OpportunityCard({
           <MarketBadge market={parseMarket(opportunity.market, opportunity.projectType)} />
           <TypeBadge type={opportunity.projectType} />
         </div>
-        {details.showLocation || opportunity.bidDueAt ? (
-        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span className="min-w-0 truncate">{details.showLocation ? details.location : ""}</span>
-          {opportunity.bidDueAt ? (
+        {opportunity.bidDueAt ? (
+          <div className="flex items-center justify-end text-xs text-muted-foreground">
             <span
               className={cn(
                 "shrink-0 tabular-nums",
@@ -286,8 +300,7 @@ function OpportunityCard({
                   ? "Due tomorrow"
                   : formatDateShort(opportunity.bidDueAt)}
             </span>
-          ) : null}
-        </div>
+          </div>
         ) : null}
       </CardContent>
     </Card>

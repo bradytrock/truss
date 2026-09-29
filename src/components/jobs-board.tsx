@@ -331,6 +331,9 @@ function JobCard({
     customerName,
     location: job.location,
     street: job.street,
+    city: job.city,
+    state: job.state,
+    postalCode: job.postalCode,
   });
   const estimateTags = boardEstimateTags(estimatesForJob(job, crm.estimates ?? []));
 
@@ -356,25 +359,40 @@ function JobCard({
           >
             <GripVertical className="size-3.5" />
           </button>
-          <JobOpenLink
-            jobId={job.id}
-            overlay={overlay}
-            onSelectJob={onSelectJob}
-            className="min-w-0 flex-1 text-left"
-          >
-            <RecordCode code={job.code} />
-            <span className="mt-0.5 block text-sm font-medium leading-snug hover:underline">
-              {details.title}
-            </span>
-            {details.showCustomer ? (
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">{details.customer}</p>
-            ) : null}
-            {job.leadSource ? (
-              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                {leadSourceLabel(job.leadSource)}
-              </p>
-            ) : null}
-          </JobOpenLink>
+          <div className="min-w-0 flex-1">
+            <JobOpenLink
+              jobId={job.id}
+              overlay={overlay}
+              onSelectJob={onSelectJob}
+              className="block w-full text-left"
+            >
+              <RecordCode code={job.code} />
+              {details.title ? (
+                <span className="mt-0.5 block text-sm font-medium leading-snug hover:underline">
+                  {details.title}
+                </span>
+              ) : null}
+              {details.streetLine ? (
+                <span className="mt-0.5 block text-sm font-medium leading-snug">
+                  {details.streetLine}
+                </span>
+              ) : null}
+              {details.locality ? (
+                <span className="mt-0.5 block text-xs leading-snug">{details.locality}</span>
+              ) : null}
+              {details.showLocation && !details.streetLine && !details.locality ? (
+                <span className="mt-0.5 block text-sm leading-snug">{details.location}</span>
+              ) : null}
+              {details.showCustomer ? (
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{details.customer}</p>
+              ) : null}
+              {job.leadSource ? (
+                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                  {leadSourceLabel(job.leadSource)}
+                </p>
+              ) : null}
+            </JobOpenLink>
+          </div>
           {estimateTags.length > 0 ? (
             <span className="mt-0.5 flex max-w-[48%] flex-wrap justify-end gap-1">
               {estimateTags.map((tag) => (
@@ -427,16 +445,6 @@ function JobCard({
           </div>
         ) : deleted && job.deletedReason ? (
           <p className="line-clamp-2 text-[11px] text-muted-foreground">{job.deletedReason}</p>
-        ) : null}
-        {details.showLocation ? (
-          <JobOpenLink
-            jobId={job.id}
-            overlay={overlay}
-            onSelectJob={onSelectJob}
-            className="flex w-full items-center justify-between gap-2 text-left text-xs text-muted-foreground"
-          >
-            <span className="min-w-0 truncate">{details.location}</span>
-          </JobOpenLink>
         ) : null}
       </CardContent>
     </Card>
