@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   canAddSecondHomeowner,
+  customerContactDetails,
   relatedContactIdsWithHomeowner,
   secondHomeownerDraft,
 } from "./parties.ts";
@@ -68,5 +69,24 @@ assert.equal(draft.name, "Jordan Alvarez");
 assert.equal(draft.title, "Homeowner");
 assert.equal(draft.isReferralPartner, false);
 assert.equal(draft.email, "jordan@home.test");
+
+const book = {
+  clients: [],
+  contacts: [dana, jordan],
+  jobs: [job({ id: "j1", primaryContactId: dana.id, relatedContactIds: [jordan.id] })],
+  opportunities: [],
+};
+assert.deepEqual(
+  customerContactDetails({ jobId: "j1" }, book),
+  {
+    phone: "2145550101",
+    email: "",
+    secondPhone: "",
+    secondEmail: "",
+  },
+);
+jordan.email = "jordan@home.test";
+jordan.phone = "4695550199";
+assert.equal(customerContactDetails({ contactId: dana.id, secondContactId: jordan.id }, book).secondEmail, "jordan@home.test");
 
 console.log("parties.test.ts ok");

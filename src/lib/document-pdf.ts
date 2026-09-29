@@ -49,6 +49,8 @@ import {
   paperInvoiceMeta,
   paperIssuedAt,
   paperKindLabel,
+  paperPreparedForCard,
+  paperPreparedForLines,
   paperQtyLabel,
   paperRescissionCopy,
   paperSiteTitle,
@@ -516,7 +518,7 @@ function writePartyCards(
     doc.setFontSize(8);
     ink(doc, PAPER_MUTED);
     let cy = y + 13 + (Array.isArray(name) ? name.length : 1) * 11;
-    for (const line of card.lines.filter(Boolean).slice(0, 2)) {
+    for (const line of card.lines.filter(Boolean).slice(0, 4)) {
       const wrapped = doc.splitTextToSize(line, inner);
       doc.text(wrapped, x, cy);
       cy += (Array.isArray(wrapped) ? wrapped.length : 1) * 10;
@@ -889,6 +891,10 @@ export async function buildEstimatePdf(raw: {
   lines: EstimateLine[];
   company: CompanySettings;
   customer: string;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  secondCustomerPhone?: string | null;
+  secondCustomerEmail?: string | null;
   projectManager?: ProjectManagerContact | null;
   primaryCustomer?: string;
   secondCustomer?: string | null;
@@ -930,7 +936,13 @@ export async function buildEstimatePdf(raw: {
   );
   y = writePartyCards(
     doc,
-    { label: "Prepared for", name: input.customer, lines: [] },
+    paperPreparedForCard({
+      name: input.customer,
+      phone: input.customerPhone,
+      email: input.customerEmail,
+      secondPhone: input.secondCustomerPhone,
+      secondEmail: input.secondCustomerEmail,
+    }),
     managerCard(input.projectManager, input.company.phone),
     y,
   );
@@ -1164,6 +1176,8 @@ export async function downloadSignatureCertificatePdf(input: {
   estimate: Pick<Estimate, "number" | "name" | "street" | "city" | "state" | "postalCode" | "validUntil">;
   company: CompanySettings;
   customer: string;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
   events: EstimateSignatureEvent[];
 }) {
   const trail = input.events.slice().sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -1193,7 +1207,18 @@ export async function downloadSignatureCertificatePdf(input: {
   doc.setFontSize(10);
   doc.setTextColor(70, 70, 70);
   doc.text(`Prepared for ${input.customer}`, 54, y);
-  y += 18;
+  y += 14;
+  const preparedForContact = paperPreparedForLines({
+    phone: input.customerPhone,
+    email: input.customerEmail,
+  }).join(" · ");
+  if (preparedForContact) {
+    const contactLines = doc.splitTextToSize(preparedForContact, right - 54);
+    doc.text(contactLines, 54, y);
+    y += contactLines.length * 12 + 6;
+  } else {
+    y += 4;
+  }
   writeSignatureCertificate(doc, input.estimate.number, trail, y);
   downloadBlob(doc.output("blob"), `${input.estimate.number}-signature-certificate.pdf`);
 }

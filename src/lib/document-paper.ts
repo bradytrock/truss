@@ -148,3 +148,39 @@ export function paperQtyLabel(value: number) {
   if (Number.isInteger(value)) return String(value);
   return String(value);
 }
+
+function paperPhone(value: string | null | undefined) {
+  const formatted = formatPhone(value);
+  return formatted === "—" ? "" : formatted;
+}
+
+/** Lines under the client name on a Prepared for card: phone, then email. */
+export function paperPreparedForLines(input: {
+  phone?: string | null;
+  email?: string | null;
+  secondPhone?: string | null;
+  secondEmail?: string | null;
+}) {
+  const phone = paperPhone(input.phone);
+  const email = input.email?.trim() ?? "";
+  const lines = [phone, email].filter(Boolean);
+  const secondPhone = paperPhone(input.secondPhone);
+  const secondEmail = input.secondEmail?.trim() ?? "";
+  if (secondPhone && secondPhone !== phone) lines.push(secondPhone);
+  if (secondEmail && secondEmail.toLowerCase() !== email.toLowerCase()) lines.push(secondEmail);
+  return lines;
+}
+
+export function paperPreparedForCard(input: {
+  name: string;
+  phone?: string | null;
+  email?: string | null;
+  secondPhone?: string | null;
+  secondEmail?: string | null;
+}) {
+  return {
+    label: "Prepared for",
+    name: input.name.trim() || "—",
+    lines: paperPreparedForLines(input),
+  };
+}

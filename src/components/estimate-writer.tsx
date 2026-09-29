@@ -21,7 +21,7 @@ import { BackToJobButton } from "@/components/back-to-job";
 import { ProposalDocument } from "@/components/proposal-document";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { CollectSignatureDialog } from "@/components/signature-pad";
-import { shareContactsForEstimate, coOwnerContact, jobHomeownersForEstimate } from "@/lib/parties";
+import { shareContactsForEstimate, coOwnerContact, customerContactDetails, jobHomeownersForEstimate } from "@/lib/parties";
 import { EstimateStatusBadge } from "@/components/status-badge";
 import { PaperArchivedBanner } from "@/components/paper-archive-button";
 import { Button } from "@/components/ui/button";
@@ -862,6 +862,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
     jobRelatedKey,
   ]);
   const customer = crm.customerName(estimate);
+  const clientContact = customerContactDetails(estimate, crm);
   const site =
     formatJobSite({
       street: estimate.street,
@@ -971,6 +972,10 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       lines,
       company: letterhead,
       customer,
+      customerPhone: clientContact.phone,
+      customerEmail: clientContact.email,
+      secondCustomerPhone: clientContact.secondPhone,
+      secondCustomerEmail: clientContact.secondEmail,
       projectManager,
       primaryCustomer: contact?.name,
       secondCustomer: secondSignerName,
@@ -989,6 +994,8 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       estimate: billed,
       company: letterhead,
       customer,
+      customerPhone: clientContact.phone,
+      customerEmail: clientContact.email,
       events,
     }).catch(() => toast.error("Could not build the signature certificate."));
   }

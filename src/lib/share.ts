@@ -160,8 +160,12 @@ export type SharedCompany = {
 
 export type SharedEstimatePayload = {
   customer: string;
+  customerPhone?: string;
+  customerEmail?: string;
   primaryCustomer?: string;
   secondCustomer?: string | null;
+  secondCustomerPhone?: string;
+  secondCustomerEmail?: string;
   viewerSigner?: "primary" | "second";
   company: SharedCompany;
   market?: "residential" | "commercial";
@@ -323,8 +327,12 @@ export function parseSharedEstimate(raw: unknown): SharedEstimatePayload | null 
   const viewerRaw = asString(raw.viewerSigner).toLowerCase();
   return {
     customer: asString(raw.customer, "Homeowner"),
+    customerPhone: asString(raw.customerPhone),
+    customerEmail: asString(raw.customerEmail),
     primaryCustomer: asString(raw.primaryCustomer) || undefined,
     secondCustomer: asNullable(raw.secondCustomer),
+    secondCustomerPhone: asString(raw.secondCustomerPhone),
+    secondCustomerEmail: asString(raw.secondCustomerEmail),
     viewerSigner: viewerRaw === "second" ? "second" : "primary",
     company: parseCompany(raw.company),
     market: asString(raw.market) === "commercial" ? "commercial" : asString(raw.market) === "residential" ? "residential" : undefined,

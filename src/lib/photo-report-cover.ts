@@ -1,3 +1,4 @@
+import { paperPreparedForLines } from "@/lib/document-paper";
 import { jobAddress, parseLocation } from "@/lib/job-record";
 import { pageCoverCopy, photoById } from "@/lib/photo-report";
 import type {
@@ -34,11 +35,6 @@ function displayWebsite(website: string) {
     .toUpperCase();
 }
 
-function isAdjuster(contact: Contact) {
-  const blob = `${contact.title} ${contact.name}`.toLowerCase();
-  return blob.includes("adjuster") || contact.title.toLowerCase() === "insurance";
-}
-
 export function photoReportCoverKicker(job: Job) {
   if (job.projectType === "roofing" || job.projectType === "exterior" || /\broof/i.test(job.name)) {
     return "ROOF PHOTO";
@@ -66,15 +62,8 @@ export function photoReportCoverModel(input: {
       .join(" ") || ""
   ).toUpperCase();
 
-  const homeowner =
-    input.contacts.find((contact) => contact.id === job.primaryContactId)?.name.trim() ||
-    page.subtitle.trim() ||
-    input.customerName;
-  const adjuster = input.contacts.find(
-    (contact) =>
-      (job.relatedContactIds.includes(contact.id) || contact.id === job.primaryContactId) && isAdjuster(contact),
-  );
-  const carrier = fieldValue(job, /carrier|insurance company|insurance carrier/i);
+  const client = input.contacts.find((contact) => contact.id === job.primaryContactId);
+  const homeowner = client?.name.trim() || page.subtitle.trim() || input.customerName;
   const claimNumber = page.showClaimNumber
     ? page.claimNumber.trim() || fieldValue(job, /claim/)
     : "";
@@ -92,10 +81,10 @@ export function photoReportCoverModel(input: {
     .join(" · ");
   const preparedByContact = [company.phone, company.email].filter(Boolean).join(" · ");
 
-  const preparedForDetail = [
-    carrier,
-    adjuster ? [adjuster.name, adjuster.phone].filter(Boolean).join(" · ") : "",
-  ].filter(Boolean);
+  const preparedForDetail = paperPreparedForLines({
+    phone: client?.phone,
+    email: client?.email,
+  });
 
   const region = [company.city, company.state].filter(Boolean).join(" · ").toUpperCase();
   const companyTag = region || displayWebsite(company.website);

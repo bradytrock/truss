@@ -378,7 +378,8 @@ async function drawCover(
   doc.setFontSize(8);
   doc.setTextColor(200, 200, 200);
   cover.preparedForDetail.slice(0, 2).forEach((line, index) => {
-    doc.text(line, inset, peopleY + 34 + index * 12);
+    const fitted = doc.splitTextToSize(line, splitX - inset - 20);
+    doc.text(fitted[0] ?? "", inset, peopleY + 34 + index * 12);
   });
 
   doc.setFont("helvetica", "bold");
