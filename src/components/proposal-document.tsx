@@ -301,7 +301,7 @@ export function ProposalDocument({
       {visibleLines.length === 0 ? (
         <p className="text-sm text-muted-foreground">No line items on this proposal yet.</p>
       ) : (
-        <div className="space-y-5 overflow-x-auto">
+        <div className="min-w-0 space-y-5">
           <PaperTableHead hidePrices={estimate.hideLinePrices} />
           {printSections.map((section) => (
             <section key={section.key || section.name || "items"}>
