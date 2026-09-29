@@ -313,7 +313,7 @@ function writeSignatureCertificate(
   doc.setTextColor(70, 70, 70);
   y = writeParagraph(
     doc,
-    "This is the office audit trail for the electronic signatures on this proposal. Each homeowner received a unique link. The IP address, device, time, consent, and SHA-256 hash of the proposal at sign time are stored with the drawing. Do not send this page to the homeowner.",
+    "This is the office audit trail for the electronic signatures on this proposal. Each homeowner received a unique link. The IP address, device, time, consent, and SHA-256 hash of the proposal at sign time are stored with the signature. Do not send this page to the homeowner.",
     y,
     504,
     9,
