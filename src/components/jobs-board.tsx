@@ -39,7 +39,6 @@ import {
 } from "@/lib/work-board";
 import { canDeleteJobs, jobMatchesOwnerFilter } from "@/lib/visibility";
 import { dedupeJobsByOpportunity, isDeletedJob, jobRecordHref } from "@/lib/job-record";
-import { primaryJobPhoto } from "@/lib/photo-trash";
 import type { Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -180,7 +179,7 @@ export function JobsBoard({
       onDragCancel={() => setActiveId(null)}
     >
       <KanbanScroller>
-        <div className="flex min-h-[32rem] gap-3 pb-3">
+        <div className="flex min-h-[32rem] gap-2 pb-3">
           {columns.map((column) => {
             const cards = filtered.filter((job) => columnOf(job) === column);
             const total = cards.reduce((sum, job) => {
@@ -246,15 +245,15 @@ function JobColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex w-[272px] shrink-0 flex-col rounded-md border bg-card",
+        "flex w-[184px] shrink-0 flex-col rounded-md border bg-card",
         isOver && "border-primary",
       )}
     >
-      <div className="border-b px-3 py-2.5">
-        <div className="flex items-center gap-2">
+      <div className="border-b px-2 py-2">
+        <div className="flex items-center gap-1.5">
           <span className={cn("size-1.5 rounded-full", columnAccent[column])} />
-          <h2 className="text-sm font-medium">{WORK_COLUMN_LABELS[column]}</h2>
-          <span className="ml-auto text-xs tabular-nums text-muted-foreground">{count}</span>
+          <h2 className="min-w-0 truncate text-sm font-medium">{WORK_COLUMN_LABELS[column]}</h2>
+          <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">{count}</span>
         </div>
         <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
           {count === 0
@@ -264,7 +263,7 @@ function JobColumn({
             : formatCurrency(total)}
         </p>
       </div>
-      <div className="flex flex-1 flex-col gap-2 p-2">{children}</div>
+      <div className="flex flex-1 flex-col gap-1.5 p-1.5">{children}</div>
     </div>
   );
 }
@@ -332,36 +331,19 @@ function JobCard({
     location: job.location,
     street: job.street,
   });
-  const cover = primaryJobPhoto(crm.photos ?? [], job);
 
   return (
     <Card
       ref={setNodeRef}
       size="sm"
       className={cn(
-        "bg-card shadow-none",
+        "bg-card shadow-none [--card-spacing:--spacing(2)]",
         isDragging && !overlay && "opacity-40",
-        overlay && "w-[248px] shadow-md",
+        overlay && "w-[170px] shadow-md",
         deleted && "opacity-80",
       )}
     >
-      <CardContent className="space-y-2">
-        {cover ? (
-          <JobOpenLink
-            jobId={job.id}
-            overlay={overlay}
-            onSelectJob={onSelectJob}
-            className="block w-full overflow-hidden border"
-            aria-label={`Open ${job.name}`}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={cover.imageUrl}
-              alt=""
-              className="aspect-[16/9] w-full object-cover"
-            />
-          </JobOpenLink>
-        ) : null}
+      <CardContent className="space-y-1.5">
         <div className="flex items-start gap-1">
           <button
             type="button"
@@ -396,9 +378,9 @@ function JobCard({
           jobId={job.id}
           overlay={overlay}
           onSelectJob={onSelectJob}
-          className="flex w-full items-center justify-between gap-2 text-left"
+          className="flex w-full items-center justify-between gap-1.5 text-left"
         >
-          <span className="font-heading text-sm font-medium tabular-nums">
+          <span className="min-w-0 truncate font-heading text-sm font-medium tabular-nums">
             {formatCurrency(
               boardValue(
                 job,
