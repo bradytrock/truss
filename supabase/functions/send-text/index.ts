@@ -3,6 +3,8 @@
  * and sends an iMessage / SMS via Sendblue. The Next.js website cannot see those secrets otherwise.
  */
 const SENDBLUE_SEND_URL = "https://api.sendblue.co/api/send-message";
+const SENDBLUE_CONTACTS_URL = "https://api.sendblue.co/api/v2/contacts";
+const SENDBLUE_VERIFY_URL = "https://api.sendblue.co/api/v2/contacts/verify";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -80,25 +82,56 @@ Deno.serve(async (request) => {
     return json({ ok: true, mocked: true, to, configured: false });
   }
 
-  const response = await fetch(SENDBLUE_SEND_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "sb-api-key-id": keyId,
-      "sb-api-secret-key": secret,
-    },
-    body: JSON.stringify({
-      from_number: from,
-      number: to,
-      content,
-    }),
-  });
+  const headers = {
+    "Content-Type": "application/json",
+    "sb-api-key-id": keyId,
+    "sb-api-secret-key": secret,
+  };
 
-  let payload: Record<string, unknown> = {};
-  try {
-    payload = (await response.json()) as Record<string, unknown>;
-  } catch {
-    payload = {};
+  async function postMessage() {
+    const response = await fetch(SENDBLUE_SEND_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        from_number: from,
+        number: to,
+        content,
+        allow_sms: true,
+      }),
+    });
+    let payload: Record<string, unknown> = {};
+    try {
+      payload = (await response.json()) as Record<string, unknown>;
+    } catch {
+      payload = {};
+    }
+    return { response, payload };
+  }
+
+  let { response, payload } = await postMessage();
+  const firstError =
+    (typeof payload.error_message === "string" && payload.error_message) ||
+    (typeof payload.message === "string" && payload.message) ||
+    "";
+  const unverified =
+    (!response.ok || payload.status === "ERROR") &&
+    /must be verified before sending/i.test(firstError);
+  if (unverified) {
+    await fetch(SENDBLUE_CONTACTS_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        number: to,
+        sendblue_number: from,
+        update_if_exists: true,
+      }),
+    });
+    await fetch(SENDBLUE_VERIFY_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ number: to }),
+    });
+    ({ response, payload } = await postMessage());
   }
 
   if (!response.ok) {

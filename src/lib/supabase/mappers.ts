@@ -1605,13 +1605,24 @@ function parseActions(raw: Json): AutomationAction[] {
     return [{
       id: String(row.id ?? `a${index}`),
       kind: kind as AutomationAction["kind"],
-      to: row.to === "rep" || row.to === "staff" || row.to === "customer" ? row.to : undefined,
+      to:
+        row.to === "rep" || row.to === "staff" || row.to === "customer" || row.to === "phone" || row.to === "email"
+          ? row.to
+          : undefined,
       staffId: typeof row.staffId === "string" ? row.staffId : undefined,
       body: typeof row.body === "string" ? row.body : undefined,
       subject: typeof row.subject === "string" ? row.subject : undefined,
       title: typeof row.title === "string" ? row.title : undefined,
       dueInDays: typeof row.dueInDays === "number" ? row.dueInDays : undefined,
       url: typeof row.url === "string" ? row.url : undefined,
+      valueMode:
+        row.valueMode === "estimate" || row.valueMode === "amount" || row.valueMode === "zero"
+          ? row.valueMode
+          : undefined,
+      amount: Number.isFinite(Number(row.amount)) ? Number(row.amount) : undefined,
+      stage: typeof row.stage === "string" ? canonicalizeWorkColumn(row.stage) ?? undefined : undefined,
+      phone: typeof row.phone === "string" ? row.phone : undefined,
+      email: typeof row.email === "string" ? row.email : undefined,
     }];
   });
 }

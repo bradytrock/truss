@@ -4,8 +4,11 @@ export const AUTOMATION_TRIGGERS = [
   "job_created",
   "job_stage_changed",
   "job_stage_after_days",
-  "invoice_paid",
+  "estimate_sent",
   "estimate_sent_after_days",
+  "estimate_won",
+  "estimate_lost",
+  "invoice_paid",
   "event_in_days",
 ] as const;
 
@@ -15,8 +18,11 @@ export const AUTOMATION_TRIGGER_LABELS: Record<AutomationTriggerKind, string> = 
   job_created: "A job is created",
   job_stage_changed: "A job moves to a stage",
   job_stage_after_days: "X days after a job enters a stage",
+  estimate_sent: "A proposal is sent",
+  estimate_sent_after_days: "X days after a proposal is sent",
+  estimate_won: "A proposal is won",
+  estimate_lost: "A proposal is lost",
   invoice_paid: "An invoice is paid",
-  estimate_sent_after_days: "X days after an estimate is sent",
   event_in_days: "X days before a calendar event",
 };
 
@@ -25,6 +31,9 @@ export const AUTOMATION_ACTIONS = [
   "send_email",
   "create_task",
   "notify_staff",
+  "set_job_value",
+  "set_job_stage",
+  "add_note",
   "webhook",
 ] as const;
 
@@ -35,7 +44,19 @@ export const AUTOMATION_ACTION_LABELS: Record<AutomationActionKind, string> = {
   send_email: "Send email",
   create_task: "Create task",
   notify_staff: "Notify a team member",
+  set_job_value: "Change job value",
+  set_job_stage: "Change job stage",
+  add_note: "Add a job note",
   webhook: "Send to a webhook",
+};
+
+export const AUTOMATION_VALUE_MODES = ["estimate", "amount", "zero"] as const;
+export type AutomationValueMode = (typeof AUTOMATION_VALUE_MODES)[number];
+
+export const AUTOMATION_VALUE_MODE_LABELS: Record<AutomationValueMode, string> = {
+  estimate: "The proposal total",
+  amount: "A dollar amount",
+  zero: "Zero",
 };
 
 export const AUTOMATION_CONDITION_FIELDS = [
@@ -89,6 +110,8 @@ export const AUTOMATION_MERGE_FIELDS = [
   "contactPhone",
   "contactEmail",
   "reviewUrl",
+  "jobValue",
+  "estimateTotal",
 ] as const;
 
 export type AutomationMergeField = (typeof AUTOMATION_MERGE_FIELDS)[number];
@@ -107,6 +130,8 @@ export const AUTOMATION_MERGE_FIELD_LABELS: Record<AutomationMergeField, string>
   contactPhone: "Customer phone",
   contactEmail: "Customer email",
   reviewUrl: "Review link",
+  jobValue: "Job value",
+  estimateTotal: "Proposal total",
 };
 
 export type AutomationTriggerConfig = {
@@ -121,7 +146,7 @@ export type AutomationCondition = {
   value: string;
 };
 
-export type AutomationActionTo = "customer" | "rep" | "staff";
+export type AutomationActionTo = "customer" | "rep" | "staff" | "phone" | "email";
 
 export type AutomationAction = {
   id: string;
@@ -133,6 +158,16 @@ export type AutomationAction = {
   title?: string;
   dueInDays?: number;
   url?: string;
+  /** Where a job-value action gets its number. */
+  valueMode?: AutomationValueMode;
+  /** Dollar amount when valueMode is `amount`. */
+  amount?: number;
+  /** Board column for a stage action. */
+  stage?: WorkColumn | "";
+  /** Mobile number when `to` is `phone`. */
+  phone?: string;
+  /** Address when `to` is `email`. */
+  email?: string;
 };
 
 export const AUTOMATION_RUN_STATUSES = [
@@ -204,7 +239,9 @@ export type AutomationEventKind =
   | "job_created"
   | "job_stage_changed"
   | "invoice_paid"
-  | "estimate_sent";
+  | "estimate_sent"
+  | "estimate_won"
+  | "estimate_lost";
 
 export type AutomationEvent = {
   kind: AutomationEventKind;

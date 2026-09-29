@@ -1,3 +1,4 @@
+import { formatMoney } from "@/lib/format";
 import { buildMarketingMerge } from "@/lib/marketing/merge";
 import type { CompanySettings, Contact, Job, StaffMember } from "@/lib/types";
 import { WORK_COLUMN_LABELS, workColumnFor, type WorkColumn } from "@/lib/work-board";
@@ -23,6 +24,8 @@ export function emptyAutomationMerge(): AutomationMergeContext {
     contactPhone: "",
     contactEmail: "",
     reviewUrl: "",
+    jobValue: "",
+    estimateTotal: "",
   };
 }
 
@@ -34,6 +37,7 @@ export function buildAutomationMerge(input: {
   stage?: WorkColumn | "";
   reviewUrl?: string;
   origin?: string;
+  estimateTotal?: number | null;
 }): AutomationMergeContext {
   const marketing = buildMarketingMerge({
     company: input.company,
@@ -61,6 +65,11 @@ export function buildAutomationMerge(input: {
     contactPhone: marketing.contactPhone,
     contactEmail: input.contact?.email ?? "",
     reviewUrl: marketing.reviewUrl,
+    jobValue: input.job ? formatMoney(input.job.contractValue || 0) : "",
+    estimateTotal:
+      input.estimateTotal != null && Number.isFinite(input.estimateTotal)
+        ? formatMoney(input.estimateTotal)
+        : "",
   };
 }
 

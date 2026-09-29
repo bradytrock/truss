@@ -21,7 +21,8 @@ import {
   estimateDocumentSnapshot,
   hashEstimateDocument,
 } from "@/lib/estimate-signature-audit";
-import { fillEstimateLine } from "@/lib/estimate-totals";
+import { amountForEstimate, fillEstimate, fillEstimateLine } from "@/lib/estimate-totals";
+import { dispatchShareAutomation } from "@/lib/automations/dispatch-share";
 import { clientFacingSharePayload } from "@/lib/client-proposal";
 import { parseSharedEstimate } from "@/lib/share";
 
@@ -189,6 +190,21 @@ export async function POST(request: Request, context: { params: Promise<{ token:
       documentSnapshot: snapshot ?? undefined,
       timeZone: typeof body.timeZone === "string" ? body.timeZone : "",
     });
+    const signed = parseSharedEstimate(data);
+    if (shared?.estimate.status !== "accepted" && signed?.estimate.status === "accepted") {
+      const total = amountForEstimate(
+        fillEstimate(signed.estimate),
+        signed.lines.map((line) => fillEstimateLine(line)),
+        signed.market,
+      );
+      void dispatchShareAutomation({
+        token: trimmed,
+        kind: "estimate_won",
+        estimateTotal: total,
+      }).catch((error) => {
+        console.error("[automations] proposal won", error);
+      });
+    }
     return shareJson(
       withStorageShareAccessDeep(clientFacingSharePayload(data, trimmed) ?? data, trimmed),
     );

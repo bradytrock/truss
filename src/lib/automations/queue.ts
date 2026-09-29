@@ -1,18 +1,21 @@
+import { amountForEstimate } from "@/lib/estimate-totals";
 import {
   applyAutomationMerge,
   buildAutomationMerge,
   type AutomationMergeContext,
 } from "@/lib/automations/merge";
+import { describeJobValue } from "@/lib/automations/job-effects";
 import {
   automationIsDelayed,
   automationMatchesEvent,
   conditionsPass,
   scheduledForFromTrigger,
 } from "@/lib/automations/evaluate";
-import type { Automation, AutomationEvent, AutomationRun } from "@/lib/automations/types";
+import type { Automation, AutomationAction, AutomationEvent, AutomationRun } from "@/lib/automations/types";
 import { documentOwnerStaff } from "@/lib/document-owner";
+import { marketForEstimate } from "@/lib/market";
 import type { CompanySettings, Contact, CrmState, Job } from "@/lib/types";
-import { workColumnFor } from "@/lib/work-board";
+import { WORK_COLUMN_LABELS, patchForWorkColumn, workColumnFor, type WorkColumn } from "@/lib/work-board";
 
 export function previewAutomation(input: {
   automation: Automation;
@@ -22,20 +25,61 @@ export function previewAutomation(input: {
   invoiceId?: string | null;
   estimateId?: string | null;
 }) {
+  const estimateTotal = estimateTotalForContext(input.book, input.job, input.estimateId);
   const ctx = mergeForJob({
     book: input.book,
     company: input.company,
     job: input.job,
+    estimateTotal,
   });
-  const lines = input.automation.actions.map((action) => {
-    if (action.kind === "webhook") return `Webhook ${action.url || ""}`.trim();
-    if (action.kind === "create_task") return applyAutomationMerge(action.title ?? "Task", ctx);
-    if (action.kind === "send_email") {
-      return `${applyAutomationMerge(action.subject ?? "", ctx)}\n${applyAutomationMerge(action.body ?? "", ctx)}`.trim();
-    }
-    return applyAutomationMerge(action.body ?? "", ctx);
-  });
+  const lines = input.automation.actions.map((action) => previewActionLine(action, ctx, estimateTotal));
   return lines.filter(Boolean).join("\n\n");
+}
+
+export function previewActionLine(
+  action: AutomationAction,
+  merge: AutomationMergeContext,
+  estimateTotal: number | null,
+) {
+  if (action.kind === "webhook") return `Webhook ${action.url || ""}`.trim();
+  if (action.kind === "create_task") return applyAutomationMerge(action.title ?? "Task", merge);
+  if (action.kind === "set_job_value") return describeJobValue(action, estimateTotal);
+  if (action.kind === "set_job_stage") {
+    const stage = action.stage ? WORK_COLUMN_LABELS[action.stage as WorkColumn] : "";
+    return `Move the job to ${stage || "a stage"}`;
+  }
+  if (action.kind === "add_note") return applyAutomationMerge(action.body ?? "", merge);
+  if (action.kind === "send_email") {
+    return `${applyAutomationMerge(action.subject ?? "", merge)}\n${applyAutomationMerge(action.body ?? "", merge)}`.trim();
+  }
+  return applyAutomationMerge(action.body ?? "", merge);
+}
+
+export function estimateTotalForContext(book: CrmState, job?: Job | null, estimateId?: string | null) {
+  const chosen = pickEstimate(book, job, estimateId);
+  if (!chosen) return null;
+  const market = marketForEstimate(chosen, book.jobs ?? [], book.opportunities ?? []);
+  return amountForEstimate(chosen, book.estimateLines ?? [], market);
+}
+
+function pickEstimate(book: CrmState, job?: Job | null, estimateId?: string | null) {
+  const estimates = book.estimates ?? [];
+  if (estimateId) {
+    const direct = estimates.find((estimate) => estimate.id === estimateId && !estimate.archivedAt);
+    if (direct) return direct;
+  }
+  if (!job) return undefined;
+  const related = estimates.filter(
+    (estimate) =>
+      !estimate.archivedAt &&
+      (estimate.jobId === job.id || Boolean(job.opportunityId && estimate.opportunityId === job.opportunityId)),
+  );
+  const rank = (status: string) => (status === "accepted" ? 3 : status === "sent" || status === "viewed" ? 2 : 1);
+  return [...related].sort((left, right) => {
+    const score = rank(right.status) - rank(left.status);
+    if (score !== 0) return score;
+    return (right.createdAt ?? "").localeCompare(left.createdAt ?? "");
+  })[0];
 }
 
 export function plannedRunsForEvent(input: {
@@ -118,10 +162,37 @@ export function plannedRunsForEvent(input: {
   });
 }
 
+export function runsAfterStageChange(input: {
+  book: CrmState;
+  company: CompanySettings;
+  jobId: string;
+  stage: WorkColumn;
+  at?: string;
+}): AutomationRun[] {
+  const job = input.book.jobs.find((item) => item.id === input.jobId);
+  if (!job) return [];
+  const next = patchForWorkColumn(input.stage);
+  const book: CrmState = {
+    ...input.book,
+    jobs: input.book.jobs.map((item) =>
+      item.id === input.jobId ? { ...item, status: next.status, deletedAt: null } : item,
+    ),
+    opportunities: input.book.opportunities.map((item) =>
+      job.opportunityId && item.id === job.opportunityId && next.stage ? { ...item, stage: next.stage } : item,
+    ),
+  };
+  return plannedRunsForEvent({
+    event: { kind: "job_stage_changed", jobId: input.jobId, stage: input.stage, at: input.at },
+    book,
+    company: input.company,
+  });
+}
+
 export function mergeForJob(input: {
   book: CrmState;
   company: CompanySettings;
   job?: Job | null;
+  estimateTotal?: number | null;
 }): AutomationMergeContext {
   const job = input.job ?? undefined;
   const opportunity = job?.opportunityId
@@ -138,6 +209,7 @@ export function mergeForJob(input: {
     staff,
     job,
     contact,
+    estimateTotal: input.estimateTotal,
     reviewUrl:
       input.book.googleLocations.find((location) => location.isDefault)?.reviewUrl ||
       input.book.googleLocations[0]?.reviewUrl ||

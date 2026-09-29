@@ -5189,6 +5189,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             : `Proposal ${current.number} is signed. Job value updated from the signed estimate.`,
         });
       }
+      enqueueAutomationEventRef.current({
+        kind: "estimate_won",
+        estimateId: id,
+        jobId: (opened ?? linkedJob)?.id || current.jobId || undefined,
+      });
       return "accepted";
     },
     [
@@ -5218,6 +5223,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ),
       }));
     const supabase = maybeClient();
+    const fireLost = () => {
+      if (!current) return;
+      const jobId =
+        current.jobId ||
+        bookRef.current.jobs.find((job) => job.opportunityId && job.opportunityId === current.opportunityId)?.id;
+      enqueueAutomationEventRef.current({
+        kind: "estimate_lost",
+        estimateId: id,
+        jobId: jobId || undefined,
+      });
+    };
     if (!supabase) {
       apply();
       if (current) {
@@ -5233,6 +5249,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           relatedOpportunityId: current.opportunityId,
         });
         void recordEstimateSignatureEvent({ estimateId: id, kind: "declined" });
+        fireLost();
       }
       return;
     }
@@ -5255,6 +5272,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         relatedOpportunityId: current.opportunityId,
       });
       void recordEstimateSignatureEvent({ estimateId: id, kind: "declined" });
+      fireLost();
     }
   }, [recordCompanyAudit, recordEstimateSignatureEvent, state.estimates]);
 

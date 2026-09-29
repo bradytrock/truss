@@ -29,17 +29,19 @@ import {
   AUTOMATION_OPERATORS,
   AUTOMATION_TRIGGER_LABELS,
   AUTOMATION_TRIGGERS,
-  applyAutomationMerge,
+  AUTOMATION_VALUE_MODE_LABELS,
+  AUTOMATION_VALUE_MODES,
   buildAutomationMerge,
   defaultRequiresConfirmation,
-  smsSegmentCount,
   summarizeTrigger,
   validateAutomationDraft,
-  type Automation,
   type AutomationAction,
   type AutomationCondition,
   type AutomationTriggerKind,
+  type AutomationValueMode,
 } from "@/lib/automations";
+import { estimateTotalForContext, previewActionLine } from "@/lib/automations/queue";
+import { smsSegmentCount } from "@/lib/automations/merge";
 import { useCrm } from "@/lib/crm-store";
 import { documentOwnerStaff } from "@/lib/document-owner";
 import { JOB_MARKET_LABELS, JOB_STATUS_LABELS, PROJECT_TYPE_LABELS, type Job } from "@/lib/types";
@@ -62,8 +64,8 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
   const [days, setDays] = useState(String(existing?.triggerConfig.days ?? 3));
   const [conditions, setConditions] = useState<AutomationCondition[]>(existing?.conditions ?? []);
   const [actions, setActions] = useState<AutomationAction[]>(existing?.actions ?? []);
-  const [requiresConfirmation, setRequiresConfirmation] = useState(
-    existing?.requiresConfirmation ?? true,
+  const [confirmationOverride, setConfirmationOverride] = useState<boolean | null>(
+    existing ? existing.requiresConfirmation : null,
   );
   const [oncePerJob, setOncePerJob] = useState(existing?.oncePerJob ?? true);
   const [enabled, setEnabled] = useState(existing?.enabled ?? true);
@@ -79,11 +81,9 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
   }, []);
 
   const newestJob = mostRecentJob(crm.jobs);
-  useEffect(() => {
-    if (!previewJobId && newestJob) setPreviewJobId(newestJob.id);
-  }, [newestJob, previewJobId]);
+  const selectedPreviewId = previewJobId || newestJob?.id || "";
 
-  const previewJob = crm.getJob(previewJobId) ?? newestJob;
+  const previewJob = crm.getJob(selectedPreviewId) ?? newestJob;
   const previewContact = previewJob
     ? crm.getContact(previewJob.primaryContactId) ?? crm.contacts[0]
     : crm.contacts[0];
@@ -94,6 +94,7 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
         staff: crm.book.staff,
       })
     : crm.effectiveStaff;
+  const previewTotal = previewJob ? estimateTotalForContext(crm.book, previewJob) : null;
   const merge = useMemo(
     () =>
       buildAutomationMerge({
@@ -101,13 +102,15 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
         staff: previewOwner,
         job: previewJob,
         contact: previewContact,
+        estimateTotal: previewTotal,
         reviewUrl:
           crm.googleLocations.find((location) => location.isDefault)?.reviewUrl ||
           crm.googleLocations[0]?.reviewUrl ||
           "",
       }),
-    [crm.company, previewContact, previewJob, previewOwner],
+    [crm.company, crm.googleLocations, previewContact, previewJob, previewOwner, previewTotal],
   );
+  const requiresConfirmation = confirmationOverride ?? defaultRequiresConfirmation(actions);
 
   const draft = useMemo(
     () => ({
@@ -163,7 +166,7 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
       <PageHeader
         eyebrow="Settings"
         title={existing ? existing.name || "Edit automation" : "New automation"}
-        description="When something happens, if these are true, then do this. Customer texts ask before sending unless you turn that off."
+        description="When a proposal is sent, won, or lost — or any other trigger — change the job value, move the stage, text someone, or stack a few of those."
         actions={
           <div className="flex gap-2">
             <Button render={<Link href="/settings/automations" />} variant="outline" nativeButton={false}>
@@ -208,18 +211,18 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
               checked={requiresConfirmation}
-              onCheckedChange={(value) => setRequiresConfirmation(value === true)}
+              onCheckedChange={(value) => setConfirmationOverride(value === true)}
             />
             Ask before sending
           </label>
           <p className="text-xs text-muted-foreground">
             {actions.length === 0 || defaultRequiresConfirmation(actions)
-              ? "On by default for customer texts and emails. The job owner confirms on Home or the job."
-              : "Internal actions can send without asking. Turn this on if you still want a yes first."}
+              ? "On by default for texts and emails to a customer or a number you type. The job owner confirms on Home or the job. Job value and stage changes in the same rule wait with that message."
+              : "Job updates, notes, and texts to your own team run on their own. Turn this on if you still want a yes first."}
           </p>
           <label className="flex items-center gap-2 text-sm">
             <Checkbox checked={oncePerJob} onCheckedChange={(value) => setOncePerJob(value === true)} />
-            Only send once per job
+            Only run once per job
           </label>
         </CardContent>
       </Card>
@@ -380,7 +383,9 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
       <Card>
         <CardHeader>
           <CardTitle>Then</CardTitle>
-          <CardDescription>One or more actions. Messages support merge fields.</CardDescription>
+          <CardDescription>
+            Stack actions. A sent proposal can set the job value, move the stage, and text the owner.
+          </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           {actions.map((action, index) => (
@@ -390,6 +395,7 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
               error={validation.fieldErrors[`action.${index}`] || validation.fieldErrors[`action.${index}.merge`]}
               staff={crm.book.staff}
               merge={merge}
+              estimateTotal={previewTotal}
               previewJobName={previewJob ? `${previewJob.code} · ${previewJob.name}` : ""}
               jobs={crm.jobs.map((job) => ({ id: job.id, label: `${job.code} · ${job.name}` }))}
               previewJobId={previewJob?.id ?? ""}
@@ -423,6 +429,45 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
       </Card>
     </div>
   );
+}
+
+function recipientOptions(kind: AutomationAction["kind"]) {
+  if (kind === "notify_staff") {
+    return [
+      { value: "rep", label: "Job owner" },
+      { value: "staff", label: "A teammate" },
+    ];
+  }
+  if (kind === "send_email") {
+    return [
+      { value: "customer", label: "Customer" },
+      { value: "rep", label: "Job owner" },
+      { value: "staff", label: "A teammate" },
+      { value: "email", label: "An email address" },
+    ];
+  }
+  return [
+    { value: "customer", label: "Customer" },
+    { value: "rep", label: "Job owner" },
+    { value: "staff", label: "A teammate" },
+    { value: "phone", label: "A phone number" },
+  ];
+}
+
+function patchForKind(action: AutomationAction, kind: AutomationAction["kind"]): Partial<AutomationAction> {
+  if (kind === "set_job_value") return { kind, valueMode: action.valueMode ?? "estimate" };
+  if (kind === "set_job_stage") return { kind, stage: action.stage || "proposal_sent" };
+  if (kind === "add_note") return { kind };
+  if (kind === "notify_staff") return { kind, to: action.to === "staff" ? "staff" : "rep" };
+  if (kind === "send_email") {
+    const to = action.to === "phone" ? "email" : action.to ?? "customer";
+    return { kind, to };
+  }
+  if (kind === "send_sms") {
+    const to = action.to === "email" ? "phone" : action.to ?? "customer";
+    return { kind, to };
+  }
+  return { kind };
 }
 
 function needsStage(kind: AutomationTriggerKind) {
@@ -577,6 +622,7 @@ function ActionCard({
   error,
   staff,
   merge,
+  estimateTotal,
   previewJobName,
   jobs,
   previewJobId,
@@ -586,8 +632,9 @@ function ActionCard({
 }: {
   action: AutomationAction;
   error?: string;
-  staff: { id: string; name: string }[];
+  staff: { id: string; name: string; phone?: string; email?: string }[];
   merge: ReturnType<typeof buildAutomationMerge>;
+  estimateTotal: number | null;
   previewJobName: string;
   jobs: { id: string; label: string }[];
   previewJobId: string;
@@ -595,8 +642,10 @@ function ActionCard({
   onChange: (patch: Partial<AutomationAction>) => void;
   onRemove: () => void;
 }) {
-  const preview = applyAutomationMerge(action.body ?? action.title ?? "", merge);
+  const preview = previewActionLine(action, merge, estimateTotal);
   const sms = action.kind === "send_sms" || action.kind === "notify_staff" ? smsSegmentCount(preview) : null;
+  const messageKind = action.kind === "send_sms" || action.kind === "send_email" || action.kind === "notify_staff";
+  const recipients = recipientOptions(action.kind);
 
   function insertMerge(field: string) {
     const target = action.kind === "create_task" ? "title" : "body";
@@ -609,7 +658,7 @@ function ActionCard({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Select
           value={action.kind}
-          onValueChange={(value) => onChange({ kind: String(value) as AutomationAction["kind"] })}
+          onValueChange={(value) => onChange(patchForKind(action, String(value) as AutomationAction["kind"]))}
           items={AUTOMATION_ACTIONS.map((kind) => ({ value: kind, label: AUTOMATION_ACTION_LABELS[kind] }))}
         >
           <SelectTrigger className="w-56">
@@ -627,37 +676,73 @@ function ActionCard({
           Remove
         </Button>
       </div>
-      {action.kind === "send_sms" || action.kind === "send_email" || action.kind === "notify_staff" ? (
+      {messageKind ? (
         <Select
           value={action.to ?? (action.kind === "notify_staff" ? "rep" : "customer")}
           onValueChange={(value) => onChange({ to: String(value) as AutomationAction["to"] })}
-          items={[
-            ...(action.kind === "notify_staff"
-              ? [
-                  { value: "rep", label: "Job owner" },
-                  { value: "staff", label: "A specific teammate" },
-                ]
-              : [
-                  { value: "customer", label: "Customer" },
-                  { value: "rep", label: "Job owner" },
-                ]),
-          ]}
+          items={recipients}
         >
           <SelectTrigger className="w-56">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {action.kind === "notify_staff" ? (
-              <>
-                <SelectItem value="rep">Job owner</SelectItem>
-                <SelectItem value="staff">A specific teammate</SelectItem>
-              </>
-            ) : (
-              <>
-                <SelectItem value="customer">Customer</SelectItem>
-                <SelectItem value="rep">Job owner</SelectItem>
-              </>
-            )}
+            {recipients.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : null}
+      {action.kind === "set_job_value" ? (
+        <Select
+          value={action.valueMode ?? "estimate"}
+          onValueChange={(value) => onChange({ valueMode: String(value) as AutomationValueMode })}
+          items={AUTOMATION_VALUE_MODES.map((mode) => ({
+            value: mode,
+            label: AUTOMATION_VALUE_MODE_LABELS[mode],
+          }))}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {AUTOMATION_VALUE_MODES.map((mode) => (
+              <SelectItem key={mode} value={mode}>
+                {AUTOMATION_VALUE_MODE_LABELS[mode]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : null}
+      {action.kind === "set_job_value" && (action.valueMode ?? "estimate") === "amount" ? (
+        <Input
+          type="number"
+          min={0}
+          step="0.01"
+          value={action.amount ?? ""}
+          onChange={(event) => onChange({ amount: event.target.value === "" ? undefined : Number(event.target.value) })}
+          placeholder="0.00"
+        />
+      ) : null}
+      {action.kind === "set_job_stage" ? (
+        <Select
+          value={action.stage || "proposal_sent"}
+          onValueChange={(value) => onChange({ stage: String(value) as AutomationAction["stage"] })}
+          items={STAGE_OPTIONS.map((column) => ({
+            value: column,
+            label: WORK_COLUMN_LABELS[column],
+          }))}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {STAGE_OPTIONS.map((column) => (
+              <SelectItem key={column} value={column}>
+                {WORK_COLUMN_LABELS[column]}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       ) : null}
@@ -679,12 +764,32 @@ function ActionCard({
           </SelectContent>
         </Select>
       ) : null}
-      {action.kind === "send_email" ? (
+      {action.to === "phone" ? (
         <Input
-          value={action.subject ?? ""}
-          onChange={(event) => onChange({ subject: event.target.value })}
-          placeholder="Subject"
+          value={action.phone ?? ""}
+          onChange={(event) => onChange({ phone: event.target.value })}
+          placeholder="(214) 555-0100"
         />
+      ) : null}
+      {action.to === "email" ? (
+        <Input
+          type="email"
+          value={action.email ?? ""}
+          onChange={(event) => onChange({ email: event.target.value })}
+          placeholder="name@example.com"
+        />
+      ) : null}
+      {action.kind === "send_email" ? (
+        <>
+          <Input
+            value={action.subject ?? ""}
+            onChange={(event) => onChange({ subject: event.target.value })}
+            placeholder="Subject"
+          />
+          <p className="text-xs text-muted-foreground">
+            Goes out as a SendBlue text to that person&apos;s mobile. Email is the backup if the text cannot send.
+          </p>
+        </>
       ) : null}
       {action.kind === "create_task" ? (
         <Input
@@ -700,15 +805,25 @@ function ActionCard({
           placeholder="https://example.com/hooks/truss"
         />
       ) : null}
-      {action.kind !== "webhook" && action.kind !== "create_task" ? (
+      {action.kind === "send_sms" ||
+      action.kind === "send_email" ||
+      action.kind === "notify_staff" ||
+      action.kind === "add_note" ? (
         <Textarea
           value={action.body ?? ""}
           onChange={(event) => onChange({ body: event.target.value })}
-          placeholder="Write the message. Use merge fields for names and the job."
+          placeholder={
+            action.kind === "add_note"
+              ? "Note on the job. Merge fields work here too."
+              : "Write the message. Use merge fields for names, the job, and the proposal total."
+          }
           rows={4}
         />
       ) : null}
-      {action.kind === "create_task" ? null : action.kind === "webhook" ? null : (
+      {action.kind === "create_task" ||
+      action.kind === "webhook" ||
+      action.kind === "set_job_value" ||
+      action.kind === "set_job_stage" ? null : (
         <div className="flex flex-wrap gap-1">
           {AUTOMATION_MERGE_FIELDS.map((field) => (
             <Button
@@ -724,7 +839,7 @@ function ActionCard({
           ))}
         </div>
       )}
-      {action.kind !== "webhook" ? (
+      {action.kind === "webhook" ? null : (
         <div className="rounded-md bg-muted/60 p-3">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Live preview</p>
@@ -753,7 +868,7 @@ function ActionCard({
             {sms ? `${sms.chars} characters · ${sms.segments} SMS segment${sms.segments === 1 ? "" : "s"}` : null}
           </p>
         </div>
-      ) : null}
+      )}
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>
   );
