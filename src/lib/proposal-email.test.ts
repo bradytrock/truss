@@ -17,6 +17,8 @@ const input = {
 const html = renderProposalEmailHtml(input);
 const text = renderProposalEmailText(input);
 
+assert.match(html, /Hi Dana, your estimate from T Rock Roofing is&nbsp;ready\./);
+assert.doesNotMatch(html, /your roof proposal is/);
 assert.match(html, /Job address/);
 assert.match(html, /100 Main St/);
 assert.match(html, /Valid through/);
@@ -26,6 +28,8 @@ assert.doesNotMatch(html, />Scope</);
 assert.doesNotMatch(html, /Restoration/);
 assert.doesNotMatch(html, /\$/);
 
+assert.match(text, /Hi Dana, your estimate from T Rock Roofing is ready\./);
+assert.doesNotMatch(text, /your roof proposal is/);
 assert.match(text, /Job address/);
 assert.match(text, /100 Main St/);
 assert.match(text, /Valid through/);

@@ -244,7 +244,7 @@ export function renderProposalEmailHtml(input: ProposalEmailInput) {
                             </tr>
                           </table>
                           <div class="hero-title" style="padding-top:18px;font-family:Georgia,'Times New Roman',serif;font-size:34px;line-height:40px;font-weight:normal;color:#ffffff;letter-spacing:-0.01em;">
-                            Hi ${customerFirst}, your roof proposal is&nbsp;ready.
+                            Hi ${customerFirst}, your estimate from ${companyEsc} is&nbsp;ready.
                           </div>
                           <div style="padding-top:12px;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:24px;color:#c9c5bf;">
                             ${pmName ? `${pmFirst} put this together after walking your roof. ` : ""}Take a look, pick the option that fits, and sign right from your phone.
@@ -370,7 +370,7 @@ export function renderProposalEmailText(input: ProposalEmailInput) {
   const parts = [
     `Your roofing proposal for ${street} is ready to review and sign — takes about two minutes, no account needed.`,
     "",
-    `Hi ${who}, your roof proposal is ready.`,
+    `Hi ${who}, your estimate from ${company} is ready.`,
     pmName
       ? `${pmFirst} put this together after walking your roof. Take a look, pick the option that fits, and sign right from your phone.`
       : "Take a look, pick the option that fits, and sign right from your phone.",
