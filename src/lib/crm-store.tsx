@@ -9896,6 +9896,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             staffId: user.staffId,
+            fromName: user.name,
             to,
             subject,
             body,

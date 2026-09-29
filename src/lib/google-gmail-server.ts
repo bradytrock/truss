@@ -6,6 +6,27 @@ import { readGmailTokenCookie } from "@/lib/google-gmail-cookie";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
+/** Name on the seat, then the login profile, for the From display name. */
+export async function staffSenderName(staffId: string) {
+  const id = staffId.trim();
+  if (!id || !isSupabaseConfigured()) return "";
+  try {
+    const supabase = await createClient();
+    const { data: member } = await supabase.from("team_members").select("name").eq("id", id).maybeSingle();
+    const seat = member?.name?.trim() ?? "";
+    if (seat) return seat;
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("staff_id", id)
+      .limit(1)
+      .maybeSingle();
+    return profile?.full_name?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
 export async function gmailCredentialsForStaff(staffId: string): Promise<StoredGmailTokens | null> {
   const cookieTokens = await readGmailTokenCookie();
   if (cookieTokens?.staffId === staffId && cookieTokens.refreshToken) return cookieTokens;
