@@ -165,24 +165,12 @@ export function defaultShareEmailHtml(input: {
   state?: string;
   postalCode?: string;
   validUntil?: string | null;
-  scope?: string;
   companyWebsite?: string;
   companyPhone?: string;
   companyStreet?: string;
   companyCity?: string;
   companyState?: string;
   companyPostalCode?: string;
-  summaryLines?: Array<{ label: string; amount: number | null }>;
-  summaryTotal?: number | null;
-  summaryOptions?: Array<{
-    name: string;
-    total: number;
-    selected?: boolean;
-    recommended?: boolean;
-    highlights?: string[];
-    delta?: number | null;
-    vs?: string | null;
-  }>;
 }) {
   if (input.kind === "estimate") {
     return renderProposalEmailHtml(input);
@@ -354,24 +342,12 @@ export function defaultShareEmailText(input: {
   state?: string;
   postalCode?: string;
   validUntil?: string | null;
-  scope?: string;
   companyWebsite?: string;
   companyPhone?: string;
   companyStreet?: string;
   companyCity?: string;
   companyState?: string;
   companyPostalCode?: string;
-  summaryLines?: Array<{ label: string; amount: number | null }>;
-  summaryTotal?: number | null;
-  summaryOptions?: Array<{
-    name: string;
-    total: number;
-    selected?: boolean;
-    recommended?: boolean;
-    highlights?: string[];
-    delta?: number | null;
-    vs?: string | null;
-  }>;
 }) {
   if (input.kind === "estimate") {
     return renderProposalEmailText(input);
