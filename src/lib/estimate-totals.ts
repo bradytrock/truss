@@ -204,15 +204,18 @@ function boardEstimateTag(estimate: BoardEstimateSource): BoardEstimateTag | nul
   return null;
 }
 
-/** Distinct sent, viewed, and signed tags for the job board card. One tag per milestone. */
+/** Furthest live estimate milestone for the job board card: signed > viewed > sent. */
 export function boardEstimateTags(estimates: BoardEstimateSource[]): BoardEstimateTag[] {
-  const present = new Set<BoardEstimateTag>();
+  let best: BoardEstimateTag | null = null;
   for (const estimate of estimates) {
     if (estimate.archivedAt) continue;
     const tag = boardEstimateTag(estimate);
-    if (tag) present.add(tag);
+    if (!tag) continue;
+    if (!best || BOARD_ESTIMATE_TAGS.indexOf(tag) < BOARD_ESTIMATE_TAGS.indexOf(best)) {
+      best = tag;
+    }
   }
-  return BOARD_ESTIMATE_TAGS.filter((tag) => present.has(tag));
+  return best ? [best] : [];
 }
 
 export function contractValueForOpportunity(
