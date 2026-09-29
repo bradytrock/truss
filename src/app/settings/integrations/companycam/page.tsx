@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageHeader } from "@/components/page-chrome";
+import { IntegrationSettingsChrome } from "@/components/integration-settings-chrome";
 import { SettingsAdminGate } from "@/components/settings-nav";
 import { missingCompanyCamMessage } from "@/lib/supabase/schema-errors";
 
@@ -29,7 +28,12 @@ export default function CompanyCamSettingsPage() {
       title="CompanyCam settings are restricted"
       description="Only a company admin can connect this office's CompanyCam account."
     >
-      <CompanyCamSettingsForm />
+      <IntegrationSettingsChrome
+        title="CompanyCam"
+        description="Connect this company's own CompanyCam account. Jobs can link a project and pull those photos into the gallery."
+      >
+        <CompanyCamSettingsForm />
+      </IntegrationSettingsChrome>
     </SettingsAdminGate>
   );
 }
@@ -98,12 +102,6 @@ function CompanyCamSettingsForm() {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        eyebrow="Settings"
-        title="CompanyCam"
-        description="Connect this company's own CompanyCam account. Jobs can link a project and pull those photos into the gallery."
-      />
-
       {info?.sql ? (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">{info.sql}</p>
       ) : null}
@@ -183,9 +181,6 @@ function CompanyCamSettingsForm() {
             onClick={() => void save({ rotateWebhook: true })}
           >
             Register webhook again
-          </Button>
-          <Button nativeButton={false} variant="ghost" render={<Link href="/settings" />}>
-            Back to company settings
           </Button>
         </CardContent>
       </Card>

@@ -225,7 +225,7 @@ export function JobEagleviewPanel({
             for the estimate.
           </p>
         </div>
-        <Button nativeButton={false} size="sm" variant="ghost" render={<Link href="/settings/eagleview" />}>
+        <Button nativeButton={false} size="sm" variant="ghost" render={<Link href="/settings/integrations/eagleview" />}>
           Settings
         </Button>
       </div>

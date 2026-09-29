@@ -170,7 +170,7 @@ export function JobCompanyCamPanel({ jobId, disabled }: { jobId: string; disable
               : "Connect this company's CompanyCam account to show a project's photos on the job."}
           </p>
         </div>
-        <Button nativeButton={false} size="sm" variant="ghost" render={<Link href="/settings/companycam" />}>
+        <Button nativeButton={false} size="sm" variant="ghost" render={<Link href="/settings/integrations/companycam" />}>
           Settings
         </Button>
       </div>

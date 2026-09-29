@@ -13,14 +13,13 @@ import {
   SettingsSaveActions,
   useCompanySettingsDraft,
 } from "@/components/company-settings-form";
-import { CompanyStripeSettings } from "@/components/company-stripe-settings";
 import { EmailTemplateSettings } from "@/components/email-template-settings";
 import { LEGAL_EMAIL, LEGAL_PAGES } from "@/lib/legal";
 
 export default function CompanySettingsPage() {
   return (
     <SettingsAdminGate>
-      <CompanySettingsWithStripe />
+      <CompanySettingsBody />
     </SettingsAdminGate>
   );
 }
@@ -404,12 +403,11 @@ function CompanySettingsForm() {
   );
 }
 
-function CompanySettingsWithStripe() {
+function CompanySettingsBody() {
   return (
     <>
       <CompanySettingsForm />
-      <div className="max-w-2xl space-y-6">
-        <CompanyStripeSettings />
+      <div className="max-w-2xl">
         <Card>
           <CardHeader>
             <CardTitle>Legal</CardTitle>
