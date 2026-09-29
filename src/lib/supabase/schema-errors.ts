@@ -932,6 +932,24 @@ export function missingPriceListsMessage() {
   return `Saved in this browser. Run ${PRICE_LISTS_SQL} in the SQL editor (or a fresh bootstrap) so dated price lists persist. Old lists stay in the book when you outdate them.`;
 }
 
+export const ESTIMATE_OPENED_NOTIFY_SQL =
+  "supabase/migrations/20260929200000_estimate_opened_notify.sql";
+
+export function isMissingEstimateOpenedNotify(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentions = message.includes("log_estimate_opened");
+  return (
+    mentions &&
+    (code === "pgrst205" ||
+      code === "pgrst202" ||
+      message.includes("schema cache") ||
+      message.includes("could not find the") ||
+      message.includes("does not exist"))
+  );
+}
+
 export const ESTIMATE_SIGNATURE_AUDIT_SQL =
   "supabase/migrations/20260829120000_estimate_signature_audit.sql";
 

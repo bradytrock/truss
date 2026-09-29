@@ -1,3 +1,8 @@
+import { isLinkPreviewBot } from "@/lib/estimate-opened";
+import {
+  isSignedInOfficeSession,
+  notifyProjectManagerEstimateOpened,
+} from "@/lib/estimate-opened-server";
 import { requestAudit } from "@/lib/request-audit";
 import { createAnonClient } from "@/lib/supabase/anon";
 import { isMissingSignatureAudit } from "@/lib/supabase/schema-errors";
@@ -19,9 +24,12 @@ export async function recordShareEvent(
   },
 ) {
   const audit = requestAudit(headers);
+  if (input.kind === "opened" && isLinkPreviewBot(audit.userAgent)) {
+    return null;
+  }
   try {
     const supabase = createAnonClient();
-    const { error } = await supabase.rpc("record_estimate_share_event", {
+    const { data, error } = await supabase.rpc("record_estimate_share_event", {
       p_token: token,
       p_kind: input.kind,
       p_signer_name: input.signerName ?? "",
@@ -40,6 +48,9 @@ export async function recordShareEvent(
     if (error && !isMissingSignatureAudit(error)) {
       console.error("[share] record_estimate_share_event", error.code, error.message);
       return error;
+    }
+    if (!error && input.kind === "opened" && data && !(await isSignedInOfficeSession())) {
+      await notifyProjectManagerEstimateOpened(token);
     }
     return error ?? null;
   } catch (error) {

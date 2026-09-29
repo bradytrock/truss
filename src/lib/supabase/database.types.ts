@@ -3186,6 +3186,10 @@ export type Database = {
         Args: { p_token: string };
         Returns: Json;
       };
+      log_estimate_opened: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
       select_shared_estimate_line: {
         Args: { p_token: string; p_line_id: string; p_selected: boolean };
         Returns: Json;
