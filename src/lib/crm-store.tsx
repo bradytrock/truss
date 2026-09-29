@@ -9213,9 +9213,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const organizationRoster = useCallback(
     () => ({
       staffEmails: bookRef.current.staff.map((member) => member.email),
-      companyEmail: companySettings.email,
     }),
-    [companySettings.email],
+    [],
   );
 
   const stampGoogleInvite = useCallback(

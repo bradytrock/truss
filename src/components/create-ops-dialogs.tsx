@@ -201,7 +201,6 @@ export function CreateEventDialog({
     deleteScheduleEvent,
     staff,
     contacts,
-    company,
   } = useCrm();
   const people = teamMembers.length > 0 ? teamMembers : [user.name].filter(Boolean);
   const defaultAssignee = user.name || people[0] || "";
@@ -223,7 +222,6 @@ export function CreateEventDialog({
   const editing = Boolean(event);
   const guestRoster = {
     staffEmails: staff.map((member) => member.email),
-    companyEmail: company.email,
   };
   const guestPreview = partitionGuestEmails(parseGuestEmails([...guestEmails, guestDraft]), guestRoster);
   const contactOptions = contacts.filter((contact) => contact.email.trim());

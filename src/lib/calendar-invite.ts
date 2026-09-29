@@ -8,44 +8,13 @@ function looksLikeEmail(value: string) {
 /** Google Calendar allows a large guest list. Cap invites so one event cannot fan out without bound. */
 export const MAX_EXTERNAL_INVITEES = 50;
 
-/**
- * Consumer mailbox domains are not a company. If the office address is on one of
- * these, only an exact staff email counts as inside the organization.
- */
-const PUBLIC_EMAIL_DOMAINS = new Set([
-  "gmail.com",
-  "googlemail.com",
-  "yahoo.com",
-  "yahoo.co.uk",
-  "outlook.com",
-  "hotmail.com",
-  "live.com",
-  "msn.com",
-  "icloud.com",
-  "me.com",
-  "mac.com",
-  "aol.com",
-  "proton.me",
-  "protonmail.com",
-  "pm.me",
-  "gmx.com",
-  "hey.com",
-]);
-
 export type OrganizationRoster = {
+  /** Emails of seats in the company. Anyone else is outside the organization. */
   staffEmails: string[];
-  companyEmail: string;
 };
 
 export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
-}
-
-export function emailDomain(email: string) {
-  const normalized = normalizeEmail(email);
-  const at = normalized.lastIndexOf("@");
-  if (at < 0) return "";
-  return normalized.slice(at + 1);
 }
 
 export function parseGuestEmails(raw: string | readonly string[]) {
@@ -61,21 +30,11 @@ export function parseGuestEmails(raw: string | readonly string[]) {
   return emails;
 }
 
-export function organizationDomain(companyEmail: string) {
-  const domain = emailDomain(companyEmail);
-  if (!domain || PUBLIC_EMAIL_DOMAINS.has(domain)) return "";
-  return domain;
-}
-
-/** A teammate, or anyone on the company email domain, already belongs to the organization. */
+/** A seat in the company already sees the event on the Truss calendar. */
 export function isInsideOrganization(email: string, roster: OrganizationRoster) {
   const normalized = normalizeEmail(email);
   if (!looksLikeEmail(normalized)) return false;
-  for (const staffEmail of roster.staffEmails) {
-    if (normalizeEmail(staffEmail) === normalized) return true;
-  }
-  const domain = organizationDomain(roster.companyEmail);
-  return Boolean(domain) && emailDomain(normalized) === domain;
+  return roster.staffEmails.some((staffEmail) => normalizeEmail(staffEmail) === normalized);
 }
 
 export function partitionGuestEmails(emails: string | readonly string[], roster: OrganizationRoster) {

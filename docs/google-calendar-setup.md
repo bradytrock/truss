@@ -92,7 +92,7 @@ Truss field events (site walks, production, and the rest) stay on the Truss cale
 
 ## Inviting someone outside the company
 
-On **Schedule an event**, add their email under **Invite**. A teammate, or anyone on the company email domain (the domain of Settings → Company email, when that domain is not a public mailbox like Gmail), already sees the event in Truss. Everyone else is outside the company. Truss creates the event on the signed-in seat’s primary Google Calendar and Google emails them the invite.
+On **Schedule an event**, add their email under **Invite**. A teammate already sees the event in Truss. Everyone else is outside the company, including another address on the company domain. Truss creates the event on the signed-in seat’s primary Google Calendar and Google emails them the invite.
 
 That write needs the `calendar.events` scope. Seats that connected while the app only asked for `calendar.events.readonly` must **Disconnect** and **Connect Google Calendar** again before an invite can send. The event still saves in Truss either way.
 

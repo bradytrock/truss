@@ -11,7 +11,6 @@ import {
 
 const northline = {
   staffEmails: ["Alex@Northlineco.com", "priya@gmail.com"],
-  companyEmail: "office@northlineco.com",
 };
 
 assert.deepEqual(parseGuestEmails("  Dana@Gmail.com, dana@gmail.com; not-an-email\ncrew@northlineco.com "), [
@@ -20,17 +19,10 @@ assert.deepEqual(parseGuestEmails("  Dana@Gmail.com, dana@gmail.com; not-an-emai
 ]);
 
 assert.equal(isInsideOrganization("alex@northlineco.com", northline), true);
-assert.equal(isInsideOrganization("crew@northlineco.com", northline), true);
+assert.equal(isInsideOrganization("crew@northlineco.com", northline), false);
 assert.equal(isInsideOrganization("priya@gmail.com", northline), true);
 assert.equal(isInsideOrganization("dana@gmail.com", northline), false);
 assert.equal(isInsideOrganization("other@gmail.com", northline), false);
-
-const gmailOffice = {
-  staffEmails: ["brady@gmail.com"],
-  companyEmail: "brady@gmail.com",
-};
-assert.equal(isInsideOrganization("brady@gmail.com", gmailOffice), true);
-assert.equal(isInsideOrganization("homeowner@gmail.com", gmailOffice), false);
 
 const split = partitionGuestEmails(
   ["dana@gmail.com", "alex@northlineco.com", "adjuster@statefarm.com"],
@@ -41,7 +33,7 @@ assert.deepEqual(split.inside, ["alex@northlineco.com"]);
 assert.deepEqual(externalInvitees("alex@northlineco.com", northline), []);
 
 const many = Array.from({ length: 52 }, (_, index) => `person${index}@example.com`);
-const capped = partitionGuestEmails(many, { staffEmails: [], companyEmail: "office@northlineco.com" });
+const capped = partitionGuestEmails(many, { staffEmails: [] });
 assert.equal(capped.outside.length, 50);
 assert.equal(capped.truncated, 2);
 

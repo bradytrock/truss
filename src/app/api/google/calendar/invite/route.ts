@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 
   const googleEventId = body?.googleEventId?.trim() || "";
   const guestEmails = Array.isArray(body?.guestEmails) ? body.guestEmails : [];
-  let roster = { staffEmails: [] as string[], companyEmail: "" };
+  let roster = { staffEmails: [] as string[] };
 
   if (isSupabaseConfigured()) {
     const supabase = await createClient();
@@ -79,11 +79,11 @@ export async function POST(request: Request) {
         { status: 403 },
       );
     }
-    const [{ data: people, error: peopleError }, { data: company, error: companyError }] = await Promise.all([
-      supabase.from("team_members").select("email").eq("company_id", profile.company_id),
-      supabase.from("companies").select("email").eq("id", profile.company_id).maybeSingle(),
-    ]);
-    if (peopleError || companyError) {
+    const { data: people, error: peopleError } = await supabase
+      .from("team_members")
+      .select("email")
+      .eq("company_id", profile.company_id);
+    if (peopleError) {
       return inviteResponse({
         googleEventId,
         organizerStaffId: staffId,
@@ -94,7 +94,6 @@ export async function POST(request: Request) {
     }
     roster = {
       staffEmails: (people ?? []).map((person) => person.email),
-      companyEmail: company?.email ?? "",
     };
   }
 
