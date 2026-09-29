@@ -349,57 +349,64 @@ function JobCard({
       )}
     >
       <CardContent className="space-y-1.5">
-        <div className="flex items-start gap-1">
-          <button
-            type="button"
-            className="mt-0.5 cursor-grab touch-none text-muted-foreground hover:text-foreground"
-            aria-label="Drag job"
-            {...listeners}
-            {...attributes}
-          >
-            <GripVertical className="size-3.5" />
-          </button>
-          <div className="min-w-0 flex-1">
+        <div>
+          <div className="flex items-start gap-1">
+            <button
+              type="button"
+              className="mt-0.5 cursor-grab touch-none text-muted-foreground hover:text-foreground"
+              aria-label="Drag job"
+              {...listeners}
+              {...attributes}
+            >
+              <GripVertical className="size-3.5" />
+            </button>
             <JobOpenLink
               jobId={job.id}
               overlay={overlay}
               onSelectJob={onSelectJob}
-              className="block w-full text-left"
+              className="min-w-0 flex-1 text-left"
             >
               <RecordCode code={job.code} />
-              {details.title ? (
-                <span className="mt-0.5 block text-sm font-medium leading-snug hover:underline">
-                  {details.title}
-                </span>
-              ) : null}
-              {details.streetLine ? (
-                <span className="mt-0.5 block text-sm font-medium leading-snug">
-                  {details.streetLine}
-                </span>
-              ) : null}
-              {details.locality ? (
-                <span className="mt-0.5 block text-xs leading-snug">{details.locality}</span>
-              ) : null}
-              {details.showLocation && !details.streetLine && !details.locality ? (
-                <span className="mt-0.5 block text-sm leading-snug">{details.location}</span>
-              ) : null}
-              {details.showCustomer ? (
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">{details.customer}</p>
-              ) : null}
-              {job.leadSource ? (
-                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                  {leadSourceLabel(job.leadSource)}
-                </p>
-              ) : null}
             </JobOpenLink>
           </div>
           {estimateTags.length > 0 ? (
-            <span className="mt-0.5 flex max-w-[48%] flex-wrap justify-end gap-1">
+            <div className="mt-1 flex max-w-full flex-wrap gap-1">
               {estimateTags.map((tag) => (
                 <BoardEstimateTagBadge key={tag} tag={tag} />
               ))}
-            </span>
+            </div>
           ) : null}
+          <JobOpenLink
+            jobId={job.id}
+            overlay={overlay}
+            onSelectJob={onSelectJob}
+            className="mt-0.5 block w-full text-left"
+          >
+            {details.title ? (
+              <span className="block text-sm font-medium leading-snug hover:underline">
+                {details.title}
+              </span>
+            ) : null}
+            {details.streetLine ? (
+              <span className="mt-0.5 block text-sm font-medium leading-snug">
+                {details.streetLine}
+              </span>
+            ) : null}
+            {details.locality ? (
+              <span className="mt-0.5 block text-xs leading-snug">{details.locality}</span>
+            ) : null}
+            {details.showLocation && !details.streetLine && !details.locality ? (
+              <span className="mt-0.5 block text-sm leading-snug">{details.location}</span>
+            ) : null}
+            {details.showCustomer ? (
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">{details.customer}</p>
+            ) : null}
+            {job.leadSource ? (
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                {leadSourceLabel(job.leadSource)}
+              </p>
+            ) : null}
+          </JobOpenLink>
         </div>
         <JobOpenLink
           jobId={job.id}

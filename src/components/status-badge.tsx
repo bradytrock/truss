@@ -141,7 +141,13 @@ const boardEstimateClass: Record<BoardEstimateTag, string> = {
 
 export function BoardEstimateTagBadge({ tag }: { tag: BoardEstimateTag }) {
   return (
-    <Badge variant="outline" className={cn(boardEstimateClass[tag])}>
+    <Badge
+      variant="outline"
+      className={cn(
+        boardEstimateClass[tag],
+        "h-auto max-w-full whitespace-normal py-0.5 text-left leading-tight",
+      )}
+    >
       {BOARD_ESTIMATE_TAG_LABELS[tag]}
     </Badge>
   );
