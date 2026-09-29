@@ -3,8 +3,10 @@ import {
   asCompanyCamList,
   companyCamCapturedDate,
   companyCamCapturedUnix,
+  companyCamListedPhotoId,
   companyCamPhotoCreateBody,
   companyCamPhotoIdsToDrop,
+  companyCamPhotoPageState,
   companyCamProjectBody,
   companyCamUploadUrl,
   companyCamSignature,
@@ -126,6 +128,30 @@ assert.deepEqual(
 );
 assert.deepEqual(companyCamPhotoIdsToDrop(["a", "b", ""], ["b"], true), ["a"]);
 assert.deepEqual(companyCamPhotoIdsToDrop(["a"], [], false), []);
+
+assert.deepEqual(
+  companyCamPhotoPageState({ rawCount: 50, nextCursor: "cursor-2", hasNext: "true", page: 1, previousCursor: "" }),
+  { mode: "cursor", cursor: "cursor-2", page: 1, complete: false },
+);
+assert.deepEqual(
+  companyCamPhotoPageState({ rawCount: 100, nextCursor: "", hasNext: "false", page: 3, previousCursor: "cursor-2" }),
+  { mode: "stop", cursor: "", page: 3, complete: true },
+);
+assert.deepEqual(
+  companyCamPhotoPageState({ rawCount: 100, nextCursor: "", hasNext: "true", page: 1, previousCursor: "" }),
+  { mode: "stop", cursor: "", page: 1, complete: false },
+);
+assert.deepEqual(
+  companyCamPhotoPageState({ rawCount: 50, nextCursor: "", hasNext: "", page: 1, previousCursor: "" }),
+  { mode: "page", cursor: "", page: 2, complete: false },
+);
+assert.deepEqual(
+  companyCamPhotoPageState({ rawCount: 0, nextCursor: "", hasNext: "", page: 2, previousCursor: "" }),
+  { mode: "stop", cursor: "", page: 2, complete: true },
+);
+assert.equal(companyCamListedPhotoId({ id: 8675309, status: "active" }), "8675309");
+assert.equal(companyCamListedPhotoId({ id: "55", status: "deleted" }), "");
+assert.equal(companyCamListedPhotoId({ status: "active" }), "");
 
 assert.deepEqual(asCompanyCamList({ projects: [{ id: "1" }] }), [{ id: "1" }]);
 

@@ -184,6 +184,41 @@ export function companyCamPhotoIdsToDrop(localIds: string[], remoteIds: string[]
   return [...new Set(localIds.map((id) => id.trim()).filter((id) => id && !remote.has(id)))];
 }
 
+/**
+ * How to fetch the next CompanyCam photo page.
+ * Offset pages are not the end of a project: CompanyCam often returns fewer rows than
+ * `per_page`, and a full project now continues from `X-Next-Cursor` until `X-Has-Next` is false.
+ * A stuck or missing cursor never counts as a complete list, so unsynced photos are not deleted.
+ */
+export function companyCamPhotoPageState(input: {
+  rawCount: number;
+  nextCursor: string;
+  hasNext: string;
+  page: number;
+  previousCursor: string;
+}): { mode: "cursor" | "page" | "stop"; cursor: string; page: number; complete: boolean } {
+  const hasNext = input.hasNext.trim().toLowerCase();
+  const nextCursor = input.nextCursor.trim();
+  const previousCursor = input.previousCursor.trim();
+  if (input.rawCount <= 0 || hasNext === "false") {
+    return { mode: "stop", cursor: "", page: input.page, complete: true };
+  }
+  if (hasNext === "true" || nextCursor) {
+    if (!nextCursor || nextCursor === previousCursor) {
+      return { mode: "stop", cursor: "", page: input.page, complete: false };
+    }
+    return { mode: "cursor", cursor: nextCursor, page: input.page, complete: false };
+  }
+  return { mode: "page", cursor: "", page: input.page + 1, complete: false };
+}
+
+/** Every photo id still on the project, including ones whose image URL is not ready yet. */
+export function companyCamListedPhotoId(json: unknown) {
+  if (!isRecord(json)) return "";
+  if (textOf(json.status).toLowerCase() === "deleted") return "";
+  return idOf(json.id);
+}
+
 export function asCompanyCamList(json: unknown) {
   if (Array.isArray(json)) return json;
   if (!isRecord(json)) return [];

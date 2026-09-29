@@ -3,8 +3,10 @@ import {
   COMPANYCAM_API,
   asCompanyCamList,
   companyCamErrorMessage,
+  companyCamListedPhotoId,
   companyCamPhotoCreateBody,
   companyCamPhotoIdsToDrop,
+  companyCamPhotoPageState,
   companyCamProjectBody,
   companyCamTokenHint,
   companyCamUploadUrl,
@@ -116,7 +118,7 @@ export async function companyCamRequest(token: string, path: string, init?: Requ
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "CompanyCam did not respond.";
-    return { ok: false as const, status: 0, json: null, error: message };
+    return { ok: false as const, status: 0, json: null, error: message, headers: new Headers() };
   }
   const text = await response.text();
   let json: unknown = null;
@@ -132,9 +134,15 @@ export async function companyCamRequest(token: string, path: string, init?: Requ
       response.status === 401 || response.status === 403
         ? "CompanyCam rejected that token. Create a new Application Key and paste it again."
         : `CompanyCam returned ${response.status}.`;
-    return { ok: false as const, status: response.status, json, error: companyCamErrorMessage(json, fallback) };
+    return {
+      ok: false as const,
+      status: response.status,
+      json,
+      error: companyCamErrorMessage(json, fallback),
+      headers: response.headers,
+    };
   }
-  return { ok: true as const, status: response.status, json, error: "" };
+  return { ok: true as const, status: response.status, json, error: "", headers: response.headers };
 }
 
 export async function verifyCompanyCamToken(token: string) {
@@ -198,22 +206,68 @@ export async function createCompanyCamProject(token: string, job: CompanyCamJobR
   return { ok: true as const, error: "", project };
 }
 
+const COMPANYCAM_PHOTO_PAGE_SIZE = 100;
+/** Enough for a full project at CompanyCam's smaller page sizes. Hitting the cap is an incomplete list. */
+const COMPANYCAM_PHOTO_MAX_PAGES = 100;
+
 export async function listCompanyCamPhotos(token: string, projectId: string) {
   const photos: CompanyCamPhoto[] = [];
-  for (let page = 1; page <= 4; page += 1) {
-    const params = new URLSearchParams({ page: String(page), per_page: "100" });
+  const remoteIds: string[] = [];
+  const seen = new Set<string>();
+  let page = 1;
+  let cursor = "";
+  let mode: "page" | "cursor" = "page";
+  let complete = false;
+
+  for (let step = 0; step < COMPANYCAM_PHOTO_MAX_PAGES; step += 1) {
+    const params = new URLSearchParams({ per_page: String(COMPANYCAM_PHOTO_PAGE_SIZE) });
+    if (mode === "cursor") {
+      if (cursor) params.set("after", cursor);
+    } else if (page > 1) {
+      params.set("page", String(page));
+    }
     const result = await companyCamRequest(
       token,
       `/projects/${encodeURIComponent(projectId)}/photos?${params.toString()}`,
     );
-    if (!result.ok) return { ok: false as const, error: result.error, photos, complete: false };
-    const batch = asCompanyCamList(result.json)
-      .map(parseCompanyCamPhoto)
-      .filter((item): item is CompanyCamPhoto => Boolean(item));
-    photos.push(...batch);
-    if (batch.length < 100) return { ok: true as const, error: "", photos, complete: true };
+    if (!result.ok) {
+      if (seen.size === 0) {
+        return { ok: false as const, error: result.error, photos, remoteIds, complete: false };
+      }
+      return { ok: true as const, error: "", photos, remoteIds, complete: false };
+    }
+    const raw = asCompanyCamList(result.json);
+    const before = seen.size;
+    for (const item of raw) {
+      const id = companyCamListedPhotoId(item);
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      remoteIds.push(id);
+      const photo = parseCompanyCamPhoto(item);
+      if (!photo) continue;
+      photos.push(photo.projectId ? photo : { ...photo, projectId });
+    }
+    const state = companyCamPhotoPageState({
+      rawCount: raw.length,
+      nextCursor: result.headers.get("x-next-cursor") ?? "",
+      hasNext: result.headers.get("x-has-next") ?? "",
+      page,
+      previousCursor: cursor,
+    });
+    if (state.mode === "stop" || (state.mode === "page" && raw.length > 0 && seen.size === before)) {
+      complete = state.mode === "stop" && state.complete;
+      break;
+    }
+    if (state.mode === "cursor") {
+      mode = "cursor";
+      cursor = state.cursor;
+    } else {
+      mode = "page";
+      page = state.page;
+    }
   }
-  return { ok: true as const, error: "", photos, complete: false };
+
+  return { ok: true as const, error: "", photos, remoteIds, complete };
 }
 
 export async function saveCompanyCamLink(
@@ -266,25 +320,42 @@ export async function saveCompanyCamLink(
   return { error, row: data };
 }
 
+const COMPANYCAM_ID_CHUNK = 100;
+
+function idChunks(ids: string[]) {
+  const chunks: string[][] = [];
+  for (let index = 0; index < ids.length; index += COMPANYCAM_ID_CHUNK) {
+    chunks.push(ids.slice(index, index + COMPANYCAM_ID_CHUNK));
+  }
+  return chunks;
+}
+
 export async function importCompanyCamPhotos(
   supabase: Client,
   input: { companyId: string; jobId: string; photos: CompanyCamPhoto[] },
 ) {
   const ids = [...new Set(input.photos.map((photo) => photo.id))];
   const existing = new Set<string>();
-  if (ids.length > 0) {
+  for (const chunk of idChunks(ids)) {
     const { data, error } = await supabase
       .from("job_photos")
       .select("companycam_photo_id")
       .eq("company_id", input.companyId)
-      .in("companycam_photo_id", ids);
+      .in("companycam_photo_id", chunk)
+      .limit(chunk.length);
     if (error) return { error, imported: 0, skipped: 0 };
     for (const row of data ?? []) {
       if (row.companycam_photo_id) existing.add(row.companycam_photo_id);
     }
   }
 
-  const fresh = input.photos.filter((photo) => !existing.has(photo.id) && isCompanyCamImageUrl(photo.url));
+  const fresh: CompanyCamPhoto[] = [];
+  const queued = new Set<string>();
+  for (const photo of input.photos) {
+    if (existing.has(photo.id) || queued.has(photo.id) || !isCompanyCamImageUrl(photo.url)) continue;
+    queued.add(photo.id);
+    fresh.push(photo);
+  }
   let imported = 0;
   for (let index = 0; index < fresh.length; index += 50) {
     const chunk = fresh.slice(index, index + 50).map((photo) => ({
@@ -299,7 +370,13 @@ export async function importCompanyCamPhotos(
       companycam_photo_id: photo.id,
     }));
     const { error } = await supabase.from("job_photos").insert(chunk);
-    if (error) return { error, imported, skipped: input.photos.length - imported };
+    if (error) {
+      if (error.code !== "23505") return { error, imported, skipped: input.photos.length - imported };
+      const recovered = await insertCompanyCamPhotosOneByOne(supabase, chunk);
+      imported += recovered.imported;
+      if (recovered.error) return { error: recovered.error, imported, skipped: input.photos.length - imported };
+      continue;
+    }
     imported += chunk.length;
   }
 
@@ -310,6 +387,33 @@ export async function importCompanyCamPhotos(
     .eq("job_id", input.jobId);
 
   return { error: null, imported, skipped: input.photos.length - imported };
+}
+
+async function insertCompanyCamPhotosOneByOne(
+  supabase: Client,
+  rows: {
+    company_id: string;
+    job_id: string;
+    caption: string;
+    category: "progress";
+    taken_at: string;
+    image_url: string;
+    storage_path: null;
+    created_by: string;
+    companycam_photo_id: string;
+  }[],
+) {
+  let imported = 0;
+  for (const row of rows) {
+    const { error } = await supabase.from("job_photos").insert(row);
+    if (!error) {
+      imported += 1;
+      continue;
+    }
+    if (error.code === "23505") continue;
+    return { error, imported };
+  }
+  return { error: null, imported };
 }
 
 const OUTBOUND_PHOTO_LIMIT = 25;
@@ -345,40 +449,42 @@ export async function syncCompanyCamJob(
   let removed = 0;
   if (listed.complete) {
     const cutoff = new Date(Date.now() - DROP_GRACE_MS).toISOString();
-    const { data: local, error: localError } = await supabase
-      .from("job_photos")
-      .select("id, companycam_photo_id, created_at")
-      .eq("company_id", input.companyId)
-      .eq("job_id", input.jobId)
-      .is("deleted_at", null)
-      .neq("companycam_photo_id", "")
-      .lt("created_at", cutoff);
-    if (!localError && local) {
+    const local: { id: string; companycam_photo_id: string | null }[] = [];
+    let localError = false;
+    for (let from = 0; from < 10_000; from += 1000) {
+      const { data, error } = await supabase
+        .from("job_photos")
+        .select("id, companycam_photo_id, created_at")
+        .eq("company_id", input.companyId)
+        .eq("job_id", input.jobId)
+        .is("deleted_at", null)
+        .neq("companycam_photo_id", "")
+        .lt("created_at", cutoff)
+        .range(from, from + 999);
+      if (error || !data) {
+        localError = true;
+        break;
+      }
+      local.push(...data);
+      if (data.length < 1000) break;
+    }
+    if (!localError) {
       const dropPhotoIds = companyCamPhotoIdsToDrop(
         local.map((row) => row.companycam_photo_id ?? ""),
-        listed.photos.map((photo) => photo.id),
+        listed.remoteIds,
         true,
       );
       const dropRows = local.filter((row) => dropPhotoIds.includes(row.companycam_photo_id ?? ""));
       if (dropRows.length > 0) {
         const now = new Date().toISOString();
-        const { error: dropError } = await supabase
-          .from("job_photos")
-          .update({ deleted_at: now, deleted_by: "CompanyCam" })
-          .in(
-            "id",
-            dropRows.map((row) => row.id),
-          );
-        if (!dropError) {
-          removed = dropRows.length;
-          await supabase
-            .from("jobs")
-            .update({ primary_photo_id: null })
-            .eq("id", input.jobId)
-            .in(
-              "primary_photo_id",
-              dropRows.map((row) => row.id),
-            );
+        for (const ids of idChunks(dropRows.map((row) => row.id))) {
+          const { error } = await supabase
+            .from("job_photos")
+            .update({ deleted_at: now, deleted_by: "CompanyCam" })
+            .in("id", ids);
+          if (error) break;
+          removed += ids.length;
+          await supabase.from("jobs").update({ primary_photo_id: null }).eq("id", input.jobId).in("primary_photo_id", ids);
         }
       }
     }

@@ -17,6 +17,7 @@ import { isMissingCompanyCam, missingCompanyCamMessage } from "@/lib/supabase/sc
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 function schemaFailure(error: { message?: string; code?: string } | null | undefined) {
   if (!isMissingCompanyCam(error)) return null;
