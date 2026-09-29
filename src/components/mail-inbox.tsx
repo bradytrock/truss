@@ -463,7 +463,7 @@ export function MailInbox() {
                   <p className="text-sm font-semibold">{replyThreadId ? "Reply" : "New mail"}</p>
                   <p className="text-xs text-muted-foreground">
                     {mine?.source === "google"
-                      ? `Sends from ${mine.googleEmail}`
+                      ? `Sends from ${crm.user.name.trim() || "you"} · ${mine.googleEmail}`
                       : mine?.linked
                         ? "Sample send stays in this inbox"
                         : "Connect Gmail or load the sample inbox to send"}

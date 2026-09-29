@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { sendGmailMessage } from "@/lib/google-gmail";
-import { gmailAccessToken, gmailCredentialsForStaff } from "@/lib/google-gmail-server";
+import { senderDisplayName } from "@/lib/gmail-address";
+import { gmailSendAsDisplayName, sendGmailMessage } from "@/lib/google-gmail";
+import { gmailAccessToken, gmailCredentialsForStaff, staffSenderName } from "@/lib/google-gmail-server";
 
 export const runtime = "nodejs";
 
@@ -12,6 +13,7 @@ export async function POST(request: Request) {
         subject?: string;
         body?: string;
         threadId?: string;
+        fromName?: string;
       }
     | null;
   const staffId = body?.staffId?.trim() || "";
@@ -32,9 +34,19 @@ export async function POST(request: Request) {
       );
     }
     const token = await gmailAccessToken(tokens);
+    const [seatName, sendAsName] = await Promise.all([
+      staffSenderName(staffId),
+      gmailSendAsDisplayName(token, tokens.googleEmail),
+    ]);
+    const fromName = senderDisplayName({
+      staffName: seatName || body?.fromName || "",
+      sendAsName,
+      email: tokens.googleEmail,
+    });
     const sent = await sendGmailMessage({
       accessToken: token,
       from: tokens.googleEmail,
+      fromName,
       to,
       subject,
       body: content,
@@ -45,6 +57,7 @@ export async function POST(request: Request) {
       gmailId: sent.gmailId,
       threadId: sent.threadId,
       from: tokens.googleEmail,
+      fromName,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not send that email.";

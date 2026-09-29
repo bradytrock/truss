@@ -5,6 +5,9 @@ import {
   isGoogleOAuthConfigured,
   refreshGoogleAccessToken,
 } from "@/lib/google-calendar";
+import { buildRfc822 } from "@/lib/gmail-address";
+
+export { buildRfc822, formatMailboxAddress, senderDisplayName, usableSenderName } from "@/lib/gmail-address";
 
 export const GMAIL_SCOPES = [
   "https://www.googleapis.com/auth/gmail.readonly",
@@ -240,30 +243,36 @@ function encodeRfc822(message: string) {
   return Buffer.from(message, "utf8").toString("base64url");
 }
 
-export function buildRfc822(input: {
-  from: string;
-  to: string;
-  subject: string;
-  body: string;
-}) {
-  const needsEncode = /[^\u0000-\u007f]/.test(input.subject);
-  const subject = needsEncode
-    ? `=?UTF-8?B?${Buffer.from(input.subject, "utf8").toString("base64")}?=`
-    : input.subject;
-  return [
-    `From: ${input.from}`,
-    `To: ${input.to}`,
-    `Subject: ${subject}`,
-    "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=UTF-8",
-    "",
-    input.body.replace(/\r?\n/g, "\r\n"),
-  ].join("\r\n");
+type GmailSendAs = {
+  sendAsEmail?: string;
+  displayName?: string;
+  isDefault?: boolean;
+  isPrimary?: boolean;
+};
+
+export async function gmailSendAsDisplayName(accessToken: string, email: string) {
+  try {
+    const response = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) return "";
+    const json = (await response.json()) as { sendAs?: GmailSendAs[] };
+    const list = json.sendAs ?? [];
+    const needle = email.trim().toLowerCase();
+    const match =
+      list.find((item) => (item.sendAsEmail ?? "").trim().toLowerCase() === needle) ??
+      list.find((item) => item.isDefault) ??
+      list.find((item) => item.isPrimary);
+    return match?.displayName?.replace(/[\r\n]+/g, " ").trim() ?? "";
+  } catch {
+    return "";
+  }
 }
 
 export async function sendGmailMessage(input: {
   accessToken: string;
   from: string;
+  fromName?: string;
   to: string;
   subject: string;
   body: string;
@@ -272,6 +281,7 @@ export async function sendGmailMessage(input: {
   const raw = encodeRfc822(
     buildRfc822({
       from: input.from,
+      fromName: input.fromName,
       to: input.to,
       subject: input.subject,
       body: input.body,
