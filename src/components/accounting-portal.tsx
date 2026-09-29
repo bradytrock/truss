@@ -232,7 +232,7 @@ export function AccountingPortal() {
         description="Review invoices, send them to QuickBooks, and keep job costs honest."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button nativeButton={false} variant="outline" render={<Link href="/settings/quickbooks" />}>
+            <Button nativeButton={false} variant="outline" render={<Link href="/settings/integrations/quickbooks" />}>
               <PlugZap data-icon="inline-start" />
               Connection
             </Button>
@@ -432,7 +432,7 @@ export function AccountingPortal() {
                 Desktop through the Web Connector. Invoice and expense approval live on their review tabs.
               </p>
             </div>
-            <Button nativeButton={false} variant="outline" render={<Link href="/settings/quickbooks" />}>
+            <Button nativeButton={false} variant="outline" render={<Link href="/settings/integrations/quickbooks" />}>
               Download .qwc
             </Button>
           </div>
@@ -823,7 +823,7 @@ export function AccountingPortal() {
                     <p>Web Connector</p>
                     <p className="text-xs text-[#706e6b]">Password, .qwc, and poll</p>
                   </div>
-                  <Button nativeButton={false} size="sm" variant="outline" render={<Link href="/settings/quickbooks" />}>
+                  <Button nativeButton={false} size="sm" variant="outline" render={<Link href="/settings/integrations/quickbooks" />}>
                     Open
                   </Button>
                 </li>

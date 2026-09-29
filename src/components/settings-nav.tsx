@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { EmptyState, ErrorBanner, LoadingScreen } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
+import { integrationSettingsHome } from "@/lib/integration-settings";
 import { canManageAutomations, canManageSettings, canViewAccounting } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
 
@@ -17,9 +18,7 @@ const SECTIONS = [
   { href: "/settings/people", label: "People", hint: "Seats, invites, teams, and voice agents", admin: true, accounting: false, automations: false },
   { href: "/settings/automations", label: "Automations", hint: "When, if, then", admin: true, accounting: false, automations: true },
   { href: "/settings/price-book", label: "Price book", hint: "Catalog and lists", admin: true, accounting: false, automations: false },
-  { href: "/settings/eagleview", label: "EagleView", hint: "Roof reports", admin: true, accounting: false, automations: false },
-  { href: "/settings/companycam", label: "CompanyCam", hint: "Job photos", admin: true, accounting: false, automations: false },
-  { href: "/settings/quickbooks", label: "QuickBooks", hint: "Web Connector", admin: true, accounting: true, automations: false },
+  { href: "/settings/integrations", label: "Integrations", hint: "EagleView, CompanyCam, Stripe, messaging", admin: true, accounting: true, automations: false },
 ] as const;
 
 function sectionIsActive(href: string, pathname: string) {
@@ -45,7 +44,7 @@ export function SettingsNav({ variant }: { variant: "bar" | "rail" }) {
     if (!crm.hydrated) return;
     if (pathname !== "/settings") return;
     if (admin) return;
-    if (accounting) router.replace("/settings/quickbooks");
+    if (accounting) router.replace(integrationSettingsHome(false));
     else if (automations) router.replace("/settings/automations");
   }, [admin, accounting, automations, crm.hydrated, pathname, router]);
 
@@ -62,11 +61,12 @@ export function SettingsNav({ variant }: { variant: "bar" | "rail" }) {
       )}
       <ul className={cn("flex gap-1", bar ? "overflow-x-auto" : "flex-col")}>
         {items.map((item) => {
+          const href = item.href === "/settings/integrations" ? integrationSettingsHome(admin) : item.href;
           const active = sectionIsActive(item.href, pathname);
           return (
             <li key={item.href} className="shrink-0">
               <Link
-                href={item.href}
+                href={href}
                 className={cn(
                   "flex flex-col rounded-md px-3 py-2 text-sm transition-colors",
                   active

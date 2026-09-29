@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
+import { IntegrationSettingsChrome } from "@/components/integration-settings-chrome";
+import { EmptyState, ErrorBanner, LoadingScreen } from "@/components/page-chrome";
 import { QbwcPanel } from "@/components/qbwc-panel";
 import { useCrm } from "@/lib/crm-store";
 import { canManageSettings, canViewAccounting } from "@/lib/visibility";
@@ -36,8 +37,7 @@ export default function QuickBooksSettingsPage() {
       {crm.hydrateError ? (
         <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
       ) : null}
-      <PageHeader
-        eyebrow="Settings"
+      <IntegrationSettingsChrome
         title="QuickBooks"
         description="The Web Connector posts approved invoices onto Customer:Job. Expenses post as a vendor bill (ACH from accounting) or a credit card charge — never as a check."
         actions={
@@ -45,8 +45,9 @@ export default function QuickBooksSettingsPage() {
             Accounting
           </Button>
         }
-      />
-      <QbwcPanel />
+      >
+        <QbwcPanel />
+      </IntegrationSettingsChrome>
     </div>
   );
 }
