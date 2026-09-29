@@ -104,7 +104,7 @@ async function imageToJpeg(url: string): Promise<string | null> {
 }
 
 async function writeHeader(doc: Doc, company: CompanySettings, y: number) {
-  return writePdfLetterhead(doc, company, y, 48);
+  return writePdfLetterhead(doc, company, y, 48, { nameSize: 18, detailSize: 11 });
 }
 
 function fitImage(
@@ -152,17 +152,17 @@ async function drawPhotosPage(
   let y = 48;
   if (page.heading.trim()) {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
+    doc.setFontSize(14);
     doc.setTextColor(28, 28, 28);
     doc.text(page.heading.trim(), left, y);
-    y += 18;
+    y += 20;
   }
   const cap = layoutCapacity(page.layout);
   const items = page.items.slice(0, cap);
   const gap = 12;
-  const captionH = page.showCaptions || page.showTakenAt || page.showCategory ? 32 : 8;
+  const captionH = page.showCaptions || page.showTakenAt || page.showCategory ? 40 : 8;
   const notes = page.notes.trim();
-  const notesReserve = notes ? 96 : 0;
+  const notesReserve = notes ? 112 : 0;
   const availableH = height - y - 56 - notesReserve;
   const cols = photoPageColumns(page.layout);
   const rows = page.layout === "four" ? 2 : page.layout === "two" ? 1 : Math.max(items.length, 1);
@@ -190,19 +190,19 @@ async function drawPhotosPage(
     const lines = captionLines(page, photo, item.caption);
     if (lines.length) {
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
+      doc.setFontSize(10);
       doc.setTextColor(50, 50, 50);
-      doc.text(doc.splitTextToSize(lines[0], cellW), x, top + boxH + 12);
+      doc.text(doc.splitTextToSize(lines[0], cellW), x, top + boxH + 14);
       if (lines[1]) {
         doc.setTextColor(110, 110, 110);
-        doc.text(doc.splitTextToSize(lines[1], cellW), x, top + boxH + 22);
+        doc.text(doc.splitTextToSize(lines[1], cellW), x, top + boxH + 28);
       }
     }
   }
   if (notes) {
     const notesY = y + rows * cellH + gap * Math.max(0, rows - 1) + 18;
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
+    doc.setFontSize(12);
     doc.setTextColor(40, 40, 40);
     const wrapped = doc.splitTextToSize(notes, right - left);
     doc.text(wrapped.slice(0, 6), left, notesY);
@@ -253,32 +253,32 @@ async function drawCover(
       }
     }
   } else {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
     doc.setTextColor(180, 180, 180);
     doc.text("Assign a cover photo in the report", width / 2, heroY + heroH / 2, { align: "center" });
   }
 
   if (cover.street) {
     const boxW = Math.min(340, width * 0.62);
-    const boxH = cover.cityLine ? 58 : 44;
+    const boxH = cover.cityLine ? 68 : 50;
     const boxX = inset;
     const boxY = heroY + heroH - boxH - 16;
     doc.setFillColor(12, 12, 12);
     doc.rect(boxX, boxY, boxW, boxH, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
+    doc.setFontSize(9);
     doc.setTextColor(red.r, red.g, red.b);
-    doc.text("PROPERTY INSPECTED", boxX + 12, boxY + 14);
+    doc.text("PROPERTY INSPECTED", boxX + 12, boxY + 16);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
+    doc.setFontSize(13);
     doc.setTextColor(255, 255, 255);
     const street = doc.splitTextToSize(cover.street, boxW - 24);
-    doc.text(street[0], boxX + 12, boxY + 30);
+    doc.text(street[0], boxX + 12, boxY + 36);
     if (cover.cityLine) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(8);
-      doc.text(cover.cityLine, boxX + 12, boxY + 44);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(cover.cityLine, boxX + 12, boxY + 52);
     }
   }
 
@@ -304,7 +304,7 @@ async function drawCover(
     doc.setFillColor(red.r, red.g, red.b);
     doc.rect(inset, 18, 4, mark, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
+    doc.setFontSize(15);
     doc.setTextColor(255, 255, 255);
     doc.text(initials(input.company.name) || "TR", inset + mark / 2 + 1, 44, { align: "center" });
     textX = inset + mark + 12;
@@ -312,24 +312,26 @@ async function drawCover(
 
   const nameMax = width - textX - 210;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
+  doc.setFontSize(15);
   doc.setTextColor(16, 16, 16);
   const nameLines = doc.splitTextToSize(cover.companyName, Math.max(120, nameMax));
-  doc.text(nameLines[0], textX, 34);
+  doc.text(nameLines[0], textX, 32);
   if (cover.companyTag) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
     doc.setTextColor(120, 120, 120);
-    doc.text(cover.companyTag, textX, 48);
+    const tagMax = Math.max(80, width - inset - textX - 180);
+    doc.text(doc.splitTextToSize(cover.companyTag, tagMax)[0] ?? "", textX, 50);
   }
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
+  doc.setFontSize(15);
   doc.setTextColor(16, 16, 16);
-  doc.text(cover.kicker, width - inset, 32, { align: "right" });
-  doc.setFontSize(11);
+  doc.text(cover.kicker, width - inset, 30, { align: "right" });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
   doc.setTextColor(red.r, red.g, red.b);
-  doc.text(cover.reportTitle, width - inset, 48, { align: "right" });
+  doc.text(cover.reportTitle, width - inset, 50, { align: "right" });
 
   const footerY = height - footerH;
   doc.setFillColor(8, 8, 8);
@@ -348,16 +350,16 @@ async function drawCover(
     if (index > 0) {
       doc.setDrawColor(red.r, red.g, red.b);
       doc.setFillColor(red.r, red.g, red.b);
-      doc.rect(x - 8, metaY - 8, 0.8, 36, "F");
+      doc.rect(x - 8, metaY - 10, 0.8, 42, "F");
     }
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.5);
+    doc.setFontSize(8);
     doc.setTextColor(red.r, red.g, red.b);
     doc.text(item.label, x, metaY);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
+    doc.setFontSize(13);
     doc.setTextColor(255, 255, 255);
-    doc.text(item.value, x, metaY + 16);
+    doc.text(doc.splitTextToSize(item.value, Math.max(48, colW - 16))[0] ?? "", x, metaY + 18);
   });
 
   const splitX = width / 2;
@@ -366,47 +368,55 @@ async function drawCover(
   doc.line(splitX, peopleY - 6, splitX, footerY + footerH - 40);
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
+  doc.setFontSize(8);
   doc.setTextColor(red.r, red.g, red.b);
   doc.text("PREPARED FOR", inset, peopleY);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
+  doc.setFontSize(16);
   doc.setTextColor(255, 255, 255);
   const forName = doc.splitTextToSize(cover.preparedForName, splitX - inset - 16);
-  doc.text(forName[0], inset, peopleY + 18);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.text(forName[0], inset, peopleY + 20);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
   doc.setTextColor(200, 200, 200);
   cover.preparedForDetail.slice(0, 2).forEach((line, index) => {
     const fitted = doc.splitTextToSize(line, splitX - inset - 20);
-    doc.text(fitted[0] ?? "", inset, peopleY + 34 + index * 12);
+    doc.text(fitted[0] ?? "", inset, peopleY + 38 + index * 14);
   });
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.5);
+  doc.setFontSize(8);
   doc.setTextColor(red.r, red.g, red.b);
   doc.text("PREPARED BY", splitX + 16, peopleY);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
+  doc.setFontSize(16);
   doc.setTextColor(255, 255, 255);
-  doc.text(cover.preparedByName, splitX + 16, peopleY + 18);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.text(cover.preparedByName, splitX + 16, peopleY + 20);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
   doc.setTextColor(200, 200, 200);
-  if (cover.preparedByTitle) doc.text(cover.preparedByTitle, splitX + 16, peopleY + 34);
-  if (cover.preparedByContact) doc.text(cover.preparedByContact, splitX + 16, peopleY + 46);
+  const byWidth = width - inset - (splitX + 16);
+  if (cover.preparedByTitle) {
+    doc.text(doc.splitTextToSize(cover.preparedByTitle, byWidth)[0] ?? "", splitX + 16, peopleY + 38);
+  }
+  if (cover.preparedByContact) {
+    doc.text(doc.splitTextToSize(cover.preparedByContact, byWidth)[0] ?? "", splitX + 16, peopleY + 52);
+  }
 
   doc.setFillColor(0, 0, 0);
   doc.rect(0, height - 28, width, 28, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7);
+  doc.setFontSize(9);
   doc.setTextColor(255, 255, 255);
-  doc.text(cover.footerLeft, inset, height - 12);
+  const footerHalf = (width - inset * 2) / 2 - 12;
+  doc.text(doc.splitTextToSize(cover.footerLeft, footerHalf)[0] ?? "", inset, height - 11);
   if (cover.footerRight) {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.5);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
     doc.setTextColor(170, 170, 170);
-    doc.text(cover.footerRight, width - inset, height - 12, { align: "right" });
+    doc.text(doc.splitTextToSize(cover.footerRight, footerHalf)[0] ?? "", width - inset, height - 11, {
+      align: "right",
+    });
   }
 }
 
@@ -427,45 +437,45 @@ async function drawWorkOrderPage(doc: Doc, page: PhotoReportWorkOrderPage, job: 
   let y = await writeHeader(doc, company, 54);
   const heading = (page.heading.trim() || "Work Order").trim();
   doc.setFont("times", "bold");
-  doc.setFontSize(18);
+  doc.setFontSize(20);
   doc.setTextColor(28, 28, 28);
   const headingLines = doc.splitTextToSize(heading, 514);
   doc.text(headingLines, 48, y);
-  y += headingLines.length * 22 + 8;
+  y += headingLines.length * 24 + 8;
   doc.setDrawColor(220, 220, 220);
   for (const field of page.fields) {
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
+    doc.setFontSize(11);
     doc.setTextColor(120, 120, 120);
     doc.text(field.label.trim() || "Field", 48, y);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
+    doc.setFontSize(13);
     doc.setTextColor(40, 40, 40);
     const valueLines = doc.splitTextToSize(displayWorkOrderValue(field, job), 360);
-    doc.text(valueLines, 180, y);
-    y += Math.max(16, valueLines.length * 14) + 6;
+    doc.text(valueLines, 190, y);
+    y += Math.max(18, valueLines.length * 16) + 6;
     doc.line(48, y - 8, 562, y - 8);
   }
   y += 10;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
+  doc.setFontSize(13);
   doc.setTextColor(28, 28, 28);
   doc.text((page.tasksHeading.trim() || "Tasks").toUpperCase(), 48, y);
-  y += 18;
+  y += 20;
   for (const item of page.items) {
     doc.setDrawColor(80, 80, 80);
-    doc.rect(48, y - 8, 10, 10);
+    doc.rect(48, y - 9, 12, 12);
     if (item.done) {
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      doc.text("X", 50.5, y);
+      doc.setFontSize(11);
+      doc.text("X", 50.3, y);
     }
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
+    doc.setFontSize(13);
     doc.setTextColor(40, 40, 40);
-    const lines = doc.splitTextToSize(item.text.trim() || "Untitled task", 490);
-    doc.text(lines, 66, y);
-    y += Math.max(18, lines.length * 14);
+    const lines = doc.splitTextToSize(item.text.trim() || "Untitled task", 480);
+    doc.text(lines, 68, y);
+    y += Math.max(20, lines.length * 16);
   }
 }
 
@@ -473,15 +483,15 @@ async function drawTextPage(doc: Doc, page: Extract<PhotoReportPage, { type: "te
   let y = await writeHeader(doc, company, 54);
   if (page.heading.trim()) {
     doc.setFont("times", "bold");
-    doc.setFontSize(18);
+    doc.setFontSize(20);
     doc.setTextColor(28, 28, 28);
     const heading = doc.splitTextToSize(page.heading.trim(), 514);
     doc.text(heading, 48, y);
-    y += heading.length * 22 + 10;
+    y += heading.length * 24 + 10;
   }
   if (page.body.trim()) {
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
+    doc.setFontSize(13);
     doc.setTextColor(40, 40, 40);
     const wrapped = doc.splitTextToSize(page.body.trim(), 514);
     doc.text(wrapped, 48, y);
@@ -498,7 +508,7 @@ function stampFooter(doc: Doc, company: CompanySettings, reportTitle: string, sk
     doc.setDrawColor(220, 220, 220);
     doc.line(48, height - 36, width - 48, height - 36);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
+    doc.setFontSize(10);
     doc.setTextColor(120, 120, 120);
     doc.text(company.name, 48, height - 22);
     doc.text(reportTitle, width / 2, height - 22, { align: "center" });

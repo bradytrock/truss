@@ -72,9 +72,11 @@ export async function writePdfLetterhead(
   company: CompanySettings,
   y: number,
   inset = 54,
-  options?: { showContact?: boolean },
+  options?: { showContact?: boolean; nameSize?: number; detailSize?: number },
 ) {
   const showContact = options?.showContact ?? true;
+  const nameSize = options?.nameSize ?? 16;
+  const detailSize = options?.detailSize ?? 9;
   const width = doc.internal.pageSize.getWidth();
   const right = width - inset;
   const logo = company.logoUrl?.trim() ? await loadLogoForPdf(company.logoUrl) : null;
@@ -93,28 +95,29 @@ export async function writePdfLetterhead(
   }
 
   doc.setFont("times", "bold");
-  doc.setFontSize(16);
+  doc.setFontSize(nameSize);
   doc.setTextColor(28, 28, 28);
   doc.text(company.name, textX, y);
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
+  doc.setFontSize(detailSize);
   doc.setTextColor(90, 90, 90);
   const addressLines = showContact
     ? [formatCompanyAddress(company)].filter(Boolean)
     : formatCompanyAddressLines(company);
   const contact = showContact ? formatCompanyContact(company) : "";
-  let next = y + 14;
+  const lineStep = detailSize > 9 ? Math.round(detailSize * 1.35) : 12;
+  let next = y + (nameSize > 16 ? Math.round(nameSize * 0.95) : 14);
   for (const line of addressLines) {
     doc.text(line, textX, next);
-    next += 12;
+    next += lineStep;
   }
   if (contact) {
     doc.text(contact, textX, next);
-    next += 12;
+    next += lineStep;
   }
   if (company.licenseNumber) {
     doc.text(`License ${company.licenseNumber}`, textX, next);
-    next += 12;
+    next += lineStep;
   }
   const bottom = Math.max(next, logoBottom + 8);
   doc.setTextColor(210, 210, 210);
