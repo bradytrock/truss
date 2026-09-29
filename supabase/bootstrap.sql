@@ -14817,7 +14817,7 @@ alter table public.returning_client_leads
 
 notify pgrst, 'reload schema';
 
--- ========== 20260928220000_expense_invoice_number.sql ==========
+-- ========== 20260928230000_expense_invoice_number.sql ==========
 -- Vendor invoice / receipt number on an expense. QuickBooks uses it as the
 -- bill or credit-card charge reference. The CRM number (EXP-…) stays separate.
 
