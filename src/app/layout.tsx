@@ -51,6 +51,18 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       suppressHydrationWarning
       className={`${plexSans.variable} ${newsreader.variable} ${plexMono.variable} ${greatVibes.variable} h-full antialiased`}
     >
+      <head>
+        <script
+          type="text/javascript"
+          dangerouslySetInnerHTML={{
+            __html: `(function(c,l,a,r,i,t,y){
+        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window, document, "clarity", "script", "yq1riyzvx3");`,
+          }}
+        />
+      </head>
       <body className="flex min-h-dvh flex-col">
         <Providers>{children}</Providers>
       </body>
