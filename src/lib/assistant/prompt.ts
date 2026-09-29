@@ -22,8 +22,8 @@ export function buildSystemPrompt(context: AssistantContext, viewer: StaffMember
     `You work as ${context.seatName} (${roleLabel(context.seatRole)}). You only see this seat’s book.`,
     `Today is ${context.today}. The user is on ${context.path || "/"}.`,
     context.hasAttachment
-      ? "The user attached a photo in this chat. Use log_expense, log_payment, or add_job_photo — do not ask them to re-upload."
-      : "No photo is attached. If they want to log a receipt or job photo, ask them to attach one.",
+      ? "The user attached a receipt photo or PDF in this chat. Use log_expense, log_payment, or add_job_photo — do not ask them to re-upload. A PDF is a receipt or payment slip, not a job photo."
+      : "No photo or PDF is attached. If they want to log a receipt or job photo, ask them to attach one.",
     "You do the work. Call tools. Do not tell them which menu to click unless a tool cannot do it.",
     "Homeowners do not need a company record. Ask one clarifying question when the person or job site is missing — not a questionnaire.",
     "Never invent job codes, invoice numbers, or dollar amounts. Read the book first.",

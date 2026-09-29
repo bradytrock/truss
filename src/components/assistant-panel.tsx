@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/sheet";
 import { useCrm } from "@/lib/crm-store";
 import { compressReceipt } from "@/lib/job-financials";
+import { isReceiptUpload } from "@/lib/receipt-extract";
 import { buildAssistantContext } from "@/lib/assistant/context";
 import { ASSISTANT_ASK_LABEL, ASSISTANT_NAME } from "@/lib/product";
 import { CASSIO_ASK_EVENT } from "@/lib/assistant/ask";
@@ -123,8 +124,8 @@ export function AssistantPanel() {
   }
 
   async function attachFile(file: File) {
-    if (!file.type.startsWith("image/")) {
-      toast.error("Attach a photo (receipt, check, or job picture).");
+    if (!isReceiptUpload(file)) {
+      toast.error("Attach a photo or PDF (receipt, check, or job picture).");
       return;
     }
     try {
@@ -230,7 +231,7 @@ export function AssistantPanel() {
       setError(`${ASSISTANT_ASK_LABEL} needs OPENAI_API_KEY on the server.`);
       return;
     }
-    const userText = attachment ? `${content}\n\n[Photo attached: ${attachment.name}]` : content;
+    const userText = attachment ? `${content}\n\n[File attached: ${attachment.name}]` : content;
     const history: AssistantMessage[] = [...messages, { role: "user", content: userText }];
     setMessages(history);
     setInput("");
@@ -371,8 +372,14 @@ export function AssistantPanel() {
             <form onSubmit={onSubmit} className="border-t p-3">
               {attachment ? (
                 <div className="mb-2 flex items-center gap-2 rounded-md border bg-card px-2 py-1.5">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={attachment.dataUrl} alt="" className="size-8 rounded-sm object-cover" />
+                  {attachment.dataUrl.startsWith("data:application/pdf") ? (
+                    <span className="flex size-8 items-center justify-center rounded-sm bg-muted text-[10px] font-medium">
+                      PDF
+                    </span>
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={attachment.dataUrl} alt="" className="size-8 rounded-sm object-cover" />
+                  )}
                   <p className="min-w-0 flex-1 truncate text-xs">{attachment.name}</p>
                   <Button type="button" variant="ghost" size="icon-xs" onClick={() => setAttachment(null)} aria-label="Remove photo">
                     <XIcon />
@@ -383,7 +390,7 @@ export function AssistantPanel() {
                 <input
                   ref={fileRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,application/pdf,.pdf"
                   className="sr-only"
                   onChange={(event) => {
                     const file = event.target.files?.[0];
