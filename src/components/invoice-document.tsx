@@ -110,7 +110,7 @@ export function InvoiceDocument({
       {sorted.length === 0 ? (
         <p className="text-sm text-muted-foreground">No line items on this invoice.</p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="min-w-0">
           <PaperTableHead />
           <div className="divide-y">
             {sorted.map((line) => (

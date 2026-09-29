@@ -142,24 +142,35 @@ export function paperManagerCard(manager: ProjectManagerContact | null | undefin
   };
 }
 
+// Qty, unit, rate, and amount are fixed tracks. On a phone they consume the row,
+// the description track collapses, and each word lands on its own line. Stay
+// stacked until the sheet is wide enough for the table.
+function paperTableColumns(hidePrices?: boolean) {
+  return hidePrices
+    ? "@lg:grid-cols-[minmax(0,1fr)_3rem_3.5rem]"
+    : "@lg:grid-cols-[minmax(0,1fr)_3rem_3.5rem_5.5rem_5.5rem]";
+}
+
 export function PaperTableHead({ hidePrices }: { hidePrices?: boolean }) {
   return (
-    <div
-      className="grid gap-2 border-b pb-2 text-[10px] font-semibold tracking-[0.14em] uppercase"
-      style={{
-        color: PAPER_MUTED_HEX,
-        gridTemplateColumns: hidePrices ? "minmax(0,1fr) 3rem 3.5rem" : "minmax(0,1fr) 3rem 3.5rem 5.5rem 5.5rem",
-      }}
-    >
-      <span>Description</span>
-      <span className="text-right">Qty</span>
-      <span className="text-right">Unit</span>
-      {hidePrices ? null : (
-        <>
-          <span className="text-right">Rate</span>
-          <span className="text-right">Amount</span>
-        </>
-      )}
+    <div className="@container">
+      <div
+        className={cn(
+          "hidden gap-2 border-b pb-2 text-[10px] font-semibold tracking-[0.14em] uppercase @lg:grid",
+          paperTableColumns(hidePrices),
+        )}
+        style={{ color: PAPER_MUTED_HEX }}
+      >
+        <span>Description</span>
+        <span className="text-right">Qty</span>
+        <span className="text-right">Unit</span>
+        {hidePrices ? null : (
+          <>
+            <span className="text-right">Rate</span>
+            <span className="text-right">Amount</span>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -185,26 +196,66 @@ export function PaperTableRow({
   muted?: boolean;
   extra?: ReactNode;
 }) {
+  const unitLabel = customerUnitLabel(unit);
   return (
-    <div
-      className={cn("grid items-start gap-2 py-3", muted && "opacity-70")}
-      style={{
-        gridTemplateColumns: hidePrices ? "minmax(0,1fr) 3rem 3.5rem" : "minmax(0,1fr) 3rem 3.5rem 5.5rem 5.5rem",
-      }}
-    >
-      <div className="min-w-0">
-        <div className="text-[15px] leading-6">{heading}</div>
-        {detail}
-        {extra}
+    <div className={cn("@container", muted && "opacity-70")}>
+      <div className={cn("grid w-full min-w-0 items-start gap-2 py-3", paperTableColumns(hidePrices))}>
+        <div className="min-w-0 break-words">
+          <div className="text-[15px] leading-6">{heading}</div>
+          {detail}
+          {extra}
+          <PaperMobileFacts
+            qty={qty}
+            unitLabel={unitLabel}
+            rate={rate}
+            amount={amount}
+            hidePrices={hidePrices}
+          />
+        </div>
+        <p className="hidden pt-0.5 text-right text-sm tabular-nums @lg:block">{qty}</p>
+        <p className="hidden pt-0.5 text-right text-sm @lg:block">{unitLabel}</p>
+        {hidePrices ? null : (
+          <>
+            <p className="hidden pt-0.5 text-right text-sm tabular-nums @lg:block">{rate}</p>
+            <p className="hidden pt-0.5 text-right text-sm font-medium tabular-nums @lg:block">{amount}</p>
+          </>
+        )}
       </div>
-      <p className="pt-0.5 text-right text-sm tabular-nums">{qty}</p>
-      <p className="pt-0.5 text-right text-sm">{customerUnitLabel(unit)}</p>
-      {hidePrices ? null : (
-        <>
-          <p className="pt-0.5 text-right text-sm tabular-nums">{rate}</p>
-          <p className="pt-0.5 text-right text-sm font-medium tabular-nums">{amount}</p>
-        </>
-      )}
+    </div>
+  );
+}
+
+function PaperMobileFacts({
+  qty,
+  unitLabel,
+  rate,
+  amount,
+  hidePrices,
+}: {
+  qty: string;
+  unitLabel: string;
+  rate?: string;
+  amount?: string;
+  hidePrices?: boolean;
+}) {
+  return (
+    <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm @lg:hidden">
+      <p className="min-w-0" style={{ color: PAPER_MUTED_HEX }}>
+        <span className="text-[10px] font-semibold tracking-[0.14em] uppercase">Qty</span>{" "}
+        <span className="tabular-nums" style={{ color: PAPER_INK_HEX }}>
+          {qty}
+          {unitLabel ? ` ${unitLabel}` : ""}
+        </span>
+        {!hidePrices && rate ? (
+          <span className="tabular-nums" style={{ color: PAPER_INK_HEX }}>
+            {" "}
+            · {rate}
+          </span>
+        ) : null}
+      </p>
+      {!hidePrices && amount ? (
+        <p className="ml-auto shrink-0 font-medium tabular-nums">{amount}</p>
+      ) : null}
     </div>
   );
 }
