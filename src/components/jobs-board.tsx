@@ -20,14 +20,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { KanbanScroller } from "@/components/board-scroll-slider";
 import { EmptyState, RecordCode } from "@/components/page-chrome";
-import { MarketBadge } from "@/components/status-badge";
+import { BoardEstimateTagBadge, MarketBadge } from "@/components/status-badge";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency } from "@/lib/format";
 import { leadSourceLabel } from "@/lib/leads";
 import { phoneQueryMatches } from "@/lib/phone";
 import { parseMarket, workMarket } from "@/lib/market";
-import { acceptedAmountForJob } from "@/lib/estimate-totals";
+import { acceptedAmountForJob, boardEstimateTags } from "@/lib/estimate-totals";
+import { estimatesForJob } from "@/lib/won";
 import {
   WORK_COLUMNS,
   WORK_COLUMN_LABELS,
@@ -331,6 +332,7 @@ function JobCard({
     location: job.location,
     street: job.street,
   });
+  const estimateTags = boardEstimateTags(estimatesForJob(job, crm.estimates ?? []));
 
   return (
     <Card
@@ -373,6 +375,13 @@ function JobCard({
               </p>
             ) : null}
           </JobOpenLink>
+          {estimateTags.length > 0 ? (
+            <span className="mt-0.5 flex max-w-[48%] flex-wrap justify-end gap-1">
+              {estimateTags.map((tag) => (
+                <BoardEstimateTagBadge key={tag} tag={tag} />
+              ))}
+            </span>
+          ) : null}
         </div>
         <JobOpenLink
           jobId={job.id}

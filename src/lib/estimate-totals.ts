@@ -12,6 +12,10 @@ import {
   type EstimatePackage,
 } from "@/lib/estimate-packages";
 import { customerUnitLabel, firstPlainLine, invoiceLineDescription } from "@/lib/line-format";
+import {
+  BOARD_ESTIMATE_TAGS,
+  type BoardEstimateTag,
+} from "@/lib/board-estimate-tags";
 import { estimateFullySigned } from "@/lib/estimate-signers";
 import type { Estimate, EstimateLine, JobMarket } from "@/lib/types";
 
@@ -185,6 +189,30 @@ export function featuredEstimateForJob<T extends Estimate>(estimates: T[]): T | 
     live.find((estimate) => estimate.status === "draft") ??
     live[0]
   );
+}
+
+type BoardEstimateSource = Pick<
+  Estimate,
+  "status" | "acceptedAt" | "secondAcceptedAt" | "secondContactId"
+> &
+  Partial<Pick<Estimate, "archivedAt" | "signatureImage" | "secondSignatureImage">>;
+
+function boardEstimateTag(estimate: BoardEstimateSource): BoardEstimateTag | null {
+  if (isSignedEstimate(estimate)) return "signed";
+  if (estimate.status === "viewed") return "viewed";
+  if (estimate.status === "sent") return "sent";
+  return null;
+}
+
+/** Distinct sent, viewed, and signed tags for the job board card. One tag per milestone. */
+export function boardEstimateTags(estimates: BoardEstimateSource[]): BoardEstimateTag[] {
+  const present = new Set<BoardEstimateTag>();
+  for (const estimate of estimates) {
+    if (estimate.archivedAt) continue;
+    const tag = boardEstimateTag(estimate);
+    if (tag) present.add(tag);
+  }
+  return BOARD_ESTIMATE_TAGS.filter((tag) => present.has(tag));
 }
 
 export function contractValueForOpportunity(
