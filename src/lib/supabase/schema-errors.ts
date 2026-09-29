@@ -836,6 +836,7 @@ export function isMissingCompanyCam(error: { message?: string; code?: string } |
     message.includes("companycam_connections") ||
     message.includes("companycam_job_links") ||
     message.includes("companycam_ingest_photo") ||
+    message.includes("companycam_remove_photo") ||
     message.includes("companycam_photo_id") ||
     message.includes("companycam");
   return (

@@ -3,8 +3,11 @@ import {
   COMPANYCAM_API,
   asCompanyCamList,
   companyCamErrorMessage,
+  companyCamPhotoCreateBody,
+  companyCamPhotoIdsToDrop,
   companyCamProjectBody,
   companyCamTokenHint,
+  companyCamUploadUrl,
   companyCamWebhookUrl,
   isCompanyCamImageUrl,
   isUuid,
@@ -203,14 +206,14 @@ export async function listCompanyCamPhotos(token: string, projectId: string) {
       token,
       `/projects/${encodeURIComponent(projectId)}/photos?${params.toString()}`,
     );
-    if (!result.ok) return { ok: false as const, error: result.error, photos };
+    if (!result.ok) return { ok: false as const, error: result.error, photos, complete: false };
     const batch = asCompanyCamList(result.json)
       .map(parseCompanyCamPhoto)
       .filter((item): item is CompanyCamPhoto => Boolean(item));
     photos.push(...batch);
-    if (batch.length < 100) break;
+    if (batch.length < 100) return { ok: true as const, error: "", photos, complete: true };
   }
-  return { ok: true as const, error: "", photos };
+  return { ok: true as const, error: "", photos, complete: false };
 }
 
 export async function saveCompanyCamLink(
@@ -309,6 +312,201 @@ export async function importCompanyCamPhotos(
   return { error: null, imported, skipped: input.photos.length - imported };
 }
 
+const OUTBOUND_PHOTO_LIMIT = 25;
+const DROP_GRACE_MS = 15 * 60 * 1000;
+
+export async function syncCompanyCamJob(
+  supabase: Client,
+  input: { token: string; companyId: string; jobId: string; projectId: string },
+) {
+  const listed = await listCompanyCamPhotos(input.token, input.projectId);
+  if (!listed.ok) {
+    return { ok: false as const, error: listed.error, imported: 0, removed: 0, pushed: 0, total: listed.photos.length };
+  }
+  const imported = await importCompanyCamPhotos(supabase, {
+    companyId: input.companyId,
+    jobId: input.jobId,
+    photos: listed.photos.map((photo) => ({
+      ...photo,
+      projectId: photo.projectId || input.projectId,
+    })),
+  });
+  if (imported.error) {
+    return {
+      ok: false as const,
+      error: imported.error.message,
+      imported: imported.imported,
+      removed: 0,
+      pushed: 0,
+      total: listed.photos.length,
+    };
+  }
+
+  let removed = 0;
+  if (listed.complete) {
+    const cutoff = new Date(Date.now() - DROP_GRACE_MS).toISOString();
+    const { data: local, error: localError } = await supabase
+      .from("job_photos")
+      .select("id, companycam_photo_id, created_at")
+      .eq("company_id", input.companyId)
+      .eq("job_id", input.jobId)
+      .is("deleted_at", null)
+      .neq("companycam_photo_id", "")
+      .lt("created_at", cutoff);
+    if (!localError && local) {
+      const dropPhotoIds = companyCamPhotoIdsToDrop(
+        local.map((row) => row.companycam_photo_id ?? ""),
+        listed.photos.map((photo) => photo.id),
+        true,
+      );
+      const dropRows = local.filter((row) => dropPhotoIds.includes(row.companycam_photo_id ?? ""));
+      if (dropRows.length > 0) {
+        const now = new Date().toISOString();
+        const { error: dropError } = await supabase
+          .from("job_photos")
+          .update({ deleted_at: now, deleted_by: "CompanyCam" })
+          .in(
+            "id",
+            dropRows.map((row) => row.id),
+          );
+        if (!dropError) {
+          removed = dropRows.length;
+          await supabase
+            .from("jobs")
+            .update({ primary_photo_id: null })
+            .eq("id", input.jobId)
+            .in(
+              "primary_photo_id",
+              dropRows.map((row) => row.id),
+            );
+        }
+      }
+    }
+  }
+
+  const pushed = await pushUnlinkedJobPhotos(supabase, input);
+  return {
+    ok: true as const,
+    error: "",
+    imported: imported.imported,
+    removed,
+    pushed: pushed.pushed,
+    total: listed.photos.length,
+  };
+}
+
+async function pushUnlinkedJobPhotos(
+  supabase: Client,
+  input: { token: string; companyId: string; jobId: string; projectId: string },
+) {
+  const { data, error } = await supabase
+    .from("job_photos")
+    .select("id, image_url, caption, taken_at, companycam_photo_id, created_by, deleted_at")
+    .eq("company_id", input.companyId)
+    .eq("job_id", input.jobId)
+    .is("deleted_at", null)
+    .eq("companycam_photo_id", "")
+    .order("created_at", { ascending: true })
+    .limit(OUTBOUND_PHOTO_LIMIT);
+  if (error || !data) return { pushed: 0 };
+  let pushed = 0;
+  for (const row of data) {
+    if ((row.created_by ?? "") === "CompanyCam") continue;
+    const result = await pushJobPhotoToCompanyCam(supabase, {
+      token: input.token,
+      companyId: input.companyId,
+      projectId: input.projectId,
+      photo: row,
+    });
+    if (result.ok && !result.skipped) pushed += 1;
+  }
+  return { pushed };
+}
+
+export async function pushJobPhotoToCompanyCam(
+  supabase: Client,
+  input: {
+    token: string;
+    companyId: string;
+    projectId: string;
+    photo: {
+      id: string;
+      image_url: string;
+      caption: string;
+      taken_at: string;
+      companycam_photo_id?: string | null;
+      created_by?: string | null;
+    };
+  },
+) {
+  const existingId = (input.photo.companycam_photo_id ?? "").trim();
+  if (existingId) {
+    const current = await companyCamRequest(input.token, `/photos/${encodeURIComponent(existingId)}`);
+    if (current.ok) return { ok: true as const, skipped: true, error: "", companyCamPhotoId: existingId };
+    if (current.status !== 404) return { ok: false as const, skipped: false, error: current.error, companyCamPhotoId: "" };
+  }
+  const uri = companyCamUploadUrl(input.photo.image_url);
+  if (!uri) return { ok: true as const, skipped: true, error: "", companyCamPhotoId: existingId };
+  const created = await companyCamRequest(
+    input.token,
+    `/projects/${encodeURIComponent(input.projectId)}/photos`,
+    {
+      method: "POST",
+      body: JSON.stringify(
+        companyCamPhotoCreateBody({
+          uri,
+          capturedAt: input.photo.taken_at,
+          description: input.photo.caption,
+        }),
+      ),
+    },
+  );
+  if (!created.ok) return { ok: false as const, skipped: false, error: created.error, companyCamPhotoId: "" };
+  const photo = parseCompanyCamPhoto(created.json);
+  if (!photo) {
+    return { ok: false as const, skipped: false, error: "CompanyCam did not return the new photo.", companyCamPhotoId: "" };
+  }
+  await claimCompanyCamPhotoId(supabase, {
+    companyId: input.companyId,
+    photoId: input.photo.id,
+    companyCamPhotoId: photo.id,
+  });
+  return { ok: true as const, skipped: false, error: "", companyCamPhotoId: photo.id };
+}
+
+async function claimCompanyCamPhotoId(
+  supabase: Client,
+  input: { companyId: string; photoId: string; companyCamPhotoId: string },
+) {
+  const now = new Date().toISOString();
+  const first = await supabase
+    .from("job_photos")
+    .update({ companycam_photo_id: input.companyCamPhotoId })
+    .eq("id", input.photoId)
+    .eq("company_id", input.companyId);
+  if (!first.error) return;
+  if (first.error.code !== "23505") return;
+  await supabase
+    .from("job_photos")
+    .update({ companycam_photo_id: "", deleted_at: now, deleted_by: "CompanyCam" })
+    .eq("company_id", input.companyId)
+    .eq("companycam_photo_id", input.companyCamPhotoId)
+    .neq("id", input.photoId);
+  await supabase
+    .from("job_photos")
+    .update({ companycam_photo_id: input.companyCamPhotoId })
+    .eq("id", input.photoId)
+    .eq("company_id", input.companyId);
+}
+
+export async function removeJobPhotoFromCompanyCam(token: string, companyCamPhotoId: string) {
+  const id = companyCamPhotoId.trim();
+  if (!id) return { ok: true as const, skipped: true, error: "" };
+  const result = await companyCamRequest(token, `/photos/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (result.ok || result.status === 404) return { ok: true as const, skipped: result.status === 404, error: "" };
+  return { ok: false as const, skipped: false, error: result.error };
+}
+
 export async function registerCompanyCamWebhook(input: {
   token: string;
   webhookToken: string;
@@ -324,7 +522,7 @@ export async function registerCompanyCamWebhook(input: {
     method: "POST",
     body: JSON.stringify({
       url: input.webhookUrl,
-      scopes: ["photo.created", "photo.updated"],
+      scopes: ["photo.created", "photo.updated", "photo.description_updated"],
       enabled: true,
       token: input.webhookToken,
     }),

@@ -1348,6 +1348,14 @@ type CrmContextValue = CrmState & {
 
 const CrmContext = createContext<CrmContextValue | null>(null);
 
+function mirrorCompanyCamPhoto(photoId: string, action: "push" | "remove") {
+  void fetch("/api/companycam/photo", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ photoId, action }),
+  }).catch(() => undefined);
+}
+
 export function CrmProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const configured = isSupabaseConfigured();
@@ -9945,6 +9953,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ...prev,
         photos: [photo, ...prev.photos],
       }));
+      mirrorCompanyCamPhoto(photo.id, "push");
       const job = state.jobs.find((item) => item.id === input.jobId);
       if (job && !job.primaryPhotoId) {
         await updateJob(input.jobId, { primaryPhotoId: photo.id }, { skipAudit: true });
@@ -10119,6 +10128,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
       // Soft-delete only — never call deleteViaApi / removeFromB2 for job photos.
+      mirrorCompanyCamPhoto(id, "remove");
       setState((prev) => ({
         ...prev,
         photos: prev.photos.map((photo) =>
@@ -10193,6 +10203,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           photo.id === id ? { ...photo, deletedAt: null, deletedBy: "" } : photo,
         ),
       }));
+      mirrorCompanyCamPhoto(id, "push");
       await recordPhotoAudit({
         jobId: current.jobId,
         photoId: current.id,

@@ -25,11 +25,34 @@ export async function POST(request: Request) {
   }
 
   const event = parseCompanyCamWebhook(json);
-  if (!event.photo?.id || !event.photo.projectId) {
+  if (!event.photo?.id) {
     return NextResponse.json({ ok: true, skipped: true, reason: event.eventType || "ignored" });
   }
 
   const supabase = createClient<Database>(getSupabaseUrl(), getSupabaseKey());
+  if (event.eventType === "photo.deleted") {
+    const removed = await supabase.rpc("companycam_remove_photo", {
+      p_token: token,
+      p_project_id: event.photo.projectId,
+      p_photo_id: event.photo.id,
+    });
+    if (removed.error) {
+      if (isMissingCompanyCam(removed.error) || removed.error.message.toLowerCase().includes("companycam_remove_photo")) {
+        return NextResponse.json({ ok: true, skipped: true, reason: "remove_unavailable" });
+      }
+      return NextResponse.json({ error: removed.error.message }, { status: 500 });
+    }
+    const removedRow = removed.data && typeof removed.data === "object" ? (removed.data as Record<string, unknown>) : null;
+    if (removedRow?.ok === false && (removedRow.error === "invalid_token" || removedRow.error === "missing_token")) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    }
+    return NextResponse.json(removed.data ?? { ok: true });
+  }
+
+  if (!event.photo.projectId) {
+    return NextResponse.json({ ok: true, skipped: true, reason: event.eventType || "ignored" });
+  }
+
   const { data, error } = await supabase.rpc("companycam_ingest_photo", {
     p_token: token,
     p_project_id: event.photo.projectId,

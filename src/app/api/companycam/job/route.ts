@@ -2,14 +2,13 @@ import { NextResponse } from "next/server";
 import {
   createCompanyCamProject,
   fetchCompanyCamProject,
-  importCompanyCamPhotos,
-  listCompanyCamPhotos,
   loadCompanyCamConnection,
   loadCompanyCamJob,
   loadCompanyCamLink,
   publicCompanyCamLink,
   saveCompanyCamLink,
   searchCompanyCamProjects,
+  syncCompanyCamJob,
 } from "@/lib/companycam-server";
 import { isUuid } from "@/lib/companycam";
 import { loadProfileCompany } from "@/lib/eagleview-server";
@@ -136,7 +135,24 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    return NextResponse.json({ ok: true, link: publicCompanyCamLink(saved.row) });
+    const synced = await syncCompanyCamJob(supabase, {
+      token,
+      companyId: profile.company_id,
+      jobId: job.id,
+      projectId: saved.row.companycam_project_id,
+    });
+    return NextResponse.json({
+      ok: true,
+      link: publicCompanyCamLink({
+        ...saved.row,
+        last_synced_at: synced.ok ? new Date().toISOString() : saved.row.last_synced_at,
+      }),
+      imported: synced.imported,
+      removed: synced.removed,
+      pushed: synced.pushed,
+      total: synced.total,
+      syncError: synced.ok ? "" : synced.error,
+    });
   }
 
   if (action === "sync") {
@@ -144,28 +160,21 @@ export async function POST(request: Request) {
     const linkMissing = schemaFailure(linkResult.error);
     if (linkMissing) return linkMissing;
     if (!linkResult.row) {
-      return NextResponse.json({ error: "Link a CompanyCam project before pulling photos." }, { status: 400 });
+      return NextResponse.json({ error: "Link a CompanyCam project before syncing photos." }, { status: 400 });
     }
-    const listed = await listCompanyCamPhotos(token, linkResult.row.companycam_project_id);
-    if (!listed.ok) return NextResponse.json({ error: listed.error }, { status: 400 });
-    const imported = await importCompanyCamPhotos(supabase, {
+    const synced = await syncCompanyCamJob(supabase, {
+      token,
       companyId: profile.company_id,
       jobId: job.id,
-      photos: listed.photos.map((photo) => ({
-        ...photo,
-        projectId: photo.projectId || linkResult.row!.companycam_project_id,
-      })),
+      projectId: linkResult.row.companycam_project_id,
     });
-    if (imported.error) {
-      const failed = schemaFailure(imported.error);
-      if (failed) return failed;
-      return NextResponse.json({ error: imported.error.message }, { status: 400 });
-    }
+    if (!synced.ok) return NextResponse.json({ error: synced.error }, { status: 400 });
     return NextResponse.json({
       ok: true,
-      imported: imported.imported,
-      skipped: imported.skipped,
-      total: listed.photos.length,
+      imported: synced.imported,
+      removed: synced.removed,
+      pushed: synced.pushed,
+      total: synced.total,
       link: publicCompanyCamLink({
         ...linkResult.row,
         last_synced_at: new Date().toISOString(),

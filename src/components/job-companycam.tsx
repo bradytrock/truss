@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -32,8 +32,11 @@ type JobResponse = {
   error?: string;
   sql?: string | null;
   imported?: number;
+  removed?: number;
+  pushed?: number;
   skipped?: number;
   total?: number;
+  syncError?: string;
 };
 
 export function JobCompanyCamPanel({ jobId, disabled }: { jobId: string; disabled?: boolean }) {
@@ -44,6 +47,11 @@ export function JobCompanyCamPanel({ jobId, disabled }: { jobId: string; disable
   const [projects, setProjects] = useState<CompanyCamProject[]>([]);
   const [pending, setPending] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const syncedProject = useRef("");
+  const reloadRef = useRef(crm.reload);
+  useEffect(() => {
+    reloadRef.current = crm.reload;
+  }, [crm.reload]);
 
   async function load(search?: string) {
     const params = new URLSearchParams({ jobId });
@@ -78,9 +86,40 @@ export function JobCompanyCamPanel({ jobId, disabled }: { jobId: string; disable
     };
   }, [jobId]);
 
+  useEffect(() => {
+    const projectId = info?.link?.projectId ?? "";
+    if (!loaded || disabled || !info?.connected || !projectId) return;
+    if (syncedProject.current === projectId) return;
+    let cancelled = false;
+    void (async () => {
+      setPending(true);
+      try {
+        const response = await fetch("/api/companycam/job", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobId, action: "sync" }),
+        });
+        const data = (await response.json()) as JobResponse;
+        if (cancelled || !response.ok) return;
+        syncedProject.current = projectId;
+        setInfo((current) => ({ ...current, ...data, link: data.link ?? current?.link }));
+        if ((data.imported ?? 0) > 0 || (data.removed ?? 0) > 0 || (data.pushed ?? 0) > 0) {
+          await reloadRef.current();
+        }
+      } catch {
+        // The next visit tries again.
+      } finally {
+        if (!cancelled) setPending(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [disabled, info?.connected, info?.link?.projectId, jobId, loaded]);
+
   const searchValue = query ?? job?.street ?? "";
 
-  async function act(action: "link" | "create" | "unlink" | "sync", projectId?: string) {
+  async function act(action: "link" | "create" | "unlink", projectId?: string) {
     if (disabled) return;
     if (action === "unlink" && !window.confirm("Unlink this CompanyCam project from the job?")) return;
     setPending(true);
@@ -96,18 +135,16 @@ export function JobCompanyCamPanel({ jobId, disabled }: { jobId: string; disable
         if (data.sql) setInfo((current) => ({ ...current, sql: data.sql }));
         return;
       }
-      if (action === "sync") {
-        const imported = data.imported ?? 0;
-        if (imported > 0) toast.success(`Pulled ${imported} photo${imported === 1 ? "" : "s"} from CompanyCam.`);
-        else if ((data.total ?? 0) === 0) toast.success("That CompanyCam project has no photos yet.");
-        else toast.success("Those CompanyCam photos are already on this job.");
-        await crm.reload();
-      } else if (action === "unlink") {
+      if (action === "unlink") {
         toast.success("CompanyCam project unlinked.");
         setProjects([]);
+        syncedProject.current = "";
       } else {
-        toast.success(action === "create" ? "CompanyCam project created." : "CompanyCam project linked.");
+        if (data.syncError) toast.error(data.syncError);
+        else toast.success(action === "create" ? "CompanyCam project created. Photos stay in sync." : "CompanyCam project linked. Photos stay in sync.");
         setProjects([]);
+        if (data.link?.projectId) syncedProject.current = data.link.projectId;
+        await crm.reload();
       }
       await load();
     } catch {
@@ -129,8 +166,8 @@ export function JobCompanyCamPanel({ jobId, disabled }: { jobId: string; disable
           <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">CompanyCam</p>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {info?.connected
-              ? `This company is connected to ${info.companyName || "CompanyCam"}. Link the job's project, then pull photos into the gallery.`
-              : "Connect this company's CompanyCam account to link a project and pull its photos."}
+              ? `This company is connected to ${info.companyName || "CompanyCam"}. Link the job's project and its photos stay in the gallery.`
+              : "Connect this company's CompanyCam account to show a project's photos on the job."}
           </p>
         </div>
         <Button nativeButton={false} size="sm" variant="ghost" render={<Link href="/settings/companycam" />}>
@@ -159,15 +196,15 @@ export function JobCompanyCamPanel({ jobId, disabled }: { jobId: string; disable
           <div className="space-y-2">
             <p className="text-sm font-medium">{link.name || "CompanyCam project"}</p>
             {link.address ? <p className="text-sm text-muted-foreground">{link.address}</p> : null}
+            <p className="text-sm text-muted-foreground">
+              {pending ? "Syncing photos…" : "Photos taken in CompanyCam show up here. Photos added on this job go to CompanyCam."}
+            </p>
             <div className="flex flex-wrap gap-2">
               {link.url ? (
                 <Button nativeButton={false} size="sm" variant="outline" render={<a href={link.url} target="_blank" rel="noreferrer" />}>
                   Open in CompanyCam
                 </Button>
               ) : null}
-              <Button type="button" size="sm" disabled={disabled || pending} onClick={() => void act("sync")}>
-                Pull photos
-              </Button>
               <Button type="button" size="sm" variant="outline" disabled={disabled || pending} onClick={() => void act("unlink")}>
                 Unlink
               </Button>

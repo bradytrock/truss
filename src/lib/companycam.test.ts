@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import {
   asCompanyCamList,
   companyCamCapturedDate,
+  companyCamCapturedUnix,
+  companyCamPhotoCreateBody,
+  companyCamPhotoIdsToDrop,
   companyCamProjectBody,
+  companyCamUploadUrl,
   companyCamSignature,
   companyCamSignatureMatches,
   companyCamTokenHint,
@@ -92,6 +96,36 @@ const event = parseCompanyCamWebhook({
 assert.equal(event.eventType, "photo.created");
 assert.equal(event.photo?.projectId, "77");
 assert.equal(parseCompanyCamWebhook({ event_type: "project.created", payload: { id: "1" } }).photo, null);
+
+const removed = parseCompanyCamWebhook({
+  event_type: "photo.deleted",
+  payload: { id: "55", project_id: "77" },
+});
+assert.equal(removed.eventType, "photo.deleted");
+assert.equal(removed.photo?.id, "55");
+assert.equal(removed.photo?.projectId, "77");
+assert.equal(removed.photo?.url, "");
+
+assert.equal(companyCamUploadUrl("https://files.example.com/roof.jpg"), "https://files.example.com/roof.jpg");
+assert.equal(companyCamUploadUrl("https://static.companycam.com/shot.jpg"), "");
+assert.equal(companyCamUploadUrl("http://files.example.com/roof.jpg"), "");
+assert.equal(companyCamCapturedUnix("2026-09-29T00:00:00.000Z"), Math.floor(Date.parse("2026-09-29T00:00:00.000Z") / 1000));
+assert.deepEqual(
+  companyCamPhotoCreateBody({
+    uri: "https://files.example.com/roof.jpg",
+    capturedAt: "2026-09-29T00:00:00.000Z",
+    description: "Front slope",
+  }),
+  {
+    photo: {
+      uri: "https://files.example.com/roof.jpg",
+      captured_at: companyCamCapturedUnix("2026-09-29T00:00:00.000Z"),
+      description: "Front slope",
+    },
+  },
+);
+assert.deepEqual(companyCamPhotoIdsToDrop(["a", "b", ""], ["b"], true), ["a"]);
+assert.deepEqual(companyCamPhotoIdsToDrop(["a"], [], false), []);
 
 assert.deepEqual(asCompanyCamList({ projects: [{ id: "1" }] }), [{ id: "1" }]);
 

@@ -136,7 +136,7 @@ function CompanyCamSettingsForm() {
           <p className="text-sm text-muted-foreground">
             {connected
               ? `Connected to ${info?.companyName || "CompanyCam"}${info?.tokenHint ? ` · token ending ${info.tokenHint}` : ""}.`
-              : "Not connected. Photos stay in CompanyCam until you link a project on a job and pull them."}
+              : "Not connected. Link a project on a job after this office is connected, and its photos stay in the gallery."}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button type="button" disabled={pending} onClick={() => void save()}>
@@ -155,8 +155,9 @@ function CompanyCamSettingsForm() {
         <CardHeader>
           <CardTitle>Photo webhook</CardTitle>
           <CardDescription>
-            Saving a token registers this URL with that CompanyCam account. New photos on a linked
-            project land on the job. Keys expire in CompanyCam, so paste a fresh one before the
+            Saving a token registers this URL with that CompanyCam account. Photos added or edited
+            on a linked project show up on the job. Opening the job also drops photos that were
+            removed in CompanyCam. Keys expire in CompanyCam, so paste a fresh one before the
             current key stops working.
           </CardDescription>
         </CardHeader>
@@ -173,7 +174,7 @@ function CompanyCamSettingsForm() {
           <p className="text-sm text-muted-foreground">
             {info?.webhookRegistered
               ? "Webhook is registered with CompanyCam."
-              : "Webhook is not registered yet. Save the connection to register it, or pull photos from the job."}
+              : "Webhook is not registered yet. Save the connection to register it."}
           </p>
           <Button
             type="button"

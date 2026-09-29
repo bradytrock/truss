@@ -3162,6 +3162,14 @@ export type Database = {
         };
         Returns: Json;
       };
+      companycam_remove_photo: {
+        Args: {
+          p_token: string;
+          p_project_id: string;
+          p_photo_id: string;
+        };
+        Returns: Json;
+      };
       qbwc_upsert_connector: {
         Args: { p_password: string; p_item_name?: string };
         Returns: Json;

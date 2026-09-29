@@ -134,11 +134,54 @@ export function parseCompanyCamWebhook(json: unknown): CompanyCamWebhookEvent {
   if (!eventType.startsWith("photo.")) return { eventType, photo: null };
   const payload = isRecord(json.payload) ? json.payload : json;
   const source = isRecord(payload.photo) ? payload.photo : payload;
-  const photo = parseCompanyCamPhoto(source);
-  if (photo && !photo.projectId && isRecord(payload.project)) {
-    photo.projectId = idOf(payload.project.id);
+  const projectId =
+    idOf(source.project_id) || (isRecord(payload.project) ? idOf(payload.project.id) : "");
+  if (eventType === "photo.deleted") {
+    const id = idOf(source.id);
+    if (!id) return { eventType, photo: null };
+    return {
+      eventType,
+      photo: { id, projectId, url: "", caption: "", takenOn: "" },
+    };
   }
+  const photo = parseCompanyCamPhoto(source);
+  if (photo && !photo.projectId && projectId) photo.projectId = projectId;
   return { eventType, photo };
+}
+
+/** A URL CompanyCam's servers can fetch. Photos that already live on CompanyCam are skipped. */
+export function companyCamUploadUrl(value: string) {
+  const url = value.trim();
+  if (!url.startsWith("https://")) return "";
+  if (isCompanyCamImageUrl(url)) return "";
+  return url;
+}
+
+export function companyCamCapturedUnix(value: string, now = Date.now()) {
+  const ms = Date.parse(value);
+  if (!Number.isFinite(ms)) return Math.floor(now / 1000);
+  return Math.floor(ms / 1000);
+}
+
+export function companyCamPhotoCreateBody(input: {
+  uri: string;
+  capturedAt: string;
+  description?: string;
+}) {
+  const photo: Record<string, unknown> = {
+    uri: input.uri,
+    captured_at: companyCamCapturedUnix(input.capturedAt),
+  };
+  const description = input.description?.trim().slice(0, 500) ?? "";
+  if (description) photo.description = description;
+  return { photo };
+}
+
+/** Local CompanyCam copies that are no longer on the project. Incomplete lists never drop photos. */
+export function companyCamPhotoIdsToDrop(localIds: string[], remoteIds: string[], listComplete: boolean) {
+  if (!listComplete) return [];
+  const remote = new Set(remoteIds);
+  return [...new Set(localIds.map((id) => id.trim()).filter((id) => id && !remote.has(id)))];
 }
 
 export function asCompanyCamList(json: unknown) {
