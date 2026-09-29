@@ -124,7 +124,7 @@ In Authentication → URL configuration, add `http://localhost:3847/auth/callbac
 
 `.env.local` is optional. Copy `.env.example` only if you want to override the shared project.
 
-To connect real Google Calendars, create an OAuth web client in Google Cloud (Calendar API + `.../auth/calendar.events.readonly`). Put `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env.local`, and add `http://localhost:3847/api/google/calendar/callback` as an authorized redirect URI. Without those keys, each seat can still **Link demo Google Calendar** so sharing and admin visibility can be tried locally.
+To connect real Google Calendars, follow [docs/google-calendar-setup.md](docs/google-calendar-setup.md): OAuth web client, Calendar API, scope `.../auth/calendar.events.readonly`, `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env.local` (and on the host), and `http://localhost:3847/api/google/calendar/callback` as an authorized redirect URI. Without those keys, each seat can still **Link demo Google Calendar** so sharing and admin visibility can be tried locally. An External app left in Testing drops refresh tokens after 7 days — Disconnect and Connect again, or publish the app (or use an Internal Workspace client).
 
 Gmail uses the same OAuth client. Enable the Gmail API, add scopes `.../auth/gmail.readonly` and `.../auth/gmail.send`, and add `http://localhost:3847/api/google/gmail/callback` as a redirect URI. Seats that connected before send was added must Disconnect and Connect Gmail again. Refresh tokens stay in `gmail_tokens` (RPC only).
 
