@@ -4,7 +4,9 @@ import {
   firstPlainLine,
   invoiceLineDescription,
   linePlainText,
+  customerUnitLabel,
   proposalLineSummary,
+  quantityUnitLabel,
   lineTextToSafeHtml,
   parseLineFormat,
   shouldShowLineDescription,
@@ -71,6 +73,12 @@ assert.equal(
   proposalLineSummary({ title: "Tear-off & disposal", quantity: 1, unit: "LS" }),
   "Tear-off & disposal",
 );
+assert.equal(customerUnitLabel("LS"), "");
+assert.equal(customerUnitLabel("l.s."), "");
+assert.equal(customerUnitLabel("lump sum"), "");
+assert.equal(customerUnitLabel("sq"), "sq");
+assert.equal(quantityUnitLabel(1, "LS"), "1");
+assert.equal(quantityUnitLabel(32, "sq"), "32 sq");
 assert.equal(
   proposalLineSummary({ title: "Ridge vent", quantity: 38.5, unit: "ft" }),
   "Ridge vent · 38.5 ft",

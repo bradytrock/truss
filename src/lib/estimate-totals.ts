@@ -11,7 +11,7 @@ import {
   scopedEstimateLines,
   type EstimatePackage,
 } from "@/lib/estimate-packages";
-import { firstPlainLine, invoiceLineDescription } from "@/lib/line-format";
+import { customerUnitLabel, firstPlainLine, invoiceLineDescription } from "@/lib/line-format";
 import { estimateFullySigned } from "@/lib/estimate-signers";
 import type { Estimate, EstimateLine, JobMarket } from "@/lib/types";
 
@@ -262,7 +262,7 @@ export function invoiceLinesFromEstimate(
         {
           description: estimate.name.trim() || "Contract work",
           quantity: 1,
-          unit: "LS",
+          unit: "",
           unitCost: totals.subtotal,
           sortOrder: 0,
         },
@@ -270,7 +270,7 @@ export function invoiceLinesFromEstimate(
     : billed.map((line, index) => ({
         description: invoiceLineDescription(line),
         quantity: line.quantity,
-        unit: line.unit,
+        unit: customerUnitLabel(line.unit),
         unitCost: line.unitCost,
         sortOrder: index,
       }));
@@ -281,7 +281,7 @@ export function invoiceLinesFromEstimate(
           ? `Discount (${estimate.discountValue}%)`
           : "Discount",
       quantity: 1,
-      unit: "LS",
+      unit: "",
       unitCost: -totals.discount,
       sortOrder: out.length,
     });
@@ -290,7 +290,7 @@ export function invoiceLinesFromEstimate(
     out.push({
       description: `Tax (${billedEstimate.taxRate}%)`,
       quantity: 1,
-      unit: "LS",
+      unit: "",
       unitCost: totals.tax,
       sortOrder: out.length,
     });

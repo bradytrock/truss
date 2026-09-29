@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { featuredEstimateForJob, estimateTotals, toClientFacingProposal } from "./estimate-totals.ts";
-import type { Estimate } from "./types.ts";
+import { featuredEstimateForJob, estimateTotals, invoiceLinesFromEstimate, toClientFacingProposal } from "./estimate-totals.ts";
+import type { Estimate, EstimateLine } from "./types.ts";
 
 const estimate = {
   taxRate: 0,
@@ -107,5 +107,30 @@ const featured = featuredEstimateForJob([draft, signed]);
 assert.equal(featured?.id, "est_signed");
 assert.equal(featuredEstimateForJob([draft])?.id, "est_draft");
 assert.equal(featuredEstimateForJob([draft, { ...signed, archivedAt: "2026-09-16T00:00:00.000Z" }])?.id, "est_draft");
+
+const billed = estimateRow({ id: "est_bill", status: "accepted", name: "Shadowridge roof" });
+const billedLine: EstimateLine = {
+  id: "line_bill",
+  estimateId: billed.id,
+  catalogItemId: null,
+  title: "Architectural shingles",
+  description: "",
+  quantity: 32,
+  unit: "LS",
+  unitCost: 450,
+  sortOrder: 0,
+  groupName: "",
+  optional: false,
+  selected: true,
+  taxable: true,
+  package: "",
+  photoIds: [],
+};
+const invoiceLines = invoiceLinesFromEstimate(billed, [billedLine]);
+assert.equal(invoiceLines[0]?.unit, "");
+assert.equal(invoiceLines[0]?.quantity, 32);
+
+const squares = invoiceLinesFromEstimate(billed, [{ ...billedLine, unit: "sq" }]);
+assert.equal(squares[0]?.unit, "sq");
 
 console.log("estimate-totals.test.ts ok");

@@ -29,6 +29,7 @@ import {
 import type { ProjectManagerContact } from "@/lib/document-owner";
 import {
   parseLineFormat,
+  customerUnitLabel,
   lineHeading,
   shouldShowLineDescription,
   type FormatBlock,
@@ -592,7 +593,7 @@ function writeMoneyCols(
   doc.setFontSize(9);
   ink(doc, PAPER_INK);
   doc.text(qty, cols.qtyX, y, { align: "right" });
-  doc.text(unit, cols.unitX, y, { align: "right" });
+  doc.text(customerUnitLabel(unit), cols.unitX, y, { align: "right" });
   if (!cols.hidePrices) {
     doc.text(rate, cols.rateX, y, { align: "right" });
     doc.setFont("helvetica", "bold");
