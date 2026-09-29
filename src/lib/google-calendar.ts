@@ -1,5 +1,10 @@
+import { googleCalendarInviteBody } from "@/lib/calendar-invite";
+
+/** Read and write events, so an outside guest can be emailed a calendar invite. */
+export const GOOGLE_CALENDAR_EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+
 export const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/calendar.events.readonly",
+  GOOGLE_CALENDAR_EVENTS_SCOPE,
   "https://www.googleapis.com/auth/userinfo.email",
 ].join(" ");
 
@@ -140,4 +145,104 @@ export async function listGoogleEvents(input: {
     htmlLink: item.htmlLink,
     allDay: Boolean(item.start?.date && !item.start.dateTime),
   }));
+}
+
+export class GoogleCalendarScopeError extends Error {
+  constructor() {
+    super("Reconnect Google Calendar so Truss can send invites.");
+  }
+}
+
+type GoogleErrorBody = {
+  error?: { message?: string; errors?: Array<{ reason?: string }> };
+};
+
+async function throwGoogleCalendarError(response: Response): Promise<never> {
+  const json = (await response.json().catch(() => ({}))) as GoogleErrorBody;
+  const reason = json.error?.errors?.[0]?.reason ?? "";
+  const message = json.error?.message ?? "";
+  const lowered = `${reason} ${message}`.toLowerCase();
+  if (
+    response.status === 403 &&
+    (reason === "insufficientPermissions" || lowered.includes("insufficient") || lowered.includes("scope"))
+  ) {
+    throw new GoogleCalendarScopeError();
+  }
+  throw new Error(message || "Google Calendar rejected the invite.");
+}
+
+export async function createGoogleCalendarEvent(input: {
+  accessToken: string;
+  calendarId?: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  location: string;
+  notes: string;
+  attendeeEmails: string[];
+  sendUpdates?: "all" | "none";
+}) {
+  const calendarId = encodeURIComponent(input.calendarId || "primary");
+  const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`);
+  url.searchParams.set("sendUpdates", input.sendUpdates ?? "all");
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${input.accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(googleCalendarInviteBody(input)),
+  });
+  if (!response.ok) await throwGoogleCalendarError(response);
+  const json = (await response.json()) as { id?: string };
+  if (!json.id) throw new Error("Google Calendar did not return an event.");
+  return json.id;
+}
+
+export async function updateGoogleCalendarEvent(input: {
+  accessToken: string;
+  calendarId?: string;
+  googleEventId: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  location: string;
+  notes: string;
+  attendeeEmails: string[];
+  sendUpdates?: "all" | "none";
+}) {
+  const calendarId = encodeURIComponent(input.calendarId || "primary");
+  const eventId = encodeURIComponent(input.googleEventId);
+  const url = new URL(
+    `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${eventId}`,
+  );
+  url.searchParams.set("sendUpdates", input.sendUpdates ?? "all");
+  const response = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${input.accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(googleCalendarInviteBody(input)),
+  });
+  if (response.status === 404 || response.status === 410) return null;
+  if (!response.ok) await throwGoogleCalendarError(response);
+  const json = (await response.json()) as { id?: string };
+  return json.id || input.googleEventId;
+}
+
+export async function deleteGoogleCalendarEvent(input: {
+  accessToken: string;
+  calendarId?: string;
+  googleEventId: string;
+}) {
+  const calendarId = encodeURIComponent(input.calendarId || "primary");
+  const eventId = encodeURIComponent(input.googleEventId);
+  const url = new URL(
+    `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events/${eventId}`,
+  );
+  url.searchParams.set("sendUpdates", "all");
+  const response = await fetch(url, { method: "DELETE", headers: { Authorization: `Bearer ${input.accessToken}` } });
+  if (response.ok || response.status === 404 || response.status === 410) return;
+  await throwGoogleCalendarError(response);
 }

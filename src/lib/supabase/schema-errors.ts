@@ -1159,3 +1159,19 @@ export function isMissingStaffDeviceLocations(error: { message?: string; code?: 
 export function missingStormMapMessage() {
   return `Run ${STORM_MAP_SQL} in the SQL editor so the field map can keep job pins and live crew locations.`;
 }
+
+export const SCHEDULE_GUEST_INVITES_SQL = "supabase/migrations/20260929190000_schedule_guest_invites.sql";
+
+export function isMissingScheduleGuestInvites(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("guest_emails") ||
+    message.includes("google_event_id") ||
+    message.includes("google_organizer_staff_id")
+  );
+}
+
+export function missingScheduleGuestInvitesMessage() {
+  return `Saved in this browser. Run ${SCHEDULE_GUEST_INVITES_SQL} in the SQL editor so guest emails and Google Calendar invites persist.`;
+}

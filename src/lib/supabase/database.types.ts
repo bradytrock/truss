@@ -1332,6 +1332,9 @@ export type Database = {
           job_id: string | null;
           client_id: string | null;
           notes: string;
+          guest_emails: string[];
+          google_event_id: string;
+          google_organizer_staff_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -1347,6 +1350,9 @@ export type Database = {
           job_id?: string | null;
           client_id?: string | null;
           notes?: string;
+          guest_emails?: string[];
+          google_event_id?: string;
+          google_organizer_staff_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["schedule_events"]["Insert"]>;
         Relationships: [];

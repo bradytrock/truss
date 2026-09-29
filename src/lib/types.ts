@@ -864,6 +864,12 @@ export interface ScheduleEvent {
   jobId: string | null;
   clientId: string | null;
   notes: string;
+  /** Emails invited onto this event. People outside the company get a Google Calendar invite. */
+  guestEmails?: string[];
+  /** Google Calendar event id once an outside guest has been invited. */
+  googleEventId?: string;
+  /** Seat whose linked Google Calendar owns that invite. */
+  googleOrganizerStaffId?: string | null;
 }
 
 export interface CalendarAccount {

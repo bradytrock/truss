@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { guestInviteHint, parseGuestEmails, partitionGuestEmails } from "@/lib/calendar-invite";
 import { useCrm } from "@/lib/crm-store";
 import { localYmd } from "@/lib/format";
 import { LogPaymentDialog } from "@/components/log-financial-dialogs";
@@ -198,6 +199,8 @@ export function CreateEventDialog({
     addScheduleEvent,
     updateScheduleEvent,
     deleteScheduleEvent,
+    staff,
+    contacts,
   } = useCrm();
   const people = teamMembers.length > 0 ? teamMembers : [user.name].filter(Boolean);
   const defaultAssignee = user.name || people[0] || "";
@@ -211,7 +214,17 @@ export function CreateEventDialog({
   const [jobId, setJobId] = useState("");
   const [opportunityId, setOpportunityId] = useState("");
   const [notes, setNotes] = useState("");
+  const [guestEmails, setGuestEmails] = useState<string[]>([]);
+  const [guestDraft, setGuestDraft] = useState("");
+  const guestInputId = useId();
+  const guestListId = useId();
+  const guestHintId = useId();
   const editing = Boolean(event);
+  const guestRoster = {
+    staffEmails: staff.map((member) => member.email),
+  };
+  const guestPreview = partitionGuestEmails(parseGuestEmails([...guestEmails, guestDraft]), guestRoster);
+  const contactOptions = contacts.filter((contact) => contact.email.trim());
 
   useEffect(() => {
     if (!open) return;
@@ -226,6 +239,8 @@ export function CreateEventDialog({
       setJobId(event.jobId ?? "");
       setOpportunityId(event.opportunityId ?? "");
       setNotes(event.notes);
+      setGuestEmails(parseGuestEmails(event.guestEmails ?? []));
+      setGuestDraft("");
       return;
     }
     setTitle(defaultTitle ?? "");
@@ -238,6 +253,8 @@ export function CreateEventDialog({
     setJobId("");
     setOpportunityId("");
     setNotes("");
+    setGuestEmails([]);
+    setGuestDraft("");
   }, [
     open,
     event,
@@ -248,12 +265,26 @@ export function CreateEventDialog({
     defaultAssignee,
   ]);
 
+  function commitGuestDraft(raw: string, announce = true) {
+    const emails = parseGuestEmails(raw);
+    if (raw.trim() && emails.length === 0) {
+      if (announce) toast.error("Enter an email address.");
+      return null;
+    }
+    const next = parseGuestEmails([...guestEmails, ...emails]);
+    setGuestEmails(next);
+    setGuestDraft("");
+    return next;
+  }
+
   async function handleSubmit(formEvent: FormEvent) {
     formEvent.preventDefault();
     if (!title.trim()) {
       toast.error("Give the event a title.");
       return;
     }
+    const committedGuests = commitGuestDraft(guestDraft);
+    if (!committedGuests) return;
     const job = jobs.find((item) => item.id === jobId);
     const opportunity = opportunities.find((item) => item.id === opportunityId);
     const payload = {
@@ -267,6 +298,7 @@ export function CreateEventDialog({
       jobId: jobId || null,
       clientId: job?.clientId ?? opportunity?.clientId ?? null,
       notes,
+      guestEmails: committedGuests,
     };
     try {
       if (event) {
@@ -299,7 +331,7 @@ export function CreateEventDialog({
         <DialogHeader>
           <DialogTitle>{editing ? "Edit event" : "Schedule an event"}</DialogTitle>
           <DialogDescription>
-            Site walks, inspections, production, and owner meetings for the week.
+            Site walks, inspections, production, and owner meetings for the week. People outside the company get a Google Calendar invite.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-3">
@@ -438,6 +470,62 @@ export function CreateEventDialog({
               </Select>
             </Field>
           </div>
+          <Field label="Invite" htmlFor={guestInputId}>
+            <Input
+              id={guestInputId}
+              value={guestDraft}
+              list={guestListId}
+              onChange={(formEvent) => {
+                const value = formEvent.target.value;
+                if (/[,\n;]$/.test(value) || /\s$/.test(value)) {
+                  commitGuestDraft(value);
+                  return;
+                }
+                setGuestDraft(value);
+              }}
+              onKeyDown={(formEvent) => {
+                if (formEvent.key === "Enter") {
+                  formEvent.preventDefault();
+                  commitGuestDraft(guestDraft);
+                }
+              }}
+              onBlur={() => {
+                if (guestDraft.trim()) commitGuestDraft(guestDraft, false);
+              }}
+              aria-describedby={guestHintId}
+              placeholder="name@example.com"
+            />
+            <datalist id={guestListId}>
+              {contactOptions.map((contact) => (
+                <option key={contact.id} value={contact.email}>
+                  {contact.name}
+                </option>
+              ))}
+            </datalist>
+            {guestEmails.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {guestEmails.map((email) => (
+                  <span
+                    key={email}
+                    className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-0.5 text-xs"
+                  >
+                    {email}
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label={`Remove ${email}`}
+                      onClick={() => setGuestEmails((current) => current.filter((item) => item !== email))}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            <p id={guestHintId} className="text-xs text-muted-foreground">
+              {guestInviteHint(guestPreview.outside, guestPreview.inside)}
+            </p>
+          </Field>
           <Field label="Notes" htmlFor="evt-notes">
             <Textarea
               id="evt-notes"

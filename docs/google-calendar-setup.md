@@ -19,11 +19,11 @@ On the consent screen:
   - **Internal** if every person who will connect is in your Google Workspace. Tokens do not expire on a 7-day testing clock, and you do not add test users.
   - **External** if people use personal Gmail or another Workspace. Leave the app in **Testing** until you are ready to publish.
 - **Scopes** (Data access). Add exactly what the app requests:
-  - `https://www.googleapis.com/auth/calendar.events.readonly`
+  - `https://www.googleapis.com/auth/calendar.events`
   - `https://www.googleapis.com/auth/userinfo.email`
   - For Gmail as well: `https://www.googleapis.com/auth/gmail.readonly` and `https://www.googleapis.com/auth/gmail.send`
 - If the app is **External** and still in **Testing**, add every Google account that will click Connect under **Test users**. Accounts that are not listed get `access_denied`.
-- Publishing an External app to **In production** removes the 7-day refresh-token limit. `calendar.events.readonly` is a sensitive scope, so Google may ask for verification before a wide audience can consent. Internal Workspace apps skip that.
+- Publishing an External app to **In production** removes the 7-day refresh-token limit. `calendar.events` is a sensitive scope, so Google may ask for verification before a wide audience can consent. Internal Workspace apps skip that.
 
 ## 2. OAuth client
 
@@ -88,7 +88,15 @@ Linking does not publish the calendar to the company.
 
 Check the person on in **Calendars you can see**. Events are loaded for the visible week from Google’s primary calendar.
 
-Truss field events (site walks, production, and the rest) are separate. Connecting Google does not write those back to Google.
+Truss field events (site walks, production, and the rest) stay on the Truss calendar. Connecting Google does not copy the whole week back to Google.
+
+## Inviting someone outside the company
+
+On **Schedule an event**, add their email under **Invite**. A teammate already sees the event in Truss. Everyone else is outside the company, including another address on the company domain. Truss creates the event on the signed-in seat’s primary Google Calendar and Google emails them the invite.
+
+That write needs the `calendar.events` scope. Seats that connected while the app only asked for `calendar.events.readonly` must **Disconnect** and **Connect Google Calendar** again before an invite can send. The event still saves in Truss either way.
+
+Guest emails persist after [`supabase/migrations/20260929190000_schedule_guest_invites.sql`](../supabase/migrations/20260929190000_schedule_guest_invites.sql) (or a fresh bootstrap). Until that runs, the invite can still send for this browser session.
 
 ## Connect again
 

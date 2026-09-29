@@ -1175,6 +1175,11 @@ export function mapScheduleEvent(row: EventRow): ScheduleEvent {
     jobId: row.job_id,
     clientId: row.client_id,
     notes: row.notes,
+    guestEmails: Array.isArray(row.guest_emails)
+      ? row.guest_emails.filter((email): email is string => typeof email === "string" && email.length > 0)
+      : [],
+    googleEventId: row.google_event_id ?? "",
+    googleOrganizerStaffId: row.google_organizer_staff_id ?? null,
   };
 }
 
