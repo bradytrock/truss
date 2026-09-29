@@ -808,6 +808,32 @@ export function missingEagleviewMessage() {
   return `Run ${EAGLEVIEW_SQL} in the SQL editor so EagleView orders and credentials persist.`;
 }
 
+export const COMPANYCAM_SQL = "supabase/migrations/20260928130000_companycam.sql";
+
+export function isMissingCompanyCam(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentions =
+    message.includes("companycam_connections") ||
+    message.includes("companycam_job_links") ||
+    message.includes("companycam_ingest_photo") ||
+    message.includes("companycam_photo_id") ||
+    message.includes("companycam");
+  return (
+    (code === "pgrst205" && mentions) ||
+    (code === "pgrst202" && mentions) ||
+    ((message.includes("schema cache") ||
+      message.includes("could not find the") ||
+      message.includes("does not exist")) &&
+      mentions)
+  );
+}
+
+export function missingCompanyCamMessage() {
+  return `Run ${COMPANYCAM_SQL} in the SQL editor so each company can connect its own CompanyCam account.`;
+}
+
 export const COMPANY_STRIPE_SQL = "supabase/migrations/20260916050000_company_stripe_keys.sql";
 
 export function isMissingCompanyStripe(error: { message?: string; code?: string } | null | undefined) {

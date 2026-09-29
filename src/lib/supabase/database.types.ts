@@ -1281,6 +1281,7 @@ export type Database = {
           created_by: string;
           deleted_at?: string | null;
           deleted_by?: string;
+          companycam_photo_id?: string;
         };
         Insert: {
           id?: string;
@@ -1294,6 +1295,7 @@ export type Database = {
           created_by?: string;
           deleted_at?: string | null;
           deleted_by?: string;
+          companycam_photo_id?: string;
         };
         Update: Partial<Database["public"]["Tables"]["job_photos"]["Insert"]>;
         Relationships: [];
@@ -1625,6 +1627,66 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["company_stripe_accounts"]["Insert"]>;
+        Relationships: [];
+      };
+      companycam_connections: {
+        Row: {
+          company_id: string;
+          access_token: string;
+          token_hint: string;
+          companycam_company_id: string;
+          companycam_company_name: string;
+          webhook_id: string;
+          webhook_token: string;
+          linked: boolean;
+          linked_at: string | null;
+          linked_by: string;
+          updated_at: string;
+          created_at: string;
+        };
+        Insert: {
+          company_id: string;
+          access_token?: string;
+          token_hint?: string;
+          companycam_company_id?: string;
+          companycam_company_name?: string;
+          webhook_id?: string;
+          webhook_token?: string;
+          linked?: boolean;
+          linked_at?: string | null;
+          linked_by?: string;
+          updated_at?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["companycam_connections"]["Insert"]>;
+        Relationships: [];
+      };
+      companycam_job_links: {
+        Row: {
+          id: string;
+          company_id: string;
+          job_id: string;
+          companycam_project_id: string;
+          project_name: string;
+          project_url: string;
+          address_line: string;
+          last_synced_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          job_id: string;
+          companycam_project_id: string;
+          project_name?: string;
+          project_url?: string;
+          address_line?: string;
+          last_synced_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["companycam_job_links"]["Insert"]>;
         Relationships: [];
       };
       eagleview_orders: {
@@ -3054,6 +3116,17 @@ export type Database = {
           p_order_id?: string;
           p_status_id?: number | null;
           p_status_detail?: string;
+        };
+        Returns: Json;
+      };
+      companycam_ingest_photo: {
+        Args: {
+          p_token: string;
+          p_project_id: string;
+          p_photo_id: string;
+          p_image_url: string;
+          p_caption?: string;
+          p_taken_on?: string | null;
         };
         Returns: Json;
       };
