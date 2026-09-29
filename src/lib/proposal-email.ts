@@ -279,7 +279,7 @@ export function renderProposalEmailHtml(input: ProposalEmailInput) {
                   </td>
                 </tr>
                 <tr>
-                  <td class="px" align="center" style="padding:28px 44px 8px 44px;">
+                  <td class="px" align="center" style="padding:28px 44px 28px 44px;">
                     <!--[if mso]>
                     <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="${url}" style="height:54px;v-text-anchor:middle;width:512px;" arcsize="15%" strokecolor="#b51e28" fillcolor="#b51e28">
                       <w:anchorlock/>
@@ -291,11 +291,6 @@ export function renderProposalEmailHtml(input: ProposalEmailInput) {
                       Review &amp; sign
                     </a>
                     <!--<![endif]-->
-                  </td>
-                </tr>
-                <tr>
-                  <td class="px" align="center" style="padding:0 44px 28px 44px;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:18px;color:#8a857f;">
-                    Takes about two minutes. No account or app required.
                   </td>
                 </tr>
 
