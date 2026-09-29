@@ -449,7 +449,7 @@ export async function syncCompanyCamJob(
   let removed = 0;
   if (listed.complete) {
     const cutoff = new Date(Date.now() - DROP_GRACE_MS).toISOString();
-    const local: { id: string; companycam_photo_id: string | null }[] = [];
+    const local: { id: string; companycam_photo_id: string }[] = [];
     let localError = false;
     for (let from = 0; from < 10_000; from += 1000) {
       const { data, error } = await supabase
@@ -465,7 +465,12 @@ export async function syncCompanyCamJob(
         localError = true;
         break;
       }
-      local.push(...data);
+      local.push(
+        ...data.map((row) => ({
+          id: row.id,
+          companycam_photo_id: row.companycam_photo_id ?? "",
+        })),
+      );
       if (data.length < 1000) break;
     }
     if (!localError) {
