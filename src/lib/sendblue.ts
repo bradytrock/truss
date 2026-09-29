@@ -3,6 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getSupabaseKey, getSupabaseUrl } from "@/lib/supabase/env";
 
 const SENDBLUE_SEND_URL = "https://api.sendblue.co/api/send-message";
+const SENDBLUE_CONTACTS_URL = "https://api.sendblue.co/api/v2/contacts";
+const SENDBLUE_VERIFY_URL = "https://api.sendblue.co/api/v2/contacts/verify";
+
+export function sendblueContactNeedsVerification(message: string) {
+  return /must be verified before sending/i.test(message);
+}
 
 export function sendblueApiKeyId() {
   return process.env.SENDBLUE_API_KEY_ID?.trim() || process.env.SENDBLUE_API_KEY?.trim() || "";
@@ -78,18 +84,41 @@ export async function sendblueStatus(): Promise<SendblueStatus> {
   }
 }
 
-async function sendblueTextLocal(to: string, content: string) {
+function sendblueHeaders() {
+  return {
+    "Content-Type": "application/json",
+    "sb-api-key-id": sendblueApiKeyId(),
+    "sb-api-secret-key": sendblueApiSecret(),
+  };
+}
+
+async function registerSendblueContact(to: string) {
+  const headers = sendblueHeaders();
+  await fetch(SENDBLUE_CONTACTS_URL, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      number: to,
+      sendblue_number: sendblueFromNumber(),
+      update_if_exists: true,
+    }),
+  });
+  await fetch(SENDBLUE_VERIFY_URL, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ number: to }),
+  });
+}
+
+async function postSendblueMessage(to: string, content: string) {
   const response = await fetch(SENDBLUE_SEND_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "sb-api-key-id": sendblueApiKeyId(),
-      "sb-api-secret-key": sendblueApiSecret(),
-    },
+    headers: sendblueHeaders(),
     body: JSON.stringify({
       from_number: sendblueFromNumber(),
       number: to,
       content,
+      allow_sms: true,
     }),
   });
 
@@ -122,6 +151,17 @@ async function sendblueTextLocal(to: string, content: string) {
     to,
     handle: typeof payload.message_handle === "string" ? payload.message_handle : "",
   };
+}
+
+async function sendblueTextLocal(to: string, content: string) {
+  const first = await postSendblueMessage(to, content);
+  if (first.ok || !sendblueContactNeedsVerification(first.error)) return first;
+  try {
+    await registerSendblueContact(to);
+  } catch {
+    return first;
+  }
+  return postSendblueMessage(to, content);
 }
 
 async function sendblueTextViaFunction(to: string, content: string) {

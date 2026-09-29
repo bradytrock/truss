@@ -1,8 +1,15 @@
 import { applyAutomationMerge, type Automation, type AutomationAction, type AutomationMergeContext } from "@/lib/automations";
 import { resolveJobValue } from "@/lib/automations/job-effects";
-import { sendResendEmail } from "@/lib/resend-mail";
+import { RESEND_FROM_ADDRESS, sendResendEmail } from "@/lib/resend-mail";
 import { sendblueText } from "@/lib/sendblue";
 import type { WorkColumn } from "@/lib/work-board";
+
+export function automationEmailText(subject: string, body: string) {
+  const title = subject.trim();
+  const message = body.trim();
+  if (title && message) return `${title}\n\n${message}`;
+  return title || message;
+}
 
 export type ExecuteActionResult = {
   ok: boolean;
@@ -27,6 +34,7 @@ export async function executeAutomationActions(input: {
   dryRun?: boolean;
 }): Promise<ExecuteActionResult> {
   const notes: string[] = [];
+  const errors: string[] = [];
   let stageChanged: WorkColumn | null = null;
   for (const action of input.automation.actions) {
     if (input.dryRun) {
@@ -34,11 +42,16 @@ export async function executeAutomationActions(input: {
       continue;
     }
     const result = await runAction(action, input);
-    if (!result.ok) return result;
     if (result.stageChanged) stageChanged = result.stageChanged;
     if (result.delivery) notes.push(result.delivery);
+    if (!result.ok) errors.push(result.error || "That action failed.");
   }
-  return { ok: true, delivery: notes.join(" · "), error: "", stageChanged };
+  return {
+    ok: errors.length === 0,
+    delivery: notes.join(" · "),
+    error: errors.join(" · "),
+    stageChanged,
+  };
 }
 
 async function runAction(
@@ -125,6 +138,17 @@ async function runAction(
     }
   }
 
+  const phone =
+    to === "phone"
+      ? action.phone
+      : to === "email"
+        ? ""
+        : to === "customer"
+          ? input.customerPhone
+          : to === "staff"
+            ? staff?.phone
+            : input.ownerPhone;
+
   if (action.kind === "send_email") {
     const email =
       to === "email"
@@ -134,26 +158,26 @@ async function runAction(
           : to === "staff"
             ? staff?.email
             : input.ownerEmail;
-    if (!email) return { ok: false, delivery: "", error: "No email address for that recipient." };
+    const text = automationEmailText(subject || "A note from your contractor", body);
+    if (phone && text) {
+      const texted = await sendblueText({ to: phone, content: text });
+      if (texted.ok && !texted.mocked) {
+        return { ok: true, delivery: "Sent with SendBlue", error: "" };
+      }
+      if (!texted.ok && !email) return { ok: false, delivery: "", error: texted.error };
+    }
+    if (!email) return { ok: false, delivery: "", error: "No email address or mobile number for that recipient." };
     const result = await sendResendEmail({
       to: email,
       subject: subject || "A note from your contractor",
       text: body,
       html: `<p>${body.replace(/\n/g, "<br/>")}</p>`,
-      replyTo: input.ownerEmail,
+      replyTo: input.ownerEmail || RESEND_FROM_ADDRESS,
     });
     if (!result.ok) return { ok: false, delivery: "", error: result.error };
     return { ok: true, delivery: result.mocked ? "Email mocked" : "Email sent", error: "" };
   }
 
-  const phone =
-    to === "phone"
-      ? action.phone
-      : to === "customer"
-        ? input.customerPhone
-        : to === "staff"
-          ? staff?.phone
-          : input.ownerPhone;
   if (!phone) return { ok: false, delivery: "", error: "No mobile number for that recipient." };
   const result = await sendblueText({ to: phone, content: body });
   if (!result.ok) return { ok: false, delivery: "", error: result.error };

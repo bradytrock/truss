@@ -780,11 +780,16 @@ function ActionCard({
         />
       ) : null}
       {action.kind === "send_email" ? (
-        <Input
-          value={action.subject ?? ""}
-          onChange={(event) => onChange({ subject: event.target.value })}
-          placeholder="Subject"
-        />
+        <>
+          <Input
+            value={action.subject ?? ""}
+            onChange={(event) => onChange({ subject: event.target.value })}
+            placeholder="Subject"
+          />
+          <p className="text-xs text-muted-foreground">
+            Goes out as a SendBlue text to that person&apos;s mobile. Email is the backup if the text cannot send.
+          </p>
+        </>
       ) : null}
       {action.kind === "create_task" ? (
         <Input
