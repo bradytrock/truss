@@ -153,7 +153,14 @@ assert.deepEqual(
     estimateRow({ id: "v", status: "viewed" }),
     signed,
   ]),
-  ["signed", "viewed", "sent"],
+  ["signed"],
+);
+assert.deepEqual(
+  boardEstimateTags([
+    estimateRow({ id: "s", status: "sent" }),
+    estimateRow({ id: "v", status: "viewed" }),
+  ]),
+  ["viewed"],
 );
 assert.deepEqual(
   boardEstimateTags([
