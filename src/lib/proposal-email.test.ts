@@ -23,6 +23,7 @@ assert.match(html, /Job address/);
 assert.match(html, /100 Main St/);
 assert.match(html, /Valid through/);
 assert.match(html, /Review &amp; sign/);
+assert.doesNotMatch(html, /Takes about two minutes\. No account or app required\./);
 assert.match(html, /https:\/\/app\.example\.com\/e\/token/);
 assert.doesNotMatch(html, />Scope</);
 assert.doesNotMatch(html, /Restoration/);
