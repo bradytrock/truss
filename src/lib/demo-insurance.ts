@@ -19,7 +19,9 @@ export const extraJobInsurance: JobInsurance[] = [
     overheadProfit: 0,
     mortgageCompany: "Chase",
     loanNumber: "441902",
-    adjusterContactId: "con_summit_al",
+    adjusterName: "Al Brennan",
+    adjusterEmail: "al@summitclaims.co",
+    adjusterPhone: "(720) 555-8801",
     notes: "ACV check is with the mortgage company. Depreciation releases after the completion photos.",
     supplements: [
       {
@@ -64,7 +66,9 @@ export const extraJobInsurance: JobInsurance[] = [
     overheadProfit: 4200,
     mortgageCompany: "",
     loanNumber: "",
-    adjusterContactId: "con_summit_nina",
+    adjusterName: "Nina Cho",
+    adjusterEmail: "nina@summitclaims.co",
+    adjusterPhone: "(720) 555-8808",
     notes: "Dry-out is approved. Cabinet supplement is on the rebuild job.",
     supplements: [],
     checks: [
@@ -98,7 +102,9 @@ export const extraJobInsurance: JobInsurance[] = [
     overheadProfit: 2800,
     mortgageCompany: "",
     loanNumber: "",
-    adjusterContactId: "con_summit_nina",
+    adjusterName: "Nina Cho",
+    adjusterEmail: "nina@summitclaims.co",
+    adjusterPhone: "(720) 555-8808",
     notes: "Deductible was taken on the dry-out. Nina still wants the contents list before millwork.",
     supplements: [
       {
@@ -132,7 +138,9 @@ export const extraJobInsurance: JobInsurance[] = [
     overheadProfit: 0,
     mortgageCompany: "Wells Fargo",
     loanNumber: "88211",
-    adjusterContactId: "con_summit_al",
+    adjusterName: "Al Brennan",
+    adjusterEmail: "al@summitclaims.co",
+    adjusterPhone: "(720) 555-8801",
     notes: "Al wants the two skylights on a supplement before Drew signs.",
     supplements: [
       {
@@ -166,7 +174,9 @@ export const extraJobInsurance: JobInsurance[] = [
     overheadProfit: 0,
     mortgageCompany: "US Bank",
     loanNumber: "19022",
-    adjusterContactId: "con_summit_al",
+    adjusterName: "Al Brennan",
+    adjusterEmail: "al@summitclaims.co",
+    adjusterPhone: "(720) 555-8801",
     notes: "Job stays on hold until the carrier releases the supplement.",
     supplements: [
       {
@@ -200,7 +210,9 @@ export const extraJobInsurance: JobInsurance[] = [
     overheadProfit: 18600,
     mortgageCompany: "Mr. Cooper",
     loanNumber: "66210",
-    adjusterContactId: "con_summit_nina",
+    adjusterName: "Nina Cho",
+    adjusterEmail: "nina@summitclaims.co",
+    adjusterPhone: "(720) 555-8808",
     notes: "Structure is sound. Contents pack-out stays with the owner.",
     supplements: [
       {
@@ -245,7 +257,9 @@ export const extraJobInsurance: JobInsurance[] = [
     overheadProfit: 0,
     mortgageCompany: "",
     loanNumber: "",
-    adjusterContactId: null,
+    adjusterName: "",
+    adjusterEmail: "",
+    adjusterPhone: "",
     notes: "Depreciation released with the completion photos.",
     supplements: [],
     checks: [

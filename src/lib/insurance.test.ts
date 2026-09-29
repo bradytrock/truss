@@ -3,6 +3,7 @@ import {
   claimTotals,
   emptyJobInsurance,
   insuranceActivityNote,
+  jobInsurancePayload,
   parseChecks,
   parseSupplements,
   supplementIsOpen,
@@ -104,5 +105,19 @@ assert.match(moved ?? "", /Skylights/);
 assert.match(moved ?? "", /\$2,100/);
 assert.match(moved ?? "", /8821/);
 assert.equal(insuranceActivityNote(claim, { ...claim, notes: "Called Al." }), null);
+
+const payload = jobInsurancePayload(
+  {
+    ...emptyJobInsurance("job_1", "ins_1"),
+    adjusterName: "  Al Brennan ",
+    adjusterEmail: " al@summitclaims.co ",
+    adjusterPhone: " (720) 555-8801 ",
+  },
+  "company_1",
+);
+assert.equal(payload.adjuster_name, "Al Brennan");
+assert.equal(payload.adjuster_email, "al@summitclaims.co");
+assert.equal(payload.adjuster_phone, "(720) 555-8801");
+assert.equal("adjuster_contact_id" in payload, false);
 
 console.log("insurance.test.ts ok");

@@ -1230,6 +1230,7 @@ export function JobRecord({
                 <>
                   <p>
                     {claim.claimNumber || "No claim number"}
+                    {claim.adjusterName ? ` · ${claim.adjusterName}` : ""}
                     {claimMath.openCount ? ` · ${claimMath.openCount} supplement${claimMath.openCount === 1 ? "" : "s"} open` : ""}
                   </p>
                   <p className="mt-1">{formatCurrencyFull(claimMath.outstanding)} still to collect</p>

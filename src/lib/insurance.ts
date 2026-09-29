@@ -103,7 +103,9 @@ export interface JobInsurance {
   overheadProfit: number;
   mortgageCompany: string;
   loanNumber: string;
-  adjusterContactId: string | null;
+  adjusterName: string;
+  adjusterEmail: string;
+  adjusterPhone: string;
   notes: string;
   supplements: ClaimSupplement[];
   checks: ClaimCheck[];
@@ -214,7 +216,9 @@ export function emptyJobInsurance(jobId: string, id?: string): JobInsurance {
     overheadProfit: 0,
     mortgageCompany: "",
     loanNumber: "",
-    adjusterContactId: null,
+    adjusterName: "",
+    adjusterEmail: "",
+    adjusterPhone: "",
     notes: "",
     supplements: [],
     checks: [],
@@ -242,7 +246,6 @@ export function claimTotals(claim: Pick<JobInsurance, "rcv" | "deductible" | "su
 }
 
 export function jobInsurancePayload(claim: JobInsurance, companyId: string) {
-  const adjuster = claim.adjusterContactId?.trim() ?? "";
   return {
     id: claim.id,
     company_id: companyId,
@@ -261,9 +264,9 @@ export function jobInsurancePayload(claim: JobInsurance, companyId: string) {
     overhead_profit: claim.overheadProfit,
     mortgage_company: claim.mortgageCompany.trim(),
     loan_number: claim.loanNumber.trim(),
-    adjuster_contact_id: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(adjuster)
-      ? adjuster
-      : null,
+    adjuster_name: claim.adjusterName.trim(),
+    adjuster_email: claim.adjusterEmail.trim(),
+    adjuster_phone: claim.adjusterPhone.trim(),
     notes: claim.notes,
     supplements: claim.supplements,
     checks: claim.checks,

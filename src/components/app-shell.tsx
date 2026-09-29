@@ -648,7 +648,7 @@ function SearchTrigger() {
                 return (
                   <CommandItem
                     key={claim.id}
-                    value={`${claim.carrier} ${claim.claimNumber} ${claim.policyNumber} ${job?.name ?? ""} ${job?.code ?? ""} supplement`}
+                    value={`${claim.carrier} ${claim.claimNumber} ${claim.policyNumber} ${claim.adjusterName} ${claim.adjusterEmail} ${phoneSearchText(claim.adjusterPhone)} ${job?.name ?? ""} ${job?.code ?? ""} supplement`}
                     onSelect={() => {
                       setOpen(false);
                       router.push(jobRecordHref(claim.jobId, { tab: "insurance" }));

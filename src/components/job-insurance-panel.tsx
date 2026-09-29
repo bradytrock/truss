@@ -1,11 +1,11 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
-import Link from "next/link";
+import { useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { PhoneInput } from "@/components/phone-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -72,7 +72,6 @@ export function JobInsurancePanel({ job, readOnly = false }: { job: Job; readOnl
       job={job}
       saved={saved}
       readOnly={readOnly}
-      contacts={crm.contacts}
       onSave={crm.saveJobInsurance}
     />
   );
@@ -82,28 +81,17 @@ function ClaimEditor({
   job,
   saved,
   readOnly,
-  contacts,
   onSave,
 }: {
   job: Job;
   saved: JobInsurance | undefined;
   readOnly: boolean;
-  contacts: ReturnType<typeof useCrm>["contacts"];
   onSave: (claim: JobInsurance) => Promise<JobInsurance | null>;
 }) {
   const [draft, setDraft] = useState<JobInsurance | null>(saved ?? null);
   const [saving, setSaving] = useState(false);
 
   const totals = draft ? claimTotals(draft) : null;
-  const adjusters = useMemo(() => {
-    const related = new Set(job.relatedContactIds);
-    return contacts
-      .filter((contact) => {
-        const title = contact.title.toLowerCase();
-        return contact.isReferralPartner || title.includes("adjuster") || related.has(contact.id) || contact.id === draft?.adjusterContactId;
-      })
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [contacts, draft?.adjusterContactId, job.relatedContactIds]);
 
   async function persist(next: JobInsurance) {
     if (readOnly) return;
@@ -210,33 +198,36 @@ function ClaimEditor({
             </SelectContent>
           </Select>
         </Field>
-        <Field label="Adjuster">
-          <Select
-            value={draft.adjusterContactId || "none"}
-            disabled={readOnly}
-            onValueChange={(value) => patch({ adjusterContactId: !value || value === "none" ? null : value })}
-            items={[
-              { value: "none", label: "No adjuster" },
-              ...adjusters.map((contact) => ({
-                value: contact.id,
-                label: contact.title ? `${contact.name} · ${contact.title}` : contact.name,
-              })),
-            ]}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Adjuster" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">No adjuster</SelectItem>
-              {adjusters.map((contact) => (
-                <SelectItem key={contact.id} value={contact.id}>
-                  {contact.name}
-                  {contact.title ? ` · ${contact.title}` : ""}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
+        <div className="grid gap-4 sm:grid-cols-3 md:col-span-2">
+          <Field label="Adjuster">
+            <Input
+              value={draft.adjusterName}
+              disabled={readOnly}
+              autoComplete="off"
+              placeholder="Name"
+              onChange={(event) => patch({ adjusterName: event.target.value })}
+            />
+          </Field>
+          <Field label="Adjuster email">
+            <Input
+              type="email"
+              value={draft.adjusterEmail}
+              disabled={readOnly}
+              autoComplete="off"
+              placeholder="name@carrier.com"
+              onChange={(event) => patch({ adjusterEmail: event.target.value })}
+            />
+          </Field>
+          <Field label="Adjuster phone">
+            <PhoneInput
+              value={draft.adjusterPhone}
+              disabled={readOnly}
+              autoComplete="off"
+              placeholder="(720) 555-0100"
+              onValueChange={(adjusterPhone) => patch({ adjusterPhone })}
+            />
+          </Field>
+        </div>
         <Field label="Mortgage company">
           <Input value={draft.mortgageCompany} disabled={readOnly} onChange={(event) => patch({ mortgageCompany: event.target.value })} />
         </Field>
@@ -534,14 +525,10 @@ function ClaimEditor({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">
-          {draft.adjusterContactId ? (
-            <Link href={`/contacts?contact=${draft.adjusterContactId}`} className="hover:underline">
-              Open the adjuster
-            </Link>
-          ) : (
-            "Pick an adjuster from Partners when you have one."
-          )}
-          {draft.dateOfLoss ? ` · Loss ${formatDate(draft.dateOfLoss)}` : ""}
+          <AdjusterLine claim={draft} />
+          {draft.dateOfLoss
+            ? `${draft.adjusterName.trim() || draft.adjusterEmail.trim() || draft.adjusterPhone.trim() ? " · " : ""}Loss ${formatDate(draft.dateOfLoss)}`
+            : ""}
         </p>
         {readOnly ? null : (
           <Button type="button" disabled={saving} onClick={() => void persist(draft)}>
@@ -550,6 +537,34 @@ function ClaimEditor({
         )}
       </div>
     </div>
+  );
+}
+
+function AdjusterLine({ claim }: { claim: JobInsurance }) {
+  const name = claim.adjusterName.trim();
+  const email = claim.adjusterEmail.trim();
+  const phone = claim.adjusterPhone.trim();
+  if (!name && !email && !phone) return null;
+  return (
+    <>
+      {name ? <span>{name}</span> : null}
+      {email ? (
+        <>
+          {name ? " · " : null}
+          <a href={`mailto:${email}`} className="hover:underline">
+            {email}
+          </a>
+        </>
+      ) : null}
+      {phone ? (
+        <>
+          {name || email ? " · " : null}
+          <a href={`tel:${phone.replace(/[^\d+]/g, "")}`} className="hover:underline">
+            {phone}
+          </a>
+        </>
+      ) : null}
+    </>
   );
 }
 

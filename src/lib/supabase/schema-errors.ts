@@ -236,6 +236,7 @@ export function missingForecastedExpensesMessage() {
 }
 
 export const JOB_INSURANCE_SQL = "supabase/migrations/20260929180000_job_insurance.sql";
+export const JOB_INSURANCE_ADJUSTER_SQL = "supabase/migrations/20260929182000_job_insurance_adjuster.sql";
 
 export function isMissingJobInsurance(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -250,7 +251,7 @@ export function isMissingJobInsurance(error: { message?: string; code?: string }
 }
 
 export function missingJobInsuranceMessage() {
-  return `Saved in this browser. Run ${JOB_INSURANCE_SQL} in the SQL editor so claims, supplements, and insurance checks stay on the job.`;
+  return `Saved in this browser. Run ${JOB_INSURANCE_SQL}, then ${JOB_INSURANCE_ADJUSTER_SQL}, in the SQL editor so the claim and its adjuster stay on the job.`;
 }
 
 export function isMissingOriginator(error: { message?: string; code?: string } | null | undefined) {

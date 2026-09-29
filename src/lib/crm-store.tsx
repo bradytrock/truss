@@ -7871,6 +7871,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         id: claim.id || crypto.randomUUID(),
         carrier: claim.carrier.trim(),
         claimNumber: claim.claimNumber.trim(),
+        adjusterName: claim.adjusterName.trim(),
+        adjusterEmail: claim.adjusterEmail.trim(),
+        adjusterPhone: storedPhone(claim.adjusterPhone),
         updatedAt: new Date().toISOString(),
       };
       const previous = (state.jobInsurance ?? []).find((item) => item.jobId === next.jobId || item.id === next.id);
