@@ -58,6 +58,8 @@ assert.equal(
     contactPhone: "",
     contactEmail: "",
     reviewUrl: "",
+    jobValue: "",
+    estimateTotal: "",
   }),
   "Hi Pat",
 );
@@ -69,7 +71,7 @@ assert.equal(
   summarizeTrigger("job_stage_changed", { stage: "complete" }),
   "When a job moves to Complete",
 );
-assert.match(summarizeAutomation({ ...automation, actions: [sms] }), /invoice is paid → Send text/);
+assert.match(summarizeAutomation({ ...automation, actions: [sms] }), /invoice is paid → Text the customer/);
 
 assert.equal(
   automationMatchesEvent(
@@ -147,5 +149,42 @@ const delayed = plannedRunsForEvent({
 });
 assert.equal(delayed[0]?.status, "scheduled");
 assert.ok(delayed[0]?.scheduledFor);
+
+const won = {
+  ...rule,
+  triggerKind: "estimate_won" as const,
+  requiresConfirmation: false,
+  actions: [{ id: "v1", kind: "set_job_value" as const, valueMode: "estimate" as const }],
+};
+assert.equal(validateAutomationDraft(won, { smsConfigured: false }).ok, true);
+assert.equal(defaultRequiresConfirmation(won.actions), false);
+assert.equal(
+  validateAutomationDraft({
+    ...won,
+    actions: [{ id: "p1", kind: "send_sms", to: "phone", body: "Hi", phone: "555" }],
+  }).ok,
+  false,
+);
+assert.equal(
+  automationMatchesEvent({ ...won, enabled: true } as Automation, { kind: "estimate_won", estimateId: "e1" }),
+  true,
+);
+assert.equal(
+  automationMatchesEvent({ ...won, enabled: true, triggerKind: "estimate_lost" } as Automation, {
+    kind: "estimate_sent",
+  }),
+  false,
+);
+assert.match(summarizeTrigger("estimate_sent", {}), /proposal is sent/);
+assert.match(summarizeTrigger("estimate_lost", {}), /proposal is lost/);
+
+const valued = plannedRunsForEvent({
+  event: { kind: "estimate_won", jobId: "j1", estimateId: "e1" },
+  book: { ...book, automations: [won] } as never,
+  company: { name: "Truss", phone: "555" } as never,
+});
+assert.equal(valued.length, 1);
+assert.equal(valued[0]?.status, "confirmed");
+assert.match(valued[0]?.renderedPreview ?? "", /proposal total/);
 
 console.log("automations.test.ts ok");

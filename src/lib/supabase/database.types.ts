@@ -2932,6 +2932,24 @@ export type Database = {
         Args: { p_run: Json };
         Returns: Json;
       };
+      automation_apply_job: {
+        Args: {
+          p_job_id: string;
+          p_set_value: boolean;
+          p_value: number;
+          p_stage: string;
+          p_note: string;
+        };
+        Returns: Json;
+      };
+      automation_estimate_bundle: {
+        Args: { p_estimate_id: string };
+        Returns: Json;
+      };
+      automation_share_context: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
       due_task_reminders: {
         Args: Record<string, never>;
         Returns: {

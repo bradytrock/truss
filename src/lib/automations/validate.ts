@@ -1,3 +1,4 @@
+import { looksLikePhone } from "@/lib/phone";
 import { canonicalizeWorkColumn } from "@/lib/work-board";
 import { unknownAutomationMergeFields } from "@/lib/automations/merge";
 import {
@@ -19,10 +20,9 @@ export type AutomationValidation = {
 };
 
 export function isCustomerFacingAction(action: AutomationAction) {
-  return (
-    (action.kind === "send_sms" || action.kind === "send_email") &&
-    (action.to ?? "customer") === "customer"
-  );
+  if (action.kind !== "send_sms" && action.kind !== "send_email") return false;
+  const to = action.to ?? "customer";
+  return to === "customer" || to === "phone" || to === "email";
 }
 
 export function automationNeedsSmsNumber(actions: AutomationAction[]) {
@@ -129,6 +129,18 @@ function validateAction(action: AutomationAction) {
     if (!action.body?.trim()) return "Write the email.";
   }
   if (action.kind === "create_task" && !action.title?.trim()) return "Name the task.";
+  if (action.kind === "add_note" && !action.body?.trim()) return "Write the note.";
+  if (action.kind === "set_job_value") {
+    const mode = action.valueMode ?? "estimate";
+    if (mode === "amount") {
+      const amount = Number(action.amount);
+      if (!Number.isFinite(amount) || amount < 0) return "Enter a job value of zero or more.";
+    }
+  }
+  if (action.kind === "set_job_stage") {
+    const stage = canonicalizeWorkColumn(String(action.stage ?? ""));
+    if (!stage || stage === "deleted") return "Pick a stage.";
+  }
   if (action.kind === "webhook") {
     try {
       const url = new URL(action.url ?? "");
@@ -137,8 +149,10 @@ function validateAction(action: AutomationAction) {
       return "Enter a webhook URL.";
     }
   }
-  if ((action.to === "staff" || action.kind === "notify_staff") && action.to === "staff" && !action.staffId) {
-    return "Pick who to notify.";
+  if (action.to === "staff" && !action.staffId) return "Pick who receives this.";
+  if (action.to === "phone" && !looksLikePhone(action.phone ?? "")) return "Enter a mobile number.";
+  if (action.to === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((action.email ?? "").trim())) {
+    return "Enter an email address.";
   }
   return "";
 }

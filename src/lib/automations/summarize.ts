@@ -1,3 +1,4 @@
+import { describeJobValue } from "@/lib/automations/job-effects";
 import { WORK_COLUMN_LABELS, canonicalizeWorkColumn, isWorkColumn } from "@/lib/work-board";
 import {
   AUTOMATION_ACTION_LABELS,
@@ -32,8 +33,14 @@ export function summarizeTrigger(
       return `When ${days} day${days === 1 ? "" : "s"} after a job enters ${stage}`;
     case "invoice_paid":
       return "When an invoice is paid";
+    case "estimate_sent":
+      return "When a proposal is sent";
     case "estimate_sent_after_days":
-      return `When ${days} day${days === 1 ? "" : "s"} after an estimate is sent`;
+      return `When ${days} day${days === 1 ? "" : "s"} after a proposal is sent`;
+    case "estimate_won":
+      return "When a proposal is won";
+    case "estimate_lost":
+      return "When a proposal is lost";
     case "event_in_days":
       return `When ${days} day${days === 1 ? "" : "s"} before a calendar event`;
     default:
@@ -42,7 +49,37 @@ export function summarizeTrigger(
 }
 
 export function summarizeAction(action: AutomationAction) {
-  return AUTOMATION_ACTION_LABELS[action.kind] ?? action.kind;
+  switch (action.kind) {
+    case "set_job_value":
+      return describeJobValue(action, null).replace(/ \(.*\)$/, "");
+    case "set_job_stage":
+      return `Move the job to ${stageDisplayName(action.stage)}`;
+    case "add_note":
+      return "Add a job note";
+    case "send_sms":
+      return `Text ${recipientLabel(action)}`;
+    case "send_email":
+      return `Email ${recipientLabel(action)}`;
+    case "notify_staff":
+      return action.to === "staff" ? "Text a teammate" : "Text the job owner";
+    default:
+      return AUTOMATION_ACTION_LABELS[action.kind] ?? action.kind;
+  }
+}
+
+function recipientLabel(action: AutomationAction) {
+  switch (action.to) {
+    case "rep":
+      return "the job owner";
+    case "staff":
+      return "a teammate";
+    case "phone":
+      return "a phone number";
+    case "email":
+      return "an email address";
+    default:
+      return "the customer";
+  }
 }
 
 export function summarizeAutomation(

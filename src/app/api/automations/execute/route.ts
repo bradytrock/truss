@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { executeAutomationActions } from "@/lib/automations/execute";
-import { mergeForJob } from "@/lib/automations/queue";
-import { mapAutomation, mapAutomationRun, mapCompany } from "@/lib/supabase/mappers";
+import { estimateTotalForContext, mergeForJob, runsAfterStageChange } from "@/lib/automations/queue";
+import { automationRunInsertPayload, mapAutomation, mapAutomationRun, mapCompany } from "@/lib/supabase/mappers";
 import { createClient } from "@/lib/supabase/server";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
+import { patchForWorkColumn, workColumnFor } from "@/lib/work-board";
 
 export const runtime = "nodejs";
 
@@ -45,57 +46,146 @@ export async function POST(request: Request) {
   }
 
   const { data: profile } = await supabase.from("profiles").select("company_id").eq("id", user.id).maybeSingle();
-  const companyId = profile?.company_id;
-  if (!companyId || companyId !== run.companyId) {
+  const profileCompanyId = profile?.company_id;
+  if (!profileCompanyId || profileCompanyId !== run.companyId) {
     return NextResponse.json({ error: "Wrong company." }, { status: 403 });
   }
+  const companyIdForRun: string = profileCompanyId;
 
-  const { data: companyRow } = await supabase.from("companies").select("*").eq("id", companyId).maybeSingle();
+  const { data: companyRow } = await supabase.from("companies").select("*").eq("id", companyIdForRun).maybeSingle();
   if (!companyRow) return NextResponse.json({ error: "Company missing." }, { status: 404 });
-  const book = await fetchCompanyBook(supabase, companyId);
-  const job = run.jobId ? book.state.jobs.find((item) => item.id === run.jobId) : undefined;
-  const contact = job ? book.state.contacts.find((item) => item.id === job.primaryContactId) : undefined;
-  const owner = job ? book.state.staff.find((item) => item.id === job.ownerStaffId) : undefined;
-  const merge = mergeForJob({ book: book.state, company: mapCompany(companyRow), job });
+  const company = mapCompany(companyRow);
 
-  await supabase.from("automation_runs").update({ status: "running", updated_at: new Date().toISOString() }).eq("id", run.id);
+  async function perform(currentRunId: string, depth: number): Promise<{ ok: boolean; delivery: string; error: string; status: number }> {
+    const loaded = currentRunId === run.id
+      ? { run, automation }
+      : await loadRun(currentRunId);
+    if (!loaded) return { ok: false, error: "That run is gone.", delivery: "", status: 404 };
+    if (!loaded.automation.enabled) return { ok: false, error: "That automation is paused.", delivery: "", status: 409 };
 
-  const result = await executeAutomationActions({
-    automation,
-    merge,
-    customerPhone: contact?.phone,
-    customerEmail: contact?.email,
-    ownerPhone: owner?.phone,
-    ownerEmail: owner?.email,
-    staffById: (id) => book.state.staff.find((item) => item.id === id),
-    createTask: async (title) => {
-      await supabase.from("tasks").insert({
-        company_id: companyId,
-        title,
-        due_at: new Date().toISOString(),
-        related_type: job ? "job" : null,
-        related_id: job?.id ?? null,
-        assignee: owner?.name ?? "",
-      });
-    },
-  });
+    const book = await fetchCompanyBook(supabase, companyIdForRun);
+    const job = loaded.run.jobId ? book.state.jobs.find((item) => item.id === loaded.run.jobId) : undefined;
+    let jobState = job;
+    let opportunity = job?.opportunityId
+      ? book.state.opportunities.find((item) => item.id === job.opportunityId)
+      : undefined;
+    const contact = job ? book.state.contacts.find((item) => item.id === job.primaryContactId) : undefined;
+    const owner = job ? book.state.staff.find((item) => item.id === job.ownerStaffId) : undefined;
+    const estimateTotal = estimateTotalForContext(book.state, job, loaded.run.estimateId);
+    const merge = mergeForJob({ book: book.state, company, job, estimateTotal });
 
-  await supabase
-    .from("automation_runs")
-    .update({
-      status: result.ok ? "sent" : "failed",
-      delivery_status: result.delivery,
-      error_text: result.error,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", run.id);
-  if (result.ok) {
     await supabase
-      .from("automations")
-      .update({ last_fired_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq("id", automation.id);
+      .from("automation_runs")
+      .update({ status: "running", updated_at: new Date().toISOString() })
+      .eq("id", loaded.run.id);
+
+    const executed = await executeAutomationActions({
+      automation: loaded.automation,
+      merge,
+      customerPhone: contact?.phone,
+      customerEmail: contact?.email,
+      ownerPhone: owner?.phone,
+      ownerEmail: owner?.email,
+      estimateTotal,
+      staffById: (id) => book.state.staff.find((item) => item.id === id),
+      createTask: async (title) => {
+        const { error } = await supabase.from("tasks").insert({
+          company_id: companyIdForRun,
+          title,
+          due_at: new Date().toISOString().slice(0, 10),
+          related_type: job ? "job" : null,
+          related_id: job?.id ?? null,
+          assignee: owner?.name ?? "",
+        });
+        if (error) throw new Error(error.message);
+      },
+      setJobValue: async (amount) => {
+        if (!jobState) throw new Error("This automation needs a job.");
+        const { error } = await supabase.from("jobs").update({ contract_value: amount }).eq("id", jobState.id);
+        if (error) throw new Error(error.message);
+        jobState = { ...jobState, contractValue: amount };
+        if (opportunity) {
+          const { error: oppError } = await supabase.from("opportunities").update({ value: amount }).eq("id", opportunity.id);
+          if (oppError) throw new Error(oppError.message);
+          opportunity = { ...opportunity, value: amount };
+        }
+      },
+      setJobStage: async (stage) => {
+        if (!jobState) throw new Error("This automation needs a job.");
+        if (workColumnFor(jobState, opportunity) === stage) return false;
+        const next = patchForWorkColumn(stage);
+        if (opportunity && next.stage && opportunity.stage !== next.stage) {
+          const { error } = await supabase.from("opportunities").update({ stage: next.stage }).eq("id", opportunity.id);
+          if (error) throw new Error(error.message);
+          opportunity = { ...opportunity, stage: next.stage };
+        }
+        if (jobState.status !== next.status) {
+          const { error } = await supabase.from("jobs").update({ status: next.status }).eq("id", jobState.id);
+          if (error) throw new Error(error.message);
+          jobState = { ...jobState, status: next.status };
+        }
+        return true;
+      },
+      addNote: async (body) => {
+        if (!jobState) throw new Error("This automation needs a job.");
+        const { error } = await supabase.from("activities").insert({
+          company_id: companyIdForRun,
+          entity_type: "job",
+          entity_id: jobState.id,
+          type: "note",
+          body,
+          author: "Automation",
+        });
+        if (error) throw new Error(error.message);
+      },
+    });
+
+    await supabase
+      .from("automation_runs")
+      .update({
+        status: executed.ok ? "sent" : "failed",
+        delivery_status: executed.delivery,
+        error_text: executed.error,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", loaded.run.id);
+    if (executed.ok) {
+      await supabase
+        .from("automations")
+        .update({ last_fired_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq("id", loaded.automation.id);
+    }
+    if (!executed.ok) return { ok: false, error: executed.error, delivery: "", status: 502 };
+
+    if (executed.stageChanged && jobState && depth < 3) {
+      const snapshot = await fetchCompanyBook(supabase, companyIdForRun);
+      const follow = runsAfterStageChange({
+        book: snapshot.state,
+        company,
+        jobId: jobState.id,
+        stage: executed.stageChanged,
+      });
+      for (const next of follow) {
+        if (next.automationId === loaded.automation.id && loaded.automation.oncePerJob) continue;
+        const { error } = await supabase.from("automation_runs").insert(automationRunInsertPayload(next));
+        if (error) continue;
+        if (next.status === "confirmed") await perform(next.id, depth + 1);
+      }
+    }
+
+    return { ok: true, delivery: executed.delivery, error: "", status: 200 };
   }
 
-  if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 });
+  async function loadRun(currentRunId: string) {
+    const { data: row } = await supabase.from("automation_runs").select("*").eq("id", currentRunId).maybeSingle();
+    if (!row) return null;
+    const mapped = mapAutomationRun(row);
+    const { data: rule } = await supabase.from("automations").select("*").eq("id", mapped.automationId).maybeSingle();
+    if (!rule) return null;
+    return { run: mapped, automation: mapAutomation(rule) };
+  }
+
+  const result = await perform(run.id, 0);
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
   return NextResponse.json({ ok: true, delivery: result.delivery });
 }

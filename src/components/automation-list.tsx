@@ -35,7 +35,7 @@ export function AutomationList() {
   const testJob = jobs.find((job) => job.id === testJobId) ?? jobs[0];
 
   const stats = useMemo(() => {
-    const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const since = Date.now() - 30 * 24 * 60 * 60 * 1000; // eslint-disable-line react-hooks/purity -- 30-day window is a clock read, not render state
     const map = new Map<string, { recent: number; failed: number }>();
     for (const run of runs) {
       if (run.dryRun) continue;
@@ -54,7 +54,7 @@ export function AutomationList() {
       <PageHeader
         eyebrow="Settings"
         title="Automations"
-        description="When something happens in the book, do the next thing — a text, an email, a task, or a ping. Full create and edit is on the web. Phones can pause, resume, and confirm."
+        description="When a proposal is sent, won, or lost — or a job moves — set the value, change the stage, and text whoever should know. Phones can pause, resume, and confirm."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {jobs.length > 0 ? (
@@ -174,6 +174,26 @@ export function AutomationList() {
           })}
         </ul>
       )}
+
+      {templates.length > 0 && automations.length > 0 ? (
+        <div className="space-y-3">
+          <h2 className="text-sm font-medium">Recipes</h2>
+          <TemplateGallery templates={templates} onAdd={async (template) => {
+            const saved = await crm.saveAutomation({
+              name: template.name,
+              description: template.description,
+              triggerKind: template.triggerKind,
+              triggerConfig: template.triggerConfig,
+              conditions: template.conditions,
+              actions: template.actions.map((action) => ({ ...action, id: crypto.randomUUID() })),
+              requiresConfirmation: template.requiresConfirmation,
+              oncePerJob: template.oncePerJob,
+              enabled: true,
+            });
+            if (saved) toast.success("Recipe added. Edit it to match your voice.");
+          }} />
+        </div>
+      ) : null}
     </div>
   );
 }

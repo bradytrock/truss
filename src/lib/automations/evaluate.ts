@@ -18,8 +18,13 @@ export function automationMatchesEvent(automation: Automation, event: Automation
       return event.kind === "job_stage_changed" && sameBoardColumn(event.stage, automation.triggerConfig.stage);
     case "invoice_paid":
       return event.kind === "invoice_paid";
+    case "estimate_sent":
     case "estimate_sent_after_days":
       return event.kind === "estimate_sent";
+    case "estimate_won":
+      return event.kind === "estimate_won";
+    case "estimate_lost":
+      return event.kind === "estimate_lost";
     case "event_in_days":
       return false;
     default:
