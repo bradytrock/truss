@@ -77,9 +77,14 @@ export function ShareEstimateClient({
     if (!fromStore) return;
     setSigning(true);
     try {
-      await crm.acceptEstimate(fromStore.id, input, storeSigner);
+      const status = await crm.acceptEstimate(fromStore.id, input, storeSigner);
+      if (!status) return;
       setSignOpen(false);
-      toast.success("Thank you. This proposal is signed.");
+      toast.success(
+        status === "accepted"
+          ? "Thank you. This proposal is signed."
+          : "Your signature is saved. Waiting on the other homeowner.",
+      );
     } finally {
       setSigning(false);
     }
