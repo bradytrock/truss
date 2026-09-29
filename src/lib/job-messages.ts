@@ -17,9 +17,13 @@ export function contactForPhone(contacts: Contact[], phone: string) {
   return contacts.find((contact) => phonesMatch(contact.phone, phone));
 }
 
+function relatedIds(job: Pick<Job, "relatedContactIds"> | { relatedContactIds?: string[] | null }) {
+  return Array.isArray(job.relatedContactIds) ? job.relatedContactIds : [];
+}
+
 function jobTouchesContact(job: Job, opportunity: Opportunity | undefined, contactId: string) {
   if (job.primaryContactId === contactId) return true;
-  if (job.relatedContactIds.includes(contactId)) return true;
+  if (relatedIds(job).includes(contactId)) return true;
   return Boolean(opportunity && opportunity.primaryContactId === contactId);
 }
 
@@ -42,7 +46,9 @@ export function jobForContact(jobs: Job[], opportunities: Opportunity[], contact
         contactId,
       ),
     )
-    .sort((a, b) => jobRank(a) - jobRank(b) || b.startDate.localeCompare(a.startDate));
+    .sort(
+      (a, b) => jobRank(a) - jobRank(b) || (b.startDate || "").localeCompare(a.startDate || ""),
+    );
   return ranked[0];
 }
 
@@ -71,8 +77,8 @@ export type MessageThread = {
   lastAt: string;
 };
 
-function previewOf(body: string) {
-  const text = body.replace(/\s+/g, " ").trim();
+function previewOf(body: string | null | undefined) {
+  const text = (body ?? "").replace(/\s+/g, " ").trim();
   return text.length > 72 ? `${text.slice(0, 71)}…` : text;
 }
 
@@ -83,7 +89,7 @@ export function messageThreads(
   opportunities: Opportunity[],
 ): MessageThread[] {
   const groups = new Map<string, TextMessage[]>();
-  for (const message of messages) {
+  for (const message of messages ?? []) {
     const key = threadKey(message);
     const list = groups.get(key) ?? [];
     list.push(message);
@@ -91,7 +97,7 @@ export function messageThreads(
   }
   return [...groups.entries()]
     .map(([key, items]) => {
-      const sorted = [...items].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      const sorted = [...items].sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
       const last = sorted[sorted.length - 1];
       const contact =
         contacts.find((item) => item.id === last.contactId) ?? contactForPhone(contacts, last.phone);
@@ -107,26 +113,26 @@ export function messageThreads(
             : undefined);
       return {
         key,
-        phone: toE164(last.phone) || last.phone,
+        phone: toE164(last.phone || "") || last.phone || "",
         contactId: contact?.id ?? last.contactId,
         jobId: job?.id ?? last.jobId,
         opportunityId: opportunity?.id ?? last.opportunityId,
         contact,
         job,
         opportunity,
-        title: contact?.name || toE164(last.phone) || last.phone || "Unknown number",
+        title: contact?.name || toE164(last.phone || "") || last.phone || "Unknown number",
         preview: previewOf(last.body),
         messages: sorted,
-        lastAt: last.createdAt,
+        lastAt: last.createdAt || "",
       };
     })
     .sort((a, b) => b.lastAt.localeCompare(a.lastAt));
 }
 
 export function contactsForTexting(contacts: Contact[]) {
-  return [...contacts]
-    .filter((contact) => looksLikePhone(contact.phone))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  return [...(contacts ?? [])]
+    .filter((contact) => typeof contact?.phone === "string" && looksLikePhone(contact.phone))
+    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
 }
 
 export function filterMessageThreads(threads: MessageThread[], query: string) {

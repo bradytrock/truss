@@ -598,8 +598,8 @@ function Conversation({ messages }: { messages: MessageThread["messages"] }) {
   );
 }
 
-function statusLabel(status: string, direction: "inbound" | "outbound") {
-  const key = status.toLowerCase();
+function statusLabel(status: string | null | undefined, direction: "inbound" | "outbound") {
+  const key = (status ?? "").toLowerCase();
   if (key === "failed" || key === "error" || key === "undelivered") return "Failed";
   if (key === "queued" || key === "sending") return "Sending";
   return direction === "outbound" ? "Sent" : "Received";
