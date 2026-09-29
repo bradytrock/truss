@@ -22,6 +22,7 @@ import { ClaimStatusBadge } from "@/components/job-insurance-panel";
 import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate } from "@/lib/format";
+import { phoneSearchText } from "@/lib/phone";
 import { jobRecordHref } from "@/lib/job-record";
 import {
   CLAIM_STATUS_LABELS,
@@ -55,6 +56,9 @@ export default function InsurancePage() {
           row.claim.carrier,
           row.claim.claimNumber,
           row.claim.policyNumber,
+          row.claim.adjusterName,
+          row.claim.adjusterEmail,
+          phoneSearchText(row.claim.adjusterPhone),
         ]
           .filter(Boolean)
           .join(" ")
@@ -150,6 +154,7 @@ export default function InsurancePage() {
                       <p className="text-xs text-muted-foreground">
                         {row.job?.code}
                         {row.claim.claimNumber ? ` · ${row.claim.claimNumber}` : ""}
+                        {row.claim.adjusterName ? ` · ${row.claim.adjusterName}` : ""}
                         {row.claim.dateOfLoss ? ` · loss ${formatDate(row.claim.dateOfLoss)}` : ""}
                       </p>
                     </TableCell>

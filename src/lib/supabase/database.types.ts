@@ -1129,7 +1129,9 @@ export type Database = {
           overhead_profit: number;
           mortgage_company: string;
           loan_number: string;
-          adjuster_contact_id: string | null;
+          adjuster_name: string;
+          adjuster_email: string;
+          adjuster_phone: string;
           notes: string;
           supplements: Json;
           checks: Json;
@@ -1153,7 +1155,9 @@ export type Database = {
           overhead_profit?: number;
           mortgage_company?: string;
           loan_number?: string;
-          adjuster_contact_id?: string | null;
+          adjuster_name?: string;
+          adjuster_email?: string;
+          adjuster_phone?: string;
           notes?: string;
           supplements?: Json;
           checks?: Json;
