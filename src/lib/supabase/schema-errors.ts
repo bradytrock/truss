@@ -235,6 +235,24 @@ export function missingForecastedExpensesMessage() {
   return `Saved in this browser. Run ${FORECASTED_EXPENSES_SQL} in the SQL editor so forecasted expenses stay on the job.`;
 }
 
+export const JOB_INSURANCE_SQL = "supabase/migrations/20260929180000_job_insurance.sql";
+
+export function isMissingJobInsurance(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("schema cache") ||
+    message.includes("Could not find the") ||
+    message.includes("job_insurance")
+  );
+}
+
+export function missingJobInsuranceMessage() {
+  return `Saved in this browser. Run ${JOB_INSURANCE_SQL} in the SQL editor so claims, supplements, and insurance checks stay on the job.`;
+}
+
 export function isMissingOriginator(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
   const message = error.message ?? "";

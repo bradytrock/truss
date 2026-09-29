@@ -26,6 +26,7 @@ import {
   mapPayment,
   mapExpense,
   mapForecastedExpense,
+  mapJobInsurance,
   mapQbVendor,
   mapVendorFeedback,
   mapVendorPrice,
@@ -116,6 +117,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     companyAuditRes,
     expensesRes,
     forecastedExpensesRes,
+    jobInsuranceRes,
     qbVendorsRes,
     vendorProfilesRes,
     vendorFeedbackRes,
@@ -194,6 +196,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       .select("*")
       .eq("company_id", companyId)
       .order("expected_at", { ascending: false }),
+    supabase.from("job_insurance").select("*").eq("company_id", companyId).order("updated_at", { ascending: false }),
     supabase.from("qb_vendors").select("*").eq("company_id", companyId).order("name"),
     supabase.from("vendor_profiles").select("*").eq("company_id", companyId).order("name"),
     supabase
@@ -316,6 +319,7 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     forecastedExpenses: forecastedExpensesRes.error
       ? []
       : (forecastedExpensesRes.data ?? []).map(mapForecastedExpense),
+    jobInsurance: jobInsuranceRes.error ? [] : (jobInsuranceRes.data ?? []).map(mapJobInsurance),
     qbVendors: qbVendorsRes.error ? [] : (qbVendorsRes.data ?? []).map(mapQbVendor),
     vendorProfiles: vendorProfilesRes.error ? [] : (vendorProfilesRes.data ?? []).map(mapVendorProfile),
     vendorFeedback: vendorFeedbackRes.error ? [] : (vendorFeedbackRes.data ?? []).map(mapVendorFeedback),

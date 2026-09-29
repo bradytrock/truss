@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { LayoutGrid, Menu, Plus, Search } from "lucide-react";
 import { useCrm } from "@/lib/crm-store";
+import { jobRecordHref } from "@/lib/job-record";
 import { phoneSearchText } from "@/lib/phone";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -76,6 +77,7 @@ function navSections(options: { bdOnly: boolean }): NavSection[] {
           { href: "/", label: "Home" },
           { href: "/messages", label: "Inbox" },
           { href: "/jobs", label: "Jobs" },
+          { href: "/insurance", label: "Insurance" },
           { href: "/map", label: "Map" },
           { href: "/contacts", label: "Agents & contacts" },
           { href: "/tasks", label: "Tasks" },
@@ -103,6 +105,7 @@ function navSections(options: { bdOnly: boolean }): NavSection[] {
       items: [
         { href: "/estimates", label: "Estimates" },
         { href: "/invoices", label: "Invoices" },
+        { href: "/insurance", label: "Insurance" },
       ],
     },
     {
@@ -143,6 +146,7 @@ function itemIsActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   if (href === "/accounting") return pathname === "/accounting" || pathname.startsWith("/accounting/");
   if (href === "/jobs") return pathname.startsWith("/jobs") || pathname.startsWith("/material-orders");
+  if (href === "/insurance") return pathname === "/insurance" || pathname.startsWith("/insurance/");
   if (href === "/map") return pathname === "/map" || pathname.startsWith("/map?");
   if (href === "/messages") return isInboxPath(pathname);
   if (href === "/settings") return pathname.startsWith("/settings");
@@ -480,7 +484,7 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
 function SearchTrigger() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const { opportunities, jobs, contacts, estimates, invoices, materialOrders, materialOrderTemplates, viewer, tasks } = useCrm();
+  const { opportunities, jobs, contacts, estimates, invoices, materialOrders, materialOrderTemplates, viewer, tasks, jobInsurance } = useCrm();
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -628,6 +632,36 @@ function SearchTrigger() {
                   {contact.name}
                 </CommandItem>
               ))}
+            </CommandGroup>
+            <CommandGroup heading="Insurance">
+              <CommandItem
+                value="insurance claims supplements checks carrier"
+                onSelect={() => {
+                  setOpen(false);
+                  router.push("/insurance");
+                }}
+              >
+                Insurance desk
+              </CommandItem>
+              {(jobInsurance ?? []).map((claim) => {
+                const job = jobs.find((item) => item.id === claim.jobId);
+                return (
+                  <CommandItem
+                    key={claim.id}
+                    value={`${claim.carrier} ${claim.claimNumber} ${claim.policyNumber} ${job?.name ?? ""} ${job?.code ?? ""} supplement`}
+                    onSelect={() => {
+                      setOpen(false);
+                      router.push(jobRecordHref(claim.jobId, { tab: "insurance" }));
+                    }}
+                  >
+                    <span className="min-w-0 truncate">
+                      {claim.carrier || "Claim"}
+                      {claim.claimNumber ? ` · ${claim.claimNumber}` : ""}
+                    </span>
+                    <span className="ml-auto truncate text-[10px] text-muted-foreground">{job?.name}</span>
+                  </CommandItem>
+                );
+              })}
             </CommandGroup>
             <CommandGroup heading="Estimates">
               {viewer && canManageSettings(viewer.role, viewer) ? (

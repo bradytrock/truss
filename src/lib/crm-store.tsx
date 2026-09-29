@@ -25,7 +25,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingJobInsurance, missingJobInsuranceMessage } from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newPortalToken, portalInviteExpiry, portalUrl } from "@/lib/portal";
@@ -168,6 +168,7 @@ import {
   mapPayment,
   mapExpense,
   mapForecastedExpense,
+  mapJobInsurance,
   expensePatch,
   mapMaterialOrder,
   mapMaterialOrderLine,
@@ -201,6 +202,7 @@ import {
 import { plannedRunsForEvent, previewAutomation } from "@/lib/automations/queue";
 import { validateAutomationDraft, type Automation, type AutomationEvent } from "@/lib/automations";
 import { expenseRequiresJob } from "@/lib/qbwc/work";
+import { insuranceActivityNote, jobInsurancePayload, type JobInsurance } from "@/lib/insurance";
 import {
   NORTHLINE_COMPANY,
   STAGE_LABELS,
@@ -393,6 +395,7 @@ const emptyState: CrmState = {
   photoReports: [],
   expenses: [],
   forecastedExpenses: [],
+  jobInsurance: [],
   materialOrders: [],
   materialOrderLines: [],
   materialOrderTemplates: [],
@@ -726,6 +729,7 @@ async function pruneDuplicateLeadJobs(supabase: ReturnType<typeof createClient>,
         "payments",
         "expenses",
         "forecasted_expenses",
+        "job_insurance",
         "schedule_events",
         "job_photos",
         "job_files",
@@ -1202,6 +1206,7 @@ type CrmContextValue = CrmState & {
     memo: string;
   }) => Promise<ForecastedExpense | null>;
   removeForecastedExpense: (id: string) => Promise<boolean>;
+  saveJobInsurance: (claim: JobInsurance) => Promise<JobInsurance | null>;
   addMaterialOrder: (input: {
     jobId: string;
     vendor?: string;
@@ -1619,6 +1624,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         materialOrders: (book.state.materialOrders ?? []).map((order) => ({
           ...order,
           jobId: remapDroppedJobId(order.jobId, pruned.dropped) ?? order.jobId,
+        })),
+        jobInsurance: (book.state.jobInsurance ?? []).map((claim) => ({
+          ...claim,
+          jobId: remapDroppedJobId(claim.jobId, pruned.dropped) ?? claim.jobId,
         })),
         materialOrderLines: book.state.materialOrderLines ?? [],
       });
@@ -7796,6 +7805,79 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [addActivity, recordCompanyAudit, state.forecastedExpenses],
   );
 
+  const saveJobInsurance = useCallback(
+    async (claim: JobInsurance) => {
+      if (!claim.jobId) {
+        toast.error("This claim needs a job.");
+        return null;
+      }
+      const next: JobInsurance = {
+        ...claim,
+        id: claim.id || crypto.randomUUID(),
+        carrier: claim.carrier.trim(),
+        claimNumber: claim.claimNumber.trim(),
+        updatedAt: new Date().toISOString(),
+      };
+      const previous = (state.jobInsurance ?? []).find((item) => item.jobId === next.jobId || item.id === next.id);
+      const place = (record: JobInsurance) => (current: CrmState) => ({
+        ...current,
+        jobInsurance: [
+          record,
+          ...(current.jobInsurance ?? []).filter((item) => item.jobId !== record.jobId && item.id !== record.id),
+        ],
+      });
+      setState(place(next));
+      const note = insuranceActivityNote(previous, next);
+      const supabase = maybeClient();
+      if (!supabase) {
+        if (note) {
+          await addActivity({ entityType: "job", entityId: next.jobId, type: "note", body: note });
+        }
+        toast.success("Claim saved.");
+        return next;
+      }
+      const payload = {
+        ...jobInsurancePayload(next, user.companyId),
+        supplements: next.supplements as unknown as Json,
+        checks: next.checks as unknown as Json,
+      };
+      let { data, error } = await supabase.from("job_insurance").upsert(payload, { onConflict: "job_id" }).select("*").single();
+      if (error && error.code === "23505") {
+        const retry = await supabase
+          .from("job_insurance")
+          .update(payload)
+          .eq("job_id", next.jobId)
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+      }
+      if (error || !data) {
+        if (error && isMissingJobInsurance(error)) {
+          toast.message(missingJobInsuranceMessage());
+          if (note) {
+            await addActivity({ entityType: "job", entityId: next.jobId, type: "note", body: note });
+          }
+          return next;
+        }
+        setState((current) => {
+          const without = (current.jobInsurance ?? []).filter((item) => item.jobId !== next.jobId && item.id !== next.id);
+          return { ...current, jobInsurance: previous ? [previous, ...without] : without };
+        });
+        toast.error(error?.message ?? "Could not save the claim.");
+        return null;
+      }
+      const saved = mapJobInsurance(data);
+      setState(place(saved));
+      if (note) {
+        await addActivity({ entityType: "job", entityId: saved.jobId, type: "note", body: note });
+      }
+      toast.success(saved.claimNumber ? `Claim ${saved.claimNumber} saved.` : "Claim saved.");
+      return saved;
+    },
+    [addActivity, state.jobInsurance, user.companyId],
+  );
+
   const addMaterialOrder = useCallback(
     async (input: {
       jobId: string;
@@ -12983,6 +13065,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addExpense,
       addForecastedExpense,
       removeForecastedExpense,
+      saveJobInsurance,
       addMaterialOrder,
       updateMaterialOrder,
       addMaterialOrderLineFromCatalog,
@@ -13173,6 +13256,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addExpense,
       addForecastedExpense,
       removeForecastedExpense,
+      saveJobInsurance,
       addMaterialOrder,
       updateMaterialOrder,
       addMaterialOrderLineFromCatalog,
