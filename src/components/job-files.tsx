@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { CompanyFilePickerList } from "@/components/company-files";
+import { FileDropZone } from "@/components/file-drop-zone";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -43,18 +44,21 @@ export function JobFilesPanel({
   const [attachingFromDirectory, setAttachingFromDirectory] = useState(false);
   const files = (crm.jobFiles ?? []).filter((file) => file.jobId === jobId);
 
-  async function attach(list: FileList | null) {
-    if (!list?.length || disabled) return;
+  async function attach(list: FileList | File[] | null) {
+    const incoming = list ? Array.from(list) : [];
+    if (!incoming.length || disabled) return;
     setUploading(true);
     try {
-      const saved = await crm.addJobFiles(jobId, Array.from(list));
+      const saved = await crm.addJobFiles(jobId, incoming);
       if (saved.length === 1) {
         toast.success(`Attached ${saved[0].name}.`);
       } else if (saved.length > 1) {
         toast.success(`Attached ${saved.length} files.`);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not attach files.");
+      toast.error(
+        error instanceof Error ? error.message : "Could not attach files.",
+      );
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -71,7 +75,11 @@ export function JobFilesPanel({
         setDirectoryOpen(false);
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not attach from directory.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Could not attach from directory.",
+      );
     } finally {
       setAttachingFromDirectory(false);
     }
@@ -91,7 +99,9 @@ export function JobFilesPanel({
       const url = await crm.shareJobFile(file.id);
       if (!url) return;
       await navigator.clipboard.writeText(url);
-      toast.success("Share link copied. Anyone with the link can open this file.");
+      toast.success(
+        "Share link copied. Anyone with the link can open this file.",
+      );
     } catch {
       toast.error("Could not copy that share link.");
     } finally {
@@ -115,10 +125,12 @@ export function JobFilesPanel({
     <section>
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Uploaded files</p>
+          <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">
+            Uploaded files
+          </p>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {files.length === 0
-              ? "No files on this job."
+              ? "Drop files onto this job, or use Attach."
               : `${files.length} file${files.length === 1 ? "" : "s"} · private unless you share a link`}
           </p>
         </div>
@@ -158,8 +170,8 @@ export function JobFilesPanel({
           <DialogHeader>
             <DialogTitle>Company file directory</DialogTitle>
             <DialogDescription>
-              Copy a warranty, product sheet, or template onto this job. The original stays in
-              Settings → File directory.
+              Copy a warranty, product sheet, or template onto this job. The
+              original stays in Settings → File directory.
             </DialogDescription>
           </DialogHeader>
           <CompanyFilePickerList
@@ -168,88 +180,119 @@ export function JobFilesPanel({
           />
         </DialogContent>
       </Dialog>
-      {files.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Attach from your device or copy from the company file directory. Files stay private to
-          signed-in teammates; create a share link only when someone outside needs that one file.
-        </p>
-      ) : (
-        <ul className="space-y-1.5">
-          {files.map((file) => {
-            const shared = Boolean(file.shareToken?.trim());
-            return (
-              <li key={file.id} className="flex items-center gap-2 rounded-md border px-3 py-2">
-                <FileThumb file={file} />
-                <a
-                  href={file.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="min-w-0 flex-1 text-left"
-                  onClick={() => {
-                    void crm.logAudit({
-                      entityType: "job_file",
-                      entityId: file.id,
-                      action: "opened",
-                      after: { name: file.name, url: file.url },
-                      label: file.name,
-                      relatedJobId: file.jobId,
-                    });
-                  }}
-                >
-                  <span className="block truncate text-sm font-medium">{file.name}</span>
-                  <span className="mt-0.5 block text-xs text-muted-foreground">
-                    {[
-                      formatFileSize(file.sizeBytes),
-                      file.createdBy.trim() || null,
-                      formatDate(file.createdAt),
-                      shared ? "shared" : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </span>
-                </a>
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  className="shrink-0"
-                  disabled={disabled || sharingId === file.id}
-                  onClick={() => void copyShareLink(file)}
-                  aria-label={shared ? `Copy share link for ${file.name}` : `Share ${file.name}`}
-                  title={shared ? "Copy share link" : "Create share link"}
-                >
-                  <Link2 className="size-3.5" />
-                </Button>
-                {shared ? (
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    className="shrink-0"
-                    disabled={disabled || sharingId === file.id}
-                    onClick={() => void revokeShare(file)}
-                    aria-label={`Revoke share link for ${file.name}`}
-                    title="Revoke share link"
-                  >
-                    <Link2Off className="size-3.5" />
-                  </Button>
-                ) : null}
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  className="shrink-0"
-                  disabled={disabled}
-                  onClick={() => void remove(file)}
-                  aria-label={`Remove ${file.name}`}
-                >
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <FileDropZone
+        disabled={disabled || uploading || attachingFromDirectory}
+        onFiles={(dropped) => void attach(dropped)}
+      >
+        {(dragOver) => (
+          <div
+            className={cn(
+              "space-y-2 rounded-md border border-dashed px-3 py-3 transition-colors",
+              dragOver ? "border-primary bg-muted/40" : "border-border",
+            )}
+          >
+            <div
+              className={cn("px-1 text-center", files.length === 0 && "py-4")}
+              aria-label="Drop files to attach them to this job"
+            >
+              <p className="text-sm font-medium">
+                {dragOver ? "Drop to attach" : "Drop files here"}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {files.length === 0
+                  ? "PDFs, photos, spreadsheets, and documents. Attach still opens the file picker. Files stay private to signed-in teammates; create a share link only when someone outside needs that one file."
+                  : "Drop more files onto this job, or use Attach."}
+              </p>
+            </div>
+            {files.length > 0 ? (
+              <ul className="space-y-1.5">
+                {files.map((file) => {
+                  const shared = Boolean(file.shareToken?.trim());
+                  return (
+                    <li
+                      key={file.id}
+                      className="flex items-center gap-2 rounded-md border px-3 py-2"
+                    >
+                      <FileThumb file={file} />
+                      <a
+                        href={file.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="min-w-0 flex-1 text-left"
+                        onClick={() => {
+                          void crm.logAudit({
+                            entityType: "job_file",
+                            entityId: file.id,
+                            action: "opened",
+                            after: { name: file.name, url: file.url },
+                            label: file.name,
+                            relatedJobId: file.jobId,
+                          });
+                        }}
+                      >
+                        <span className="block truncate text-sm font-medium">
+                          {file.name}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {[
+                            formatFileSize(file.sizeBytes),
+                            file.createdBy.trim() || null,
+                            formatDate(file.createdAt),
+                            shared ? "shared" : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </a>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        className="shrink-0"
+                        disabled={disabled || sharingId === file.id}
+                        onClick={() => void copyShareLink(file)}
+                        aria-label={
+                          shared
+                            ? `Copy share link for ${file.name}`
+                            : `Share ${file.name}`
+                        }
+                        title={shared ? "Copy share link" : "Create share link"}
+                      >
+                        <Link2 className="size-3.5" />
+                      </Button>
+                      {shared ? (
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          className="shrink-0"
+                          disabled={disabled || sharingId === file.id}
+                          onClick={() => void revokeShare(file)}
+                          aria-label={`Revoke share link for ${file.name}`}
+                          title="Revoke share link"
+                        >
+                          <Link2Off className="size-3.5" />
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        className="shrink-0"
+                        disabled={disabled}
+                        onClick={() => void remove(file)}
+                        aria-label={`Remove ${file.name}`}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : null}
+          </div>
+        )}
+      </FileDropZone>
     </section>
   );
 }
@@ -280,7 +323,8 @@ function FileThumb({ file }: { file: JobFile }) {
 function iconForFile(file: JobFile) {
   const mime = file.mimeType.toLowerCase();
   const name = file.name.toLowerCase();
-  if (mime.startsWith("video/") || /\.(mp4|mov|m4v|webm)$/.test(name)) return Film;
+  if (mime.startsWith("video/") || /\.(mp4|mov|m4v|webm)$/.test(name))
+    return Film;
   if (
     mime.includes("spreadsheet") ||
     mime.includes("excel") ||
