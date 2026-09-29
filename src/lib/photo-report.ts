@@ -149,7 +149,12 @@ export function layoutCapacity(layout: PhotoPageLayout) {
 }
 
 export function photoPageColumns(layout: PhotoPageLayout) {
-  return layout === "one" ? 1 : 2;
+  return layout === "four" ? 2 : 1;
+}
+
+export function photoPageRows(layout: PhotoPageLayout) {
+  if (layout === "one") return 1;
+  return 2;
 }
 
 export function newPageId() {

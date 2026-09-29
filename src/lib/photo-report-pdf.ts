@@ -13,7 +13,7 @@ import { formatDate, initials } from "@/lib/format";
 import { loadLogoForPdf, writePdfLetterhead } from "@/lib/letterhead-pdf";
 import { PHOTO_CATEGORY_LABELS } from "@/lib/types";
 import { COVER_RED, photoReportCoverModel } from "@/lib/photo-report-cover";
-import { layoutCapacity, photoById, photoPageColumns } from "@/lib/photo-report";
+import { layoutCapacity, photoById, photoPageColumns, photoPageRows } from "@/lib/photo-report";
 import { downloadBlob } from "@/lib/share";
 import { workOrderFieldValue } from "@/lib/work-order";
 
@@ -165,7 +165,7 @@ async function drawPhotosPage(
   const notesReserve = notes ? 112 : 0;
   const availableH = height - y - 56 - notesReserve;
   const cols = photoPageColumns(page.layout);
-  const rows = page.layout === "four" ? 2 : page.layout === "two" ? 1 : Math.max(items.length, 1);
+  const rows = photoPageRows(page.layout);
   const cellW = cols === 1 ? right - left : (right - left - gap) / 2;
   const cellH = (availableH - gap * (rows - 1)) / rows;
 

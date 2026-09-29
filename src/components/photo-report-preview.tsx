@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatDate } from "@/lib/format";
 import { photoReportCoverModel } from "@/lib/photo-report-cover";
-import { layoutCapacity, photoById, photoPageColumns } from "@/lib/photo-report";
+import { layoutCapacity, photoById, photoPageColumns, photoPageRows } from "@/lib/photo-report";
 import {
   PHOTO_CATEGORY_LABELS,
   PHOTO_PAGE_LAYOUT_LABELS,
@@ -349,9 +349,9 @@ function PhotosPreview({
 }) {
   const cap = layoutCapacity(page.layout);
   const cols = photoPageColumns(page.layout);
+  const rows = photoPageRows(page.layout);
   const filled = page.items.slice(0, cap);
-  const slots = edit ? cap : Math.max(filled.length, 1);
-  const cells = Array.from({ length: slots }, (_, index) => filled[index] ?? null);
+  const cells = Array.from({ length: cap }, (_, index) => filled[index] ?? null);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -360,23 +360,24 @@ function PhotosPreview({
           value={page.heading}
           onChange={(event) => edit.onChange({ heading: event.target.value })}
           placeholder="Page heading — South slope, kitchen, before…"
-          className="mb-2 w-full border-0 bg-transparent text-sm font-medium outline-none placeholder:text-neutral-300"
+          className="mb-2 w-full shrink-0 border-0 bg-transparent text-sm font-medium outline-none placeholder:text-neutral-300"
         />
       ) : page.heading.trim() ? (
-        <h2 className="mb-2 text-sm font-medium">{page.heading}</h2>
+        <h2 className="mb-2 shrink-0 text-sm font-medium">{page.heading}</h2>
       ) : null}
       <div
-        className={cn("grid min-h-0 gap-2", cols === 2 ? "grid-cols-2" : "grid-cols-1")}
-        style={{ gridTemplateRows: `repeat(${Math.max(1, Math.ceil(slots / cols))}, minmax(0, 1fr))` }}
+        className={cn("grid min-h-0 flex-1 gap-2", cols === 2 ? "grid-cols-2" : "grid-cols-1")}
+        style={{ gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}
       >
         {cells.map((item, index) => {
           if (!item) {
+            if (!edit) return <div key={`empty-${index}`} className="min-h-0" />;
             return (
               <button
                 key={`empty-${index}`}
                 type="button"
-                onClick={() => edit?.onAddPhotos?.()}
-                className="flex min-h-16 flex-col items-center justify-center gap-1 border border-dashed bg-neutral-50 text-[10px] text-neutral-400 hover:border-primary hover:text-primary"
+                onClick={() => edit.onAddPhotos?.()}
+                className="flex min-h-0 flex-col items-center justify-center gap-1 border border-dashed bg-neutral-50 text-[10px] text-neutral-400 hover:border-primary hover:text-primary"
               >
                 <Plus className="size-4" />
                 Add photo
@@ -397,10 +398,12 @@ function PhotosPreview({
                 </button>
               ) : null}
               {photo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={photo.imageUrl} alt="" className="min-h-0 flex-1 object-cover" />
+                <div className="flex min-h-0 flex-1 items-center justify-center bg-neutral-100">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photo.imageUrl} alt="" className="max-h-full max-w-full object-contain" />
+                </div>
               ) : (
-                <div className="flex flex-1 items-center justify-center bg-neutral-100 text-[10px] text-neutral-400">
+                <div className="flex min-h-0 flex-1 items-center justify-center bg-neutral-100 text-[10px] text-neutral-400">
                   Missing photo
                 </div>
               )}
@@ -416,13 +419,13 @@ function PhotosPreview({
                     });
                   }}
                   placeholder="Text under this photo"
-                  className="mt-1 w-full border-0 bg-transparent text-[10px] leading-snug text-neutral-700 outline-none placeholder:text-neutral-300"
+                  className="mt-1 w-full shrink-0 border-0 bg-transparent text-[10px] leading-snug text-neutral-700 outline-none placeholder:text-neutral-300"
                 />
               ) : page.showCaptions && item.caption.trim() ? (
-                <figcaption className="mt-1 text-[10px] leading-snug text-neutral-700">{item.caption}</figcaption>
+                <figcaption className="mt-1 shrink-0 text-[10px] leading-snug text-neutral-700">{item.caption}</figcaption>
               ) : null}
               {(page.showTakenAt || page.showCategory) && photo ? (
-                <p className="text-[10px] text-neutral-500">
+                <p className="shrink-0 text-[10px] text-neutral-500">
                   {[page.showCategory ? PHOTO_CATEGORY_LABELS[photo.category] : "", page.showTakenAt ? formatDate(photo.takenAt) : ""]
                     .filter(Boolean)
                     .join(" · ")}
@@ -437,10 +440,10 @@ function PhotosPreview({
           value={page.notes ?? ""}
           onChange={(event) => edit.onChange({ notes: event.target.value })}
           placeholder="Describe this page — what we found, what to do next…"
-          className="mt-2 min-h-16 flex-1 resize-none border-0 bg-transparent text-xs leading-relaxed text-neutral-700 outline-none placeholder:text-neutral-300"
+          className="mt-2 max-h-24 min-h-12 shrink-0 resize-none border-0 bg-transparent text-xs leading-relaxed text-neutral-700 outline-none placeholder:text-neutral-300"
         />
       ) : page.notes.trim() ? (
-        <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-neutral-700">{page.notes}</p>
+        <p className="mt-2 line-clamp-4 shrink-0 whitespace-pre-wrap text-xs leading-relaxed text-neutral-700">{page.notes}</p>
       ) : null}
     </div>
   );
