@@ -40,7 +40,6 @@ import {
 } from "@/lib/work-board";
 import { canDeleteJobs, jobMatchesOwnerFilter } from "@/lib/visibility";
 import { dedupeJobsByOpportunity, isDeletedJob, jobRecordHref } from "@/lib/job-record";
-import { primaryJobPhoto } from "@/lib/photo-trash";
 import type { Job } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -334,7 +333,6 @@ function JobCard({
     location: job.location,
     street: job.street,
   });
-  const cover = primaryJobPhoto(crm.photos ?? [], job);
   const estimateTags = boardEstimateTags(estimatesForJob(job, crm.estimates ?? []));
 
   return (
@@ -349,22 +347,6 @@ function JobCard({
       )}
     >
       <CardContent className="space-y-2">
-        {cover ? (
-          <JobOpenLink
-            jobId={job.id}
-            overlay={overlay}
-            onSelectJob={onSelectJob}
-            className="block w-full overflow-hidden border"
-            aria-label={`Open ${job.name}`}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={cover.imageUrl}
-              alt=""
-              className="aspect-[16/9] w-full object-cover"
-            />
-          </JobOpenLink>
-        ) : null}
         <div className="flex items-start gap-1">
           <button
             type="button"
@@ -394,32 +376,30 @@ function JobCard({
               </p>
             ) : null}
           </JobOpenLink>
-        </div>
-        <JobOpenLink
-          jobId={job.id}
-          overlay={overlay}
-          onSelectJob={onSelectJob}
-          className="flex w-full flex-col gap-1.5 text-left"
-        >
-          <span className="flex w-full items-center justify-between gap-2">
-            <span className="font-heading text-sm font-medium tabular-nums">
-              {formatCurrency(
-                boardValue(
-                  job,
-                  opportunity,
-                  acceptedAmountForJob(job, crm.estimates ?? [], crm.estimateLines ?? [], market),
-                ),
-              )}
-            </span>
-            <MarketBadge market={parseMarket(market)} />
-          </span>
           {estimateTags.length > 0 ? (
-            <span className="flex flex-wrap gap-1">
+            <span className="mt-0.5 flex max-w-[48%] flex-wrap justify-end gap-1">
               {estimateTags.map((tag) => (
                 <BoardEstimateTagBadge key={tag} tag={tag} />
               ))}
             </span>
           ) : null}
+        </div>
+        <JobOpenLink
+          jobId={job.id}
+          overlay={overlay}
+          onSelectJob={onSelectJob}
+          className="flex w-full items-center justify-between gap-2 text-left"
+        >
+          <span className="font-heading text-sm font-medium tabular-nums">
+            {formatCurrency(
+              boardValue(
+                job,
+                opportunity,
+                acceptedAmountForJob(job, crm.estimates ?? [], crm.estimateLines ?? [], market),
+              ),
+            )}
+          </span>
+          <MarketBadge market={parseMarket(market)} />
         </JobOpenLink>
         {canTrash && deleted && !overlay ? (
           <div
