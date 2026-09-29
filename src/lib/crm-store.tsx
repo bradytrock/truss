@@ -26,6 +26,17 @@ import {
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
 import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingJobInsurance, missingJobInsuranceMessage } from "@/lib/supabase/schema-errors";
+import {
+  eventTimesAreInvitable,
+  externalInvitees,
+  inviteSentCopy,
+  MAX_EXTERNAL_INVITEES,
+  postExternalCalendarInvite,
+} from "@/lib/calendar-invite";
+import {
+  isMissingScheduleGuestInvites,
+  missingScheduleGuestInvitesMessage,
+} from "@/lib/supabase/schema-errors";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newPortalToken, portalInviteExpiry, portalUrl } from "@/lib/portal";
@@ -490,6 +501,49 @@ function requireClient() {
     return null;
   }
   return createClient();
+}
+
+function scheduleEventWrite(event: Omit<ScheduleEvent, "id">) {
+  return {
+    title: event.title,
+    kind: event.kind,
+    starts_at: event.startsAt,
+    ends_at: event.endsAt,
+    location: event.location,
+    assignee: event.assignee,
+    opportunity_id: event.opportunityId,
+    job_id: event.jobId,
+    client_id: event.clientId,
+    notes: event.notes,
+    guest_emails: event.guestEmails ?? [],
+    google_event_id: event.googleEventId ?? "",
+    google_organizer_staff_id: event.googleOrganizerStaffId ?? null,
+  };
+}
+
+function withGuestFields(mapped: ScheduleEvent, source: Omit<ScheduleEvent, "id">): ScheduleEvent {
+  return {
+    ...mapped,
+    guestEmails: mapped.guestEmails?.length ? mapped.guestEmails : (source.guestEmails ?? []),
+    googleEventId: mapped.googleEventId || source.googleEventId || "",
+    googleOrganizerStaffId: mapped.googleOrganizerStaffId ?? source.googleOrganizerStaffId ?? null,
+  };
+}
+
+function scheduleEventWriteWithoutGuests(event: Omit<ScheduleEvent, "id">) {
+  const row = scheduleEventWrite(event);
+  return {
+    title: row.title,
+    kind: row.kind,
+    starts_at: row.starts_at,
+    ends_at: row.ends_at,
+    location: row.location,
+    assignee: row.assignee,
+    opportunity_id: row.opportunity_id,
+    job_id: row.job_id,
+    client_id: row.client_id,
+    notes: row.notes,
+  };
 }
 
 function maybeClient() {
@@ -1375,6 +1429,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const bookEpoch = useRef(0);
   const bookRef = useRef(state);
   bookRef.current = state;
+  const guestInviteColumnWarned = useRef(false);
   const enqueueAutomationEventRef = useRef<(event: AutomationEvent) => void>(() => undefined);
   const syncMaterialOrderDeliveryRef = useRef<(order: MaterialOrder) => void>(() => undefined);
   const materialOrderEventIdsRef = useRef(new Map<string, string>());
@@ -9149,11 +9204,124 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     []
   );
 
+  const warnMissingGuestInviteColumns = useCallback(() => {
+    if (guestInviteColumnWarned.current) return;
+    guestInviteColumnWarned.current = true;
+    toast.message(missingScheduleGuestInvitesMessage());
+  }, []);
+
+  const organizationRoster = useCallback(
+    () => ({
+      staffEmails: bookRef.current.staff.map((member) => member.email),
+      companyEmail: companySettings.email,
+    }),
+    [companySettings.email],
+  );
+
+  const stampGoogleInvite = useCallback(
+    async (event: ScheduleEvent, googleEventId: string, organizerStaffId: string | null) => {
+      const stamped: ScheduleEvent = { ...event, googleEventId, googleOrganizerStaffId: organizerStaffId };
+      setState((prev) => ({
+        ...prev,
+        events: prev.events.map((item) => (item.id === event.id ? { ...item, googleEventId, googleOrganizerStaffId: organizerStaffId } : item)),
+      }));
+      bookRef.current = {
+        ...bookRef.current,
+        events: bookRef.current.events.map((item) =>
+          item.id === event.id ? { ...item, googleEventId, googleOrganizerStaffId: organizerStaffId } : item,
+        ),
+      };
+      const supabase = maybeClient();
+      if (!supabase) return stamped;
+      const { error } = await supabase
+        .from("schedule_events")
+        .update({
+          google_event_id: googleEventId,
+          google_organizer_staff_id: organizerStaffId,
+        })
+        .eq("id", event.id);
+      if (error && isMissingScheduleGuestInvites(error)) warnMissingGuestInviteColumns();
+      else if (error) toast.error(error.message);
+      return stamped;
+    },
+    [warnMissingGuestInviteColumns],
+  );
+
+  const pushExternalCalendarInvite = useCallback(
+    async (before: ScheduleEvent | null, event: ScheduleEvent, mode: "save" | "delete") => {
+      const roster = organizationRoster();
+      const outside = externalInvitees(event.guestEmails ?? [], roster);
+      const hasGoogle = Boolean(event.googleEventId);
+      if (mode === "save" && outside.length === 0 && !hasGoogle) return event;
+      if (mode === "delete" && !hasGoogle) return event;
+      if (mode === "save" && outside.length > 0 && !eventTimesAreInvitable(event.startsAt, event.endsAt)) {
+        toast.message("Set an end time after the start so the Google Calendar invite can send.");
+        return event;
+      }
+      const staffId = event.googleOrganizerStaffId || user.staffId;
+      if (!staffId) {
+        if (outside.length > 0) {
+          toast.message("Connect Google Calendar on this seat to email people outside the company.");
+        }
+        return event;
+      }
+      const previousOutside = externalInvitees(before?.guestEmails ?? [], roster);
+      const guestsChanged =
+        previousOutside.length !== outside.length ||
+        previousOutside.some((email) => !outside.includes(email));
+      const result = await postExternalCalendarInvite({
+        staffId,
+        googleEventId: event.googleEventId || "",
+        cancel: mode === "delete" || outside.length === 0,
+        title: event.title,
+        startsAt: event.startsAt,
+        endsAt: event.endsAt,
+        location: event.location,
+        notes: event.notes,
+        guestEmails: event.guestEmails ?? [],
+        sendUpdates: mode === "delete" || guestsChanged || !event.googleEventId ? "all" : "none",
+      }).catch(() => null);
+      if (!result) {
+        toast.message("Could not reach Google Calendar to send the invite.");
+        return event;
+      }
+      if (result.error) {
+        toast.message(result.error);
+        return event;
+      }
+      if (result.warning) toast.message(result.warning);
+      else if (result.cancelled && before?.googleEventId) {
+        toast.message("Cancelled the Google Calendar invite.");
+      } else if (mode === "save") {
+        const previous = new Set(previousOutside);
+        const added = result.sent.filter((email) => !before || !previous.has(email));
+        if (added.length) toast.success(inviteSentCopy(added));
+        if (result.truncated > 0) {
+          toast.message(`Only the first ${MAX_EXTERNAL_INVITEES} people outside the company were invited.`);
+        }
+      }
+      if (mode === "delete") return event;
+      const nextId = result.googleEventId;
+      const organizer = nextId ? result.organizerStaffId : null;
+      if ((event.googleEventId ?? "") === nextId && (event.googleOrganizerStaffId ?? null) === organizer) {
+        return event;
+      }
+      return stampGoogleInvite(event, nextId, organizer);
+    },
+    [organizationRoster, stampGoogleInvite, user.staffId],
+  );
+
   const addScheduleEvent = useCallback(
     async (input: Omit<ScheduleEvent, "id">) => {
       const supabase = requireClient();
       if (!supabase) {
-        const event: ScheduleEvent = { ...input, id: crypto.randomUUID() };
+        const event: ScheduleEvent = {
+          ...input,
+          id: crypto.randomUUID(),
+          guestEmails: input.guestEmails ?? [],
+          googleEventId: input.googleEventId ?? "",
+          googleOrganizerStaffId: input.googleOrganizerStaffId ?? null,
+        };
         setState((prev) => ({ ...prev, events: [...prev.events, event] }));
         void recordCompanyAudit({
           entityType: "schedule_event",
@@ -9164,30 +9332,36 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           relatedJobId: event.jobId,
           relatedOpportunityId: event.opportunityId,
         });
-        return event;
+        return pushExternalCalendarInvite(null, event, "save");
       }
-      const { data, error } = await supabase
+      const inserted = await supabase
         .from("schedule_events")
         .insert({
           company_id: user.companyId,
-          title: input.title,
-          kind: input.kind,
-          starts_at: input.startsAt,
-          ends_at: input.endsAt,
-          location: input.location,
-          assignee: input.assignee,
-          opportunity_id: input.opportunityId,
-          job_id: input.jobId,
-          client_id: input.clientId,
-          notes: input.notes,
+          ...scheduleEventWrite(input),
         })
         .select("*")
         .single();
+      let data = inserted.data;
+      let error = inserted.error;
+      if (error && isMissingScheduleGuestInvites(error)) {
+        warnMissingGuestInviteColumns();
+        const retry = await supabase
+          .from("schedule_events")
+          .insert({
+            company_id: user.companyId,
+            ...scheduleEventWriteWithoutGuests(input),
+          })
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+      }
       if (error || !data) {
         toast.error(error?.message ?? "Could not add the event.");
         throw error ?? new Error("Could not add the event.");
       }
-      const event = mapScheduleEvent(data);
+      const event = withGuestFields(mapScheduleEvent(data), input);
       setState((prev) => ({ ...prev, events: [...prev.events, event] }));
       void recordCompanyAudit({
         entityType: "schedule_event",
@@ -9198,9 +9372,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         relatedJobId: event.jobId,
         relatedOpportunityId: event.opportunityId,
       });
-      return event;
+      return pushExternalCalendarInvite(null, event, "save");
     },
-    [recordCompanyAudit, user.companyId]
+    [pushExternalCalendarInvite, recordCompanyAudit, user.companyId, warnMissingGuestInviteColumns]
   );
 
   const updateScheduleEvent = useCallback(
@@ -9226,30 +9400,32 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           relatedJobId: next.jobId,
           relatedOpportunityId: next.opportunityId,
         });
-        return next;
+        return pushExternalCalendarInvite(current, next, "save");
       }
-      const { data, error } = await supabase
+      const updated = await supabase
         .from("schedule_events")
-        .update({
-          title: next.title,
-          kind: next.kind,
-          starts_at: next.startsAt,
-          ends_at: next.endsAt,
-          location: next.location,
-          assignee: next.assignee,
-          opportunity_id: next.opportunityId,
-          job_id: next.jobId,
-          client_id: next.clientId,
-          notes: next.notes,
-        })
+        .update(scheduleEventWrite(next))
         .eq("id", id)
         .select("*")
         .single();
+      let data = updated.data;
+      let error = updated.error;
+      if (error && isMissingScheduleGuestInvites(error)) {
+        warnMissingGuestInviteColumns();
+        const retry = await supabase
+          .from("schedule_events")
+          .update(scheduleEventWriteWithoutGuests(next))
+          .eq("id", id)
+          .select("*")
+          .single();
+        data = retry.data;
+        error = retry.error;
+      }
       if (error || !data) {
         toast.error(error?.message ?? "Could not update the event.");
         throw error ?? new Error("Could not update the event.");
       }
-      const event = mapScheduleEvent(data);
+      const event = withGuestFields(mapScheduleEvent(data), next);
       setState((prev) => ({
         ...prev,
         events: prev.events.map((item) => (item.id === id ? event : item)),
@@ -9264,9 +9440,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         relatedJobId: event.jobId,
         relatedOpportunityId: event.opportunityId,
       });
-      return event;
+      return pushExternalCalendarInvite(current, event, "save");
     },
-    [recordCompanyAudit, state.events],
+    [pushExternalCalendarInvite, recordCompanyAudit, state.events, warnMissingGuestInviteColumns],
   );
 
   const deleteScheduleEvent = useCallback(
@@ -9290,6 +9466,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           relatedJobId: current.jobId,
           relatedOpportunityId: current.opportunityId,
         });
+        await pushExternalCalendarInvite(current, current, "delete");
         return;
       }
       const { error } = await supabase.from("schedule_events").delete().eq("id", id);
@@ -9310,8 +9487,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         relatedJobId: current.jobId,
         relatedOpportunityId: current.opportunityId,
       });
+      await pushExternalCalendarInvite(current, current, "delete");
     },
-    [recordCompanyAudit, state.events],
+    [pushExternalCalendarInvite, recordCompanyAudit, state.events],
   );
 
   syncMaterialOrderDeliveryRef.current = (order) => {

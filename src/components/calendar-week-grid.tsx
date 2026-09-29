@@ -784,6 +784,12 @@ export function CalendarWeekGrid({
             {selectedCrm.notes ? (
               <p className="text-sm text-muted-foreground">{selectedCrm.notes}</p>
             ) : null}
+            {(selectedCrm.guestEmails ?? []).length > 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Invited: {selectedCrm.guestEmails?.join(", ")}
+                {selectedCrm.googleEventId ? " · Google Calendar invite sent" : ""}
+              </p>
+            ) : null}
             <p className="text-xs text-muted-foreground">
               Drag to move · pull the bottom edge to resize · double-click to edit
             </p>
