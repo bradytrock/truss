@@ -22,7 +22,7 @@ import {
   ESIGN_CONSENT_TEXT,
 } from "@/lib/estimate-signature-audit";
 import { billingEstimate, workMarket } from "@/lib/market";
-import { coOwnerContact } from "@/lib/parties";
+import { coOwnerContact, customerContactDetails } from "@/lib/parties";
 import { parseSharedEstimate, type ShareSender, type SharedEstimatePayload } from "@/lib/share";
 import { SHARE_FETCH, useRemoteShare } from "@/lib/use-remote-share";
 import type { EstimateLine } from "@/lib/types";
@@ -182,6 +182,7 @@ export function ShareEstimateClient({
       fromStore.status === "draft" || fromStore.status === "sent" || fromStore.status === "viewed";
     const viewerSigned = homeownerHasSigned(fromStore, storeSigner);
     const canSign = fromStore.status !== "declined" && !viewerSigned;
+    const clientContact = customerContactDetails(fromStore, crm);
     const primaryName = crm.getContact(fromStore.contactId)?.name || customer;
     const secondName =
       (fromStore.secondContactId ? crm.getContact(fromStore.secondContactId)?.name : null) ||
@@ -199,6 +200,10 @@ export function ShareEstimateClient({
                   lines,
                   company: letterhead,
                   customer,
+                  customerPhone: clientContact.phone,
+                  customerEmail: clientContact.email,
+                  secondCustomerPhone: clientContact.secondPhone,
+                  secondCustomerEmail: clientContact.secondEmail,
                   projectManager,
                   primaryCustomer: primaryName,
                   secondCustomer: secondName,
@@ -293,6 +298,10 @@ export function ShareEstimateClient({
                 lines: remote.lines,
                 company: remote.company,
                 customer: remote.customer,
+                customerPhone: remote.customerPhone,
+                customerEmail: remote.customerEmail,
+                secondCustomerPhone: remote.secondCustomerPhone,
+                secondCustomerEmail: remote.secondCustomerEmail,
                 projectManager: remote.projectManager,
                 primaryCustomer: remote.primaryCustomer,
                 secondCustomer: remote.secondCustomer || estimate.secondSignatureName,
@@ -319,6 +328,10 @@ export function ShareEstimateClient({
         estimate={estimate}
         lines={remote.lines}
         customer={remote.customer}
+        customerPhone={remote.customerPhone}
+        customerEmail={remote.customerEmail}
+        secondCustomerPhone={remote.secondCustomerPhone}
+        secondCustomerEmail={remote.secondCustomerEmail}
         market={remote.market}
         showStatus={false}
         selectable={optionalOpen}

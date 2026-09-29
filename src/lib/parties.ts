@@ -24,7 +24,7 @@ export type CustomerRecord = {
 
 type PartyBook = Pick<CrmState, "clients" | "contacts" | "jobs" | "opportunities">;
 
-export function resolveCustomerName(record: CustomerRecord, book: PartyBook): string {
+export function resolveCustomerParties(record: CustomerRecord, book: PartyBook) {
   const client = record.clientId
     ? book.clients.find((item) => item.id === record.clientId)
     : undefined;
@@ -44,6 +44,22 @@ export function resolveCustomerName(record: CustomerRecord, book: PartyBook): st
     (record.secondContactId
       ? book.contacts.find((item) => item.id === record.secondContactId)
       : undefined) ?? coOwnerContact(job, book.contacts, contactId);
+  return { client, contact, second: second ?? undefined };
+}
+
+/** Phone and email for the Prepared for block: the client, then a co-owner when the job has one. */
+export function customerContactDetails(record: CustomerRecord, book: PartyBook) {
+  const { contact, second } = resolveCustomerParties(record, book);
+  return {
+    phone: contact?.phone?.trim() ?? "",
+    email: contact?.email?.trim() ?? "",
+    secondPhone: second?.phone?.trim() ?? "",
+    secondEmail: second?.email?.trim() ?? "",
+  };
+}
+
+export function resolveCustomerName(record: CustomerRecord, book: PartyBook): string {
+  const { client, contact, second } = resolveCustomerParties(record, book);
   if (second?.name) {
     const primary = contact?.name ?? client?.name ?? "Homeowner";
     return joinCustomerNames(primary, second.name);

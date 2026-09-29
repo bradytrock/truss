@@ -8,6 +8,8 @@ import {
   paperIssuedAt,
   paperKindLabel,
   paperMetaBlank,
+  paperPreparedForCard,
+  paperPreparedForLines,
   paperQtyLabel,
   paperRescissionCopy,
   paperSiteTitle,
@@ -37,6 +39,30 @@ assert.equal(paperIssuedAt({ sentAt: "2026-09-20", createdAt: "2026-09-14" }), "
 assert.equal(paperIssuedAt({ sentAt: null, createdAt: "2026-09-14" }), "2026-09-14");
 assert.equal(paperQtyLabel(1), "1");
 assert.equal(paperQtyLabel(38.5), "38.5");
+
+assert.deepEqual(
+  paperPreparedForLines({ phone: "2145550142", email: "shawn@example.com" }),
+  ["(214) 555-0142", "shawn@example.com"],
+);
+assert.deepEqual(paperPreparedForLines({ phone: "", email: "  " }), []);
+assert.deepEqual(
+  paperPreparedForLines({
+    phone: "2145550142",
+    email: "shawn@example.com",
+    secondPhone: "2145550142",
+    secondEmail: "jane@example.com",
+  }),
+  ["(214) 555-0142", "shawn@example.com", "jane@example.com"],
+);
+const preparedFor = paperPreparedForCard({
+  name: "Shawn Gregory",
+  phone: "4695550100",
+  email: "shawn@example.com",
+});
+assert.equal(preparedFor.label, "Prepared for");
+assert.equal(preparedFor.name, "Shawn Gregory");
+assert.equal(preparedFor.lines[0], "(469) 555-0100");
+assert.equal(preparedFor.lines[1], "shawn@example.com");
 
 const company = paperCompanyLines({
   name: "T Rock Roofing",

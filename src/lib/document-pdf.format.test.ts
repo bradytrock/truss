@@ -130,11 +130,16 @@ async function main() {
       lines,
       company,
       customer: "Shawn Gregory",
+      customerPhone: "4695550142",
+      customerEmail: "shawn@example.com",
       jobCode: "JH091426-A",
     }),
   );
   assert.match(estimateText, /ESTIMATE/);
   assert.match(estimateText, /PREPARED FOR/i);
+  assert.match(estimateText, /Shawn Gregory/);
+  assert.match(estimateText, /\(469\) 555-0142/);
+  assert.match(estimateText, /shawn@example.com/);
   assert.match(estimateText, /9174 Shadowridge Drive/);
   assert.match(estimateText, /Roofing System/);
   assert.match(estimateText, /TAMKO Heritage/);

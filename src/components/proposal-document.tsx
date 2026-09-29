@@ -25,7 +25,7 @@ import {
 import { formatDate, formatMoney } from "@/lib/format";
 import { isSignaturePng } from "@/lib/estimate-signature";
 import { estimateSignatureLines } from "@/lib/estimate-signers";
-import { coOwnerContact } from "@/lib/parties";
+import { customerContactDetails, coOwnerContact } from "@/lib/parties";
 import { EstimatePhotoThumb } from "@/components/estimate-line-photos";
 import { photosForEstimateLine } from "@/lib/estimate-line-photos";
 import type { CompanySettings, Estimate, EstimateLine, JobMarket, JobPhoto } from "@/lib/types";
@@ -39,6 +39,7 @@ import {
   paperAuthorizationCopy,
   paperEstimateMeta,
   paperIssuedAt,
+  paperPreparedForCard,
   paperQtyLabel,
   paperRescissionCopy,
   paperSiteTitle,
@@ -194,6 +195,10 @@ export function ProposalDocument({
   projectManager,
   primaryCustomer,
   secondCustomer,
+  customerPhone,
+  customerEmail,
+  secondCustomerPhone,
+  secondCustomerEmail,
   contractorName,
   onTermsChange,
   onSelectPackage,
@@ -210,6 +215,10 @@ export function ProposalDocument({
   projectManager?: ProjectManagerContact | null;
   primaryCustomer?: string;
   secondCustomer?: string | null;
+  customerPhone?: string | null;
+  customerEmail?: string | null;
+  secondCustomerPhone?: string | null;
+  secondCustomerEmail?: string | null;
   contractorName?: string;
   onTermsChange?: (terms: string) => void;
   onSelectPackage?: (pkg: EstimatePackage) => void;
@@ -259,6 +268,21 @@ export function ProposalDocument({
     estimate,
     companyDefault: companyEstimateTermsFor(letterhead, estimate.contractTypeId),
   });
+  const fromBook = crm
+    ? customerContactDetails(estimate, {
+        clients: crm.clients,
+        contacts: crm.contacts,
+        jobs: crm.jobs,
+        opportunities: crm.opportunities,
+      })
+    : null;
+  const preparedFor = paperPreparedForCard({
+    name: customer,
+    phone: customerPhone || fromBook?.phone,
+    email: customerEmail || fromBook?.email,
+    secondPhone: secondCustomerPhone || fromBook?.secondPhone,
+    secondEmail: secondCustomerEmail || fromBook?.secondEmail,
+  });
   const site = paperSiteTitle({
     street: estimate.street,
     city: estimate.city,
@@ -282,14 +306,7 @@ export function ProposalDocument({
           jobCode: job?.code,
         })}
       />
-      <PaperPartyCards
-        left={{
-          label: "Prepared for",
-          name: customer,
-          lines: [],
-        }}
-        right={paperManagerCard(manager)}
-      />
+      <PaperPartyCards left={preparedFor} right={paperManagerCard(manager)} />
       {estimate.intro ? (
         <p className="text-sm leading-relaxed whitespace-pre-wrap">{estimate.intro}</p>
       ) : null}
