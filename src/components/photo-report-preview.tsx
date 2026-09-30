@@ -206,7 +206,6 @@ function CoverPreview({
     cover.showInspectionDate ? { label: "Inspection date", value: cover.inspectionDate } : null,
     cover.showDateOfLoss ? { label: "Date of loss", value: cover.dateOfLoss } : null,
     cover.showClaimNumber ? { label: "Claim number", value: cover.claimNumber } : null,
-    { label: "Job number", value: cover.jobNumber },
   ].filter((item): item is { label: string; value: string } => Boolean(item));
 
   return (
@@ -258,17 +257,19 @@ function CoverPreview({
       </div>
 
       <footer className="shrink-0 bg-neutral-950 px-3 pb-2 pt-2.5 text-white">
-        <div
-          className="grid gap-2 border-b border-white/10 pb-2"
-          style={{ gridTemplateColumns: `repeat(${meta.length}, minmax(0, 1fr))` }}
-        >
-          {meta.map((item) => (
-            <div key={item.label}>
-              <p className="text-[6px] font-semibold tracking-[0.14em] text-[#c4182a] uppercase">{item.label}</p>
-              <p className="mt-0.5 truncate text-[9px] font-semibold">{item.value || "—"}</p>
-            </div>
-          ))}
-        </div>
+        {meta.length > 0 ? (
+          <div
+            className="grid gap-2 border-b border-white/10 pb-2"
+            style={{ gridTemplateColumns: `repeat(${meta.length}, minmax(0, 1fr))` }}
+          >
+            {meta.map((item) => (
+              <div key={item.label}>
+                <p className="text-[6px] font-semibold tracking-[0.14em] text-[#c4182a] uppercase">{item.label}</p>
+                <p className="mt-0.5 truncate text-[9px] font-semibold">{item.value || "—"}</p>
+              </div>
+            ))}
+          </div>
+        ) : null}
         <div className="mt-2 grid grid-cols-2 gap-3">
           <div>
             <p className="text-[6px] font-semibold tracking-[0.14em] text-[#c4182a] uppercase">Prepared for</p>
@@ -282,10 +283,11 @@ function CoverPreview({
           <div>
             <p className="text-[6px] font-semibold tracking-[0.14em] text-[#c4182a] uppercase">Prepared by</p>
             <p className="mt-0.5 text-[11px] font-semibold leading-tight">{cover.preparedByName}</p>
-            {cover.preparedByTitle ? <p className="truncate text-[8px] text-white/70">{cover.preparedByTitle}</p> : null}
-            {cover.preparedByContact ? (
-              <p className="truncate text-[8px] text-white/70">{cover.preparedByContact}</p>
-            ) : null}
+            {cover.preparedByDetail.map((line) => (
+              <p key={line} className="truncate text-[8px] font-semibold text-white/70">
+                {line}
+              </p>
+            ))}
           </div>
         </div>
         <div className="mt-2 flex items-end justify-between gap-2 border-t border-white/10 pt-1.5">

@@ -341,7 +341,6 @@ async function drawCover(
     cover.showInspectionDate ? { label: "INSPECTION DATE", value: cover.inspectionDate || "—" } : null,
     cover.showDateOfLoss ? { label: "DATE OF LOSS", value: cover.dateOfLoss || "—" } : null,
     cover.showClaimNumber ? { label: "CLAIM NUMBER", value: cover.claimNumber || "—" } : null,
-    { label: "JOB NUMBER", value: cover.jobNumber || "—" },
   ].filter((item): item is { label: string; value: string } => Boolean(item));
   const colW = (width - inset * 2) / Math.max(1, meta.length);
   const metaY = footerY + 28;
@@ -396,12 +395,9 @@ async function drawCover(
   doc.setFontSize(10);
   doc.setTextColor(200, 200, 200);
   const byWidth = width - inset - (splitX + 16);
-  if (cover.preparedByTitle) {
-    doc.text(doc.splitTextToSize(cover.preparedByTitle, byWidth)[0] ?? "", splitX + 16, peopleY + 38);
-  }
-  if (cover.preparedByContact) {
-    doc.text(doc.splitTextToSize(cover.preparedByContact, byWidth)[0] ?? "", splitX + 16, peopleY + 52);
-  }
+  cover.preparedByDetail.slice(0, 3).forEach((line, index) => {
+    doc.text(doc.splitTextToSize(line, byWidth)[0] ?? "", splitX + 16, peopleY + 38 + index * 14);
+  });
 
   doc.setFillColor(0, 0, 0);
   doc.rect(0, height - 28, width, 28, "F");

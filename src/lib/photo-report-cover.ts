@@ -1,6 +1,9 @@
+import { documentProjectManager } from "@/lib/document-owner";
 import { paperPreparedForLines } from "@/lib/document-paper";
+import { formatPhone } from "@/lib/format";
 import { jobAddress, parseLocation } from "@/lib/job-record";
 import { pageCoverCopy, photoById } from "@/lib/photo-report";
+import { namesMatch } from "@/lib/seats";
 import type {
   CompanySettings,
   Contact,
@@ -33,6 +36,20 @@ function displayWebsite(website: string) {
     .replace(/^www\./i, "")
     .replace(/\/$/, "")
     .toUpperCase();
+}
+
+function coverProjectManager(job: Job, staff: StaffMember[]) {
+  const named = job.projectManager.trim();
+  if (named) {
+    const member = staff.find((item) => namesMatch(item.name, named));
+    return {
+      name: member?.name.trim() || named,
+      title: member?.title.trim() || "Project Manager",
+      email: member?.email.trim() || "",
+      phone: member?.phone.trim() || "",
+    };
+  }
+  return documentProjectManager({ job, staff });
 }
 
 export function photoReportCoverKicker(job: Job) {
@@ -71,15 +88,11 @@ export function photoReportCoverModel(input: {
     ? page.dateOfLoss.trim() || fieldValue(job, /date of loss|loss date/i)
     : "";
 
-  const author =
-    input.staff.find((member) => member.name === report.createdBy) ||
-    input.staff.find((member) => member.id === job.ownerStaffId) ||
-    input.staff.find((member) => member.name === job.projectManager);
-  const preparedByName = author?.name || report.createdBy || job.projectManager || company.name;
-  const preparedByTitle = [author?.title || (job.projectManager ? "Project manager" : ""), company.name]
-    .filter(Boolean)
-    .join(" · ");
-  const preparedByContact = [company.phone, company.email].filter(Boolean).join(" · ");
+  const manager = coverProjectManager(job, input.staff);
+  const managerPhone = manager?.phone.trim() ? formatPhone(manager.phone) : "";
+  const preparedByDetail = [manager?.title.trim() || "", managerPhone === "—" ? "" : managerPhone, manager?.email.trim() || ""].filter(
+    Boolean,
+  );
 
   const preparedForDetail = paperPreparedForLines({
     phone: client?.phone,
@@ -103,12 +116,10 @@ export function photoReportCoverModel(input: {
     inspectionDate: page.showDate ? dottedDate(report.createdAt || new Date().toISOString()) : "",
     dateOfLoss: page.showDateOfLoss ? dottedDate(dateOfLoss) || dateOfLoss : "",
     claimNumber,
-    jobNumber: job.code || "",
     preparedForName: homeowner || "Homeowner",
     preparedForDetail,
-    preparedByName,
-    preparedByTitle,
-    preparedByContact,
+    preparedByName: manager?.name || "",
+    preparedByDetail,
     footerLeft: company.name.toUpperCase(),
     footerRight: [displayWebsite(company.website), company.licenseNumber ? `${company.licenseNumber}` : ""]
       .filter(Boolean)
