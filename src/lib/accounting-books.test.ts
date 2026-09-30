@@ -270,7 +270,7 @@ assert.deepEqual(
 const preview = expenseQbPreview(bill, job({ id: "job_1", name: "Martinez", code: "J-12" }), "Martinez");
 assert.equal(preview.txnType, "Credit card charge");
 assert.equal(preview.vendor, "ABC Supply");
-assert.equal(preview.accountName, "Job materials");
+assert.equal(preview.accountName, "50400 · Construction Materials Costs");
 assert.equal(preview.customerJob, "Martinez:J-12");
 assert.equal(preview.memo, "Ridge vent");
 assert.equal(preview.refNumber, "EX-104");

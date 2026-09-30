@@ -56,6 +56,7 @@ export async function qbwcApply(
     customerName?: string;
     customerListId?: string;
     jobListId?: string;
+    accountListId?: string;
   } = {},
 ) {
   const supabase = createAnonClient();
@@ -68,11 +69,24 @@ export async function qbwcApply(
     p_customer_name: extra.customerName ?? "",
     p_customer_list_id: extra.customerListId ?? "",
     p_job_list_id: extra.jobListId ?? "",
+    p_account_list_id: extra.accountListId ?? "",
   };
   let { data, error } = await supabase.rpc("qbwc_apply_response", payload);
+  if (error && /p_account_list_id/i.test(error.message)) {
+    ({ data, error } = await supabase.rpc("qbwc_apply_response", {
+      p_ticket: ticket,
+      p_action: action,
+      p_next_step: extra.nextStep ?? "",
+      p_txn_id: extra.txnId ?? "",
+      p_error: extra.error ?? "",
+      p_customer_name: extra.customerName ?? "",
+      p_customer_list_id: extra.customerListId ?? "",
+      p_job_list_id: extra.jobListId ?? "",
+    }));
+  }
   if (
     error &&
-    /p_customer_name|p_customer_list_id|p_job_list_id|could not find the function/i.test(error.message)
+    /p_customer_name|p_customer_list_id|p_job_list_id|could not find the function/i.test(error.message ?? "")
   ) {
     ({ data, error } = await supabase.rpc("qbwc_apply_response", {
       p_ticket: ticket,

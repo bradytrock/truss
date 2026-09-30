@@ -57,16 +57,26 @@ export function signedInvoiceQtyRate(quantity: number, unitCost: number) {
   return { quantity: qty, unitCost: rate };
 }
 
-export function wrapQbxml(body: string) {
+export function wrapQbxml(body: string, onError: "continueOnError" | "stopOnError" = "continueOnError") {
   return (
     `<?xml version="1.0" encoding="utf-8"?>\r\n` +
     `<?qbxml version="13.0"?>\r\n` +
     `<QBXML>\r\n` +
-    `  <QBXMLMsgsRq onError="continueOnError">\r\n` +
+    `  <QBXMLMsgsRq onError="${onError}">\r\n` +
     `${body}` +
     `  </QBXMLMsgsRq>\r\n` +
     `</QBXML>`
   );
+}
+
+/** Account FullName may be Parent:Child. Colons stay. qbName() would strip them. */
+export function qbAccountFullName(value: string) {
+  return value
+    .replace(/[\t\n\r]/g, " ")
+    .replace(/[^\x20-\x7E]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 159);
 }
 
 export function customerQueryXml(fullName: string, requestId: string) {
@@ -223,6 +233,42 @@ export function readVendorListResponse(xml: string) {
   return { vendors, iteratorId, remaining, done, statusCode };
 }
 
+export function accountQueryXml(requestId: string) {
+  return wrapQbxml(
+    `    <AccountQueryRq requestID="${xmlEscape(requestId)}">\r\n` +
+      `      <ActiveStatus>All</ActiveStatus>\r\n` +
+      `    </AccountQueryRq>\r\n`,
+  );
+}
+
+export type QbAccountRet = {
+  listId: string;
+  name: string;
+  fullName: string;
+  accountNumber: string;
+  accountType: string;
+};
+
+export function readAccountListResponse(xml: string): QbAccountRet[] {
+  const accounts: QbAccountRet[] = [];
+  const re = /<AccountRet\b[\s\S]*?<\/AccountRet>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(xml))) {
+    const block = match[0].replace(/<ParentRef\b[\s\S]*?<\/ParentRef>/gi, "");
+    const listId = innerTag(block, "ListID");
+    const name = decodeEntities(innerTag(block, "Name"));
+    if (!listId || !name) continue;
+    accounts.push({
+      listId,
+      name,
+      fullName: decodeEntities(innerTag(block, "FullName")) || name,
+      accountNumber: decodeEntities(innerTag(block, "AccountNumber")),
+      accountType: innerTag(block, "AccountType"),
+    });
+  }
+  return accounts;
+}
+
 export function vendorAddXml(name: string, requestId: string) {
   return wrapQbxml(
     `    <VendorAddRq requestID="${xmlEscape(requestId)}">\r\n` +
@@ -236,17 +282,22 @@ export function vendorAddXml(name: string, requestId: string) {
 
 export function expenseLineXml(input: {
   accountName: string;
+  accountListId?: string;
   amount: number;
   memo?: string;
   customerJobFullName?: string;
   customerListId?: string;
 }) {
   const memo = qbAscii(input.memo ?? "", 4095);
+  const accountListId = input.accountListId?.trim() ?? "";
+  const accountRef = accountListId
+    ? `<ListID>${xmlEscape(accountListId)}</ListID>`
+    : `<FullName>${xmlEscape(qbAccountFullName(input.accountName))}</FullName>`;
   const listId = input.customerListId?.trim() ?? "";
   // CustomerRef on the expense line is what hangs the bill on Customer:Job.
-  // ListID only — FullName can miss (alias, renamed job) and continueOnError
-  // then saves the bill as company A/P with no job. The connector queries the
-  // job first and will not BillAdd a job expense until it has this ListID.
+  // ListID only — a mismatched FullName plus continueOnError used to save the
+  // bill in Accounts Payable with the job blank. BillAdd uses stopOnError, and
+  // the connector will not send the bill until this ListID is the job.
   const customerRef = listId
     ? `          <CustomerRef>\r\n            <ListID>${xmlEscape(listId)}</ListID>\r\n          </CustomerRef>\r\n` +
       `          <BillableStatus>NotBillable</BillableStatus>\r\n`
@@ -254,7 +305,7 @@ export function expenseLineXml(input: {
   return (
     `        <ExpenseLineAdd>\r\n` +
     `          <AccountRef>\r\n` +
-    `            <FullName>${xmlEscape(qbName(input.accountName, 31))}</FullName>\r\n` +
+    `            ${accountRef}\r\n` +
     `          </AccountRef>\r\n` +
     `          <Amount>${xmlEscape(qbMoney(input.amount))}</Amount>\r\n` +
     (memo ? `          <Memo>${xmlEscape(memo)}</Memo>\r\n` : "") +
@@ -271,6 +322,7 @@ export function checkAddXml(input: {
   txnDate: string;
   memo?: string;
   accountName: string;
+  accountListId?: string;
   amount: number;
   customerJobFullName?: string;
   customerListId?: string;
@@ -312,12 +364,15 @@ export function billAddXml(input: {
   txnDate: string;
   memo?: string;
   accountName: string;
+  accountListId?: string;
   amount: number;
   customerJobFullName?: string;
   customerListId?: string;
 }) {
   const memo = qbAscii(input.memo ?? "", 4095);
   const ref = qbAscii(input.refNumber ?? "", QB_REF_MAX);
+  // stopOnError: continueOnError saves the bill and drops a Customer:Job it
+  // cannot resolve, which leaves the cost on a chart account with no job.
   return wrapQbxml(
     `    <BillAddRq requestID="${xmlEscape(input.requestId)}">\r\n` +
       `      <BillAdd>\r\n` +
@@ -330,6 +385,7 @@ export function billAddXml(input: {
       expenseLineXml(input) +
       `      </BillAdd>\r\n` +
       `    </BillAddRq>\r\n`,
+    "stopOnError",
   );
 }
 
@@ -341,6 +397,7 @@ export function creditCardChargeAddXml(input: {
   txnDate: string;
   memo?: string;
   accountName: string;
+  accountListId?: string;
   amount: number;
   customerJobFullName?: string;
   customerListId?: string;
@@ -362,6 +419,7 @@ export function creditCardChargeAddXml(input: {
       expenseLineXml(input) +
       `      </CreditCardChargeAdd>\r\n` +
       `    </CreditCardChargeAddRq>\r\n`,
+    "stopOnError",
   );
 }
 
@@ -487,15 +545,46 @@ export function isQbLockMessage(message: string) {
   return /could not be locked|in use by another user/i.test(message);
 }
 
+export type QbExpenseLineRef = {
+  customerListId: string;
+  customerName: string;
+  accountListId: string;
+  accountName: string;
+};
+
+export function expenseLineRefs(xml: string): QbExpenseLineRef[] {
+  const lines = xml.match(/<ExpenseLineRet\b[\s\S]*?<\/ExpenseLineRet>/gi) ?? [];
+  return lines.map((line) => {
+    const customer = innerBlock(line, "CustomerRef");
+    const account = innerBlock(line, "AccountRef");
+    return {
+      customerListId: innerTag(customer, "ListID"),
+      customerName: decodeEntities(innerTag(customer, "FullName")),
+      accountListId: innerTag(account, "ListID"),
+      accountName: decodeEntities(innerTag(account, "FullName")),
+    };
+  });
+}
+
 /** True when every expense line on the saved bill/charge is hung on a customer or job. */
 export function expenseRetHasJobCustomer(xml: string) {
-  const lines = xml.match(/<ExpenseLineRet\b[\s\S]*?<\/ExpenseLineRet>/gi) ?? [];
+  const lines = expenseLineRefs(xml);
   if (lines.length === 0) return false;
-  return lines.every((line) =>
-    /<CustomerRef\b[\s\S]*?(?:<ListID>[^<]+<\/ListID>|<FullName>[^<]+<\/FullName>)[\s\S]*?<\/CustomerRef>/i.test(
-      line,
-    ),
-  );
+  return lines.every((line) => Boolean(line.customerListId || line.customerName));
+}
+
+/** Saved bill line is the job we queried, on the chart account we queried. */
+export function expenseRetMatchesJob(xml: string, jobListId: string, accountListId = "") {
+  const lines = expenseLineRefs(xml);
+  if (lines.length === 0 || !jobListId.trim()) return false;
+  return lines.every((line) => {
+    if (!line.customerListId && !line.customerName) return false;
+    if (line.customerListId && line.customerListId !== jobListId) return false;
+    if (line.customerName && !line.customerName.includes(":")) return false;
+    if (!line.customerListId && !line.customerName.includes(":")) return false;
+    if (accountListId && line.accountListId && line.accountListId !== accountListId) return false;
+    return true;
+  });
 }
 
 export function readQbResponse(xml: string, fallbackMessage = ""): QbParsedResponse {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { billAddXml, expenseRetHasJobCustomer, invoiceAddXml, signedInvoiceQtyRate, txnVoidXml } from "./qbxml.ts";
+import { matchQbAccount, qbChartAccountFor } from "./accounts.ts";
 import { advanceFromResponse, receiveWorkAdvance, requestForStep } from "./steps.ts";
 import {
   expenseRepairsBill,
@@ -57,6 +58,7 @@ const expenseWork: QbExpenseWork = {
   invoiceNumber: "",
   vendor: "Silva's Sheet Metal LLC",
   accountName: "Subcontractors",
+  accountNumber: "53600",
   amount: 2800,
   payWith: "bill",
   txnDate: "2026-09-10",
@@ -74,7 +76,16 @@ const expenseWork: QbExpenseWork = {
 };
 assert.equal(resolveQbwcStep("expense_add", expenseWork), "job_query");
 assert.equal(resolveQbwcStep("txn_void+alias", expenseWork), "job_query+alias");
-assert.equal(resolveQbwcStep("expense_add", { ...expenseWork, jobListId: "80000012-1789520000" }), "expense_add");
+assert.equal(resolveQbwcStep("account_query", expenseWork), "job_query");
+assert.equal(resolveQbwcStep("expense_add", { ...expenseWork, jobListId: "80000012-1789520000" }), "account_query");
+assert.equal(
+  resolveQbwcStep("expense_add", {
+    ...expenseWork,
+    jobListId: "80000012-1789520000",
+    accountListId: "8000001B-2",
+  }),
+  "expense_add",
+);
 assert.equal(resolveQbwcStep("vendor_query", expenseWork), "vendor_query");
 const jobFound =
   "<CustomerQueryRs statusCode=\"0\"><CustomerRet><ListID>80000012-1789520000</ListID><FullName>Ojamaye:BJ091026-A</FullName></CustomerRet></CustomerQueryRs>";
@@ -84,7 +95,7 @@ const queriedFromBill = receiveWorkAdvance({
   work: expenseWork,
 });
 assert.equal(queriedFromBill.action, "next");
-assert.equal(queriedFromBill.action === "next" ? queriedFromBill.step : "", "expense_add");
+assert.equal(queriedFromBill.action === "next" ? queriedFromBill.step : "", "account_query");
 assert.equal(queriedFromBill.action === "next" ? queriedFromBill.jobListId : "", "80000012-1789520000");
 
 const billXml = requestForStep("expense_add", expenseWork);
@@ -92,10 +103,18 @@ assert.match(billXml, /<CustomerQueryRq/);
 assert.match(billXml, /<FullName>Ojamaye:BJ091026-A<\/FullName>/);
 assert.doesNotMatch(billXml, /<BillAddRq/);
 
-const billedOnJob = requestForStep("expense_add", { ...expenseWork, jobListId: "80000012-1789520000" });
+const accountListId = "8000001B-2";
+const billedOnJob = requestForStep("expense_add", {
+  ...expenseWork,
+  jobListId: "80000012-1789520000",
+  accountListId,
+});
 assert.match(billedOnJob, /<BillAddRq/);
+assert.match(billedOnJob, /onError="stopOnError"/);
 assert.match(billedOnJob, /<RefNumber>EXP-1001<\/RefNumber>/);
 assert.match(billedOnJob, /<VendorRef>[\s\S]*Silva&apos;s Sheet Metal LLC/);
+assert.match(billedOnJob, /<AccountRef>[\s\S]*<ListID>8000001B-2<\/ListID>/);
+assert.doesNotMatch(billedOnJob, /<AccountRef>[\s\S]*<FullName>/);
 assert.match(billedOnJob, /<CustomerRef>[\s\S]*<ListID>80000012-1789520000<\/ListID>/);
 assert.match(billedOnJob, /<BillableStatus>NotBillable<\/BillableStatus>/);
 assert.doesNotMatch(billedOnJob, /<CustomerRef>[\s\S]*<FullName>/);
@@ -103,6 +122,7 @@ assert.doesNotMatch(billedOnJob, /<CheckAddRq/);
 const billedWithInvoice = requestForStep("expense_add", {
   ...expenseWork,
   jobListId: "80000012-1789520000",
+  accountListId,
   invoiceNumber: "88421",
 });
 assert.match(billedWithInvoice, /<RefNumber>88421<\/RefNumber>/);
@@ -110,6 +130,7 @@ assert.doesNotMatch(billedWithInvoice, /<RefNumber>EXP-1001<\/RefNumber>/);
 const billedLongInvoice = requestForStep("expense_add", {
   ...expenseWork,
   jobListId: "80000012-1789520000",
+  accountListId,
   invoiceNumber: "INV-2026-99999",
 });
 assert.match(billedLongInvoice, /<RefNumber>INV-2026-99<\/RefNumber>/);
@@ -123,11 +144,17 @@ assert.doesNotMatch(billAddXml({
 }), /<CustomerRef>/);
 
 const jobListId = "80000012-1789520000";
-const replaceWork = { ...expenseWork, replaceTxnId: "43-1789510995", jobListId };
+const replaceWork = { ...expenseWork, replaceTxnId: "43-1789510995", jobListId, accountListId };
 assert.equal(expenseReplacesCheck(replaceWork), true);
 assert.equal(expenseReplacesCheck(expenseWork), false);
 assert.equal(expenseRepairsBill(replaceWork), false);
-const repairWork = { ...expenseWork, replaceTxnId: "49-1789524336", replaceTxnKind: "bill" as const, jobListId };
+const repairWork = {
+  ...expenseWork,
+  replaceTxnId: "49-1789524336",
+  replaceTxnKind: "bill" as const,
+  jobListId,
+  accountListId,
+};
 assert.equal(expenseRepairsBill(repairWork), true);
 assert.equal(expenseReplacesCheck(repairWork), false);
 assert.match(requestForStep("txn_void", repairWork), /<TxnVoidType>Bill<\/TxnVoidType>/);
@@ -187,9 +214,9 @@ assert.equal(
   "fail",
 );
 const jobOk = "<CustomerAddRs statusCode=\"0\"><CustomerRet><ListID>1</ListID></CustomerRet></CustomerAddRs>";
-assert.equal(advanceFromResponse("job_add", jobOk, "", replaceWork).step, "expense_add");
-assert.equal(advanceFromResponse("job_add", jobOk, "", expenseWork).step, "expense_add");
-assert.equal(advanceFromResponse("job_add", jobOk, "", repairWork).step, "txn_void");
+assert.equal(advanceFromResponse("job_add", jobOk, "", replaceWork).step, "account_query");
+assert.equal(advanceFromResponse("job_add", jobOk, "", expenseWork).step, "account_query");
+assert.equal(advanceFromResponse("job_add", jobOk, "", repairWork).step, "account_query");
 const jobExists = "<CustomerAddRs statusCode=\"3100\" statusMessage=\"The name is already in use.\" />";
 assert.equal(advanceFromResponse("job_add", jobExists, "", expenseWork).step, "job_query");
 assert.equal(advanceFromResponse("job_add+alias", jobExists, "", expenseWork).step, "job_query+alias");
@@ -202,7 +229,48 @@ assert.equal(hungOffJob.action, "fail");
 assert.equal(hungOffJob.action === "fail" ? hungOffJob.txnId : "", "49-1");
 const billOnJob =
   "<BillAddRs statusCode=\"0\"><BillRet><TxnID>50-1</TxnID><ExpenseLineRet><CustomerRef><ListID>80000012-1789520000</ListID></CustomerRef></ExpenseLineRet></BillRet></BillAddRs>";
-assert.equal(advanceFromResponse("expense_add", billOnJob, "", { ...expenseWork, jobListId }).action, "complete");
+assert.equal(
+  advanceFromResponse("expense_add", billOnJob, "", { ...expenseWork, jobListId, accountListId }).action,
+  "complete",
+);
+const billOnParent =
+  "<BillAddRs statusCode=\"0\"><BillRet><TxnID>51-1</TxnID><ExpenseLineRet><AccountRef><ListID>8000001A-9</ListID><FullName>Subcontractors</FullName></AccountRef><CustomerRef><ListID>80000001-1</ListID><FullName>Ojamaye</FullName></CustomerRef></ExpenseLineRet></BillRet></BillAddRs>";
+const hungOnParent = advanceFromResponse("expense_add", billOnParent, "", {
+  ...expenseWork,
+  jobListId,
+  accountListId,
+});
+assert.equal(hungOnParent.action, "fail");
+const parentCustomer =
+  "<CustomerQueryRs statusCode=\"0\"><CustomerRet><ListID>80000001-1</ListID><FullName>Ojamaye</FullName></CustomerRet></CustomerQueryRs>";
+assert.equal(advanceFromResponse("job_query", parentCustomer, "", expenseWork).action, "fail");
+const chartXml =
+  "<AccountQueryRs statusCode=\"0\">" +
+  "<AccountRet><ListID>8000001A-9</ListID><Name>Subcontractors</Name><FullName>Subcontractors</FullName><AccountType>Expense</AccountType></AccountRet>" +
+  "<AccountRet><ListID>8000001B-2</ListID><Name>Subcontractors Expense</Name><FullName>Cost of Goods Sold:Subcontractors Expense</FullName><AccountNumber>53600</AccountNumber><AccountType>CostOfGoodsSold</AccountType><ParentRef><ListID>80000010-1</ListID><FullName>Cost of Goods Sold</FullName></ParentRef></AccountRet>" +
+  "</AccountQueryRs>";
+const chartPick = advanceFromResponse("account_query", chartXml, "", { ...expenseWork, jobListId });
+assert.equal(chartPick.action, "next");
+assert.equal(chartPick.action === "next" ? chartPick.step : "", "expense_add");
+assert.equal(chartPick.action === "next" ? chartPick.accountListId : "", accountListId);
+const repairChart = advanceFromResponse("account_query", chartXml, "", repairWork);
+assert.equal(repairChart.action === "next" ? repairChart.step : "", "txn_void");
+assert.equal(
+  matchQbAccount(
+    [
+      { listId: "stray", name: "Subcontractors", fullName: "Subcontractors", accountNumber: "", accountType: "Expense" },
+      {
+        listId: accountListId,
+        name: "Subcontractors Expense",
+        fullName: "Cost of Goods Sold:Subcontractors Expense",
+        accountNumber: "53600",
+        accountType: "CostOfGoodsSold",
+      },
+    ],
+    qbChartAccountFor({ accountName: "Subcontractors", accountNumber: "53600" })!,
+  )?.listId,
+  accountListId,
+);
 assert.equal(
   advanceFromResponse("expense_add", billNoJob, "", { ...expenseWork, hasJob: false, jobCode: "" }).action,
   "complete",
@@ -247,8 +315,11 @@ const apPayload = parseWorkPayload({
   jobCode: "BJ091026-A",
   hasJob: true,
   jobListId: "80000012-1789520000",
+  accountListId: "8000001B-2",
+  accountNumber: "53600",
 });
 assert.equal(apPayload && apPayload.kind === "expense" && apPayload.payWith, "bill");
+assert.equal(apPayload && apPayload.kind === "expense" && apPayload.accountNumber, "53600");
 assert.equal(apPayload && apPayload.kind === "expense" && apPayload.invoiceNumber, "");
 const invoicedPayload = parseWorkPayload({
   kind: "expense",
@@ -257,10 +328,12 @@ const invoicedPayload = parseWorkPayload({
   invoiceNumber: "88421",
   vendor: "ABC Supply",
   payWith: "credit_card",
+  accountListId: "8000001B-2",
 });
 assert.equal(invoicedPayload && invoicedPayload.kind === "expense" && invoicedPayload.invoiceNumber, "88421");
 if (invoicedPayload && invoicedPayload.kind === "expense") {
   assert.match(requestForStep("expense_add", invoicedPayload), /<RefNumber>88421<\/RefNumber>/);
+  assert.match(requestForStep("expense_add", invoicedPayload), /onError="stopOnError"/);
 }
 if (apPayload && apPayload.kind === "expense") {
   const apXml = requestForStep("expense_add", apPayload);
@@ -302,11 +375,14 @@ const repairPayload = parseWorkPayload({
   replaceTxnId: "49-1789524336",
   replaceTxnKind: "bill",
   jobListId: "80000012-1789520000",
+  accountListId: "8000001B-2",
 });
 assert.equal(repairPayload && repairPayload.kind === "expense" && repairPayload.replaceTxnKind, "bill");
 if (repairPayload && repairPayload.kind === "expense") {
   assert.match(requestForStep("expense_add", repairPayload), /<ListID>80000012-1789520000<\/ListID>/);
+  assert.match(requestForStep("expense_add", repairPayload), /<AccountRef>[\s\S]*<ListID>8000001B-2<\/ListID>/);
 }
 if (checkMethod && checkMethod.kind === "expense") {
-  assert.match(requestForStep("expense_add", checkMethod), /<BillAddRq/);
+  assert.match(requestForStep("expense_add", checkMethod), /<AccountQueryRq/);
+  assert.doesNotMatch(requestForStep("expense_add", checkMethod), /<BillAddRq/);
 }

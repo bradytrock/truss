@@ -105,6 +105,7 @@ async function dispatch(call: ReturnType<typeof parseQbwcSoap>) {
         customerName: advance.customerName,
         customerListId: advance.customerListId,
         jobListId: advance.jobListId,
+        accountListId: advance.accountListId,
       });
       return soapIntResponse("receiveResponseXML", 25);
     }

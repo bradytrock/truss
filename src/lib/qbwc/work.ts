@@ -10,7 +10,7 @@ import type {
   Opportunity,
   Payment,
 } from "@/lib/types";
-import { EXPENSE_ACCOUNT_LABELS } from "@/lib/types";
+import { qbChartAccountLabel } from "@/lib/qbwc/accounts";
 import { customerAliasName, customerJobFullName, qbName, type QbInvoiceLine } from "@/lib/qbwc/qbxml";
 
 export const DEFAULT_QB_ITEM = "Contract work";
@@ -30,6 +30,7 @@ export type QbwcStep =
   | "vendor_query"
   | "vendor_add"
   | "vendor_list_query"
+  | "account_query"
   | "expense_add"
   | "txn_void"
   | "payment_add";
@@ -59,13 +60,17 @@ export function taggedQbwcStep(step: QbwcStep, useAlias: boolean) {
   return `${step}${QBWC_ALIAS_FLAG}`;
 }
 
-/** Job expenses must hang on a Customer:Job ListID. Query the job before BillAdd. */
+/** Job expenses must hang on a Customer:Job ListID and a chart-account ListID. */
 export function resolveQbwcStep(rawStep: string, work?: QbwcWork | null) {
   const { step, useAlias } = splitQbwcStep(rawStep);
-  if (work?.kind === "expense" && work.hasJob && !work.jobListId?.trim()) {
-    if (step === "expense_add" || step === "txn_void") {
-      return taggedQbwcStep("job_query", useAlias);
-    }
+  if (work?.kind !== "expense") return rawStep;
+  const posting = step === "expense_add" || step === "txn_void" || step === "account_query";
+  if (!posting) return rawStep;
+  if (work.hasJob && !work.jobListId?.trim()) {
+    return taggedQbwcStep("job_query", useAlias);
+  }
+  if ((step === "expense_add" || step === "txn_void") && !work.accountListId?.trim()) {
+    return taggedQbwcStep("account_query", useAlias);
   }
   return rawStep;
 }
@@ -100,6 +105,8 @@ export type QbExpenseWork = {
   invoiceNumber: string;
   vendor: string;
   accountName: string;
+  /** Chart account number, e.g. 53600. Empty on payloads from before the chart map. */
+  accountNumber: string;
   amount: number;
   payWith: "credit_card" | "bill";
   txnDate: string;
@@ -116,6 +123,8 @@ export type QbExpenseWork = {
   hasJob: boolean;
   customerListId?: string;
   jobListId?: string;
+  /** ListID of the numbered chart account the bill line must hit. */
+  accountListId?: string;
   /** Previous Check or unattached Bill TxnID to void before posting the job bill. */
   replaceTxnId?: string;
   replaceTxnKind?: "check" | "bill";
@@ -302,7 +311,7 @@ export function paymentPushBlocked(input: { payment: Payment; invoice?: Invoice;
 }
 
 export function qbExpenseAccountName(account: ExpenseAccount) {
-  return EXPENSE_ACCOUNT_LABELS[account];
+  return qbChartAccountLabel(account);
 }
 
 export function customerFullName(work: { customerName: string }) {
@@ -343,6 +352,7 @@ function resolvedIds(row: Record<string, unknown>) {
   return {
     ...(asString(row.customerListId) ? { customerListId: asString(row.customerListId) } : {}),
     ...(asString(row.jobListId) ? { jobListId: asString(row.jobListId) } : {}),
+    ...(asString(row.accountListId) ? { accountListId: asString(row.accountListId) } : {}),
   };
 }
 
@@ -364,6 +374,7 @@ export function parseWorkPayload(raw: unknown): QbwcWork | null {
       invoiceNumber: asString(row.invoiceNumber),
       vendor,
       accountName: asString(row.accountName, "Other"),
+      accountNumber: asString(row.accountNumber),
       amount: asNumber(row.amount),
       payWith: asPayWith(row.payWith, asString(row.payAccount)),
       txnDate: asString(row.txnDate),

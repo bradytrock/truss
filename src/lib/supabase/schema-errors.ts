@@ -684,6 +684,7 @@ export const QBWC_VENDORS_SQL = "supabase/migrations/20260825260000_qb_vendors.s
 export const QB_REVIEW_SQL = "supabase/migrations/20260825270000_qb_review.sql";
 export const QB_REVIEW_MENTIONS_SQL = "supabase/migrations/20260827010000_qb_review_mentions.sql";
 export const QBWC_EXPENSE_JOB_SQL = "supabase/migrations/20260827020000_qbwc_expense_job.sql";
+export const QBWC_JOB_BILL_SQL = "supabase/migrations/20260930120000_qbwc_job_bill_chart_accounts.sql";
 
 export function isMissingQbReview(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -738,7 +739,7 @@ export function isMissingQbwc(error: { message?: string; code?: string } | null 
 }
 
 export function missingQbwcMessage() {
-  return `Run ${QBWC_SQL} in the SQL editor (or a fresh bootstrap) so the Web Connector can sign in and post invoices. Expenses and payments also need ${QBWC_EXPENSES_SQL}. Job expenses posting onto Customer:Job need ${QBWC_EXPENSE_JOB_SQL}. If a job parent is already a vendor, run ${QBWC_CUSTOMER_ALIAS_SQL} so the connector can create a customer and hang the job under it. Expense vendor dropdowns need ${QBWC_VENDORS_SQL} so the connector can pull the vendor list from QuickBooks.`;
+  return `Run ${QBWC_SQL} in the SQL editor (or a fresh bootstrap) so the Web Connector can sign in and post invoices. Expenses and payments also need ${QBWC_EXPENSES_SQL}. Job expenses posting onto Customer:Job need ${QBWC_EXPENSE_JOB_SQL}. Bills on the numbered chart accounts (not a stray expense account) need ${QBWC_JOB_BILL_SQL}. If a job parent is already a vendor, run ${QBWC_CUSTOMER_ALIAS_SQL} so the connector can create a customer and hang the job under it. Expense vendor dropdowns need ${QBWC_VENDORS_SQL} so the connector can pull the vendor list from QuickBooks.`;
 }
 
 export const MATERIAL_ORDERS_SQL = "supabase/migrations/20260828120000_material_orders.sql";
