@@ -173,8 +173,8 @@ export function emptyCoverPage(input?: Partial<Extract<PhotoReportPage, { type: 
     notes: input?.notes ?? "",
     showAddress: input?.showAddress ?? true,
     showDate: input?.showDate ?? true,
-    showDateOfLoss: input?.showDateOfLoss ?? false,
-    showClaimNumber: input?.showClaimNumber ?? false,
+    showDateOfLoss: input?.showDateOfLoss ?? true,
+    showClaimNumber: input?.showClaimNumber ?? true,
     heroPhotoId: input?.heroPhotoId ?? null,
     dateOfLoss: input?.dateOfLoss ?? "",
     claimNumber: input?.claimNumber ?? "",
@@ -190,7 +190,7 @@ export function emptyPhotosPage(layout: PhotoPageLayout = "two"): PhotoReportPho
     layout,
     showCaptions: true,
     showTakenAt: true,
-    showCategory: false,
+    showCategory: true,
     items: [],
   };
 }
@@ -343,8 +343,8 @@ export function parsePhotoReportPages(raw: unknown): PhotoReportPage[] {
         notes: asString(row.notes),
         showAddress: asBool(row.showAddress, true),
         showDate: asBool(row.showDate, true),
-        showDateOfLoss: asBool(row.showDateOfLoss, false),
-        showClaimNumber: asBool(row.showClaimNumber, false),
+        showDateOfLoss: asBool(row.showDateOfLoss, true),
+        showClaimNumber: asBool(row.showClaimNumber, true),
         heroPhotoId: asString(row.heroPhotoId) || null,
         dateOfLoss: asString(row.dateOfLoss),
         claimNumber: asString(row.claimNumber),
@@ -385,7 +385,7 @@ export function parsePhotoReportPages(raw: unknown): PhotoReportPage[] {
         layout: parseLayout(row.layout),
         showCaptions: asBool(row.showCaptions, true),
         showTakenAt: asBool(row.showTakenAt, true),
-        showCategory: asBool(row.showCategory, false),
+        showCategory: asBool(row.showCategory, true),
         items,
       });
     }

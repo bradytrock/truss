@@ -255,7 +255,7 @@ async function drawCover(
   } else {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.setTextColor(180, 180, 180);
+    doc.setTextColor(255, 255, 255);
     doc.text("Assign a cover photo in the report", width / 2, heroY + heroH / 2, { align: "center" });
   }
 
@@ -319,7 +319,7 @@ async function drawCover(
   if (cover.companyTag) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
-    doc.setTextColor(120, 120, 120);
+    doc.setTextColor(16, 16, 16);
     const tagMax = Math.max(80, width - inset - textX - 180);
     doc.text(doc.splitTextToSize(cover.companyTag, tagMax)[0] ?? "", textX, 50);
   }
@@ -377,7 +377,7 @@ async function drawCover(
   doc.text(forName[0], inset, peopleY + 20);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.setTextColor(200, 200, 200);
+  doc.setTextColor(255, 255, 255);
   cover.preparedForDetail.slice(0, 2).forEach((line, index) => {
     const fitted = doc.splitTextToSize(line, splitX - inset - 20);
     doc.text(fitted[0] ?? "", inset, peopleY + 38 + index * 14);
@@ -393,7 +393,7 @@ async function drawCover(
   doc.text(cover.preparedByName, splitX + 16, peopleY + 20);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(10);
-  doc.setTextColor(200, 200, 200);
+  doc.setTextColor(255, 255, 255);
   const byWidth = width - inset - (splitX + 16);
   cover.preparedByDetail.slice(0, 3).forEach((line, index) => {
     doc.text(doc.splitTextToSize(line, byWidth)[0] ?? "", splitX + 16, peopleY + 38 + index * 14);
@@ -409,7 +409,7 @@ async function drawCover(
   if (cover.footerRight) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
-    doc.setTextColor(170, 170, 170);
+    doc.setTextColor(255, 255, 255);
     doc.text(doc.splitTextToSize(cover.footerRight, footerHalf)[0] ?? "", width - inset, height - 11, {
       align: "right",
     });

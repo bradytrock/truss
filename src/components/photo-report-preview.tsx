@@ -228,7 +228,7 @@ function CoverPreview({
           <div className="min-w-0">
             <p className="truncate text-[11px] font-semibold leading-tight">{cover.companyName}</p>
             {cover.companyTag ? (
-              <p className="truncate text-[8px] tracking-[0.12em] text-neutral-500 uppercase">{cover.companyTag}</p>
+              <p className="truncate text-[9px] font-semibold tracking-[0.12em] text-neutral-900 uppercase">{cover.companyTag}</p>
             ) : null}
           </div>
         </div>
@@ -249,9 +249,9 @@ function CoverPreview({
         )}
         {cover.street ? (
           <div className="absolute bottom-3 left-3 max-w-[70%] bg-black/80 px-2.5 py-1.5 text-white">
-            <p className="text-[7px] font-semibold tracking-[0.16em] text-[#c4182a] uppercase">Property inspected</p>
+            <p className="text-[8px] font-semibold tracking-[0.16em] text-[#c4182a] uppercase">Property inspected</p>
             <p className="mt-0.5 text-[11px] font-semibold uppercase leading-tight">{cover.street}</p>
-            {cover.cityLine ? <p className="text-[8px] uppercase text-white/80">{cover.cityLine}</p> : null}
+            {cover.cityLine ? <p className="text-[9px] font-semibold uppercase text-white">{cover.cityLine}</p> : null}
           </div>
         ) : null}
       </div>
@@ -264,36 +264,36 @@ function CoverPreview({
           >
             {meta.map((item) => (
               <div key={item.label}>
-                <p className="text-[6px] font-semibold tracking-[0.14em] text-[#c4182a] uppercase">{item.label}</p>
-                <p className="mt-0.5 truncate text-[9px] font-semibold">{item.value || "—"}</p>
+              <p className="text-[8px] font-semibold tracking-[0.14em] text-[#c4182a] uppercase">{item.label}</p>
+              <p className="mt-0.5 truncate text-[11px] font-semibold">{item.value || "—"}</p>
               </div>
             ))}
           </div>
         ) : null}
         <div className="mt-2 grid grid-cols-2 gap-3">
           <div>
-            <p className="text-[6px] font-semibold tracking-[0.14em] text-[#c4182a] uppercase">Prepared for</p>
+            <p className="text-[8px] font-semibold tracking-[0.14em] text-[#c4182a] uppercase">Prepared for</p>
             <p className="mt-0.5 text-[11px] font-semibold leading-tight">{cover.preparedForName}</p>
             {cover.preparedForDetail.map((line) => (
-              <p key={line} className="truncate text-[8px] text-white/70">
+              <p key={line} className="truncate text-[9px] font-semibold text-white">
                 {line}
               </p>
             ))}
           </div>
           <div>
-            <p className="text-[6px] font-semibold tracking-[0.14em] text-[#c4182a] uppercase">Prepared by</p>
+            <p className="text-[8px] font-semibold tracking-[0.14em] text-[#c4182a] uppercase">Prepared by</p>
             <p className="mt-0.5 text-[11px] font-semibold leading-tight">{cover.preparedByName}</p>
             {cover.preparedByDetail.map((line) => (
-              <p key={line} className="truncate text-[8px] font-semibold text-white/70">
+              <p key={line} className="truncate text-[9px] font-semibold text-white">
                 {line}
               </p>
             ))}
           </div>
         </div>
         <div className="mt-2 flex items-end justify-between gap-2 border-t border-white/10 pt-1.5">
-          <p className="truncate text-[7px] font-semibold tracking-wide uppercase">{cover.footerLeft}</p>
+          <p className="truncate text-[8px] font-semibold tracking-wide uppercase">{cover.footerLeft}</p>
           {cover.footerRight ? (
-            <p className="truncate text-[7px] tracking-wide text-white/50 uppercase">{cover.footerRight}</p>
+            <p className="truncate text-[8px] font-semibold tracking-wide text-white uppercase">{cover.footerRight}</p>
           ) : null}
         </div>
       </footer>
