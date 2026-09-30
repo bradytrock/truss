@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CurrencyInput } from "@/components/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -321,15 +322,7 @@ export function LogExpenseDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label htmlFor="exp-amt">Amount</Label>
-              <Input
-                id="exp-amt"
-                type="number"
-                min={0}
-                step="0.01"
-                value={amount}
-                onChange={(event) => setAmount(event.target.value)}
-                required
-              />
+              <CurrencyInput id="exp-amt" value={amount} onValueChange={setAmount} required />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="exp-date">Date</Label>
@@ -647,15 +640,7 @@ export function LogPaymentDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label htmlFor="pay2-amt">Amount</Label>
-              <Input
-                id="pay2-amt"
-                type="number"
-                min={0}
-                step="0.01"
-                value={amount}
-                onChange={(event) => setAmount(event.target.value)}
-                required
-              />
+              <CurrencyInput id="pay2-amt" value={amount} onValueChange={setAmount} required />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="pay2-date">Date</Label>
@@ -789,15 +774,7 @@ export function LogForecastedExpenseDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label htmlFor="fest-amt">Amount</Label>
-              <Input
-                id="fest-amt"
-                type="number"
-                min={0}
-                step="0.01"
-                value={amount}
-                onChange={(event) => setAmount(event.target.value)}
-                required
-              />
+              <CurrencyInput id="fest-amt" value={amount} onValueChange={setAmount} required />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="fest-date">Expected date</Label>

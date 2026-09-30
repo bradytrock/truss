@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CreditCard, Hourglass, PieChart, PlugZap, Receipt, RefreshCw, Users } from "lucide-react";
+import { CurrencyInput } from "@/components/currency-input";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -751,11 +751,11 @@ export function AccountingPortal() {
               <div className="mt-3 space-y-3">
                 <div className="grid gap-1.5">
                   <Label htmlFor="c-amt">Contract amount</Label>
-                  <Input id="c-amt" type="number" min={0} value={contract} onChange={(event) => setContract(event.target.value)} />
+                  <CurrencyInput id="c-amt" value={contract} onValueChange={setContract} />
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="c-cost">Job cost</Label>
-                  <Input id="c-cost" type="number" min={0} value={jobCost} onChange={(event) => setJobCost(event.target.value)} />
+                  <CurrencyInput id="c-cost" value={jobCost} onValueChange={setJobCost} />
                 </div>
                 <div className="grid gap-1.5">
                   <Label>Plan</Label>

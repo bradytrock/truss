@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { CurrencyInput } from "@/components/currency-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -186,11 +187,11 @@ export function VendorProfilePanel({ row }: { row: VendorBookRow }) {
         <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_4.5rem_6.5rem]">
           <Input value={priceName} onChange={(event) => setPriceName(event.target.value)} placeholder="Item" />
           <Input value={priceUnit} onChange={(event) => setPriceUnit(event.target.value)} placeholder="Unit" />
-          <Input
+          <CurrencyInput
             value={priceCost}
-            onChange={(event) => setPriceCost(event.target.value)}
+            onValueChange={setPriceCost}
             placeholder="Cost"
-            inputMode="decimal"
+            aria-label="Unit cost"
           />
         </div>
         <Input

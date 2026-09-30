@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/page-chrome";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CurrencyInput } from "@/components/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -716,13 +717,12 @@ function ActionCard({
         </Select>
       ) : null}
       {action.kind === "set_job_value" && (action.valueMode ?? "estimate") === "amount" ? (
-        <Input
-          type="number"
-          min={0}
-          step="0.01"
+        <CurrencyInput
           value={action.amount ?? ""}
-          onChange={(event) => onChange({ amount: event.target.value === "" ? undefined : Number(event.target.value) })}
-          placeholder="0.00"
+          onValueChange={(text) => {
+            const amount = Number(text);
+            onChange({ amount: text === "" || text === "." || !Number.isFinite(amount) ? undefined : amount });
+          }}
         />
       ) : null}
       {action.kind === "set_job_stage" ? (

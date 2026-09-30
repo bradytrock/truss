@@ -12,6 +12,7 @@ import {
   Download,
   Trash2,
 } from "lucide-react";
+import { CurrencyInput } from "@/components/currency-input";
 import { FormattedTextEditor } from "@/components/formatted-text-editor";
 import { EstimateAddLine } from "@/components/estimate-add-line";
 import { EstimateLinePhotos } from "@/components/estimate-line-photos";
@@ -112,6 +113,7 @@ import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { mintEstimateSignerTokens } from "@/lib/estimate-signers";
 import { shareUrl } from "@/lib/share";
 import { formatDate, formatMoney } from "@/lib/format";
+import { moneyAmount } from "@/lib/money-input";
 import {
   catalogProposalUnitPrice,
   effectiveCatalogMargin,
@@ -426,15 +428,15 @@ export function LineCard({
       ) : (
         <p className="w-[4.75rem] text-sm">{line.unit}</p>
       )}
-      <CommitInput
-        type="number"
-        min={0}
-        step="0.01"
+      <CurrencyInput
         disabled={!editable}
         aria-label="Unit price"
-        className="h-8 w-[6.5rem] text-right"
+        className="h-8 w-[8.25rem] text-right"
         value={line.unitCost}
-        onCommit={(value) => onPatch({ unitCost: Number(value) || 0 })}
+        onCommit={(text) => {
+          const unitCost = moneyAmount(text) ?? 0;
+          if (unitCost !== line.unitCost) onPatch({ unitCost });
+        }}
       />
     </>
   );
@@ -1471,16 +1473,16 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
           <div>
             <Label>Customer subtotal</Label>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <CommitInput
-                type="number"
-                min={0}
-                step="0.01"
+              <CurrencyInput
                 disabled={!editable}
                 className="max-w-[12rem]"
                 value={estimate.subtotalOverride ?? totals.subtotal}
-                onCommit={(value) => {
-                  const amount = Math.max(0, Number(value) || 0);
-                  void crm.updateEstimate(estimate.id, { subtotalOverride: amount });
+                onCommit={(text) => {
+                  const amount = Math.max(0, moneyAmount(text) ?? 0);
+                  const shown = estimate.subtotalOverride ?? totals.subtotal;
+                  if (Math.round(amount * 100) !== Math.round(shown * 100)) {
+                    void crm.updateEstimate(estimate.id, { subtotalOverride: amount });
+                  }
                 }}
               />
               {estimate.subtotalOverride != null ? (
@@ -1855,14 +1857,25 @@ export function AdjustmentFields({
             <SelectItem value="amount">$</SelectItem>
           </SelectContent>
         </Select>
-        <CommitInput
-          type="number"
-          min={0}
-          step="0.01"
-          disabled={disabled}
-          value={value}
-          onCommit={(next) => onChange(kind, Number(next) || 0)}
-        />
+        {kind === "amount" ? (
+          <CurrencyInput
+            disabled={disabled}
+            value={value}
+            onCommit={(text) => {
+              const next = moneyAmount(text) ?? 0;
+              if (next !== value) onChange(kind, next);
+            }}
+          />
+        ) : (
+          <CommitInput
+            type="number"
+            min={0}
+            step="0.01"
+            disabled={disabled}
+            value={value}
+            onCommit={(next) => onChange(kind, Number(next) || 0)}
+          />
+        )}
       </div>
     </div>
   );

@@ -22,6 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { CurrencyInput } from "@/components/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -969,21 +970,12 @@ function EditProfileDialog({
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="profile-edit-quota">Monthly sales quota</Label>
-              <div className="relative">
-                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground">
-                  $
-                </span>
-                <Input
-                  id="profile-edit-quota"
-                  type="number"
-                  min={0}
-                  step="1000"
-                  className="pl-7"
-                  value={quota}
-                  onChange={(event) => setQuota(event.target.value)}
-                  placeholder="Company default"
-                />
-              </div>
+              <CurrencyInput
+                id="profile-edit-quota"
+                value={quota}
+                onValueChange={setQuota}
+                placeholder="Company default"
+              />
               <p className="text-xs text-muted-foreground">
                 {quota.trim()
                   ? "Overrides the company default on the home Goal bar."

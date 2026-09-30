@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Input } from "@/components/ui/input";
+import { CurrencyInput } from "@/components/currency-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -212,30 +212,22 @@ function CompanySettingsForm() {
         <CardContent className="grid gap-4 pt-4">
           <div className="grid gap-1.5 sm:max-w-xs">
             <Label htmlFor="company-default-quota">Company default quota</Label>
-            <div className="relative">
-              <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground">
-                $
-              </span>
-              <Input
-                id="company-default-quota"
-                type="number"
-                min={0}
-                step="1000"
-                className="pl-7"
-                value={
-                  Number.isFinite(form.defaultMonthlySalesQuota)
-                    ? String(form.defaultMonthlySalesQuota)
-                    : "0"
-                }
-                onChange={(event) => {
-                  const next = Number(event.target.value);
-                  patch(
-                    "defaultMonthlySalesQuota",
-                    Number.isFinite(next) && next >= 0 ? next : 0,
-                  );
-                }}
-              />
-            </div>
+            <CurrencyInput
+              id="company-default-quota"
+              value={
+                typeof form.defaultMonthlySalesQuota === "number" &&
+                Number.isFinite(form.defaultMonthlySalesQuota)
+                  ? form.defaultMonthlySalesQuota
+                  : 0
+              }
+              onValueChange={(text) => {
+                const next = Number(text);
+                patch(
+                  "defaultMonthlySalesQuota",
+                  text === "" || !Number.isFinite(next) || next < 0 ? 0 : next,
+                );
+              }}
+            />
             <p className="text-xs text-muted-foreground">
               Sold this month is signed contract value (accepted proposals), not invoices. Override
               a seat under Settings → People when someone carries a different number.
