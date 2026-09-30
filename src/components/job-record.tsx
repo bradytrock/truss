@@ -81,7 +81,6 @@ import {
   suggestedJobCode,
   existingRecordCodes,
 } from "@/lib/job-code";
-import { visibleJobCustomFields } from "@/lib/job-files";
 import {
   isWaitingOnPm,
   itemKindLabel,
@@ -111,7 +110,6 @@ import {
   PROJECT_TYPES,
   type Contact,
   type Job,
-  type JobCustomField,
   type JobStatus,
   type LeadSource,
   type PageTemplateId,
@@ -126,7 +124,7 @@ import { materialOrderLinesFor, materialOrderTotal } from "@/lib/material-orders
 import { archivedPaper, livePaper } from "@/lib/paper-archive";
 import { MaterialOrderFromTemplateDialog } from "@/components/material-order-from-template-dialog";
 
-const JOB_TABS = ["overview", "photos", "files", "insurance", "financials", "paper", "fields"] as const;
+const JOB_TABS = ["overview", "photos", "files", "insurance", "financials", "paper"] as const;
 type JobTab = (typeof JOB_TABS)[number];
 
 function parseJobTab(raw: string | null): JobTab {
@@ -326,8 +324,6 @@ export function JobRecord({
   const [pageCreateOpen, setPageCreateOpen] = useState(false);
   const [pageCreating, setPageCreating] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
-  const [fieldLabel, setFieldLabel] = useState("");
-  const [fieldValue, setFieldValue] = useState("");
   const [street, setStreet] = useState(job.street);
   const [city, setCity] = useState(job.city);
   const [state, setState] = useState(job.state);
@@ -575,22 +571,6 @@ export function JobRecord({
     setTagDraft("");
   }
 
-  function addCustomField() {
-    const label = fieldLabel.trim();
-    if (!label) {
-      toast.error("Give the field a name.");
-      return;
-    }
-    const next: JobCustomField = {
-      id: crypto.randomUUID(),
-      label,
-      value: fieldValue.trim(),
-    };
-    patch({ customFields: [...job.customFields, next] });
-    setFieldLabel("");
-    setFieldValue("");
-  }
-
   const newMenu = !deleted ? (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -719,6 +699,12 @@ export function JobRecord({
           </Select>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <p className="shrink-0 text-sm tabular-nums">
+            <span className="font-medium">{formatCurrencyFull(books.invoiced)}</span>
+            <span className="text-muted-foreground"> invoiced</span>
+            <span className="mx-1.5 text-muted-foreground">·</span>
+            <span className="text-muted-foreground">est. draft {formatCurrencyFull(draftEstimateTotal)}</span>
+          </p>
           {primary?.phone ? (
             <Button
               nativeButton={false}
@@ -1133,37 +1119,28 @@ export function JobRecord({
           if (typeof value === "string") setJobTab(parseJobTab(value));
         }}
       >
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <TabsList variant="line" className="h-auto w-full justify-start overflow-x-auto rounded-none bg-transparent p-0">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="photos">
-              Photos
-              <span className="ml-1 text-muted-foreground">{photos.length}</span>
-            </TabsTrigger>
-            <TabsTrigger value="files">
-              Files
-              <span className="ml-1 text-muted-foreground">{fileCount}</span>
-            </TabsTrigger>
-            <TabsTrigger value="paper">
-              Paper
-              <span className="ml-1 text-muted-foreground">{estimates.length + invoices.length}</span>
-            </TabsTrigger>
-            <TabsTrigger value="insurance">
-              Insurance
-              {claimMath?.openCount ? (
-                <span className="ml-1 text-muted-foreground">{claimMath.openCount}</span>
-              ) : null}
-            </TabsTrigger>
-            <TabsTrigger value="financials">Financials</TabsTrigger>
-            <TabsTrigger value="fields">Custom fields</TabsTrigger>
-          </TabsList>
-          <p className="shrink-0 text-right text-sm tabular-nums">
-            <span className="font-medium">{formatCurrencyFull(books.invoiced)}</span>
-            <span className="text-muted-foreground"> invoiced</span>
-            <span className="mx-1.5 text-muted-foreground">·</span>
-            <span className="text-muted-foreground">est. draft {formatCurrencyFull(draftEstimateTotal)}</span>
-          </p>
-        </div>
+        <TabsList variant="line" className="mb-4 h-auto w-full justify-start overflow-x-auto rounded-none bg-transparent p-0">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="photos">
+            Photos
+            <span className="ml-1 text-muted-foreground">{photos.length}</span>
+          </TabsTrigger>
+          <TabsTrigger value="files">
+            Files
+            <span className="ml-1 text-muted-foreground">{fileCount}</span>
+          </TabsTrigger>
+          <TabsTrigger value="paper">
+            Paper
+            <span className="ml-1 text-muted-foreground">{estimates.length + invoices.length}</span>
+          </TabsTrigger>
+          <TabsTrigger value="insurance">
+            Insurance
+            {claimMath?.openCount ? (
+              <span className="ml-1 text-muted-foreground">{claimMath.openCount}</span>
+            ) : null}
+          </TabsTrigger>
+          <TabsTrigger value="financials">Financials</TabsTrigger>
+        </TabsList>
 
         <TabsContent value="overview" className="mt-0">
           <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -1822,61 +1799,6 @@ export function JobRecord({
           ) : null}
         </TabsContent>
 
-        <TabsContent value="fields" className="mt-0">
-          {visibleJobCustomFields(job.customFields).length === 0 ? (
-            <p className="mb-4 text-sm text-muted-foreground">
-              Claim numbers, deductibles, HOA notes — fields that do not belong on every job.
-            </p>
-          ) : (
-            <ul className="mb-4 divide-y border">
-              {visibleJobCustomFields(job.customFields).map((field) => (
-                <li key={field.id} className="flex items-start gap-3 px-3 py-2.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs text-muted-foreground">{field.label}</p>
-                    <Input
-                      defaultValue={field.value}
-                      onBlur={(event) => {
-                        if (event.target.value === field.value) return;
-                        patch({
-                          customFields: job.customFields.map((item) =>
-                            item.id === field.id ? { ...item, value: event.target.value } : item
-                          ),
-                        });
-                      }}
-                      className="mt-1 h-8"
-                    />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="mt-5 size-7"
-                    onClick={() =>
-                      patch({ customFields: job.customFields.filter((item) => item.id !== field.id) })
-                    }
-                    aria-label={`Remove ${field.label}`}
-                  >
-                    <XIcon className="size-3.5" />
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-            <Input
-              value={fieldLabel}
-              onChange={(event) => setFieldLabel(event.target.value)}
-              placeholder="Field name"
-            />
-            <Input
-              value={fieldValue}
-              onChange={(event) => setFieldValue(event.target.value)}
-              placeholder="Value"
-            />
-            <Button variant="outline" onClick={addCustomField}>
-              Add field
-            </Button>
-          </div>
-        </TabsContent>
       </Tabs>
         </div>
       </div>
