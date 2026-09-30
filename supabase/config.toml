@@ -3,3 +3,6 @@ project_id = "truss"
 
 [functions.send-text]
 verify_jwt = true
+
+[functions.receive-text]
+verify_jwt = false

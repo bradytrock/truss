@@ -4,7 +4,6 @@ import { conditionsPass, automationMatchesEvent, scheduledForFromTrigger } from 
 import { applyAutomationMerge, smsSegmentCount, unknownAutomationMergeFields } from "./merge.ts";
 import { plannedRunsForEvent } from "./queue.ts";
 import { summarizeAutomation, summarizeTrigger } from "./summarize.ts";
-import { sendblueContactNeedsVerification } from "../sendblue.ts";
 import { defaultRequiresConfirmation, validateAutomationDraft } from "./validate.ts";
 import type { Automation, AutomationAction, AutomationCondition } from "./types.ts";
 
@@ -189,7 +188,5 @@ assert.equal(valued.length, 1);
 assert.equal(valued[0]?.status, "confirmed");
 assert.match(valued[0]?.renderedPreview ?? "", /proposal total/);
 assert.equal(automationEmailText("Status updated", "Moved to In progress"), "Status updated\n\nMoved to In progress");
-assert.equal(sendblueContactNeedsVerification("This contact must be verified before sending messages to it."), true);
-assert.equal(sendblueContactNeedsVerification("Sendblue returned 500."), false);
 
 console.log("automations.test.ts ok");

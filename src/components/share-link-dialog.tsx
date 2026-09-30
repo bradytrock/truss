@@ -31,7 +31,7 @@ import {
 } from "@/lib/share-text";
 import { formatResendFromDisplay, RESEND_FROM_ADDRESS } from "@/lib/resend-from";
 
-type SendblueStatus = { configured: boolean; fromNumber: string };
+type TextStatus = { configured: boolean; fromNumber: string };
 type ResendStatus = { configured: boolean; from: string; domain?: string };
 
 export function ShareLinkDialog({
@@ -107,7 +107,7 @@ export function ShareLinkDialog({
   }) => void | Promise<void>;
 }) {
   const [pending, setPending] = useState<"copy" | "pdf" | "text" | "email" | null>(null);
-  const [textStatus, setTextStatus] = useState<SendblueStatus | null>(null);
+  const [textStatus, setTextStatus] = useState<TextStatus | null>(null);
   const [emailStatus, setEmailStatus] = useState<ResendStatus | null>(null);
   const [phones, setPhones] = useState<Record<string, string>>({});
   const [emails, setEmails] = useState<Record<string, string>>({});
@@ -182,7 +182,7 @@ export function ShareLinkDialog({
     void Promise.all([
       fetch("/api/share/text")
         .then((response) => (response.ok ? response.json() : null))
-        .then((data: SendblueStatus | null) => {
+        .then((data: TextStatus | null) => {
           if (!cancelled && data) setTextStatus(data);
         })
         .catch(() => {
@@ -306,7 +306,7 @@ export function ShareLinkDialog({
       }
       if (mocked) {
         toast.message(
-          "Sendblue is not connected to this website. Add SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY, and SENDBLUE_FROM_NUMBER on the host and redeploy, or deploy supabase/functions/send-text.",
+          "Photon is not connected to this website. Set PHOTON_WORKER_URL and PHOTON_WORKER_SECRET, and run the Photon text worker.",
         );
       } else {
         toast.success(
@@ -582,8 +582,8 @@ export function ShareLinkDialog({
                 ? "Each send includes that person’s own signing link. "
                 : null}
               {textStatus?.configured
-                ? `Texts go out over Sendblue${textStatus.fromNumber ? ` (${textStatus.fromNumber})` : ""}. `
-                : "Texts need SENDBLUE_ keys on the host until then Send text previews without delivering. "}
+                ? `Texts go out over Photon${textStatus.fromNumber ? ` (${textStatus.fromNumber})` : ""}. `
+                : "Texts need the Photon worker until then Send text previews without delivering. "}
               {(() => {
                 const fromLabel =
                   sender?.name?.trim() && companyName?.trim()

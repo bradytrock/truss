@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { looksLikePhone } from "@/lib/phone";
-import { isSendblueConfiguredLocally, sendblueStatus, sendblueText } from "@/lib/sendblue";
+import { photonStatus, photonText, photonWorkerConfigured } from "@/lib/photon";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function GET() {
-  return NextResponse.json(await sendblueStatus());
+  return NextResponse.json(await photonStatus());
 }
 
 export async function POST(request: Request) {
@@ -35,20 +36,20 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await sendblueText({ to, content });
+    const result = await photonText({ to, content });
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 502 });
     }
     return NextResponse.json({
       ok: true,
       mocked: result.mocked,
-      configured: isSendblueConfiguredLocally() || !result.mocked,
+      configured: photonWorkerConfigured() || !result.mocked,
       to: result.to,
       handle: result.handle,
     });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Could not reach Sendblue." },
+      { error: error instanceof Error ? error.message : "Could not reach Photon." },
       { status: 502 },
     );
   }

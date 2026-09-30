@@ -14,6 +14,7 @@
     "dev": "node scripts/dev.mjs",
     "build": "next build --webpack && node scripts/prepare-standalone.mjs",
     "start": "node scripts/start.mjs",
+    "photon-worker": "node scripts/photon-worker.mjs",
     "lint": "eslint",
     "postinstall": "node scripts/allow-dev-origins.mjs"
   },
@@ -24,6 +25,8 @@
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@spectrum-ts/core": "^12.10.1",
+    "@spectrum-ts/imessage": "^12.10.1",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
     "@types/leaflet": "^1.9.22",
