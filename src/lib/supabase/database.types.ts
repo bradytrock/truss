@@ -418,6 +418,7 @@ export type Database = {
           lead_source: string;
           market: string;
           primary_photo_id: string | null;
+          projected_margin_percent: number | null;
           deleted_at: string | null;
           deleted_reason: string;
           deleted_by: string;
@@ -457,6 +458,7 @@ export type Database = {
           lead_source?: string;
           market?: string;
           primary_photo_id?: string | null;
+          projected_margin_percent?: number | null;
           deleted_at?: string | null;
           deleted_reason?: string;
           deleted_by?: string;

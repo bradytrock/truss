@@ -350,6 +350,11 @@ export interface Job {
   leadSource: LeadSource | "";
   /** Stable cover photo for the job header / front of the project page. */
   primaryPhotoId: string | null;
+  /**
+   * When set, projected profit is this net margin percent of projected income.
+   * Null keeps the estimate-cost and forecasted-expense projection.
+   */
+  projectedMarginPercent?: number | null;
   deletedAt: string | null;
   deletedReason: string;
   deletedBy: string;

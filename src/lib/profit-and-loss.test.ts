@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { formatDate } from "./format.ts";
 import {
+  applyAverageMargin,
   applyForecastedExpenses,
+  averageActualMarginPercent,
   buildProfitAndLoss,
+  clampAverageMarginPercent,
   compareJobProfitAndLoss,
   preferredEstimateForJob,
+  projectJobComparison,
   type ProfitAndLossStatement,
 } from "./profit-and-loss.ts";
 import type {
@@ -174,6 +178,30 @@ const withOffice = applyForecastedExpenses(compared, [officeForecast]);
 assert.equal(withOffice?.projectedCostOfSales, 50 * 80 + 400);
 assert.equal(withOffice?.projectedExpenses, 120);
 assert.equal(withOffice?.projectedNetIncome, (50 * 112 + 400) - (50 * 80 + 400) - 120);
+
+const income = 50 * 112 + 400;
+const atAverage = applyAverageMargin(compared, 35);
+assert.equal(atAverage?.marginBasis, "average");
+assert.equal(atAverage?.averageMarginPercent, 35);
+assert.equal(atAverage?.projectedNetIncome, roundExpected(income * 0.35));
+assert.equal(atAverage?.projectedGrossProfit, atAverage?.projectedNetIncome);
+assert.equal(atAverage?.projectedCostOfSales, roundExpected(income - income * 0.35));
+assert.equal(atAverage?.projectedExpenses, 0);
+assert.equal(applyAverageMargin(compared, null), compared);
+assert.equal(applyAverageMargin(null, 35), null);
+assert.equal(clampAverageMarginPercent(150), 100);
+assert.equal(clampAverageMarginPercent(-150), -100);
+assert.equal(clampAverageMarginPercent(Number.NaN), null);
+
+const averagedOverForecast = projectJobComparison(compared, {
+  forecasts: [forecast],
+  averageMarginPercent: 35,
+});
+assert.equal(averagedOverForecast?.projectedNetIncome, roundExpected(income * 0.35));
+assert.equal(averagedOverForecast?.projectedCostOfSales, roundExpected(income - income * 0.35));
+const forecasted = projectJobComparison(compared, { forecasts: [forecast], averageMarginPercent: null });
+assert.equal(forecasted?.projectedCostOfSales, 50 * 80 + 400 + 700);
+assert.equal(forecasted?.marginBasis, "estimate");
 
 function job(partial: Partial<Job> & Pick<Job, "id" | "name">): Job {
   return {
@@ -421,5 +449,47 @@ assert.deepEqual(
   ["INV-1 · check", "INV-200 · check · 4419"],
 );
 assert.equal(jobCash.income.lines.every((line) => !line.children), true);
+
+const marginJobs = [
+  job({ id: "job_a", name: "A" }),
+  job({ id: "job_b", name: "B" }),
+  job({ id: "job_empty", name: "Empty" }),
+  job({ id: "job_gone", name: "Gone", deletedAt: "2026-09-01T00:00:00.000Z" }),
+];
+const marginInvoices = [
+  invoice({ id: "inv_a", number: "INV-A", jobId: "job_a", issuedAt: "2026-09-04" }),
+  invoice({ id: "inv_b", number: "INV-B", jobId: "job_b", issuedAt: "2026-09-04" }),
+  invoice({ id: "inv_gone", number: "INV-G", jobId: "job_gone", issuedAt: "2026-09-04" }),
+];
+const companyAverage = averageActualMarginPercent({
+  jobs: marginJobs,
+  invoices: marginInvoices,
+  invoiceLines: [
+    invoiceLine("inv_a", 1000),
+    invoiceLine("inv_b", 1000),
+    invoiceLine("inv_gone", 5000),
+  ],
+  payments: [],
+  expenses: [
+    expense({ id: "exp_a", amount: 400, account: "materials", jobId: "job_a" }),
+    expense({ id: "exp_b", amount: 800, account: "labor", jobId: "job_b" }),
+  ],
+  basis: "accrual",
+});
+assert.equal(companyAverage, 40);
+assert.equal(
+  averageActualMarginPercent({
+    jobs: [job({ id: "job_empty", name: "Empty" })],
+    invoices: [],
+    invoiceLines: [],
+    payments: [],
+    expenses: [],
+  }),
+  null,
+);
+
+function roundExpected(value: number) {
+  return Math.round(value * 100) / 100;
+}
 
 console.log("profit-and-loss.test.ts ok");

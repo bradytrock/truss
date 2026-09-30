@@ -24,7 +24,7 @@ import {
 import { scopedEstimateLines } from "@/lib/estimate-packages";
 import { marketForEstimate } from "@/lib/market";
 import type { JobBooksBasis } from "@/lib/job-financials";
-import { expensesForJob, paymentsForJob } from "@/lib/job-financials";
+import { expensesForJob, jobProfitAndLoss, paymentsForJob } from "@/lib/job-financials";
 import { jobRecordHref } from "@/lib/job-record";
 
 export const COST_OF_SALES_ACCOUNTS: ExpenseAccount[] = [
@@ -73,6 +73,8 @@ export type ProfitAndLossStatement = {
   netIncome: number;
 };
 
+export type JobPnlMarginBasis = "estimate" | "average";
+
 export type JobPnlComparison = {
   estimateId: string | null;
   estimateLabel: string | null;
@@ -82,7 +84,16 @@ export type JobPnlComparison = {
   projectedOther: number;
   projectedGrossProfit: number | null;
   projectedNetIncome: number | null;
+  /** estimate: line costs plus forecasted expenses. average: a chosen net margin percent. */
+  marginBasis: JobPnlMarginBasis;
+  averageMarginPercent: number | null;
 };
+
+export function clampAverageMarginPercent(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(Number(value))) return null;
+  const rounded = Math.round(Number(value) * 100) / 100;
+  return Math.min(100, Math.max(-100, rounded));
+}
 
 function inRange(ymd: string | null | undefined, from: string | null, to: string | null) {
   if (!ymd) return false;
@@ -506,6 +517,8 @@ export function compareJobProfitAndLoss(input: {
     projectedOther,
     projectedGrossProfit,
     projectedNetIncome,
+    marginBasis: "estimate",
+    averageMarginPercent: null,
   };
 }
 
@@ -547,6 +560,73 @@ export function applyForecastedExpenses(
     projectedGrossProfit,
     projectedNetIncome,
   };
+}
+
+/**
+ * Replace estimate costs and forecasted expenses with a net margin percent of projected income.
+ * 35 on a $10,000 job projects $3,500 of profit.
+ */
+export function applyAverageMargin(
+  comparison: JobPnlComparison | null,
+  marginPercent: number | null | undefined,
+): JobPnlComparison | null {
+  if (!comparison) return comparison;
+  const percent = clampAverageMarginPercent(marginPercent);
+  if (percent == null) return comparison;
+  const projectedNetIncome = roundMoney(comparison.projectedIncome * (percent / 100));
+  const projectedCostOfSales = roundMoney(comparison.projectedIncome - projectedNetIncome);
+  return {
+    ...comparison,
+    projectedCostOfSales,
+    projectedExpenses: 0,
+    projectedOther: 0,
+    projectedGrossProfit: projectedNetIncome,
+    projectedNetIncome,
+    marginBasis: "average",
+    averageMarginPercent: percent,
+  };
+}
+
+/** Average margin wins over forecasted expenses. A blank percent keeps the estimate projection. */
+export function projectJobComparison(
+  comparison: JobPnlComparison | null,
+  input: {
+    forecasts: ForecastedExpense[];
+    averageMarginPercent?: number | null;
+  },
+): JobPnlComparison | null {
+  if (input.averageMarginPercent != null) return applyAverageMargin(comparison, input.averageMarginPercent);
+  return applyForecastedExpenses(comparison, input.forecasts);
+}
+
+/** Weighted net margin of jobs that already have income. Null when none do. */
+export function averageActualMarginPercent(input: {
+  jobs: Job[];
+  invoices: Invoice[];
+  invoiceLines: InvoiceLine[];
+  payments: Payment[];
+  expenses: Expense[];
+  basis?: JobBooksBasis;
+}) {
+  const basis = input.basis ?? "accrual";
+  let income = 0;
+  let profit = 0;
+  for (const job of input.jobs) {
+    if (job.deletedAt) continue;
+    const books = jobProfitAndLoss({
+      job,
+      invoices: input.invoices,
+      invoiceLines: input.invoiceLines,
+      payments: input.payments,
+      expenses: input.expenses,
+      basis,
+    });
+    if (books.income <= 0) continue;
+    income += books.income;
+    profit += books.profit;
+  }
+  if (income <= 0) return null;
+  return clampAverageMarginPercent((profit / income) * 100);
 }
 
 export function buildProfitAndLoss(input: {
