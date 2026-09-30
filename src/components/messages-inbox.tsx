@@ -408,12 +408,26 @@ export function MessagesInbox() {
               <ChevronLeft />
             </Button>
             {selectedWeb ? (
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">{selectedWeb.label}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  Website chat · replies stay in this box
-                </p>
-              </div>
+              <>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold">{selectedWeb.label}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {selectedWeb.channel === "text"
+                      ? "Website chat · asked to continue by text"
+                      : "Website chat · replies stay in this box"}
+                  </p>
+                </div>
+                {selectedWeb.jobId ? (
+                  <Button
+                    nativeButton={false}
+                    variant="outline"
+                    size="sm"
+                    render={<Link href={`/jobs?job=${selectedWeb.jobId}`} />}
+                  >
+                    Open lead
+                  </Button>
+                ) : null}
+              </>
             ) : webChatId ? (
               <div className="min-w-0">
                 <p className="text-sm font-semibold">Website chat</p>

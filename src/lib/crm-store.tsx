@@ -3580,6 +3580,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       ) {
         await updateContact(contact.id, { ownerStaffId: staffId });
       }
+      if (leadAssignNeedsEmail({ ownerStaffId: staffId, originatorStaffId: opportunity.originatorStaffId })) {
+        void requestLeadAssignNotification(id);
+      }
       return true;
     },
     [state.contacts, state.jobs, state.opportunities, state.staff, updateContact, updateJob, updateOpportunity, recordCompanyAudit]

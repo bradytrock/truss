@@ -409,7 +409,8 @@ function WebsiteChatEmbed({ slug, phone }: { slug: string; phone: string }) {
       <CardHeader className="border-b">
         <CardTitle>Website chat</CardTitle>
         <CardDescription>
-          A chat box on a computer. On a phone it opens Messages to the main phone
+          Asks for a name, phone, and street address, then opens a lead. Company admins are
+          notified so they can assign it. The visitor can keep talking here or text the main phone
           {phone.trim() ? ` (${phone.trim()})` : ""}.
         </CardDescription>
       </CardHeader>
@@ -432,7 +433,7 @@ function WebsiteChatEmbed({ slug, phone }: { slug: string; phone: string }) {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Desktop messages show up in Inbox under Website. Set the main phone so a visitor on a phone can text the office immediately.
+          The conversation shows up in Inbox under Website. Set the main phone so the visitor can move it to a text.
         </p>
       </CardContent>
     </Card>

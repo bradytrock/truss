@@ -2851,6 +2851,14 @@ export type Database = {
         Args: { p_chat_id: string; p_body: string };
         Returns: Json;
       };
+      website_chat_intake: {
+        Args: { p_token: string; p_name: string; p_phone: string; p_street: string };
+        Returns: Json;
+      };
+      website_chat_choose: {
+        Args: { p_token: string; p_channel: string };
+        Returns: Json;
+      };
       voice_agent_intake: {
         Args: {
           p_token: string;

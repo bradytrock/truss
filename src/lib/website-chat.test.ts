@@ -3,7 +3,13 @@ import {
   fallbackChatReplies,
   isPhoneUserAgent,
   messagesAppLink,
+  parseChatName,
+  parseChatPhone,
+  parseChatStreet,
   parseSuggestedReplies,
+  textHandoffBody,
+  websiteChatAdminSubject,
+  websiteChatAdminText,
   WEBSITE_CHAT_GREETING,
 } from "./website-chat.ts";
 
@@ -26,5 +32,22 @@ assert.deepEqual(parseSuggestedReplies('{"replies":["A","B"]}'), ["A", "B"]);
 assert.deepEqual(parseSuggestedReplies("sure {\"replies\":[\"Only this\"]} thanks"), ["Only this"]);
 assert.deepEqual(parseSuggestedReplies("not json"), []);
 assert.equal(fallbackChatReplies().length, 2);
+assert.equal(parseChatName("  Brady Jones "), "Brady Jones");
+assert.equal(parseChatName("1"), "");
+assert.equal(parseChatPhone("(469) 555-0100"), "(469) 555-0100");
+assert.equal(parseChatPhone("555"), "");
+assert.equal(parseChatStreet("  123 Oak Street "), "123 Oak Street");
+assert.equal(parseChatStreet("Oak"), "");
+assert.equal(
+  textHandoffBody("Brady Jones", "123 Oak Street"),
+  "Hi, this is Brady Jones. I was on your website about 123 Oak Street.",
+);
+assert.equal(websiteChatAdminSubject("Brady Jones", "123 Oak Street"), "New website conversation — 123 Oak Street");
+assert.match(websiteChatAdminText({
+  name: "Brady Jones",
+  phone: "(469) 555-0100",
+  street: "123 Oak Street",
+  companyName: "T Rock Roofing",
+}), /unassigned/);
 
 console.log("website-chat.test.ts ok");

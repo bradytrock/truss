@@ -1,6 +1,11 @@
-import { toE164 } from "./phone.ts";
+import { looksLikePhone, storedPhone, toE164 } from "./phone.ts";
 
 export const WEBSITE_CHAT_GREETING = "Hi, I was on your website.";
+
+export const CHAT_ASK_NAME = "What's your name?";
+export const CHAT_ASK_PHONE = "What's the best phone number to reach you?";
+export const CHAT_ASK_STREET = "What's the street address?";
+export const CHAT_ASK_CHANNEL = "Thanks. You can keep talking here, or move this over to a text.";
 
 export type WebsiteChatMessage = {
   id: string;
@@ -14,6 +19,8 @@ export type WebsiteChatThread = {
   label: string;
   updatedAt: string;
   preview: string;
+  jobId?: string | null;
+  channel?: string;
   messages: WebsiteChatMessage[];
 };
 
@@ -35,6 +42,51 @@ export function messagesAppLink(phone: string, body: string, iphone: boolean) {
   if (!text) return `sms:${e164}`;
   const joiner = iphone ? "&" : "?";
   return `sms:${e164}${joiner}body=${encodeURIComponent(text)}`;
+}
+
+export function parseChatName(value: string) {
+  const name = value.trim().replace(/\s+/g, " ");
+  if (name.length < 2 || name.length > 80 || !/[A-Za-z]/.test(name)) return "";
+  return name;
+}
+
+export function parseChatPhone(value: string) {
+  if (!looksLikePhone(value)) return "";
+  return storedPhone(value);
+}
+
+export function parseChatStreet(value: string) {
+  const street = value.trim().replace(/\s+/g, " ");
+  if (street.length < 5 || street.length > 160) return "";
+  return street;
+}
+
+export function textHandoffBody(name: string, street: string) {
+  const who = name.trim() || "a visitor";
+  const place = street.trim();
+  return place
+    ? `Hi, this is ${who}. I was on your website about ${place}.`
+    : `Hi, this is ${who}. I was on your website.`;
+}
+
+export function websiteChatAdminSubject(name: string, street: string) {
+  const place = street.trim() || name.trim() || "a visitor";
+  return `New website conversation — ${place}`;
+}
+
+export function websiteChatAdminText(input: {
+  name: string;
+  phone: string;
+  street: string;
+  companyName: string;
+}) {
+  const office = input.companyName.trim() || "the office";
+  return [
+    `${input.name.trim() || "A visitor"} started a website chat with ${office}.`,
+    `Phone: ${input.phone.trim() || "—"}`,
+    `Street: ${input.street.trim() || "—"}`,
+    "The lead is unassigned. Assign it when you are ready, and that project manager is notified.",
+  ].join("\n");
 }
 
 export function fallbackChatReplies() {
