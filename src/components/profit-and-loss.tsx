@@ -4,7 +4,13 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { formatMoney } from "@/lib/format";
-import type { JobPnlComparison, PnlLine, PnlSection, ProfitAndLossStatement } from "@/lib/profit-and-loss";
+import {
+  explainJobProfitGap,
+  type JobPnlComparison,
+  type PnlLine,
+  type PnlSection,
+  type ProfitAndLossStatement,
+} from "@/lib/profit-and-loss";
 import { cn } from "@/lib/utils";
 
 function pnlAmount(value: number) {
@@ -166,6 +172,7 @@ export function JobPnlComparisonTable({
       ? comparison.projectedNetIncome / comparison.projectedIncome
       : null;
   const actualMargin = statement.income.total > 0 ? statement.netIncome / statement.income.total : null;
+  const gap = explainJobProfitGap({ comparison, statement });
 
   return (
     <div className="border bg-card px-5 py-5 sm:px-8">
@@ -268,6 +275,33 @@ export function JobPnlComparisonTable({
           />
         </tbody>
       </table>
+
+      {gap ? (
+        <div className="mt-4 space-y-2 border-t pt-3">
+          <p className="text-sm text-muted-foreground">{gap.summary}</p>
+          {gap.items.length > 0 ? (
+            <ul className="space-y-2">
+              {gap.items.map((item) => (
+                <li key={item.id} className="flex items-baseline justify-between gap-3 text-sm">
+                  <div className="min-w-0">
+                    {item.href ? (
+                      <Link href={item.href} className="block truncate hover:underline">
+                        {item.label}
+                      </Link>
+                    ) : (
+                      <p className="truncate">{item.label}</p>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {[item.account, item.note].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                  <span className="shrink-0 tabular-nums">{pnlAmount(item.amount)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

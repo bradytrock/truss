@@ -4,6 +4,7 @@ import {
   applyForecastedExpenses,
   buildProfitAndLoss,
   compareJobProfitAndLoss,
+  explainJobProfitGap,
   preferredEstimateForJob,
   type ProfitAndLossStatement,
 } from "./profit-and-loss.ts";
@@ -125,6 +126,8 @@ assert.equal(compared?.projectedIncome, 50 * 112 + 400);
 assert.equal(compared?.projectedCostOfSales, 50 * 80 + 400);
 assert.equal(compared?.projectedGrossProfit, 50 * 112 + 400 - (50 * 80 + 400));
 assert.equal(compared?.estimateLabel?.startsWith("EST-1016"), true);
+assert.equal(compared?.linesUncosted, false);
+assert.equal(compared?.contractPrice, false);
 
 const contractOnly = compareJobProfitAndLoss({
   job: { id: "job2", opportunityId: null, contractValue: 15000 },
@@ -135,6 +138,12 @@ const contractOnly = compareJobProfitAndLoss({
 assert.equal(contractOnly?.projectedIncome, 15000);
 assert.equal(contractOnly?.projectedCostOfSales, null);
 assert.equal(contractOnly?.projectedNetIncome, null);
+assert.equal(contractOnly?.linesUncosted, false);
+assert.equal(contractOnly?.contractPrice, false);
+assert.equal(
+  explainJobProfitGap({ comparison: contractOnly!, statement }),
+  null,
+);
 
 assert.equal(
   compareJobProfitAndLoss({
@@ -421,5 +430,123 @@ assert.deepEqual(
   ["INV-1 · check", "INV-200 · check · 4419"],
 );
 assert.equal(jobCash.income.lines.every((line) => !line.children), true);
+
+const pebble = job({ id: "job_pebble", name: "Soffit repair", opportunityId: "opp1" });
+const pebbleEstimate = estimate({
+  id: "est1024",
+  status: "accepted",
+  number: "EST-1024",
+  jobId: pebble.id,
+  subtotalOverride: 1503.4,
+  discountKind: "amount",
+  discountValue: 100,
+});
+const pebbleLines = [
+  line({ id: "soffit", estimateId: "est1024", title: "Soffit", quantity: 1, unitCost: 0 }),
+  line({ id: "paint", estimateId: "est1024", title: "Paint soffit", quantity: 1, unitCost: 0 }),
+];
+const pebbleStatement = buildProfitAndLoss({
+  companyName: "Northline",
+  jobs: [pebble],
+  invoices: [
+    invoice({
+      id: "inv_pebble",
+      number: "INV-1005",
+      name: pebble.name,
+      jobId: pebble.id,
+      estimateId: "est1024",
+      status: "paid",
+      issuedAt: "2026-09-18",
+    }),
+  ],
+  invoiceLines: [
+    invoiceLine("inv_pebble", 1503.4, "inv_pebble_work"),
+    { ...invoiceLine("inv_pebble", -100, "inv_pebble_discount"), description: "Discount" },
+  ],
+  payments: [],
+  expenses: [
+    expense({
+      id: "exp_jag",
+      amount: 850.5,
+      account: "subcontractors",
+      jobId: pebble.id,
+      vendor: "Jaguar Painting",
+      invoiceNumber: "902088",
+      incurredAt: "2024-07-14",
+      memo: "Exterior siding repairs",
+    }),
+  ],
+  estimates: [pebbleEstimate],
+  estimateLines: pebbleLines,
+  basis: "accrual",
+  job: pebble,
+  from: null,
+  to: null,
+  periodLabel: "Job",
+});
+const pebbleCompared = compareJobProfitAndLoss({
+  job: pebble,
+  statement: pebbleStatement,
+  estimates: [pebbleEstimate],
+  estimateLines: pebbleLines,
+});
+assert.equal(pebbleCompared?.projectedIncome, 1403.4);
+assert.equal(pebbleCompared?.projectedCostOfSales, 0);
+assert.equal(pebbleCompared?.linesUncosted, true);
+assert.equal(pebbleCompared?.contractPrice, true);
+assert.equal(pebbleStatement.income.total, 1403.4);
+assert.equal(pebbleStatement.costOfSales.total, 850.5);
+assert.equal(Math.round(pebbleStatement.netIncome * 100) / 100, 552.9);
+const pebbleGap = explainJobProfitGap({ comparison: pebbleCompared!, statement: pebbleStatement });
+assert.match(pebbleGap?.summary ?? "", /EST-1024 · accepted is a contract price with no cost on its lines/);
+assert.match(pebbleGap?.summary ?? "", /projected cost of sales is \$0\.00/);
+assert.equal(pebbleGap?.items.length, 1);
+assert.equal(pebbleGap?.items[0]?.amount, 850.5);
+assert.match(pebbleGap?.items[0]?.label ?? "", /Jaguar Painting/);
+assert.match(pebbleGap?.items[0]?.label ?? "", /invoice 902088/);
+assert.equal(pebbleGap?.items[0]?.account, "Subcontractors");
+assert.equal(pebbleGap?.items[0]?.note, "Exterior siding repairs");
+
+const matched = {
+  income: { ...statement.income, total: compared!.projectedIncome, lines: [] },
+  costOfSales: { ...statement.costOfSales, total: compared!.projectedCostOfSales!, lines: [] },
+  expenses: { ...statement.expenses, total: 0, lines: [] },
+  otherExpenses: { ...statement.otherExpenses, total: 0, lines: [] },
+  grossProfit: compared!.projectedGrossProfit!,
+  netIncome: compared!.projectedNetIncome!,
+};
+assert.equal(explainJobProfitGap({ comparison: compared!, statement: matched }), null);
+
+const overStatement = {
+  ...matched,
+  costOfSales: { ...matched.costOfSales, total: matched.costOfSales.total + 600 },
+  grossProfit: matched.grossProfit - 600,
+  netIncome: matched.netIncome - 600,
+};
+const overGap = explainJobProfitGap({ comparison: compared!, statement: overStatement });
+assert.match(overGap?.summary ?? "", /Cost of sales is \$600\.00 over EST-1016 · accepted/);
+assert.equal(overGap?.items.length, 0);
+
+const fuelOnly = {
+  ...matched,
+  expenses: {
+    ...matched.expenses,
+    total: 40,
+    lines: [
+      {
+        id: "fuel",
+        label: "Fuel",
+        amount: 40,
+        children: [{ id: "exp_fuel", label: "Sep 3, 2026 · Shell · EXP-FUEL", amount: 40 }],
+      },
+    ],
+  },
+  netIncome: matched.netIncome - 40,
+};
+const fuelGap = explainJobProfitGap({ comparison: compared!, statement: fuelOnly });
+assert.match(fuelGap?.summary ?? "", /Expenses are \$40\.00 over/);
+assert.equal(fuelGap?.items.length, 1);
+assert.equal(fuelGap?.items[0]?.account, "Fuel");
+assert.equal(fuelGap?.items[0]?.amount, 40);
 
 console.log("profit-and-loss.test.ts ok");

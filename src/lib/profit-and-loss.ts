@@ -12,7 +12,7 @@ import type {
   Payment,
 } from "@/lib/types";
 import { EXPENSE_ACCOUNT_LABELS } from "@/lib/types";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 import { invoiceTotal } from "@/lib/money";
 import {
   amountForEstimate,
@@ -45,6 +45,8 @@ export type PnlLine = {
   label: string;
   amount: number;
   href?: string;
+  /** Vendor-bill memo, when this line is one document. */
+  note?: string;
   /** Invoices, payments, or vendor bills rolled into this line. Omitted when the line is already that document. */
   children?: PnlLine[];
 };
@@ -82,6 +84,24 @@ export type JobPnlComparison = {
   projectedOther: number;
   projectedGrossProfit: number | null;
   projectedNetIncome: number | null;
+  /** Included lines exist and every one of them costs $0. */
+  linesUncosted: boolean;
+  /** Customer price is a contract subtotal, not the sum of the lines. */
+  contractPrice: boolean;
+};
+
+export type ProfitGapItem = {
+  id: string;
+  label: string;
+  amount: number;
+  href?: string;
+  account: string;
+  note?: string;
+};
+
+export type ProfitGapExplanation = {
+  summary: string;
+  items: ProfitGapItem[];
 };
 
 function inRange(ymd: string | null | undefined, from: string | null, to: string | null) {
@@ -111,10 +131,12 @@ function expenseDetailLine(expense: Expense, jobs: Job[], nameJob: boolean): Pnl
   parts.push(vendor);
   if (invoice) parts.push(`invoice ${invoice}`);
   else if (expense.number.trim()) parts.push(expense.number.trim());
+  const note = expense.memo.trim();
   return {
     id: expense.id,
     label: parts.join(" · "),
     amount: expense.amount,
+    ...(note ? { note } : {}),
     href: expense.jobId
       ? jobRecordHref(expense.jobId, { tab: "files", doc: `expense:${expense.id}` })
       : expense.receiptUrl || undefined,
@@ -484,10 +506,11 @@ export function compareJobProfitAndLoss(input: {
   const lines = estimate
     ? includedLines(scopedEstimateLines(estimate, linesForEstimate(input.estimateLines, estimate.id)))
     : [];
-  const projectedCostOfSales =
-    lines.length > 0
-      ? roundMoney(lines.reduce((sum, line) => sum + projectedLineCost(line, input.catalog ?? []), 0))
-      : null;
+  const lineCosts = lines.map((line) => projectedLineCost(line, input.catalog ?? []));
+  const projectedCostOfSales = lines.length > 0 ? roundMoney(lineCosts.reduce((sum, cost) => sum + cost, 0)) : null;
+  const linesUncosted = lines.length > 0 && lineCosts.every((cost) => cost === 0);
+  const override = estimate?.subtotalOverride;
+  const contractPrice = override != null && Number.isFinite(Number(override));
   const projectedExpenses = 0;
   const projectedOther = 0;
   const projectedGrossProfit =
@@ -506,7 +529,88 @@ export function compareJobProfitAndLoss(input: {
     projectedOther,
     projectedGrossProfit,
     projectedNetIncome,
+    linesUncosted,
+    contractPrice,
   };
+}
+
+function postedDocuments(section: PnlSection): ProfitGapItem[] {
+  return section.lines.flatMap((line) => {
+    const documents = line.children && line.children.length > 0 ? line.children : [line];
+    return documents.map((document) => ({
+      id: document.id,
+      label: document.label,
+      amount: document.amount,
+      ...(document.href ? { href: document.href } : {}),
+      account: line.label,
+      ...(document.note ? { note: document.note } : {}),
+    }));
+  });
+}
+
+/**
+ * Why actual profit differs from the sold estimate.
+ * Bills are listed only when that side of the estimate was $0, so each row is part of the gap.
+ */
+export function explainJobProfitGap(input: {
+  comparison: JobPnlComparison;
+  statement: Pick<
+    ProfitAndLossStatement,
+    "income" | "costOfSales" | "expenses" | "otherExpenses" | "netIncome"
+  >;
+}): ProfitGapExplanation | null {
+  const projected = input.comparison.projectedNetIncome;
+  if (projected == null) return null;
+  const profitDelta = roundMoney(input.statement.netIncome - projected);
+  if (profitDelta === 0) return null;
+
+  const label = input.comparison.estimateLabel ?? "The estimate";
+  const parts: string[] = [];
+  const items: ProfitGapItem[] = [];
+
+  const incomeDelta = roundMoney(input.statement.income.total - input.comparison.projectedIncome);
+  if (incomeDelta !== 0) {
+    parts.push(
+      `Income is ${formatMoney(Math.abs(incomeDelta))} ${incomeDelta > 0 ? "over" : "under"} ${label}.`,
+    );
+  }
+
+  const projectedCost = input.comparison.projectedCostOfSales;
+  if (projectedCost != null) {
+    const costDelta = roundMoney(input.statement.costOfSales.total - projectedCost);
+    if (costDelta !== 0 && input.comparison.linesUncosted && projectedCost === 0) {
+      parts.push(
+        input.comparison.contractPrice
+          ? `${label} is a contract price with no cost on its lines, so projected cost of sales is ${formatMoney(0)}.`
+          : `${label} has no cost on its lines, so projected cost of sales is ${formatMoney(0)}.`,
+      );
+    } else if (costDelta !== 0) {
+      parts.push(
+        `Cost of sales is ${formatMoney(Math.abs(costDelta))} ${costDelta > 0 ? "over" : "under"} ${label}.`,
+      );
+    }
+    if (costDelta !== 0 && projectedCost === 0) {
+      items.push(...postedDocuments(input.statement.costOfSales));
+    }
+  }
+
+  const expenseActual = roundMoney(input.statement.expenses.total + input.statement.otherExpenses.total);
+  const expenseProjected = roundMoney(input.comparison.projectedExpenses + input.comparison.projectedOther);
+  const expenseDelta = roundMoney(expenseActual - expenseProjected);
+  if (expenseDelta !== 0) {
+    parts.push(
+      `Expenses are ${formatMoney(Math.abs(expenseDelta))} ${expenseDelta > 0 ? "over" : "under"} ${label}.`,
+    );
+    if (expenseProjected === 0) {
+      items.push(
+        ...postedDocuments(input.statement.expenses),
+        ...postedDocuments(input.statement.otherExpenses),
+      );
+    }
+  }
+
+  if (parts.length === 0) return null;
+  return { summary: parts.join(" "), items };
 }
 
 function forecastSum(items: ForecastedExpense[], accounts: readonly ExpenseAccount[]) {
