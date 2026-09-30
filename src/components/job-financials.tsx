@@ -179,7 +179,7 @@ export function JobFinancials({ job }: { job: Job }) {
           <p className="text-sm text-muted-foreground">
             {comparison?.marginBasis === "average"
               ? "No forecasted expenses. Projected profit is using the average margin."
-              : "No forecasted expenses on this job yet. Log an expected cost, or set an average margin on projected profit."}
+              : "No forecasted expenses on this job yet. Log an expected cost, or click the projected margin and set a percent."}
           </p>
         ) : (
           <ul className="space-y-3">

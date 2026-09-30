@@ -1,10 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/lib/format";
 import {
   clampAverageMarginPercent,
@@ -167,104 +165,132 @@ export type ProjectedMarginEditor = {
   onChange: (percent: number | null) => boolean | Promise<boolean>;
 };
 
-function ProjectedMarginEditorRow({
-  percent: savedPercent,
+function marginDraft(value: number) {
+  return String(Math.round(value * 100) / 100);
+}
+
+function EditableProjectedMargin({
+  shownPercent,
+  usingAverage,
+  savedPercent,
   companyAverage,
   onChange,
-}: ProjectedMarginEditor) {
-  const [draft, setDraft] = useState(savedPercent == null ? "" : String(savedPercent));
-  const [sourcePercent, setSourcePercent] = useState(savedPercent);
-  if (sourcePercent !== savedPercent) {
-    setSourcePercent(savedPercent);
-    setDraft(savedPercent == null ? "" : String(savedPercent));
-  }
-
-  async function commit(raw: string) {
-    const trimmed = raw.trim().replace(/%$/, "");
-    if (!trimmed) {
-      if (savedPercent != null) {
-        const ok = await onChange(null);
-        if (!ok) setDraft(String(savedPercent));
-      }
-      return;
-    }
-    const next = clampAverageMarginPercent(Number(trimmed));
-    if (next == null || (savedPercent != null && next === savedPercent)) {
-      setDraft(savedPercent == null ? "" : String(savedPercent));
-      return;
-    }
-    const ok = await onChange(next);
-    if (!ok) setDraft(savedPercent == null ? "" : String(savedPercent));
-  }
-
+}: {
+  shownPercent: number | null;
+  usingAverage: boolean;
+  savedPercent: number | null;
+  companyAverage: number | null;
+  onChange: ProjectedMarginEditor["onChange"];
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const cancelRef = useRef(false);
+  const label =
+    usingAverage && savedPercent != null
+      ? `${savedPercent.toFixed(1)}% average margin`
+      : shownPercent == null
+        ? "Margin —"
+        : `${shownPercent.toFixed(1)}% margin`;
   const averageToApply =
     companyAverage != null &&
     (savedPercent == null || Math.abs(companyAverage - savedPercent) >= 0.01)
       ? companyAverage
       : null;
 
+  function beginEdit() {
+    const initial = savedPercent ?? shownPercent;
+    setDraft(initial == null ? "" : marginDraft(initial));
+    setEditing(true);
+  }
+
+  async function commit(raw: string) {
+    if (cancelRef.current) {
+      cancelRef.current = false;
+      return;
+    }
+    const trimmed = raw.trim().replace(/%$/, "");
+    if (!trimmed) {
+      cancelRef.current = true;
+      setEditing(false);
+      if (savedPercent != null) await onChange(null);
+      return;
+    }
+    const next = clampAverageMarginPercent(Number(trimmed));
+    if (next == null || (savedPercent != null && next === savedPercent)) {
+      cancelRef.current = true;
+      setEditing(false);
+      return;
+    }
+    const ok = await onChange(next);
+    if (ok) {
+      cancelRef.current = true;
+      setEditing(false);
+    }
+  }
+
+  function skipBlurAnd(action: () => void) {
+    return {
+      onMouseDown: (event: { preventDefault: () => void }) => {
+        event.preventDefault();
+        cancelRef.current = true;
+      },
+      onClick: () => {
+        setEditing(false);
+        action();
+      },
+    };
+  }
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="text-left text-xs text-muted-foreground underline-offset-2 hover:underline"
+        onClick={beginEdit}
+      >
+        {label}
+      </button>
+    );
+  }
+
   return (
-    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-      <div className="min-w-0">
-        <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-          Margin
-        </p>
-        <p className="mt-0.5 max-w-xl text-xs text-muted-foreground">
-          {savedPercent == null
-            ? companyAverage == null
-              ? "Type a margin percent. Projected profit becomes that share of income, without forecasted expenses."
-              : "Type a margin percent, or use the company average. Projected profit becomes that share of income, without forecasted expenses."
-            : "This percent of income is the projected profit. Forecasted expenses stay listed and are left out of the projection."}
-        </p>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="sr-only">Average margin percent</span>
-          <Input
-            type="number"
-            inputMode="decimal"
-            min={-100}
-            max={100}
-            step="0.1"
-            aria-label="Average margin percent"
-            className="h-8 w-20 tabular-nums"
-            value={draft}
-            placeholder="—"
-            onChange={(event) => setDraft(event.target.value)}
-            onBlur={() => void commit(draft)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                event.currentTarget.blur();
-              }
-            }}
-          />
-          <span>%</span>
-        </label>
-        {averageToApply != null ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => void onChange(averageToApply)}
-          >
-            Use {averageToApply.toFixed(1)}% average
-          </Button>
-        ) : null}
-        {savedPercent != null ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => void onChange(null)}
-          >
-            Use estimate costs
-          </Button>
-        ) : null}
-      </div>
-    </div>
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+      <input
+        autoFocus
+        type="number"
+        inputMode="decimal"
+        min={-100}
+        max={100}
+        step="0.1"
+        aria-label="Projected margin percent"
+        className="w-14 border-0 border-b border-foreground/40 bg-transparent p-0 text-xs tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => void commit(draft)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            event.currentTarget.blur();
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            cancelRef.current = true;
+            setEditing(false);
+          }
+        }}
+      />
+      <span>% average margin</span>
+      {averageToApply != null ? (
+        <button type="button" className="underline-offset-2 hover:underline" {...skipBlurAnd(() => void onChange(averageToApply))}>
+          Use {averageToApply.toFixed(1)}% average
+        </button>
+      ) : null}
+      {savedPercent != null ? (
+        <button type="button" className="underline-offset-2 hover:underline" {...skipBlurAnd(() => void onChange(null))}>
+          Use estimate costs
+        </button>
+      ) : null}
+    </span>
   );
 }
 
@@ -325,13 +351,23 @@ export function JobPnlComparisonTable({
           <p className="mt-1 text-lg tabular-nums">
             {comparison.projectedNetIncome == null ? "—" : pnlAmount(comparison.projectedNetIncome)}
           </p>
-          <p className="text-xs text-muted-foreground">
-            {comparison.marginBasis === "average" && comparison.averageMarginPercent != null
-              ? `${comparison.averageMarginPercent.toFixed(1)}% average margin`
-              : projectedMargin == null
-                ? "Margin —"
-                : `${(projectedMargin * 100).toFixed(1)}% margin`}
-          </p>
+          {marginEditor ? (
+            <EditableProjectedMargin
+              shownPercent={projectedMargin == null ? null : projectedMargin * 100}
+              usingAverage={comparison.marginBasis === "average" && comparison.averageMarginPercent != null}
+              savedPercent={marginEditor.percent}
+              companyAverage={marginEditor.companyAverage}
+              onChange={marginEditor.onChange}
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {comparison.marginBasis === "average" && comparison.averageMarginPercent != null
+                ? `${comparison.averageMarginPercent.toFixed(1)}% average margin`
+                : projectedMargin == null
+                  ? "Margin —"
+                  : `${(projectedMargin * 100).toFixed(1)}% margin`}
+            </p>
+          )}
         </div>
         <div className="border px-3 py-2.5">
           <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
@@ -356,8 +392,6 @@ export function JobPnlComparisonTable({
           </p>
         </div>
       </div>
-
-      {marginEditor ? <ProjectedMarginEditorRow {...marginEditor} /> : null}
 
       <table className="mt-4 w-full text-sm">
         <thead>
