@@ -158,8 +158,14 @@ async function notifyOwningPm(token: string, result: VoiceRpcResult) {
   const content = result.notifySms?.trim() ?? "";
   if (!looksLikePhone(to) || !content) return { notified: false };
   try {
-    const sent = await photonText({ to, content });
-    if (sent.ok && (result.jobId || result.opportunityId)) {
+    const supabase = createAnonClient();
+    const { data: companyId } = await supabase.rpc("photon_company_for_voice", { p_token: token });
+    const sent = await photonText({
+      to,
+      content,
+      companyId: typeof companyId === "string" ? companyId : "",
+    });
+    if (sent.ok && !sent.mocked && (result.jobId || result.opportunityId)) {
       await voiceLog(token, {
         body: `Texted ${result.notifyName || "the project manager"}: ${content}`,
         jobId: result.jobId ?? undefined,

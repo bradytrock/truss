@@ -2427,7 +2427,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       if (data.mocked) {
         toast.message(
-          "Photon is not connected on this host. The text is logged on the job. Set PHOTON_WORKER_URL and PHOTON_WORKER_SECRET, and run the Photon text worker.",
+          "Photon is not connected for this company. The text is logged on the job. Add this office's Photon project under Settings → Photon.",
         );
       } else {
         toast.success("Text sent.");

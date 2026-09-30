@@ -151,6 +151,7 @@ async function runPlanned(
     let opportunityState = opportunity;
     const executed = await executeAutomationActions({
       automation,
+      companyId: next.companyId,
       merge: mergeForJob({ book, company, job, estimateTotal }),
       estimateTotal,
       customerPhone: contact?.phone,

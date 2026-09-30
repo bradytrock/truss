@@ -1,8 +1,8 @@
 /**
  * Proxies a signed-in send to the long-lived Photon worker.
  * Spectrum has no HTTP send API, so this function cannot talk to iMessage itself.
- * Set PHOTON_WORKER_URL and PHOTON_WORKER_SECRET in Edge Function secrets when
- * those values are not on the Next.js host.
+ * Project id, secret, and from-number come from the company on each request.
+ * Set PHOTON_WORKER_URL and PHOTON_WORKER_SECRET here only when they are not on the Next.js host.
  */
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -78,7 +78,14 @@ Deno.serve(async (request) => {
         Authorization: `Bearer ${secret}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ to, content }),
+      body: JSON.stringify({
+        to,
+        content,
+        companyId: typeof body.companyId === "string" ? body.companyId : "",
+        projectId: typeof body.projectId === "string" ? body.projectId : "",
+        projectSecret: typeof body.projectSecret === "string" ? body.projectSecret : "",
+        fromNumber: typeof body.fromNumber === "string" ? body.fromNumber : "",
+      }),
     });
     const payload = await response.json().catch(() => ({ ok: false, error: "Photon could not send that text." }));
     return json(payload, response.ok ? 200 : response.status);

@@ -845,6 +845,27 @@ export function missingEagleviewMessage() {
   return `Run ${EAGLEVIEW_SQL} in the SQL editor so EagleView orders and credentials persist.`;
 }
 
+export const PHOTON_SQL = "supabase/migrations/20260930140000_photon_connections.sql";
+
+export function isMissingPhoton(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentions = message.includes("photon_connections") || message.includes("photon_webhook_account") || message.includes("photon_company_for");
+  return (
+    (code === "pgrst205" && mentions) ||
+    (code === "pgrst202" && mentions) ||
+    ((message.includes("schema cache") ||
+      message.includes("could not find the") ||
+      message.includes("does not exist")) &&
+      mentions)
+  );
+}
+
+export function missingPhotonMessage() {
+  return `Run ${PHOTON_SQL} in the SQL editor so each company can store its own Photon project.`;
+}
+
 export const COMPANYCAM_SQL = "supabase/migrations/20260928130000_companycam.sql";
 
 export function isMissingCompanyCam(error: { message?: string; code?: string } | null | undefined) {

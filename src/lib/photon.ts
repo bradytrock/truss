@@ -1,3 +1,4 @@
+import type { PhotonAccount } from "@/lib/photon-account";
 import { toE164 } from "@/lib/phone";
 import { createClient } from "@/lib/supabase/server";
 import { getSupabaseKey, getSupabaseUrl } from "@/lib/supabase/env";
@@ -36,7 +37,11 @@ function workerHeaders() {
   };
 }
 
-async function photonWorkerRequest(input: { method: "GET" | "POST"; path: string; body?: Record<string, string> }) {
+async function photonWorkerRequest(input: {
+  method: "GET" | "POST";
+  path: string;
+  body?: Record<string, string>;
+}) {
   const response = await fetch(`${photonWorkerUrl()}${input.path}`, {
     method: input.method,
     headers: workerHeaders(),
@@ -67,29 +72,26 @@ async function photonFunctionRequest(input: { method: "GET" | "POST"; body?: Rec
   return response;
 }
 
-function readStatus(payload: Record<string, unknown>): PhotonTextStatus {
+/** Company line plus a worker URL on this host. The number comes from the office, not the platform. */
+export function photonCompanyStatus(account: PhotonAccount | null): PhotonTextStatus {
+  const fromNumber = account?.fromNumber ?? "";
   return {
-    configured: Boolean(payload.configured),
-    fromNumber: typeof payload.fromNumber === "string" ? payload.fromNumber : "",
+    configured: Boolean(fromNumber) && photonWorkerConfigured(),
+    fromNumber: fromNumber ? `ending ${fromNumber.slice(-4)}` : "",
   };
 }
 
-export async function photonStatus(): Promise<PhotonTextStatus> {
-  if (photonWorkerConfigured()) {
-    try {
-      const response = await photonWorkerRequest({ method: "GET", path: "/status" });
-      if (!response.ok) return { configured: false, fromNumber: "" };
-      return readStatus((await response.json()) as Record<string, unknown>);
-    } catch {
-      return { configured: false, fromNumber: "" };
-    }
-  }
+export async function photonStatus(account: PhotonAccount | null = null): Promise<PhotonTextStatus> {
+  const local = photonCompanyStatus(account);
+  if (!local.configured) return local;
   try {
-    const response = await photonFunctionRequest({ method: "GET" });
-    if (!response || !response.ok) return { configured: false, fromNumber: "" };
-    return readStatus((await response.json()) as Record<string, unknown>);
+    const response = photonWorkerConfigured()
+      ? await photonWorkerRequest({ method: "GET", path: "/status" })
+      : await photonFunctionRequest({ method: "GET" });
+    if (!response || !response.ok) return { configured: false, fromNumber: local.fromNumber };
+    return local;
   } catch {
-    return { configured: false, fromNumber: "" };
+    return { configured: false, fromNumber: local.fromNumber };
   }
 }
 
@@ -107,10 +109,26 @@ function readSendPayload(payload: Record<string, unknown>, to: string): PhotonTe
   };
 }
 
-async function photonTextViaWorker(to: string, content: string): Promise<PhotonTextResult> {
+async function photonTextViaWorker(
+  to: string,
+  content: string,
+  account: PhotonAccount | null,
+  companyId: string,
+): Promise<PhotonTextResult> {
   let response: Response;
   try {
-    response = await photonWorkerRequest({ method: "POST", path: "/send", body: { to, content } });
+    response = await photonWorkerRequest({
+      method: "POST",
+      path: "/send",
+      body: {
+        to,
+        content,
+        companyId: companyId || account?.companyId || "",
+        projectId: account?.projectId || "",
+        projectSecret: account?.projectSecret || "",
+        fromNumber: account?.fromNumber || "",
+      },
+    });
   } catch {
     return { ok: false, mocked: false, error: "Could not reach the Photon text worker." };
   }
@@ -129,8 +147,23 @@ async function photonTextViaWorker(to: string, content: string): Promise<PhotonT
   return readSendPayload(payload, to);
 }
 
-async function photonTextViaFunction(to: string, content: string): Promise<PhotonTextResult> {
-  const response = await photonFunctionRequest({ method: "POST", body: { to, content } });
+async function photonTextViaFunction(
+  to: string,
+  content: string,
+  account: PhotonAccount | null,
+  companyId: string,
+): Promise<PhotonTextResult> {
+  const response = await photonFunctionRequest({
+    method: "POST",
+    body: {
+      to,
+      content,
+      companyId: companyId || account?.companyId || "",
+      projectId: account?.projectId || "",
+      projectSecret: account?.projectSecret || "",
+      fromNumber: account?.fromNumber || "",
+    },
+  });
   if (!response) {
     return { ok: false, mocked: false, error: "Photon texting is not configured on this host." };
   }
@@ -151,16 +184,26 @@ async function photonTextViaFunction(to: string, content: string): Promise<Photo
   return readSendPayload(payload, to);
 }
 
-export async function photonText(input: { to: string; content: string }): Promise<PhotonTextResult> {
+export async function photonText(input: {
+  to: string;
+  content: string;
+  companyId?: string;
+  account?: PhotonAccount | null;
+}): Promise<PhotonTextResult> {
   const to = toE164(input.to);
   const content = input.content.trim();
+  const companyId = input.companyId?.trim() || input.account?.companyId || "";
+  const account = input.account ?? null;
   if (!to) return { ok: false, mocked: false, error: "That phone number is not valid." };
   if (!content) return { ok: false, mocked: false, error: "Write a message before sending." };
+  if (!companyId && !account) {
+    return { ok: false, mocked: false, error: "Connect Photon for this company in Settings." };
+  }
 
-  if (photonWorkerConfigured()) return photonTextViaWorker(to, content);
+  if (photonWorkerConfigured()) return photonTextViaWorker(to, content, account, companyId);
 
   try {
-    return await photonTextViaFunction(to, content);
+    return await photonTextViaFunction(to, content, account, companyId);
   } catch {
     return { ok: true, mocked: true, to, handle: `mock_${Date.now()}` };
   }

@@ -1,22 +1,33 @@
 import { NextResponse } from "next/server";
+import { loadProfileCompany } from "@/lib/eagleview-server";
 import { looksLikePhone } from "@/lib/phone";
+import { loadPhotonConnection, photonAccountFromRow } from "@/lib/photon-account";
 import { photonStatus, photonText, photonWorkerConfigured } from "@/lib/photon";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+async function companyAccount() {
+  const supabase = await createClient();
+  const { profile, error } = await loadProfileCompany(supabase);
+  if (!profile?.company_id) return { error: error || "Sign in to send a text.", account: null, companyId: "" };
+  const { row } = await loadPhotonConnection(supabase, profile.company_id);
+  return { error: "", account: photonAccountFromRow(row), companyId: profile.company_id };
+}
+
 export async function GET() {
-  return NextResponse.json(await photonStatus());
+  const loaded = await companyAccount();
+  if (!loaded.companyId) {
+    return NextResponse.json({ error: loaded.error }, { status: 401 });
+  }
+  return NextResponse.json(await photonStatus(loaded.account));
 }
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Sign in to send a text." }, { status: 401 });
+  const loaded = await companyAccount();
+  if (!loaded.companyId) {
+    return NextResponse.json({ error: loaded.error || "Sign in to send a text." }, { status: 401 });
   }
 
   let body: Record<string, unknown> = {};
@@ -35,8 +46,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Write a message before sending." }, { status: 400 });
   }
 
+  if (!loaded.account) {
+    return NextResponse.json({
+      ok: true,
+      mocked: true,
+      configured: false,
+      to,
+      handle: "",
+    });
+  }
+
   try {
-    const result = await photonText({ to, content });
+    const result = await photonText({
+      to,
+      content,
+      companyId: loaded.companyId,
+      account: loaded.account,
+    });
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 502 });
     }

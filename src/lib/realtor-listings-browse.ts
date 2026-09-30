@@ -132,6 +132,7 @@ function parseWatches(raw: unknown): RealtorListingWatch[] {
 }
 
 async function notifyOwnerOfNewListings(input: {
+  companyId: string;
   ownerPhone: string;
   contactName: string;
   listings: Array<{ title?: string; address?: string; price?: number | null }>;
@@ -146,7 +147,7 @@ async function notifyOwnerOfNewListings(input: {
   const extra =
     input.listings.length > 1 ? ` (+${input.listings.length - 1} more)` : "";
   const content = `New listing from ${input.contactName}: ${label}${price}${extra}. Open Truss to follow up.`;
-  await photonText({ to: input.ownerPhone, content });
+  await photonText({ to: input.ownerPhone, content, companyId: input.companyId });
 }
 
 export async function listRealtorListingWatches() {
@@ -196,6 +197,7 @@ export async function browseRealtorListingWatch(watch: RealtorListingWatch) {
   if (!browseError && newListings.length > 0) {
     try {
       await notifyOwnerOfNewListings({
+        companyId: watch.companyId,
         ownerPhone,
         contactName,
         listings: newListings,

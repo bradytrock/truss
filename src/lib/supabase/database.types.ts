@@ -1723,6 +1723,38 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["company_stripe_accounts"]["Insert"]>;
         Relationships: [];
       };
+      photon_connections: {
+        Row: {
+          company_id: string;
+          project_id: string;
+          project_secret: string;
+          from_number: string;
+          webhook_token: string;
+          webhook_id: string;
+          webhook_secret: string;
+          linked: boolean;
+          linked_at: string | null;
+          linked_by: string;
+          updated_at: string;
+          created_at: string;
+        };
+        Insert: {
+          company_id: string;
+          project_id?: string;
+          project_secret?: string;
+          from_number?: string;
+          webhook_token?: string;
+          webhook_id?: string;
+          webhook_secret?: string;
+          linked?: boolean;
+          linked_at?: string | null;
+          linked_by?: string;
+          updated_at?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["photon_connections"]["Insert"]>;
+        Relationships: [];
+      };
       companycam_connections: {
         Row: {
           company_id: string;
@@ -3211,6 +3243,18 @@ export type Database = {
         }[];
       };
       claim_invite: {
+        Args: { p_token: string };
+        Returns: string;
+      };
+      photon_webhook_account: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      photon_company_for_voice: {
+        Args: { p_token: string };
+        Returns: string;
+      };
+      photon_company_for_estimate_share: {
         Args: { p_token: string };
         Returns: string;
       };

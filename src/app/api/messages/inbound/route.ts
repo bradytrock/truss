@@ -1,16 +1,16 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import {
-  authorizeInboundWebhook,
-  inboundOurNumber,
-  messagesWebhookToken,
-  parseInboundText,
-  spectrumWebhookSecret,
-} from "@/lib/photon-webhook";
+import { authorizeInboundWebhook, parseInboundText } from "@/lib/photon-webhook";
 import { getSupabaseKey, getSupabaseUrl } from "@/lib/supabase/env";
-import type { Database } from "@/lib/supabase/database.types";
+import type { Database, Json } from "@/lib/supabase/database.types";
+import { isMissingPhoton } from "@/lib/supabase/schema-errors";
 
 export const runtime = "nodejs";
+
+function asRecord(value: Json | null): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
 
 export async function GET() {
   return NextResponse.json({ ok: true });
@@ -19,11 +19,27 @@ export async function GET() {
 export async function POST(request: Request) {
   const rawBody = await request.text();
   const url = new URL(request.url);
+  const token = url.searchParams.get("token")?.trim() || request.headers.get("x-webhook-token")?.trim() || "";
+  const supabase = createClient<Database>(getSupabaseUrl(), getSupabaseKey());
+  const { data, error } = await supabase.rpc("photon_webhook_account", { p_token: token });
+  if (error) {
+    if (isMissingPhoton(error)) {
+      return NextResponse.json({ ok: true, skipped: true, reason: "run_photon_sql" });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  const account = asRecord(data);
+  const secret = typeof account?.webhookSecret === "string" ? account.webhookSecret : "";
+  const fromNumber = typeof account?.fromNumber === "string" ? account.fromNumber : "";
+  if (!secret) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
   const auth = authorizeInboundWebhook({
-    secret: spectrumWebhookSecret(),
-    token: messagesWebhookToken(),
-    headerToken: request.headers.get("x-webhook-token") || "",
-    queryToken: url.searchParams.get("token") || "",
+    secret,
+    token: "",
+    headerToken: "",
+    queryToken: "",
     timestamp: request.headers.get("x-spectrum-timestamp") || "",
     signature: request.headers.get("x-spectrum-signature") || "",
     rawBody,
@@ -39,13 +55,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  const parsed = parseInboundText(raw, inboundOurNumber());
+  const parsed = parseInboundText(raw, fromNumber);
   if (parsed.skip) {
     return NextResponse.json({ ok: true, skipped: true, reason: parsed.reason });
   }
 
-  const supabase = createClient<Database>(getSupabaseUrl(), getSupabaseKey());
-  const { data, error } = await supabase.rpc("ingest_inbound_text", {
+  const ingested = await supabase.rpc("ingest_inbound_text", {
     p_from: parsed.from,
     p_body: parsed.body,
     p_handle: parsed.handle,
@@ -53,12 +68,12 @@ export async function POST(request: Request) {
     p_sent_at: parsed.sentAt,
   });
 
-  if (error) {
+  if (ingested.error) {
     if (
-      error.code === "PGRST202" ||
-      error.code === "PGRST204" ||
-      error.code === "PGRST205" ||
-      (error.message ?? "").includes("Could not find the")
+      ingested.error.code === "PGRST202" ||
+      ingested.error.code === "PGRST204" ||
+      ingested.error.code === "PGRST205" ||
+      (ingested.error.message ?? "").includes("Could not find the")
     ) {
       return NextResponse.json({
         ok: true,
@@ -66,8 +81,8 @@ export async function POST(request: Request) {
         reason: "run_messages_sql",
       });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: ingested.error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data ?? { ok: true });
+  return NextResponse.json(ingested.data ?? { ok: true });
 }

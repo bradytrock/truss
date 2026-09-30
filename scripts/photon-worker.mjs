@@ -5,12 +5,14 @@
  * connection, and Spectrum has no public HTTP send API. This process stays
  * up, and the Next.js app calls it with PHOTON_WORKER_URL + PHOTON_WORKER_SECRET.
  *
- *   SPECTRUM_PROJECT_ID
- *   SPECTRUM_PROJECT_SECRET
+ * Photon project id, secret, and from-number live on each company. This
+ * process only needs:
+ *
  *   PHOTON_WORKER_SECRET
- *   PHOTON_FROM_NUMBER          optional dedicated line, E.164
  *   PHOTON_WORKER_PORT          default 8787
  *   PHOTON_WORKER_HOST          default 0.0.0.0
+ *   SUPABASE_URL                so background sends can load that company
+ *   SUPABASE_SERVICE_ROLE_KEY
  */
 import { createServer } from "node:http";
 import { timingSafeEqual } from "node:crypto";
@@ -18,8 +20,10 @@ import { timingSafeEqual } from "node:crypto";
 const port = Number(process.env.PHOTON_WORKER_PORT || "8787");
 const host = process.env.PHOTON_WORKER_HOST?.trim() || "0.0.0.0";
 const workerSecret = process.env.PHOTON_WORKER_SECRET?.trim() || "";
-const projectId = process.env.SPECTRUM_PROJECT_ID?.trim() || "";
-const projectSecret = process.env.SPECTRUM_PROJECT_SECRET?.trim() || "";
+const supabaseUrl = (process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "")
+  .trim()
+  .replace(/\/$/, "");
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || "";
 
 function digitsOnly(value) {
   return value.replace(/\D/g, "");
@@ -40,8 +44,6 @@ function toE164(value) {
   return "";
 }
 
-const fromNumber = toE164(process.env.PHOTON_FROM_NUMBER || "");
-
 function json(response, status, body) {
   const payload = JSON.stringify(body);
   response.writeHead(status, {
@@ -61,38 +63,46 @@ function authorized(request) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-function fromLabel() {
-  return fromNumber ? `ending ${fromNumber.slice(-4)}` : "";
+const clients = new Map();
+
+async function accountFromDatabase(companyId) {
+  if (!supabaseUrl || !serviceKey || !companyId) return null;
+  const response = await fetch(
+    `${supabaseUrl}/rest/v1/photon_connections?company_id=eq.${encodeURIComponent(companyId)}&select=project_id,project_secret,from_number,linked`,
+    {
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+      },
+    },
+  );
+  if (!response.ok) return null;
+  const rows = await response.json().catch(() => []);
+  const row = Array.isArray(rows) ? rows[0] : null;
+  if (!row || row.linked === false) return null;
+  const projectId = typeof row.project_id === "string" ? row.project_id.trim() : "";
+  const projectSecret = typeof row.project_secret === "string" ? row.project_secret.trim() : "";
+  const fromNumber = toE164(typeof row.from_number === "string" ? row.from_number : "");
+  if (!projectId || !projectSecret || !fromNumber) return null;
+  return { projectId, projectSecret, fromNumber };
 }
 
-let spectrum = null;
-let starting = null;
-let connectError = "";
-
-async function ensureSpectrum() {
-  if (spectrum) return spectrum;
-  if (!projectId || !projectSecret) return null;
-  if (!starting) {
-    starting = (async () => {
-      const { Spectrum } = await import("@spectrum-ts/core");
-      const { imessage } = await import("@spectrum-ts/imessage");
-      const app = await Spectrum({
-        projectId,
-        projectSecret,
-        providers: [imessage.config()],
-      });
-      spectrum = { app, im: imessage(app) };
-      connectError = "";
-      return spectrum;
-    })().catch((error) => {
-      starting = null;
-      spectrum = null;
-      connectError = error instanceof Error ? error.message : "Photon line did not connect.";
-      console.error("[photon-worker] connect failed", connectError);
-      throw error;
-    });
+async function clientFor(account) {
+  const existing = clients.get(account.projectId);
+  if (existing && existing.secret === account.projectSecret) return existing;
+  if (existing?.app && typeof existing.app.stop === "function") {
+    await Promise.resolve(existing.app.stop()).catch(() => {});
   }
-  return starting;
+  const { Spectrum } = await import("@spectrum-ts/core");
+  const { imessage } = await import("@spectrum-ts/imessage");
+  const app = await Spectrum({
+    projectId: account.projectId,
+    projectSecret: account.projectSecret,
+    providers: [imessage.config()],
+  });
+  const next = { secret: account.projectSecret, app, im: imessage(app) };
+  clients.set(account.projectId, next);
+  return next;
 }
 
 function messageHandle(sent) {
@@ -102,16 +112,10 @@ function messageHandle(sent) {
   return "";
 }
 
-async function sendText(to, content) {
-  const client = await ensureSpectrum();
-  if (!client) {
-    const error = "Set SPECTRUM_PROJECT_ID and SPECTRUM_PROJECT_SECRET on the Photon worker.";
-    return { status: 503, body: { ok: false, error } };
-  }
+async function sendText(to, content, account) {
+  const client = await clientFor(account);
   const user = await client.im.user(to);
-  const space = fromNumber
-    ? await client.im.space.create(user, { phone: fromNumber })
-    : await client.im.space.create(user);
+  const space = await client.im.space.create(user, { phone: account.fromNumber });
   const sent = await space.send(content);
   return {
     status: 200,
@@ -153,8 +157,7 @@ const server = createServer(async (request, response) => {
   const path = url.pathname.replace(/\/$/, "") || "/";
 
   if (request.method === "GET" && path === "/health") {
-    const ready = Boolean(spectrum) || !projectId || !projectSecret;
-    json(response, ready ? 200 : 503, { ok: ready, configured: Boolean(spectrum) });
+    json(response, 200, { ok: true, configured: Boolean(workerSecret) });
     return;
   }
 
@@ -164,11 +167,7 @@ const server = createServer(async (request, response) => {
   }
 
   if (request.method === "GET" && (path === "/status" || path === "/")) {
-    json(response, 200, {
-      configured: Boolean(spectrum),
-      fromNumber: fromLabel(),
-      error: connectError || undefined,
-    });
+    json(response, 200, { configured: true, fromNumber: "" });
     return;
   }
 
@@ -192,6 +191,12 @@ const server = createServer(async (request, response) => {
     }
     const to = toE164(typeof body.to === "string" ? body.to : "");
     const content = typeof body.content === "string" ? body.content.trim() : "";
+    const companyId = typeof body.companyId === "string" ? body.companyId.trim() : "";
+    let account = {
+      projectId: typeof body.projectId === "string" ? body.projectId.trim() : "",
+      projectSecret: typeof body.projectSecret === "string" ? body.projectSecret.trim() : "",
+      fromNumber: toE164(typeof body.fromNumber === "string" ? body.fromNumber : ""),
+    };
     if (!to) {
       json(response, 400, { ok: false, error: "That phone number is not valid." });
       return;
@@ -200,8 +205,18 @@ const server = createServer(async (request, response) => {
       json(response, 400, { ok: false, error: "Write a message before sending." });
       return;
     }
+    if (!account.projectId || !account.projectSecret || !account.fromNumber) {
+      account = (await accountFromDatabase(companyId)) || account;
+    }
+    if (!account.projectId || !account.projectSecret || !account.fromNumber) {
+      json(response, 409, {
+        ok: false,
+        error: "Connect Photon for this company in Settings.",
+      });
+      return;
+    }
     try {
-      const result = await sendText(to, content);
+      const result = await sendText(to, content, account);
       json(response, result.status, result.body);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Photon could not send that text.";
@@ -217,21 +232,20 @@ const server = createServer(async (request, response) => {
 server.listen(port, host, () => {
   console.log(`[photon-worker] listening on ${host}:${port}`);
   if (!workerSecret) console.error("[photon-worker] PHOTON_WORKER_SECRET is not set");
-  if (projectId && projectSecret) {
-    void ensureSpectrum().catch(() => {});
-  } else {
-    console.error("[photon-worker] SPECTRUM_PROJECT_ID and SPECTRUM_PROJECT_SECRET are not set");
+  if (!supabaseUrl || !serviceKey) {
+    console.error("[photon-worker] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are not set");
   }
 });
 
 function shutdown() {
   server.close();
-  const app = spectrum?.app;
-  if (app && typeof app.stop === "function") {
-    void Promise.resolve(app.stop()).finally(() => process.exit(0));
-    return;
+  const stops = [];
+  for (const client of clients.values()) {
+    if (client.app && typeof client.app.stop === "function") {
+      stops.push(Promise.resolve(client.app.stop()).catch(() => {}));
+    }
   }
-  process.exit(0);
+  void Promise.all(stops).finally(() => process.exit(0));
 }
 
 process.on("SIGTERM", shutdown);

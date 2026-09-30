@@ -3,23 +3,6 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 /** Reject deliveries older than this. Spectrum signs `X-Spectrum-Timestamp` as UNIX seconds. */
 export const SPECTRUM_SIGNATURE_TOLERANCE_SEC = 5 * 60;
 
-export function spectrumWebhookSecret() {
-  return (
-    process.env.SPECTRUM_WEBHOOK_SECRET?.trim() ||
-    process.env.SPECTRUM_SIGNING_SECRET?.trim() ||
-    ""
-  );
-}
-
-export function messagesWebhookToken() {
-  return process.env.MESSAGES_WEBHOOK_TOKEN?.trim() || "";
-}
-
-/** Office line used only to drop echoed outbound payloads from a legacy provider. */
-export function inboundOurNumber() {
-  return process.env.PHOTON_FROM_NUMBER?.trim() || process.env.SENDBLUE_FROM_NUMBER?.trim() || "";
-}
-
 function digitsOnly(value: string) {
   return value.replace(/\D/g, "");
 }

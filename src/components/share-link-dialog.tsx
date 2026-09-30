@@ -306,7 +306,7 @@ export function ShareLinkDialog({
       }
       if (mocked) {
         toast.message(
-          "Photon is not connected to this website. Set PHOTON_WORKER_URL and PHOTON_WORKER_SECRET, and run the Photon text worker.",
+          "Photon is not connected for this company. Add this office's Photon project under Settings → Photon.",
         );
       } else {
         toast.success(
@@ -583,7 +583,7 @@ export function ShareLinkDialog({
                 : null}
               {textStatus?.configured
                 ? `Texts go out over Photon${textStatus.fromNumber ? ` (${textStatus.fromNumber})` : ""}. `
-                : "Texts need the Photon worker until then Send text previews without delivering. "}
+                : "Connect Photon for this company under Settings. Until then Send text previews without delivering. "}
               {(() => {
                 const fromLabel =
                   sender?.name?.trim() && companyName?.trim()

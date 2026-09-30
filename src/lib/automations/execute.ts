@@ -25,6 +25,7 @@ export async function executeAutomationActions(input: {
   customerEmail?: string;
   ownerPhone?: string;
   ownerEmail?: string;
+  companyId?: string;
   staffById: (id: string) => { phone?: string; email?: string; name?: string } | undefined;
   createTask?: (title: string) => Promise<void>;
   setJobValue?: (amount: number) => Promise<void>;
@@ -62,6 +63,7 @@ async function runAction(
     customerEmail?: string;
     ownerPhone?: string;
     ownerEmail?: string;
+    companyId?: string;
     staffById: (id: string) => { phone?: string; email?: string; name?: string } | undefined;
     createTask?: (title: string) => Promise<void>;
     setJobValue?: (amount: number) => Promise<void>;
@@ -160,7 +162,7 @@ async function runAction(
             : input.ownerEmail;
     const text = automationEmailText(subject || "A note from your contractor", body);
     if (phone && text) {
-      const texted = await photonText({ to: phone, content: text });
+      const texted = await photonText({ to: phone, content: text, companyId: input.companyId });
       if (texted.ok && !texted.mocked) {
         return { ok: true, delivery: "Text sent", error: "" };
       }
@@ -179,7 +181,7 @@ async function runAction(
   }
 
   if (!phone) return { ok: false, delivery: "", error: "No mobile number for that recipient." };
-  const result = await photonText({ to: phone, content: body });
+  const result = await photonText({ to: phone, content: body, companyId: input.companyId });
   if (!result.ok) return { ok: false, delivery: "", error: result.error };
   return { ok: true, delivery: result.mocked ? "Text mocked" : "Text sent", error: "" };
 }

@@ -161,6 +161,7 @@ export async function GET(request: Request) {
     });
     const result = await executeAutomationActions({
       automation,
+      companyId,
       merge,
       estimateTotal,
       customerPhone: String(row.contact_phone ?? ""),

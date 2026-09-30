@@ -1,12 +1,8 @@
 /**
- * Receive webhook for Photon inbound texts.
- * Same ingest path as /api/messages/inbound — register whichever URL you give Photon.
- * Deploy with verify_jwt = false. The signing secret is the real check.
+ * Receive webhook for one company's Photon texts.
+ * Same ingest path as /api/messages/inbound. The ?token= value is that company's webhook token.
  */
-import {
-  authorizeInboundWebhook,
-  parseInboundText,
-} from "../_shared/photon-webhook.ts";
+import { authorizeInboundWebhook, parseInboundText } from "../_shared/photon-webhook.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -31,24 +27,38 @@ Deno.serve(async (request) => {
 
   const rawBody = await request.text();
   const url = new URL(request.url);
-  const auth = authorizeInboundWebhook({
-    secret:
-      (Deno.env.get("SPECTRUM_WEBHOOK_SECRET") ?? "").trim() ||
-      (Deno.env.get("SPECTRUM_SIGNING_SECRET") ?? "").trim(),
-    token: (Deno.env.get("MESSAGES_WEBHOOK_TOKEN") ?? "").trim(),
-    headerToken: request.headers.get("x-webhook-token") || "",
-    queryToken: url.searchParams.get("token") || "",
-    timestamp: request.headers.get("x-spectrum-timestamp") || "",
-    signature: request.headers.get("x-spectrum-signature") || "",
-    rawBody,
-  });
-  if (!auth.ok) return json({ error: auth.error }, auth.status);
-
+  const token = url.searchParams.get("token")?.trim() || request.headers.get("x-webhook-token")?.trim() || "";
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   if (!supabaseUrl || !serviceKey) {
     return json({ error: "Missing Supabase service credentials." }, 500);
   }
+
+  const lookup = await fetch(
+    `${supabaseUrl}/rest/v1/photon_connections?webhook_token=eq.${encodeURIComponent(token)}&select=webhook_secret,from_number,linked`,
+    {
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+      },
+    },
+  );
+  const rows = await lookup.json().catch(() => []);
+  const row = Array.isArray(rows) ? rows[0] : null;
+  const secret = row && row.linked !== false && typeof row.webhook_secret === "string" ? row.webhook_secret : "";
+  const fromNumber = row && typeof row.from_number === "string" ? row.from_number : "";
+  if (!secret) return json({ error: "Unauthorized." }, 401);
+
+  const auth = authorizeInboundWebhook({
+    secret,
+    token: "",
+    headerToken: "",
+    queryToken: "",
+    timestamp: request.headers.get("x-spectrum-timestamp") || "",
+    signature: request.headers.get("x-spectrum-signature") || "",
+    rawBody,
+  });
+  if (!auth.ok) return json({ error: auth.error }, auth.status);
 
   let raw: unknown = {};
   try {
@@ -57,10 +67,7 @@ Deno.serve(async (request) => {
     return json({ ok: true, skipped: true });
   }
 
-  const ours =
-    (Deno.env.get("PHOTON_FROM_NUMBER") ?? "").trim() ||
-    (Deno.env.get("SENDBLUE_FROM_NUMBER") ?? "").trim();
-  const parsed = parseInboundText(raw, ours);
+  const parsed = parseInboundText(raw, fromNumber);
   if (parsed.skip) return json({ ok: true, skipped: true, reason: parsed.reason });
 
   const response = await fetch(`${supabaseUrl}/rest/v1/rpc/ingest_inbound_text`, {
