@@ -1119,27 +1119,27 @@ export function JobRecord({
           if (typeof value === "string") setJobTab(parseJobTab(value));
         }}
       >
-        <TabsList variant="line" className="mb-4 h-auto w-full justify-start overflow-x-auto rounded-none bg-transparent p-0">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="photos">
+        <TabsList variant="line" className="mb-4 h-auto w-full flex-wrap justify-start overflow-visible rounded-none bg-transparent px-0 pt-0 pb-1.5">
+          <TabsTrigger value="overview" className="flex-none">Overview</TabsTrigger>
+          <TabsTrigger value="photos" className="flex-none">
             Photos
             <span className="ml-1 text-muted-foreground">{photos.length}</span>
           </TabsTrigger>
-          <TabsTrigger value="files">
+          <TabsTrigger value="files" className="flex-none">
             Files
             <span className="ml-1 text-muted-foreground">{fileCount}</span>
           </TabsTrigger>
-          <TabsTrigger value="paper">
+          <TabsTrigger value="paper" className="flex-none">
             Paper
             <span className="ml-1 text-muted-foreground">{estimates.length + invoices.length}</span>
           </TabsTrigger>
-          <TabsTrigger value="insurance">
+          <TabsTrigger value="insurance" className="flex-none">
             Insurance
             {claimMath?.openCount ? (
               <span className="ml-1 text-muted-foreground">{claimMath.openCount}</span>
             ) : null}
           </TabsTrigger>
-          <TabsTrigger value="financials">Financials</TabsTrigger>
+          <TabsTrigger value="financials" className="flex-none">Financials</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-0">
