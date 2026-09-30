@@ -1,6 +1,7 @@
 /**
- * Receive webhook for Sendblue inbound texts.
- * Same ingest path as /api/messages/inbound — use whichever URL you put in Sendblue.
+ * Receive webhook for Photon inbound texts.
+ * Same ingest path as /api/messages/inbound.
+ * Field parsing matches src/lib/inbound-text.ts.
  */
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -11,33 +12,76 @@ function json(body: unknown, status = 200) {
   return Response.json(body, { status, headers: cors });
 }
 
+function asRecord(value: unknown) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
 function asString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
-function digitsOnly(value: string) {
-  return value.replace(/\D/g, "");
+function nestedMessage(body: Record<string, unknown>) {
+  return asRecord(body.message);
 }
 
-function last10(value: string) {
-  return digitsOnly(value).slice(-10);
+function senderId(value: unknown) {
+  const record = asRecord(value);
+  if (!record) return "";
+  return asString(record.id) || asString(record.address) || asString(record.phone);
 }
 
-function flatten(body: Record<string, unknown>) {
-  const nested = body.message;
-  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
-    return { ...body, ...(nested as Record<string, unknown>) };
+function textContent(value: unknown) {
+  if (typeof value === "string") return value;
+  const record = asRecord(value);
+  if (!record) return "";
+  return asString(record.text) || asString(record.body);
+}
+
+function inboundSkipReason(body: Record<string, unknown>) {
+  if (body.is_outbound === true || body.isFromMe === true) return "outbound";
+  const direction = asString(body.direction).toLowerCase();
+  if (direction === "outbound") return "outbound";
+  const message = nestedMessage(body);
+  if (message) {
+    if (message.is_outbound === true || message.isFromMe === true) return "outbound";
+    if (asString(message.direction).toLowerCase() === "outbound") return "outbound";
   }
-  return body;
+  const type = asString(body.type) || asString(body.event);
+  if (type && type !== "message.received") return "ignored_event";
+  return null;
 }
 
-function isOutboundPayload(body: Record<string, unknown>) {
-  if (body.is_outbound === true) return true;
-  const from = asString(body.from_number) || asString(body.number);
-  const ours = (Deno.env.get("SENDBLUE_FROM_NUMBER") ?? "").trim();
-  const fromKey = last10(from);
-  const oursKey = last10(ours);
-  return Boolean(oursKey && fromKey && fromKey === oursKey);
+function inboundTextFields(raw: Record<string, unknown>) {
+  const message = nestedMessage(raw);
+  return {
+    from:
+      senderId(raw.sender) ||
+      senderId(message?.sender) ||
+      asString(raw.from_number) ||
+      asString(message?.from_number) ||
+      asString(raw.number) ||
+      asString(message?.number),
+    content:
+      textContent(raw.content) ||
+      textContent(message?.content) ||
+      asString(raw.text) ||
+      asString(message?.text),
+    handle:
+      asString(message?.id) ||
+      asString(message?.guid) ||
+      asString(raw.message_handle) ||
+      asString(raw.id),
+    mediaUrl: asString(raw.media_url) || asString(message?.media_url),
+    sentAt:
+      asString(raw.date_sent) ||
+      asString(raw.occurredAt) ||
+      asString(message?.date_sent) ||
+      asString(message?.occurredAt) ||
+      null,
+  };
 }
 
 Deno.serve(async (request) => {
@@ -74,11 +118,12 @@ Deno.serve(async (request) => {
     return json({ ok: true, skipped: true });
   }
 
-  const body = flatten(raw);
-  if (isOutboundPayload(body)) {
-    return json({ ok: true, skipped: true, reason: "outbound" });
+  const skip = inboundSkipReason(raw);
+  if (skip) {
+    return json({ ok: true, skipped: true, reason: skip });
   }
 
+  const fields = inboundTextFields(raw);
   const response = await fetch(`${supabaseUrl}/rest/v1/rpc/ingest_inbound_text`, {
     method: "POST",
     headers: {
@@ -87,11 +132,11 @@ Deno.serve(async (request) => {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      p_from: asString(body.from_number) || asString(body.number),
-      p_body: asString(body.content),
-      p_handle: asString(body.message_handle),
-      p_media_url: asString(body.media_url),
-      p_sent_at: asString(body.date_sent) || null,
+      p_from: fields.from,
+      p_body: fields.content,
+      p_handle: fields.handle,
+      p_media_url: fields.mediaUrl,
+      p_sent_at: fields.sentAt,
     }),
   });
 

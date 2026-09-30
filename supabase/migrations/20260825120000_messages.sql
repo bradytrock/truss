@@ -1,5 +1,5 @@
--- Two-way texts (Sendblue) logged on the related job as communication.
--- Safe to re-run. Adds activity_type 'text' and aligns older Sendblue `messages`
+-- Two-way texts logged on the related job as communication.
+-- Safe to re-run. Adds activity_type 'text' and aligns older `messages`
 -- tables (to_number / uuid created_by) with the app columns (phone, handle, job_id).
 -- Do not assign the new enum value at CREATE FUNCTION time — Postgres rejects that
 -- until COMMIT when ADD VALUE ran in the same script.

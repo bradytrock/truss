@@ -11,9 +11,9 @@ export async function GET() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ configured: false, fromNumber: "" });
+  if (!user) return NextResponse.json({ configured: false });
   const status = await officePhotonConfigured();
-  return NextResponse.json({ ...status, fromNumber: "" });
+  return NextResponse.json(status);
 }
 
 export async function POST(request: Request) {
