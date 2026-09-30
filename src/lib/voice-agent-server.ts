@@ -1,7 +1,7 @@
 import { leadAssignNeedsEmail } from "@/lib/lead-assign-email";
 import { sendVoiceLeadAssignEmails } from "@/lib/lead-assign-email-server";
 import { looksLikePhone } from "@/lib/phone";
-import { sendblueText } from "@/lib/sendblue";
+import { photonText } from "@/lib/photon";
 import { createAnonClient } from "@/lib/supabase/anon";
 
 export type VoiceRpcResult = {
@@ -158,8 +158,14 @@ async function notifyOwningPm(token: string, result: VoiceRpcResult) {
   const content = result.notifySms?.trim() ?? "";
   if (!looksLikePhone(to) || !content) return { notified: false };
   try {
-    const sent = await sendblueText({ to, content });
-    if (sent.ok && (result.jobId || result.opportunityId)) {
+    const supabase = createAnonClient();
+    const { data: companyId } = await supabase.rpc("photon_company_for_voice", { p_token: token });
+    const sent = await photonText({
+      to,
+      content,
+      companyId: typeof companyId === "string" ? companyId : "",
+    });
+    if (sent.ok && !sent.mocked && (result.jobId || result.opportunityId)) {
       await voiceLog(token, {
         body: `Texted ${result.notifyName || "the project manager"}: ${content}`,
         jobId: result.jobId ?? undefined,

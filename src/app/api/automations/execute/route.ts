@@ -81,6 +81,7 @@ export async function POST(request: Request) {
 
     const executed = await executeAutomationActions({
       automation: loaded.automation,
+      companyId: companyIdForRun,
       merge,
       customerPhone: contact?.phone,
       customerEmail: contact?.email,

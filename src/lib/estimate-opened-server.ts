@@ -6,7 +6,7 @@ import {
 } from "@/lib/estimate-opened";
 import { looksLikePhone } from "@/lib/phone";
 import { formatResendFrom, isResendConfigured, sendResendEmail } from "@/lib/resend-mail";
-import { sendblueText } from "@/lib/sendblue";
+import { photonText } from "@/lib/photon";
 import { looksLikeEmail } from "@/lib/share-text";
 import { createAnonClient } from "@/lib/supabase/anon";
 import { createClient } from "@/lib/supabase/server";
@@ -39,8 +39,13 @@ export async function notifyProjectManagerEstimateOpened(token: string) {
     if (!notify) return;
 
     const sms = estimateOpenedSms(notify);
+    const { data: companyId } = await supabase.rpc("photon_company_for_estimate_share", { p_token: token });
     if (looksLikePhone(notify.phone) && sms) {
-      const sent = await sendblueText({ to: notify.phone, content: sms });
+      const sent = await photonText({
+        to: notify.phone,
+        content: sms,
+        companyId: typeof companyId === "string" ? companyId : "",
+      });
       if (!sent.ok) {
         console.error("[share] estimate opened text", sent.error);
       }

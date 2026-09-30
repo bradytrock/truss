@@ -1,7 +1,7 @@
 import { applyAutomationMerge, type Automation, type AutomationAction, type AutomationMergeContext } from "@/lib/automations";
 import { resolveJobValue } from "@/lib/automations/job-effects";
 import { RESEND_FROM_ADDRESS, sendResendEmail } from "@/lib/resend-mail";
-import { sendblueText } from "@/lib/sendblue";
+import { photonText } from "@/lib/photon";
 import type { WorkColumn } from "@/lib/work-board";
 
 export function automationEmailText(subject: string, body: string) {
@@ -25,6 +25,7 @@ export async function executeAutomationActions(input: {
   customerEmail?: string;
   ownerPhone?: string;
   ownerEmail?: string;
+  companyId?: string;
   staffById: (id: string) => { phone?: string; email?: string; name?: string } | undefined;
   createTask?: (title: string) => Promise<void>;
   setJobValue?: (amount: number) => Promise<void>;
@@ -62,6 +63,7 @@ async function runAction(
     customerEmail?: string;
     ownerPhone?: string;
     ownerEmail?: string;
+    companyId?: string;
     staffById: (id: string) => { phone?: string; email?: string; name?: string } | undefined;
     createTask?: (title: string) => Promise<void>;
     setJobValue?: (amount: number) => Promise<void>;
@@ -160,9 +162,9 @@ async function runAction(
             : input.ownerEmail;
     const text = automationEmailText(subject || "A note from your contractor", body);
     if (phone && text) {
-      const texted = await sendblueText({ to: phone, content: text });
+      const texted = await photonText({ to: phone, content: text, companyId: input.companyId });
       if (texted.ok && !texted.mocked) {
-        return { ok: true, delivery: "Sent with SendBlue", error: "" };
+        return { ok: true, delivery: "Text sent", error: "" };
       }
       if (!texted.ok && !email) return { ok: false, delivery: "", error: texted.error };
     }
@@ -179,7 +181,7 @@ async function runAction(
   }
 
   if (!phone) return { ok: false, delivery: "", error: "No mobile number for that recipient." };
-  const result = await sendblueText({ to: phone, content: body });
+  const result = await photonText({ to: phone, content: body, companyId: input.companyId });
   if (!result.ok) return { ok: false, delivery: "", error: result.error };
   return { ok: true, delivery: result.mocked ? "Text mocked" : "Text sent", error: "" };
 }
