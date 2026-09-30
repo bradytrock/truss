@@ -6,7 +6,7 @@ import {
 } from "@/lib/estimate-opened";
 import { looksLikePhone } from "@/lib/phone";
 import { formatResendFrom, isResendConfigured, sendResendEmail } from "@/lib/resend-mail";
-import { sendblueText } from "@/lib/sendblue";
+import { sendOfficeText } from "@/lib/photon-server";
 import { looksLikeEmail } from "@/lib/share-text";
 import { createAnonClient } from "@/lib/supabase/anon";
 import { createClient } from "@/lib/supabase/server";
@@ -40,7 +40,7 @@ export async function notifyProjectManagerEstimateOpened(token: string) {
 
     const sms = estimateOpenedSms(notify);
     if (looksLikePhone(notify.phone) && sms) {
-      const sent = await sendblueText({ to: notify.phone, content: sms });
+      const sent = await sendOfficeText({ to: notify.phone, content: sms });
       if (!sent.ok) {
         console.error("[share] estimate opened text", sent.error);
       }

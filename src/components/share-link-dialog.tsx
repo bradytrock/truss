@@ -306,7 +306,7 @@ export function ShareLinkDialog({
       }
       if (mocked) {
         toast.message(
-          "Sendblue is not connected to this website. Add SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY, and SENDBLUE_FROM_NUMBER on the host and redeploy, or deploy supabase/functions/send-text.",
+          "Photon is not connected for this company. The text is logged on the job. Add this office's Photon project under Settings → Photon.",
         );
       } else {
         toast.success(
@@ -582,8 +582,8 @@ export function ShareLinkDialog({
                 ? "Each send includes that person’s own signing link. "
                 : null}
               {textStatus?.configured
-                ? `Texts go out over Sendblue${textStatus.fromNumber ? ` (${textStatus.fromNumber})` : ""}. `
-                : "Texts need SENDBLUE_ keys on the host until then Send text previews without delivering. "}
+                ? "Texts go out through this office's Photon project. "
+                : "Photon is not set up for this company. Send text logs the message on the job until you add the project under Settings → Photon. "}
               {(() => {
                 const fromLabel =
                   sender?.name?.trim() && companyName?.trim()

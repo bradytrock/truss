@@ -6,6 +6,13 @@ const nextConfig = {
   // Hostinger and similar PaaS start from .next/standalone. Keep this explicit so
   // deploys do not fail with "no standalone server" if a TypeScript config wrapper fails.
   output: "standalone",
+  serverExternalPackages: [
+    "@grpc/grpc-js",
+    "@spectrum-ts/core",
+    "@spectrum-ts/imessage",
+    "nice-grpc",
+    "@photon-ai/advanced-imessage",
+  ],
   // Cloud Agent / Cursor preview proxies rewrite the browser host away from localhost.
   // Use ** so multi-label hosts like p-3847-pod-....agent.cvm.dev are allowed.
   // "null" covers sandboxed preview iframes that send Origin: null (opaque origin).

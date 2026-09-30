@@ -1723,6 +1723,34 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["company_stripe_accounts"]["Insert"]>;
         Relationships: [];
       };
+      photon_connections: {
+        Row: {
+          company_id: string;
+          project_id: string;
+          project_secret: string;
+          project_name: string;
+          secret_hint: string;
+          linked: boolean;
+          linked_at: string | null;
+          linked_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          company_id: string;
+          project_id?: string;
+          project_secret?: string;
+          project_name?: string;
+          secret_hint?: string;
+          linked?: boolean;
+          linked_at?: string | null;
+          linked_by?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["photon_connections"]["Insert"]>;
+        Relationships: [];
+      };
       companycam_connections: {
         Row: {
           company_id: string;
@@ -3082,6 +3110,31 @@ export type Database = {
       };
       stripe_company_status: {
         Args: Record<string, never>;
+        Returns: Json;
+      };
+      photon_company_status: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      photon_company_save: {
+        Args: {
+          p_project_id: string;
+          p_project_secret: string;
+          p_project_name: string;
+          p_secret_hint: string;
+        };
+        Returns: Json;
+      };
+      photon_company_disconnect: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      photon_outbound_config: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      photon_outbound_for_voice: {
+        Args: { p_token: string };
         Returns: Json;
       };
       stripe_company_set_keys: {

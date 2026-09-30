@@ -872,6 +872,32 @@ export function missingCompanyCamMessage() {
   return `Run ${COMPANYCAM_SQL} in the SQL editor so each company can connect its own CompanyCam account.`;
 }
 
+export const PHOTON_SQL = "supabase/migrations/20260930120000_photon_connections.sql";
+
+export function isMissingPhoton(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentions =
+    message.includes("photon_connections") ||
+    message.includes("photon_company_status") ||
+    message.includes("photon_company_save") ||
+    message.includes("photon_outbound_config") ||
+    message.includes("photon");
+  return (
+    (code === "pgrst205" && mentions) ||
+    (code === "pgrst202" && mentions) ||
+    ((message.includes("schema cache") ||
+      message.includes("could not find the") ||
+      message.includes("does not exist")) &&
+      mentions)
+  );
+}
+
+export function missingPhotonMessage() {
+  return `Run ${PHOTON_SQL} in the SQL editor. Paste that file, not a chat transcript. A buffer that starts with "New Chat" fails with syntax error 42601.`;
+}
+
 export const COMPANY_STRIPE_SQL = "supabase/migrations/20260916050000_company_stripe_keys.sql";
 
 export function isMissingCompanyStripe(error: { message?: string; code?: string } | null | undefined) {

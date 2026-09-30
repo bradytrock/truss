@@ -787,7 +787,7 @@ function ActionCard({
             placeholder="Subject"
           />
           <p className="text-xs text-muted-foreground">
-            Goes out as a SendBlue text to that person&apos;s mobile. Email is the backup if the text cannot send.
+            Also texts that person&apos;s mobile through this office&apos;s Photon project. Email is the backup if the text cannot send.
           </p>
         </>
       ) : null}
