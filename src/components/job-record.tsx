@@ -1119,7 +1119,7 @@ export function JobRecord({
           if (typeof value === "string") setJobTab(parseJobTab(value));
         }}
       >
-        <TabsList variant="line" className="mb-4 h-auto w-full flex-wrap justify-start overflow-visible rounded-none bg-transparent px-0 pt-0 pb-1.5">
+        <TabsList variant="line" className="mb-4 flex h-auto w-full justify-between overflow-visible rounded-none bg-transparent px-0 pt-0 pb-1.5">
           <TabsTrigger value="overview" className="flex-none">Overview</TabsTrigger>
           <TabsTrigger value="photos" className="flex-none">
             Photos
