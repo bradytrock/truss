@@ -241,7 +241,7 @@ async function drawCover(
   const inset = 26;
   const red = COVER_RED;
 
-  doc.setFillColor(18, 18, 18);
+  doc.setFillColor(45, 45, 45);
   doc.rect(0, heroY, width, heroH, "F");
   if (cover.hero) {
     const data = await imageToCoverJpeg(cover.hero.imageUrl, width * 2, heroH * 2);
@@ -264,7 +264,7 @@ async function drawCover(
     const boxH = cover.cityLine ? 76 : 56;
     const boxX = inset;
     const boxY = heroY + heroH - boxH - 16;
-    doc.setFillColor(12, 12, 12);
+    doc.setFillColor(45, 45, 45);
     doc.rect(boxX, boxY, boxW, boxH, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
@@ -299,7 +299,7 @@ async function drawCover(
     textX = inset + w + 12;
   } else {
     const mark = 40;
-    doc.setFillColor(16, 16, 16);
+    doc.setFillColor(45, 45, 45);
     doc.rect(inset, 18, mark, mark, "F");
     doc.setFillColor(red.r, red.g, red.b);
     doc.rect(inset, 18, 4, mark, "F");
@@ -334,7 +334,7 @@ async function drawCover(
   doc.text(cover.reportTitle, width - inset, 50, { align: "right" });
 
   const footerY = height - footerH;
-  doc.setFillColor(8, 8, 8);
+  doc.setFillColor(45, 45, 45);
   doc.rect(0, footerY, width, footerH, "F");
 
   const meta = [
@@ -399,7 +399,7 @@ async function drawCover(
     doc.text(doc.splitTextToSize(line, byWidth)[0] ?? "", splitX + 16, peopleY + 42 + index * 16);
   });
 
-  doc.setFillColor(0, 0, 0);
+  doc.setFillColor(45, 45, 45);
   doc.rect(0, height - 28, width, 28, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);

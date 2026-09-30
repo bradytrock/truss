@@ -216,7 +216,7 @@ function CoverPreview({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={logoUrl} alt="" className="h-8 w-auto max-w-[4.5rem] object-contain object-left" />
           ) : (
-            <span className="flex size-8 items-center justify-center bg-neutral-950 text-[10px] font-semibold tracking-wide text-white">
+            <span className="flex size-8 items-center justify-center bg-[#2d2d2d] text-[10px] font-semibold tracking-wide text-white">
               {company.name
                 .split(" ")
                 .filter(Boolean)
@@ -238,7 +238,7 @@ function CoverPreview({
         </div>
       </header>
 
-      <div className="relative min-h-0 flex-1 bg-neutral-950">
+      <div className="relative min-h-0 flex-1 bg-[#2d2d2d]">
         {cover.hero ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={cover.hero.imageUrl} alt="" className="size-full object-cover" />
@@ -248,7 +248,7 @@ function CoverPreview({
           </p>
         )}
         {cover.street ? (
-          <div className="absolute bottom-3 left-3 max-w-[70%] bg-black/80 px-2.5 py-1.5 text-white">
+          <div className="absolute bottom-3 left-3 max-w-[70%] bg-[#2d2d2d] px-2.5 py-1.5 text-white">
             <p className="text-[8px] font-semibold tracking-[0.16em] text-[#c4182a] uppercase">Property inspected</p>
             <p className="mt-0.5 text-[11px] font-semibold uppercase leading-tight">{cover.street}</p>
             {cover.cityLine ? <p className="text-[9px] font-semibold uppercase text-white">{cover.cityLine}</p> : null}
@@ -256,7 +256,7 @@ function CoverPreview({
         ) : null}
       </div>
 
-      <footer className="shrink-0 bg-neutral-950 px-3 pb-2 pt-2.5 text-white">
+      <footer className="shrink-0 bg-[#2d2d2d] px-3 pb-2 pt-2.5 text-white">
         {meta.length > 0 ? (
           <div
             className="grid gap-2 border-b border-white/10 pb-2"
