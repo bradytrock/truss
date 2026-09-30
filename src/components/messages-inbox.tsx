@@ -43,6 +43,7 @@ import {
 import { formatPhoneInput, looksLikePhone } from "@/lib/phone";
 import { mailHref } from "@/lib/job-emails";
 import { cn } from "@/lib/utils";
+import { fallbackChatReplies, type WebsiteChatThread } from "@/lib/website-chat";
 
 export function MessagesInbox() {
   const crm = useCrm();
@@ -85,29 +86,40 @@ export function MessagesInbox() {
   }, [wantedThread, queryContact, threads]);
 
   const [query, setQuery] = useState("");
-  const [draftPhone, setDraftPhone] = useState("");
-  const [draftContactId, setDraftContactId] = useState("");
+  const [draftPhone, setDraftPhone] = useState(() =>
+    queryContact?.phone ? formatPhoneInput(queryContact.phone) : "",
+  );
+  const [draftContactId, setDraftContactId] = useState(() => queryContact?.id ?? "");
+  const contactSeed = queryContact?.id ?? "";
+  const [seenContact, setSeenContact] = useState(contactSeed);
+  if (contactSeed !== seenContact) {
+    setSeenContact(contactSeed);
+    if (queryContact?.phone && !draftPhone) {
+      setDraftPhone(formatPhoneInput(queryContact.phone));
+      setDraftContactId(queryContact.id);
+    }
+  }
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
+  const [webChats, setWebChats] = useState<WebsiteChatThread[]>([]);
+  const [webBody, setWebBody] = useState("");
+  const [webSending, setWebSending] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggesting, setSuggesting] = useState(false);
 
   const showCompose =
     composeParam || (!wantedThread && Boolean(queryContact) && !queryThread);
-  const selected = showCompose
+  const webChatId = wantedThread?.startsWith("web:") ? wantedThread.slice(4) : "";
+  const selectedWeb = webChats.find((chat) => chat.id === webChatId) ?? null;
+  const selected = webChatId || showCompose
     ? null
     : (wantedThread ? threads.find((row) => row.key === wantedThread) : undefined) ??
       queryThread ??
       (wantedThread || wantedContact || wantedJob ? null : threads[0] ?? null);
 
   const visibleThreads = useMemo(() => filterMessageThreads(threads, query), [query, threads]);
-
-  useEffect(() => {
-    if (queryContact?.phone) {
-      setDraftPhone((current) => current || formatPhoneInput(queryContact.phone));
-      setDraftContactId((current) => current || queryContact.id);
-    }
-  }, [queryContact?.id, queryContact?.phone]);
 
   const composeContact =
     (draftContactId ? crm.contacts.find((row) => row.id === draftContactId) : undefined) ??
@@ -119,7 +131,84 @@ export function MessagesInbox() {
     (composeContact ? jobForContact(crm.jobs, crm.opportunities, composeContact.id)?.id : "") ??
     "";
   const contactHint = queryContact?.id ?? selected?.contactId ?? composeContact?.id ?? "";
-  const conversationOpen = showCompose || Boolean(selected);
+  const conversationOpen = showCompose || Boolean(selected) || Boolean(webChatId);
+
+  useEffect(() => {
+    let cancelled = false;
+    function load() {
+      void fetch("/api/chat/office")
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data: { chats?: WebsiteChatThread[] } | null) => {
+          if (!cancelled && data?.chats) setWebChats(data.chats);
+        })
+        .catch(() => undefined);
+    }
+    load();
+    const timer = window.setInterval(load, 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const visibleWebChats = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return webChats;
+    return webChats.filter(
+      (chat) => chat.label.toLowerCase().includes(needle) || chat.preview.toLowerCase().includes(needle),
+    );
+  }, [query, webChats]);
+
+  async function replyToWebsite() {
+    const text = webBody.trim();
+    if (!selectedWeb || !text) return;
+    setWebSending(true);
+    try {
+      const response = await fetch("/api/chat/office", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId: selectedWeb.id, body: text }),
+      });
+      const data = (await response.json()) as { ok?: boolean };
+      if (data.ok) {
+        setWebBody("");
+        setSuggestions([]);
+        const sent = {
+          id: `local-${Date.now()}`,
+          direction: "outbound" as const,
+          body: text,
+          createdAt: new Date().toISOString(),
+        };
+        setWebChats((current) =>
+          current.map((chat) =>
+            chat.id === selectedWeb.id
+              ? { ...chat, preview: text, messages: [...chat.messages, sent], updatedAt: sent.createdAt }
+              : chat,
+          ),
+        );
+      }
+    } finally {
+      setWebSending(false);
+    }
+  }
+
+  async function suggestReply() {
+    if (!selectedWeb) return;
+    setSuggesting(true);
+    try {
+      const response = await fetch("/api/chat/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: selectedWeb.messages }),
+      });
+      const data = (await response.json()) as { replies?: string[] };
+      setSuggestions(data.replies?.length ? data.replies : fallbackChatReplies());
+    } catch {
+      setSuggestions(fallbackChatReplies());
+    } finally {
+      setSuggesting(false);
+    }
+  }
 
   const openThread = useCallback(
     (key: string) => {
@@ -237,12 +326,53 @@ export function MessagesInbox() {
             </div>
           </div>
           <div className="min-h-0 flex-1">
+            {visibleWebChats.length > 0 ? (
+              <div className="border-b">
+                <p className="px-4 pt-3 text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+                  Website
+                </p>
+                {visibleWebChats.map((chat) => (
+                  <button
+                    key={chat.id}
+                    type="button"
+                    onClick={() => {
+                      setWebBody("");
+                      setSuggestions([]);
+                      router.replace(messagesHref({ thread: `web:${chat.id}` }), { scroll: false });
+                    }}
+                    className={cn(
+                      "flex w-full items-start gap-3 px-4 py-3 text-left",
+                      webChatId === chat.id ? "bg-muted" : "hover:bg-muted/50",
+                    )}
+                  >
+                    <Avatar size="sm" className="mt-0.5">
+                      <AvatarFallback className="bg-primary/10 text-primary">
+                        {initials(chat.label) || "W"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-sm font-medium">{chat.label}</span>
+                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                          {formatInboxTime(chat.updatedAt)}
+                        </span>
+                      </span>
+                      <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                        {chat.preview || "New website chat"}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
             {visibleThreads.length === 0 ? (
+              visibleWebChats.length > 0 ? null : (
               <p className="px-4 py-8 text-sm text-muted-foreground">
                 {threads.length === 0
                   ? "No conversations yet. Text a homeowner — replies land here and on the job."
                   : "No threads match that search."}
               </p>
+              )
             ) : (
               <Virtuoso
                 className="h-full"
@@ -277,7 +407,19 @@ export function MessagesInbox() {
             >
               <ChevronLeft />
             </Button>
-            {showCompose ? (
+            {selectedWeb ? (
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold">{selectedWeb.label}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  Website chat · replies stay in this box
+                </p>
+              </div>
+            ) : webChatId ? (
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Website chat</p>
+                <p className="text-xs text-muted-foreground">Loading this conversation.</p>
+              </div>
+            ) : showCompose ? (
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold">New message</p>
                 <p className="truncate text-xs text-muted-foreground">
@@ -372,10 +514,14 @@ export function MessagesInbox() {
           <div
             className={cn(
               "min-h-0 flex-1 bg-muted/20",
-              showCompose || !selected ? "overflow-y-auto px-4 py-4" : "",
+              !selectedWeb && (showCompose || !selected) ? "overflow-y-auto px-4 py-4" : "",
             )}
           >
-            {showCompose || !selected ? (
+            {selectedWeb ? (
+              <WebsiteConversation key={selectedWeb.id} messages={selectedWeb.messages} />
+            ) : webChatId ? (
+              <p className="text-sm text-muted-foreground">Loading this website chat.</p>
+            ) : showCompose || !selected ? (
               threads.length === 0 && !showCompose ? (
                 <EmptyState
                   title="No texts yet"
@@ -396,6 +542,63 @@ export function MessagesInbox() {
             )}
           </div>
 
+          {selectedWeb ? (
+            <form
+              className="space-y-2 border-t p-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void replyToWebsite();
+              }}
+            >
+              {suggestions.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {suggestions.map((reply) => (
+                    <button
+                      key={reply}
+                      type="button"
+                      className="max-w-full rounded-full border bg-background px-3 py-1 text-left text-xs hover:bg-muted"
+                      onClick={() => setWebBody(reply)}
+                    >
+                      {reply}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <div className="flex gap-2">
+                <Textarea
+                  value={webBody}
+                  onChange={(event) => setWebBody(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      void replyToWebsite();
+                    }
+                  }}
+                  placeholder="Reply in the website chat…"
+                  rows={2}
+                  className="min-h-[44px] resize-none"
+                />
+                <div className="flex shrink-0 flex-col gap-2 self-end">
+                  <Button type="button" variant="outline" disabled={suggesting} onClick={() => void suggestReply()}>
+                    {suggesting ? "Thinking…" : "Suggest"}
+                  </Button>
+                  <Button type="submit" disabled={webSending || !webBody.trim()}>
+                    {webSending ? (
+                      "Sending…"
+                    ) : (
+                      <>
+                        <Send data-icon="inline-start" />
+                        Send
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                This reply shows in the website chat box. It does not send a text.
+              </p>
+            </form>
+          ) : (
           <form
             className="space-y-2 border-t p-4"
             onSubmit={(event) => {
@@ -496,6 +699,7 @@ export function MessagesInbox() {
                 : "Choose a contact or enter a valid mobile number."}
             </p>
           </form>
+          )}
         </section>
       </div>
     </div>
@@ -541,6 +745,57 @@ function ThreadRow({
         ) : null}
       </span>
     </button>
+  );
+}
+
+function WebsiteConversation({ messages }: { messages: WebsiteChatThread["messages"] }) {
+  const lastIndex = Math.max(0, messages.length - 1);
+  if (messages.length === 0) {
+    return (
+      <p className="px-4 py-4 text-sm text-muted-foreground">
+        Waiting for the visitor. Replies you send here appear in their chat box.
+      </p>
+    );
+  }
+  return (
+    <Virtuoso
+      className="h-full"
+      data={messages}
+      increaseViewportBy={{ top: 240, bottom: 400 }}
+      initialTopMostItemIndex={lastIndex}
+      followOutput="smooth"
+      itemContent={(index, message) => {
+        const prior = messages[index - 1];
+        const showDay = !prior || !sameLocalDay(prior.createdAt, message.createdAt);
+        return (
+          <div className={cn("px-4", index === 0 ? "pt-4" : "pt-3", index === lastIndex ? "pb-4" : "")}>
+            {showDay ? (
+              <p className="mb-3 text-center text-[11px] tracking-wide text-muted-foreground uppercase">
+                {formatDate(message.createdAt)}
+              </p>
+            ) : null}
+            <div
+              className={cn(
+                "max-w-[85%] rounded-2xl px-3 py-2 text-sm",
+                message.direction === "outbound"
+                  ? "ml-auto bg-primary text-primary-foreground"
+                  : "bg-card shadow-sm",
+              )}
+            >
+              <p className="whitespace-pre-wrap">{message.body}</p>
+              <p
+                className={cn(
+                  "mt-1 text-[10px] tracking-wide uppercase",
+                  message.direction === "outbound" ? "text-primary-foreground/70" : "text-muted-foreground",
+                )}
+              >
+                {message.direction === "outbound" ? "Reply" : "Visitor"} · {formatMessageStamp(message.createdAt)}
+              </p>
+            </div>
+          </div>
+        );
+      }}
+    />
   );
 }
 

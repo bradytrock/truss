@@ -20,6 +20,7 @@ export function isPublicAppPath(pathname: string) {
     pathname.startsWith("/realtor-portal") ||
     pathname.startsWith("/unsubscribe") ||
     pathname.startsWith("/api/") ||
+    pathname.startsWith("/chat/") ||
     isLegalPath(pathname) ||
     isPublicCardPath(pathname)
   );

@@ -37,6 +37,8 @@ function isSharePath(path: string) {
     path.startsWith("/api/voice/intake") ||
     path.startsWith("/api/voice/book") ||
     path.startsWith("/api/voice/log") ||
+    path.startsWith("/api/chat") ||
+    path.startsWith("/chat/") ||
     isPublicCardPath(path)
   );
 }

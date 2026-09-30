@@ -1,7 +1,10 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +18,7 @@ import {
 } from "@/components/company-settings-form";
 import { CompanyStripeSettings } from "@/components/company-stripe-settings";
 import { LEGAL_EMAIL, LEGAL_PAGES } from "@/lib/legal";
+import { copyText } from "@/lib/share";
 
 export default function CompanySettingsPage() {
   return (
@@ -122,6 +126,8 @@ function CompanySettingsForm() {
           </div>
         </CardContent>
       </Card>
+
+      <WebsiteChatEmbed slug={form.slug} phone={form.phone} />
 
       <Card>
         <CardHeader className="border-b">
@@ -384,6 +390,52 @@ function CompanySettingsForm() {
         </CardContent>
       </Card>
     </form>
+  );
+}
+
+function WebsiteChatEmbed({ slug, phone }: { slug: string; phone: string }) {
+  const origin = useSyncExternalStore(
+    () => () => {},
+    () => window.location.origin,
+    () => "",
+  );
+  const company = slug.trim() || "your-company";
+  const snippet = origin
+    ? `<script src="${origin}/api/chat/widget.js" data-company="${company}" async></script>`
+    : "";
+
+  return (
+    <Card>
+      <CardHeader className="border-b">
+        <CardTitle>Website chat</CardTitle>
+        <CardDescription>
+          A chat box on a computer. On a phone it opens Messages to the main phone
+          {phone.trim() ? ` (${phone.trim()})` : ""}.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 pt-4">
+        <Label htmlFor="website-chat-snippet">Embed on your site</Label>
+        <Textarea id="website-chat-snippet" readOnly rows={3} value={snippet} className="font-mono text-xs" />
+        <div>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!snippet}
+            onClick={() => {
+              void copyText(snippet).then((ok) => {
+                if (ok) toast.success("Embed code copied.");
+                else toast.error("Could not copy that.");
+              });
+            }}
+          >
+            Copy embed code
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Desktop messages show up in Inbox under Website. Set the main phone so a visitor on a phone can text the office immediately.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 

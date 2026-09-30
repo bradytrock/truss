@@ -44,6 +44,8 @@ export function isSubscriptionExemptPath(pathname: string) {
     path.startsWith("/api/stripe/webhook") ||
     path.startsWith("/api/eagleview/webhook") ||
     path.startsWith("/api/messages/inbound") ||
+    path.startsWith("/api/chat") ||
+    path.startsWith("/chat/") ||
     path.startsWith("/api/marketing/unsubscribe") ||
     path.startsWith("/api/marketing/event") ||
     path.startsWith("/api/cards/event")

@@ -2827,6 +2827,30 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      website_chat_lookup: {
+        Args: { p_slug: string };
+        Returns: Json;
+      };
+      website_chat_start: {
+        Args: { p_slug: string };
+        Returns: Json;
+      };
+      website_chat_post: {
+        Args: { p_token: string; p_body: string };
+        Returns: Json;
+      };
+      website_chat_read: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      website_chat_office_list: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      website_chat_office_reply: {
+        Args: { p_chat_id: string; p_body: string };
+        Returns: Json;
+      };
       voice_agent_intake: {
         Args: {
           p_token: string;
