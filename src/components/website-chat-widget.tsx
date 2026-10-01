@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { MessageSquare, Send, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { Send, X } from "lucide-react";
 import {
   CHAT_ASK_NAME,
   CHAT_ASK_PHONE,
@@ -13,6 +13,7 @@ import {
   textHandoffBody,
   type WebsiteChatMessage,
 } from "@/lib/website-chat";
+import { cn } from "@/lib/utils";
 
 type Office = { companyName: string; phone: string };
 type Step = "name" | "phone" | "street" | "choose" | "chat" | "text";
@@ -28,6 +29,10 @@ type Intake = {
   messages?: WebsiteChatMessage[];
 };
 
+const CLOSED_FRAME = "60px";
+const OPEN_FRAME_WIDTH = "min(380px, calc(100vw - 32px))";
+const OPEN_FRAME_HEIGHT = "min(640px, calc(100vh - 32px))";
+
 function stepFor(intake: Intake | null): Step {
   if (!intake?.ready) {
     if (!intake?.visitorName) return "name";
@@ -37,6 +42,43 @@ function stepFor(intake: Intake | null): Step {
   if (intake.channel === "text") return "text";
   if (intake.channel === "chat") return "chat";
   return "choose";
+}
+
+function readStored(key: string) {
+  try {
+    return window.localStorage.getItem(key) || "";
+  } catch {
+    return "";
+  }
+}
+
+function writeStored(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Cross-site embeds often block storage. The visit still works.
+  }
+}
+
+function removeStored(key: string) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Same as writeStored: a blocked store should not take down the chat.
+  }
+}
+
+function officeInitial(name: string) {
+  const letter = name.trim().charAt(0).toUpperCase();
+  return /[A-Z0-9]/.test(letter) ? letter : "";
+}
+
+function ChatGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden className={className ?? "size-6"} fill="currentColor">
+      <path d="M5 4.75h14A2.25 2.25 0 0 1 21.25 7v7.5A2.25 2.25 0 0 1 19 16.75H9.4L5.15 20.2v-3.45H5A2.25 2.25 0 0 1 2.75 14.5V7A2.25 2.25 0 0 1 5 4.75Z" />
+    </svg>
+  );
 }
 
 export function WebsiteChatWidget({
@@ -62,15 +104,56 @@ export function WebsiteChatWidget({
   const [draftStreet, setDraftStreet] = useState("");
   const [handoff, setHandoff] = useState("");
   const scroller = useRef<HTMLDivElement>(null);
+  const field = useRef<HTMLInputElement>(null);
+
+  const publishSize = useCallback((nextOpen: boolean) => {
+    if (!embed || window.parent === window) return;
+    window.parent.postMessage(
+      {
+        type: "truss-chat-size",
+        open: nextOpen,
+        width: nextOpen ? OPEN_FRAME_WIDTH : CLOSED_FRAME,
+        height: nextOpen ? OPEN_FRAME_HEIGHT : CLOSED_FRAME,
+      },
+      "*",
+    );
+  }, [embed]);
 
   useEffect(() => {
-    if (!embed || window.parent === window) return;
-    window.parent.postMessage({ type: "truss-chat-size", open }, window.location.origin);
-  }, [embed, open]);
+    if (!embed) return;
+    const html = document.documentElement;
+    const previousHtml = html.style.backgroundColor;
+    const previousBody = document.body.style.backgroundColor;
+    const previousOverflow = document.body.style.overflow;
+    html.style.backgroundColor = "transparent";
+    document.body.style.backgroundColor = "transparent";
+    document.body.style.overflow = "hidden";
+    return () => {
+      html.style.backgroundColor = previousHtml;
+      document.body.style.backgroundColor = previousBody;
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [embed]);
+
+  useEffect(() => {
+    publishSize(open);
+  }, [open, publishSize]);
+
+  useEffect(() => {
+    if (!embed || !open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        publishSize(false);
+        setOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [embed, open, publishSize]);
 
   useEffect(() => {
     const storageKey = `truss.websiteChat.${companySlug}${ownerId ? `.${ownerId}` : ""}`;
-    const saved = window.localStorage.getItem(storageKey) || "";
+    const saved = readStored(storageKey);
     let cancelled = false;
 
     function applyIntake(data: Intake, existingToken: string) {
@@ -110,7 +193,7 @@ export function WebsiteChatWidget({
           setReady(true);
           return;
         }
-        window.localStorage.removeItem(storageKey);
+        removeStored(storageKey);
       }
 
       const started = await fetch("/api/chat/start", {
@@ -125,7 +208,7 @@ export function WebsiteChatWidget({
         setReady(true);
         return;
       }
-      window.localStorage.setItem(storageKey, data.token);
+      writeStored(storageKey, data.token);
       setToken(data.token);
       setOffice({ companyName: data.companyName || officeData.companyName || "Office", phone: data.phone || officeData.phone || "" });
       setMessages([]);
@@ -164,6 +247,11 @@ export function WebsiteChatWidget({
     const node = scroller.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [messages, open, step]);
+
+  useEffect(() => {
+    if (!open || !ready || !token || step === "choose" || step === "text") return;
+    field.current?.focus();
+  }, [open, ready, token, step]);
 
   const name = office?.companyName || "the office";
   const prompt =
@@ -318,20 +406,30 @@ export function WebsiteChatWidget({
     ? [...messages, { id: "prompt", direction: "outbound" as const, body: prompt, createdAt: "" }]
     : messages;
 
+  const mark = officeInitial(office?.companyName || "");
+  const placeholder =
+    step === "phone" ? "(469) 555-0100" : step === "street" ? "123 Oak Street" : step === "name" ? "Your name" : "Write a message";
+
   const panel = !ready ? (
-    <p className="p-5 text-sm text-muted-foreground">Opening chat…</p>
+    <div className="flex flex-1 items-center justify-center px-6">
+      <p className="text-sm text-muted-foreground">Opening chat…</p>
+    </div>
+  ) : !token ? (
+    <div className="flex flex-1 items-center px-6">
+      <p className="text-sm leading-relaxed text-muted-foreground">{error || "Chat is not available."}</p>
+    </div>
   ) : step === "text" ? (
-    <div className="flex h-full flex-col justify-between p-5">
+    <div className="flex flex-1 flex-col justify-center gap-5 px-5 py-6">
       <div>
-        <p className="text-sm font-semibold">Text {name}</p>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="font-heading text-[1.65rem] leading-none text-foreground">Text {name}</p>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
           This opens Messages with your name and street already written.
         </p>
       </div>
       {handoff ? (
         <a
           href={handoff}
-          className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"
+          className="inline-flex h-12 items-center justify-center rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground"
         >
           Open Messages
         </a>
@@ -340,27 +438,34 @@ export function WebsiteChatWidget({
       )}
     </div>
   ) : (
-    <div className="flex h-full min-h-0 flex-col">
-      <div ref={scroller} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 py-3">
-        {shown.map((message) => (
-          <p
-            key={message.id}
-            className={
-              message.direction === "outbound"
-                ? "mr-8 rounded-2xl bg-muted px-3 py-2 text-sm"
-                : "ml-8 rounded-2xl bg-primary px-3 py-2 text-sm text-primary-foreground"
-            }
-          >
-            {message.body}
-          </p>
-        ))}
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div ref={scroller} className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+        <div className="mt-auto flex flex-col gap-2.5 px-4 py-4">
+        {shown.map((message) => {
+          const mine = message.direction === "inbound";
+          return (
+            <p
+              key={message.id}
+              className={cn(
+                "max-w-[84%] px-3.5 py-2.5 text-sm leading-snug break-words whitespace-pre-wrap",
+                mine
+                  ? "ml-auto rounded-[18px] rounded-br-[5px] bg-primary text-primary-foreground"
+                  : "mr-auto rounded-[18px] rounded-bl-[5px] border border-border/80 bg-card text-foreground",
+              )}
+            >
+              {message.body}
+            </p>
+          );
+        })}
+        </div>
       </div>
+      {error ? <p className="px-4 pb-1 text-xs text-destructive">{error}</p> : null}
       {step === "choose" ? (
-        <div className="grid gap-2 border-t p-3">
+        <div className="grid gap-2 border-t border-border bg-background px-3 py-3">
           <button
             type="button"
             disabled={sending}
-            className="h-10 rounded-md bg-primary text-sm font-medium text-primary-foreground disabled:opacity-50"
+            className="h-11 rounded-full bg-primary text-sm font-medium text-primary-foreground disabled:opacity-50"
             onClick={() => void choose("chat")}
           >
             Keep talking here
@@ -368,47 +473,45 @@ export function WebsiteChatWidget({
           <button
             type="button"
             disabled={sending || !office?.phone}
-            className="h-10 rounded-md border text-sm font-medium disabled:opacity-50"
+            className="h-11 rounded-full border border-border bg-card text-sm font-medium disabled:opacity-50"
             onClick={() => void choose("text")}
           >
             Text the office
           </button>
+          {!office?.phone ? (
+            <p className="text-center text-xs text-muted-foreground">This office does not have a main phone yet.</p>
+          ) : null}
         </div>
-      ) : step === "chat" ? (
+      ) : (
         <form
-          className="flex gap-2 border-t p-3"
+          className="flex items-center gap-2 border-t border-border bg-background px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
           onSubmit={(event) => {
-            event.preventDefault();
-            void send();
+            if (step === "chat") {
+              event.preventDefault();
+              void send();
+              return;
+            }
+            void answer(event);
           }}
         >
+          <label className="sr-only" htmlFor="website-chat-body">
+            Message
+          </label>
           <input
+            id="website-chat-body"
+            ref={field}
             value={body}
             onChange={(event) => setBody(event.target.value)}
-            placeholder="Write a message"
-            className="h-10 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
+            placeholder={placeholder}
+            inputMode={step === "phone" ? "tel" : "text"}
+            autoComplete={step === "name" ? "name" : step === "phone" ? "tel" : step === "street" ? "street-address" : "off"}
+            enterKeyHint="send"
+            className="h-11 min-w-0 flex-1 rounded-full border border-border bg-card px-4 text-sm outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/25"
           />
           <button
             type="submit"
             disabled={sending || !body.trim() || !token}
-            className="inline-flex size-10 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-50"
-            aria-label="Send"
-          >
-            <Send className="size-4" />
-          </button>
-        </form>
-      ) : (
-        <form className="flex gap-2 border-t p-3" onSubmit={(event) => void answer(event)}>
-          <input
-            value={body}
-            onChange={(event) => setBody(event.target.value)}
-            placeholder={step === "phone" ? "(469) 555-0100" : step === "street" ? "123 Oak Street" : "Your name"}
-            className="h-10 min-w-0 flex-1 rounded-md border bg-background px-3 text-sm"
-          />
-          <button
-            type="submit"
-            disabled={sending || !body.trim() || !token}
-            className="inline-flex size-10 items-center justify-center rounded-md bg-primary text-primary-foreground disabled:opacity-50"
+            className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40"
             aria-label="Send"
           >
             <Send className="size-4" />
@@ -419,33 +522,61 @@ export function WebsiteChatWidget({
   );
 
   return (
-    <div className={embed ? "h-dvh w-full bg-transparent" : "flex min-h-dvh items-end justify-center bg-muted/40 p-4 sm:items-center"}>
-      <div className={embed ? "flex h-full flex-col items-end justify-end" : "flex w-full max-w-md flex-col items-end"}>
+    <div
+      className={
+        embed
+          ? "fixed inset-0 bg-transparent"
+          : "flex min-h-dvh items-end justify-center bg-muted p-4 sm:items-center"
+      }
+    >
+      <div className={embed ? "relative h-full w-full" : "flex w-full max-w-[380px] flex-col"}>
         {open ? (
-          <section className="mb-3 flex h-[min(560px,calc(100dvh-7rem))] w-full flex-col overflow-hidden rounded-2xl border bg-background shadow-xl">
-            <header className="flex items-center justify-between border-b px-4 py-3">
-              <div>
-                <p className="text-sm font-semibold">{name}</p>
-                <p className="text-xs text-muted-foreground">Website chat</p>
-              </div>
+          <section
+            aria-label={`Chat with ${name}`}
+            className={cn(
+              "flex flex-col overflow-hidden bg-background",
+              embed
+                ? "absolute inset-0 h-full"
+                : "h-[min(640px,calc(100dvh-2rem))] rounded-[20px] border border-border shadow-[0_22px_50px_rgba(28,12,8,0.18)]",
+            )}
+          >
+            <header className="flex items-center gap-3 bg-primary px-4 py-3.5 text-primary-foreground">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-white/15 font-heading text-lg leading-none">
+                {mark || <ChatGlyph className="size-4" />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-heading text-[1.2rem] leading-none font-medium">{name}</span>
+                <span className="mt-1 block text-xs text-primary-foreground/75">Replies from the office</span>
+              </span>
               {embed ? (
-                <button type="button" className="rounded-md p-1 text-muted-foreground" aria-label="Close chat" onClick={() => setOpen(false)}>
+                <button
+                  type="button"
+                  className="inline-flex size-9 items-center justify-center rounded-full text-primary-foreground/85 hover:bg-white/10"
+                  aria-label="Close chat"
+                  onClick={() => {
+                    publishSize(false);
+                    setOpen(false);
+                  }}
+                >
                   <X className="size-4" />
                 </button>
               ) : null}
             </header>
-            {error ? <p className="px-4 pt-3 text-xs text-destructive">{error}</p> : null}
             {panel}
           </section>
         ) : null}
-        {embed ? (
+        {embed && !open ? (
           <button
             type="button"
-            aria-label={open ? "Close chat" : "Open chat"}
-            className="flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg"
-            onClick={() => setOpen((value) => !value)}
+            aria-label="Open chat"
+            aria-expanded={false}
+            className="absolute inset-0 flex items-center justify-center rounded-full bg-primary text-primary-foreground transition hover:brightness-110"
+            onClick={() => {
+              publishSize(true);
+              setOpen(true);
+            }}
           >
-            {open ? <X className="size-5" /> : <MessageSquare className="size-5" />}
+            <ChatGlyph className="size-7" />
           </button>
         ) : null}
       </div>

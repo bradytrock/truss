@@ -12,11 +12,19 @@ export default async function WebsiteChatPage({
 }) {
   const { company } = await params;
   const query = await searchParams;
+  const embed = query.embed === "1";
   return (
-    <WebsiteChatWidget
-      companySlug={company}
-      embed={query.embed === "1"}
-      ownerId={query.person?.trim() ?? ""}
-    />
+    <>
+      {embed ? (
+        <style href="truss-chat-embed" precedence="default">
+          {`html,body{background:transparent!important;background-color:transparent!important;overflow:hidden!important}nextjs-portal{display:none!important}`}
+        </style>
+      ) : null}
+      <WebsiteChatWidget
+        companySlug={company}
+        embed={embed}
+        ownerId={query.person?.trim() ?? ""}
+      />
+    </>
   );
 }
