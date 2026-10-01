@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { resolveAutomationReplies } from "@/lib/automations/replies";
 import { inboundMessages, inboundSkipReason } from "@/lib/inbound-text";
 import { getSupabaseKey, getSupabaseUrl } from "@/lib/supabase/env";
 import type { Database } from "@/lib/supabase/database.types";
@@ -63,6 +64,13 @@ export async function ingestCompanyMessages(raw: Record<string, unknown>, compan
       return { status: 500, body: { error: error.message } };
     }
     saved.push(data ?? { ok: true });
+    await resolveAutomationReplies({
+      companyId,
+      from: fields.from,
+      body: fields.content,
+    }).catch((error: unknown) => {
+      console.error("[automations] reply", error instanceof Error ? error.message : error);
+    });
   }
 
   return {

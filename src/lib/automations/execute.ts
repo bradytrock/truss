@@ -33,6 +33,9 @@ export async function executeAutomationActions(input: {
   customerEmail?: string;
   ownerPhone?: string;
   ownerEmail?: string;
+  /** Homeowner mobiles for a group message. */
+  groupPhones?: string[];
+  groupPhonesError?: string;
   staffById: (id: string) => { phone?: string; email?: string; name?: string } | undefined;
   createTask?: (title: string) => Promise<void>;
   setJobValue?: (amount: number) => Promise<void>;
@@ -71,6 +74,8 @@ async function runAction(
     customerEmail?: string;
     ownerPhone?: string;
     ownerEmail?: string;
+    groupPhones?: string[];
+    groupPhonesError?: string;
     staffById: (id: string) => { phone?: string; email?: string; name?: string } | undefined;
     createTask?: (title: string) => Promise<void>;
     setJobValue?: (amount: number) => Promise<void>;
@@ -148,10 +153,25 @@ async function runAction(
     }
   }
 
+  if (action.kind === "send_sms" && to === "group") {
+    if (input.groupPhonesError) return { ok: false, delivery: "", error: input.groupPhonesError };
+    const phones = input.groupPhones ?? [];
+    if (phones.length < 2) {
+      return {
+        ok: false,
+        delivery: "",
+        error: "A group message needs at least two mobile numbers on the job.",
+      };
+    }
+    const result = await sendOfficeText({ to: phones, content: body });
+    if (!result.ok) return { ok: false, delivery: "", error: result.error };
+    return { ok: true, delivery: result.mocked ? "Group text mocked" : "Group text sent", error: "" };
+  }
+
   const phone =
     to === "phone"
       ? action.phone
-      : to === "email"
+      : to === "email" || to === "group"
         ? ""
         : to === "customer"
           ? input.customerPhone

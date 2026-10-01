@@ -2301,6 +2301,7 @@ export type Database = {
           confirmed_by_name: string;
           decided_at: string | null;
           dry_run: boolean;
+          workflow_cursor: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -2321,6 +2322,7 @@ export type Database = {
           confirmed_by_name?: string;
           decided_at?: string | null;
           dry_run?: boolean;
+          workflow_cursor?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -3106,7 +3108,17 @@ export type Database = {
           p_delivery?: string;
           p_error?: string;
           p_preview?: string;
+          p_scheduled?: string;
+          p_cursor?: string;
         };
+        Returns: Json;
+      };
+      automation_claim_wait: {
+        Args: { p_id: string };
+        Returns: Json;
+      };
+      automation_waiting_replies: {
+        Args: { p_company_id: string; p_phone: string };
         Returns: Json;
       };
       automation_add_task: {
@@ -3142,6 +3154,10 @@ export type Database = {
       };
       automation_estimate_bundle: {
         Args: { p_estimate_id: string };
+        Returns: Json;
+      };
+      automation_job_phones: {
+        Args: { p_job_id: string };
         Returns: Json;
       };
       automation_share_context: {

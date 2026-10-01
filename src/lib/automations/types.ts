@@ -146,9 +146,40 @@ export const AUTOMATION_MERGE_FIELD_LABELS: Record<AutomationMergeField, string>
   estimateTotal: "Proposal total",
 };
 
+export const WORKFLOW_WAIT_UNITS = ["minutes", "hours", "days"] as const;
+export type WorkflowWaitUnit = (typeof WORKFLOW_WAIT_UNITS)[number];
+
+export type WorkflowStep =
+  | { id: string; kind: "action"; action: AutomationAction }
+  | { id: string; kind: "wait"; amount: number; unit: WorkflowWaitUnit };
+
+export type WorkflowReply = {
+  amount: number;
+  unit: WorkflowWaitUnit;
+  yes: WorkflowStep[];
+  no: WorkflowStep[];
+  timeout: WorkflowStep[];
+};
+
+/** Ordered steps, with an optional yes / no / no-reply split at the end. */
+export type AutomationWorkflow = {
+  enabled: true;
+  steps: WorkflowStep[];
+  reply?: WorkflowReply;
+};
+
+export type WorkflowLane = "main" | "yes" | "no" | "timeout";
+
+/** Where a paused run resumes. Index is the next step in that lane. */
+export type WorkflowCursor = {
+  lane: WorkflowLane;
+  index: number;
+};
+
 export type AutomationTriggerConfig = {
   stage?: WorkColumn | "";
   days?: number;
+  workflow?: AutomationWorkflow;
 };
 
 export type AutomationCondition = {
@@ -158,7 +189,7 @@ export type AutomationCondition = {
   value: string;
 };
 
-export type AutomationActionTo = "customer" | "rep" | "staff" | "phone" | "email";
+export type AutomationActionTo = "customer" | "rep" | "staff" | "phone" | "email" | "group";
 
 export type AutomationAction = {
   id: string;
@@ -188,6 +219,7 @@ export const AUTOMATION_RUN_STATUSES = [
   "confirmed",
   "skipped",
   "running",
+  "waiting_reply",
   "sent",
   "failed",
 ] as const;
@@ -229,6 +261,8 @@ export type AutomationRun = {
   confirmedByName: string;
   decidedAt: string | null;
   dryRun: boolean;
+  /** Set while a wait or a reply split is in progress. */
+  workflowCursor?: WorkflowCursor | null;
   createdAt: string;
   updatedAt: string;
 };

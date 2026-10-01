@@ -16,6 +16,7 @@ const STATUS_LABEL: Record<AutomationRunStatus, string> = {
   confirmed: "Confirmed",
   skipped: "Skipped",
   running: "Running",
+  waiting_reply: "Waiting on a reply",
   sent: "Sent",
   failed: "Failed",
 };

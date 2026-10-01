@@ -1,4 +1,5 @@
 import { describeJobValue } from "@/lib/automations/job-effects";
+import { formatDuration, workflowOf } from "@/lib/automations/workflow";
 import { leadSourceLabel } from "@/lib/leads";
 import { WORK_COLUMN_LABELS, canonicalizeWorkColumn, isWorkColumn } from "@/lib/work-board";
 import {
@@ -86,6 +87,8 @@ function recipientLabel(action: AutomationAction) {
       return "a teammate";
     case "phone":
       return "a phone number";
+    case "group":
+      return "the group";
     case "email":
       return "an email address";
     default:
@@ -100,7 +103,18 @@ export function summarizeAutomation(
   const trigger = summarizeTrigger(automation.triggerKind, automation.triggerConfig, labels);
   const first = automation.actions[0] ? summarizeAction(automation.actions[0]) : "do nothing";
   const extra = automation.actions.length > 1 ? ` + ${automation.actions.length - 1} more` : "";
-  return `${trigger} → ${first}${extra}`;
+  const workflow = workflowOf(automation.triggerConfig);
+  const waits = workflow?.steps.filter((step) => step.kind === "wait").length ?? 0;
+  const waitLabel = waits > 0 ? ` · ${waits} wait${waits === 1 ? "" : "s"}` : "";
+  const reply = workflow?.reply;
+  const map = reply ? ` · yes / no / no reply in ${formatDuration(reply.amount, reply.unit)}` : "";
+  return `${trigger} → ${first}${extra}${waitLabel}${map}`;
+}
+
+export function summarizeWorkflowBranch(label: string, actions: Automation["actions"]) {
+  const first = actions[0] ? summarizeAction(actions[0]) : "Do nothing";
+  const extra = actions.length > 1 ? ` + ${actions.length - 1} more` : "";
+  return `${label}: ${first}${extra}`;
 }
 
 export function summarizeCondition(condition: AutomationCondition, labels?: Record<string, string>) {

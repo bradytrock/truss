@@ -151,11 +151,26 @@ function photonError(error: unknown) {
   return error instanceof Error ? error.message : "Could not reach Photon.";
 }
 
+function textTargets(to: string | string[]) {
+  const raw = Array.isArray(to) ? to : [to];
+  const seen = new Set<string>();
+  const phones: string[] = [];
+  for (const value of raw) {
+    const phone = toE164(value);
+    if (!phone || seen.has(phone)) continue;
+    seen.add(phone);
+    phones.push(phone);
+  }
+  return phones;
+}
+
 async function withSpace<T>(
   credentials: PhotonCredentials,
-  to: string,
+  to: string | string[],
   run: (space: SpectrumSpace) => Promise<T>,
 ) {
+  const phones = textTargets(to);
+  if (phones.length === 0) throw new Error("That phone number is not valid.");
   const { Spectrum } = await import("@spectrum-ts/core");
   const { imessage } = await import("@spectrum-ts/imessage");
   const app = await Spectrum({
@@ -165,8 +180,8 @@ async function withSpace<T>(
   });
   try {
     const platform = imessage(app);
-    const person = await platform.user(to);
-    const space = await platform.space.create(person);
+    const people = await Promise.all(phones.map((phone) => platform.user(phone)));
+    const space = await platform.space.create(people.length === 1 ? people[0] : people);
     return await run(space as SpectrumSpace);
   } finally {
     await app.stop().catch(() => undefined);
@@ -199,30 +214,31 @@ async function outboundPayload(input: { content: string; effectId: string; reply
 }
 
 export async function sendOfficeText(input: {
-  to: string;
+  to: string | string[];
   content: string;
   effect?: string;
   replyToHandle?: string;
   voiceToken?: string;
 }): Promise<PhotonSendResult> {
-  const to = toE164(input.to);
+  const phones = textTargets(input.to);
   const content = input.content.trim();
   const requestedEffect = input.effect?.trim() ?? "";
   const effectId = requestedEffect ? imessageEffectId(requestedEffect) : "";
   const replyToHandle = input.replyToHandle?.trim() ?? "";
-  if (!to) return { ok: false, mocked: false, error: "That phone number is not valid." };
+  const destination = phones.join(", ");
+  if (phones.length === 0) return { ok: false, mocked: false, error: "That phone number is not valid." };
   if (!content) return { ok: false, mocked: false, error: "Write a message before sending." };
   if (requestedEffect && !effectId) return { ok: false, mocked: false, error: "That effect is not available." };
 
   const credentials = await loadCredentials(input.voiceToken);
   if (!credentials) {
-    return { ok: true, mocked: true, to, handle: `mock_${Date.now()}` };
+    return { ok: true, mocked: true, to: destination, handle: `mock_${Date.now()}` };
   }
 
   try {
-    return await withSpace(credentials, to, async (space) => {
+    return await withSpace(credentials, phones, async (space) => {
       const sent = await space.send(await outboundPayload({ content, effectId, replyToHandle }));
-      return { ok: true as const, mocked: false as const, to, handle: sentHandle(sent) };
+      return { ok: true as const, mocked: false as const, to: destination, handle: sentHandle(sent) };
     });
   } catch (error) {
     return { ok: false, mocked: false, error: photonError(error) };

@@ -5,13 +5,14 @@ import {
   type AutomationMergeContext,
 } from "@/lib/automations/merge";
 import { describeJobValue } from "@/lib/automations/job-effects";
+import { formatDuration, formatWait, mainSteps, workflowOf } from "@/lib/automations/workflow";
 import {
   automationIsDelayed,
   automationMatchesEvent,
   conditionsPass,
   scheduledForFromTrigger,
 } from "@/lib/automations/evaluate";
-import type { Automation, AutomationAction, AutomationEvent, AutomationRun } from "@/lib/automations/types";
+import type { Automation, AutomationAction, AutomationEvent, AutomationRun, WorkflowStep } from "@/lib/automations/types";
 import { documentOwnerStaff } from "@/lib/document-owner";
 import { marketForEstimate } from "@/lib/market";
 import type { CompanySettings, Contact, CrmState, Job } from "@/lib/types";
@@ -32,8 +33,47 @@ export function previewAutomation(input: {
     job: input.job,
     estimateTotal,
   });
-  const lines = input.automation.actions.map((action) => previewActionLine(action, ctx, estimateTotal));
+  return previewAutomationSteps(input.automation, ctx, estimateTotal);
+}
+
+export function previewAutomationSteps(
+  automation: Pick<Automation, "actions" | "triggerConfig">,
+  merge: AutomationMergeContext,
+  estimateTotal: number | null,
+) {
+  const workflow = workflowOf(automation.triggerConfig);
+  const lines = workflow
+    ? previewSteps(mainSteps(workflow, automation.actions), merge, estimateTotal)
+    : automation.actions.map((action) => previewActionLine(action, merge, estimateTotal));
+  if (workflow?.reply) {
+    lines.push(
+      previewWorkflowBranch("If yes", workflow.reply.yes, merge, estimateTotal),
+      previewWorkflowBranch("If no", workflow.reply.no, merge, estimateTotal),
+      previewWorkflowBranch(
+        `If no reply in ${formatDuration(workflow.reply.amount, workflow.reply.unit)}`,
+        workflow.reply.timeout,
+        merge,
+        estimateTotal,
+      ),
+    );
+  }
   return lines.filter(Boolean).join("\n\n");
+}
+
+function previewSteps(steps: WorkflowStep[], merge: AutomationMergeContext, estimateTotal: number | null) {
+  return steps.map((step) =>
+    step.kind === "wait" ? formatWait(step.amount, step.unit) : previewActionLine(step.action, merge, estimateTotal),
+  );
+}
+
+function previewWorkflowBranch(
+  label: string,
+  steps: WorkflowStep[],
+  merge: AutomationMergeContext,
+  estimateTotal: number | null,
+) {
+  if (steps.length === 0) return `${label}: Do nothing`;
+  return `${label}: ${previewSteps(steps, merge, estimateTotal).join(", ")}`;
 }
 
 export function previewActionLine(

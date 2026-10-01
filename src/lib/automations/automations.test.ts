@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import { automationEmailText } from "./execute.ts";
+import { groupMessagePhones } from "./group-text.ts";
 import { conditionsPass, automationMatchesEvent, scheduledForFromTrigger } from "./evaluate.ts";
 import { applyAutomationMerge, smsSegmentCount, unknownAutomationMergeFields } from "./merge.ts";
-import { plannedRunsForEvent } from "./queue.ts";
-import { summarizeAutomation, summarizeTrigger } from "./summarize.ts";
+import { plannedRunsForEvent, previewAutomation } from "./queue.ts";
+import { summarizeAutomation, summarizeTrigger, summarizeWorkflowBranch } from "./summarize.ts";
 import { defaultRequiresConfirmation, validateAutomationDraft } from "./validate.ts";
-import type { Automation, AutomationAction, AutomationCondition } from "./types.ts";
+import { classifyAutomationReply, planWorkflowSlice, replyDeadline } from "./workflow.ts";
+import type { Automation, AutomationAction, AutomationCondition, WorkflowStep } from "./types.ts";
+import type { Contact, Job } from "../types.ts";
 
 const sms: AutomationAction = {
   id: "a1",
@@ -78,6 +81,45 @@ assert.equal(
   "When a job moves to Complete",
 );
 assert.match(summarizeAutomation({ ...automation, actions: [sms] }), /invoice is paid → Text the customer/);
+assert.match(
+  summarizeAutomation({ ...automation, actions: [{ ...sms, to: "group", body: "Hi both" }] }),
+  /Text the group/,
+);
+assert.equal(defaultRequiresConfirmation([{ ...sms, to: "group" }]), true);
+assert.equal(
+  validateAutomationDraft(
+    { ...automation, actions: [{ ...sms, to: "group", body: "Hi both" }] },
+    { smsConfigured: true },
+  ).ok,
+  true,
+);
+
+function person(partial: Partial<Contact> & Pick<Contact, "id" | "name" | "phone">): Contact {
+  return {
+    clientId: null,
+    title: "Homeowner",
+    email: "",
+    ownerStaffId: "staff-1",
+    isReferralPartner: false,
+    listingWatchUrl: "",
+    listingWatchEnabled: false,
+    ...partial,
+  };
+}
+const groupJob = {
+  primaryContactId: "c1",
+  relatedContactIds: ["c2", "c3", "c4"],
+  subcontractorIds: ["c4"],
+} as Pick<Job, "primaryContactId" | "relatedContactIds" | "subcontractorIds">;
+assert.deepEqual(
+  groupMessagePhones(groupJob, [
+    person({ id: "c1", name: "Dana", phone: "(214) 555-0101" }),
+    person({ id: "c2", name: "Jordan", phone: "2145550102" }),
+    person({ id: "c3", name: "Pat", phone: "2145550103", title: "Public adjuster" }),
+    person({ id: "c4", name: "Crew", phone: "2145550104" }),
+  ]),
+  ["+12145550101", "+12145550102"],
+);
 
 assert.equal(
   automationMatchesEvent(
@@ -272,5 +314,135 @@ assert.equal(valued.length, 1);
 assert.equal(valued[0]?.status, "confirmed");
 assert.match(valued[0]?.renderedPreview ?? "", /proposal total/);
 assert.equal(automationEmailText("Status updated", "Moved to In progress"), "Status updated\n\nMoved to In progress");
+
+assert.equal(classifyAutomationReply("Yes!"), "yes");
+assert.equal(classifyAutomationReply("yeah we are interested"), "yes");
+assert.equal(classifyAutomationReply("ok"), "yes");
+assert.equal(classifyAutomationReply("No thanks"), "no");
+assert.equal(classifyAutomationReply("not interested"), "no");
+assert.equal(classifyAutomationReply("maybe later"), null);
+assert.equal(classifyAutomationReply("  "), null);
+assert.equal(replyDeadline(24, new Date("2026-09-18T12:00:00.000Z")), "2026-09-19T12:00:00.000Z");
+assert.equal(replyDeadline(0, new Date("2026-09-18T12:00:00.000Z")), "2026-09-18T13:00:00.000Z");
+
+const replyMap = {
+  enabled: true as const,
+  steps: [] as WorkflowStep[],
+  reply: {
+    amount: 24,
+    unit: "hours" as const,
+    yes: [{ id: "ys", kind: "action" as const, action: { id: "y", kind: "create_task" as const, title: "Call {{contactName}}" } }],
+    no: [{ id: "ns", kind: "action" as const, action: { id: "n", kind: "add_note" as const, body: "{{contactName}} said no." } }],
+    timeout: [],
+  },
+};
+const mapped = {
+  ...automation,
+  triggerKind: "lead_created" as const,
+  triggerConfig: { workflow: { ...replyMap, steps: [] } },
+  actions: [sms],
+};
+assert.equal(validateAutomationDraft(mapped, { smsConfigured: true }).ok, true);
+assert.equal(validateAutomationDraft({ ...mapped, actions: [] }, { smsConfigured: true }).ok, false);
+assert.equal(
+  validateAutomationDraft(
+    {
+      ...mapped,
+      triggerConfig: {
+        workflow: { enabled: true, steps: [], reply: { amount: 0, unit: "hours", yes: [], no: [], timeout: [] } },
+      },
+    },
+    { smsConfigured: true },
+  ).ok,
+  false,
+);
+const waited = {
+  ...automation,
+  actions: [sms],
+  triggerConfig: {
+    workflow: {
+      enabled: true as const,
+      steps: [
+        { id: "a", kind: "action" as const, action: sms },
+        { id: "w", kind: "wait" as const, amount: 2, unit: "hours" as const },
+        { id: "b", kind: "action" as const, action: { id: "t", kind: "create_task" as const, title: "Call back" } },
+      ],
+    },
+  },
+};
+assert.equal(validateAutomationDraft(waited, { smsConfigured: true }).ok, true);
+assert.match(summarizeAutomation(waited), /1 wait/);
+const firstSlice = planWorkflowSlice({
+  workflow: waited.triggerConfig.workflow,
+  openingActions: [],
+  cursor: null,
+  now: new Date("2026-09-18T12:00:00.000Z"),
+});
+assert.equal(firstSlice.actions.length, 1);
+assert.equal(firstSlice.hold.kind, "wait");
+if (firstSlice.hold.kind === "wait") {
+  assert.equal(firstSlice.hold.at, "2026-09-18T14:00:00.000Z");
+  assert.equal(firstSlice.hold.cursor.index, 2);
+}
+const secondSlice = planWorkflowSlice({
+  workflow: waited.triggerConfig.workflow,
+  openingActions: [],
+  cursor: { lane: "main", index: 2 },
+  now: new Date("2026-09-18T14:00:00.000Z"),
+});
+assert.equal(secondSlice.actions[0]?.kind, "create_task");
+assert.equal(secondSlice.hold.kind, "done");
+const asked = planWorkflowSlice({
+  workflow: { ...replyMap, steps: [] },
+  openingActions: [sms],
+  cursor: null,
+  now: new Date("2026-09-18T12:00:00.000Z"),
+});
+assert.equal(asked.actions.length, 1);
+assert.equal(asked.hold.kind, "reply");
+assert.match(summarizeAutomation(mapped), /yes \/ no \/ no reply in 24 hours/);
+assert.equal(summarizeWorkflowBranch("If no reply", []), "If no reply: Do nothing");
+
+const previewJob = {
+  id: "j1",
+  name: "Roof",
+  code: "JOB-1",
+  city: "Dallas",
+  primaryContactId: "c1",
+  ownerStaffId: "s1",
+};
+const yesNoPreview = previewAutomation({
+  automation: { ...rule, triggerKind: "lead_created", triggerConfig: { workflow: replyMap } },
+  book: {
+    jobs: [previewJob],
+    contacts: [{ id: "c1", name: "Pat" }],
+    staff: [{ id: "s1", name: "Sam" }],
+    opportunities: [],
+    googleLocations: [],
+  } as never,
+  company: { name: "Truss", phone: "555" } as never,
+  job: previewJob as never,
+});
+assert.match(yesNoPreview, /If yes: Call Pat/);
+assert.match(yesNoPreview, /If no: Pat said no/);
+assert.match(yesNoPreview, /If no reply in 24 hours: Do nothing/);
+
+const yesNoQueued = plannedRunsForEvent({
+  event: { kind: "lead_created", jobId: "j1" },
+  book: {
+    ...book,
+    automations: [
+      {
+        ...rule,
+        triggerKind: "lead_created",
+        triggerConfig: { workflow: replyMap },
+        requiresConfirmation: false,
+      },
+    ],
+  } as never,
+  company: { name: "Truss", phone: "555" } as never,
+});
+assert.equal(yesNoQueued[0]?.status, "confirmed");
+assert.match(yesNoQueued[0]?.renderedPreview ?? "", /If yes/);
 
 console.log("automations.test.ts ok");
