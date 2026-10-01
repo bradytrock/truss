@@ -55,6 +55,7 @@ export async function generateMetadata({
     description: preview.description,
     robots: { index: false, follow: false },
     openGraph: {
+      type: "website",
       title,
       description: preview.description,
       siteName: preview.siteName || undefined,
