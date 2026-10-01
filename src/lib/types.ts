@@ -299,6 +299,8 @@ export interface Opportunity {
   lostReason?: string;
   ownerStaffId: string;
   originatorStaffId?: string;
+  assignedTo?: string;
+  createdBy?: string;
   leadSource?: LeadSource | "";
   referralContactId?: string | null;
   street?: string;
@@ -1239,6 +1241,8 @@ export interface TextMessage {
   opportunityId: string | null;
   direction: "inbound" | "outbound";
   phone: string;
+  fromNumber?: string;
+  toNumber?: string;
   body: string;
   handle: string;
   status: string;
@@ -1247,6 +1251,39 @@ export interface TextMessage {
   detail: string;
   createdAt: string;
   createdBy: string;
+}
+
+export interface CompanyProfile {
+  id: string;
+  staffId: string | null;
+  name: string;
+  title: string;
+  role: SeatRole;
+}
+
+export interface MessageThreadMember {
+  id: string;
+  companyId: string;
+  threadKey: string;
+  profileId: string;
+  addedBy: string;
+}
+
+export interface MessageThreadOpen {
+  id: string;
+  companyId: string;
+  profileId: string;
+  threadKey: string;
+  openedAt: string;
+}
+
+export interface ThreadViewer {
+  profileId: string;
+  staffId: string;
+  name: string;
+  role: SeatRole;
+  profileRole?: SeatRole | null;
+  teamId: string | null;
 }
 
 export type ReturningClientLeadStatus =
@@ -1333,6 +1370,9 @@ export interface CrmState {
   trainingProgress: TrainingProgress[];
   trainingBulletins: TrainingBulletin[];
   messages: TextMessage[];
+  companyProfiles: CompanyProfile[];
+  messageThreadMembers: MessageThreadMember[];
+  messageThreadOpens: MessageThreadOpen[];
   returningClientLeads: ReturningClientLead[];
   eagleviewOrders: EagleviewOrder[];
   automations: import("@/lib/automations").Automation[];
