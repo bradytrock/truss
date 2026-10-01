@@ -333,6 +333,48 @@ const addable = addableThreadPeople(danaThread, roster, profiles, members, jobs,
 assert.ok(addable.some((row) => row.id === "prof_other"));
 assert.equal(addable.some((row) => row.id === "prof_maya"), false);
 
+const missingRelated = job({
+  id: "job_missing_related",
+  primaryContactId: "con_other",
+  ownerStaffId: "staff_other",
+});
+(missingRelated as { relatedContactIds?: string[] | null }).relatedContactIds = null;
+const nullSender = messageThreads(
+  [
+    text({
+      id: "null-by",
+      contactId: "con_other",
+      direction: "outbound",
+      phone: "(555) 000-1111",
+      createdAt: "2026-09-24T16:00:00.000Z",
+      createdBy: null as unknown as string,
+    }),
+  ],
+  [other],
+  [missingRelated],
+  [],
+)[0];
+assert.equal(
+  canSeeMessageThread(nullSender, otherViewer, {
+    staff: roster,
+    profiles,
+    members,
+    jobs: [missingRelated],
+    opportunities: [],
+  }),
+  true,
+);
+assert.equal(
+  canSeeMessageThread(nullSender, acct, {
+    staff: roster,
+    profiles,
+    members,
+    jobs: [missingRelated],
+    opportunities: [],
+  }),
+  false,
+);
+
 function isAdminLike(viewer: ReturnType<typeof viewerFromStaff>) {
   return viewer.role === "company_admin" || viewer.profileRole === "company_admin";
 }

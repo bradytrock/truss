@@ -52,10 +52,14 @@ export function jobForContact(jobs: Job[], opportunities: Opportunity[], contact
   return ranked[0];
 }
 
+function stamp(value: string | null | undefined) {
+  return typeof value === "string" ? value : "";
+}
+
 export function opportunityForContact(opportunities: Opportunity[], contactId: string) {
-  return [...opportunities]
+  return [...(opportunities ?? [])]
     .filter((item) => item.primaryContactId === contactId && item.stage !== "lost")
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    .sort((a, b) => stamp(b.createdAt).localeCompare(stamp(a.createdAt)))[0];
 }
 
 export function conversationThreadKey(input: {
@@ -145,10 +149,14 @@ function messageMatchesThreadKey(
   return false;
 }
 
+function contactName(contact: Contact | null | undefined) {
+  return contact && typeof contact.name === "string" ? contact.name.trim() : "";
+}
+
 function namedContact(candidates: Contact[]) {
   return (
     candidates.find((contact) => {
-      const name = contact.name.trim();
+      const name = contactName(contact);
       return Boolean(name) && !looksLikePhone(name);
     }) ?? candidates[0]
   );
@@ -160,6 +168,10 @@ export function messageThreads(
   jobs: Job[],
   opportunities: Opportunity[],
 ): MessageThread[] {
+  if (!Array.isArray(messages)) messages = [];
+  if (!Array.isArray(contacts)) contacts = [];
+  if (!Array.isArray(jobs)) jobs = [];
+  if (!Array.isArray(opportunities)) opportunities = [];
   const keys = new Set<string>();
   for (const message of messages ?? []) {
     const key = messageConversationKey(message, contacts);
@@ -222,11 +234,12 @@ export function messageThreads(
         (contact ? opportunityForContact(opportunities, contact.id) : undefined) ??
         contactIds.map((id) => opportunityForContact(opportunities, id)).find(Boolean);
       const phone =
-        last.phone ||
-        last.fromNumber ||
-        last.toNumber ||
-        contact?.phone ||
+        stamp(last.phone) ||
+        stamp(last.fromNumber) ||
+        stamp(last.toNumber) ||
+        stamp(contact?.phone) ||
         (key.startsWith("p:") ? key.slice(2) : "");
+      const label = contactName(contact);
       return {
         key,
         phone: toE164(phone) || phone,
@@ -237,7 +250,7 @@ export function messageThreads(
         contact,
         job,
         opportunity,
-        title: (contact && contact.name.trim() && !looksLikePhone(contact.name) ? contact.name.trim() : "") ||
+        title: (label && !looksLikePhone(label) ? label : "") ||
           toE164(phone) ||
           phone ||
           "Unknown number",
@@ -260,9 +273,9 @@ export function filterMessageThreads(threads: MessageThread[], query: string) {
   if (!needle) return threads;
   const digits = needle.replace(/\D/g, "");
   return threads.filter((thread) => {
-    if (thread.title.toLowerCase().includes(needle)) return true;
-    if (thread.preview.toLowerCase().includes(needle)) return true;
-    if (thread.job?.name.toLowerCase().includes(needle)) return true;
+    if ((thread.title || "").toLowerCase().includes(needle)) return true;
+    if ((thread.preview || "").toLowerCase().includes(needle)) return true;
+    if ((thread.job?.name || "").toLowerCase().includes(needle)) return true;
     if (thread.job?.code?.toLowerCase().includes(needle)) return true;
     if (digits.length >= 3 && phoneKey(thread.phone).includes(digits)) return true;
     return false;
