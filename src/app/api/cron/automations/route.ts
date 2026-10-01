@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { conditionsPass } from "@/lib/automations/evaluate";
 import { emptyAutomationMerge } from "@/lib/automations/merge";
-import { previewActionLine } from "@/lib/automations/queue";
-import { executeRemoteAutomation } from "@/lib/automations/remote-execute";
-import { replyDeadline, workflowOf } from "@/lib/automations/workflow";
+import { previewAutomationSteps } from "@/lib/automations/queue";
+import { runRemoteWorkflowSlice } from "@/lib/automations/remote-execute";
+import { parseWorkflowCursor } from "@/lib/automations/workflow";
 import { mapAutomation } from "@/lib/supabase/mappers";
 import { createAnonClient } from "@/lib/supabase/anon";
 import { createClient } from "@/lib/supabase/server";
@@ -44,15 +44,25 @@ function asList(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function previewFromActions(
-  automation: Automation,
-  merge: ReturnType<typeof emptyAutomationMerge>,
-  estimateTotal: number | null,
+async function markSlice(
+  supabase: ReturnType<typeof createAnonClient>,
+  runId: string,
+  outcome: {
+    status: "sent" | "failed" | "scheduled" | "waiting_reply";
+    delivery: string;
+    error: string;
+    scheduledFor: string | null;
+    cursor: string | null;
+  },
 ) {
-  return automation.actions
-    .map((action) => previewActionLine(action, merge, estimateTotal))
-    .filter(Boolean)
-    .join("\n\n");
+  await supabase.rpc("automation_mark_run", {
+    p_id: runId,
+    p_status: outcome.status,
+    p_delivery: outcome.delivery,
+    p_error: outcome.error,
+    ...(outcome.scheduledFor ? { p_scheduled: outcome.scheduledFor } : {}),
+    ...(outcome.cursor != null ? { p_cursor: outcome.cursor } : {}),
+  });
 }
 
 function inboundConditionsPass(automation: Automation, row: Record<string, unknown>) {
@@ -122,7 +132,7 @@ async function enqueueMatchedRuns(
       contactPhone: String(row.contact_phone ?? ""),
       contactEmail: String(row.contact_email ?? ""),
     };
-    const preview = previewFromActions(automation, merge, null);
+    const preview = previewAutomationSteps(automation, merge, null);
     const { error } = await supabase.rpc("automation_insert_run", {
       p_run: {
         company_id: String(row.company_id ?? ""),
@@ -170,25 +180,30 @@ export async function GET(request: Request) {
     if (!runId || !automationRaw) continue;
     const automation = mapAutomation(automationRaw as never);
     const runStatus = String(row.status ?? "");
+    const cursor = parseWorkflowCursor(row.workflow_cursor);
+    if (runStatus === "scheduled" && cursor) {
+      const outcome = await runRemoteWorkflowSlice({ supabase, row, automation, cursor });
+      await markSlice(supabase, runId, outcome);
+      if (outcome.status === "sent") sent += 1;
+      else if (outcome.status === "failed") failed += 1;
+      else waiting += 1;
+      continue;
+    }
     if (runStatus === "waiting_reply") {
       const claimed = await supabase.rpc("automation_claim_wait", { p_id: runId });
       const claim = asRecord(claimed.data);
       if (claimed.error || claim?.ok !== true) continue;
-      const timeoutActions = workflowOf(automation.triggerConfig)?.timeout ?? [];
-      const result = await executeRemoteAutomation({
+      const outcome = await runRemoteWorkflowSlice({
         supabase,
         row,
         automation,
-        actions: timeoutActions,
+        cursor: { lane: "timeout", index: 0 },
+        prefix: "No reply",
       });
-      await supabase.rpc("automation_mark_run", {
-        p_id: runId,
-        p_status: result.ok ? "sent" : "failed",
-        p_delivery: ["No reply", result.delivery].filter(Boolean).join(". "),
-        p_error: result.error,
-      });
-      if (result.ok) sent += 1;
-      else failed += 1;
+      await markSlice(supabase, runId, outcome);
+      if (outcome.status === "sent") sent += 1;
+      else if (outcome.status === "failed") failed += 1;
+      else waiting += 1;
       continue;
     }
     if (automation.requiresConfirmation) {
@@ -200,17 +215,11 @@ export async function GET(request: Request) {
       waiting += 1;
       continue;
     }
-    const result = await executeRemoteAutomation({ supabase, row, automation });
-    const workflow = result.ok ? workflowOf(automation.triggerConfig) : null;
-    await supabase.rpc("automation_mark_run", {
-      p_id: runId,
-      p_status: result.ok ? (workflow ? "waiting_reply" : "sent") : "failed",
-      p_delivery: workflow ? [result.delivery, "Waiting on a reply."].filter(Boolean).join(" · ") : result.delivery,
-      p_error: result.error,
-      ...(workflow ? { p_scheduled: replyDeadline(workflow.timeoutHours) } : {}),
-    });
-    if (result.ok) sent += 1;
-    else failed += 1;
+    const outcome = await runRemoteWorkflowSlice({ supabase, row, automation, cursor: null });
+    await markSlice(supabase, runId, outcome);
+    if (outcome.status === "sent") sent += 1;
+    else if (outcome.status === "failed") failed += 1;
+    else waiting += 1;
   }
 
   return NextResponse.json({

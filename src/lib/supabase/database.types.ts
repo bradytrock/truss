@@ -2244,6 +2244,7 @@ export type Database = {
           confirmed_by_name: string;
           decided_at: string | null;
           dry_run: boolean;
+          workflow_cursor: Json | null;
           created_at: string;
           updated_at: string;
         };
@@ -2264,6 +2265,7 @@ export type Database = {
           confirmed_by_name?: string;
           decided_at?: string | null;
           dry_run?: boolean;
+          workflow_cursor?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -3037,6 +3039,7 @@ export type Database = {
           p_error?: string;
           p_preview?: string;
           p_scheduled?: string;
+          p_cursor?: string;
         };
         Returns: Json;
       };

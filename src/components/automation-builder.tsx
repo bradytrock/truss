@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { AutomationCanvas } from "@/components/automation-flow";
 import { PageHeader } from "@/components/page-chrome";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +41,8 @@ import {
   type AutomationCondition,
   type AutomationTriggerKind,
   type AutomationValueMode,
+  type WorkflowStep,
+  type WorkflowWaitUnit,
 } from "@/lib/automations";
 import { estimateTotalForContext, previewActionLine } from "@/lib/automations/queue";
 import { smsSegmentCount } from "@/lib/automations/merge";
@@ -65,13 +68,17 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
   const [stage, setStage] = useState(existing?.triggerConfig.stage ?? "complete");
   const [days, setDays] = useState(String(existing?.triggerConfig.days ?? 3));
   const [conditions, setConditions] = useState<AutomationCondition[]>(existing?.conditions ?? []);
-  const [actions, setActions] = useState<AutomationAction[]>(existing?.actions ?? []);
   const existingWorkflow = workflowOf(existing?.triggerConfig);
-  const [workflowOn, setWorkflowOn] = useState(Boolean(existingWorkflow));
-  const [timeoutHours, setTimeoutHours] = useState(String(existingWorkflow?.timeoutHours ?? 24));
-  const [yesActions, setYesActions] = useState<AutomationAction[]>(existingWorkflow?.yes ?? []);
-  const [noActions, setNoActions] = useState<AutomationAction[]>(existingWorkflow?.no ?? []);
-  const [timeoutActions, setTimeoutActions] = useState<AutomationAction[]>(existingWorkflow?.timeout ?? []);
+  const [steps, setSteps] = useState<WorkflowStep[]>(() => {
+    if (existingWorkflow && existingWorkflow.steps.length > 0) return existingWorkflow.steps;
+    return (existing?.actions ?? []).map((action) => ({ id: action.id, kind: "action" as const, action }));
+  });
+  const [replyOn, setReplyOn] = useState(Boolean(existingWorkflow?.reply));
+  const [replyAmount, setReplyAmount] = useState(String(existingWorkflow?.reply?.amount ?? 24));
+  const [replyUnit, setReplyUnit] = useState<WorkflowWaitUnit>(existingWorkflow?.reply?.unit ?? "hours");
+  const [yesSteps, setYesSteps] = useState<WorkflowStep[]>(existingWorkflow?.reply?.yes ?? []);
+  const [noSteps, setNoSteps] = useState<WorkflowStep[]>(existingWorkflow?.reply?.no ?? []);
+  const [timeoutSteps, setTimeoutSteps] = useState<WorkflowStep[]>(existingWorkflow?.reply?.timeout ?? []);
   const [confirmationOverride, setConfirmationOverride] = useState<boolean | null>(
     existing ? existing.requiresConfirmation : null,
   );
@@ -118,7 +125,14 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
       }),
     [crm.company, crm.googleLocations, previewContact, previewJob, previewOwner, previewTotal],
   );
-  const requiresConfirmation = confirmationOverride ?? defaultRequiresConfirmation(actions);
+  const mainActions = useMemo(
+    () => steps.flatMap((step) => (step.kind === "action" ? [step.action] : [])),
+    [steps],
+  );
+  const flowOn =
+    replyOn ||
+    [steps, yesSteps, noSteps, timeoutSteps].some((list) => list.some((step) => step.kind === "wait"));
+  const requiresConfirmation = confirmationOverride ?? defaultRequiresConfirmation(mainActions);
 
   const draft = useMemo(
     () => ({
@@ -127,22 +141,45 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
       triggerConfig: {
         ...(needsStage(triggerKind) ? { stage } : {}),
         ...(needsDays(triggerKind) ? { days: Number(days) || 0 } : {}),
-        ...(workflowOn
+        ...(flowOn
           ? {
               workflow: {
                 enabled: true as const,
-                timeoutHours: Number(timeoutHours) || 0,
-                yes: yesActions,
-                no: noActions,
-                timeout: timeoutActions,
+                steps,
+                ...(replyOn
+                  ? {
+                      reply: {
+                        amount: Number(replyAmount) || 0,
+                        unit: replyUnit,
+                        yes: yesSteps,
+                        no: noSteps,
+                        timeout: timeoutSteps,
+                      },
+                    }
+                  : {}),
               },
             }
           : {}),
       },
       conditions,
-      actions,
+      actions: mainActions,
     }),
-    [actions, conditions, days, name, noActions, stage, timeoutActions, timeoutHours, triggerKind, workflowOn, yesActions],
+    [
+      conditions,
+      days,
+      flowOn,
+      mainActions,
+      name,
+      noSteps,
+      replyAmount,
+      replyOn,
+      replyUnit,
+      stage,
+      steps,
+      timeoutSteps,
+      triggerKind,
+      yesSteps,
+    ],
   );
   const validation = validateAutomationDraft(draft, { smsConfigured });
 
@@ -159,7 +196,7 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
       triggerKind,
       triggerConfig: draft.triggerConfig,
       conditions,
-      actions,
+      actions: draft.actions,
       requiresConfirmation,
       oncePerJob,
       enabled,
@@ -235,7 +272,7 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
             Ask before sending
           </label>
           <p className="text-xs text-muted-foreground">
-            {actions.length === 0 || defaultRequiresConfirmation(actions)
+            {mainActions.length === 0 || defaultRequiresConfirmation(mainActions)
               ? "On by default for texts and emails to a customer or a number you type. The job owner confirms on Home or the job. Job value and stage changes in the same rule wait with that message."
               : "Job updates, notes, and texts to your own team run on their own. Turn this on if you still want a yes first."}
           </p>
@@ -401,202 +438,54 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Then</CardTitle>
+          <CardTitle>Workflow</CardTitle>
           <CardDescription>
-            {workflowOn
-              ? "This is what goes out first. The reply map below waits on their answer."
-              : "Stack actions. A sent proposal can set the job value, move the stage, and text the owner."}
+            Steps run from top to bottom. Add a wait between them, or split on yes, no, and no reply.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-4">
-          {actions.map((action, index) => (
-            <ActionCard
-              key={action.id}
-              action={action}
-              error={validation.fieldErrors[`action.${index}`] || validation.fieldErrors[`action.${index}.merge`]}
-              staff={crm.book.staff}
-              merge={merge}
-              estimateTotal={previewTotal}
-              previewJobName={previewJob ? `${previewJob.code} · ${previewJob.name}` : ""}
-              jobs={crm.jobs.map((job) => ({ id: job.id, label: `${job.code} · ${job.name}` }))}
-              previewJobId={previewJob?.id ?? ""}
-              onPreviewJob={setPreviewJobId}
-              onChange={(patch) =>
-                setActions(actions.map((item) => (item.id === action.id ? { ...item, ...patch } : item)))
-              }
-              onRemove={() => setActions(actions.filter((item) => item.id !== action.id))}
-            />
-          ))}
+        <CardContent className="grid gap-3">
           {validation.fieldErrors.actions ? (
             <p className="text-sm text-destructive">{validation.fieldErrors.actions}</p>
           ) : null}
           {validation.fieldErrors.sms ? (
             <p className="text-sm text-destructive">{validation.fieldErrors.sms}</p>
           ) : null}
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-fit"
-            onClick={() =>
-              setActions([
-                ...actions,
-                { id: crypto.randomUUID(), kind: "send_sms", to: "customer", body: "" },
-              ])
-            }
-          >
-            Add action
-          </Button>
+          <AutomationCanvas
+            triggerLabel={summarizeTrigger(triggerKind, draft.triggerConfig)}
+            steps={steps}
+            onSteps={setSteps}
+            mainErrorPrefix={flowOn ? "flow.main" : "action"}
+            replyOn={replyOn}
+            onReplyOn={setReplyOn}
+            replyAmount={replyAmount}
+            replyUnit={replyUnit}
+            onReplyAmount={setReplyAmount}
+            onReplyUnit={setReplyUnit}
+            yesSteps={yesSteps}
+            noSteps={noSteps}
+            timeoutSteps={timeoutSteps}
+            onYesSteps={setYesSteps}
+            onNoSteps={setNoSteps}
+            onTimeoutSteps={setTimeoutSteps}
+            fieldErrors={validation.fieldErrors}
+            renderAction={(action, onChange, onRemove, error) => (
+              <ActionCard
+                action={action}
+                error={error}
+                staff={crm.book.staff}
+                merge={merge}
+                estimateTotal={previewTotal}
+                previewJobName={previewJob ? `${previewJob.code} · ${previewJob.name}` : ""}
+                jobs={crm.jobs.map((job) => ({ id: job.id, label: `${job.code} · ${job.name}` }))}
+                previewJobId={previewJob?.id ?? ""}
+                onPreviewJob={setPreviewJobId}
+                onChange={onChange}
+                onRemove={onRemove}
+              />
+            )}
+          />
         </CardContent>
       </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Reply map</CardTitle>
-          <CardDescription>
-            If they say yes, do this. If they say no, do that. If they stay quiet, take the third path.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4">
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={workflowOn} onCheckedChange={(value) => setWorkflowOn(value === true)} />
-            Branch on their reply
-          </label>
-          {workflowOn ? (
-            <>
-              <div className="mx-auto grid w-full max-w-lg justify-items-center gap-2 text-center text-sm">
-                <div className="w-full rounded-md border bg-muted/40 px-3 py-2">After the actions above</div>
-                <div className="h-4 w-px bg-border" />
-                <div className="w-full rounded-md border px-3 py-2 font-medium">Wait for yes, no, or silence</div>
-              </div>
-              <Field label="If no reply after" error={validation.fieldErrors.workflow}>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min={1}
-                    max={720}
-                    value={timeoutHours}
-                    onChange={(event) => setTimeoutHours(event.target.value)}
-                    className="w-28"
-                  />
-                  <span className="text-sm text-muted-foreground">hours. Checked about once an hour.</span>
-                </div>
-              </Field>
-              <p className="text-xs text-muted-foreground">
-                A reply counts as yes or no when it starts with yes, yeah, ok, no, or nope. Anything else keeps waiting.
-              </p>
-              <div className="grid gap-3 lg:grid-cols-3">
-                <BranchColumn
-                  title="If yes"
-                  actions={yesActions}
-                  setActions={setYesActions}
-                  errorPrefix="workflow.yes"
-                  fieldErrors={validation.fieldErrors}
-                  staff={crm.book.staff}
-                  merge={merge}
-                  estimateTotal={previewTotal}
-                  previewJobName={previewJob ? `${previewJob.code} · ${previewJob.name}` : ""}
-                  jobs={crm.jobs.map((job) => ({ id: job.id, label: `${job.code} · ${job.name}` }))}
-                  previewJobId={previewJob?.id ?? ""}
-                  onPreviewJob={setPreviewJobId}
-                />
-                <BranchColumn
-                  title="If no"
-                  actions={noActions}
-                  setActions={setNoActions}
-                  errorPrefix="workflow.no"
-                  fieldErrors={validation.fieldErrors}
-                  staff={crm.book.staff}
-                  merge={merge}
-                  estimateTotal={previewTotal}
-                  previewJobName={previewJob ? `${previewJob.code} · ${previewJob.name}` : ""}
-                  jobs={crm.jobs.map((job) => ({ id: job.id, label: `${job.code} · ${job.name}` }))}
-                  previewJobId={previewJob?.id ?? ""}
-                  onPreviewJob={setPreviewJobId}
-                />
-                <BranchColumn
-                  title="If no reply"
-                  actions={timeoutActions}
-                  setActions={setTimeoutActions}
-                  errorPrefix="workflow.timeout"
-                  fieldErrors={validation.fieldErrors}
-                  staff={crm.book.staff}
-                  merge={merge}
-                  estimateTotal={previewTotal}
-                  previewJobName={previewJob ? `${previewJob.code} · ${previewJob.name}` : ""}
-                  jobs={crm.jobs.map((job) => ({ id: job.id, label: `${job.code} · ${job.name}` }))}
-                  previewJobId={previewJob?.id ?? ""}
-                  onPreviewJob={setPreviewJobId}
-                />
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Off. The actions above run once and stop. Turn this on to split yes, no, and no reply.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function BranchColumn({
-  title,
-  actions,
-  setActions,
-  errorPrefix,
-  fieldErrors,
-  staff,
-  merge,
-  estimateTotal,
-  previewJobName,
-  jobs,
-  previewJobId,
-  onPreviewJob,
-}: {
-  title: string;
-  actions: AutomationAction[];
-  setActions: (next: AutomationAction[]) => void;
-  errorPrefix: string;
-  fieldErrors: Record<string, string>;
-  staff: { id: string; name: string; phone?: string; email?: string }[];
-  merge: ReturnType<typeof buildAutomationMerge>;
-  estimateTotal: number | null;
-  previewJobName: string;
-  jobs: { id: string; label: string }[];
-  previewJobId: string;
-  onPreviewJob: (id: string) => void;
-}) {
-  return (
-    <div className="grid content-start gap-3 rounded-md border p-3">
-      <h3 className="text-sm font-medium">{title}</h3>
-      {actions.length === 0 ? <p className="text-xs text-muted-foreground">Do nothing on this path.</p> : null}
-      {actions.map((action, index) => (
-        <ActionCard
-          key={action.id}
-          action={action}
-          error={fieldErrors[`${errorPrefix}.${index}`] || fieldErrors[`${errorPrefix}.${index}.merge`]}
-          staff={staff}
-          merge={merge}
-          estimateTotal={estimateTotal}
-          previewJobName={previewJobName}
-          jobs={jobs}
-          previewJobId={previewJobId}
-          onPreviewJob={onPreviewJob}
-          onChange={(patch) => setActions(actions.map((item) => (item.id === action.id ? { ...item, ...patch } : item)))}
-          onRemove={() => setActions(actions.filter((item) => item.id !== action.id))}
-        />
-      ))}
-      <Button
-        variant="outline"
-        size="sm"
-        className="w-fit"
-        onClick={() =>
-          setActions([...actions, { id: crypto.randomUUID(), kind: "create_task", title: "" }])
-        }
-      >
-        Add action
-      </Button>
     </div>
   );
 }

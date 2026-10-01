@@ -1,7 +1,7 @@
 import { looksLikePhone } from "@/lib/phone";
 import { canonicalizeWorkColumn } from "@/lib/work-board";
 import { unknownAutomationMergeFields } from "@/lib/automations/merge";
-import { workflowOf } from "@/lib/automations/workflow";
+import { actionSteps, mainSteps, workflowActionList, workflowOf } from "@/lib/automations/workflow";
 import {
   AUTOMATION_ACTIONS,
   AUTOMATION_CONDITION_FIELDS,
@@ -12,6 +12,8 @@ import {
   type AutomationCondition,
   type AutomationTriggerConfig,
   type AutomationTriggerKind,
+  type WorkflowStep,
+  type WorkflowWaitUnit,
 } from "@/lib/automations/types";
 
 export type AutomationValidation = {
@@ -57,43 +59,31 @@ export function validateAutomationDraft(
   }
 
   const workflow = workflowOf(draft.triggerConfig);
-  if (draft.actions.length === 0) {
-    fieldErrors.actions = workflow ? "Add the text they will reply to." : "Add at least one action.";
+  const sourced = Boolean(workflow && workflow.steps.length > 0);
+  const opening = workflow ? actionSteps(mainSteps(workflow, draft.actions)) : draft.actions;
+  if (opening.length === 0) {
+    fieldErrors.actions = workflow?.reply ? "Add the text they will reply to." : "Add at least one action.";
     errors.push(fieldErrors.actions);
   }
   if (workflow) {
-    const hours = Number(workflow.timeoutHours);
-    if (!Number.isFinite(hours) || hours < 1 || hours > 720) {
-      fieldErrors.workflow = "Wait between 1 and 720 hours for a reply.";
-      errors.push(fieldErrors.workflow);
-    }
-    const branches = [
-      ["yes", workflow.yes],
-      ["no", workflow.no],
-      ["timeout", workflow.timeout],
-    ] as const;
-    if (branches.every(([, actions]) => actions.length === 0)) {
-      fieldErrors.workflow = "Add what happens for yes, no, or no reply.";
-      errors.push(fieldErrors.workflow);
-    }
-    for (const [branch, actions] of branches) {
-      actions.forEach((action, index) => {
-        const error = validateAction(action);
-        if (error) {
-          fieldErrors[`workflow.${branch}.${index}`] = error;
-          errors.push(error);
-        }
-        const unknown = [
-          ...unknownAutomationMergeFields(action.body ?? ""),
-          ...unknownAutomationMergeFields(action.subject ?? ""),
-          ...unknownAutomationMergeFields(action.title ?? ""),
-        ];
-        if (unknown.length > 0) {
-          const message = `Unknown merge field {{${unknown[0]}}}.`;
-          fieldErrors[`workflow.${branch}.${index}.merge`] = message;
-          errors.push(message);
-        }
-      });
+    if (sourced) noteStepErrors(workflow.steps, "flow.main", fieldErrors, errors);
+    const reply = workflow.reply;
+    if (reply) {
+      const waitError = validateWait(reply.amount, reply.unit);
+      if (waitError) {
+        fieldErrors.workflow = waitError;
+        errors.push(waitError);
+      }
+      const branches = [
+        ["yes", reply.yes],
+        ["no", reply.no],
+        ["timeout", reply.timeout],
+      ] as const;
+      if (branches.every(([, steps]) => steps.length === 0)) {
+        fieldErrors.workflow = "Add what happens for yes, no, or no reply.";
+        errors.push(fieldErrors.workflow);
+      }
+      for (const [branch, steps] of branches) noteStepErrors(steps, `flow.${branch}`, fieldErrors, errors);
     }
   }
 
@@ -105,36 +95,68 @@ export function validateAutomationDraft(
     }
   });
 
-  draft.actions.forEach((action, index) => {
-    const error = validateAction(action);
-    if (error) {
-      fieldErrors[`action.${index}`] = error;
-      errors.push(error);
-    }
-    const unknown = [
-      ...unknownAutomationMergeFields(action.body ?? ""),
-      ...unknownAutomationMergeFields(action.subject ?? ""),
-      ...unknownAutomationMergeFields(action.title ?? ""),
-    ];
-    if (unknown.length > 0) {
-      const message = `Unknown merge field {{${unknown[0]}}}.`;
-      fieldErrors[`action.${index}.merge`] = message;
-      errors.push(message);
-    }
-  });
+  if (!sourced) {
+    draft.actions.forEach((action, index) => noteActionError(action, `action.${index}`, fieldErrors, errors));
+  }
 
-  const smsActions = [
-    ...draft.actions,
-    ...(workflow?.yes ?? []),
-    ...(workflow?.no ?? []),
-    ...(workflow?.timeout ?? []),
-  ];
+  const smsActions = workflow ? workflowActionList(workflow, draft.actions) : draft.actions;
   if (automationNeedsSmsNumber(smsActions) && options.smsConfigured === false) {
     fieldErrors.sms = "Add this office's Photon project under Settings → Photon before saving a text action.";
     errors.push(fieldErrors.sms);
   }
 
   return { ok: errors.length === 0, errors, fieldErrors };
+}
+
+function noteStepErrors(
+  steps: WorkflowStep[],
+  prefix: string,
+  fieldErrors: Record<string, string>,
+  errors: string[],
+) {
+  steps.forEach((step, index) => {
+    if (step.kind === "wait") {
+      const waitError = validateWait(step.amount, step.unit);
+      if (waitError) {
+        fieldErrors[`${prefix}.${index}`] = waitError;
+        errors.push(waitError);
+      }
+      return;
+    }
+    noteActionError(step.action, `${prefix}.${index}`, fieldErrors, errors);
+  });
+}
+
+function noteActionError(
+  action: AutomationAction,
+  key: string,
+  fieldErrors: Record<string, string>,
+  errors: string[],
+) {
+  const error = validateAction(action);
+  if (error) {
+    fieldErrors[key] = error;
+    errors.push(error);
+  }
+  const unknown = [
+    ...unknownAutomationMergeFields(action.body ?? ""),
+    ...unknownAutomationMergeFields(action.subject ?? ""),
+    ...unknownAutomationMergeFields(action.title ?? ""),
+  ];
+  if (unknown.length > 0) {
+    const message = `Unknown merge field {{${unknown[0]}}}.`;
+    fieldErrors[`${key}.merge`] = message;
+    errors.push(message);
+  }
+}
+
+function validateWait(amount: number, unit: WorkflowWaitUnit) {
+  const n = Number(amount);
+  const max = unit === "minutes" ? 43200 : unit === "days" ? 30 : 720;
+  if (!Number.isFinite(n) || n < 1 || n > max) {
+    return `Wait between 1 and ${max} ${unit}.`;
+  }
+  return "";
 }
 
 export function validateTriggerConfig(kind: AutomationTriggerKind, config: AutomationTriggerConfig) {

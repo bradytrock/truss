@@ -5,8 +5,8 @@ import { applyAutomationMerge, smsSegmentCount, unknownAutomationMergeFields } f
 import { plannedRunsForEvent, previewAutomation } from "./queue.ts";
 import { summarizeAutomation, summarizeTrigger, summarizeWorkflowBranch } from "./summarize.ts";
 import { defaultRequiresConfirmation, validateAutomationDraft } from "./validate.ts";
-import { classifyAutomationReply, replyDeadline } from "./workflow.ts";
-import type { Automation, AutomationAction, AutomationCondition } from "./types.ts";
+import { classifyAutomationReply, planWorkflowSlice, replyDeadline } from "./workflow.ts";
+import type { Automation, AutomationAction, AutomationCondition, WorkflowStep } from "./types.ts";
 
 const sms: AutomationAction = {
   id: "a1",
@@ -286,26 +286,79 @@ assert.equal(replyDeadline(0, new Date("2026-09-18T12:00:00.000Z")), "2026-09-18
 
 const replyMap = {
   enabled: true as const,
-  timeoutHours: 24,
-  yes: [{ id: "y", kind: "create_task" as const, title: "Call {{contactName}}" }],
-  no: [{ id: "n", kind: "add_note" as const, body: "{{contactName}} said no." }],
-  timeout: [] as AutomationAction[],
+  steps: [] as WorkflowStep[],
+  reply: {
+    amount: 24,
+    unit: "hours" as const,
+    yes: [{ id: "ys", kind: "action" as const, action: { id: "y", kind: "create_task" as const, title: "Call {{contactName}}" } }],
+    no: [{ id: "ns", kind: "action" as const, action: { id: "n", kind: "add_note" as const, body: "{{contactName}} said no." } }],
+    timeout: [],
+  },
 };
 const mapped = {
   ...automation,
   triggerKind: "lead_created" as const,
-  triggerConfig: { workflow: replyMap },
+  triggerConfig: { workflow: { ...replyMap, steps: [] } },
   actions: [sms],
 };
 assert.equal(validateAutomationDraft(mapped, { smsConfigured: true }).ok, true);
 assert.equal(validateAutomationDraft({ ...mapped, actions: [] }, { smsConfigured: true }).ok, false);
 assert.equal(
   validateAutomationDraft(
-    { ...mapped, triggerConfig: { workflow: { ...replyMap, timeoutHours: 0, yes: [], no: [], timeout: [] } } },
+    {
+      ...mapped,
+      triggerConfig: {
+        workflow: { enabled: true, steps: [], reply: { amount: 0, unit: "hours", yes: [], no: [], timeout: [] } },
+      },
+    },
     { smsConfigured: true },
   ).ok,
   false,
 );
+const waited = {
+  ...automation,
+  actions: [sms],
+  triggerConfig: {
+    workflow: {
+      enabled: true as const,
+      steps: [
+        { id: "a", kind: "action" as const, action: sms },
+        { id: "w", kind: "wait" as const, amount: 2, unit: "hours" as const },
+        { id: "b", kind: "action" as const, action: { id: "t", kind: "create_task" as const, title: "Call back" } },
+      ],
+    },
+  },
+};
+assert.equal(validateAutomationDraft(waited, { smsConfigured: true }).ok, true);
+assert.match(summarizeAutomation(waited), /1 wait/);
+const firstSlice = planWorkflowSlice({
+  workflow: waited.triggerConfig.workflow,
+  openingActions: [],
+  cursor: null,
+  now: new Date("2026-09-18T12:00:00.000Z"),
+});
+assert.equal(firstSlice.actions.length, 1);
+assert.equal(firstSlice.hold.kind, "wait");
+if (firstSlice.hold.kind === "wait") {
+  assert.equal(firstSlice.hold.at, "2026-09-18T14:00:00.000Z");
+  assert.equal(firstSlice.hold.cursor.index, 2);
+}
+const secondSlice = planWorkflowSlice({
+  workflow: waited.triggerConfig.workflow,
+  openingActions: [],
+  cursor: { lane: "main", index: 2 },
+  now: new Date("2026-09-18T14:00:00.000Z"),
+});
+assert.equal(secondSlice.actions[0]?.kind, "create_task");
+assert.equal(secondSlice.hold.kind, "done");
+const asked = planWorkflowSlice({
+  workflow: { ...replyMap, steps: [] },
+  openingActions: [sms],
+  cursor: null,
+  now: new Date("2026-09-18T12:00:00.000Z"),
+});
+assert.equal(asked.actions.length, 1);
+assert.equal(asked.hold.kind, "reply");
 assert.match(summarizeAutomation(mapped), /yes \/ no \/ no reply in 24 hours/);
 assert.equal(summarizeWorkflowBranch("If no reply", []), "If no reply: Do nothing");
 

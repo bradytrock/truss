@@ -82,6 +82,7 @@ import type {
   MaterialOrderTemplate,
   MaterialOrderTemplateLine,
 } from "@/lib/types";
+import { parseWorkflowCursor } from "@/lib/automations/workflow";
 import {
   AUTOMATION_ACTIONS,
   AUTOMATION_CONDITION_FIELDS,
@@ -95,6 +96,9 @@ import {
   type AutomationTemplate,
   type AutomationTriggerKind,
   type AutomationWorkflow,
+  type WorkflowReply,
+  type WorkflowStep,
+  type WorkflowWaitUnit,
 } from "@/lib/automations";
 import { canonicalizeWorkColumn } from "@/lib/work-board";
 
@@ -1670,17 +1674,64 @@ function parseActions(raw: Json): AutomationAction[] {
   });
 }
 
+function parseWaitUnit(value: unknown): WorkflowWaitUnit {
+  return value === "minutes" || value === "days" ? value : "hours";
+}
+
+function parseWaitAmount(value: unknown, fallback: number) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return fallback;
+  return Math.min(43200, Math.round(amount));
+}
+
+function parseSteps(raw: unknown): WorkflowStep[] {
+  if (!Array.isArray(raw)) return [];
+  const steps: WorkflowStep[] = [];
+  raw.forEach((item, index) => {
+    const row = asRecord(item);
+    if (row.kind === "wait") {
+      steps.push({
+        id: String(row.id ?? `w${index}`),
+        kind: "wait",
+        amount: parseWaitAmount(row.amount, 1),
+        unit: parseWaitUnit(row.unit),
+      });
+      return;
+    }
+    const actionSource = row.kind === "action" ? row.action : item;
+    const action = parseActions([actionSource] as Json)[0];
+    if (!action) return;
+    steps.push({ id: String(row.id ?? action.id), kind: "action", action });
+  });
+  return steps;
+}
+
+function parseReply(raw: unknown, fallbackAmount: number): WorkflowReply {
+  const row = asRecord(raw);
+  return {
+    amount: parseWaitAmount(row.amount ?? fallbackAmount, fallbackAmount),
+    unit: parseWaitUnit(row.unit),
+    yes: parseSteps(row.yes),
+    no: parseSteps(row.no),
+    timeout: parseSteps(row.timeout),
+  };
+}
+
 function parseWorkflow(raw: unknown): AutomationWorkflow | undefined {
   const row = asRecord(raw);
   if (row.enabled !== true) return undefined;
-  const hours = Number(row.timeoutHours);
-  return {
-    enabled: true,
-    timeoutHours: Number.isFinite(hours) && hours > 0 ? Math.min(720, Math.round(hours)) : 24,
-    yes: parseActions(row.yes as Json),
-    no: parseActions(row.no as Json),
-    timeout: parseActions(row.timeout as Json),
-  };
+  const steps = Array.isArray(row.steps) ? parseSteps(row.steps) : [];
+  const legacy =
+    row.timeoutHours != null || Array.isArray(row.yes) || Array.isArray(row.no) || Array.isArray(row.timeout);
+  const reply = row.reply
+    ? parseReply(row.reply, 24)
+    : legacy
+      ? parseReply(
+          { amount: row.timeoutHours, unit: "hours", yes: row.yes, no: row.no, timeout: row.timeout },
+          24,
+        )
+      : undefined;
+  return { enabled: true, steps, ...(reply ? { reply } : {}) };
 }
 
 function parseTriggerConfig(raw: Json): Automation["triggerConfig"] {
@@ -1736,6 +1787,7 @@ export function mapAutomationRun(row: AutomationRunRow): AutomationRun {
     confirmedByName: row.confirmed_by_name ?? "",
     decidedAt: row.decided_at,
     dryRun: Boolean(row.dry_run),
+    workflowCursor: parseWorkflowCursor(row.workflow_cursor),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

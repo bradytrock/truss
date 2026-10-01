@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { executeAutomationActions } from "@/lib/automations/execute";
-import { replyDeadline, workflowOf } from "@/lib/automations/workflow";
+import { planWorkflowSlice, settleWorkflow, workflowOf } from "@/lib/automations/workflow";
 import { estimateTotalForContext, mergeForJob, runsAfterStageChange } from "@/lib/automations/queue";
 import { automationRunInsertPayload, mapAutomation, mapAutomationRun, mapCompany } from "@/lib/supabase/mappers";
 import { createClient } from "@/lib/supabase/server";
@@ -80,8 +80,18 @@ export async function POST(request: Request) {
       .update({ status: "running", updated_at: new Date().toISOString() })
       .eq("id", loaded.run.id);
 
-    const executed = await executeAutomationActions({
-      automation: loaded.automation,
+    const workflow = workflowOf(loaded.automation.triggerConfig);
+    const plan = workflow
+      ? planWorkflowSlice({
+          workflow,
+          openingActions: loaded.automation.actions,
+          cursor: loaded.run.workflowCursor ?? null,
+        })
+      : null;
+    const sliceActions = plan ? plan.actions : loaded.automation.actions;
+    const executed = sliceActions.length
+      ? await executeAutomationActions({
+      automation: { ...loaded.automation, actions: sliceActions },
       merge,
       customerPhone: contact?.phone,
       customerEmail: contact?.email,
@@ -139,22 +149,30 @@ export async function POST(request: Request) {
         });
         if (error) throw new Error(error.message);
       },
-    });
+    })
+      : { ok: true as const, delivery: "", error: "", stageChanged: null };
 
-    const workflow = executed.ok ? workflowOf(loaded.automation.triggerConfig) : null;
+    const settled = plan
+      ? settleWorkflow(plan, executed)
+      : {
+          status: executed.ok ? ("sent" as const) : ("failed" as const),
+          delivery: executed.delivery,
+          error: executed.error,
+          scheduledFor: loaded.run.scheduledFor,
+          cursor: "",
+        };
     await supabase
       .from("automation_runs")
       .update({
-        status: executed.ok ? (workflow ? "waiting_reply" : "sent") : "failed",
-        scheduled_for: workflow ? replyDeadline(workflow.timeoutHours) : loaded.run.scheduledFor,
-        delivery_status: workflow
-          ? [executed.delivery, "Waiting on a reply."].filter(Boolean).join(" · ")
-          : executed.delivery,
-        error_text: executed.error,
+        status: settled.status,
+        scheduled_for: settled.scheduledFor,
+        workflow_cursor: settled.cursor ? JSON.parse(settled.cursor) : null,
+        delivery_status: settled.delivery,
+        error_text: settled.error,
         updated_at: new Date().toISOString(),
       })
       .eq("id", loaded.run.id);
-    if (executed.ok) {
+    if (settled.status !== "failed") {
       await supabase
         .from("automations")
         .update({ last_fired_at: new Date().toISOString(), updated_at: new Date().toISOString() })

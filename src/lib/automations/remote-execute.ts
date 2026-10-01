@@ -1,6 +1,7 @@
 import { executeAutomationActions } from "@/lib/automations/execute";
 import { buildAutomationMerge } from "@/lib/automations/merge";
-import type { Automation, AutomationAction } from "@/lib/automations/types";
+import { planWorkflowSlice, settleWorkflow, workflowOf } from "@/lib/automations/workflow";
+import type { Automation, AutomationAction, WorkflowCursor } from "@/lib/automations/types";
 import { amountForEstimate } from "@/lib/estimate-totals";
 import { mapEstimate, mapEstimateLine } from "@/lib/supabase/mappers";
 import type { Database } from "@/lib/supabase/database.types";
@@ -16,6 +17,36 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function asList(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+export async function runRemoteWorkflowSlice(input: {
+  supabase: Client;
+  row: Record<string, unknown>;
+  automation: Automation;
+  cursor: WorkflowCursor | null;
+  prefix?: string;
+}) {
+  const workflow = workflowOf(input.automation.triggerConfig);
+  if (!workflow) {
+    const result = await executeRemoteAutomation(input);
+    return {
+      status: result.ok ? ("sent" as const) : ("failed" as const),
+      delivery: result.delivery,
+      error: result.error,
+      scheduledFor: null as string | null,
+      cursor: null as string | null,
+      ok: result.ok,
+    };
+  }
+  const plan = planWorkflowSlice({
+    workflow,
+    openingActions: input.automation.actions,
+    cursor: input.cursor,
+  });
+  const result = plan.actions.length
+    ? await executeRemoteAutomation({ ...input, actions: plan.actions })
+    : { ok: true, delivery: "", error: "" };
+  return { ...settleWorkflow(plan, result, input.prefix ?? ""), ok: result.ok };
 }
 
 export async function executeRemoteAutomation(input: {
