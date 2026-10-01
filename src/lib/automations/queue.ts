@@ -144,7 +144,7 @@ export function plannedRunsForEvent(input: {
       jobId: input.event.jobId ?? job?.id ?? null,
       invoiceId: input.event.invoiceId ?? null,
       estimateId: input.event.estimateId ?? null,
-      eventId: null,
+      eventId: input.event.eventId ?? null,
       status,
       scheduledFor: delayed
         ? scheduledForFromTrigger(automation.triggerKind, Number(automation.triggerConfig.days) || 1, now)

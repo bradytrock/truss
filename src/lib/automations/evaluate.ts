@@ -12,10 +12,19 @@ export function automationMatchesEvent(automation: Automation, event: Automation
   switch (automation.triggerKind) {
     case "job_created":
       return event.kind === "job_created";
+    case "lead_created":
+    case "lead_created_after_days":
+      return event.kind === "lead_created";
+    case "lead_assigned":
+      return event.kind === "lead_assigned";
+    case "appointment_scheduled":
+      return event.kind === "appointment_scheduled";
     case "job_stage_changed":
       return event.kind === "job_stage_changed" && sameBoardColumn(event.stage, automation.triggerConfig.stage);
     case "job_stage_after_days":
       return event.kind === "job_stage_changed" && sameBoardColumn(event.stage, automation.triggerConfig.stage);
+    case "invoice_sent":
+      return event.kind === "invoice_sent";
     case "invoice_paid":
       return event.kind === "invoice_paid";
     case "estimate_sent":
@@ -40,6 +49,7 @@ function sameBoardColumn(left: string | undefined, right: string | undefined) {
 export function automationIsDelayed(kind: AutomationTriggerKind) {
   return (
     kind === "job_stage_after_days" ||
+    kind === "lead_created_after_days" ||
     kind === "estimate_sent_after_days" ||
     kind === "event_in_days"
   );
@@ -116,7 +126,9 @@ function conditionValue(
     case "job.projectType":
       return job?.projectType ?? "";
     case "job.market":
-      return job?.market ?? "";
+      return job?.market ?? input.opportunity?.market ?? "";
+    case "job.leadSource":
+      return job?.leadSource || input.opportunity?.leadSource || "";
     case "customer.name":
       return input.customerName ?? input.contact?.name ?? "";
     case "contact.email":

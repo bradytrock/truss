@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { conditionsPass } from "@/lib/automations/evaluate";
 import { buildAutomationMerge, emptyAutomationMerge } from "@/lib/automations/merge";
 import { executeAutomationActions } from "@/lib/automations/execute";
 import { previewActionLine } from "@/lib/automations/queue";
@@ -7,7 +8,8 @@ import { mapAutomation, mapEstimate, mapEstimateLine } from "@/lib/supabase/mapp
 import { createAnonClient } from "@/lib/supabase/anon";
 import { createClient } from "@/lib/supabase/server";
 import type { Automation } from "@/lib/automations";
-import type { JobMarket } from "@/lib/types";
+import type { Job, JobMarket, Opportunity } from "@/lib/types";
+import { workColumnFor } from "@/lib/work-board";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,6 +55,90 @@ function previewFromActions(
     .join("\n\n");
 }
 
+function inboundConditionsPass(automation: Automation, row: Record<string, unknown>) {
+  if (automation.conditions.length === 0) return true;
+  const status = String(row.job_status ?? "precon");
+  const opportunityId = String(row.opportunity_id ?? "");
+  const opportunityStage = String(row.opportunity_stage ?? "");
+  const jobSource = typeof row.job_lead_source === "string" ? row.job_lead_source : "";
+  const opportunitySource = typeof row.opportunity_lead_source === "string" ? row.opportunity_lead_source : "";
+  const leadSource = jobSource || opportunitySource;
+  const stage = workColumnFor(
+    {
+      status: status as Job["status"],
+      opportunityId: opportunityId || null,
+      deletedAt: null,
+    },
+    opportunityStage ? { stage: opportunityStage as Opportunity["stage"] } : null,
+  );
+  return conditionsPass(automation.conditions, {
+    job: {
+      status: status as Job["status"],
+      city: String(row.job_city ?? ""),
+      state: String(row.job_state ?? ""),
+      projectType: String(row.job_project_type ?? ""),
+      market: String(row.job_market ?? ""),
+      leadSource,
+      ownerStaffId: String(row.owner_staff_id ?? ""),
+    } as never,
+    opportunity: {
+      leadSource: opportunitySource || leadSource,
+      market: String(row.job_market ?? ""),
+      stage: opportunityStage,
+    } as never,
+    contact: {
+      name: String(row.contact_name ?? ""),
+      email: String(row.contact_email ?? ""),
+    } as never,
+    customerName: String(row.contact_name ?? ""),
+    owner: { id: String(row.owner_staff_id ?? "") },
+    stage,
+  });
+}
+
+async function enqueueMatchedRuns(
+  supabase: ReturnType<typeof createAnonClient>,
+  rows: unknown,
+  checkConditions: boolean,
+) {
+  let enqueued = 0;
+  for (const raw of asList(rows)) {
+    const row = asRecord(raw);
+    const automationRaw = row ? asRecord(row.automation) : null;
+    if (!row || !automationRaw) continue;
+    const automation = mapAutomation(automationRaw as never);
+    if (checkConditions && !inboundConditionsPass(automation, row)) continue;
+    const dueAt = typeof row.due_at === "string" && row.due_at ? row.due_at : new Date().toISOString();
+    const merge = {
+      ...emptyAutomationMerge(),
+      companyName: String(row.company_name ?? ""),
+      companyPhone: String(row.company_phone ?? ""),
+      staffName: String(row.owner_name ?? ""),
+      staffPhone: String(row.owner_phone ?? ""),
+      jobName: String(row.job_name ?? row.event_title ?? ""),
+      jobCode: String(row.job_code ?? ""),
+      jobCity: String(row.job_city ?? ""),
+      contactName: String(row.contact_name ?? ""),
+      contactPhone: String(row.contact_phone ?? ""),
+      contactEmail: String(row.contact_email ?? ""),
+    };
+    const preview = previewFromActions(automation, merge, null);
+    const { error } = await supabase.rpc("automation_insert_run", {
+      p_run: {
+        company_id: String(row.company_id ?? ""),
+        automation_id: automation.id,
+        job_id: typeof row.job_id === "string" ? row.job_id : "",
+        event_id: typeof row.event_id === "string" ? row.event_id : "",
+        status: automation.requiresConfirmation ? "pending_confirmation" : "scheduled",
+        scheduled_for: automation.requiresConfirmation ? "" : dueAt,
+        rendered_preview: preview,
+      },
+    });
+    if (!error) enqueued += 1;
+  }
+  return enqueued;
+}
+
 export async function GET(request: Request) {
   if (!cronAuthorized(request) && !(await staffAuthorized())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -62,38 +148,11 @@ export async function GET(request: Request) {
   let enqueued = 0;
   const { data: upcoming, error: upcomingError } = await supabase.rpc("automation_upcoming_event_matches");
   if (!upcomingError) {
-    for (const raw of asList(upcoming)) {
-      const row = asRecord(raw);
-      const automationRaw = row ? asRecord(row.automation) : null;
-      if (!row || !automationRaw) continue;
-      const automation = mapAutomation(automationRaw as never);
-      const merge = {
-        ...emptyAutomationMerge(),
-        companyName: String(row.company_name ?? ""),
-        companyPhone: String(row.company_phone ?? ""),
-        staffName: String(row.owner_name ?? ""),
-        staffPhone: String(row.owner_phone ?? ""),
-        jobName: String(row.job_name ?? row.event_title ?? ""),
-        jobCode: String(row.job_code ?? ""),
-        jobCity: String(row.job_city ?? ""),
-        contactName: String(row.contact_name ?? ""),
-        contactPhone: String(row.contact_phone ?? ""),
-        contactEmail: String(row.contact_email ?? ""),
-      };
-      const preview = previewFromActions(automation, merge, null);
-      const { error } = await supabase.rpc("automation_insert_run", {
-        p_run: {
-          company_id: String(row.company_id ?? ""),
-          automation_id: automation.id,
-          job_id: typeof row.job_id === "string" ? row.job_id : "",
-          event_id: typeof row.event_id === "string" ? row.event_id : "",
-          status: automation.requiresConfirmation ? "pending_confirmation" : "scheduled",
-          scheduled_for: automation.requiresConfirmation ? "" : new Date().toISOString(),
-          rendered_preview: preview,
-        },
-      });
-      if (!error) enqueued += 1;
-    }
+    enqueued += await enqueueMatchedRuns(supabase, upcoming, false);
+  }
+  const { data: inbound, error: inboundError } = await supabase.rpc("automation_inbound_matches");
+  if (!inboundError) {
+    enqueued += await enqueueMatchedRuns(supabase, inbound, true);
   }
 
   const { data, error } = await supabase.rpc("automation_due_runs");

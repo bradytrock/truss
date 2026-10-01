@@ -2,12 +2,17 @@ import type { WorkColumn } from "@/lib/work-board";
 
 export const AUTOMATION_TRIGGERS = [
   "job_created",
+  "lead_created",
+  "lead_created_after_days",
+  "lead_assigned",
+  "appointment_scheduled",
   "job_stage_changed",
   "job_stage_after_days",
   "estimate_sent",
   "estimate_sent_after_days",
   "estimate_won",
   "estimate_lost",
+  "invoice_sent",
   "invoice_paid",
   "event_in_days",
 ] as const;
@@ -16,12 +21,17 @@ export type AutomationTriggerKind = (typeof AUTOMATION_TRIGGERS)[number];
 
 export const AUTOMATION_TRIGGER_LABELS: Record<AutomationTriggerKind, string> = {
   job_created: "A job is created",
+  lead_created: "A new lead is created",
+  lead_created_after_days: "X days after a new lead is created",
+  lead_assigned: "A lead is assigned",
+  appointment_scheduled: "An appointment is scheduled",
   job_stage_changed: "A job moves to a stage",
   job_stage_after_days: "X days after a job enters a stage",
   estimate_sent: "A proposal is sent",
   estimate_sent_after_days: "X days after a proposal is sent",
   estimate_won: "A proposal is won",
   estimate_lost: "A proposal is lost",
+  invoice_sent: "An invoice is sent",
   invoice_paid: "An invoice is paid",
   event_in_days: "X days before a calendar event",
 };
@@ -66,6 +76,7 @@ export const AUTOMATION_CONDITION_FIELDS = [
   "job.state",
   "job.projectType",
   "job.market",
+  "job.leadSource",
   "customer.name",
   "contact.email",
   "rep.id",
@@ -80,6 +91,7 @@ export const AUTOMATION_CONDITION_FIELD_LABELS: Record<AutomationConditionField,
   "job.state": "Job state",
   "job.projectType": "Project type",
   "job.market": "Market",
+  "job.leadSource": "Lead source",
   "customer.name": "Customer name",
   "contact.email": "Customer email",
   "rep.id": "Job owner",
@@ -237,7 +249,11 @@ export type AutomationTemplate = {
 
 export type AutomationEventKind =
   | "job_created"
+  | "lead_created"
+  | "lead_assigned"
+  | "appointment_scheduled"
   | "job_stage_changed"
+  | "invoice_sent"
   | "invoice_paid"
   | "estimate_sent"
   | "estimate_won"
@@ -248,6 +264,7 @@ export type AutomationEvent = {
   jobId?: string;
   invoiceId?: string;
   estimateId?: string;
+  eventId?: string;
   stage?: WorkColumn;
   at?: string;
 };
