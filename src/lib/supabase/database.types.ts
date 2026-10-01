@@ -3428,6 +3428,7 @@ export type Database = {
           p_customer_name?: string;
           p_customer_list_id?: string;
           p_job_list_id?: string;
+          p_account_list_id?: string;
         };
         Returns: Json;
       };

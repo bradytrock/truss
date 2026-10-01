@@ -7,10 +7,10 @@ import {
   expensePushBlocked,
   expenseQbRefNumber,
   expenseRequiresJob,
+  qbExpenseAccountName,
   invoicePushBlocked,
 } from "@/lib/qbwc/work";
 import {
-  EXPENSE_ACCOUNT_LABELS,
   EXPENSE_METHOD_LABELS,
   type Expense,
   type ExpenseMethod,
@@ -165,7 +165,7 @@ export function expenseQbPreview(
     vendor: expense.vendor.trim() || "Add a vendor",
     amount: expense.amount,
     txnDate: expense.incurredAt.slice(0, 10),
-    accountName: EXPENSE_ACCOUNT_LABELS[expense.account],
+    accountName: qbExpenseAccountName(expense.account),
     paidWith: EXPENSE_METHOD_LABELS[expense.method],
     payAccount:
       payWith === "credit_card"

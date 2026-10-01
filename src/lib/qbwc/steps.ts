@@ -1,15 +1,18 @@
+import { matchQbAccount, qbAccountMissMessage, qbChartAccountFor } from "@/lib/qbwc/accounts";
 import {
+  accountQueryXml,
   billAddXml,
   creditCardChargeAddXml,
   customerAddXml,
   customerAliasName,
   customerQueryXml,
-  expenseRetHasJobCustomer,
+  expenseRetMatchesJob,
   invoiceAddXml,
   isQbLockMessage,
   isQbNotFoundMessage,
   itemQueryXml,
   itemServiceAddXml,
+  readAccountListResponse,
   readQbResponse,
   receivePaymentAddXml,
   txnVoidXml,
@@ -100,6 +103,8 @@ export function requestForStep(rawStep: string, work: QbwcWork) {
       return vendorQueryXml(work.kind === "expense" ? work.vendor : "Vendor", requestId);
     case "vendor_add":
       return vendorAddXml(work.kind === "expense" ? work.vendor : "Vendor", requestId);
+    case "account_query":
+      return accountQueryXml(requestId);
     case "expense_add":
       return expenseRequest(requestId, work, useAlias);
     case "txn_void":
@@ -139,6 +144,7 @@ function expenseRequest(requestId: string, work: QbwcWork, useAlias: boolean) {
     txnDate: work.txnDate,
     memo: work.memo || work.number,
     accountName: work.accountName,
+    accountListId: work.accountListId,
     amount: work.amount,
     customerJobFullName: work.hasJob ? jobFullName(work, useAlias) : "",
     customerListId: work.hasJob ? work.jobListId : undefined,
@@ -169,6 +175,7 @@ export type StepAdvance =
       customerName?: string;
       customerListId?: string;
       jobListId?: string;
+      accountListId?: string;
     }
   | { action: "complete"; txnId: string }
   | { action: "fail"; error: string; txnId?: string };
@@ -269,11 +276,19 @@ export function advanceFromResponse(
           error: "QuickBooks found the job but did not return a ListID. Run the connector again.",
         };
       }
+      if (work?.kind === "expense" && result.fullName && !result.fullName.includes(":")) {
+        return {
+          action: "fail",
+          error: `QuickBooks returned "${result.fullName}" for that job. A job expense has to hang on Customer:Job, not the customer alone.`,
+        };
+      }
       return {
         action: "next",
         step: afterJob(work, useAlias),
         jobListId: result.listId || undefined,
       };
+    case "account_query":
+      return accountQueryAdvance(responseXml, qbMessage, missing, work, useAlias);
     case "job_add":
       if (missing) return { action: "fail", error: qbMessage };
       if (result.kind === "exists" && isParentNotCustomer(qbMessage)) {
@@ -351,7 +366,9 @@ function expenseAddAdvance(
   work?: QbwcWork | null,
 ): StepAdvance {
   if (result.kind === "missing") return { action: "fail", error: qbMessage };
-  if (needsExpenseJobListId(work) && !expenseRetHasJobCustomer(responseXml)) {
+  const jobListId = work?.kind === "expense" ? work.jobListId?.trim() ?? "" : "";
+  const accountListId = work?.kind === "expense" ? work.accountListId?.trim() ?? "" : "";
+  if (needsExpenseJobListId(work) && !expenseRetMatchesJob(responseXml, jobListId, accountListId)) {
     if (work?.kind === "expense" && work.payWith === "credit_card") {
       return {
         action: "fail",
@@ -369,8 +386,30 @@ function expenseAddAdvance(
   return { action: "complete", txnId: result.txnId };
 }
 
+function accountQueryAdvance(
+  responseXml: string,
+  qbMessage: string,
+  missing: boolean,
+  work: QbwcWork | null | undefined,
+  useAlias: boolean,
+): StepAdvance {
+  if (missing || work?.kind !== "expense") {
+    return { action: "fail", error: qbMessage || "QuickBooks did not return the chart of accounts." };
+  }
+  const target = qbChartAccountFor({ accountName: work.accountName, accountNumber: work.accountNumber });
+  const match = target ? matchQbAccount(readAccountListResponse(responseXml), target) : undefined;
+  if (!match) return { action: "fail", error: qbAccountMissMessage(target) };
+  return {
+    action: "next",
+    step: afterAccount(work, useAlias),
+    accountListId: match.listId,
+  };
+}
+
 function afterVendor(work?: QbwcWork | null) {
-  return work?.kind === "expense" && work.hasJob ? "customer_query" : "expense_add";
+  if (work?.kind === "expense" && work.hasJob) return "customer_query";
+  if (work?.kind === "expense") return "account_query";
+  return "expense_add";
 }
 
 function afterCustomer(work: QbwcWork | null | undefined, useAlias: boolean) {
@@ -378,22 +417,24 @@ function afterCustomer(work: QbwcWork | null | undefined, useAlias: boolean) {
     return taggedQbwcStep(work.hasJob ? "job_query" : "payment_add", useAlias);
   }
   if (work?.kind === "expense") {
-    return taggedQbwcStep(work.hasJob ? "job_query" : "expense_add", useAlias);
+    return taggedQbwcStep(work.hasJob ? "job_query" : "account_query", useAlias);
   }
   return taggedQbwcStep("job_query", useAlias);
 }
 
 function afterJob(work: QbwcWork | null | undefined, useAlias: boolean) {
   if (work?.kind === "expense") {
-    // Only void an unattached bill we are replacing. Leftover checks stay skipped
-    // so a locked check cannot block the first vendor-bill post.
-    if (expenseRepairsBill(work)) {
-      return taggedQbwcStep("txn_void", useAlias);
-    }
-    return taggedQbwcStep("expense_add", useAlias);
+    return taggedQbwcStep("account_query", useAlias);
   }
   if (work?.kind === "payment") return taggedQbwcStep("payment_add", useAlias);
   return taggedQbwcStep("item_query", useAlias);
+}
+
+function afterAccount(work: QbwcWork | null | undefined, useAlias: boolean) {
+  if (work?.kind === "expense" && expenseRepairsBill(work)) {
+    return taggedQbwcStep("txn_void", useAlias);
+  }
+  return taggedQbwcStep("expense_add", useAlias);
 }
 
 function jobCodeOf(work?: QbwcWork | null) {
@@ -446,7 +487,8 @@ export const STEP_LABELS: Record<QbwcStep, string> = {
   vendor_query: "Find the vendor in QuickBooks",
   vendor_add: "Create the vendor",
   vendor_list_query: "Pull vendors from QuickBooks",
-  expense_add: "Add the vendor bill or credit card charge",
+  account_query: "Find the chart account for this cost",
+  expense_add: "Add the vendor bill on Customer:Job",
   txn_void: "Void the check that was posted instead of a bill",
   payment_add: "Receive the payment against the invoice",
 };

@@ -252,9 +252,10 @@ export function QbwcPanel() {
               placeholder={DEFAULT_QB_CC}
             />
             <p className="text-xs text-muted-foreground">
-              Credit card expenses post as a charge on this account. Create it in QB if it is not there.
-              Expense accounts in QuickBooks should match Truss labels such as Job materials and
-              Subcontractors.
+              Credit card expenses post as a charge on this account, on Customer:Job. Create it in
+              QB if it is not there. Job costs post as a vendor bill on that same Customer:Job and
+              use the numbered chart accounts (Construction Materials Costs, Subcontractors Expense,
+              and the rest). They do not post to a separate expense account.
             </p>
           </div>
         </div>
