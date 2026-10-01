@@ -1,3 +1,4 @@
+import { imessageEffectId, imessageTapbackVerb } from "@/lib/imessage";
 import { toE164 } from "@/lib/phone";
 import {
   looksLikePhotonProjectId,
@@ -107,60 +108,143 @@ async function loadVoiceCredentials(token: string): Promise<PhotonCredentials | 
   return credentialsFrom(data);
 }
 
-async function sendViaSpectrum(input: {
-  projectId: string;
-  projectSecret: string;
-  to: string;
-  content: string;
-}): Promise<PhotonSendResult> {
+type SpectrumSpace = {
+  send: (input: unknown) => Promise<unknown>;
+};
+
+function sentHandle(sent: unknown) {
+  return sent && typeof sent === "object" && "id" in sent && typeof sent.id === "string" ? sent.id : "";
+}
+
+function photonError(error: unknown) {
+  return error instanceof Error ? error.message : "Could not reach Photon.";
+}
+
+async function withSpace<T>(
+  credentials: PhotonCredentials,
+  to: string,
+  run: (space: SpectrumSpace) => Promise<T>,
+) {
   const { Spectrum } = await import("@spectrum-ts/core");
   const { imessage } = await import("@spectrum-ts/imessage");
   const app = await Spectrum({
-    projectId: input.projectId,
-    projectSecret: input.projectSecret,
+    projectId: credentials.projectId,
+    projectSecret: credentials.projectSecret,
     providers: [imessage.config()],
   });
   try {
     const platform = imessage(app);
-    const person = await platform.user(input.to);
+    const person = await platform.user(to);
     const space = await platform.space.create(person);
-    const sent = await space.send(input.content);
-    const handle = sent && typeof sent === "object" && "id" in sent && typeof sent.id === "string" ? sent.id : "";
-    return { ok: true, mocked: false, to: input.to, handle };
+    return await run(space as SpectrumSpace);
   } finally {
     await app.stop().catch(() => undefined);
   }
 }
 
+async function loadCredentials(voiceToken?: string) {
+  const token = voiceToken?.trim() ?? "";
+  return token ? loadVoiceCredentials(token) : loadOfficeCredentials();
+}
+
+/** Photon only needs the message id. Unsends must be marked outbound; a refetched message is treated as inbound and rejected. */
+function phoneMessage(handle: string, direction: "inbound" | "outbound") {
+  return { id: handle, direction, content: { type: "text" as const, text: "" } };
+}
+
+async function outboundPayload(input: { content: string; effectId: string; replyToHandle: string }) {
+  const { reply } = await import("@spectrum-ts/core");
+  let payload: unknown = input.content;
+  if (input.effectId) {
+    const mod = (await import("@spectrum-ts/imessage")) as unknown as {
+      effect: (body: string, messageEffect: string) => unknown;
+    };
+    payload = mod.effect(input.content, input.effectId);
+  }
+  if (input.replyToHandle) {
+    payload = reply(payload as never, phoneMessage(input.replyToHandle, "inbound") as never);
+  }
+  return payload;
+}
+
 export async function sendOfficeText(input: {
   to: string;
   content: string;
+  effect?: string;
+  replyToHandle?: string;
   voiceToken?: string;
 }): Promise<PhotonSendResult> {
   const to = toE164(input.to);
   const content = input.content.trim();
+  const requestedEffect = input.effect?.trim() ?? "";
+  const effectId = requestedEffect ? imessageEffectId(requestedEffect) : "";
+  const replyToHandle = input.replyToHandle?.trim() ?? "";
   if (!to) return { ok: false, mocked: false, error: "That phone number is not valid." };
   if (!content) return { ok: false, mocked: false, error: "Write a message before sending." };
+  if (requestedEffect && !effectId) return { ok: false, mocked: false, error: "That effect is not available." };
 
-  const voiceToken = input.voiceToken?.trim() ?? "";
-  const credentials = voiceToken ? await loadVoiceCredentials(voiceToken) : await loadOfficeCredentials();
+  const credentials = await loadCredentials(input.voiceToken);
   if (!credentials) {
     return { ok: true, mocked: true, to, handle: `mock_${Date.now()}` };
   }
 
   try {
-    return await sendViaSpectrum({
-      projectId: credentials.projectId,
-      projectSecret: credentials.projectSecret,
-      to,
-      content,
+    return await withSpace(credentials, to, async (space) => {
+      const sent = await space.send(await outboundPayload({ content, effectId, replyToHandle }));
+      return { ok: true as const, mocked: false as const, to, handle: sentHandle(sent) };
     });
   } catch (error) {
-    return {
-      ok: false,
-      mocked: false,
-      error: error instanceof Error ? error.message : "Could not reach Photon.",
-    };
+    return { ok: false, mocked: false, error: photonError(error) };
+  }
+}
+
+export async function sendOfficeReaction(input: {
+  to: string;
+  handle: string;
+  emoji: string;
+}): Promise<PhotonSendResult> {
+  const to = toE164(input.to);
+  const handle = input.handle.trim();
+  const emoji = input.emoji.trim();
+  if (!to) return { ok: false, mocked: false, error: "That phone number is not valid." };
+  if (!handle) return { ok: false, mocked: false, error: "That message cannot be reacted to." };
+  if (!imessageTapbackVerb(emoji)) return { ok: false, mocked: false, error: "That reaction is not an iMessage tapback." };
+
+  const credentials = await loadCredentials();
+  if (!credentials) {
+    return { ok: true, mocked: true, to, handle: `mock_${Date.now()}` };
+  }
+
+  try {
+    const { reaction } = await import("@spectrum-ts/core");
+    return await withSpace(credentials, to, async (space) => {
+      const sent = await space.send(reaction(emoji, phoneMessage(handle, "inbound") as never));
+      return { ok: true as const, mocked: false as const, to, handle: sentHandle(sent) };
+    });
+  } catch (error) {
+    return { ok: false, mocked: false, error: photonError(error) };
+  }
+}
+
+export async function sendOfficeUnsend(input: { to: string; handle: string }): Promise<PhotonSendResult> {
+  const to = toE164(input.to);
+  const handle = input.handle.trim();
+  if (!to) return { ok: false, mocked: false, error: "That phone number is not valid." };
+  if (!handle) return { ok: false, mocked: false, error: "That message cannot be unsent." };
+
+  const credentials = await loadCredentials();
+  if (!credentials) {
+    return { ok: true, mocked: true, to, handle };
+  }
+
+  try {
+    const { unsend } = await import("@spectrum-ts/core");
+    return await withSpace(credentials, to, async (space) => {
+      await space.send(unsend(phoneMessage(handle, "outbound") as never));
+      return { ok: true as const, mocked: false as const, to, handle };
+    });
+  } catch (error) {
+    return { ok: false, mocked: false, error: photonError(error) };
   }
 }
 

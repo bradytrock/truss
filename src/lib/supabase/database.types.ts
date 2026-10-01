@@ -2127,6 +2127,8 @@ export type Database = {
           handle: string;
           status: string;
           media_url: string;
+          imessage_kind: string;
+          imessage_detail: string;
           created_at: string;
           created_by: string;
         };
@@ -2142,6 +2144,8 @@ export type Database = {
           handle?: string;
           status?: string;
           media_url?: string;
+          imessage_kind?: string;
+          imessage_detail?: string;
           created_at?: string;
           created_by?: string;
         };
@@ -3313,6 +3317,18 @@ export type Database = {
           p_media_url?: string;
           p_sent_at?: string | null;
           p_company_id?: string | null;
+          p_kind?: string;
+          p_detail?: string;
+        };
+        Returns: Json;
+      };
+      apply_imessage_revision: {
+        Args: {
+          p_company_id: string;
+          p_handle: string;
+          p_body: string;
+          p_kind?: string;
+          p_detail?: string;
         };
         Returns: Json;
       };

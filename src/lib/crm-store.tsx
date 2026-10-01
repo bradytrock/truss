@@ -344,6 +344,7 @@ import {
   type ReturningClientMatch,
   type ReturningClientNoticeKind,
 } from "@/lib/returning-client";
+import { imessageEffectId, imessageEffectLabel, imessageReactionText } from "@/lib/imessage";
 import { looksLikePhone, storedPhone, toE164 } from "@/lib/phone";
 import { resolveCustomerName, applyCoOwnerToEstimate, coOwnerContact, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage, missingPageShareMessage, isMissingPageShare, parsePageTemplate } from "@/lib/photo-report";
@@ -1064,7 +1065,20 @@ type CrmContextValue = CrmState & {
     contactId?: string | null;
     opportunityId?: string | null;
     name?: string;
+    effect?: string;
+    replyToHandle?: string;
   }) => Promise<boolean>;
+  reactToText: (input: {
+    to: string;
+    handle: string;
+    emoji: string;
+    preview: string;
+    jobId?: string | null;
+    contactId?: string | null;
+    opportunityId?: string | null;
+    name?: string;
+  }) => Promise<boolean>;
+  unsendText: (input: { to: string; handle: string }) => Promise<boolean>;
   logOutboundText: (input: {
     to: string;
     content: string;
@@ -1073,6 +1087,8 @@ type CrmContextValue = CrmState & {
     opportunityId?: string | null;
     name?: string;
     handle?: string;
+    kind?: string;
+    detail?: string;
   }) => Promise<void>;
   logOutboundEmail: (input: {
     to: string;
@@ -2219,10 +2235,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       opportunityId?: string | null;
       name?: string;
       handle?: string;
+      kind?: string;
+      detail?: string;
     }) => {
       const phone = toE164(input.to) || input.to.trim();
       const content = input.content.trim();
       if (!phone || !content) return;
+      const kind = input.kind?.trim() || "text";
+      const detail = input.detail?.trim() || "";
       const contact =
         (input.contactId ? state.contacts.find((item) => item.id === input.contactId) : undefined) ??
         contactForPhone(state.contacts, phone);
@@ -2246,6 +2266,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         handle: input.handle?.trim() ?? "",
         status: "sent",
         mediaUrl: "",
+        kind,
+        detail,
         createdAt: new Date().toISOString(),
         createdBy: user.name,
       };
@@ -2267,6 +2289,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             handle: message.handle,
             status: message.status,
             media_url: message.mediaUrl,
+            imessage_kind: message.kind,
+            imessage_detail: message.detail,
             created_by: message.createdBy,
           })
           .select("*")
@@ -2407,11 +2431,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       contactId?: string | null;
       opportunityId?: string | null;
       name?: string;
+      effect?: string;
+      replyToHandle?: string;
     }) => {
+      const effectId = input.effect?.trim() ? imessageEffectId(input.effect) : "";
+      const replyToHandle = input.replyToHandle?.trim() ?? "";
       const response = await fetch("/api/messages/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: input.to, content: input.content }),
+        body: JSON.stringify({
+          to: input.to,
+          content: input.content,
+          effect: effectId,
+          replyToHandle,
+        }),
       });
       const data = (await response.json().catch(() => null)) as
         | { ok?: boolean; mocked?: boolean; error?: string; handle?: string; to?: string }
@@ -2420,10 +2453,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error(data?.error || "Could not send that text.");
         return false;
       }
+      const detail = [effectId ? imessageEffectLabel(effectId) : "", replyToHandle ? "Reply" : ""]
+        .filter(Boolean)
+        .join(" · ");
       await logOutboundText({
         ...input,
         to: data.to || input.to,
         handle: data.handle,
+        kind: effectId ? "effect" : replyToHandle ? "reply" : "text",
+        detail,
       });
       if (data.mocked) {
         toast.message(
@@ -2435,6 +2473,88 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return true;
     },
     [logOutboundText],
+  );
+
+  const reactToText = useCallback(
+    async (input: {
+      to: string;
+      handle: string;
+      emoji: string;
+      preview: string;
+      jobId?: string | null;
+      contactId?: string | null;
+      opportunityId?: string | null;
+      name?: string;
+    }) => {
+      const response = await fetch("/api/messages/react", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: input.to, handle: input.handle, emoji: input.emoji }),
+      });
+      const data = (await response.json().catch(() => null)) as
+        | { ok?: boolean; mocked?: boolean; error?: string; handle?: string; to?: string }
+        | null;
+      if (!response.ok || !data?.ok) {
+        toast.error(data?.error || "Could not send that reaction.");
+        return false;
+      }
+      const reaction = imessageReactionText(input.emoji, input.preview);
+      await logOutboundText({
+        to: data.to || input.to,
+        content: reaction.body,
+        jobId: input.jobId,
+        contactId: input.contactId,
+        opportunityId: input.opportunityId,
+        name: input.name,
+        handle: data.handle,
+        kind: "reaction",
+        detail: reaction.detail,
+      });
+      toast.success(data.mocked ? "Reaction logged. Connect Photon to send it." : "Reaction sent.");
+      return true;
+    },
+    [logOutboundText],
+  );
+
+  const unsendText = useCallback(
+    async (input: { to: string; handle: string }) => {
+      const handle = input.handle.trim();
+      if (!handle) return false;
+      const response = await fetch("/api/messages/unsend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: input.to, handle }),
+      });
+      const data = (await response.json().catch(() => null)) as
+        | { ok?: boolean; mocked?: boolean; error?: string }
+        | null;
+      if (!response.ok || !data?.ok) {
+        toast.error(data?.error || "Could not unsend that text.");
+        return false;
+      }
+      const patch = { body: "Message unsent", status: "unsent", kind: "unsend", detail: "Unsent" };
+      setState((prev) => ({
+        ...prev,
+        messages: prev.messages.map((message) => (message.handle === handle ? { ...message, ...patch } : message)),
+      }));
+      const supabase = maybeClient();
+      if (supabase) {
+        const { error } = await supabase
+          .from("messages")
+          .update({
+            body: patch.body,
+            status: patch.status,
+            imessage_kind: patch.kind,
+            imessage_detail: patch.detail,
+          })
+          .eq("company_id", user.companyId)
+          .eq("handle", handle);
+        if (error && !isMissingMessages(error)) toast.error(error.message);
+      }
+      toast.success(data.mocked ? "Marked unsent here. Connect Photon to remove it from the phone." : "Message unsent.");
+      return true;
+    },
+    [user.companyId],
   );
 
   const notifyStaffByText = useCallback(async (member: StaffMember | undefined, content: string) => {
@@ -13194,6 +13314,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addJob,
       addActivity,
       sendTextMessage,
+      reactToText,
+      unsendText,
       logOutboundText,
       logOutboundEmail,
       toggleTask,
@@ -13385,6 +13507,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addJob,
       addActivity,
       sendTextMessage,
+      reactToText,
+      unsendText,
       logOutboundText,
       logOutboundEmail,
       toggleTask,

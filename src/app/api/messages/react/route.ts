@@ -1,18 +1,9 @@
 import { NextResponse } from "next/server";
 import { looksLikePhone } from "@/lib/phone";
-import { officePhotonConfigured, sendOfficeText } from "@/lib/photon-server";
+import { sendOfficeReaction } from "@/lib/photon-server";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
-
-export async function GET() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ configured: false });
-  return NextResponse.json(await officePhotonConfigured());
-}
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -31,18 +22,14 @@ export async function POST(request: Request) {
   }
 
   const to = typeof body.to === "string" ? body.to : "";
-  const content = typeof body.content === "string" ? body.content : "";
-  const effect = typeof body.effect === "string" ? body.effect : "";
-  const replyToHandle = typeof body.replyToHandle === "string" ? body.replyToHandle : "";
-  if (!looksLikePhone(to)) {
-    return NextResponse.json({ error: "Enter a valid mobile number." }, { status: 400 });
-  }
-  if (!content.trim()) {
-    return NextResponse.json({ error: "Write a message before sending." }, { status: 400 });
+  const handle = typeof body.handle === "string" ? body.handle : "";
+  const emoji = typeof body.emoji === "string" ? body.emoji : "";
+  if (!looksLikePhone(to) || !handle.trim() || !emoji.trim()) {
+    return NextResponse.json({ error: "That message cannot be reacted to." }, { status: 400 });
   }
 
   try {
-    const result = await sendOfficeText({ to, content, effect, replyToHandle });
+    const result = await sendOfficeReaction({ to, handle, emoji });
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 502 });
     }

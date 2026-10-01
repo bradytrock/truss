@@ -24,6 +24,8 @@ function text(
     handle: "",
     status: "delivered",
     mediaUrl: "",
+    kind: "text",
+    detail: "",
     createdAt: input.createdAt,
     createdBy: input.createdBy,
   };

@@ -1,7 +1,7 @@
 /**
  * Receive webhook for Photon inbound texts.
- * Same ingest path as /api/messages/inbound.
- * Field parsing matches src/lib/inbound-text.ts.
+ * Same ingest path as /api/messages/inbound/[token].
+ * Field parsing matches src/lib/inbound-text.ts and src/lib/imessage.ts.
  */
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -10,6 +10,75 @@ const cors = {
 
 function json(body: unknown, status = 200) {
   return Response.json(body, { status, headers: cors });
+}
+
+/** Stable Photon iMessage add-ons: tapbacks and bubble or screen effects. */
+
+const IMESSAGE_TAPBACKS = [
+  { emoji: "❤️", label: "Love", verb: "Loved" },
+  { emoji: "👍", label: "Like", verb: "Liked" },
+  { emoji: "👎", label: "Dislike", verb: "Disliked" },
+  { emoji: "😂", label: "Laugh", verb: "Laughed at" },
+  { emoji: "‼️", label: "Emphasize", verb: "Emphasized" },
+  { emoji: "❓", label: "Question", verb: "Questioned" },
+] as const;
+
+const IMESSAGE_EFFECTS = [
+  { id: "com.apple.messages.effect.CKConfettiEffect", label: "Confetti" },
+  { id: "com.apple.messages.effect.CKBalloonEffect", label: "Balloons" },
+  { id: "com.apple.messages.effect.CKLasersEffect", label: "Lasers" },
+  { id: "com.apple.messages.effect.CKFireworksEffect", label: "Fireworks" },
+  { id: "com.apple.messages.effect.CKSparklesEffect", label: "Sparkles" },
+  { id: "com.apple.messages.effect.CKSpotlightEffect", label: "Spotlight" },
+  { id: "com.apple.messages.effect.CKHeartEffect", label: "Heart" },
+  { id: "com.apple.messages.effect.CKEchoEffect", label: "Echo" },
+  { id: "com.apple.messages.effect.CKHappyBirthdayEffect", label: "Celebration" },
+  { id: "com.apple.MobileSMS.expressivesend.impact", label: "Slam" },
+  { id: "com.apple.MobileSMS.expressivesend.loud", label: "Loud" },
+  { id: "com.apple.MobileSMS.expressivesend.gentle", label: "Gentle" },
+  { id: "com.apple.MobileSMS.expressivesend.invisibleink", label: "Invisible ink" },
+] as const;
+
+const TAPBACK_VERBS = new Map<string, string>([
+  ...IMESSAGE_TAPBACKS.map((item) => [item.emoji, item.verb] as const),
+  ["❤", "Loved"],
+  ["❗", "Emphasized"],
+]);
+
+function imessageTapbackVerb(emoji: string) {
+  return TAPBACK_VERBS.get(emoji.trim()) ?? "";
+}
+
+function imessageEffectLabel(value: string) {
+  const raw = value.trim();
+  const found = IMESSAGE_EFFECTS.find(
+    (item) => item.id === raw || item.label.toLowerCase() === raw.toLowerCase(),
+  );
+  if (found) return found.label;
+  if (!raw) return "Effect";
+  const tail = raw.split(".").pop() ?? raw;
+  const words = tail.replace(/^CK/, "").replace(/Effect$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
+  return words || "Effect";
+}
+
+function imessageEffectId(value: string) {
+  const raw = value.trim();
+  if (!raw) return "";
+  return (
+    IMESSAGE_EFFECTS.find((item) => item.id === raw || item.label.toLowerCase() === raw.toLowerCase())?.id ?? ""
+  );
+}
+
+/** Words written into the thread for a tapback, including the quoted preview. */
+function imessageReactionText(emoji: string, preview: string) {
+  const verb = imessageTapbackVerb(emoji);
+  const text = preview.trim().replace(/\s+/g, " ").slice(0, 160);
+  const quoted = text ? `“${text}”` : "";
+  if (verb && quoted) return { body: `${verb} ${quoted}`, detail: verb };
+  if (verb) return { body: `${verb} a message`, detail: verb };
+  if (emoji && quoted) return { body: `Reacted ${emoji} to ${quoted}`, detail: emoji };
+  if (emoji) return { body: `Reacted ${emoji}`, detail: emoji };
+  return { body: "Reacted to a message", detail: "Reaction" };
 }
 
 function asRecord(value: unknown) {
@@ -40,16 +109,7 @@ function httpUrl(value: string) {
 /** Spectrum Stable delivers one event, `messages`. Older payloads used `message.received`. */
 const ACCEPTED_EVENTS = new Set(["messages", "message.received"]);
 
-const TAPBACKS: Record<string, string> = {
-  "❤️": "Loved",
-  "❤": "Loved",
-  "👍": "Liked",
-  "👎": "Disliked",
-  "😂": "Laughed at",
-  "‼️": "Emphasized",
-  "❗": "Emphasized",
-  "❓": "Questioned",
-};
+type InboundAction = "insert" | "edit" | "unsend";
 
 type InboundText = {
   from: string;
@@ -57,7 +117,23 @@ type InboundText = {
   handle: string;
   mediaUrl: string;
   sentAt: string | null;
+  kind: string;
+  detail: string;
+  action: InboundAction;
+  targetHandle: string;
 };
+
+type Piece = {
+  body: string;
+  kind: string;
+  detail: string;
+  action: InboundAction;
+  targetHandle: string;
+};
+
+function piece(body: string, extra?: Partial<Piece>): Piece {
+  return { body, kind: "text", detail: "", action: "insert", targetHandle: "", ...extra };
+}
 
 function eventName(body: Record<string, unknown>) {
   return (asString(body.event) || asString(body.type)).toLowerCase();
@@ -83,16 +159,19 @@ function quoted(value: string) {
   return text ? `“${text}”` : "";
 }
 
-function reactionBody(content: Record<string, unknown>) {
+function targetOf(content: Record<string, unknown>) {
+  return asRecord(content.target);
+}
+
+function reactionBody(content: Record<string, unknown>): Piece {
   const emoji = asString(content.emoji).trim();
-  const target = asRecord(content.target);
-  const preview = quoted(asString(target?.contentPreview));
-  const verb = TAPBACKS[emoji] ?? "";
-  if (verb && preview) return `${verb} ${preview}`;
-  if (verb) return `${verb} a message`;
-  if (emoji && preview) return `Reacted ${emoji} to ${preview}`;
-  if (emoji) return `Reacted ${emoji}`;
-  return "Reacted to a message";
+  const target = targetOf(content);
+  const text = imessageReactionText(emoji, asString(target?.contentPreview));
+  return piece(text.body, {
+    kind: "reaction",
+    detail: text.detail,
+    targetHandle: asString(target?.id),
+  });
 }
 
 function attachmentBody(content: Record<string, unknown>) {
@@ -119,20 +198,105 @@ function contactBody(content: Record<string, unknown>) {
   return who ? `Shared a contact · ${who}` : "Shared a contact";
 }
 
-function describeContent(content: unknown, fallback: string) {
-  if (typeof content === "string") return content.trim() || fallback.trim();
+function namesOf(value: unknown) {
+  if (!Array.isArray(value)) return "";
+  return value
+    .map((item) => (typeof item === "string" ? item : asString(asRecord(item)?.id)))
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+function describeContent(content: unknown, fallback: string): Piece | null {
+  if (typeof content === "string") return piece(content.trim() || fallback.trim());
   const record = asRecord(content);
-  if (!record) return fallback.trim();
+  if (!record) {
+    const body = fallback.trim();
+    return body ? piece(body) : null;
+  }
   const type = asString(record.type);
-  if (!type || type === "text") return asString(record.text).trim() || asString(record.body).trim() || fallback.trim();
-  if (type === "markdown") return asString(record.markdown).trim() || asString(record.text).trim();
-  if (type === "attachment") return attachmentBody(record);
+  if (type === "typing") return null;
+  if (!type || type === "text") {
+    const subject = asString(record.subject).trim();
+    const text = asString(record.text).trim() || asString(record.body).trim() || fallback.trim();
+    const body = subject && text ? `${subject}\n${text}` : subject || text;
+    return body ? piece(body) : null;
+  }
+  if (type === "markdown") {
+    const body = asString(record.markdown).trim() || asString(record.text).trim();
+    return body ? piece(body, { kind: "markdown" }) : null;
+  }
+  if (type === "attachment") {
+    return piece(attachmentBody(record), { kind: "attachment", detail: asString(record.mimeType) });
+  }
   if (type === "reaction") return reactionBody(record);
-  if (type === "contact") return contactBody(record);
-  if (type === "richlink") return asString(record.url).trim() || "Shared a link";
-  if (type === "typing") return "";
-  if (type === "read") return "Read a message";
-  return asString(record.text).trim() || asString(record.body).trim();
+  if (type === "contact") return piece(contactBody(record), { kind: "contact" });
+  if (type === "richlink") {
+    return piece(asString(record.url).trim() || "Shared a link", { kind: "richlink" });
+  }
+  if (type === "read") return piece("Read a message", { kind: "read" });
+  if (type === "effect") {
+    const inner = describeContent(record.content, fallback);
+    const label = imessageEffectLabel(asString(record.effect));
+    if (!inner) return piece(label, { kind: "effect", detail: label });
+    return piece(inner.body, { kind: "effect", detail: label });
+  }
+  if (type === "reply") {
+    const inner = describeContent(record.content ?? record.text, fallback);
+    const preview = quoted(asString(targetOf(record)?.contentPreview));
+    return piece(inner?.body || fallback.trim() || "Reply", {
+      kind: "reply",
+      detail: preview ? `Reply to ${preview}` : "Reply",
+      targetHandle: asString(targetOf(record)?.id),
+    });
+  }
+  if (type === "edit") {
+    const inner = describeContent(record.content ?? record.text, fallback);
+    return piece(inner?.body || "Edited a message", {
+      kind: "edit",
+      detail: "Edited",
+      action: "edit",
+      targetHandle: asString(targetOf(record)?.id),
+    });
+  }
+  if (type === "unsend") {
+    return piece("Message unsent", {
+      kind: "unsend",
+      detail: "Unsent",
+      action: "unsend",
+      targetHandle: asString(targetOf(record)?.id) || asString(record.id),
+    });
+  }
+  if (type === "poll") {
+    const options = Array.isArray(record.options)
+      ? record.options.map((item) => asString(asRecord(item)?.title).trim()).filter(Boolean)
+      : [];
+    return piece(asString(record.title).trim() || "Poll", {
+      kind: "poll",
+      detail: options.join(" · "),
+    });
+  }
+  if (type === "poll_option") {
+    return piece(asString(record.title).trim() || "Voted", { kind: "poll", detail: "Vote" });
+  }
+  if (type === "rename") {
+    const name = asString(record.displayName).trim();
+    return piece(name ? `Renamed the chat to ${name}` : "Renamed the chat", { kind: "rename", detail: name });
+  }
+  if (type === "addMember") {
+    const names = namesOf(record.members);
+    return piece(names ? `Added ${names}` : "Added someone to the chat", { kind: "membership" });
+  }
+  if (type === "removeMember") {
+    const names = namesOf(record.members);
+    return piece(names ? `Removed ${names}` : "Removed someone from the chat", { kind: "membership" });
+  }
+  if (type === "leaveSpace") return piece("Left the conversation", { kind: "membership" });
+  if (type === "avatar") return piece("Changed the group photo", { kind: "avatar" });
+  const text = asString(record.text).trim() || asString(record.body).trim();
+  if (text) return piece(text, { kind: type || "text" });
+  if (type) return piece(type, { kind: type });
+  return null;
 }
 
 function mediaFrom(raw: Record<string, unknown>, message: Record<string, unknown> | null) {
@@ -147,9 +311,9 @@ function oneMessage(
   fallbackHandle: string,
   fallbackSentAt: string | null,
 ): InboundText | null {
-  const body = describeContent(content, asString(raw.text) || asString(message?.text));
+  const described = describeContent(content, asString(raw.text) || asString(message?.text));
   const mediaUrl = mediaFrom(raw, message);
-  if (!body && !mediaUrl) return null;
+  if (!described && !mediaUrl) return null;
   const from =
     senderId(message?.sender) ||
     senderId(raw.sender) ||
@@ -172,12 +336,17 @@ function oneMessage(
     asString(message?.occurredAt) ||
     fallbackSentAt ||
     null;
+  const row = described ?? piece("(photo or attachment)");
   return {
     from,
-    content: body || "(photo or attachment)",
+    content: row.body || "(photo or attachment)",
     handle,
     mediaUrl,
     sentAt: sentAt || null,
+    kind: row.kind,
+    detail: row.detail,
+    action: row.action,
+    targetHandle: row.targetHandle,
   };
 }
 
@@ -207,18 +376,42 @@ function inboundMessages(raw: Record<string, unknown>): InboundText[] {
   return parsed ? [parsed] : [];
 }
 
+const EMPTY_INBOUND: InboundText = {
+  from: "",
+  content: "",
+  handle: "",
+  mediaUrl: "",
+  sentAt: null,
+  kind: "text",
+  detail: "",
+  action: "insert",
+  targetHandle: "",
+};
+
 function inboundTextFields(raw: Record<string, unknown>): InboundText {
-  return (
-    inboundMessages(raw)[0] ?? {
-      from: "",
-      content: "",
-      handle: "",
-      mediaUrl: "",
-      sentAt: null,
-    }
-  );
+  return inboundMessages(raw)[0] ?? EMPTY_INBOUND;
 }
 
+
+function schemaMissing(status: number, payload: unknown) {
+  const message = payload && typeof payload === "object" && "message" in payload ? String((payload as { message?: unknown }).message ?? "") : "";
+  const code = payload && typeof payload === "object" && "code" in payload ? String((payload as { code?: unknown }).code ?? "") : "";
+  return status === 404 || code.startsWith("PGRST20") || message.includes("Could not find the");
+}
+
+async function rpc(supabaseUrl: string, serviceKey: string, name: string, args: Record<string, unknown>) {
+  const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${name}`, {
+    method: "POST",
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(args),
+  });
+  const payload = await response.json().catch(() => ({ ok: true }));
+  return { response, payload };
+}
 
 Deno.serve(async (request) => {
   if (request.method === "OPTIONS") {
@@ -253,59 +446,59 @@ Deno.serve(async (request) => {
     return json({ ok: true, skipped: true });
   }
 
-  const companyResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/photon_inbound_company`, {
-    method: "POST",
-    headers: {
-      apikey: serviceKey,
-      Authorization: `Bearer ${serviceKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ p_token: token }),
-  });
-  const companyPayload = await companyResponse.json().catch(() => null);
-  const companyId =
-    companyPayload && typeof companyPayload === "object" && companyPayload.ok === true && typeof companyPayload.companyId === "string"
-      ? companyPayload.companyId
-      : "";
-  if (!companyResponse.ok || !companyId) {
-    const message =
-      companyPayload && typeof companyPayload === "object" && typeof companyPayload.error === "string"
-        ? companyPayload.error
-        : "Unknown webhook.";
-    return json({ error: message }, 401);
+  const company = await rpc(supabaseUrl, serviceKey, "photon_inbound_company", { p_token: token });
+  const companyPayload = company.payload as { ok?: boolean; companyId?: string; error?: string };
+  const companyId = companyPayload?.ok === true && typeof companyPayload.companyId === "string" ? companyPayload.companyId : "";
+  if (!company.response.ok || !companyId) {
+    return json({ error: companyPayload?.error || "Unknown webhook." }, 401);
   }
 
   const skip = inboundSkipReason(raw);
-  if (skip) {
-    return json({ ok: true, skipped: true, reason: skip });
-  }
+  if (skip) return json({ ok: true, skipped: true, reason: skip });
 
   const messages = inboundMessages(raw);
-  if (messages.length === 0) {
-    return json({ ok: true, skipped: true, reason: "empty" });
-  }
+  if (messages.length === 0) return json({ ok: true, skipped: true, reason: "empty" });
 
   const saved = [];
   for (const fields of messages) {
-    const response = await fetch(`${supabaseUrl}/rest/v1/rpc/ingest_inbound_text`, {
-      method: "POST",
-      headers: {
-        apikey: serviceKey,
-        Authorization: `Bearer ${serviceKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        p_from: fields.from,
-        p_body: fields.content,
-        p_handle: fields.handle,
-        p_media_url: fields.mediaUrl,
-        p_sent_at: fields.sentAt,
+    if ((fields.action === "edit" || fields.action === "unsend") && fields.targetHandle) {
+      const revised = await rpc(supabaseUrl, serviceKey, "apply_imessage_revision", {
         p_company_id: companyId,
-      }),
+        p_handle: fields.targetHandle,
+        p_body: fields.content,
+        p_kind: fields.kind,
+        p_detail: fields.detail,
+      });
+      if (!revised.response.ok) {
+        if (schemaMissing(revised.response.status, revised.payload)) {
+          return json({ ok: true, skipped: true, reason: "run_messages_sql" });
+        }
+        return json(revised.payload, 500);
+      }
+      const revision = revised.payload as { reason?: string };
+      if (revision?.reason !== "not_found") {
+        saved.push(revised.payload);
+        continue;
+      }
+    }
+
+    const inserted = await rpc(supabaseUrl, serviceKey, "ingest_inbound_text", {
+      p_from: fields.from,
+      p_body: fields.content,
+      p_handle: fields.handle,
+      p_media_url: fields.mediaUrl,
+      p_sent_at: fields.sentAt,
+      p_company_id: companyId,
+      p_kind: fields.kind,
+      p_detail: fields.detail,
     });
-    const payload = await response.json().catch(() => ({ ok: true }));
-    if (!response.ok) return json(payload, 500);
-    saved.push(payload);
+    if (!inserted.response.ok) {
+      if (schemaMissing(inserted.response.status, inserted.payload)) {
+        return json({ ok: true, skipped: true, reason: "run_messages_sql" });
+      }
+      return json(inserted.payload, 500);
+    }
+    saved.push(inserted.payload);
   }
 
   return json(saved.length === 1 ? saved[0] : { ok: true, count: saved.length, messages: saved });

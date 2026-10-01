@@ -1,3 +1,5 @@
+import { imessageEffectLabel, imessageReactionText } from "./imessage.ts";
+
 function asRecord(value: unknown) {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -26,16 +28,7 @@ function httpUrl(value: string) {
 /** Spectrum Stable delivers one event, `messages`. Older payloads used `message.received`. */
 const ACCEPTED_EVENTS = new Set(["messages", "message.received"]);
 
-const TAPBACKS: Record<string, string> = {
-  "❤️": "Loved",
-  "❤": "Loved",
-  "👍": "Liked",
-  "👎": "Disliked",
-  "😂": "Laughed at",
-  "‼️": "Emphasized",
-  "❗": "Emphasized",
-  "❓": "Questioned",
-};
+export type InboundAction = "insert" | "edit" | "unsend";
 
 export type InboundText = {
   from: string;
@@ -43,7 +36,23 @@ export type InboundText = {
   handle: string;
   mediaUrl: string;
   sentAt: string | null;
+  kind: string;
+  detail: string;
+  action: InboundAction;
+  targetHandle: string;
 };
+
+type Piece = {
+  body: string;
+  kind: string;
+  detail: string;
+  action: InboundAction;
+  targetHandle: string;
+};
+
+function piece(body: string, extra?: Partial<Piece>): Piece {
+  return { body, kind: "text", detail: "", action: "insert", targetHandle: "", ...extra };
+}
 
 function eventName(body: Record<string, unknown>) {
   return (asString(body.event) || asString(body.type)).toLowerCase();
@@ -69,16 +78,19 @@ function quoted(value: string) {
   return text ? `“${text}”` : "";
 }
 
-function reactionBody(content: Record<string, unknown>) {
+function targetOf(content: Record<string, unknown>) {
+  return asRecord(content.target);
+}
+
+function reactionBody(content: Record<string, unknown>): Piece {
   const emoji = asString(content.emoji).trim();
-  const target = asRecord(content.target);
-  const preview = quoted(asString(target?.contentPreview));
-  const verb = TAPBACKS[emoji] ?? "";
-  if (verb && preview) return `${verb} ${preview}`;
-  if (verb) return `${verb} a message`;
-  if (emoji && preview) return `Reacted ${emoji} to ${preview}`;
-  if (emoji) return `Reacted ${emoji}`;
-  return "Reacted to a message";
+  const target = targetOf(content);
+  const text = imessageReactionText(emoji, asString(target?.contentPreview));
+  return piece(text.body, {
+    kind: "reaction",
+    detail: text.detail,
+    targetHandle: asString(target?.id),
+  });
 }
 
 function attachmentBody(content: Record<string, unknown>) {
@@ -105,20 +117,105 @@ function contactBody(content: Record<string, unknown>) {
   return who ? `Shared a contact · ${who}` : "Shared a contact";
 }
 
-function describeContent(content: unknown, fallback: string) {
-  if (typeof content === "string") return content.trim() || fallback.trim();
+function namesOf(value: unknown) {
+  if (!Array.isArray(value)) return "";
+  return value
+    .map((item) => (typeof item === "string" ? item : asString(asRecord(item)?.id)))
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+function describeContent(content: unknown, fallback: string): Piece | null {
+  if (typeof content === "string") return piece(content.trim() || fallback.trim());
   const record = asRecord(content);
-  if (!record) return fallback.trim();
+  if (!record) {
+    const body = fallback.trim();
+    return body ? piece(body) : null;
+  }
   const type = asString(record.type);
-  if (!type || type === "text") return asString(record.text).trim() || asString(record.body).trim() || fallback.trim();
-  if (type === "markdown") return asString(record.markdown).trim() || asString(record.text).trim();
-  if (type === "attachment") return attachmentBody(record);
+  if (type === "typing") return null;
+  if (!type || type === "text") {
+    const subject = asString(record.subject).trim();
+    const text = asString(record.text).trim() || asString(record.body).trim() || fallback.trim();
+    const body = subject && text ? `${subject}\n${text}` : subject || text;
+    return body ? piece(body) : null;
+  }
+  if (type === "markdown") {
+    const body = asString(record.markdown).trim() || asString(record.text).trim();
+    return body ? piece(body, { kind: "markdown" }) : null;
+  }
+  if (type === "attachment") {
+    return piece(attachmentBody(record), { kind: "attachment", detail: asString(record.mimeType) });
+  }
   if (type === "reaction") return reactionBody(record);
-  if (type === "contact") return contactBody(record);
-  if (type === "richlink") return asString(record.url).trim() || "Shared a link";
-  if (type === "typing") return "";
-  if (type === "read") return "Read a message";
-  return asString(record.text).trim() || asString(record.body).trim();
+  if (type === "contact") return piece(contactBody(record), { kind: "contact" });
+  if (type === "richlink") {
+    return piece(asString(record.url).trim() || "Shared a link", { kind: "richlink" });
+  }
+  if (type === "read") return piece("Read a message", { kind: "read" });
+  if (type === "effect") {
+    const inner = describeContent(record.content, fallback);
+    const label = imessageEffectLabel(asString(record.effect));
+    if (!inner) return piece(label, { kind: "effect", detail: label });
+    return piece(inner.body, { kind: "effect", detail: label });
+  }
+  if (type === "reply") {
+    const inner = describeContent(record.content ?? record.text, fallback);
+    const preview = quoted(asString(targetOf(record)?.contentPreview));
+    return piece(inner?.body || fallback.trim() || "Reply", {
+      kind: "reply",
+      detail: preview ? `Reply to ${preview}` : "Reply",
+      targetHandle: asString(targetOf(record)?.id),
+    });
+  }
+  if (type === "edit") {
+    const inner = describeContent(record.content ?? record.text, fallback);
+    return piece(inner?.body || "Edited a message", {
+      kind: "edit",
+      detail: "Edited",
+      action: "edit",
+      targetHandle: asString(targetOf(record)?.id),
+    });
+  }
+  if (type === "unsend") {
+    return piece("Message unsent", {
+      kind: "unsend",
+      detail: "Unsent",
+      action: "unsend",
+      targetHandle: asString(targetOf(record)?.id) || asString(record.id),
+    });
+  }
+  if (type === "poll") {
+    const options = Array.isArray(record.options)
+      ? record.options.map((item) => asString(asRecord(item)?.title).trim()).filter(Boolean)
+      : [];
+    return piece(asString(record.title).trim() || "Poll", {
+      kind: "poll",
+      detail: options.join(" · "),
+    });
+  }
+  if (type === "poll_option") {
+    return piece(asString(record.title).trim() || "Voted", { kind: "poll", detail: "Vote" });
+  }
+  if (type === "rename") {
+    const name = asString(record.displayName).trim();
+    return piece(name ? `Renamed the chat to ${name}` : "Renamed the chat", { kind: "rename", detail: name });
+  }
+  if (type === "addMember") {
+    const names = namesOf(record.members);
+    return piece(names ? `Added ${names}` : "Added someone to the chat", { kind: "membership" });
+  }
+  if (type === "removeMember") {
+    const names = namesOf(record.members);
+    return piece(names ? `Removed ${names}` : "Removed someone from the chat", { kind: "membership" });
+  }
+  if (type === "leaveSpace") return piece("Left the conversation", { kind: "membership" });
+  if (type === "avatar") return piece("Changed the group photo", { kind: "avatar" });
+  const text = asString(record.text).trim() || asString(record.body).trim();
+  if (text) return piece(text, { kind: type || "text" });
+  if (type) return piece(type, { kind: type });
+  return null;
 }
 
 function mediaFrom(raw: Record<string, unknown>, message: Record<string, unknown> | null) {
@@ -133,9 +230,9 @@ function oneMessage(
   fallbackHandle: string,
   fallbackSentAt: string | null,
 ): InboundText | null {
-  const body = describeContent(content, asString(raw.text) || asString(message?.text));
+  const described = describeContent(content, asString(raw.text) || asString(message?.text));
   const mediaUrl = mediaFrom(raw, message);
-  if (!body && !mediaUrl) return null;
+  if (!described && !mediaUrl) return null;
   const from =
     senderId(message?.sender) ||
     senderId(raw.sender) ||
@@ -158,12 +255,17 @@ function oneMessage(
     asString(message?.occurredAt) ||
     fallbackSentAt ||
     null;
+  const row = described ?? piece("(photo or attachment)");
   return {
     from,
-    content: body || "(photo or attachment)",
+    content: row.body || "(photo or attachment)",
     handle,
     mediaUrl,
     sentAt: sentAt || null,
+    kind: row.kind,
+    detail: row.detail,
+    action: row.action,
+    targetHandle: row.targetHandle,
   };
 }
 
@@ -193,14 +295,18 @@ export function inboundMessages(raw: Record<string, unknown>): InboundText[] {
   return parsed ? [parsed] : [];
 }
 
+const EMPTY_INBOUND: InboundText = {
+  from: "",
+  content: "",
+  handle: "",
+  mediaUrl: "",
+  sentAt: null,
+  kind: "text",
+  detail: "",
+  action: "insert",
+  targetHandle: "",
+};
+
 export function inboundTextFields(raw: Record<string, unknown>): InboundText {
-  return (
-    inboundMessages(raw)[0] ?? {
-      from: "",
-      content: "",
-      handle: "",
-      mediaUrl: "",
-      sentAt: null,
-    }
-  );
+  return inboundMessages(raw)[0] ?? EMPTY_INBOUND;
 }

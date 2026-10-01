@@ -1243,6 +1243,8 @@ export interface TextMessage {
   handle: string;
   status: string;
   mediaUrl: string;
+  kind: string;
+  detail: string;
   createdAt: string;
   createdBy: string;
 }

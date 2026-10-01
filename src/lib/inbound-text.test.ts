@@ -15,6 +15,10 @@ assert.deepEqual(inboundTextFields(photon), {
   handle: "msg_1",
   mediaUrl: "",
   sentAt: null,
+  kind: "text",
+  detail: "",
+  action: "insert",
+  targetHandle: "",
 });
 
 const spectrum = {
@@ -38,6 +42,10 @@ assert.deepEqual(inboundMessages(spectrum), [
     handle: "spc-msg-1",
     mediaUrl: "",
     sentAt: "2026-05-14T19:06:32.000Z",
+    kind: "text",
+    detail: "",
+    action: "insert",
+    targetHandle: "",
   },
 ]);
 
@@ -62,6 +70,10 @@ assert.deepEqual(
       handle: "spc-msg-1:reaction:1",
       mediaUrl: "",
       sentAt: "2026-05-14T19:07:00.000Z",
+      kind: "reaction",
+      detail: "Liked",
+      action: "insert",
+      targetHandle: "spc-msg-1",
     },
   ],
 );
@@ -128,6 +140,89 @@ assert.equal(
     },
   })[0]?.content,
   "https://example.test/roof",
+);
+
+assert.deepEqual(
+  inboundMessages({
+    event: "messages",
+    message: {
+      id: "fx-1",
+      sender: { id: "+15550100" },
+      content: {
+        type: "effect",
+        effect: "com.apple.messages.effect.CKConfettiEffect",
+        content: { type: "text", text: "Happy birthday" },
+      },
+    },
+  })[0],
+  {
+    from: "+15550100",
+    content: "Happy birthday",
+    handle: "fx-1",
+    mediaUrl: "",
+    sentAt: null,
+    kind: "effect",
+    detail: "Confetti",
+    action: "insert",
+    targetHandle: "",
+  },
+);
+
+const edited = inboundMessages({
+  event: "messages",
+  message: {
+    id: "edit-1",
+    sender: { id: "+15550100" },
+    content: {
+      type: "edit",
+      target: { id: "spc-msg-1" },
+      content: { type: "text", text: "7pm works" },
+    },
+  },
+})[0];
+assert.equal(edited?.content, "7pm works");
+assert.equal(edited?.action, "edit");
+assert.equal(edited?.targetHandle, "spc-msg-1");
+assert.equal(edited?.kind, "edit");
+
+const unsent = inboundMessages({
+  event: "messages",
+  message: {
+    id: "unsend-1",
+    sender: { id: "+15550100" },
+    content: { type: "unsend", target: { id: "spc-msg-1" } },
+  },
+})[0];
+assert.equal(unsent?.action, "unsend");
+assert.equal(unsent?.content, "Message unsent");
+assert.equal(unsent?.targetHandle, "spc-msg-1");
+
+const poll = inboundMessages({
+  event: "messages",
+  message: {
+    id: "poll-1",
+    sender: { id: "+15550100" },
+    content: {
+      type: "poll",
+      title: "Shingle color",
+      options: [{ title: "Charcoal" }, { title: "Weathered wood" }],
+    },
+  },
+})[0];
+assert.equal(poll?.content, "Shingle color");
+assert.equal(poll?.kind, "poll");
+assert.equal(poll?.detail, "Charcoal · Weathered wood");
+
+assert.equal(
+  inboundMessages({
+    event: "messages",
+    message: {
+      id: "rename-1",
+      sender: { id: "+15550100" },
+      content: { type: "rename", displayName: "Roof crew" },
+    },
+  })[0]?.content,
+  "Renamed the chat to Roof crew",
 );
 
 assert.equal(inboundMessages({ event: "messages", message: { id: "type-1", content: { type: "typing" } } }).length, 0);

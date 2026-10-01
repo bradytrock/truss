@@ -44,6 +44,8 @@ import { formatPhoneInput, looksLikePhone } from "@/lib/phone";
 import { mailHref } from "@/lib/job-emails";
 import { cn } from "@/lib/utils";
 import { fallbackChatReplies, type WebsiteChatThread } from "@/lib/website-chat";
+import { IMESSAGE_EFFECTS, IMESSAGE_TAPBACKS } from "@/lib/imessage";
+import type { TextMessage } from "@/lib/types";
 
 export function MessagesInbox() {
   const crm = useCrm();
@@ -100,6 +102,8 @@ export function MessagesInbox() {
     }
   }
   const [body, setBody] = useState("");
+  const [effect, setEffect] = useState("");
+  const [replyTo, setReplyTo] = useState<{ handle: string; preview: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
@@ -132,6 +136,13 @@ export function MessagesInbox() {
     "";
   const contactHint = queryContact?.id ?? selected?.contactId ?? composeContact?.id ?? "";
   const conversationOpen = showCompose || Boolean(selected) || Boolean(webChatId);
+  const threadSeed = selected?.key ?? "";
+  const [seenThread, setSeenThread] = useState(threadSeed);
+  if (threadSeed !== seenThread) {
+    setSeenThread(threadSeed);
+    setReplyTo(null);
+    setEffect("");
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -247,12 +258,16 @@ export function MessagesInbox() {
       const ok = await crm.sendTextMessage({
         to: sendTo,
         content: text,
+        effect,
+        replyToHandle: replyTo?.handle,
         jobId: jobHint || undefined,
         contactId: contactHint || undefined,
         name: selected?.contact?.name || composeContact?.name || queryContact?.name,
       });
       if (ok) {
         setBody("");
+        setEffect("");
+        setReplyTo(null);
         const key = contactHint || phoneKey(sendTo);
         if (key) router.replace(messagesHref({ thread: key }), { scroll: false });
       }
@@ -261,6 +276,8 @@ export function MessagesInbox() {
     }
   }, [
     body,
+    effect,
+    replyTo?.handle,
     sendTo,
     crm,
     jobHint,
@@ -270,6 +287,50 @@ export function MessagesInbox() {
     queryContact?.name,
     router,
   ]);
+
+  const react = useCallback(
+    async (message: TextMessage, emoji: string) => {
+      if (!message.handle || !looksLikePhone(sendTo) || sending) return;
+      setSending(true);
+      try {
+        await crm.reactToText({
+          to: sendTo,
+          handle: message.handle,
+          emoji,
+          preview: message.body,
+          jobId: jobHint || undefined,
+          contactId: contactHint || undefined,
+          name: selected?.contact?.name || composeContact?.name || queryContact?.name,
+        });
+      } finally {
+        setSending(false);
+      }
+    },
+    [
+      sendTo,
+      sending,
+      crm,
+      jobHint,
+      contactHint,
+      selected?.contact?.name,
+      composeContact?.name,
+      queryContact?.name,
+    ],
+  );
+
+  const unsend = useCallback(
+    async (message: TextMessage) => {
+      if (!message.handle || !looksLikePhone(sendTo) || sending) return;
+      if (!window.confirm("Unsend this text? It leaves the phone when Apple still allows it.")) return;
+      setSending(true);
+      try {
+        await crm.unsendText({ to: sendTo, handle: message.handle });
+      } finally {
+        setSending(false);
+      }
+    },
+    [sendTo, sending, crm],
+  );
 
   const pickerPeople = useMemo(() => {
     const needle = pickerQuery.trim().toLowerCase();
@@ -552,7 +613,18 @@ export function MessagesInbox() {
                 </p>
               )
             ) : (
-              <Conversation key={selected.key} messages={selected.messages} />
+              <Conversation
+                key={selected.key}
+                messages={selected.messages}
+                onReact={(message, emoji) => void react(message, emoji)}
+                onReply={(message) =>
+                  setReplyTo({
+                    handle: message.handle,
+                    preview: message.body.replace(/\s+/g, " ").slice(0, 80),
+                  })
+                }
+                onUnsend={(message) => void unsend(message)}
+              />
             )}
           </div>
 
@@ -677,6 +749,30 @@ export function MessagesInbox() {
                 />
               </div>
             ) : null}
+            {replyTo ? (
+              <div className="flex items-center justify-between gap-2 rounded-md bg-muted px-2 py-1 text-xs">
+                <span className="min-w-0 truncate">Reply to “{replyTo.preview || "message"}”</span>
+                <button type="button" className="shrink-0 text-muted-foreground" onClick={() => setReplyTo(null)}>
+                  Cancel
+                </button>
+              </div>
+            ) : null}
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              Effect
+              <select
+                value={effect}
+                onChange={(event) => setEffect(event.target.value)}
+                aria-label="Message effect"
+                className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs text-foreground"
+              >
+                <option value="">None</option>
+                {IMESSAGE_EFFECTS.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="flex gap-2">
               <Textarea
                 value={body}
@@ -813,7 +909,26 @@ function WebsiteConversation({ messages }: { messages: WebsiteChatThread["messag
   );
 }
 
-function Conversation({ messages }: { messages: MessageThread["messages"] }) {
+function addonNote(message: TextMessage) {
+  if (!message.detail) return "";
+  if (message.kind === "effect" || message.kind === "reply" || message.kind === "poll" || message.kind === "edit") {
+    return message.detail;
+  }
+  if (message.kind === "rename" || message.kind === "membership") return message.detail;
+  return "";
+}
+
+function Conversation({
+  messages,
+  onReact,
+  onReply,
+  onUnsend,
+}: {
+  messages: MessageThread["messages"];
+  onReact: (message: TextMessage, emoji: string) => void;
+  onReply: (message: TextMessage) => void;
+  onUnsend: (message: TextMessage) => void;
+}) {
   const lastIndex = Math.max(0, messages.length - 1);
   return (
     <Virtuoso
@@ -848,7 +963,54 @@ function Conversation({ messages }: { messages: MessageThread["messages"] }) {
                   className="mb-2 max-h-56 w-full rounded-md object-cover"
                 />
               ) : null}
-              <p className="whitespace-pre-wrap">{message.body}</p>
+              {addonNote(message) ? (
+                <p
+                  className={cn(
+                    "mb-1 text-[10px] font-medium tracking-wide uppercase",
+                    message.direction === "outbound" ? "text-primary-foreground/80" : "text-muted-foreground",
+                  )}
+                >
+                  {addonNote(message)}
+                </p>
+              ) : null}
+              <p className={cn("whitespace-pre-wrap", message.status === "unsent" && "italic opacity-70")}>
+                {message.body}
+              </p>
+              {message.handle && message.status !== "unsent" && message.kind !== "reaction" ? (
+                <div className="mt-1 flex flex-wrap items-center gap-1">
+                  {IMESSAGE_TAPBACKS.map((tap) => (
+                    <button
+                      key={tap.emoji}
+                      type="button"
+                      aria-label={tap.label}
+                      title={tap.label}
+                      className="rounded-full px-1 text-sm leading-none hover:bg-black/10"
+                      onClick={() => onReact(message, tap.emoji)}
+                    >
+                      {tap.emoji}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    className={cn(
+                      "rounded px-1 text-[10px] tracking-wide uppercase",
+                      message.direction === "outbound" ? "text-primary-foreground/80" : "text-muted-foreground",
+                    )}
+                    onClick={() => onReply(message)}
+                  >
+                    Reply
+                  </button>
+                  {message.direction === "outbound" ? (
+                    <button
+                      type="button"
+                      className="rounded px-1 text-[10px] tracking-wide text-primary-foreground/80 uppercase"
+                      onClick={() => onUnsend(message)}
+                    >
+                      Unsend
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
               <p
                 className={cn(
                   "mt-1 text-[10px] tracking-wide uppercase",
@@ -869,6 +1031,7 @@ function Conversation({ messages }: { messages: MessageThread["messages"] }) {
 
 function statusLabel(status: string | null | undefined, direction: "inbound" | "outbound") {
   const key = (status ?? "").toLowerCase();
+  if (key === "unsent") return "Unsent";
   if (key === "failed" || key === "error" || key === "undelivered") return "Failed";
   if (key === "queued" || key === "sending") return "Sending";
   return direction === "outbound" ? "Sent" : "Received";

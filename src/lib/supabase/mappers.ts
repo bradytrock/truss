@@ -1391,6 +1391,8 @@ export function mapMessage(row: MessageRow): TextMessage {
     handle: row.handle,
     status: row.status,
     mediaUrl: row.media_url,
+    kind: row.imessage_kind || "text",
+    detail: row.imessage_detail || "",
     createdAt: row.created_at,
     createdBy: row.created_by,
   };
