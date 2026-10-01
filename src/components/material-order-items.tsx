@@ -4,8 +4,10 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { CurrencyInput } from "@/components/currency-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { moneyAmount } from "@/lib/money-input";
 import {
   Sheet,
   SheetContent,
@@ -147,16 +149,14 @@ export function MaterialOrderItems({
                 </div>
                 <div>
                   <p className="mb-1 text-[11px] font-medium text-muted-foreground">Unit cost</p>
-                  <Input
-                    inputMode="decimal"
-                    value={String(line.unitCost)}
-                    onChange={(event) => {
-                      const next = Number(event.target.value);
-                      if (!Number.isFinite(next)) return;
+                  <CurrencyInput
+                    value={line.unitCost}
+                    aria-label="Unit cost"
+                    onCommit={(text) => {
+                      const next = moneyAmount(text);
+                      if (next == null || next === line.unitCost) return;
                       onUpdate(line.id, { unitCost: next });
                     }}
-                    aria-label="Unit cost"
-                    className="tabular-nums"
                   />
                 </div>
                 <p className="hidden text-right text-sm font-medium tabular-nums sm:block">

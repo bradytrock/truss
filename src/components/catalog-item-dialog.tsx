@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { CurrencyInput } from "@/components/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -225,15 +226,10 @@ export function CatalogItemDialog({
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="catalog-cost">Unit cost</Label>
-              <Input
+              <CurrencyInput
                 id="catalog-cost"
-                type="number"
-                min={0}
-                step="0.01"
                 value={draft.unitCost}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, unitCost: event.target.value }))
-                }
+                onValueChange={(unitCost) => setDraft((current) => ({ ...current, unitCost }))}
               />
             </div>
             <div className="grid gap-1.5">

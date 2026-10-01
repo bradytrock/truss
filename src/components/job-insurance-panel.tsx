@@ -5,6 +5,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CurrencyInput } from "@/components/currency-input";
 import { PhoneInput } from "@/components/phone-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,11 +43,6 @@ import {
   type SupplementStatus,
 } from "@/lib/insurance";
 import type { Job } from "@/lib/types";
-
-function amountFrom(value: string) {
-  const parsed = Number(value.replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
 
 function Field({
   label,
@@ -588,18 +584,14 @@ function MoneyField({
   disabled?: boolean;
   onChange: (value: number) => void;
 }) {
-  const [override, setOverride] = useState<{ text: string; amount: number } | null>(null);
-  const shown = override && override.amount === value ? override.text : value ? String(value) : "";
   const input = (
-    <Input
-      inputMode="decimal"
-      value={shown}
+    <CurrencyInput
+      value={value || ""}
       disabled={disabled}
       aria-label={label || "Amount"}
-      onChange={(event) => {
-        const amount = amountFrom(event.target.value);
-        setOverride({ text: event.target.value, amount });
-        onChange(amount);
+      onValueChange={(text) => {
+        const amount = Number(text);
+        onChange(text === "" || text === "." || !Number.isFinite(amount) ? 0 : amount);
       }}
     />
   );

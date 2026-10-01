@@ -9,6 +9,7 @@ import {
   withPaymentDefaults,
   type TermsInlinePart,
 } from "@/lib/document-terms";
+import { formatMoneyGrouping } from "@/lib/money-input";
 import { cn } from "@/lib/utils";
 
 export function DocumentTermsFields({
@@ -125,7 +126,7 @@ function MoneyBlank({
         )}
         style={{ width: `${width}ch` }}
         value={draft}
-        onChange={(event) => setDraft(event.target.value)}
+        onChange={(event) => setDraft(formatMoneyGrouping(event.target.value))}
         onFocus={() => {
           focusedRef.current = true;
         }}

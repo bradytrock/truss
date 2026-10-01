@@ -3,7 +3,9 @@
 import { FormattedTextEditor } from "@/components/formatted-text-editor";
 import { InvoiceDocument } from "@/components/invoice-document";
 import { VendorPicker } from "@/components/vendor-picker";
+import { CurrencyInput } from "@/components/currency-input";
 import { Input } from "@/components/ui/input";
+import { moneyAmount } from "@/lib/money-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -191,7 +193,7 @@ function InvoiceFields({ invoiceId, locked }: { invoiceId: string; locked: boole
       <div className="space-y-2">
         <p className="text-xs font-medium">Lines QuickBooks will post</p>
         {lines.map((line) => (
-          <div key={line.id} className="grid gap-2 rounded-md border p-2 sm:grid-cols-[1fr_4.5rem_5.5rem]">
+          <div key={line.id} className="grid gap-2 rounded-md border p-2 sm:grid-cols-[1fr_4.5rem_8rem]">
             <FormattedTextEditor
               value={line.description}
               disabled={locked}
@@ -212,14 +214,13 @@ function InvoiceFields({ invoiceId, locked }: { invoiceId: string; locked: boole
                 }
               }}
             />
-            <Input
-              type="number"
-              step="0.01"
-              defaultValue={String(line.unitCost)}
+            <CurrencyInput
+              value={line.unitCost}
               disabled={locked}
-              onBlur={(event) => {
-                const unitCost = Number(event.target.value);
-                if (Number.isFinite(unitCost) && unitCost !== line.unitCost) {
+              aria-label="Unit price"
+              onCommit={(text) => {
+                const unitCost = moneyAmount(text);
+                if (unitCost != null && unitCost !== line.unitCost) {
                   void crm.updateInvoiceLine(line.id, { unitCost });
                 }
               }}
@@ -313,14 +314,12 @@ export function ExpenseFields({ expenseId, locked }: { expenseId: string; locked
       </Field>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Amount">
-          <Input
-            type="number"
-            step="0.01"
-            defaultValue={String(expense.amount)}
+          <CurrencyInput
+            value={expense.amount}
             disabled={locked}
-            onBlur={(event) => {
-              const amount = Number(event.target.value);
-              if (Number.isFinite(amount) && amount !== expense.amount) {
+            onCommit={(text) => {
+              const amount = moneyAmount(text);
+              if (amount != null && amount !== expense.amount) {
                 void crm.updateExpense(expense.id, { amount });
               }
             }}
@@ -433,14 +432,12 @@ function PaymentFields({ paymentId, locked }: { paymentId: string; locked: boole
       </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Amount">
-          <Input
-            type="number"
-            step="0.01"
-            defaultValue={String(payment.amount)}
+          <CurrencyInput
+            value={payment.amount}
             disabled={locked}
-            onBlur={(event) => {
-              const amount = Number(event.target.value);
-              if (Number.isFinite(amount) && amount !== payment.amount) {
+            onCommit={(text) => {
+              const amount = moneyAmount(text);
+              if (amount != null && amount !== payment.amount) {
                 void crm.updatePayment(payment.id, { amount });
               }
             }}
