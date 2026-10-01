@@ -22,6 +22,7 @@ Truss places and receives calls on the office Photon iMessage line through **Liv
    - Registration stays **off** (Photon and LiveKit both require this).
    - Media encryption is **disabled** so Photon RTP can negotiate.
    - Creates an **inbound** trunk + per-call room dispatch rule.
+   - If LiveKit already has an inbound trunk for that number (no `AllowedNumbers`), provisioning reuses it. A second open trunk on the same number is rejected.
 4. Copy the **LiveKit webhook** URL into the LiveKit project webhook settings (room/participant events).
 5. In the **Photon** dashboard, set the line’s inbound SIP URI to the LiveKit SIP endpoint (`sips:…:5061`). Use the hint on Settings → Calling; confirm the hostname in LiveKit Cloud SIP docs for your project.
 6. Register the Photon business profile before production outbound volume.
@@ -60,6 +61,7 @@ Reuse `/api/calls/*` and the same endpoint kinds. Native clients join with LiveK
 | Symptom | Check |
 | --- | --- |
 | Cannot provision trunks | LiveKit env vars; Photon linked; office line set |
+| Conflicting inbound SIP trunks for the office number | An inbound trunk already owns that number without `AllowedNumbers`. Provision reuses that trunk instead of creating `<new>`. |
 | Outbound fails immediately | Photon project owns the From line; TLS 5061; registration off |
 | Inbound never rings Truss | Photon inbound `sips:` URI; LiveKit webhook URL; calling enabled |
 | No audio | Photon RTP vs encryption — trunks use `SIP_MEDIA_ENCRYPT_DISABLE` |
