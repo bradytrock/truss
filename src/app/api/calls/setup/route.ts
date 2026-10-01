@@ -45,7 +45,30 @@ export async function GET(request: Request) {
 
   const { data: photon } = await supabase.rpc("photon_company_status");
   const photonRow = asRecord(photon) ?? {};
-  const webhookToken = typeof status.webhookToken === "string" ? status.webhookToken : "";
+  let webhookToken = typeof status.webhookToken === "string" ? status.webhookToken.trim() : "";
+  let webhookError = "";
+  if (!webhookToken) {
+    const { data: minted, error: mintError } = await supabase.rpc("calling_company_save", {
+      p_enabled: Boolean(status.enabled),
+      p_office_line: typeof status.officeLine === "string" ? status.officeLine : "",
+      p_livekit_outbound_trunk_id:
+        typeof status.livekitOutboundTrunkId === "string" ? status.livekitOutboundTrunkId : "",
+      p_livekit_inbound_trunk_id:
+        typeof status.livekitInboundTrunkId === "string" ? status.livekitInboundTrunkId : "",
+      p_livekit_dispatch_rule_id:
+        typeof status.livekitDispatchRuleId === "string" ? status.livekitDispatchRuleId : "",
+    });
+    if (mintError) {
+      webhookError = mintError.message;
+    } else {
+      const mintedRow = asRecord(minted) ?? {};
+      if (mintedRow.ok === false) {
+        webhookError = typeof mintedRow.error === "string" ? mintedRow.error : "Could not create the calling webhook token.";
+      } else if (typeof mintedRow.webhookToken === "string") {
+        webhookToken = mintedRow.webhookToken.trim();
+      }
+    }
+  }
 
   return NextResponse.json({
     ...callingHostStatus(),
@@ -57,6 +80,7 @@ export async function GET(request: Request) {
     livekitInboundTrunkId: status.livekitInboundTrunkId ?? "",
     livekitDispatchRuleId: status.livekitDispatchRuleId ?? "",
     webhookUrl: callingWebhookUrl(requestOrigin(request), webhookToken),
+    webhookError,
     photonLinked: Boolean(photonRow.linked),
     photonProjectId: photonRow.projectId ?? "",
     sql: null,

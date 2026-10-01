@@ -22,6 +22,7 @@ type SetupInfo = {
   livekitInboundTrunkId?: string;
   livekitDispatchRuleId?: string;
   webhookUrl?: string;
+  webhookError?: string;
   inboundSipUriHint?: string;
   photonLinked?: boolean;
   photonProjectId?: string;
@@ -200,22 +201,28 @@ export function CallingSettingsForm() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <code className="rounded bg-muted px-2 py-1 font-mono text-xs break-all">
-              {info.webhookUrl}
-            </code>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                void copyText(info.webhookUrl || "").then((ok) =>
-                  ok ? toast.success("Copied webhook URL.") : toast.error("Could not copy."),
-                );
-              }}
-            >
-              Copy
-            </Button>
-          </div>
+          {info.webhookUrl ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <code className="rounded bg-muted px-2 py-1 font-mono text-xs break-all">
+                {info.webhookUrl}
+              </code>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  void copyText(info.webhookUrl || "").then((ok) =>
+                    ok ? toast.success("Copied webhook URL.") : toast.error("Could not copy."),
+                  );
+                }}
+              >
+                Copy
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {info.webhookError || "The webhook URL appears after this office’s calling token is saved."}
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

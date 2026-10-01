@@ -1,6 +1,7 @@
 import { AccessToken, LiveKitAPI, type SipDispatchRuleIndividual } from "livekit-server-sdk";
 import { SIPMediaEncryption, SIPTransport } from "@livekit/protocol";
 import { toE164 } from "../phone.ts";
+import { isSipTrunkNumberConflict, pickDispatchRuleForTrunk, pickTrunkForNumber } from "./trunks.ts";
 
 export const PHOTON_SIP_HOST = "sip.spectrum.photon.codes";
 export const PHOTON_SIP_TLS_PORT = 5061;
@@ -95,18 +96,30 @@ export async function ensurePhotonOutboundTrunk(options: {
     if (trunks[0]) return trunks[0];
   }
 
-  return api.sip.createSipOutboundTrunk(
-    options.name,
-    `${PHOTON_SIP_HOST}:${PHOTON_SIP_TLS_PORT}`,
-    [number],
-    {
-      transport: SIPTransport.SIP_TRANSPORT_TLS,
-      authUsername: options.projectId,
-      authPassword: options.projectSecret,
-      metadata: JSON.stringify({ provider: "photon", officeLine: number }),
-      mediaEncryption: SIPMediaEncryption.SIP_MEDIA_ENCRYPT_DISABLE,
-    },
-  );
+  const listed = await api.sip.listSipOutboundTrunk();
+  const existing = pickTrunkForNumber(listed, number, options.existingTrunkId);
+  if (existing) return existing;
+
+  try {
+    return await api.sip.createSipOutboundTrunk(
+      options.name,
+      `${PHOTON_SIP_HOST}:${PHOTON_SIP_TLS_PORT}`,
+      [number],
+      {
+        transport: SIPTransport.SIP_TRANSPORT_TLS,
+        authUsername: options.projectId,
+        authPassword: options.projectSecret,
+        metadata: JSON.stringify({ provider: "photon", officeLine: number }),
+        mediaEncryption: SIPMediaEncryption.SIP_MEDIA_ENCRYPT_DISABLE,
+      },
+    );
+  } catch (error) {
+    if (!isSipTrunkNumberConflict(error)) throw error;
+    const again = await api.sip.listSipOutboundTrunk();
+    const recovered = pickTrunkForNumber(again, number, options.existingTrunkId);
+    if (recovered) return recovered;
+    throw error;
+  }
 }
 
 export async function ensurePhotonInboundTrunk(options: {
@@ -125,11 +138,23 @@ export async function ensurePhotonInboundTrunk(options: {
     if (trunks[0]) return trunks[0];
   }
 
-  return api.sip.createSipInboundTrunk(options.name, [number], {
-    metadata: JSON.stringify({ provider: "photon", officeLine: number }),
-    mediaEncryption: SIPMediaEncryption.SIP_MEDIA_ENCRYPT_DISABLE,
-    krispEnabled: true,
-  });
+  const listed = await api.sip.listSipInboundTrunk();
+  const existing = pickTrunkForNumber(listed, number, options.existingTrunkId);
+  if (existing) return existing;
+
+  try {
+    return await api.sip.createSipInboundTrunk(options.name, [number], {
+      metadata: JSON.stringify({ provider: "photon", officeLine: number }),
+      mediaEncryption: SIPMediaEncryption.SIP_MEDIA_ENCRYPT_DISABLE,
+      krispEnabled: true,
+    });
+  } catch (error) {
+    if (!isSipTrunkNumberConflict(error)) throw error;
+    const again = await api.sip.listSipInboundTrunk();
+    const recovered = pickTrunkForNumber(again, number, options.existingTrunkId);
+    if (recovered) return recovered;
+    throw error;
+  }
 }
 
 export async function ensureInboundDispatchRule(options: {
@@ -145,6 +170,10 @@ export async function ensureInboundDispatchRule(options: {
     });
     if (rules[0]) return rules[0];
   }
+
+  const listed = await api.sip.listSipDispatchRule();
+  const existing = pickDispatchRuleForTrunk(listed, options.trunkId, options.existingRuleId);
+  if (existing) return existing;
 
   const rule: SipDispatchRuleIndividual = {
     type: "individual",

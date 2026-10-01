@@ -1,4 +1,4 @@
-import { liveKitConfigured, liveKitEnv, liveKitSipUriHint } from "@/lib/calls/livekit";
+import { liveKitConfigured, liveKitEnv, liveKitSipUriHint } from "./livekit.ts";
 
 export function callingHostStatus() {
   const env = liveKitEnv();
@@ -13,6 +13,7 @@ export function callingHostStatus() {
 
 export function callingWebhookUrl(origin: string, token: string) {
   const base = origin.replace(/\/$/, "");
-  if (!token) return `${base}/api/calls/webhook/{token}`;
-  return `${base}/api/calls/webhook/${token}`;
+  const value = token.trim();
+  if (!base || !value || value.includes("{") || value.includes("}")) return "";
+  return `${base}/api/calls/webhook/${encodeURIComponent(value)}`;
 }
