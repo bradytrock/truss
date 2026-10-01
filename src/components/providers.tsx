@@ -8,7 +8,9 @@ import type { ReactNode } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { AppShell } from "@/components/app-shell";
+import { SoftphoneBar } from "@/components/softphone-bar";
 import { CrmProvider } from "@/lib/crm-store";
+import { SoftphoneProvider } from "@/lib/calls/softphone";
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -37,7 +39,10 @@ function Shell({ children }: { children: ReactNode }) {
 
   return (
     <CrmProvider>
-      <AppShell>{children}</AppShell>
+      <SoftphoneProvider>
+        <AppShell>{children}</AppShell>
+        <SoftphoneBar />
+      </SoftphoneProvider>
     </CrmProvider>
   );
 }

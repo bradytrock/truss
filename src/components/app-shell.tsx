@@ -76,6 +76,7 @@ function navSections(options: { bdOnly: boolean }): NavSection[] {
         items: [
           { href: "/", label: "Home" },
           { href: "/messages", label: "Inbox" },
+          { href: "/calls", label: "Calls" },
           { href: "/jobs", label: "Jobs" },
           { href: "/insurance", label: "Insurance" },
           { href: "/map", label: "Map" },
@@ -92,6 +93,7 @@ function navSections(options: { bdOnly: boolean }): NavSection[] {
       items: [
         { href: "/", label: "Home" },
         { href: "/messages", label: "Inbox" },
+        { href: "/calls", label: "Calls" },
         { href: "/jobs", label: "Jobs" },
         { href: "/map", label: "Map" },
         { href: "/contacts", label: "Contacts" },

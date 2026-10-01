@@ -20,6 +20,7 @@ const SECTIONS = [
   { href: "/settings/eagleview", label: "EagleView", hint: "Roof reports", admin: true, accounting: false, automations: false },
   { href: "/settings/companycam", label: "CompanyCam", hint: "Job photos", admin: true, accounting: false, automations: false },
   { href: "/settings/photon", label: "Photon", hint: "Office texts", admin: true, accounting: false, automations: false },
+  { href: "/settings/calling", label: "Calling", hint: "Photon + LiveKit dialer", admin: true, accounting: false, automations: false },
   { href: "/settings/quickbooks", label: "QuickBooks", hint: "Web Connector", admin: true, accounting: true, automations: false },
 ] as const;
 
