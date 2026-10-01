@@ -3,6 +3,7 @@ import { toE164 } from "@/lib/phone";
 import {
   looksLikePhotonProjectId,
   looksLikePhotonProjectSecret,
+  photonImessageLinePhone,
   photonSecretHint,
 } from "@/lib/photon";
 import { createAnonClient } from "@/lib/supabase/anon";
@@ -88,6 +89,36 @@ export async function verifyPhotonProject(projectId: string, projectSecret: stri
     projectName: name,
     secretHint: photonSecretHint(secret),
   };
+}
+
+export async function fetchPhotonImessageLine(projectId: string, projectSecret: string) {
+  const id = projectId.trim();
+  const secret = projectSecret.trim();
+  if (!looksLikePhotonProjectId(id) || !secret) return "";
+  try {
+    const response = await fetch(`${SPECTRUM_PROJECT_URL}/${id}/lines/?platform=imessage`, {
+      headers: { Authorization: `Basic ${Buffer.from(`${id}:${secret}`).toString("base64")}` },
+    });
+    if (!response.ok) return "";
+    return photonImessageLinePhone(await response.json());
+  } catch {
+    return "";
+  }
+}
+
+/** Store this office's Photon line so website texts open that number. */
+export async function syncOfficePhotonLine() {
+  const credentials = await loadOfficeCredentials();
+  if (!credentials) return "";
+  const phone = await fetchPhotonImessageLine(credentials.projectId, credentials.projectSecret);
+  if (!phone) return "";
+  try {
+    const supabase = await createClient();
+    await supabase.rpc("photon_company_set_line", { p_phone: phone });
+  } catch {
+    return phone;
+  }
+  return phone;
 }
 
 async function loadOfficeCredentials(): Promise<PhotonCredentials | null> {

@@ -33,7 +33,7 @@ export function isPhoneUserAgent(userAgent: string) {
 
 /**
  * Opens the phone's Messages app. iPhone uses `&body=`; other phones use `?body=`.
- * The destination is the company main phone, not a separate texting project.
+ * The destination is this office's Photon line.
  */
 export function messagesAppLink(phone: string, body: string, iphone: boolean) {
   const e164 = toE164(phone);

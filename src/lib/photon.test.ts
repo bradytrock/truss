@@ -5,6 +5,7 @@ import {
   isSqlScript,
   looksLikePhotonProjectId,
   looksLikePhotonProjectSecret,
+  photonImessageLinePhone,
   photonNotSetupMessage,
   photonSecretHint,
   photonWebhookUrl,
@@ -42,3 +43,16 @@ assert.equal(migration.trimStart().startsWith("--"), true);
 assert.equal(isSqlScript(migration), true);
 assert.doesNotMatch(migration.split(/\r?\n/, 1)[0] ?? "", /^New Chat/);
 assert.match(migration, /create table if not exists public\.photon_connections/);
+assert.equal(
+  photonImessageLinePhone({
+    succeed: true,
+    data: {
+      lines: [
+        { platform: "imessage", phoneNumber: "+15551110000", status: "unavailable" },
+        { platform: "imessage", phoneNumber: "+15552220000", status: "available" },
+      ],
+    },
+  }),
+  "+15552220000",
+);
+assert.equal(photonImessageLinePhone({ succeed: true, data: { lines: [] } }), "");

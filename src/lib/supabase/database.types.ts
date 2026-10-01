@@ -1734,6 +1734,7 @@ export type Database = {
           linked_at: string | null;
           linked_by: string;
           webhook_token: string;
+          line_phone: string;
           created_at: string;
           updated_at: string;
         };
@@ -1747,6 +1748,7 @@ export type Database = {
           linked_at?: string | null;
           linked_by?: string;
           webhook_token?: string;
+          line_phone?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -3169,6 +3171,10 @@ export type Database = {
       };
       photon_company_disconnect: {
         Args: Record<string, never>;
+        Returns: Json;
+      };
+      photon_company_set_line: {
+        Args: { p_phone: string };
         Returns: Json;
       };
       photon_outbound_config: {
