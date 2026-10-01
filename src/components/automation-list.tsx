@@ -54,7 +54,7 @@ export function AutomationList() {
       <PageHeader
         eyebrow="Settings"
         title="Automations"
-        description="When a proposal is sent, won, or lost — or a job moves — set the value, change the stage, and text whoever should know. Phones can pause, resume, and confirm."
+        description="When a new lead is created, a proposal is won, or a job moves — set the value, change the stage, and text whoever should know. Phones can pause, resume, and confirm."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {jobs.length > 0 ? (

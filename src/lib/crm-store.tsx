@@ -3325,6 +3325,32 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [moveOpportunity, restoreJob, state.jobs, state.opportunities, updateJob],
   );
 
+  function queueLeadCreated(opportunity: Opportunity, pipelineJob: Job | null) {
+    bookRef.current = {
+      ...bookRef.current,
+      opportunities: [opportunity, ...bookRef.current.opportunities.filter((item) => item.id !== opportunity.id)],
+      jobs: pipelineJob
+        ? dedupeJobsByOpportunity([pipelineJob, ...bookRef.current.jobs])
+        : bookRef.current.jobs,
+    };
+    if (!pipelineJob) return;
+    enqueueAutomationEventRef.current({ kind: "lead_created", jobId: pipelineJob.id });
+  }
+
+  function queueAppointmentScheduled(event: { id: string; jobId: string | null; opportunityId: string | null }) {
+    const jobId =
+      event.jobId ||
+      (event.opportunityId
+        ? bookRef.current.jobs.find((job) => job.opportunityId === event.opportunityId)?.id
+        : undefined);
+    if (!jobId) return;
+    enqueueAutomationEventRef.current({
+      kind: "appointment_scheduled",
+      jobId,
+      eventId: event.id,
+    });
+  }
+
   const addOpportunity = useCallback(
     async (
       input: Omit<Opportunity, "id" | "code" | "createdAt" | "winProbability" | "ownerStaffId" | "market"> & {
@@ -3391,6 +3417,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           relatedJobId: pipelineJob?.id ?? null,
         });
         if (leadAssignNeedsEmail(opportunity)) void requestLeadAssignNotification(opportunity.id);
+        queueLeadCreated(opportunity, pipelineJob);
         return Object.assign(opportunity, { costingJob: pipelineJob });
       }
       const base = {
@@ -3540,6 +3567,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               }),
               opportunity,
             );
+      let leadJobPersisted = false;
       if (pipelineJob) {
         const jobPayload = jobInsertPayload(pipelineJob, user.companyId, { id: pipelineJob.id });
         const inserted = await insertJobWithFallbacks(jobPayload, async (row) => {
@@ -3554,6 +3582,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             pipelineJob,
             fillJobRecord({ ...mapJob(jobRow), code: jobRow.code || pipelineJob.code }, opportunity),
           );
+          leadJobPersisted = true;
         } else if (jobError?.code === "23505") {
           const existing = await supabase
             .from("jobs")
@@ -3568,6 +3597,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
                 opportunity,
               ),
             );
+            leadJobPersisted = true;
           }
         } else if (jobError) {
           toast.error(jobInsertError(jobError, "Lead opened. Could not open the job for costing."));
@@ -3594,6 +3624,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         relatedJobId: pipelineJob?.id ?? null,
       });
       if (leadAssignNeedsEmail(opportunity)) void requestLeadAssignNotification(opportunity.id);
+      queueLeadCreated(opportunity, leadJobPersisted ? pipelineJob : null);
       return Object.assign(opportunity, { costingJob: pipelineJob });
     },
     [addActivity, recordCompanyAudit, state.jobs, state.opportunities, state.staff, user.companyId, user.name, user.staffId]
@@ -3883,6 +3914,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       if (leadAssignNeedsEmail({ ownerStaffId: staffId, originatorStaffId: opportunity.originatorStaffId })) {
         void requestLeadAssignNotification(id);
+      }
+      if (previousOwnerId !== staffId && job) {
+        bookRef.current = {
+          ...bookRef.current,
+          jobs: bookRef.current.jobs.map((item) =>
+            item.id === job.id ? { ...item, ownerStaffId: staffId, projectManager: member.name } : item,
+          ),
+          opportunities: bookRef.current.opportunities.map((item) =>
+            item.id === id ? { ...item, ownerStaffId: staffId, estimator: member.name } : item,
+          ),
+        };
+        enqueueAutomationEventRef.current({ kind: "lead_assigned", jobId: job.id });
       }
       return true;
     },
@@ -7460,6 +7503,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         detail: `${current.status} → sent`,
         relatedJobId: current.jobId,
       });
+      if (current.jobId) {
+        enqueueAutomationEventRef.current({
+          kind: "invoice_sent",
+          invoiceId: id,
+          jobId: current.jobId,
+        });
+      }
     };
     const supabase = maybeClient();
     if (!supabase) {
@@ -9644,6 +9694,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           relatedJobId: event.jobId,
           relatedOpportunityId: event.opportunityId,
         });
+        queueAppointmentScheduled(event);
         return pushExternalCalendarInvite(null, event, "save");
       }
       const inserted = await supabase
@@ -9684,6 +9735,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         relatedJobId: event.jobId,
         relatedOpportunityId: event.opportunityId,
       });
+      queueAppointmentScheduled(event);
       return pushExternalCalendarInvite(null, event, "save");
     },
     [pushExternalCalendarInvite, recordCompanyAudit, user.companyId, warnMissingGuestInviteColumns]

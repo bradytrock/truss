@@ -68,6 +68,11 @@ assert.equal(smsSegmentCount("x".repeat(160)).segments, 1);
 assert.equal(smsSegmentCount("x".repeat(161)).segments, 2);
 
 assert.equal(summarizeTrigger("job_created", {}), "When a job is created");
+assert.equal(summarizeTrigger("lead_created", {}), "When a new lead is created");
+assert.equal(summarizeTrigger("lead_assigned", {}), "When a lead is assigned");
+assert.equal(summarizeTrigger("appointment_scheduled", {}), "When an appointment is scheduled");
+assert.equal(summarizeTrigger("invoice_sent", {}), "When an invoice is sent");
+assert.equal(summarizeTrigger("lead_created_after_days", { days: 1 }), "When 1 day after a new lead is created");
 assert.equal(
   summarizeTrigger("job_stage_changed", { stage: "complete" }),
   "When a job moves to Complete",
@@ -178,6 +183,85 @@ assert.equal(
 );
 assert.match(summarizeTrigger("estimate_sent", {}), /proposal is sent/);
 assert.match(summarizeTrigger("estimate_lost", {}), /proposal is lost/);
+
+assert.equal(
+  automationMatchesEvent({ ...rule, triggerKind: "lead_created" }, { kind: "lead_created", jobId: "j1" }),
+  true,
+);
+assert.equal(
+  automationMatchesEvent({ ...rule, triggerKind: "lead_created_after_days", triggerConfig: { days: 2 } }, {
+    kind: "lead_created",
+    jobId: "j1",
+  }),
+  true,
+);
+assert.equal(
+  automationMatchesEvent({ ...rule, triggerKind: "job_created" }, { kind: "lead_created", jobId: "j1" }),
+  false,
+);
+assert.equal(
+  automationMatchesEvent({ ...rule, triggerKind: "lead_assigned" }, { kind: "lead_assigned", jobId: "j1" }),
+  true,
+);
+assert.equal(
+  automationMatchesEvent({ ...rule, triggerKind: "appointment_scheduled" }, {
+    kind: "appointment_scheduled",
+    jobId: "j1",
+    eventId: "ev1",
+  }),
+  true,
+);
+assert.equal(
+  automationMatchesEvent({ ...rule, triggerKind: "invoice_sent" }, { kind: "invoice_sent", invoiceId: "inv1" }),
+  true,
+);
+assert.equal(
+  validateAutomationDraft({
+    ...automation,
+    triggerKind: "lead_created_after_days",
+    triggerConfig: { days: 0 },
+    actions: [{ id: "t", kind: "create_task", title: "Call" }],
+  }).ok,
+  false,
+);
+
+const source: AutomationCondition = { id: "c2", field: "job.leadSource", operator: "eq", value: "website" };
+assert.equal(conditionsPass([source], { job: { leadSource: "website" } as never }), true);
+assert.equal(
+  conditionsPass([source], { opportunity: { leadSource: "phone" } as never, job: { leadSource: "" } as never }),
+  false,
+);
+assert.equal(conditionsPass([source], { opportunity: { leadSource: "website" } as never }), true);
+
+const leadFollowUp = plannedRunsForEvent({
+  event: { kind: "lead_created", jobId: "j1" },
+  book: {
+    ...book,
+    automations: [
+      {
+        ...rule,
+        triggerKind: "lead_created_after_days",
+        triggerConfig: { days: 1 },
+        requiresConfirmation: false,
+        actions: [{ id: "t", kind: "create_task", title: "Call {{contactName}}" }],
+      },
+    ],
+  } as never,
+  company: { name: "Truss", phone: "555" } as never,
+});
+assert.equal(leadFollowUp[0]?.status, "scheduled");
+assert.ok(leadFollowUp[0]?.scheduledFor);
+
+const booked = plannedRunsForEvent({
+  event: { kind: "appointment_scheduled", jobId: "j1", eventId: "ev1" },
+  book: {
+    ...book,
+    automations: [{ ...rule, triggerKind: "appointment_scheduled", requiresConfirmation: true }],
+  } as never,
+  company: { name: "Truss", phone: "555" } as never,
+});
+assert.equal(booked[0]?.eventId, "ev1");
+assert.equal(booked[0]?.status, "pending_confirmation");
 
 const valued = plannedRunsForEvent({
   event: { kind: "estimate_won", jobId: "j1", estimateId: "e1" },

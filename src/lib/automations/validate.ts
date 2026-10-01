@@ -101,7 +101,12 @@ export function validateTriggerConfig(kind: AutomationTriggerKind, config: Autom
       return "Pick a stage.";
     }
   }
-  if (kind === "job_stage_after_days" || kind === "estimate_sent_after_days" || kind === "event_in_days") {
+  if (
+    kind === "job_stage_after_days" ||
+    kind === "lead_created_after_days" ||
+    kind === "estimate_sent_after_days" ||
+    kind === "event_in_days"
+  ) {
     const days = Number(config.days);
     if (!Number.isFinite(days) || days < 1 || days > 365) {
       return "Enter a day count between 1 and 365.";

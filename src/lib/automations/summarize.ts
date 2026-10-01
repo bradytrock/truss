@@ -1,4 +1,5 @@
 import { describeJobValue } from "@/lib/automations/job-effects";
+import { leadSourceLabel } from "@/lib/leads";
 import { WORK_COLUMN_LABELS, canonicalizeWorkColumn, isWorkColumn } from "@/lib/work-board";
 import {
   AUTOMATION_ACTION_LABELS,
@@ -27,10 +28,20 @@ export function summarizeTrigger(
   switch (kind) {
     case "job_created":
       return "When a job is created";
+    case "lead_created":
+      return "When a new lead is created";
+    case "lead_created_after_days":
+      return `When ${days} day${days === 1 ? "" : "s"} after a new lead is created`;
+    case "lead_assigned":
+      return "When a lead is assigned";
+    case "appointment_scheduled":
+      return "When an appointment is scheduled";
     case "job_stage_changed":
       return `When a job moves to ${stage}`;
     case "job_stage_after_days":
       return `When ${days} day${days === 1 ? "" : "s"} after a job enters ${stage}`;
+    case "invoice_sent":
+      return "When an invoice is sent";
     case "invoice_paid":
       return "When an invoice is paid";
     case "estimate_sent":
@@ -99,6 +110,10 @@ export function summarizeCondition(condition: AutomationCondition, labels?: Reco
     return `${field} ${operator}`;
   }
   const value =
-    condition.field === "job.stage" ? stageDisplayName(condition.value, labels) : condition.value;
+    condition.field === "job.stage"
+      ? stageDisplayName(condition.value, labels)
+      : condition.field === "job.leadSource"
+        ? leadSourceLabel(condition.value) || condition.value
+        : condition.value;
   return `${field} ${operator} ${value}`;
 }

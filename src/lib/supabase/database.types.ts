@@ -3107,6 +3107,10 @@ export type Database = {
         Args: Record<string, never>;
         Returns: Json;
       };
+      automation_inbound_matches: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
       automation_insert_run: {
         Args: { p_run: Json };
         Returns: Json;

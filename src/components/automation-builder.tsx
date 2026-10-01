@@ -45,6 +45,7 @@ import { estimateTotalForContext, previewActionLine } from "@/lib/automations/qu
 import { smsSegmentCount } from "@/lib/automations/merge";
 import { useCrm } from "@/lib/crm-store";
 import { documentOwnerStaff } from "@/lib/document-owner";
+import { leadSourceChoices, leadSourceLabel } from "@/lib/leads";
 import { JOB_MARKET_LABELS, JOB_STATUS_LABELS, PROJECT_TYPE_LABELS, type Job } from "@/lib/types";
 import { WORK_COLUMN_LABELS, WORK_COLUMNS } from "@/lib/work-board";
 
@@ -167,7 +168,7 @@ export function AutomationBuilder({ automationId }: { automationId?: string }) {
       <PageHeader
         eyebrow="Settings"
         title={existing ? existing.name || "Edit automation" : "New automation"}
-        description="When a proposal is sent, won, or lost — or any other trigger — change the job value, move the stage, text someone, or stack a few of those."
+        description="When a new lead lands, a proposal is sent, or a job moves — change the value, move the stage, text someone, or stack a few of those."
         actions={
           <div className="flex gap-2">
             <Button render={<Link href="/settings/automations" />} variant="outline" nativeButton={false}>
@@ -476,7 +477,12 @@ function needsStage(kind: AutomationTriggerKind) {
 }
 
 function needsDays(kind: AutomationTriggerKind) {
-  return kind === "job_stage_after_days" || kind === "estimate_sent_after_days" || kind === "event_in_days";
+  return (
+    kind === "job_stage_after_days" ||
+    kind === "lead_created_after_days" ||
+    kind === "estimate_sent_after_days" ||
+    kind === "event_in_days"
+  );
 }
 
 function Field({
@@ -569,6 +575,27 @@ function ConditionValue({
           {Object.entries(PROJECT_TYPE_LABELS).map(([value, label]) => (
             <SelectItem key={value} value={value}>
               {label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  }
+  if (condition.field === "job.leadSource") {
+    const choices = leadSourceChoices(condition.value);
+    return (
+      <Select
+        value={condition.value}
+        onValueChange={(value) => onChange(String(value))}
+        items={choices.map((value) => ({ value, label: leadSourceLabel(value) || value }))}
+      >
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {choices.map((value) => (
+            <SelectItem key={value} value={value}>
+              {leadSourceLabel(value) || value}
             </SelectItem>
           ))}
         </SelectContent>
