@@ -209,6 +209,7 @@ export function ShareEstimateClient({
                   secondCustomer: secondName,
                   photos: crm.photos,
                   jobCode: job?.code,
+                  files: (crm.estimateFiles ?? []).filter((file) => file.estimateId === fromStore.id),
                 }).catch(() => toast.error("Could not build the PDF."))
               }
             />
@@ -237,6 +238,16 @@ export function ShareEstimateClient({
           showStatus={false}
           primaryCustomer={primaryName}
           secondCustomer={secondName}
+          files={(crm.estimateFiles ?? [])
+            .filter((file) => file.estimateId === fromStore.id)
+            .map((file) => ({
+              id: file.id,
+              name: file.name,
+              mimeType: file.mimeType,
+              sizeBytes: file.sizeBytes,
+              url: file.url,
+              createdAt: file.createdAt,
+            }))}
           onToggleOptional={(line, selected) => void crm.updateEstimateLine(line.id, { selected })}
           onSelectPackage={
             optionalOpen
@@ -305,6 +316,7 @@ export function ShareEstimateClient({
                 projectManager: remote.projectManager,
                 primaryCustomer: remote.primaryCustomer,
                 secondCustomer: remote.secondCustomer || estimate.secondSignatureName,
+                files: remote.files,
               }).catch(() => toast.error("Could not build the PDF."))
             }
           />
@@ -338,6 +350,7 @@ export function ShareEstimateClient({
         projectManager={remote.projectManager}
         primaryCustomer={remote.primaryCustomer}
         secondCustomer={remote.secondCustomer}
+        files={remote.files}
         onToggleOptional={(line, selected) => void toggleRemoteOptional(line, selected)}
         onSelectPackage={optionalOpen ? (pkg) => void selectRemotePackage(pkg) : undefined}
       />

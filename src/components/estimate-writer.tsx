@@ -978,6 +978,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       secondCustomer: secondSignerName,
       photos: crm.photos,
       jobCode: job?.code,
+      files: (crm.estimateFiles ?? []).filter((file) => file.estimateId === estimate.id),
     });
   }
 
@@ -1612,6 +1613,16 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
       onSelectPackage={
         optionalOpen ? (pkg) => void crm.updateEstimate(estimate.id, { selectedPackage: pkg }) : undefined
       }
+      files={(crm.estimateFiles ?? [])
+        .filter((file) => file.estimateId === estimate.id)
+        .map((file) => ({
+          id: file.id,
+          name: file.name,
+          mimeType: file.mimeType,
+          sizeBytes: file.sizeBytes,
+          url: file.url,
+          createdAt: file.createdAt,
+        }))}
       onTermsChange={
         editable ? (terms) => void crm.updateEstimate(estimate.id, { terms }) : undefined
       }

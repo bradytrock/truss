@@ -38,9 +38,11 @@ import { estimateSignatureLines } from "@/lib/estimate-signers";
 import { customerContactDetails, coOwnerContact } from "@/lib/parties";
 import { EstimatePhotoThumb } from "@/components/estimate-line-photos";
 import { photosForEstimateLine } from "@/lib/estimate-line-photos";
+import type { SharedEstimateFile } from "@/lib/share";
 import type { CompanySettings, Estimate, EstimateLine, EstimateLinePhoto, JobMarket, JobPhoto } from "@/lib/types";
 import { companyEstimateTermsFor } from "@/lib/contract-types";
 import { estimateTermsValues, liveEstimateTerms } from "@/lib/document-terms";
+import { DocumentFileLinks } from "@/components/document-files-panel";
 import { DocumentNotesBlock } from "@/components/document-notes";
 import { DocumentTermsFields } from "@/components/document-terms-fields";
 import { FormattedLineText } from "@/components/formatted-line-text";
@@ -212,6 +214,7 @@ export function ProposalDocument({
   contractorName,
   onTermsChange,
   onSelectPackage,
+  files,
 }: {
   estimate: Estimate;
   lines: EstimateLine[];
@@ -232,6 +235,7 @@ export function ProposalDocument({
   contractorName?: string;
   onTermsChange?: (terms: string) => void;
   onSelectPackage?: (pkg: EstimatePackage) => void;
+  files?: SharedEstimateFile[];
 }) {
   const crm = useCrmOptional();
   const job = estimate.jobId && crm ? crm.jobs.find((item) => item.id === estimate.jobId) : undefined;
@@ -293,6 +297,18 @@ export function ProposalDocument({
     secondPhone: secondCustomerPhone || fromBook?.secondPhone,
     secondEmail: secondCustomerEmail || fromBook?.secondEmail,
   });
+  const attachments =
+    files ??
+    (crm?.estimateFiles ?? [])
+      .filter((file) => file.estimateId === estimate.id)
+      .map((file) => ({
+        id: file.id,
+        name: file.name,
+        mimeType: file.mimeType,
+        sizeBytes: file.sizeBytes,
+        url: file.url,
+        createdAt: file.createdAt,
+      }));
   const site = paperSiteTitle({
     street: estimate.street,
     city: estimate.city,
@@ -372,6 +388,7 @@ export function ProposalDocument({
       <EstimateTotals estimate={billed.estimate} lines={visibleLines} />
       <PaperSignCue pageLabel="the authorization page" />
       <DocumentNotesBlock notes={estimate.notes} />
+      <ProposalAttachments files={attachments} />
       <div className="break-inside-auto space-y-2">
         <PaperSectionLabel>Terms</PaperSectionLabel>
         <PaperTermsColumns>
@@ -494,6 +511,17 @@ function SignatureLineCell({
         <p>Date</p>
       </div>
       <p className="mt-3 border-t pt-2 text-sm">{line.name}</p>
+    </div>
+  );
+}
+
+function ProposalAttachments({ files }: { files: SharedEstimateFile[] }) {
+  const visible = files.filter((file) => file.name.trim() && file.url.trim());
+  if (!visible.length) return null;
+  return (
+    <div className="break-inside-auto space-y-2">
+      <h3 className="text-[11px] font-semibold tracking-[0.16em] uppercase">Attachments</h3>
+      <DocumentFileLinks files={visible} />
     </div>
   );
 }
