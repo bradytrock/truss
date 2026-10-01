@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { LayoutGrid, Menu, Plus, Search } from "lucide-react";
 import { useCrm } from "@/lib/crm-store";
@@ -38,16 +39,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import {
-  CreateClientDialog,
-  CreateOpportunityDialog,
-} from "@/components/create-records";
-import {
-  CreateEventDialog,
-  CreateInvoiceDialog,
-} from "@/components/create-ops-dialogs";
-import { CreateTaskDialog } from "@/components/create-task-dialog";
-import { LogExpenseDialog, LogForecastedExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
 import { canViewReports, canManageSettings, canManageAutomations, canViewAccounting } from "@/lib/visibility";
 import { groupLoginAsTargets, readLoginAsRecent, recentLoginAsTargets, rememberLoginAsRecent } from "@/lib/login-as";
 import { isInboxPath } from "@/lib/inbox";
@@ -57,13 +48,45 @@ import { isBusinessDevelopment } from "@/lib/bd";
 import { COURSE } from "@/lib/training/engine";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { BrandMark, TheRoofingCrmMark } from "@/components/brand";
+import { BrandMark } from "@/components/brand";
 import { PRODUCT_NAME } from "@/lib/product";
 import { SettingsMobileBar } from "@/components/settings-nav";
-import { AssistantPanel } from "@/components/assistant-panel";
 import { useStartEstimate } from "@/lib/start-estimate";
-import { StartEstimateDialogHost } from "@/components/start-estimate-button";
-import { FirstWelcomeHost } from "@/components/welcome-screen";
+
+const AssistantPanel = dynamic(
+  () => import("@/components/assistant-panel").then((mod) => mod.AssistantPanel),
+  { loading: () => <div className="size-8 shrink-0" aria-hidden /> },
+);
+const CreateOpportunityDialog = dynamic(() =>
+  import("@/components/create-records").then((mod) => mod.CreateOpportunityDialog),
+);
+const CreateClientDialog = dynamic(() =>
+  import("@/components/create-records").then((mod) => mod.CreateClientDialog),
+);
+const CreateEventDialog = dynamic(() =>
+  import("@/components/create-ops-dialogs").then((mod) => mod.CreateEventDialog),
+);
+const CreateInvoiceDialog = dynamic(() =>
+  import("@/components/create-ops-dialogs").then((mod) => mod.CreateInvoiceDialog),
+);
+const CreateTaskDialog = dynamic(() =>
+  import("@/components/create-task-dialog").then((mod) => mod.CreateTaskDialog),
+);
+const LogExpenseDialog = dynamic(() =>
+  import("@/components/log-financial-dialogs").then((mod) => mod.LogExpenseDialog),
+);
+const LogForecastedExpenseDialog = dynamic(() =>
+  import("@/components/log-financial-dialogs").then((mod) => mod.LogForecastedExpenseDialog),
+);
+const LogPaymentDialog = dynamic(() =>
+  import("@/components/log-financial-dialogs").then((mod) => mod.LogPaymentDialog),
+);
+const StartEstimateDialogHost = dynamic(() =>
+  import("@/components/start-estimate-button").then((mod) => mod.StartEstimateDialogHost),
+);
+const FirstWelcomeHost = dynamic(() =>
+  import("@/components/welcome-screen").then((mod) => mod.FirstWelcomeHost),
+);
 
 type NavItem = { href: string; label: string };
 type NavSection = { id: string; label?: string; items: NavItem[] };
@@ -155,6 +178,7 @@ function itemIsActive(pathname: string, href: string) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { effectiveStaff, user } = useCrm();
   const startEstimateFlow = useStartEstimate();
   const startEstimate = startEstimateFlow.prompt;
@@ -162,6 +186,38 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [create, setCreate] = useState<
     "opportunity" | "client" | "invoice" | "event" | "expense" | "forecast" | "payment" | "task" | null
   >(null);
+
+  useEffect(() => {
+    const hrefs = [
+      "/",
+      "/messages",
+      "/mail",
+      "/jobs",
+      "/map",
+      "/contacts",
+      "/calendar",
+      "/tasks",
+      "/estimates",
+      "/invoices",
+      "/insurance",
+      "/training",
+      "/photos",
+      "/accounting",
+      "/reports",
+      "/settings",
+      "/marketing",
+    ];
+    for (const href of hrefs) router.prefetch(href);
+    const warm = window.setTimeout(() => {
+      void import("@/components/create-records");
+      void import("@/components/create-ops-dialogs");
+      void import("@/components/create-task-dialog");
+      void import("@/components/log-financial-dialogs");
+      void import("@/components/assistant-panel");
+      void import("@/components/start-estimate-button");
+    }, 1200);
+    return () => window.clearTimeout(warm);
+  }, [router]);
 
   const launcherApps = appLauncherItems();
 
@@ -195,7 +251,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <aside className="hidden h-full min-h-dvh flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
         <div className="flex items-start gap-1 border-b border-sidebar-border px-3 py-3.5">
           <AppLauncher apps={launcherApps} pathname={pathname} />
-          <Link href="/" className="min-w-0 flex-1 rounded-sm px-1.5 py-0.5 hover:bg-white/6">
+          <Link href="/" prefetch className="min-w-0 flex-1 rounded-sm px-1.5 py-0.5 hover:bg-white/6">
             <span className="font-heading block truncate text-[0.95rem] font-medium tracking-tight">
               {PRODUCT_NAME}
             </span>
@@ -280,40 +336,37 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main className="flex-1 bg-background p-5 sm:p-7">{children}</main>
       </div>
 
-      <CreateOpportunityDialog
-        open={create === "opportunity"}
-        onOpenChange={(open) => setCreate(open ? "opportunity" : null)}
-      />
-      <CreateClientDialog
-        open={create === "client"}
-        onOpenChange={(open) => setCreate(open ? "client" : null)}
-      />
-      <CreateInvoiceDialog
-        open={create === "invoice"}
-        onOpenChange={(open) => setCreate(open ? "invoice" : null)}
-      />
-      <CreateEventDialog
-        open={create === "event"}
-        onOpenChange={(open) => setCreate(open ? "event" : null)}
-      />
-      <CreateTaskDialog
-        open={create === "task"}
-        onOpenChange={(open) => setCreate(open ? "task" : null)}
-      />
-      <LogExpenseDialog
-        open={create === "expense"}
-        onOpenChange={(open) => setCreate(open ? "expense" : null)}
-      />
-      <LogForecastedExpenseDialog
-        key={create === "forecast" ? "forecast-open" : "forecast-closed"}
-        open={create === "forecast"}
-        onOpenChange={(open) => setCreate(open ? "forecast" : null)}
-      />
-      <LogPaymentDialog
-        open={create === "payment"}
-        onOpenChange={(open) => setCreate(open ? "payment" : null)}
-      />
-      <StartEstimateDialogHost flow={startEstimateFlow} />
+      {create === "opportunity" ? (
+        <CreateOpportunityDialog
+          open
+          onOpenChange={(open) => setCreate(open ? "opportunity" : null)}
+        />
+      ) : null}
+      {create === "client" ? (
+        <CreateClientDialog open onOpenChange={(open) => setCreate(open ? "client" : null)} />
+      ) : null}
+      {create === "invoice" ? (
+        <CreateInvoiceDialog open onOpenChange={(open) => setCreate(open ? "invoice" : null)} />
+      ) : null}
+      {create === "event" ? (
+        <CreateEventDialog open onOpenChange={(open) => setCreate(open ? "event" : null)} />
+      ) : null}
+      {create === "task" ? (
+        <CreateTaskDialog open onOpenChange={(open) => setCreate(open ? "task" : null)} />
+      ) : null}
+      {create === "expense" ? (
+        <LogExpenseDialog open onOpenChange={(open) => setCreate(open ? "expense" : null)} />
+      ) : null}
+      {create === "forecast" ? (
+        <LogForecastedExpenseDialog
+          open
+          onOpenChange={(open) => setCreate(open ? "forecast" : null)}
+        />
+      ) : null}
+      {create === "payment" ? (
+        <LogPaymentDialog open onOpenChange={(open) => setCreate(open ? "payment" : null)} />
+      ) : null}
+      {startEstimateFlow.open ? <StartEstimateDialogHost flow={startEstimateFlow} /> : null}
       <FirstWelcomeHost />
     </div>
   );
@@ -359,6 +412,7 @@ function AppLauncher({
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch
                 onClick={() => setOpen(false)}
                 className={cn(
                   "rounded-sm px-2.5 py-2 text-sm hover:bg-accent hover:text-accent-foreground",
@@ -443,6 +497,7 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch
                 onClick={onNavigate}
                 className={linkClass(active)}
               >
@@ -468,6 +523,7 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch
                 onClick={onNavigate}
                 className={linkClass(active)}
               >
@@ -509,6 +565,7 @@ function SearchTrigger() {
       >
         <Search className="size-4" />
       </Button>
+      {open ? (
       <CommandDialog
         open={open}
         onOpenChange={setOpen}
@@ -764,6 +821,7 @@ function SearchTrigger() {
           </CommandList>
         </Command>
       </CommandDialog>
+      ) : null}
     </>
   );
 }
@@ -938,9 +996,7 @@ function UserMenu() {
         <DropdownMenuItem onClick={() => void signOut()}>Sign out</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-    {loginAsOptions.length > 0 ? (
-      <LoginAsDialog open={loginAsOpen} onOpenChange={setLoginAsOpen} />
-    ) : null}
+    {loginAsOpen ? <LoginAsDialog open onOpenChange={setLoginAsOpen} /> : null}
     </>
   );
 }

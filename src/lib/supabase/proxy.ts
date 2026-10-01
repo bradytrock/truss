@@ -9,6 +9,12 @@ import {
   SB_KEY_COOKIE,
   SB_URL_COOKIE,
 } from "@/lib/supabase/env";
+import {
+  GATE_COOKIE,
+  GATE_COOKIE_MAX_AGE,
+  projectRefFromSupabaseUrl,
+  readAuthCookieSession,
+} from "@/lib/supabase/session-cookie";
 
 function redirectToDemo() {
   return NextResponse.redirect(DEMO_SCHEDULE_URL);
@@ -41,48 +47,23 @@ function isSharePath(path: string) {
   );
 }
 
-export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
-  const url = getSupabaseUrl() || request.cookies.get(SB_URL_COOKIE)?.value || "";
-  const key = getSupabaseKey() || request.cookies.get(SB_KEY_COOKIE)?.value || "";
-  const path = request.nextUrl.pathname;
-
-  // Legal pages and homeowner links must not wait on a CRM session.
-  if (isLegalPath(path) || isSharePath(path)) {
-    return NextResponse.next({ request });
-  }
-
-  if (!url || !key) {
-    if (isPublicAppPath(path)) return NextResponse.next({ request });
-    return redirectToLogin(request);
-  }
-
-  const supabase = createServerClient(url, key, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet, headers) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        supabaseResponse = NextResponse.next({ request });
-        cookiesToSet.forEach(({ name, value, options }) =>
-          supabaseResponse.cookies.set(name, value, options)
-        );
-        if (headers) {
-          Object.entries(headers).forEach(([key, value]) =>
-            supabaseResponse.headers.set(key, value)
-          );
-        }
-      },
-    },
+function rememberGate(response: NextResponse, open: boolean) {
+  response.cookies.set(GATE_COOKIE, open ? "1" : "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: open ? GATE_COOKIE_MAX_AGE : 0,
   });
+}
 
-  const { data } = await supabase.auth.getUser();
-  const signedIn = Boolean(data.user);
-  const subscriptionActive = signedIn
-    ? subscriptionActiveFromRpc(await supabase.rpc("company_subscription_active"))
-    : false;
-
+function finishSession(
+  request: NextRequest,
+  path: string,
+  signedIn: boolean,
+  subscriptionActive: boolean,
+  response: NextResponse,
+) {
   if (signedIn && shouldForceDemo({ signedIn, pathname: path, subscriptionActive })) {
     if (path.startsWith("/api/")) {
       return NextResponse.json(
@@ -118,5 +99,71 @@ export async function updateSession(request: NextRequest) {
     return redirectToLogin(request);
   }
 
-  return supabaseResponse;
+  return response;
+}
+
+export async function updateSession(request: NextRequest) {
+  const path = request.nextUrl.pathname;
+
+  // Legal pages and homeowner links must not wait on a CRM session.
+  if (isLegalPath(path) || isSharePath(path)) {
+    return NextResponse.next({ request });
+  }
+
+  const url = getSupabaseUrl() || request.cookies.get(SB_URL_COOKIE)?.value || "";
+  const key = getSupabaseKey() || request.cookies.get(SB_KEY_COOKIE)?.value || "";
+
+  if (!url || !key) {
+    if (isPublicAppPath(path)) return NextResponse.next({ request });
+    return redirectToLogin(request);
+  }
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const session = readAuthCookieSession(
+    request.cookies.getAll(),
+    projectRefFromSupabaseUrl(url),
+    nowSec,
+  );
+  const gateOpen = request.cookies.get(GATE_COOKIE)?.value === "1";
+
+  // A live access token plus a recent subscription check can skip Auth and Postgres.
+  if (!session.present) {
+    return finishSession(request, path, false, false, NextResponse.next({ request }));
+  }
+  if (session.fresh && gateOpen) {
+    return finishSession(request, path, true, true, NextResponse.next({ request }));
+  }
+
+  let supabaseResponse = NextResponse.next({ request });
+  const supabase = createServerClient(url, key, {
+    cookies: {
+      getAll() {
+        return request.cookies.getAll();
+      },
+      setAll(cookiesToSet, headers) {
+        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+        supabaseResponse = NextResponse.next({ request });
+        cookiesToSet.forEach(({ name, value, options }) =>
+          supabaseResponse.cookies.set(name, value, options)
+        );
+        if (headers) {
+          Object.entries(headers).forEach(([header, value]) =>
+            supabaseResponse.headers.set(header, value)
+          );
+        }
+      },
+    },
+  });
+
+  let signedIn = session.fresh;
+  if (!session.fresh) {
+    const { data } = await supabase.auth.getUser();
+    signedIn = Boolean(data.user);
+  }
+  const subscriptionActive = signedIn
+    ? subscriptionActiveFromRpc(await supabase.rpc("company_subscription_active"))
+    : false;
+  rememberGate(supabaseResponse, signedIn && subscriptionActive);
+
+  return finishSession(request, path, signedIn, subscriptionActive, supabaseResponse);
 }

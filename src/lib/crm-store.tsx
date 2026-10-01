@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { isPendingPayment } from "@/lib/payment-posting";
-import { fetchCompanyBook } from "@/lib/supabase/load-book";
+import { applyDeferredBook, fetchCompanyBook, loadCompanyBook } from "@/lib/supabase/load-book";
 import {
   asAuditState,
   canRevertCompanyAudit,
@@ -1541,7 +1541,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
     const companyId = profile.company_id;
     try {
-      let book = await fetchCompanyBook(supabase, companyId);
+      const bookLoad = loadCompanyBook(supabase, companyId);
+      let book = await bookLoad.core;
+      let loadedFullBook = false;
       let ensured = await ensureSignedInStaff(
         supabase,
         companyId,
@@ -1564,6 +1566,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           });
           if (removed) {
             book = await fetchCompanyBook(supabase, companyId);
+            loadedFullBook = true;
             ensured = await ensureSignedInStaff(
               supabase,
               companyId,
@@ -1619,6 +1622,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           const added = await persistOpenLeadJobs(supabase, companyId, opportunities, jobs);
           if (added) {
             book = await fetchCompanyBook(supabase, companyId);
+            loadedFullBook = true;
             const restamped = backfillRecordCodes(
               book.state.opportunities,
               book.state.jobs,
@@ -1688,6 +1692,41 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       setHydrateError(null);
       setHydrated(true);
+      if (!loadedFullBook) {
+        try {
+          const full = await bookLoad.full;
+          if (epoch !== bookEpoch.current) return;
+          setState((prev) => {
+            const merged = applyDeferredBook(prev, full.state);
+            const dropped = pruned.dropped;
+            return {
+              ...merged,
+              photos: merged.photos.map((photo) => ({
+                ...photo,
+                jobId: remapDroppedJobId(photo.jobId, dropped) ?? photo.jobId,
+              })),
+              jobFiles: merged.jobFiles.map((file) => ({
+                ...file,
+                jobId: remapDroppedJobId(file.jobId, dropped) ?? file.jobId,
+              })),
+              photoReports: merged.photoReports.map((report) => ({
+                ...report,
+                jobId: remapDroppedJobId(report.jobId, dropped) ?? report.jobId,
+              })),
+              materialOrders: merged.materialOrders.map((order) => ({
+                ...order,
+                jobId: remapDroppedJobId(order.jobId, dropped) ?? order.jobId,
+              })),
+              jobInsurance: merged.jobInsurance.map((claim) => ({
+                ...claim,
+                jobId: remapDroppedJobId(claim.jobId, dropped) ?? claim.jobId,
+              })),
+            };
+          });
+        } catch {
+          // The desk is already up. The next live refresh fills photos, mail, and files.
+        }
+      }
     } catch (error) {
       if (epoch !== bookEpoch.current) return;
       setHydrateError(loadErrorMessage(error));

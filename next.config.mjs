@@ -20,6 +20,14 @@ const nextConfig = {
   ],
   experimental: {
     proxyClientMaxBodySize: "15mb",
+    // Dynamic pages are not reused by the client router unless this is set.
+    // Sidebar clicks then serve the prefetched segment instead of waiting on
+    // the proxy and a fresh RSC request.
+    staleTimes: {
+      dynamic: 60,
+      static: 300,
+    },
+    optimizePackageImports: ["lucide-react", "@base-ui/react"],
   },
   async redirects() {
     return [

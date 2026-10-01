@@ -28,6 +28,7 @@ export function MarketingNav() {
           <Link
             key={link.href}
             href={link.href}
+            prefetch
             className={cn(
               "shrink-0 rounded-md px-2.5 py-1.5 text-[13px] tracking-tight transition-colors",
               active

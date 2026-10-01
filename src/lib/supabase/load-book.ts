@@ -57,6 +57,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import { initialsFromName, type CrmState, type SeatRole } from "@/lib/types";
 import { jobFilesFromJobs, mergeJobFiles } from "@/lib/job-files";
 import { jobsFilledFromLeads } from "@/lib/job-record";
+import { overlayById, replaceIfEmpty } from "@/lib/supabase/book-merge";
 
 type Client = SupabaseClient<Database>;
 
@@ -91,61 +92,62 @@ function mapRows<T, R>(rows: T[] | null | undefined, map: (row: T) => R): R[] {
   });
 }
 
-export async function fetchCompanyBook(supabase: Client, companyId: string) {
-  const [
-    clientsRes,
-    contactsRes,
-    oppsRes,
-    jobsRes,
-    activitiesRes,
-    tasksRes,
-    teamRes,
-    teamsRes,
-    googleLocationsRes,
-    catalogRes,
-    estimatesRes,
-    estimateLinesRes,
-    estimateSignatureEventsRes,
-    estimateTemplatesRes,
-    estimateTemplateLinesRes,
-    invoicesRes,
-    invoiceLinesRes,
-    paymentsRes,
-    eventsRes,
-    photosRes,
-    photoAuditRes,
-    companyAuditRes,
-    expensesRes,
-    forecastedExpensesRes,
-    jobInsuranceRes,
-    qbVendorsRes,
-    vendorProfilesRes,
-    vendorFeedbackRes,
-    vendorPricesRes,
-    qbReviewCommentsRes,
-    calendarAccountsRes,
-    calendarSharesRes,
-    trainingProgressRes,
-    trainingBulletinsRes,
-    photoReportsRes,
-    messagesRes,
-    gmailAccountsRes,
-    gmailMessagesRes,
-    returningClientLeadsRes,
-    jobFilesRes,
-    estimateFilesRes,
-    invoiceFilesRes,
-    companyFilesRes,
-    materialOrdersRes,
-    materialOrderLinesRes,
-    materialOrderTemplatesRes,
-    materialOrderTemplateLinesRes,
-    priceListsRes,
-    eagleviewOrdersRes,
-    automationsRes,
-    automationRunsRes,
-    automationTemplatesRes,
-  ] = await Promise.all([
+export type CompanyBook = {
+  state: CrmState;
+  team: string[];
+};
+
+const DEFERRED_ID_KEYS = [
+  "googleLocations",
+  "estimateSignatureEvents",
+  "estimateTemplates",
+  "estimateTemplateLines",
+  "photos",
+  "photoAuditEvents",
+  "companyAuditEvents",
+  "forecastedExpenses",
+  "jobInsurance",
+  "qbVendors",
+  "vendorProfiles",
+  "vendorFeedback",
+  "vendorPrices",
+  "qbReviewComments",
+  "jobFiles",
+  "estimateFiles",
+  "invoiceFiles",
+  "companyFiles",
+  "photoReports",
+  "trainingBulletins",
+  "messages",
+  "gmailAccounts",
+  "gmailMessages",
+  "materialOrders",
+  "materialOrderLines",
+  "materialOrderTemplates",
+  "materialOrderTemplateLines",
+  "eagleviewOrders",
+  "automations",
+  "automationRuns",
+  "automationTemplates",
+] as const satisfies readonly (keyof CrmState)[];
+
+/** Merge photos, mail, files, and the rest onto a book that already painted. */
+export function applyDeferredBook(current: CrmState, incoming: CrmState): CrmState {
+  const next: CrmState = { ...current };
+  const target = next as Record<(typeof DEFERRED_ID_KEYS)[number], { id: string }[]>;
+  const local = current as Record<(typeof DEFERRED_ID_KEYS)[number], { id: string }[]>;
+  const remote = incoming as Record<(typeof DEFERRED_ID_KEYS)[number], { id: string }[]>;
+  for (const key of DEFERRED_ID_KEYS) {
+    target[key] = overlayById(local[key], remote[key]);
+  }
+  next.calendarAccounts = replaceIfEmpty(current.calendarAccounts, incoming.calendarAccounts);
+  next.calendarShares = replaceIfEmpty(current.calendarShares, incoming.calendarShares);
+  next.trainingProgress = replaceIfEmpty(current.trainingProgress, incoming.trainingProgress);
+  return next;
+}
+
+function queryCore(supabase: Client, companyId: string) {
+  return Promise.all([
     supabase.from("clients").select("*").eq("company_id", companyId).order("name"),
     supabase.from("contacts").select("*").eq("company_id", companyId).order("name"),
     supabase
@@ -162,10 +164,23 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     supabase.from("tasks").select("*").eq("company_id", companyId).order("due_at"),
     supabase.from("team_members").select("*").eq("company_id", companyId).order("name"),
     supabase.from("teams").select("*").eq("company_id", companyId).order("name"),
-    supabase.from("google_locations").select("*").eq("company_id", companyId).order("name"),
     supabase.from("catalog_items").select("*").eq("company_id", companyId).order("cost_code"),
     supabase.from("estimates").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("estimate_lines").select("*").eq("company_id", companyId).order("sort_order"),
+    supabase.from("invoices").select("*").eq("company_id", companyId).order("issued_at", { ascending: false }),
+    supabase.from("invoice_lines").select("*").eq("company_id", companyId).order("sort_order"),
+    supabase.from("payments").select("*").eq("company_id", companyId).order("paid_at", { ascending: false }),
+    supabase.from("schedule_events").select("*").eq("company_id", companyId).order("starts_at"),
+    supabase.from("expenses").select("*").eq("company_id", companyId).order("incurred_at", { ascending: false }),
+    supabase.from("returning_client_leads").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    supabase.from("price_lists").select("*").eq("company_id", companyId).order("effective_on", { ascending: false }),
+    supabase.from("account_invites").select("staff_id, token, expires_at").eq("company_id", companyId),
+  ]);
+}
+
+function queryDeferred(supabase: Client, companyId: string) {
+  return Promise.all([
+    supabase.from("google_locations").select("*").eq("company_id", companyId).order("name"),
     supabase
       .from("estimate_signature_events")
       .select("*")
@@ -173,10 +188,6 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       .order("created_at", { ascending: false }),
     supabase.from("estimate_templates").select("*").eq("company_id", companyId).order("name"),
     supabase.from("estimate_template_lines").select("*").eq("company_id", companyId).order("sort_order"),
-    supabase.from("invoices").select("*").eq("company_id", companyId).order("issued_at", { ascending: false }),
-    supabase.from("invoice_lines").select("*").eq("company_id", companyId).order("sort_order"),
-    supabase.from("payments").select("*").eq("company_id", companyId).order("paid_at", { ascending: false }),
-    supabase.from("schedule_events").select("*").eq("company_id", companyId).order("starts_at"),
     supabase.from("job_photos").select("*").eq("company_id", companyId).order("taken_at", { ascending: false }),
     supabase
       .from("photo_audit_events")
@@ -190,7 +201,6 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       .eq("company_id", companyId)
       .order("created_at", { ascending: false })
       .limit(2000),
-    supabase.from("expenses").select("*").eq("company_id", companyId).order("incurred_at", { ascending: false }),
     supabase
       .from("forecasted_expenses")
       .select("*")
@@ -222,7 +232,6 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
       .select("*")
       .eq("company_id", companyId)
       .order("received_at", { ascending: false }),
-    supabase.from("returning_client_leads").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("job_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("estimate_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     supabase.from("invoice_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
@@ -231,7 +240,6 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     supabase.from("material_order_lines").select("*").eq("company_id", companyId).order("sort_order"),
     supabase.from("material_order_templates").select("*").eq("company_id", companyId).order("name"),
     supabase.from("material_order_template_lines").select("*").eq("company_id", companyId).order("sort_order"),
-    supabase.from("price_lists").select("*").eq("company_id", companyId).order("effective_on", { ascending: false }),
     supabase
       .from("eagleview_orders")
       .select("*")
@@ -241,7 +249,74 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     supabase.from("automation_runs").select("*").eq("company_id", companyId).order("created_at", { ascending: false }).limit(500),
     supabase.from("automation_templates").select("*").order("sort_order"),
   ]);
+}
 
+type CoreRows = Awaited<ReturnType<typeof queryCore>>;
+type DeferredRows = Awaited<ReturnType<typeof queryDeferred>>;
+
+function emptyDeferred(): DeferredRows {
+  const blank = { data: [] as never[], error: null };
+  return Array.from({ length: 34 }, () => blank) as unknown as DeferredRows;
+}
+
+function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
+  const [
+    clientsRes,
+    contactsRes,
+    oppsRes,
+    jobsRes,
+    activitiesRes,
+    tasksRes,
+    teamRes,
+    teamsRes,
+    catalogRes,
+    estimatesRes,
+    estimateLinesRes,
+    invoicesRes,
+    invoiceLinesRes,
+    paymentsRes,
+    eventsRes,
+    expensesRes,
+    returningClientLeadsRes,
+    priceListsRes,
+    invitesRes,
+  ] = core;
+  const [
+    googleLocationsRes,
+    estimateSignatureEventsRes,
+    estimateTemplatesRes,
+    estimateTemplateLinesRes,
+    photosRes,
+    photoAuditRes,
+    companyAuditRes,
+    forecastedExpensesRes,
+    jobInsuranceRes,
+    qbVendorsRes,
+    vendorProfilesRes,
+    vendorFeedbackRes,
+    vendorPricesRes,
+    qbReviewCommentsRes,
+    calendarAccountsRes,
+    calendarSharesRes,
+    trainingProgressRes,
+    trainingBulletinsRes,
+    photoReportsRes,
+    messagesRes,
+    gmailAccountsRes,
+    gmailMessagesRes,
+    jobFilesRes,
+    estimateFilesRes,
+    invoiceFilesRes,
+    companyFilesRes,
+    materialOrdersRes,
+    materialOrderLinesRes,
+    materialOrderTemplatesRes,
+    materialOrderTemplateLinesRes,
+    eagleviewOrdersRes,
+    automationsRes,
+    automationRunsRes,
+    automationTemplatesRes,
+  ] = deferred;
   const missingTeams = Boolean(teamsRes.error);
   requireTable("clients", clientsRes);
   requireTable("contacts", contactsRes);
@@ -272,7 +347,6 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     }
   });
 
-  const invitesRes = await supabase.from("account_invites").select("staff_id, token, expires_at").eq("company_id", companyId);
   const invites = invitesRes.error ? [] : (invitesRes.data ?? []);
   const staffWithInvites = staff.map((member) => {
     const invite = invites.find((row) => row.staff_id === member.id);
@@ -395,4 +469,23 @@ export async function fetchCompanyBook(supabase: Client, companyId: string) {
     state,
     team: state.staff.map((member) => member.name),
   };
+}
+
+/**
+ * Core tables unblock the desk. Photos, mail, files, and audit history stream in after.
+ * Both groups start together, so the slow tables do not add a second waterfall.
+ */
+export function loadCompanyBook(supabase: Client, companyId: string) {
+  const corePromise = queryCore(supabase, companyId);
+  const deferredPromise = queryDeferred(supabase, companyId);
+  return {
+    core: corePromise.then((core) => assembleBook(core, emptyDeferred())),
+    full: Promise.all([corePromise, deferredPromise]).then(([core, deferred]) =>
+      assembleBook(core, deferred),
+    ),
+  };
+}
+
+export async function fetchCompanyBook(supabase: Client, companyId: string) {
+  return loadCompanyBook(supabase, companyId).full;
 }

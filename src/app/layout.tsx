@@ -24,6 +24,7 @@ const plexMono = IBM_Plex_Mono({
   weight: ["400", "500"],
   style: "normal",
   display: "swap",
+  preload: false,
 });
 
 const greatVibes = Great_Vibes({
@@ -32,6 +33,7 @@ const greatVibes = Great_Vibes({
   weight: "400",
   style: "normal",
   display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {
