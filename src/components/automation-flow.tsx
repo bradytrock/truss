@@ -1025,6 +1025,8 @@ function recipientShort(action: AutomationAction) {
       return "to a teammate";
     case "phone":
       return "to a phone number";
+    case "group":
+      return "to the group";
     case "email":
       return "to an email";
     default:

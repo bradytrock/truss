@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { executeAutomationActions } from "@/lib/automations/execute";
+import { groupMessagePhones } from "@/lib/automations/group-text";
 import { planWorkflowSlice, settleWorkflow, workflowOf } from "@/lib/automations/workflow";
 import { estimateTotalForContext, mergeForJob, runsAfterStageChange } from "@/lib/automations/queue";
 import { automationRunInsertPayload, mapAutomation, mapAutomationRun, mapCompany } from "@/lib/supabase/mappers";
@@ -97,6 +98,7 @@ export async function POST(request: Request) {
       customerEmail: contact?.email,
       ownerPhone: owner?.phone,
       ownerEmail: owner?.email,
+      groupPhones: groupMessagePhones(job, book.state.contacts),
       estimateTotal,
       staffById: (id) => book.state.staff.find((item) => item.id === id),
       createTask: async (title) => {

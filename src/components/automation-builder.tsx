@@ -566,6 +566,7 @@ function recipientOptions(kind: AutomationAction["kind"]) {
     { value: "rep", label: "Job owner" },
     { value: "staff", label: "A teammate" },
     { value: "phone", label: "A phone number" },
+    { value: "group", label: "Group message" },
   ];
 }
 
@@ -575,7 +576,7 @@ function patchForKind(action: AutomationAction, kind: AutomationAction["kind"]):
   if (kind === "add_note") return { kind };
   if (kind === "notify_staff") return { kind, to: action.to === "staff" ? "staff" : "rep" };
   if (kind === "send_email") {
-    const to = action.to === "phone" ? "email" : action.to ?? "customer";
+    const to = action.to === "phone" ? "email" : action.to === "group" ? "customer" : action.to ?? "customer";
     return { kind, to };
   }
   if (kind === "send_sms") {
@@ -1051,6 +1052,11 @@ function ActionCard({
           ))}
         </div>
       )}
+      {action.kind === "send_sms" && action.to === "group" ? (
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          One iMessage group for the homeowners on the job. The job needs at least two mobile numbers.
+        </p>
+      ) : null}
       {action.kind === "send_sms" ? (
         <p className="text-xs leading-relaxed text-muted-foreground">
           Add an If / else after this text to take a yes, no, or no-reply path.

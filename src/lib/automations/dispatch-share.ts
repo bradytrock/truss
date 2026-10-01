@@ -1,4 +1,5 @@
 import { executeAutomationActions } from "@/lib/automations/execute";
+import { automationSendsGroup, fetchAutomationGroupPhones } from "@/lib/automations/group-text";
 import { mergeForJob, plannedRunsForEvent, runsAfterStageChange } from "@/lib/automations/queue";
 import type { AutomationEventKind, AutomationRun } from "@/lib/automations/types";
 import { createAnonClient } from "@/lib/supabase/anon";
@@ -147,6 +148,9 @@ async function runPlanned(
       : undefined;
     const contact = book.contacts.find((item) => item.id === job.primaryContactId);
     const owner = book.staff.find((item) => item.id === job.ownerStaffId);
+    const group = automationSendsGroup(automation)
+      ? await fetchAutomationGroupPhones(supabase, job.id)
+      : { phones: [] as string[], error: "" };
     let jobState = job;
     let opportunityState = opportunity;
     const executed = await executeAutomationActions({
@@ -157,6 +161,8 @@ async function runPlanned(
       customerEmail: contact?.email,
       ownerPhone: owner?.phone,
       ownerEmail: owner?.email,
+      groupPhones: group.phones,
+      groupPhonesError: group.error,
       staffById: (id) => book.staff.find((item) => item.id === id),
       createTask: async (title) => {
         const { error: taskError } = await supabase.rpc("automation_add_task", {

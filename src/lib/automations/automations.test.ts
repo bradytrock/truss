@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { automationEmailText } from "./execute.ts";
+import { groupMessagePhones } from "./group-text.ts";
 import { conditionsPass, automationMatchesEvent, scheduledForFromTrigger } from "./evaluate.ts";
 import { applyAutomationMerge, smsSegmentCount, unknownAutomationMergeFields } from "./merge.ts";
 import { plannedRunsForEvent, previewAutomation } from "./queue.ts";
@@ -7,6 +8,7 @@ import { summarizeAutomation, summarizeTrigger, summarizeWorkflowBranch } from "
 import { defaultRequiresConfirmation, validateAutomationDraft } from "./validate.ts";
 import { classifyAutomationReply, planWorkflowSlice, replyDeadline } from "./workflow.ts";
 import type { Automation, AutomationAction, AutomationCondition, WorkflowStep } from "./types.ts";
+import type { Contact, Job } from "../types.ts";
 
 const sms: AutomationAction = {
   id: "a1",
@@ -79,6 +81,45 @@ assert.equal(
   "When a job moves to Complete",
 );
 assert.match(summarizeAutomation({ ...automation, actions: [sms] }), /invoice is paid → Text the customer/);
+assert.match(
+  summarizeAutomation({ ...automation, actions: [{ ...sms, to: "group", body: "Hi both" }] }),
+  /Text the group/,
+);
+assert.equal(defaultRequiresConfirmation([{ ...sms, to: "group" }]), true);
+assert.equal(
+  validateAutomationDraft(
+    { ...automation, actions: [{ ...sms, to: "group", body: "Hi both" }] },
+    { smsConfigured: true },
+  ).ok,
+  true,
+);
+
+function person(partial: Partial<Contact> & Pick<Contact, "id" | "name" | "phone">): Contact {
+  return {
+    clientId: null,
+    title: "Homeowner",
+    email: "",
+    ownerStaffId: "staff-1",
+    isReferralPartner: false,
+    listingWatchUrl: "",
+    listingWatchEnabled: false,
+    ...partial,
+  };
+}
+const groupJob = {
+  primaryContactId: "c1",
+  relatedContactIds: ["c2", "c3", "c4"],
+  subcontractorIds: ["c4"],
+} as Pick<Job, "primaryContactId" | "relatedContactIds" | "subcontractorIds">;
+assert.deepEqual(
+  groupMessagePhones(groupJob, [
+    person({ id: "c1", name: "Dana", phone: "(214) 555-0101" }),
+    person({ id: "c2", name: "Jordan", phone: "2145550102" }),
+    person({ id: "c3", name: "Pat", phone: "2145550103", title: "Public adjuster" }),
+    person({ id: "c4", name: "Crew", phone: "2145550104" }),
+  ]),
+  ["+12145550101", "+12145550102"],
+);
 
 assert.equal(
   automationMatchesEvent(

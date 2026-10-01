@@ -25,7 +25,7 @@ export type AutomationValidation = {
 export function isCustomerFacingAction(action: AutomationAction) {
   if (action.kind !== "send_sms" && action.kind !== "send_email") return false;
   const to = action.to ?? "customer";
-  return to === "customer" || to === "phone" || to === "email";
+  return to === "customer" || to === "phone" || to === "email" || to === "group";
 }
 
 export function automationNeedsSmsNumber(actions: AutomationAction[]) {

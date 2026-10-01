@@ -107,10 +107,23 @@ async function loadVoiceCredentials(token: string): Promise<PhotonCredentials | 
   return credentialsFrom(data);
 }
 
+function textTargets(to: string | string[]) {
+  const raw = Array.isArray(to) ? to : [to];
+  const seen = new Set<string>();
+  const phones: string[] = [];
+  for (const value of raw) {
+    const phone = toE164(value);
+    if (!phone || seen.has(phone)) continue;
+    seen.add(phone);
+    phones.push(phone);
+  }
+  return phones;
+}
+
 async function sendViaSpectrum(input: {
   projectId: string;
   projectSecret: string;
-  to: string;
+  to: string[];
   content: string;
 }): Promise<PhotonSendResult> {
   const { Spectrum } = await import("@spectrum-ts/core");
@@ -122,30 +135,30 @@ async function sendViaSpectrum(input: {
   });
   try {
     const platform = imessage(app);
-    const person = await platform.user(input.to);
-    const space = await platform.space.create(person);
+    const people = await Promise.all(input.to.map((phone) => platform.user(phone)));
+    const space = await platform.space.create(people.length === 1 ? people[0] : people);
     const sent = await space.send(input.content);
     const handle = sent && typeof sent === "object" && "id" in sent && typeof sent.id === "string" ? sent.id : "";
-    return { ok: true, mocked: false, to: input.to, handle };
+    return { ok: true, mocked: false, to: input.to.join(", "), handle };
   } finally {
     await app.stop().catch(() => undefined);
   }
 }
 
 export async function sendOfficeText(input: {
-  to: string;
+  to: string | string[];
   content: string;
   voiceToken?: string;
 }): Promise<PhotonSendResult> {
-  const to = toE164(input.to);
+  const to = textTargets(input.to);
   const content = input.content.trim();
-  if (!to) return { ok: false, mocked: false, error: "That phone number is not valid." };
+  if (to.length === 0) return { ok: false, mocked: false, error: "That phone number is not valid." };
   if (!content) return { ok: false, mocked: false, error: "Write a message before sending." };
 
   const voiceToken = input.voiceToken?.trim() ?? "";
   const credentials = voiceToken ? await loadVoiceCredentials(voiceToken) : await loadOfficeCredentials();
   if (!credentials) {
-    return { ok: true, mocked: true, to, handle: `mock_${Date.now()}` };
+    return { ok: true, mocked: true, to: to.join(", "), handle: `mock_${Date.now()}` };
   }
 
   try {

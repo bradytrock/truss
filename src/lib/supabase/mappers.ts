@@ -1653,7 +1653,12 @@ function parseActions(raw: Json): AutomationAction[] {
       id: String(row.id ?? `a${index}`),
       kind: kind as AutomationAction["kind"],
       to:
-        row.to === "rep" || row.to === "staff" || row.to === "customer" || row.to === "phone" || row.to === "email"
+        row.to === "rep" ||
+        row.to === "staff" ||
+        row.to === "customer" ||
+        row.to === "phone" ||
+        row.to === "email" ||
+        row.to === "group"
           ? row.to
           : undefined,
       staffId: typeof row.staffId === "string" ? row.staffId : undefined,

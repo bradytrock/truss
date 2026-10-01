@@ -1,4 +1,5 @@
 import { executeAutomationActions } from "@/lib/automations/execute";
+import { fetchAutomationGroupPhones, sliceSendsGroup } from "@/lib/automations/group-text";
 import { buildAutomationMerge } from "@/lib/automations/merge";
 import { planWorkflowSlice, settleWorkflow, workflowOf } from "@/lib/automations/workflow";
 import type { Automation, AutomationAction, WorkflowCursor } from "@/lib/automations/types";
@@ -72,6 +73,7 @@ export async function executeRemoteAutomation(input: {
       name: String(seat.name ?? ""),
     }];
   });
+  const group = sliceSendsGroup(actions) ? await fetchAutomationGroupPhones(input.supabase, jobId) : { phones: [], error: "" };
   const merge = buildAutomationMerge({
     company: {
       name: String(row.company_name ?? "Your company"),
@@ -107,6 +109,8 @@ export async function executeRemoteAutomation(input: {
     customerEmail: String(row.contact_email ?? ""),
     ownerPhone: String(row.owner_phone ?? ""),
     ownerEmail: String(row.owner_email ?? ""),
+    groupPhones: group.phones,
+    groupPhonesError: group.error,
     staffById: (id) => staff.find((seat) => seat.id === id),
     createTask: async (title) => {
       const { error } = await input.supabase.rpc("automation_add_task", {

@@ -87,6 +87,8 @@ function recipientLabel(action: AutomationAction) {
       return "a teammate";
     case "phone":
       return "a phone number";
+    case "group":
+      return "the group";
     case "email":
       return "an email address";
     default:

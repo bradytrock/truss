@@ -3086,6 +3086,10 @@ export type Database = {
         Args: { p_estimate_id: string };
         Returns: Json;
       };
+      automation_job_phones: {
+        Args: { p_job_id: string };
+        Returns: Json;
+      };
       automation_share_context: {
         Args: { p_token: string };
         Returns: Json;

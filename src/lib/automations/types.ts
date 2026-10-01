@@ -189,7 +189,7 @@ export type AutomationCondition = {
   value: string;
 };
 
-export type AutomationActionTo = "customer" | "rep" | "staff" | "phone" | "email";
+export type AutomationActionTo = "customer" | "rep" | "staff" | "phone" | "email" | "group";
 
 export type AutomationAction = {
   id: string;
