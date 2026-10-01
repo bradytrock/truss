@@ -8,6 +8,7 @@ export default function EditAutomationPage() {
   const params = useParams<{ id: string }>();
   return (
     <SettingsAdminGate
+      flush
       allowAutomations
       title="Automations are restricted"
       description="Only a company admin, or someone granted manage automations, can build these rules."

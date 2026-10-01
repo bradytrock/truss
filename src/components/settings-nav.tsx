@@ -23,6 +23,10 @@ const SECTIONS = [
   { href: "/settings/quickbooks", label: "QuickBooks", hint: "Web Connector", admin: true, accounting: true, automations: false },
 ] as const;
 
+export function isAutomationBuilderPath(pathname: string) {
+  return /^\/settings\/automations\/(?:new|[^/]+)$/.test(pathname);
+}
+
 function sectionIsActive(href: string, pathname: string) {
   if (href === "/settings") return pathname === "/settings";
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -91,6 +95,7 @@ export function SettingsNav({ variant }: { variant: "bar" | "rail" }) {
 export function SettingsMobileBar() {
   const pathname = usePathname();
   if (!pathname.startsWith("/settings")) return null;
+  if (isAutomationBuilderPath(pathname)) return null;
   return (
     <div className="border-t lg:hidden">
       <SettingsNav variant="bar" />
@@ -103,11 +108,13 @@ export function SettingsAdminGate({
   title = "Settings are restricted",
   description = "Only a company admin can change the business name, name teams, invite people, or lock accounts.",
   allowAutomations = false,
+  flush = false,
 }: {
   children: ReactNode;
   title?: string;
   description?: string;
   allowAutomations?: boolean;
+  flush?: boolean;
 }) {
   const crm = useCrm();
 
@@ -132,9 +139,11 @@ export function SettingsAdminGate({
   }
 
   return (
-    <div className="space-y-5">
+    <div className={flush ? undefined : "space-y-5"}>
       {crm.hydrateError ? (
-        <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
+        <div className={flush ? "mb-4" : undefined}>
+          <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
+        </div>
       ) : null}
       {children}
     </div>
