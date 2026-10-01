@@ -17415,38 +17415,51 @@ begin
     v_opp_id := v_job.opportunity_id;
   end if;
 
-  insert into public.messages (
-    company_id,
-    contact_id,
-    job_id,
-    opportunity_id,
-    direction,
-    phone,
-    body,
-    handle,
-    status,
-    media_url,
-    imessage_kind,
-    imessage_detail,
-    created_at,
-    created_by
-  ) values (
-    v_contact.company_id,
-    v_contact.id,
-    v_job.id,
-    v_opp_id,
-    'inbound',
-    coalesce(nullif(trim(p_from), ''), v_contact.phone),
-    v_body,
-    coalesce(p_handle, ''),
-    'received',
-    coalesce(p_media_url, ''),
-    coalesce(p_kind, ''),
-    coalesce(p_detail, ''),
-    v_created,
-    v_contact.name
-  )
-  returning * into v_message;
+  begin
+    insert into public.messages (
+      company_id,
+      contact_id,
+      job_id,
+      opportunity_id,
+      direction,
+      phone,
+      body,
+      handle,
+      status,
+      media_url,
+      imessage_kind,
+      imessage_detail,
+      created_at,
+      created_by
+    ) values (
+      v_contact.company_id,
+      v_contact.id,
+      v_job.id,
+      v_opp_id,
+      'inbound',
+      coalesce(nullif(trim(p_from), ''), v_contact.phone),
+      v_body,
+      coalesce(p_handle, ''),
+      'received',
+      coalesce(p_media_url, ''),
+      coalesce(p_kind, ''),
+      coalesce(p_detail, ''),
+      v_created,
+      v_contact.name
+    )
+    returning * into v_message;
+  exception
+    when unique_violation then
+      select * into v_message
+      from public.messages
+      where company_id = v_contact.company_id
+        and handle = coalesce(p_handle, '')
+      limit 1;
+      if found then
+        return jsonb_build_object('ok', true, 'duplicate', true, 'id', v_message.id);
+      end if;
+      raise;
+  end;
 
   v_author := coalesce(nullif(trim(v_contact.name), ''), 'Homeowner');
   begin

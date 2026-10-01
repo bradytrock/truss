@@ -37,6 +37,7 @@ import {
   isMissingScheduleGuestInvites,
   missingScheduleGuestInvitesMessage,
 } from "@/lib/supabase/schema-errors";
+import { distinctMessageHandle, isDuplicateMessageHandle, outboundMessageHandle } from "@/lib/message-handle";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newPortalToken, portalInviteExpiry, portalUrl } from "@/lib/portal";
@@ -2319,33 +2320,58 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         createdBy: user.name,
       };
       const supabase = maybeClient();
+      const insertLogged = (row: TextMessage) =>
+        supabase!.from("messages").insert({
+          id: row.id,
+          company_id: user.companyId,
+          contact_id: row.contactId,
+          job_id: row.jobId,
+          opportunity_id: row.opportunityId,
+          direction: row.direction,
+          phone: row.phone,
+          body: row.body,
+          handle: row.handle,
+          status: row.status,
+          media_url: row.mediaUrl,
+          imessage_kind: row.kind,
+          imessage_detail: row.detail,
+          created_by: row.createdBy,
+        }).select("*").single();
+      let logged = message;
       if (!supabase) {
-        setState((prev) => ({ ...prev, messages: [message, ...prev.messages] }));
+        setState((prev) => ({ ...prev, messages: [logged, ...prev.messages] }));
       } else {
-        const { data, error } = await supabase
-          .from("messages")
-          .insert({
-            id: message.id,
-            company_id: user.companyId,
-            contact_id: message.contactId,
-            job_id: message.jobId,
-            opportunity_id: message.opportunityId,
-            direction: message.direction,
-            phone: message.phone,
-            body: message.body,
-            handle: message.handle,
-            status: message.status,
-            media_url: message.mediaUrl,
-            imessage_kind: message.kind,
-            imessage_detail: message.detail,
-            created_by: message.createdBy,
-          })
-          .select("*")
-          .single();
+        let { data, error } = await insertLogged(logged);
+        if (error && isDuplicateMessageHandle(error) && logged.handle) {
+          const existing = await supabase
+            .from("messages")
+            .select("*")
+            .eq("company_id", user.companyId)
+            .eq("handle", logged.handle)
+            .maybeSingle();
+          if (existing.data && existing.data.body === logged.body) {
+            const mapped = mapMessage(existing.data);
+            setState((prev) =>
+              prev.messages.some((item) => item.id === mapped.id)
+                ? prev
+                : { ...prev, messages: [mapped, ...prev.messages] },
+            );
+            return;
+          }
+          logged = {
+            ...logged,
+            id: crypto.randomUUID(),
+            handle: distinctMessageHandle(logged.handle, logged.kind),
+          };
+          const retry = await insertLogged(logged);
+          data = retry.data;
+          error = retry.error;
+        }
         if (error) {
           if (isMissingMessages(error)) toast.message(missingMessagesMessage());
+          else if (isDuplicateMessageHandle(error)) toast.error("That text is already in the thread.");
           else toast.error(error.message);
-          setState((prev) => ({ ...prev, messages: [message, ...prev.messages] }));
+          setState((prev) => ({ ...prev, messages: [logged, ...prev.messages] }));
         } else if (data) {
           setState((prev) => ({ ...prev, messages: [mapMessage(data), ...prev.messages] }));
         }
@@ -2503,11 +2529,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const detail = [effectId ? imessageEffectLabel(effectId) : "", replyToHandle ? "Reply" : ""]
         .filter(Boolean)
         .join(" · ");
+      const kind = effectId ? "effect" : replyToHandle ? "reply" : "text";
       await logOutboundText({
         ...input,
         to: data.to || input.to,
-        handle: data.handle,
-        kind: effectId ? "effect" : replyToHandle ? "reply" : "text",
+        handle: outboundMessageHandle({ returned: data.handle, occupied: replyToHandle, kind }),
+        kind,
         detail,
       });
       if (data.mocked) {
@@ -2553,7 +2580,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         contactId: input.contactId,
         opportunityId: input.opportunityId,
         name: input.name,
-        handle: data.handle,
+        handle: outboundMessageHandle({ returned: data.handle, occupied: input.handle, kind: "reaction" }),
         kind: "reaction",
         detail: reaction.detail,
       });
