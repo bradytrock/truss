@@ -9,6 +9,14 @@ import {
   crewMapLabel,
   type CrewFreshness,
 } from "@/lib/project-map";
+import {
+  RADAR_ATTRIBUTION,
+  RADAR_EMPTY_TILE,
+  RADAR_LEGEND,
+  RADAR_MAX_NATIVE_ZOOM,
+  RADAR_OPACITY,
+  radarFrames,
+} from "@/lib/weather-radar";
 
 export type ProjectMapJobPin = {
   id: string;
@@ -39,6 +47,7 @@ export function ProjectMapCanvas({
   selectedStaffId,
   showProjects,
   showCrew,
+  showWeather,
   fitKey,
   onSelectJob,
   onOpenJob,
@@ -50,6 +59,7 @@ export function ProjectMapCanvas({
   selectedStaffId?: string | null;
   showProjects: boolean;
   showCrew: boolean;
+  showWeather: boolean;
   fitKey: string;
   onSelectJob: (id: string) => void;
   onOpenJob: (id: string) => void;
@@ -67,6 +77,12 @@ export function ProjectMapCanvas({
   onOpen.current = onOpenJob;
   onCrew.current = onSelectCrew;
   const [zoom, setZoom] = useState(8);
+  const [radarLabel, setRadarLabel] = useState("Now");
+  const [radarSession, setRadarSession] = useState(showWeather);
+  if (radarSession !== showWeather) {
+    setRadarSession(showWeather);
+    setRadarLabel("Now");
+  }
 
   useEffect(() => {
     if (!el.current || mapRef.current) return;
@@ -78,6 +94,9 @@ export function ProjectMapCanvas({
       attribution: "&copy; OpenStreetMap",
       maxZoom: 19,
     }).addTo(map);
+    const radarPane = map.createPane("radar");
+    radarPane.style.zIndex = "350";
+    radarPane.style.pointerEvents = "none";
     layersRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
     const onZoom = () => setZoom(map.getZoom());
@@ -183,7 +202,61 @@ export function ProjectMapCanvas({
     if (!selectedJobId) focusRef.current = null;
   }, [jobs, crew, showProjects, showCrew, selectedJobId, selectedStaffId, fitKey, zoom]);
 
-  return <div ref={el} className="project-map-leaflet h-full min-h-[280px] w-full" />;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !showWeather) return;
+    const motionOk = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const frames = motionOk ? radarFrames() : radarFrames().slice(-1);
+    const layers = frames.map((frame, index) => {
+      const layer = L.tileLayer(frame.url, {
+        pane: "radar",
+        opacity: index === frames.length - 1 ? RADAR_OPACITY : 0,
+        maxZoom: 19,
+        maxNativeZoom: RADAR_MAX_NATIVE_ZOOM,
+        errorTileUrl: RADAR_EMPTY_TILE,
+        ...(index === frames.length - 1 ? { attribution: RADAR_ATTRIBUTION } : {}),
+      });
+      layer.addTo(map);
+      return layer;
+    });
+    let index = frames.length - 1;
+    let timer = 0;
+    const tick = () => {
+      const hold = frames[index]?.holdMs ?? 800;
+      timer = window.setTimeout(() => {
+        const next = (index + 1) % frames.length;
+        layers[index]?.setOpacity(0);
+        layers[next]?.setOpacity(RADAR_OPACITY);
+        index = next;
+        setRadarLabel(frames[index]?.label ?? "Now");
+        tick();
+      }, hold);
+    };
+    if (frames.length > 1) tick();
+    return () => {
+      window.clearTimeout(timer);
+      for (const layer of layers) map.removeLayer(layer);
+    };
+  }, [showWeather]);
+
+  return (
+    <div className="relative h-full min-h-[280px] w-full">
+      <div ref={el} className="project-map-leaflet h-full min-h-[280px] w-full" />
+      {showWeather ? (
+        <div className="pointer-events-none absolute bottom-36 left-3 z-10 rounded-lg border border-[#c9c9c9] bg-background/95 px-3 py-2 text-xs shadow-sm lg:bottom-3">
+          <p className="font-medium text-[#181818]">Radar · {radarLabel ?? "Loading"}</p>
+          <ul className="mt-1.5 flex flex-wrap gap-x-2.5 gap-y-1 text-[#706e6b]">
+            {RADAR_LEGEND.map((item) => (
+              <li key={item.label} className="flex items-center gap-1">
+                <span className="size-2.5 rounded-sm border border-black/15" style={{ background: item.color }} />
+                {item.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function jobPopup(job: ProjectMapJobPin, onOpen: () => void) {
