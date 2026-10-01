@@ -1733,6 +1733,7 @@ export type Database = {
           linked: boolean;
           linked_at: string | null;
           linked_by: string;
+          webhook_token: string;
           created_at: string;
           updated_at: string;
         };
@@ -1745,6 +1746,7 @@ export type Database = {
           linked?: boolean;
           linked_at?: string | null;
           linked_by?: string;
+          webhook_token?: string;
           created_at?: string;
           updated_at?: string;
         };
@@ -3148,6 +3150,10 @@ export type Database = {
         Args: Record<string, never>;
         Returns: Json;
       };
+      photon_inbound_company: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
       photon_company_save: {
         Args: {
           p_project_id: string;
@@ -3306,6 +3312,7 @@ export type Database = {
           p_handle?: string;
           p_media_url?: string;
           p_sent_at?: string | null;
+          p_company_id?: string | null;
         };
         Returns: Json;
       };

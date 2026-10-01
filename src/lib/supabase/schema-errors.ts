@@ -873,6 +873,7 @@ export function missingCompanyCamMessage() {
 }
 
 export const PHOTON_SQL = "supabase/migrations/20260930120000_photon_connections.sql";
+export const PHOTON_WEBHOOK_SQL = "supabase/migrations/20261001140000_photon_company_webhooks.sql";
 
 export function isMissingPhoton(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;

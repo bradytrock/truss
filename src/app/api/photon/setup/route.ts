@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { loadProfileCompany } from "@/lib/eagleview-server";
 import { verifyPhotonProject } from "@/lib/photon-server";
-import { photonNotSetupMessage } from "@/lib/photon";
+import { photonNotSetupMessage, photonWebhookUrl } from "@/lib/photon";
+import { requestOrigin } from "@/lib/share-text";
 import { createClient } from "@/lib/supabase/server";
-import { isMissingPhoton, missingPhotonMessage } from "@/lib/supabase/schema-errors";
+import { isMissingPhoton, missingPhotonMessage, PHOTON_WEBHOOK_SQL } from "@/lib/supabase/schema-errors";
 import type { SeatRole } from "@/lib/types";
 import { canManageSettings } from "@/lib/visibility";
 
@@ -18,6 +19,7 @@ type StatusPayload = {
   projectName?: string;
   secretHint?: string;
   linkedAt?: string | null;
+  webhookToken?: string;
   error?: string;
 };
 
@@ -26,7 +28,7 @@ function schemaResponse(error: { message?: string; code?: string } | null | unde
   return NextResponse.json({ linked: false, sql: missingPhotonMessage() });
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createClient();
   const { profile, error: authError } = await loadProfileCompany(supabase);
   if (!profile) return NextResponse.json({ error: authError || "Unauthorized." }, { status: 401 });
@@ -45,6 +47,7 @@ export async function GET() {
   if (status.ok === false) {
     return NextResponse.json({ error: status.error || "Could not load Photon." }, { status: 400 });
   }
+  const webhookToken = status.webhookToken ?? "";
   return NextResponse.json({
     linked: Boolean(status.linked),
     companyName: status.companyName ?? "",
@@ -52,7 +55,10 @@ export async function GET() {
     projectName: status.projectName ?? "",
     secretHint: status.secretHint ?? "",
     linkedAt: status.linkedAt ?? null,
-    sql: null,
+    webhookUrl: photonWebhookUrl(requestOrigin(request), webhookToken),
+    sql: webhookToken
+      ? null
+      : `Run ${PHOTON_WEBHOOK_SQL} in the SQL editor so this office gets its own inbound webhook.`,
   });
 }
 

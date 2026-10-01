@@ -7,6 +7,7 @@ import {
   looksLikePhotonProjectSecret,
   photonNotSetupMessage,
   photonSecretHint,
+  photonWebhookUrl,
 } from "./photon.ts";
 
 const projectId = "6a4d2e8c-7b1f-4d3a-9a8e-2c5d6f7e8a9b";
@@ -19,6 +20,11 @@ assert.equal(looksLikePhotonProjectSecret("secret-key"), true);
 assert.equal(looksLikePhotonProjectSecret("short"), false);
 assert.equal(looksLikePhotonProjectSecret("has a space-in-it"), false);
 assert.equal(photonSecretHint("project-secret-91af"), "91af");
+assert.equal(
+  photonWebhookUrl("https://crmtrock.com/", "a".repeat(48)),
+  `https://crmtrock.com/api/messages/inbound/${"a".repeat(48)}`,
+);
+assert.equal(photonWebhookUrl("https://crmtrock.com", "short"), "");
 assert.equal(
   photonNotSetupMessage("T Rock Roofing"),
   "Photon is not set up for T Rock Roofing.",

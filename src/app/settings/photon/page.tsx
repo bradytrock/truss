@@ -19,6 +19,7 @@ type SetupInfo = {
   projectName?: string;
   secretHint?: string;
   linkedAt?: string | null;
+  webhookUrl?: string;
   sql?: string | null;
   error?: string;
 };
@@ -161,6 +162,26 @@ function PhotonSettingsForm() {
               </Button>
             ) : null}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Inbound webhook</CardTitle>
+          <CardDescription>
+            This URL belongs to {companyName || "this office"} only. In the Photon project, register it as the
+            webhook. Texts and likes posted here stay in this company.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Label htmlFor="photon-webhook-url">Webhook URL</Label>
+          <Input
+            id="photon-webhook-url"
+            readOnly
+            value={info?.webhookUrl || ""}
+            placeholder="This office's URL appears here."
+            onFocus={(event) => event.target.select()}
+          />
         </CardContent>
       </Card>
 

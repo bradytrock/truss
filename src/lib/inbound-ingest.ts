@@ -1,0 +1,45 @@
+import { createClient } from "@supabase/supabase-js";
+import { inboundMessages, inboundSkipReason } from "@/lib/inbound-text";
+import { getSupabaseKey, getSupabaseUrl } from "@/lib/supabase/env";
+import type { Database } from "@/lib/supabase/database.types";
+
+export async function ingestCompanyMessages(raw: Record<string, unknown>, companyId: string) {
+  const skip = inboundSkipReason(raw);
+  if (skip) return { status: 200, body: { ok: true, skipped: true, reason: skip } };
+
+  const messages = inboundMessages(raw);
+  if (messages.length === 0) {
+    return { status: 200, body: { ok: true, skipped: true, reason: "empty" } };
+  }
+
+  const supabase = createClient<Database>(getSupabaseUrl(), getSupabaseKey());
+  const saved: unknown[] = [];
+  for (const fields of messages) {
+    const { data, error } = await supabase.rpc("ingest_inbound_text", {
+      p_from: fields.from,
+      p_body: fields.content,
+      p_handle: fields.handle,
+      p_media_url: fields.mediaUrl,
+      p_sent_at: fields.sentAt,
+      p_company_id: companyId,
+    });
+
+    if (error) {
+      if (
+        error.code === "PGRST202" ||
+        error.code === "PGRST204" ||
+        error.code === "PGRST205" ||
+        (error.message ?? "").includes("Could not find the")
+      ) {
+        return { status: 200, body: { ok: true, skipped: true, reason: "run_messages_sql" } };
+      }
+      return { status: 500, body: { error: error.message } };
+    }
+    saved.push(data ?? { ok: true });
+  }
+
+  return {
+    status: 200,
+    body: saved.length === 1 ? (saved[0] ?? { ok: true }) : { ok: true, count: saved.length, messages: saved },
+  };
+}

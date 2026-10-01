@@ -231,14 +231,13 @@ Deno.serve(async (request) => {
     return json({ error: "Method not allowed." }, 405);
   }
 
-  const expected = (Deno.env.get("MESSAGES_WEBHOOK_TOKEN") ?? "").trim();
-  if (expected) {
-    const url = new URL(request.url);
-    const header = request.headers.get("x-webhook-token")?.trim() || "";
-    const query = url.searchParams.get("token")?.trim() || "";
-    if (header !== expected && query !== expected) {
-      return json({ error: "Unauthorized." }, 401);
-    }
+  const url = new URL(request.url);
+  const token = url.searchParams.get("token")?.trim() || "";
+  if (token.length < 24) {
+    return json(
+      { error: "Use this company's webhook URL from Settings → Photon. A shared webhook cannot receive texts." },
+      400,
+    );
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -252,6 +251,28 @@ Deno.serve(async (request) => {
     raw = (await request.json()) as Record<string, unknown>;
   } catch {
     return json({ ok: true, skipped: true });
+  }
+
+  const companyResponse = await fetch(`${supabaseUrl}/rest/v1/rpc/photon_inbound_company`, {
+    method: "POST",
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ p_token: token }),
+  });
+  const companyPayload = await companyResponse.json().catch(() => null);
+  const companyId =
+    companyPayload && typeof companyPayload === "object" && companyPayload.ok === true && typeof companyPayload.companyId === "string"
+      ? companyPayload.companyId
+      : "";
+  if (!companyResponse.ok || !companyId) {
+    const message =
+      companyPayload && typeof companyPayload === "object" && typeof companyPayload.error === "string"
+        ? companyPayload.error
+        : "Unknown webhook.";
+    return json({ error: message }, 401);
   }
 
   const skip = inboundSkipReason(raw);
@@ -279,6 +300,7 @@ Deno.serve(async (request) => {
         p_handle: fields.handle,
         p_media_url: fields.mediaUrl,
         p_sent_at: fields.sentAt,
+        p_company_id: companyId,
       }),
     });
     const payload = await response.json().catch(() => ({ ok: true }));

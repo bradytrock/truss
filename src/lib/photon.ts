@@ -23,6 +23,14 @@ export function photonSecretHint(value: string) {
   return secret.slice(-4);
 }
 
+/** One inbound URL per office. The token is the company, not an app-wide secret. */
+export function photonWebhookUrl(origin: string, token: string) {
+  const base = origin.trim().replace(/\/+$/, "");
+  const webhookToken = token.trim();
+  if (!base || webhookToken.length < 24) return "";
+  return `${base}/api/messages/inbound/${encodeURIComponent(webhookToken)}`;
+}
+
 export function photonNotSetupMessage(companyName: string) {
   const name = companyName.trim() || "this company";
   return `Photon is not set up for ${name}.`;
