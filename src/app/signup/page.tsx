@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthFrame } from "@/components/auth-frame";
-import { AuthWelcomePreview } from "@/components/welcome-screen";
+import { AuthWelcomePreview } from "@/components/auth-welcome-preview";
 import {
   isMissingAccountManagement,
   missingAccountManagementMessage,

@@ -1,5 +1,5 @@
 import { inviteSignupPatchMessage } from "@/lib/accounts";
-import { cardSlugPrivilegeMessage, isCardSlugPrivilegeError } from "@/lib/supabase/schema-errors";
+import { cardSlugPrivilegeMessage, isCardSlugPrivilegeError } from "@/lib/supabase/card-slug-error";
 
 export function authErrorMessage(error: { message?: string; code?: string } | string | null | undefined) {
   const raw = typeof error === "string" ? error : error?.message ?? "";
