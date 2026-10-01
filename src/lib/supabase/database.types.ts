@@ -3036,7 +3036,16 @@ export type Database = {
           p_delivery?: string;
           p_error?: string;
           p_preview?: string;
+          p_scheduled?: string;
         };
+        Returns: Json;
+      };
+      automation_claim_wait: {
+        Args: { p_id: string };
+        Returns: Json;
+      };
+      automation_waiting_replies: {
+        Args: { p_company_id: string; p_phone: string };
         Returns: Json;
       };
       automation_add_task: {

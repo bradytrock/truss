@@ -3,3 +3,4 @@ export * from "@/lib/automations/merge";
 export * from "@/lib/automations/validate";
 export * from "@/lib/automations/evaluate";
 export * from "@/lib/automations/summarize";
+export * from "@/lib/automations/workflow";

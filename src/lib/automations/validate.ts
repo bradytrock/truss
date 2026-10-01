@@ -1,6 +1,7 @@
 import { looksLikePhone } from "@/lib/phone";
 import { canonicalizeWorkColumn } from "@/lib/work-board";
 import { unknownAutomationMergeFields } from "@/lib/automations/merge";
+import { workflowOf } from "@/lib/automations/workflow";
 import {
   AUTOMATION_ACTIONS,
   AUTOMATION_CONDITION_FIELDS,
@@ -55,9 +56,45 @@ export function validateAutomationDraft(
     }
   }
 
+  const workflow = workflowOf(draft.triggerConfig);
   if (draft.actions.length === 0) {
-    fieldErrors.actions = "Add at least one action.";
+    fieldErrors.actions = workflow ? "Add the text they will reply to." : "Add at least one action.";
     errors.push(fieldErrors.actions);
+  }
+  if (workflow) {
+    const hours = Number(workflow.timeoutHours);
+    if (!Number.isFinite(hours) || hours < 1 || hours > 720) {
+      fieldErrors.workflow = "Wait between 1 and 720 hours for a reply.";
+      errors.push(fieldErrors.workflow);
+    }
+    const branches = [
+      ["yes", workflow.yes],
+      ["no", workflow.no],
+      ["timeout", workflow.timeout],
+    ] as const;
+    if (branches.every(([, actions]) => actions.length === 0)) {
+      fieldErrors.workflow = "Add what happens for yes, no, or no reply.";
+      errors.push(fieldErrors.workflow);
+    }
+    for (const [branch, actions] of branches) {
+      actions.forEach((action, index) => {
+        const error = validateAction(action);
+        if (error) {
+          fieldErrors[`workflow.${branch}.${index}`] = error;
+          errors.push(error);
+        }
+        const unknown = [
+          ...unknownAutomationMergeFields(action.body ?? ""),
+          ...unknownAutomationMergeFields(action.subject ?? ""),
+          ...unknownAutomationMergeFields(action.title ?? ""),
+        ];
+        if (unknown.length > 0) {
+          const message = `Unknown merge field {{${unknown[0]}}}.`;
+          fieldErrors[`workflow.${branch}.${index}.merge`] = message;
+          errors.push(message);
+        }
+      });
+    }
   }
 
   draft.conditions.forEach((condition, index) => {
@@ -86,7 +123,13 @@ export function validateAutomationDraft(
     }
   });
 
-  if (automationNeedsSmsNumber(draft.actions) && options.smsConfigured === false) {
+  const smsActions = [
+    ...draft.actions,
+    ...(workflow?.yes ?? []),
+    ...(workflow?.no ?? []),
+    ...(workflow?.timeout ?? []),
+  ];
+  if (automationNeedsSmsNumber(smsActions) && options.smsConfigured === false) {
     fieldErrors.sms = "Add this office's Photon project under Settings → Photon before saving a text action.";
     errors.push(fieldErrors.sms);
   }

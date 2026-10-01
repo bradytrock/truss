@@ -146,9 +146,19 @@ export const AUTOMATION_MERGE_FIELD_LABELS: Record<AutomationMergeField, string>
   estimateTotal: "Proposal total",
 };
 
+export type AutomationWorkflow = {
+  enabled: true;
+  /** Hours of silence before the no-reply branch. */
+  timeoutHours: number;
+  yes: AutomationAction[];
+  no: AutomationAction[];
+  timeout: AutomationAction[];
+};
+
 export type AutomationTriggerConfig = {
   stage?: WorkColumn | "";
   days?: number;
+  workflow?: AutomationWorkflow;
 };
 
 export type AutomationCondition = {
@@ -188,6 +198,7 @@ export const AUTOMATION_RUN_STATUSES = [
   "confirmed",
   "skipped",
   "running",
+  "waiting_reply",
   "sent",
   "failed",
 ] as const;

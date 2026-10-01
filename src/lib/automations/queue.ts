@@ -5,6 +5,7 @@ import {
   type AutomationMergeContext,
 } from "@/lib/automations/merge";
 import { describeJobValue } from "@/lib/automations/job-effects";
+import { workflowOf } from "@/lib/automations/workflow";
 import {
   automationIsDelayed,
   automationMatchesEvent,
@@ -33,7 +34,27 @@ export function previewAutomation(input: {
     estimateTotal,
   });
   const lines = input.automation.actions.map((action) => previewActionLine(action, ctx, estimateTotal));
+  const workflow = workflowOf(input.automation.triggerConfig);
+  if (workflow) {
+    lines.push(
+      previewWorkflowBranch("If yes", workflow.yes, ctx, estimateTotal),
+      previewWorkflowBranch("If no", workflow.no, ctx, estimateTotal),
+      previewWorkflowBranch(`If no reply in ${workflow.timeoutHours} hours`, workflow.timeout, ctx, estimateTotal),
+    );
+  }
   return lines.filter(Boolean).join("\n\n");
+}
+
+function previewWorkflowBranch(
+  label: string,
+  actions: AutomationAction[],
+  merge: AutomationMergeContext,
+  estimateTotal: number | null,
+) {
+  if (actions.length === 0) return `${label}: Do nothing`;
+  const first = previewActionLine(actions[0], merge, estimateTotal);
+  const extra = actions.length > 1 ? ` + ${actions.length - 1} more` : "";
+  return `${label}: ${first}${extra}`;
 }
 
 export function previewActionLine(

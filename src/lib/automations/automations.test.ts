@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { automationEmailText } from "./execute.ts";
 import { conditionsPass, automationMatchesEvent, scheduledForFromTrigger } from "./evaluate.ts";
 import { applyAutomationMerge, smsSegmentCount, unknownAutomationMergeFields } from "./merge.ts";
-import { plannedRunsForEvent } from "./queue.ts";
-import { summarizeAutomation, summarizeTrigger } from "./summarize.ts";
+import { plannedRunsForEvent, previewAutomation } from "./queue.ts";
+import { summarizeAutomation, summarizeTrigger, summarizeWorkflowBranch } from "./summarize.ts";
 import { defaultRequiresConfirmation, validateAutomationDraft } from "./validate.ts";
+import { classifyAutomationReply, replyDeadline } from "./workflow.ts";
 import type { Automation, AutomationAction, AutomationCondition } from "./types.ts";
 
 const sms: AutomationAction = {
@@ -272,5 +273,82 @@ assert.equal(valued.length, 1);
 assert.equal(valued[0]?.status, "confirmed");
 assert.match(valued[0]?.renderedPreview ?? "", /proposal total/);
 assert.equal(automationEmailText("Status updated", "Moved to In progress"), "Status updated\n\nMoved to In progress");
+
+assert.equal(classifyAutomationReply("Yes!"), "yes");
+assert.equal(classifyAutomationReply("yeah we are interested"), "yes");
+assert.equal(classifyAutomationReply("ok"), "yes");
+assert.equal(classifyAutomationReply("No thanks"), "no");
+assert.equal(classifyAutomationReply("not interested"), "no");
+assert.equal(classifyAutomationReply("maybe later"), null);
+assert.equal(classifyAutomationReply("  "), null);
+assert.equal(replyDeadline(24, new Date("2026-09-18T12:00:00.000Z")), "2026-09-19T12:00:00.000Z");
+assert.equal(replyDeadline(0, new Date("2026-09-18T12:00:00.000Z")), "2026-09-18T13:00:00.000Z");
+
+const replyMap = {
+  enabled: true as const,
+  timeoutHours: 24,
+  yes: [{ id: "y", kind: "create_task" as const, title: "Call {{contactName}}" }],
+  no: [{ id: "n", kind: "add_note" as const, body: "{{contactName}} said no." }],
+  timeout: [] as AutomationAction[],
+};
+const mapped = {
+  ...automation,
+  triggerKind: "lead_created" as const,
+  triggerConfig: { workflow: replyMap },
+  actions: [sms],
+};
+assert.equal(validateAutomationDraft(mapped, { smsConfigured: true }).ok, true);
+assert.equal(validateAutomationDraft({ ...mapped, actions: [] }, { smsConfigured: true }).ok, false);
+assert.equal(
+  validateAutomationDraft(
+    { ...mapped, triggerConfig: { workflow: { ...replyMap, timeoutHours: 0, yes: [], no: [], timeout: [] } } },
+    { smsConfigured: true },
+  ).ok,
+  false,
+);
+assert.match(summarizeAutomation(mapped), /yes \/ no \/ no reply in 24 hours/);
+assert.equal(summarizeWorkflowBranch("If no reply", []), "If no reply: Do nothing");
+
+const previewJob = {
+  id: "j1",
+  name: "Roof",
+  code: "JOB-1",
+  city: "Dallas",
+  primaryContactId: "c1",
+  ownerStaffId: "s1",
+};
+const yesNoPreview = previewAutomation({
+  automation: { ...rule, triggerKind: "lead_created", triggerConfig: { workflow: replyMap } },
+  book: {
+    jobs: [previewJob],
+    contacts: [{ id: "c1", name: "Pat" }],
+    staff: [{ id: "s1", name: "Sam" }],
+    opportunities: [],
+    googleLocations: [],
+  } as never,
+  company: { name: "Truss", phone: "555" } as never,
+  job: previewJob as never,
+});
+assert.match(yesNoPreview, /If yes: Call Pat/);
+assert.match(yesNoPreview, /If no: Pat said no/);
+assert.match(yesNoPreview, /If no reply in 24 hours: Do nothing/);
+
+const yesNoQueued = plannedRunsForEvent({
+  event: { kind: "lead_created", jobId: "j1" },
+  book: {
+    ...book,
+    automations: [
+      {
+        ...rule,
+        triggerKind: "lead_created",
+        triggerConfig: { workflow: replyMap },
+        requiresConfirmation: false,
+      },
+    ],
+  } as never,
+  company: { name: "Truss", phone: "555" } as never,
+});
+assert.equal(yesNoQueued[0]?.status, "confirmed");
+assert.match(yesNoQueued[0]?.renderedPreview ?? "", /If yes/);
 
 console.log("automations.test.ts ok");

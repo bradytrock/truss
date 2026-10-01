@@ -1,4 +1,5 @@
 import { describeJobValue } from "@/lib/automations/job-effects";
+import { workflowOf } from "@/lib/automations/workflow";
 import { leadSourceLabel } from "@/lib/leads";
 import { WORK_COLUMN_LABELS, canonicalizeWorkColumn, isWorkColumn } from "@/lib/work-board";
 import {
@@ -100,7 +101,17 @@ export function summarizeAutomation(
   const trigger = summarizeTrigger(automation.triggerKind, automation.triggerConfig, labels);
   const first = automation.actions[0] ? summarizeAction(automation.actions[0]) : "do nothing";
   const extra = automation.actions.length > 1 ? ` + ${automation.actions.length - 1} more` : "";
-  return `${trigger} → ${first}${extra}`;
+  const workflow = workflowOf(automation.triggerConfig);
+  const map = workflow
+    ? ` · yes / no / no reply in ${workflow.timeoutHours} hour${workflow.timeoutHours === 1 ? "" : "s"}`
+    : "";
+  return `${trigger} → ${first}${extra}${map}`;
+}
+
+export function summarizeWorkflowBranch(label: string, actions: Automation["actions"]) {
+  const first = actions[0] ? summarizeAction(actions[0]) : "Do nothing";
+  const extra = actions.length > 1 ? ` + ${actions.length - 1} more` : "";
+  return `${label}: ${first}${extra}`;
 }
 
 export function summarizeCondition(condition: AutomationCondition, labels?: Record<string, string>) {

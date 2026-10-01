@@ -94,6 +94,7 @@ import {
   type AutomationRun,
   type AutomationTemplate,
   type AutomationTriggerKind,
+  type AutomationWorkflow,
 } from "@/lib/automations";
 import { canonicalizeWorkColumn } from "@/lib/work-board";
 
@@ -1669,13 +1670,28 @@ function parseActions(raw: Json): AutomationAction[] {
   });
 }
 
+function parseWorkflow(raw: unknown): AutomationWorkflow | undefined {
+  const row = asRecord(raw);
+  if (row.enabled !== true) return undefined;
+  const hours = Number(row.timeoutHours);
+  return {
+    enabled: true,
+    timeoutHours: Number.isFinite(hours) && hours > 0 ? Math.min(720, Math.round(hours)) : 24,
+    yes: parseActions(row.yes as Json),
+    no: parseActions(row.no as Json),
+    timeout: parseActions(row.timeout as Json),
+  };
+}
+
 function parseTriggerConfig(raw: Json): Automation["triggerConfig"] {
   const row = asRecord(raw);
   const stage = typeof row.stage === "string" ? canonicalizeWorkColumn(row.stage) ?? undefined : undefined;
   const days = typeof row.days === "number" ? row.days : Number(row.days);
+  const workflow = parseWorkflow(row.workflow);
   return {
     ...(stage ? { stage } : {}),
     ...(Number.isFinite(days) && days > 0 ? { days } : {}),
+    ...(workflow ? { workflow } : {}),
   };
 }
 

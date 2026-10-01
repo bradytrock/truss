@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { executeAutomationActions } from "@/lib/automations/execute";
+import { replyDeadline, workflowOf } from "@/lib/automations/workflow";
 import { estimateTotalForContext, mergeForJob, runsAfterStageChange } from "@/lib/automations/queue";
 import { automationRunInsertPayload, mapAutomation, mapAutomationRun, mapCompany } from "@/lib/supabase/mappers";
 import { createClient } from "@/lib/supabase/server";
@@ -140,11 +141,15 @@ export async function POST(request: Request) {
       },
     });
 
+    const workflow = executed.ok ? workflowOf(loaded.automation.triggerConfig) : null;
     await supabase
       .from("automation_runs")
       .update({
-        status: executed.ok ? "sent" : "failed",
-        delivery_status: executed.delivery,
+        status: executed.ok ? (workflow ? "waiting_reply" : "sent") : "failed",
+        scheduled_for: workflow ? replyDeadline(workflow.timeoutHours) : loaded.run.scheduledFor,
+        delivery_status: workflow
+          ? [executed.delivery, "Waiting on a reply."].filter(Boolean).join(" · ")
+          : executed.delivery,
         error_text: executed.error,
         updated_at: new Date().toISOString(),
       })
