@@ -328,9 +328,13 @@ export function MessagesInbox() {
     if (key && (showCompose || !selected)) {
       router.replace(messagesHref({ thread: key }), { scroll: false });
     }
-    void crm.sendTextMessage(payload).then((ok) => {
-      if (!ok) setBody((current) => (current.trim() ? current : text));
-    });
+    void crm.sendTextMessage(payload)
+      .then((ok) => {
+        if (!ok) setBody((current) => (current.trim() ? current : text));
+      })
+      .catch(() => {
+        setBody((current) => (current.trim() ? current : text));
+      });
   }, [
     body,
     effect,
