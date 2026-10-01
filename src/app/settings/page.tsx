@@ -409,8 +409,9 @@ function WebsiteChatEmbed({ slug, phone }: { slug: string; phone: string }) {
       <CardHeader className="border-b">
         <CardTitle>Website chat</CardTitle>
         <CardDescription>
-          Asks for a name, phone, and street address, then opens a lead. Company admins are
-          notified so they can assign it. The visitor can keep talking here or text the main phone
+          Asks the same qualifying questions as a new lead: residential or commercial, the trades
+          involved, name, phone, email, and address. Company admins are notified so they can assign
+          it. The visitor can keep talking here or text the main phone
           {phone.trim() ? ` (${phone.trim()})` : ""}.
         </CardDescription>
       </CardHeader>
