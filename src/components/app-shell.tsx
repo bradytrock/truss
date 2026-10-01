@@ -225,6 +225,28 @@ export function AppShell({ children }: { children: ReactNode }) {
   const launcherApps = appLauncherItems();
   const inboxLayout = isInboxPath(pathname);
 
+  useEffect(() => {
+    if (!inboxLayout) return;
+    const root = document.documentElement;
+    const body = document.body;
+    const previous = {
+      rootHeight: root.style.height,
+      rootOverflow: root.style.overflow,
+      bodyHeight: body.style.height,
+      bodyOverflow: body.style.overflow,
+    };
+    root.style.height = "100dvh";
+    root.style.overflow = "hidden";
+    body.style.height = "100dvh";
+    body.style.overflow = "hidden";
+    return () => {
+      root.style.height = previous.rootHeight;
+      root.style.overflow = previous.rootOverflow;
+      body.style.height = previous.bodyHeight;
+      body.style.overflow = previous.bodyOverflow;
+    };
+  }, [inboxLayout]);
+
   const createMenu =
     effectiveStaff && isBusinessDevelopment(effectiveStaff.role) ? (
       <>
@@ -254,7 +276,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div
       className={cn(
         "grid w-full flex-1 bg-sidebar md:grid-cols-[13.5rem_minmax(0,1fr)]",
-        inboxLayout ? "h-dvh overflow-hidden" : "min-h-dvh",
+        inboxLayout ? "h-dvh max-h-dvh overflow-hidden" : "min-h-dvh",
       )}
     >
       <aside
