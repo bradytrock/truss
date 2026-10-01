@@ -241,6 +241,7 @@ export function fillJobRecord(job: JobDraft, opportunity?: Opportunity | null): 
     market: workMarket(job, opportunity),
     leadSource: (job.leadSource || opportunity?.leadSource || "") as LeadSource | "",
     primaryPhotoId: job.primaryPhotoId ?? null,
+    projectedMarginPercent: job.projectedMarginPercent ?? null,
     deletedAt: job.deletedAt ?? null,
     deletedReason: job.deletedReason ?? "",
     deletedBy: job.deletedBy ?? "",

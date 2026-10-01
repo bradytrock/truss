@@ -14,10 +14,11 @@ import {
   type JobBooksBasis,
 } from "@/lib/job-financials";
 import {
-  applyForecastedExpenses,
+  averageActualMarginPercent,
   buildProfitAndLoss,
   compareJobProfitAndLoss,
   jobPeriodBounds,
+  projectJobComparison,
 } from "@/lib/profit-and-loss";
 import { JobPnlComparisonTable, ProfitAndLossReport } from "@/components/profit-and-loss";
 import { EXPENSE_ACCOUNT_LABELS, type Job } from "@/lib/types";
@@ -75,7 +76,7 @@ export function JobFinancials({ job }: { job: Job }) {
   );
   const comparison = useMemo(
     () =>
-      applyForecastedExpenses(
+      projectJobComparison(
         compareJobProfitAndLoss({
           job,
           statement,
@@ -84,9 +85,24 @@ export function JobFinancials({ job }: { job: Job }) {
           catalog: crm.catalog,
           opportunities: crm.opportunities,
         }),
-        forecasts,
+        {
+          forecasts,
+          averageMarginPercent: job.projectedMarginPercent ?? null,
+        },
       ),
     [crm.catalog, crm.estimateLines, crm.estimates, crm.opportunities, forecasts, job, statement],
+  );
+  const companyAverage = useMemo(
+    () =>
+      averageActualMarginPercent({
+        jobs: crm.jobs,
+        invoices: crm.invoices,
+        invoiceLines: crm.invoiceLines,
+        payments: crm.payments,
+        expenses: crm.expenses,
+        basis,
+      }),
+    [basis, crm.expenses, crm.invoiceLines, crm.invoices, crm.jobs, crm.payments],
   );
   const forecastTotal = forecasts.reduce((sum, item) => sum + item.amount, 0);
   const expenses = expensesForJob(job.id, crm.expenses).sort((a, b) =>
@@ -110,7 +126,17 @@ export function JobFinancials({ job }: { job: Job }) {
         </Button>
       </div>
 
-      {comparison ? <JobPnlComparisonTable statement={statement} comparison={comparison} /> : null}
+      {comparison ? (
+        <JobPnlComparisonTable
+          statement={statement}
+          comparison={comparison}
+          marginEditor={{
+            percent: job.projectedMarginPercent ?? null,
+            companyAverage,
+            onChange: (percent) => crm.updateJob(job.id, { projectedMarginPercent: percent }),
+          }}
+        />
+      ) : null}
 
       <ProfitAndLossReport statement={statement} />
 
@@ -123,7 +149,9 @@ export function JobFinancials({ job }: { job: Job }) {
         </div>
         {forecasts.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No forecasted expenses on this job yet. Log an expected cost before the receipt exists.
+            {comparison?.marginBasis === "average"
+              ? "No forecasted expenses. Projected profit is using the average margin."
+              : "No forecasted expenses on this job yet. Log an expected cost, or click the projected margin and set a percent."}
           </p>
         ) : (
           <ul className="space-y-3">
@@ -153,8 +181,9 @@ export function JobFinancials({ job }: { job: Job }) {
         )}
         {forecasts.length > 0 ? (
           <p className="mt-2 text-xs text-muted-foreground">
-            Job costs (materials, labor, dumpsters, permits, and similar) move projected cost of sales.
-            Fuel, office, and insurance move projected expenses. Nothing here posts to QuickBooks.
+            {comparison?.marginBasis === "average"
+              ? "Projected profit is using the average margin, so these costs are not in the projected column. Nothing here posts to QuickBooks."
+              : "Job costs (materials, labor, dumpsters, permits, and similar) move projected cost of sales. Fuel, office, and insurance move projected expenses. Nothing here posts to QuickBooks."}
           </p>
         ) : null}
       </div>

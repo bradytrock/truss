@@ -235,6 +235,25 @@ export function missingForecastedExpensesMessage() {
   return `Saved in this browser. Run ${FORECASTED_EXPENSES_SQL} in the SQL editor so forecasted expenses stay on the job.`;
 }
 
+export const PROJECTED_MARGIN_SQL = "supabase/migrations/20260930160000_job_projected_margin.sql";
+
+export function isMissingProjectedMargin(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  if (!message.includes("projected_margin_percent")) return false;
+  return (
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("schema cache") ||
+    message.includes("could not find") ||
+    message.includes("does not exist")
+  );
+}
+
+export function missingProjectedMarginMessage() {
+  return `Saved in this browser. Run ${PROJECTED_MARGIN_SQL} in the SQL editor so the average margin stays on the job.`;
+}
+
 export const JOB_INSURANCE_SQL = "supabase/migrations/20260929180000_job_insurance.sql";
 export const JOB_INSURANCE_ADJUSTER_SQL = "supabase/migrations/20260929182000_job_insurance_adjuster.sql";
 

@@ -385,6 +385,11 @@ export function mapJob(row: JobRow): Job {
       "primary_photo_id" in row
         ? (((row as { primary_photo_id?: string | null }).primary_photo_id) ?? null)
         : null,
+    projectedMarginPercent:
+      "projected_margin_percent" in row &&
+      (row as { projected_margin_percent?: number | null }).projected_margin_percent != null
+        ? Number((row as { projected_margin_percent?: number | null }).projected_margin_percent)
+        : null,
     deletedAt: row.deleted_at ?? null,
     deletedReason: row.deleted_reason ?? "",
     deletedBy: row.deleted_by ?? "",
@@ -517,6 +522,9 @@ export function jobPatch(patch: Partial<Job>) {
   if (patch.leadSource !== undefined) row.lead_source = patch.leadSource ?? "";
   if (patch.primaryPhotoId !== undefined) {
     (row as { primary_photo_id?: string | null }).primary_photo_id = patch.primaryPhotoId;
+  }
+  if (patch.projectedMarginPercent !== undefined) {
+    row.projected_margin_percent = patch.projectedMarginPercent;
   }
   if (patch.deletedAt !== undefined) row.deleted_at = patch.deletedAt;
   if (patch.deletedReason !== undefined) row.deleted_reason = patch.deletedReason;
