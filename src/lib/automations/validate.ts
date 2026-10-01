@@ -87,7 +87,7 @@ export function validateAutomationDraft(
   });
 
   if (automationNeedsSmsNumber(draft.actions) && options.smsConfigured === false) {
-    fieldErrors.sms = "Provision a sending number before saving a text action.";
+    fieldErrors.sms = "Add this office's Photon project under Settings → Photon before saving a text action.";
     errors.push(fieldErrors.sms);
   }
 

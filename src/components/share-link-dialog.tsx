@@ -31,7 +31,7 @@ import {
 } from "@/lib/share-text";
 import { formatResendFromDisplay, RESEND_FROM_ADDRESS } from "@/lib/resend-from";
 
-type SendblueStatus = { configured: boolean; fromNumber: string };
+type PhotonTextStatus = { configured: boolean };
 type ResendStatus = { configured: boolean; from: string; domain?: string };
 
 export function ShareLinkDialog({
@@ -107,7 +107,7 @@ export function ShareLinkDialog({
   }) => void | Promise<void>;
 }) {
   const [pending, setPending] = useState<"copy" | "pdf" | "text" | "email" | null>(null);
-  const [textStatus, setTextStatus] = useState<SendblueStatus | null>(null);
+  const [textStatus, setTextStatus] = useState<PhotonTextStatus | null>(null);
   const [emailStatus, setEmailStatus] = useState<ResendStatus | null>(null);
   const [phones, setPhones] = useState<Record<string, string>>({});
   const [emails, setEmails] = useState<Record<string, string>>({});
@@ -182,11 +182,11 @@ export function ShareLinkDialog({
     void Promise.all([
       fetch("/api/share/text")
         .then((response) => (response.ok ? response.json() : null))
-        .then((data: SendblueStatus | null) => {
+        .then((data: PhotonTextStatus | null) => {
           if (!cancelled && data) setTextStatus(data);
         })
         .catch(() => {
-          if (!cancelled) setTextStatus({ configured: false, fromNumber: "" });
+          if (!cancelled) setTextStatus({ configured: false });
         }),
       fetch("/api/share/email")
         .then((response) => (response.ok ? response.json() : null))
@@ -306,7 +306,7 @@ export function ShareLinkDialog({
       }
       if (mocked) {
         toast.message(
-          "Sendblue is not connected to this website. Add SENDBLUE_API_KEY_ID, SENDBLUE_API_SECRET_KEY, and SENDBLUE_FROM_NUMBER on the host and redeploy, or deploy supabase/functions/send-text.",
+          "Photon is not connected for this company. The text is logged on the job. Add this office's Photon project under Settings → Photon.",
         );
       } else {
         toast.success(
@@ -582,8 +582,8 @@ export function ShareLinkDialog({
                 ? "Each send includes that person’s own signing link. "
                 : null}
               {textStatus?.configured
-                ? `Texts go out over Sendblue${textStatus.fromNumber ? ` (${textStatus.fromNumber})` : ""}. `
-                : "Texts need SENDBLUE_ keys on the host until then Send text previews without delivering. "}
+                ? "Texts go out through this office's Photon project. "
+                : "Photon is not set up for this company. Send text logs the message on the job until you add the project under Settings → Photon. "}
               {(() => {
                 const fromLabel =
                   sender?.name?.trim() && companyName?.trim()

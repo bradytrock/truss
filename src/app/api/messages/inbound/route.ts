@@ -1,7 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { digitsOnly } from "@/lib/phone";
-import { sendblueFromNumber } from "@/lib/sendblue";
+import { inboundSkipReason, inboundTextFields } from "@/lib/inbound-text";
 import { getSupabaseKey, getSupabaseUrl } from "@/lib/supabase/env";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -9,31 +8,6 @@ export const runtime = "nodejs";
 
 function webhookToken() {
   return process.env.MESSAGES_WEBHOOK_TOKEN?.trim() || "";
-}
-
-function asString(value: unknown) {
-  return typeof value === "string" ? value : "";
-}
-
-function last10(value: string) {
-  return digitsOnly(value).slice(-10);
-}
-
-function flatten(body: Record<string, unknown>) {
-  const nested = body.message;
-  if (nested && typeof nested === "object" && !Array.isArray(nested)) {
-    return { ...body, ...(nested as Record<string, unknown>) };
-  }
-  return body;
-}
-
-function isOutboundPayload(body: Record<string, unknown>) {
-  if (body.is_outbound === true) return true;
-  const from = asString(body.from_number) || asString(body.number);
-  const ours = sendblueFromNumber();
-  const fromKey = last10(from);
-  const oursKey = last10(ours);
-  return Boolean(oursKey && fromKey && fromKey === oursKey);
 }
 
 export async function GET() {
@@ -58,24 +32,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  const body = flatten(raw);
-  if (isOutboundPayload(body)) {
-    return NextResponse.json({ ok: true, skipped: true, reason: "outbound" });
+  const skip = inboundSkipReason(raw);
+  if (skip) {
+    return NextResponse.json({ ok: true, skipped: true, reason: skip });
   }
 
-  const from = asString(body.from_number) || asString(body.number);
-  const content = asString(body.content);
-  const handle = asString(body.message_handle);
-  const mediaUrl = asString(body.media_url);
-  const sentAt = asString(body.date_sent) || null;
-
+  const fields = inboundTextFields(raw);
   const supabase = createClient<Database>(getSupabaseUrl(), getSupabaseKey());
   const { data, error } = await supabase.rpc("ingest_inbound_text", {
-    p_from: from,
-    p_body: content,
-    p_handle: handle,
-    p_media_url: mediaUrl,
-    p_sent_at: sentAt,
+    p_from: fields.from,
+    p_body: fields.content,
+    p_handle: fields.handle,
+    p_media_url: fields.mediaUrl,
+    p_sent_at: fields.sentAt,
   });
 
   if (error) {
