@@ -143,6 +143,119 @@ type SpectrumSpace = {
   send: (input: unknown) => Promise<unknown>;
 };
 
+type SpectrumPlatform = {
+  user: (phone: string) => Promise<unknown>;
+  space: {
+    create: (people: unknown) => Promise<SpectrumSpace>;
+  };
+};
+
+type SpectrumSession = {
+  projectId: string;
+  app: { stop: () => Promise<void> };
+  platform: SpectrumPlatform;
+  users: Map<string, unknown>;
+  spaces: Map<string, SpectrumSpace>;
+};
+
+const sessions = new Map<string, SpectrumSession>();
+const maxSessions = 8;
+let sendQueue: Promise<void> = Promise.resolve();
+
+function enqueue<T>(run: () => Promise<T>): Promise<T> {
+  const result = sendQueue.then(run, run);
+  // A stuck Photon call must not hold every later text behind it.
+  const settled = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  sendQueue = Promise.race([
+    settled,
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, 25_000);
+    }),
+  ]);
+  return result;
+}
+
+function connectionLost(error: unknown) {
+  const message = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  return /socket|closed|econn|network|fetch|disconnected|aborted|timed out|timeout|not connected/.test(message);
+}
+
+function rememberSession(next: SpectrumSession) {
+  sessions.delete(next.projectId);
+  sessions.set(next.projectId, next);
+  while (sessions.size > maxSessions) {
+    const oldest = sessions.keys().next().value;
+    if (!oldest) break;
+    const dropped = sessions.get(oldest);
+    sessions.delete(oldest);
+    if (dropped) void dropped.app.stop().catch(() => undefined);
+  }
+}
+
+async function forgetSession(projectId: string) {
+  const current = sessions.get(projectId);
+  if (!current) return;
+  sessions.delete(projectId);
+  await current.app.stop().catch(() => undefined);
+}
+
+async function spectrumSession(credentials: PhotonCredentials) {
+  const existing = sessions.get(credentials.projectId);
+  if (existing) return existing;
+  const { Spectrum } = await import("@spectrum-ts/core");
+  const { imessage } = await import("@spectrum-ts/imessage");
+  const app = await Spectrum({
+    projectId: credentials.projectId,
+    projectSecret: credentials.projectSecret,
+    providers: [imessage.config()],
+  });
+  const next: SpectrumSession = {
+    projectId: credentials.projectId,
+    app,
+    platform: imessage(app) as SpectrumPlatform,
+    users: new Map(),
+    spaces: new Map(),
+  };
+  rememberSession(next);
+  return next;
+}
+
+async function spaceFor(credentials: PhotonCredentials, phones: string[]) {
+  const current = await spectrumSession(credentials);
+  const key = phones.join("|");
+  const cached = current.spaces.get(key);
+  if (cached) return cached;
+  const people: unknown[] = [];
+  for (const phone of phones) {
+    let person = current.users.get(phone);
+    if (!person) {
+      person = await current.platform.user(phone);
+      current.users.set(phone, person);
+    }
+    people.push(person);
+  }
+  const space = await current.platform.space.create(people.length === 1 ? people[0] : people);
+  current.spaces.set(key, space);
+  return space;
+}
+
+async function openSpace(credentials: PhotonCredentials, phones: string[]) {
+  try {
+    return await spaceFor(credentials, phones);
+  } catch {
+    await forgetSession(credentials.projectId);
+    try {
+      return await spaceFor(credentials, phones);
+    } catch (error) {
+      await forgetSession(credentials.projectId);
+      throw error;
+    }
+  }
+}
+
 function sentHandle(sent: unknown) {
   return sent && typeof sent === "object" && "id" in sent && typeof sent.id === "string" ? sent.id : "";
 }
@@ -171,21 +284,15 @@ async function withSpace<T>(
 ) {
   const phones = textTargets(to);
   if (phones.length === 0) throw new Error("That phone number is not valid.");
-  const { Spectrum } = await import("@spectrum-ts/core");
-  const { imessage } = await import("@spectrum-ts/imessage");
-  const app = await Spectrum({
-    projectId: credentials.projectId,
-    projectSecret: credentials.projectSecret,
-    providers: [imessage.config()],
+  return enqueue(async () => {
+    const space = await openSpace(credentials, phones);
+    try {
+      return await run(space);
+    } catch (error) {
+      if (connectionLost(error)) await forgetSession(credentials.projectId);
+      throw error;
+    }
   });
-  try {
-    const platform = imessage(app);
-    const people = await Promise.all(phones.map((phone) => platform.user(phone)));
-    const space = await platform.space.create(people.length === 1 ? people[0] : people);
-    return await run(space as SpectrumSpace);
-  } finally {
-    await app.stop().catch(() => undefined);
-  }
 }
 
 async function loadCredentials(voiceToken?: string) {

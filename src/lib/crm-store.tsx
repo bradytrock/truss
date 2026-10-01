@@ -1829,7 +1829,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
     const channel = supabase
       .channel(`truss-live-${user.companyId}`)
-      .on("postgres_changes", { event: "*", schema: "public" }, kick)
+      .on("postgres_changes", { event: "*", schema: "public" }, (payload) => {
+        // Marking a thread read should not reload the whole book.
+        if (payload.table === "message_thread_opens") return;
+        kick();
+      })
       .subscribe((status) => {
         if (cancelled) return;
         if (status === "SUBSCRIBED") {
@@ -2378,9 +2382,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       const activityBody = outboundActivityBody(who, phone, content);
       if (job) {
-        await addActivity({ entityType: "job", entityId: job.id, type: "text", body: activityBody });
+        void addActivity({ entityType: "job", entityId: job.id, type: "text", body: activityBody });
       } else if (opportunityId) {
-        await addActivity({
+        void addActivity({
           entityType: "opportunity",
           entityId: opportunityId,
           type: "text",
@@ -2509,44 +2513,85 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }) => {
       const effectId = input.effect?.trim() ? imessageEffectId(input.effect) : "";
       const replyToHandle = input.replyToHandle?.trim() ?? "";
-      const response = await fetch("/api/messages/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: input.to,
-          content: input.content,
-          effect: effectId,
-          replyToHandle,
-        }),
-      });
-      const data = (await response.json().catch(() => null)) as
-        | { ok?: boolean; mocked?: boolean; error?: string; handle?: string; to?: string }
-        | null;
-      if (!response.ok || !data?.ok) {
-        toast.error(data?.error || "Could not send that text.");
-        return false;
-      }
+      const content = input.content.trim();
+      const phone = toE164(input.to) || input.to.trim();
       const detail = [effectId ? imessageEffectLabel(effectId) : "", replyToHandle ? "Reply" : ""]
         .filter(Boolean)
         .join(" · ");
       const kind = effectId ? "effect" : replyToHandle ? "reply" : "text";
-      await logOutboundText({
-        ...input,
-        to: data.to || input.to,
-        handle: outboundMessageHandle({ returned: data.handle, occupied: replyToHandle, kind }),
-        kind,
-        detail,
-      });
-      if (data.mocked) {
-        toast.message(
-          "Photon is not connected for this company. The text is logged on the job. Add this office's Photon project under Settings → Photon.",
-        );
-      } else {
-        toast.success("Text sent.");
+      const pendingId = crypto.randomUUID();
+      if (phone && content) {
+        const pending: TextMessage = {
+          id: pendingId,
+          contactId: input.contactId ?? null,
+          jobId: input.jobId ?? null,
+          opportunityId: input.opportunityId ?? null,
+          direction: "outbound",
+          phone,
+          body: content,
+          handle: "",
+          status: "sending",
+          mediaUrl: "",
+          kind,
+          detail,
+          createdAt: new Date().toISOString(),
+          createdBy: user.name,
+        };
+        setState((prev) => ({ ...prev, messages: [pending, ...prev.messages] }));
       }
-      return true;
+      const failPending = () => {
+        setState((prev) => ({
+          ...prev,
+          messages: prev.messages.map((message) =>
+            message.id === pendingId ? { ...message, status: "failed" } : message,
+          ),
+        }));
+      };
+      try {
+        const response = await fetch("/api/messages/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: input.to,
+            content: input.content,
+            effect: effectId,
+            replyToHandle,
+          }),
+        });
+        const data = (await response.json().catch(() => null)) as
+          | { ok?: boolean; mocked?: boolean; error?: string; handle?: string; to?: string }
+          | null;
+        if (!response.ok || !data?.ok) {
+          failPending();
+          toast.error(data?.error || "Could not send that text.");
+          return false;
+        }
+        await logOutboundText({
+          ...input,
+          to: data.to || input.to,
+          handle: outboundMessageHandle({ returned: data.handle, occupied: replyToHandle, kind }),
+          kind,
+          detail,
+        });
+        setState((prev) => ({
+          ...prev,
+          messages: prev.messages.filter((message) => message.id !== pendingId),
+        }));
+        if (data.mocked) {
+          toast.message(
+            "Photon is not connected for this company. The text is logged on the job. Add this office's Photon project under Settings → Photon.",
+          );
+        } else {
+          toast.success("Text sent.");
+        }
+        return true;
+      } catch {
+        failPending();
+        toast.error("Could not reach the server to send that text.");
+        return false;
+      }
     },
-    [logOutboundText],
+    [logOutboundText, user.name],
   );
 
   const reactToText = useCallback(
@@ -2631,10 +2676,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [user.companyId],
   );
 
+  const threadOpenMarks = useRef(new Map<string, number>());
   const markThreadOpened = useCallback(
     async (threadKey: string) => {
       const key = threadKey.trim();
       if (!key || !looksLikeUuid(user.id) || !user.companyId) return;
+      const now = Date.now();
+      const last = threadOpenMarks.current.get(key) ?? 0;
+      if (now - last < 2000) return;
+      threadOpenMarks.current.set(key, now);
       const openedAt = new Date().toISOString();
       setState((prev) => {
         const existing = prev.messageThreadOpens.find(
@@ -2661,16 +2711,23 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       const supabase = maybeClient();
       if (!supabase) return;
-      const { error } = await supabase.from("message_thread_opens").upsert(
-        {
-          company_id: user.companyId,
-          profile_id: user.id,
-          thread_key: key,
-          opened_at: openedAt,
-        },
-        { onConflict: "company_id,profile_id,thread_key" },
-      );
-      if (error && !isMissingThreadOpens(error)) toast.error(error.message);
+      try {
+        const { error } = await supabase.from("message_thread_opens").upsert(
+          {
+            company_id: user.companyId,
+            profile_id: user.id,
+            thread_key: key,
+            opened_at: openedAt,
+          },
+          { onConflict: "company_id,profile_id,thread_key" },
+        );
+        if (error && !isMissingThreadOpens(error)) {
+          threadOpenMarks.current.delete(key);
+          toast.error(error.message);
+        }
+      } catch {
+        threadOpenMarks.current.delete(key);
+      }
     },
     [user.companyId, user.id],
   );

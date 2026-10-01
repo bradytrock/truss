@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Virtuoso } from "react-virtuoso";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronsUpDown, Mail, MessageSquare, Phone, Search, Send, Smartphone, UserPlus, X } from "lucide-react";
@@ -21,6 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, ErrorBanner, LoadingScreen } from "@/components/page-chrome";
 import { InboxChannelSwitch } from "@/components/inbox-channel-switch";
+import { InboxScroll } from "@/components/inbox-scroll";
 import { useCrm } from "@/lib/crm-store";
 import {
   Sheet,
@@ -306,33 +306,31 @@ export function MessagesInbox() {
     );
   }, [queryContact?.id, queryContact?.phone, queryJob?.id, router]);
 
-  const send = useCallback(async () => {
+  const send = useCallback(() => {
     const text = body.trim();
     if (!looksLikePhone(sendTo) || !text) return;
-    setSending(true);
-    try {
-      const ok = await crm.sendTextMessage({
-        to: sendTo,
-        content: text,
-        effect,
-        replyToHandle: replyTo?.handle,
-        jobId: jobHint || undefined,
-        contactId: contactHint || undefined,
-        name: selected?.contact?.name || composeContact?.name || queryContact?.name,
-      });
-      if (ok) {
-        setBody("");
-        setEffect("");
-        setReplyTo(null);
-        const key = conversationThreadKey({
-          contactId: contactHint || composeContact?.id,
-          phone: sendTo,
-        });
-        if (key) router.replace(messagesHref({ thread: key }), { scroll: false });
-      }
-    } finally {
-      setSending(false);
+    const payload = {
+      to: sendTo,
+      content: text,
+      effect,
+      replyToHandle: replyTo?.handle,
+      jobId: jobHint || undefined,
+      contactId: contactHint || undefined,
+      name: selected?.contact?.name || composeContact?.name || queryContact?.name,
+    };
+    setBody("");
+    setEffect("");
+    setReplyTo(null);
+    const key = conversationThreadKey({
+      contactId: contactHint || composeContact?.id,
+      phone: sendTo,
+    });
+    if (key && (showCompose || !selected)) {
+      router.replace(messagesHref({ thread: key }), { scroll: false });
     }
+    void crm.sendTextMessage(payload).then((ok) => {
+      if (!ok) setBody((current) => (current.trim() ? current : text));
+    });
   }, [
     body,
     effect,
@@ -341,7 +339,8 @@ export function MessagesInbox() {
     crm,
     jobHint,
     contactHint,
-    selected?.contact?.name,
+    selected,
+    showCompose,
     composeContact?.id,
     composeContact?.name,
     queryContact?.name,
@@ -392,9 +391,12 @@ export function MessagesInbox() {
     [sendTo, sending, crm],
   );
 
+  // The store object changes when a thread is marked read. Depending on it
+  // re-fires this effect and floods the network with the same write.
+  const markOpened = crm.markThreadOpened;
   useEffect(() => {
-    if (selected?.key) void crm.markThreadOpened(selected.key);
-  }, [crm, selected?.key]);
+    if (selected?.key) void markOpened(selected.key);
+  }, [markOpened, selected?.key]);
 
   const pickerPeople = useMemo(() => {
     const needle = pickerQuery.trim().toLowerCase();
@@ -424,7 +426,7 @@ export function MessagesInbox() {
             conversationOpen && "hidden lg:flex",
           )}
         >
-          <div className="border-b px-4 py-3">
+          <div className="shrink-0 border-b px-4 py-3">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
@@ -450,7 +452,7 @@ export function MessagesInbox() {
               />
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <InboxScroll>
             {visibleWebChats.length > 0 ? (
               <div className="border-b">
                 <p className="px-4 pt-3 text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
@@ -512,7 +514,7 @@ export function MessagesInbox() {
                 />
               ))
             )}
-          </div>
+          </InboxScroll>
         </aside>
 
         <section
@@ -521,7 +523,7 @@ export function MessagesInbox() {
             !conversationOpen && "hidden lg:flex",
           )}
         >
-          <header className="flex items-center gap-2 border-b px-3 py-3 sm:px-4">
+          <header className="flex shrink-0 items-center gap-2 border-b px-3 py-3 sm:px-4">
             <Button
               type="button"
               variant="ghost"
@@ -703,7 +705,7 @@ export function MessagesInbox() {
 
           {selectedWeb ? (
             <form
-              className="space-y-2 border-t p-4"
+              className="shrink-0 space-y-2 border-t p-4"
               onSubmit={(event) => {
                 event.preventDefault();
                 void replyToWebsite();
@@ -759,7 +761,7 @@ export function MessagesInbox() {
             </form>
           ) : (
           <form
-            className="space-y-2 border-t p-4"
+            className="shrink-0 space-y-2 border-t p-4"
             onSubmit={(event) => {
               event.preventDefault();
               void send();
@@ -862,17 +864,11 @@ export function MessagesInbox() {
               />
               <Button
                 type="submit"
-                disabled={sending || !body.trim() || !looksLikePhone(sendTo)}
+                disabled={!body.trim() || !looksLikePhone(sendTo)}
                 className="self-end"
               >
-                {sending ? (
-                  "Sending…"
-                ) : (
-                  <>
-                    <Send data-icon="inline-start" />
-                    Send
-                  </>
-                )}
+                <Send data-icon="inline-start" />
+                Send
               </Button>
             </div>
             <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
@@ -961,6 +957,7 @@ function ThreadRow({
 
 function WebsiteConversation({ messages }: { messages: WebsiteChatThread["messages"] }) {
   const lastIndex = Math.max(0, messages.length - 1);
+  const last = messages[messages.length - 1];
   if (messages.length === 0) {
     return (
       <p className="px-4 py-4 text-sm text-muted-foreground">
@@ -969,17 +966,12 @@ function WebsiteConversation({ messages }: { messages: WebsiteChatThread["messag
     );
   }
   return (
-    <Virtuoso
-      className="h-full min-h-0 flex-1"
-      data={messages}
-      increaseViewportBy={{ top: 240, bottom: 400 }}
-      initialTopMostItemIndex={lastIndex}
-      followOutput="smooth"
-      itemContent={(index, message) => {
+    <InboxScroll stickToEnd stickKey={`${messages.length}:${last?.id ?? ""}`}>
+      {messages.map((message, index) => {
         const prior = messages[index - 1];
         const showDay = !prior || !sameLocalDay(prior.createdAt, message.createdAt);
         return (
-          <div className={cn("px-4", index === 0 ? "pt-4" : "pt-3", index === lastIndex ? "pb-4" : "")}>
+          <div key={message.id} className={cn("px-4", index === 0 ? "pt-4" : "pt-3", index === lastIndex ? "pb-4" : "")}>
             {showDay ? (
               <p className="mb-3 text-center text-[11px] tracking-wide text-muted-foreground uppercase">
                 {formatDate(message.createdAt)}
@@ -1005,8 +997,8 @@ function WebsiteConversation({ messages }: { messages: WebsiteChatThread["messag
             </div>
           </div>
         );
-      }}
-    />
+      })}
+    </InboxScroll>
   );
 }
 
@@ -1197,18 +1189,14 @@ function Conversation({
   onUnsend: (message: TextMessage) => void;
 }) {
   const lastIndex = Math.max(0, messages.length - 1);
+  const last = messages[messages.length - 1];
   return (
-    <Virtuoso
-      className="h-full min-h-0 flex-1"
-      data={messages}
-      increaseViewportBy={{ top: 240, bottom: 400 }}
-      initialTopMostItemIndex={lastIndex}
-      followOutput="smooth"
-      itemContent={(index, message) => {
+    <InboxScroll stickToEnd stickKey={`${messages.length}:${last?.id ?? ""}:${last?.status ?? ""}`}>
+      {messages.map((message, index) => {
         const prior = messages[index - 1];
         const showDay = !prior || !sameLocalDay(prior.createdAt, message.createdAt);
         return (
-          <div className={cn("px-4", index === 0 ? "pt-4" : "pt-3", index === lastIndex ? "pb-4" : "")}>
+          <div key={message.id} className={cn("px-4", index === 0 ? "pt-4" : "pt-3", index === lastIndex ? "pb-4" : "")}>
             {showDay ? (
               <p className="mb-3 text-center text-[11px] tracking-wide text-muted-foreground uppercase">
                 {formatDate(message.createdAt)}
@@ -1291,8 +1279,8 @@ function Conversation({
             </div>
           </div>
         );
-      }}
-    />
+      })}
+    </InboxScroll>
   );
 }
 
