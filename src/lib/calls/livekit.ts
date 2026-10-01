@@ -1,6 +1,7 @@
 import { AccessToken, LiveKitAPI, type SipDispatchRuleIndividual } from "livekit-server-sdk";
 import { SIPMediaEncryption, SIPTransport } from "@livekit/protocol";
 import { toE164 } from "../phone.ts";
+import { reuseOrCreateTrunk } from "./livekit-trunks.ts";
 
 export const PHOTON_SIP_HOST = "sip.spectrum.photon.codes";
 export const PHOTON_SIP_TLS_PORT = 5061;
@@ -88,25 +89,28 @@ export async function ensurePhotonOutboundTrunk(options: {
   const number = toE164(options.officeLine);
   if (!number) throw new Error("Set the office calling line in E.164 first.");
 
-  if (options.existingTrunkId) {
-    const trunks = await api.sip.listSipOutboundTrunk({
-      trunkIds: [options.existingTrunkId],
-    });
-    if (trunks[0]) return trunks[0];
-  }
-
-  return api.sip.createSipOutboundTrunk(
-    options.name,
-    `${PHOTON_SIP_HOST}:${PHOTON_SIP_TLS_PORT}`,
-    [number],
-    {
-      transport: SIPTransport.SIP_TRANSPORT_TLS,
-      authUsername: options.projectId,
-      authPassword: options.projectSecret,
-      metadata: JSON.stringify({ provider: "photon", officeLine: number }),
-      mediaEncryption: SIPMediaEncryption.SIP_MEDIA_ENCRYPT_DISABLE,
+  return reuseOrCreateTrunk({
+    number,
+    existingTrunkId: options.existingTrunkId,
+    getById: async (id) => {
+      const trunks = await api.sip.listSipOutboundTrunk({ trunkIds: [id] });
+      return trunks.find((trunk) => trunk?.sipTrunkId === id) ?? null;
     },
-  );
+    listByNumber: (officeNumber) => api.sip.listSipOutboundTrunk({ numbers: [officeNumber] }),
+    create: () =>
+      api.sip.createSipOutboundTrunk(
+        options.name,
+        `${PHOTON_SIP_HOST}:${PHOTON_SIP_TLS_PORT}`,
+        [number],
+        {
+          transport: SIPTransport.SIP_TRANSPORT_TLS,
+          authUsername: options.projectId,
+          authPassword: options.projectSecret,
+          metadata: JSON.stringify({ provider: "photon", officeLine: number }),
+          mediaEncryption: SIPMediaEncryption.SIP_MEDIA_ENCRYPT_DISABLE,
+        },
+      ),
+  });
 }
 
 export async function ensurePhotonInboundTrunk(options: {
@@ -118,17 +122,20 @@ export async function ensurePhotonInboundTrunk(options: {
   const number = toE164(options.officeLine);
   if (!number) throw new Error("Set the office calling line in E.164 first.");
 
-  if (options.existingTrunkId) {
-    const trunks = await api.sip.listSipInboundTrunk({
-      trunkIds: [options.existingTrunkId],
-    });
-    if (trunks[0]) return trunks[0];
-  }
-
-  return api.sip.createSipInboundTrunk(options.name, [number], {
-    metadata: JSON.stringify({ provider: "photon", officeLine: number }),
-    mediaEncryption: SIPMediaEncryption.SIP_MEDIA_ENCRYPT_DISABLE,
-    krispEnabled: true,
+  return reuseOrCreateTrunk({
+    number,
+    existingTrunkId: options.existingTrunkId,
+    getById: async (id) => {
+      const trunks = await api.sip.listSipInboundTrunk({ trunkIds: [id] });
+      return trunks.find((trunk) => trunk?.sipTrunkId === id) ?? null;
+    },
+    listByNumber: (officeNumber) => api.sip.listSipInboundTrunk({ numbers: [officeNumber] }),
+    create: () =>
+      api.sip.createSipInboundTrunk(options.name, [number], {
+        metadata: JSON.stringify({ provider: "photon", officeLine: number }),
+        mediaEncryption: SIPMediaEncryption.SIP_MEDIA_ENCRYPT_DISABLE,
+        krispEnabled: true,
+      }),
   });
 }
 
