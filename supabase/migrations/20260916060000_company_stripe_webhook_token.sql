@@ -47,12 +47,12 @@ begin
 
   select * into acct from public.company_stripe_accounts where company_id = v_company;
   if not found then
-    v_token := encode(gen_random_bytes(24), 'hex');
+    v_token := encode(extensions.gen_random_bytes(24), 'hex');
     insert into public.company_stripe_accounts (company_id, webhook_token)
     values (v_company, v_token)
     returning * into acct;
   elsif acct.webhook_token = '' then
-    v_token := encode(gen_random_bytes(24), 'hex');
+    v_token := encode(extensions.gen_random_bytes(24), 'hex');
     update public.company_stripe_accounts
     set webhook_token = v_token, updated_at = now()
     where company_id = v_company
@@ -94,7 +94,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'Secret key and webhook signing secret are required.');
   end if;
 
-  v_token := coalesce(nullif(acct.webhook_token, ''), encode(gen_random_bytes(24), 'hex'));
+  v_token := coalesce(nullif(acct.webhook_token, ''), encode(extensions.gen_random_bytes(24), 'hex'));
 
   insert into public.company_stripe_accounts (
     company_id, secret_key, webhook_secret, webhook_token, connected_at, revoke_at, revoke_requested_at, revoke_requested_by, updated_at
