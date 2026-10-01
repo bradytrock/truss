@@ -44,6 +44,30 @@ function stepFor(intake: Intake | null): Step {
   return "choose";
 }
 
+function readStored(key: string) {
+  try {
+    return window.localStorage.getItem(key) || "";
+  } catch {
+    return "";
+  }
+}
+
+function writeStored(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Cross-site embeds often block storage. The visit still works.
+  }
+}
+
+function removeStored(key: string) {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Same as writeStored: a blocked store should not take down the chat.
+  }
+}
+
 function officeInitial(name: string) {
   const letter = name.trim().charAt(0).toUpperCase();
   return /[A-Z0-9]/.test(letter) ? letter : "";
@@ -121,7 +145,7 @@ export function WebsiteChatWidget({ companySlug, embed }: { companySlug: string;
 
   useEffect(() => {
     const storageKey = `truss.websiteChat.${companySlug}`;
-    const saved = window.localStorage.getItem(storageKey) || "";
+    const saved = readStored(storageKey);
     let cancelled = false;
 
     function applyIntake(data: Intake, existingToken: string) {
@@ -161,7 +185,7 @@ export function WebsiteChatWidget({ companySlug, embed }: { companySlug: string;
           setReady(true);
           return;
         }
-        window.localStorage.removeItem(storageKey);
+        removeStored(storageKey);
       }
 
       const started = await fetch("/api/chat/start", {
@@ -176,7 +200,7 @@ export function WebsiteChatWidget({ companySlug, embed }: { companySlug: string;
         setReady(true);
         return;
       }
-      window.localStorage.setItem(storageKey, data.token);
+      writeStored(storageKey, data.token);
       setToken(data.token);
       setOffice({ companyName: data.companyName || officeData.companyName || "Office", phone: data.phone || officeData.phone || "" });
       setMessages([]);
@@ -407,7 +431,8 @@ export function WebsiteChatWidget({ companySlug, embed }: { companySlug: string;
     </div>
   ) : (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div ref={scroller} className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain px-4 py-4">
+      <div ref={scroller} className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+        <div className="mt-auto flex flex-col gap-2.5 px-4 py-4">
         {shown.map((message) => {
           const mine = message.direction === "inbound";
           return (
@@ -424,6 +449,7 @@ export function WebsiteChatWidget({ companySlug, embed }: { companySlug: string;
             </p>
           );
         })}
+        </div>
       </div>
       {error ? <p className="px-4 pb-1 text-xs text-destructive">{error}</p> : null}
       {step === "choose" ? (

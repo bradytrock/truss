@@ -17,7 +17,7 @@ export default async function WebsiteChatPage({
     <>
       {embed ? (
         <style href="truss-chat-embed" precedence="default">
-          {`html,body{background:transparent!important;background-color:transparent!important;overflow:hidden!important}`}
+          {`html,body{background:transparent!important;background-color:transparent!important;overflow:hidden!important}nextjs-portal{display:none!important}`}
         </style>
       ) : null}
       <WebsiteChatWidget companySlug={company} embed={embed} />
