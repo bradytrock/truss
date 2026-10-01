@@ -79,14 +79,27 @@ export function websiteChatAdminText(input: {
   phone: string;
   street: string;
   companyName: string;
+  ownerName?: string;
 }) {
   const office = input.companyName.trim() || "the office";
+  const owner = input.ownerName?.trim() ?? "";
   return [
     `${input.name.trim() || "A visitor"} started a website chat with ${office}.`,
     `Phone: ${input.phone.trim() || "—"}`,
     `Street: ${input.street.trim() || "—"}`,
-    "The lead is unassigned. Assign it when you are ready, and that project manager is notified.",
+    owner
+      ? `The lead is in ${owner}'s pipeline.`
+      : "The lead is unassigned. Assign it when you are ready, and that project manager is notified.",
   ].join("\n");
+}
+
+/** One header tag. A person id assigns new leads to that seat. */
+export function websiteChatEmbedCode(origin: string, company: string, personId = "") {
+  const root = origin.replace(/\/$/, "");
+  const office = company.trim().replace(/"/g, "");
+  const person = personId.trim().replace(/"/g, "");
+  const personAttr = person ? ` data-person="${person}"` : "";
+  return `<script src="${root}/api/chat/widget.js" data-company="${office}"${personAttr} async></script>`;
 }
 
 export function fallbackChatReplies() {

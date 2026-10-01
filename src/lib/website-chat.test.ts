@@ -10,6 +10,7 @@ import {
   textHandoffBody,
   websiteChatAdminSubject,
   websiteChatAdminText,
+  websiteChatEmbedCode,
   WEBSITE_CHAT_GREETING,
 } from "./website-chat.ts";
 
@@ -49,5 +50,20 @@ assert.match(websiteChatAdminText({
   street: "123 Oak Street",
   companyName: "T Rock Roofing",
 }), /unassigned/);
+assert.match(websiteChatAdminText({
+  name: "Brady Jones",
+  phone: "(469) 555-0100",
+  street: "123 Oak Street",
+  companyName: "T Rock Roofing",
+  ownerName: "Jordan Hale",
+}), /Jordan Hale's pipeline/);
+assert.equal(
+  websiteChatEmbedCode("https://crmtrock.com", "t-rock", "11111111-1111-4111-8111-111111111111"),
+  '<script src="https://crmtrock.com/api/chat/widget.js" data-company="t-rock" data-person="11111111-1111-4111-8111-111111111111" async></script>',
+);
+assert.equal(
+  websiteChatEmbedCode("https://crmtrock.com/", "t-rock"),
+  '<script src="https://crmtrock.com/api/chat/widget.js" data-company="t-rock" async></script>',
+);
 
 console.log("website-chat.test.ts ok");

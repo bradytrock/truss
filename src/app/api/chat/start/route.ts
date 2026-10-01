@@ -15,10 +15,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Bad request." }, { status: 400 });
   }
   const slug = typeof body.company === "string" ? body.company.trim().toLowerCase() : "";
+  const person = typeof body.person === "string" ? body.person.trim() : "";
   if (!slug) return NextResponse.json({ ok: false, error: "Missing office." }, { status: 400 });
 
   const supabase = createAnonClient();
-  const { data, error } = await supabase.rpc("website_chat_start", { p_slug: slug });
+  const { data, error } = await supabase.rpc("website_chat_start", { p_slug: slug, p_owner: person });
   if (error) {
     return NextResponse.json({ ok: false, error: "Chat is not ready yet." }, { status: 503 });
   }

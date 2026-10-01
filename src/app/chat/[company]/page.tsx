@@ -8,9 +8,15 @@ export default async function WebsiteChatPage({
   searchParams,
 }: {
   params: Promise<{ company: string }>;
-  searchParams: Promise<{ embed?: string }>;
+  searchParams: Promise<{ embed?: string; person?: string }>;
 }) {
   const { company } = await params;
   const query = await searchParams;
-  return <WebsiteChatWidget companySlug={company} embed={query.embed === "1"} />;
+  return (
+    <WebsiteChatWidget
+      companySlug={company}
+      embed={query.embed === "1"}
+      ownerId={query.person?.trim() ?? ""}
+    />
+  );
 }

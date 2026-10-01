@@ -2866,7 +2866,7 @@ export type Database = {
         Returns: Json;
       };
       website_chat_start: {
-        Args: { p_slug: string };
+        Args: { p_slug: string; p_owner?: string };
         Returns: Json;
       };
       website_chat_post: {

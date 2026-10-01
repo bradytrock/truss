@@ -1,10 +1,7 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,7 +15,7 @@ import {
 } from "@/components/company-settings-form";
 import { CompanyStripeSettings } from "@/components/company-stripe-settings";
 import { LEGAL_EMAIL, LEGAL_PAGES } from "@/lib/legal";
-import { copyText } from "@/lib/share";
+import { WebsiteChatSnippet } from "@/components/website-chat-snippet";
 
 export default function CompanySettingsPage() {
   return (
@@ -394,15 +391,7 @@ function CompanySettingsForm() {
 }
 
 function WebsiteChatEmbed({ slug, phone }: { slug: string; phone: string }) {
-  const origin = useSyncExternalStore(
-    () => () => {},
-    () => window.location.origin,
-    () => "",
-  );
   const company = slug.trim() || "your-company";
-  const snippet = origin
-    ? `<script src="${origin}/api/chat/widget.js" data-company="${company}" async></script>`
-    : "";
 
   return (
     <Card>
@@ -411,27 +400,12 @@ function WebsiteChatEmbed({ slug, phone }: { slug: string; phone: string }) {
         <CardDescription>
           Asks for a name, phone, and street address, then opens a lead. Company admins are
           notified so they can assign it. The visitor can keep talking here or text the main phone
-          {phone.trim() ? ` (${phone.trim()})` : ""}.
+          {phone.trim() ? ` (${phone.trim()})` : ""}. A person’s own header code, on their profile,
+          puts the lead in that person’s pipeline.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 pt-4">
-        <Label htmlFor="website-chat-snippet">Embed on your site</Label>
-        <Textarea id="website-chat-snippet" readOnly rows={3} value={snippet} className="font-mono text-xs" />
-        <div>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={!snippet}
-            onClick={() => {
-              void copyText(snippet).then((ok) => {
-                if (ok) toast.success("Embed code copied.");
-                else toast.error("Could not copy that.");
-              });
-            }}
-          >
-            Copy embed code
-          </Button>
-        </div>
+        <WebsiteChatSnippet company={company} fieldId="website-chat-snippet" />
         <p className="text-xs text-muted-foreground">
           The conversation shows up in Inbox under Website. Set the main phone so the visitor can move it to a text.
         </p>

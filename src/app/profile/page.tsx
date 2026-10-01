@@ -19,6 +19,7 @@ import { useCrm } from "@/lib/crm-store";
 import { formatPhone } from "@/lib/format";
 import { formatPhoneInput } from "@/lib/phone";
 import { copyText } from "@/lib/share";
+import { WebsiteChatSnippet } from "@/components/website-chat-snippet";
 
 export default function ProfilePage() {
   const crm = useCrm();
@@ -245,6 +246,18 @@ export default function ProfilePage() {
       </form>
 
       <div className="max-w-2xl">
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Your website chat</CardTitle>
+            <CardDescription>
+              Paste this in the header of a site you run. A visitor who leaves their name, phone, and
+              street opens a lead in your pipeline.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <WebsiteChatSnippet company={crm.company.slug} personId={seat.id} fieldId="profile-chat-snippet" />
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader className="border-b">
             <CardTitle>Card activity</CardTitle>

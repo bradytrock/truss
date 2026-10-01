@@ -11,6 +11,7 @@ export async function notifyWebsiteChatAdmins(input: {
   street: string;
   companyName: string;
   companyEmail: string;
+  ownerName?: string;
 }) {
   const recipients = input.admins
     .map((admin) => (admin.email ?? "").trim())
@@ -23,6 +24,7 @@ export async function notifyWebsiteChatAdmins(input: {
     phone: input.phone,
     street: input.street,
     companyName: input.companyName,
+    ownerName: input.ownerName,
   });
   const html = text
     .split("\n")

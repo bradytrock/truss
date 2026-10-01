@@ -41,6 +41,7 @@ export async function POST(request: Request) {
     companyName?: string;
     companyEmail?: string;
     companyPhone?: string;
+    ownerName?: string;
     jobId?: string;
     opportunityId?: string;
     channel?: string;
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
       street: payload.visitorStreet || street,
       companyName: payload.companyName || "",
       companyEmail: payload.companyEmail || "",
+      ownerName: payload.ownerName || "",
     }).catch(() => undefined);
   }
 

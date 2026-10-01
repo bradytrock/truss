@@ -59,6 +59,7 @@ import { formatDate, formatPhone, initials } from "@/lib/format";
 import { formatPhoneInput } from "@/lib/phone";
 import { copyText } from "@/lib/share";
 import { cardUrl } from "@/lib/card";
+import { WebsiteChatSnippet } from "@/components/website-chat-snippet";
 import { mintPersonCardSlug } from "@/lib/card-slug";
 import { NO_TEAM, parseTeamSelect } from "@/lib/teams";
 import type { GoogleLocation, SeatRole, StaffMember, Team } from "@/lib/types";
@@ -480,6 +481,7 @@ export function PeopleSettings({
 
       <EditProfileDialog
         member={profileTarget}
+        companySlug={companySlug}
         teams={teams}
         googleLocations={googleLocations}
         companySignature={companySignature}
@@ -806,6 +808,7 @@ type ProfilePatch = Partial<
 
 function EditProfileDialog({
   member,
+  companySlug,
   teams,
   googleLocations,
   companySignature,
@@ -813,6 +816,7 @@ function EditProfileDialog({
   onSave,
 }: {
   member: StaffMember | null;
+  companySlug: string;
   teams: Team[];
   googleLocations: GoogleLocation[];
   companySignature: string;
@@ -1005,6 +1009,21 @@ function EditProfileDialog({
                   ? "Signs off mail they send from Inbox."
                   : "Blank uses the company default from Settings → Company."}
               </p>
+            </div>
+            <div className="grid gap-1.5">
+              <p className="text-sm font-medium">Their website chat</p>
+              <p className="text-xs text-muted-foreground">
+                {member?.locked
+                  ? "This seat is locked, so this header code will not open leads."
+                  : "Paste this in the header of a site they run. New conversations open a lead in their pipeline."}
+              </p>
+              {member ? (
+                <WebsiteChatSnippet
+                  company={companySlug}
+                  personId={member.id}
+                  fieldId="person-chat-snippet"
+                />
+              ) : null}
             </div>
           </div>
 

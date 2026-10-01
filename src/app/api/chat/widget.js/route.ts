@@ -5,10 +5,13 @@ const SCRIPT = `(function () {
   if (!script) return;
   var company = (script.getAttribute("data-company") || "").trim();
   if (!company) return;
+  var person = (script.getAttribute("data-person") || "").trim();
   var origin = new URL(script.src).origin;
   var frame = document.createElement("iframe");
   frame.title = "Chat";
-  frame.src = origin + "/chat/" + encodeURIComponent(company) + "?embed=1";
+  var src = origin + "/chat/" + encodeURIComponent(company) + "?embed=1";
+  if (person) src += "&person=" + encodeURIComponent(person);
+  frame.src = src;
   frame.setAttribute("allowtransparency", "true");
   frame.style.cssText = "position:fixed;right:16px;bottom:16px;width:88px;height:88px;border:0;z-index:2147483000;background:transparent;color-scheme:normal;";
   window.addEventListener("message", function (event) {

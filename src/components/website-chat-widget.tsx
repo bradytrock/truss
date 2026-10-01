@@ -39,7 +39,15 @@ function stepFor(intake: Intake | null): Step {
   return "choose";
 }
 
-export function WebsiteChatWidget({ companySlug, embed }: { companySlug: string; embed: boolean }) {
+export function WebsiteChatWidget({
+  companySlug,
+  embed,
+  ownerId = "",
+}: {
+  companySlug: string;
+  embed: boolean;
+  ownerId?: string;
+}) {
   const [open, setOpen] = useState(!embed);
   const [office, setOffice] = useState<Office | null>(null);
   const [token, setToken] = useState("");
@@ -61,7 +69,7 @@ export function WebsiteChatWidget({ companySlug, embed }: { companySlug: string;
   }, [embed, open]);
 
   useEffect(() => {
-    const storageKey = `truss.websiteChat.${companySlug}`;
+    const storageKey = `truss.websiteChat.${companySlug}${ownerId ? `.${ownerId}` : ""}`;
     const saved = window.localStorage.getItem(storageKey) || "";
     let cancelled = false;
 
@@ -108,7 +116,7 @@ export function WebsiteChatWidget({ companySlug, embed }: { companySlug: string;
       const started = await fetch("/api/chat/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company: companySlug }),
+        body: JSON.stringify({ company: companySlug, person: ownerId }),
       });
       const data = (await started.json()) as { ok?: boolean; token?: string; error?: string; companyName?: string; phone?: string };
       if (cancelled) return;
@@ -134,7 +142,7 @@ export function WebsiteChatWidget({ companySlug, embed }: { companySlug: string;
     return () => {
       cancelled = true;
     };
-  }, [companySlug]);
+  }, [companySlug, ownerId]);
 
   useEffect(() => {
     if (!token || !open || step !== "chat") return;
