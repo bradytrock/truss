@@ -49,6 +49,7 @@ import {
   paperInvoiceMeta,
   paperIssuedAt,
   paperKindLabel,
+  paperOptionChoiceCopy,
   paperPreparedForCard,
   paperPreparedForLines,
   paperQtyLabel,
@@ -503,11 +504,12 @@ async function writeCoverHeader(
   doc.setFontSize(9);
   ink(doc, PAPER_RED);
   doc.text(number, right, 42, { align: "right" });
-  const y = Math.max(next, logoBottom) + 12;
+  const ruleY = Math.max(next, logoBottom) + 6;
   draw(doc, PAPER_LINE);
   doc.setLineWidth(0.8);
-  doc.line(PAPER_INSET, y - 6, right, y - 6);
-  return y;
+  doc.line(PAPER_INSET, ruleY, right, ruleY);
+  // 14pt Helvetica caps are about 10pt. Keep the street baseline under the rule.
+  return ruleY + 16;
 }
 
 function writeSiteBlock(
@@ -584,9 +586,6 @@ function writePartyCards(
     }
     bottom = Math.max(bottom, cy);
   });
-  draw(doc, { r: 220, g: 220, b: 220 });
-  doc.setLineWidth(0.5);
-  doc.line(PAPER_INSET, bottom + 6, rightEdge, bottom + 6);
   return bottom + 16;
 }
 
@@ -1023,7 +1022,7 @@ export async function buildEstimatePdf(raw: {
   if (gbb && estimateOptions.length > 0) {
     y = writeParagraph(
       doc,
-      "Check one option. Shared work is included in every option. Options replace each other; they do not stack.",
+      paperOptionChoiceCopy(),
       y,
       contentRight(doc) - PAPER_INSET,
       9,

@@ -125,6 +125,10 @@ export function paperInvoiceMeta(input: {
   ];
 }
 
+export function paperOptionChoiceCopy() {
+  return "Please choose the option you prefer. The price shown with it is the full amount for that selection.";
+}
+
 export function paperAuthorizationCopy(companyName: string) {
   const name = companyName.trim() || "the contractor";
   return `By signing below I authorize ${name} to perform the work described in this estimate for the total shown. I have read and agree to the terms on the preceding pages.`;

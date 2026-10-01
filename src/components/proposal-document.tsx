@@ -51,6 +51,7 @@ import {
   paperAuthorizationCopy,
   paperEstimateMeta,
   paperIssuedAt,
+  paperOptionChoiceCopy,
   paperPreparedForCard,
   paperQtyLabel,
   paperRescissionCopy,
@@ -338,7 +339,7 @@ export function ProposalDocument({
       ) : null}
       {gbb && printSections.some((section) => section.kind === "option") ? (
         <p className="text-sm text-muted-foreground">
-          Check one option. Shared work is included in every option. Options replace each other; they do not stack.
+          {paperOptionChoiceCopy()}
         </p>
       ) : null}
       {visibleLines.length === 0 ? (
