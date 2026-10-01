@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, ChevronDown, Search, Tags, Users } from "lucide-react";
+import { Calendar, ChevronDown, CloudRain, Search, Tags, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -30,6 +30,8 @@ export function MapSearchBar({
   onToggleStage,
   showCrew,
   onToggleCrew,
+  showWeather,
+  onToggleWeather,
   className,
 }: {
   query: string;
@@ -41,6 +43,8 @@ export function MapSearchBar({
   onToggleStage: (column: WorkColumn) => void;
   showCrew: boolean;
   onToggleCrew: () => void;
+  showWeather: boolean;
+  onToggleWeather: () => void;
   className?: string;
 }) {
   return (
@@ -99,6 +103,17 @@ export function MapSearchBar({
         >
           <Users data-icon="inline-start" />
           Crew
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={showWeather ? "default" : "outline"}
+          className="shrink-0 rounded-full"
+          aria-pressed={showWeather}
+          onClick={onToggleWeather}
+        >
+          <CloudRain data-icon="inline-start" />
+          Weather
         </Button>
         <Popover>
           <PopoverTrigger

@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { LocateFixed } from "lucide-react";
+import { CloudRain, LocateFixed } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { JobRecordWindow } from "@/components/job-window";
 import { MapJobResultList, MapSearchBar } from "@/components/map-job-list";
@@ -59,6 +59,7 @@ function MapPageInner() {
   const [crew, setCrew] = useState<MapCrewPing[]>([]);
   const [showProjects, setShowProjects] = useState(true);
   const [showCrew, setShowCrew] = useState(true);
+  const [showWeather, setShowWeather] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [mapError, setMapError] = useState("");
   const [geocoding, setGeocoding] = useState(false);
@@ -335,6 +336,8 @@ function MapPageInner() {
       onToggleStage={toggleStage}
       showCrew={showCrew}
       onToggleCrew={() => setShowCrew((value) => !value)}
+      showWeather={showWeather}
+      onToggleWeather={() => setShowWeather((value) => !value)}
     />
   );
 
@@ -346,11 +349,20 @@ function MapPageInner() {
         <PageHeader
           eyebrow="Field"
           title="Map"
-          description="Job sites and live crew. Search an address, filter by year or stage, and tap a name pill to see who is pinging."
+          description="Job sites and live crew. Turn on weather radar when you need the storm picture, then search an address or filter by year and stage."
           actions={
             <div className="flex flex-wrap items-center gap-2">
               <Button variant={showProjects ? "default" : "outline"} onClick={() => setShowProjects((value) => !value)}>
                 Projects {mappedJobs.length}
+              </Button>
+              <Button
+                type="button"
+                variant={showWeather ? "default" : "outline"}
+                aria-pressed={showWeather}
+                onClick={() => setShowWeather((value) => !value)}
+              >
+                <CloudRain data-icon="inline-start" />
+                Weather
               </Button>
               <Button variant={sharing ? "secondary" : "outline"} onClick={sharing ? stopSharing : startSharing}>
                 {sharing ? "Stop sharing" : "Share my location"}
@@ -368,6 +380,7 @@ function MapPageInner() {
             selectedStaffId={selectedStaffId}
             showProjects={showProjects}
             showCrew={showCrew}
+            showWeather={showWeather}
             fitKey={`${year}|${query}|${stages.join(",")}|${showProjects}|${showCrew}|${pins.length}|${liveCrew.length}`}
             onSelectJob={selectJob}
             onOpenJob={openJobRecord}
@@ -385,7 +398,7 @@ function MapPageInner() {
             </Button>
           </div>
           {geocoding || needGeocode.length ? (
-            <p className="pointer-events-none absolute bottom-28 left-3 z-10 rounded-full bg-background/90 px-3 py-1 text-xs text-muted-foreground shadow-sm lg:bottom-3">
+            <p className={cn("pointer-events-none absolute left-3 z-10 rounded-full bg-background/90 px-3 py-1 text-xs text-muted-foreground shadow-sm", showWeather ? "bottom-56 lg:bottom-24" : "bottom-28 lg:bottom-3")}>
               {geocoding ? "Mapping sites…" : `${needGeocode.length} still looking up`}
             </p>
           ) : null}
