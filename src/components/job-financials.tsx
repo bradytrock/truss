@@ -21,13 +21,12 @@ import {
 } from "@/lib/profit-and-loss";
 import { JobPnlComparisonTable, ProfitAndLossReport } from "@/components/profit-and-loss";
 import { EXPENSE_ACCOUNT_LABELS, type Job } from "@/lib/types";
-import { cn } from "@/lib/utils";
 import { LogExpenseDialog, LogForecastedExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
 import { jobDocumentHref, latestReturnNote } from "@/lib/qb-review";
 
 export function JobFinancials({ job }: { job: Job }) {
   const crm = useCrm();
-  const [basis, setBasis] = useState<JobBooksBasis>("accrual");
+  const basis: JobBooksBasis = "cash";
   const [expenseOpen, setExpenseOpen] = useState(false);
   const [forecastOpen, setForecastOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
@@ -99,43 +98,16 @@ export function JobFinancials({ job }: { job: Job }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">
-          Actual books versus the sold estimate. Same statement as QuickBooks below.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <div className="flex border">
-            <button
-              type="button"
-              className={cn(
-                "px-3 py-1.5 text-xs font-medium",
-                basis === "accrual" ? "bg-foreground text-background" : "text-muted-foreground",
-              )}
-              onClick={() => setBasis("accrual")}
-            >
-              Accrual
-            </button>
-            <button
-              type="button"
-              className={cn(
-                "px-3 py-1.5 text-xs font-medium",
-                basis === "cash" ? "bg-foreground text-background" : "text-muted-foreground",
-              )}
-              onClick={() => setBasis("cash")}
-            >
-              Cash
-            </button>
-          </div>
-          <Button size="sm" variant="outline" onClick={() => setExpenseOpen(true)}>
-            Log expense
-          </Button>
-          <Button size="sm" variant="outline" onClick={() => setForecastOpen(true)}>
-            Log forecasted expense
-          </Button>
-          <Button size="sm" onClick={() => setPaymentOpen(true)}>
-            Log payment
-          </Button>
-        </div>
+      <div className="grid grid-cols-3 gap-2">
+        <Button size="sm" variant="outline" className="w-full" onClick={() => setExpenseOpen(true)}>
+          Log expense
+        </Button>
+        <Button size="sm" variant="outline" className="w-full" onClick={() => setForecastOpen(true)}>
+          Log forecasted expense
+        </Button>
+        <Button size="sm" className="w-full" onClick={() => setPaymentOpen(true)}>
+          Log payment
+        </Button>
       </div>
 
       {comparison ? <JobPnlComparisonTable statement={statement} comparison={comparison} /> : null}
