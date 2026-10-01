@@ -223,6 +223,7 @@ export function parseVoiceLeadAssignContext(raw: unknown): {
   teams: LeadAssignTeam[];
   companyName: string;
   companyEmail: string;
+  companyId: string;
 } | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Record<string, unknown>;
@@ -255,6 +256,7 @@ export function parseVoiceLeadAssignContext(raw: unknown): {
     teams,
     companyName: asText(row.companyName ?? row.company_name),
     companyEmail: asText(row.companyEmail ?? row.company_email),
+    companyId: asText(row.companyId ?? row.company_id),
   };
 }
 

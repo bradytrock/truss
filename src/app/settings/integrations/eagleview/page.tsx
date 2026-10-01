@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageHeader } from "@/components/page-chrome";
+import { IntegrationSettingsChrome } from "@/components/integration-settings-chrome";
 import { SettingsAdminGate } from "@/components/settings-nav";
 import { EAGLEVIEW_PRODUCTS, type EagleviewProductId } from "@/lib/eagleview";
 import { missingEagleviewMessage } from "@/lib/supabase/schema-errors";
@@ -34,7 +33,12 @@ export default function EagleviewSettingsPage() {
       title="EagleView settings are restricted"
       description="Only a company admin can connect EagleView credentials for the office."
     >
-      <EagleviewSettingsForm />
+      <IntegrationSettingsChrome
+        title="EagleView"
+        description="Order roof measurement reports from EagleView on a job. Reports land in Files; squares can be applied to estimate lines."
+      >
+        <EagleviewSettingsForm />
+      </IntegrationSettingsChrome>
     </SettingsAdminGate>
   );
 }
@@ -93,12 +97,6 @@ function EagleviewSettingsForm() {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        eyebrow="Settings"
-        title="EagleView"
-        description="Order roof measurement reports from EagleView on a job. Reports land in Files; squares can be applied to estimate lines."
-      />
-
       {info?.sql ? (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
           {info.sql}
@@ -225,9 +223,6 @@ function EagleviewSettingsForm() {
             After a report is ready, open the job and use <strong>Pull report</strong> if
             measurements are not filled yet, then <strong>Apply to estimate</strong>.
           </p>
-          <Button nativeButton={false} variant="ghost" render={<Link href="/settings" />}>
-            Back to company settings
-          </Button>
         </CardContent>
       </Card>
     </div>

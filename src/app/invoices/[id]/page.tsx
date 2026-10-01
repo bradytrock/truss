@@ -344,6 +344,7 @@ export default function InvoiceDetailPage() {
         propertyAddress={propertyAddress}
         companyName={crm.company.name}
         companyLogoUrl={cardHeaderLogo(crm.company)}
+        emailTemplates={crm.company.emailTemplates}
         sender={emailOwner}
         recipients={shareContactsForInvoice(record, crm)}
         onDownloadPdf={downloadPdf}

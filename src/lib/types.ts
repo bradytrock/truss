@@ -1,3 +1,5 @@
+import type { CompanyEmailTemplates } from "@/lib/email-templates";
+
 export const PIPELINE_STAGES = [
   "pursuing",
   "estimating",
@@ -179,6 +181,8 @@ export interface CompanySettings {
   minimumMarginPercent?: number;
   /** Plain-text email sign-off used when a seat has no signature of their own. */
   defaultEmailSignature?: string;
+  /** Per-email copy overrides. Blank fields keep the built-in wording. */
+  emailTemplates?: CompanyEmailTemplates;
   /** Default monthly signed-contract goal (USD) for seats without their own quota. */
   defaultMonthlySalesQuota?: number;
 }
@@ -211,6 +215,7 @@ export const NORTHLINE_COMPANY: CompanySettings = {
   contractTypes: [],
   minimumMarginPercent: 0,
   defaultEmailSignature: "",
+  emailTemplates: {},
   defaultMonthlySalesQuota: 80000,
 };
 

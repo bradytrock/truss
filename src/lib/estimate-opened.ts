@@ -18,6 +18,7 @@ export type EstimateOpenedNotify = {
   contactName: string;
   companyName: string;
   companyEmail: string;
+  companyId: string;
 };
 
 function asString(value: unknown) {
@@ -45,6 +46,7 @@ export function parseEstimateOpenedNotify(raw: unknown): EstimateOpenedNotify | 
     contactName: asString(notify.contactName),
     companyName: asString(notify.companyName),
     companyEmail: asString(notify.companyEmail),
+    companyId: asString(notify.companyId),
   };
 }
 

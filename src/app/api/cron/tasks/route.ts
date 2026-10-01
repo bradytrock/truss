@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { appOrigin } from "@/lib/app-origin";
+import {
+  emailTemplateHasOverride,
+  resolveSystemEmail,
+  systemEmailHtml,
+  systemEmailText,
+} from "@/lib/email-templates";
+import { loadCompanyEmailTemplates } from "@/lib/email-templates-server";
 import { formatDate } from "@/lib/format";
+import { firstName } from "@/lib/phone";
 import { formatResendFrom, isResendConfigured, sendResendEmail } from "@/lib/resend-mail";
 import { createAnonClient } from "@/lib/supabase/anon";
 import { createClient } from "@/lib/supabase/server";
@@ -47,6 +55,7 @@ export async function GET(request: Request) {
 
   const deskUrl = `${await appOrigin()}/tasks`;
   const rows = Array.isArray(data) ? data : [];
+  const templatesByCompany = new Map<string, Awaited<ReturnType<typeof loadCompanyEmailTemplates>>>();
   let sent = 0;
   let failed = 0;
   let skipped = 0;
@@ -67,11 +76,41 @@ export async function GET(request: Request) {
       overdue,
       deskUrl,
     };
+    const builtinSubject = taskReminderSubject(reminder.title, overdue);
+    const builtinText = taskReminderText(payload);
+    const statusLine = overdue ? `${reminder.title} is overdue.` : `${reminder.title} is due today.`;
+    let detail = builtinText.startsWith(statusLine) ? builtinText.slice(statusLine.length).trim() : builtinText;
+    if (deskUrl && detail.endsWith(deskUrl)) detail = detail.slice(0, -deskUrl.length).trim();
+    let templates = templatesByCompany.get(reminder.companyId);
+    if (!templates) {
+      templates = await loadCompanyEmailTemplates(supabase, reminder.companyId);
+      templatesByCompany.set(reminder.companyId, templates);
+    }
+    const custom = emailTemplateHasOverride(templates, "task_reminder")
+      ? resolveSystemEmail("task_reminder", templates, {
+          name: firstName(reminder.assigneeName),
+          company: reminder.companyName,
+          title: reminder.title,
+          due: formatDate(reminder.dueAt),
+          subject: builtinSubject,
+          statusLine,
+          message: detail,
+        })
+      : null;
     const result = await sendResendEmail({
       to: reminder.assigneeEmail,
-      subject: taskReminderSubject(reminder.title, overdue),
-      text: taskReminderText(payload),
-      html: taskReminderHtml(payload),
+      subject: custom?.subject || builtinSubject,
+      text: custom
+        ? systemEmailText({ headline: custom.headline, message: custom.message, url: deskUrl })
+        : builtinText,
+      html: custom
+        ? systemEmailHtml({
+            headline: custom.headline,
+            message: custom.message,
+            button: custom.button,
+            url: deskUrl,
+          })
+        : taskReminderHtml(payload),
       from: formatResendFrom({
         senderName: "Office",
         companyName: reminder.companyName || "Truss",

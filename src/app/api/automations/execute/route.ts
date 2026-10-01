@@ -82,6 +82,7 @@ export async function POST(request: Request) {
     const executed = await executeAutomationActions({
       automation: loaded.automation,
       merge,
+      emailTemplates: company.emailTemplates,
       customerPhone: contact?.phone,
       customerEmail: contact?.email,
       ownerPhone: owner?.phone,

@@ -987,6 +987,18 @@ export function missingEmailSignatureMessage() {
   return `Saved in this browser. Run ${EMAIL_SIGNATURES_SQL} in the SQL editor (or a fresh bootstrap) so email signatures persist.`;
 }
 
+export const EMAIL_TEMPLATES_SQL = "supabase/migrations/20260929210000_email_templates.sql";
+
+export function isMissingEmailTemplates(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return message.includes("email_templates") || message.includes("company_email_templates");
+}
+
+export function missingEmailTemplatesMessage() {
+  return `Saved in this browser. Run ${EMAIL_TEMPLATES_SQL} in the SQL editor (or a fresh bootstrap) so email templates persist.`;
+}
+
 export const PRICE_LISTS_SQL = "supabase/migrations/20260828150000_price_lists.sql";
 
 export function isMissingPriceLists(error: { message?: string; code?: string } | null | undefined) {

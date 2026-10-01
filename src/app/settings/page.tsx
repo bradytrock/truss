@@ -13,14 +13,14 @@ import {
   SettingsSaveActions,
   useCompanySettingsDraft,
 } from "@/components/company-settings-form";
-import { CompanyStripeSettings } from "@/components/company-stripe-settings";
+import { EmailTemplateSettings } from "@/components/email-template-settings";
 import { LEGAL_EMAIL, LEGAL_PAGES } from "@/lib/legal";
 import { WebsiteChatSnippet } from "@/components/website-chat-snippet";
 
 export default function CompanySettingsPage() {
   return (
     <SettingsAdminGate>
-      <CompanySettingsWithStripe />
+      <CompanySettingsBody />
     </SettingsAdminGate>
   );
 }
@@ -356,6 +356,22 @@ function CompanySettingsForm() {
 
       <Card>
         <CardHeader className="border-b">
+          <CardTitle>Email templates</CardTitle>
+          <CardDescription>
+            Wording for every email the system sends. Change a subject, headline, message, or
+            button here and the next send uses it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-2 pt-4">
+          <EmailTemplateSettings
+            templates={form.emailTemplates}
+            onChange={(emailTemplates) => patch("emailTemplates", emailTemplates)}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="border-b">
           <CardTitle>Default email signature</CardTitle>
           <CardDescription>
             Appended to mail this company sends when that person has not set their own sign-off.
@@ -406,12 +422,11 @@ function WebsiteChatEmbed({ slug, phone }: { slug: string; phone: string }) {
   );
 }
 
-function CompanySettingsWithStripe() {
+function CompanySettingsBody() {
   return (
     <>
       <CompanySettingsForm />
-      <div className="max-w-2xl space-y-6">
-        <CompanyStripeSettings />
+      <div className="max-w-2xl">
         <Card>
           <CardHeader>
             <CardTitle>Legal</CardTitle>

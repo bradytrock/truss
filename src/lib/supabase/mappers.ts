@@ -14,6 +14,7 @@ import { fillMaterialOrder, fillMaterialOrderLine } from "@/lib/material-orders"
 import { fillVendorFeedback, fillVendorPrice, fillVendorProfile } from "@/lib/vendor-profile";
 import { fillMaterialOrderTemplate, fillMaterialOrderTemplateLine } from "@/lib/material-order-templates";
 import { parseContractTypes } from "@/lib/contract-types";
+import { parseEmailTemplates } from "@/lib/email-templates";
 import { fillEstimate, fillEstimateLine } from "@/lib/estimate-totals";
 import { parseEstimatePackage, parseEstimatePackageMode, parseLinePackage } from "@/lib/estimate-packages";
 import { fillEstimateTemplate, fillEstimateTemplateLine } from "@/lib/estimate-templates";
@@ -216,6 +217,7 @@ export function mapCompany(row: Pick<CompanyRow, "name"> & Partial<CompanyRow>):
     minimumMarginPercent: Number(row.minimum_margin_percent ?? 0),
     defaultEmailSignature:
       "default_email_signature" in row ? String(row.default_email_signature ?? "") : "",
+    emailTemplates: parseEmailTemplates("email_templates" in row ? row.email_templates : null),
     defaultMonthlySalesQuota: Number(
       "default_monthly_sales_quota" in row ? (row.default_monthly_sales_quota ?? 0) : 0,
     ),

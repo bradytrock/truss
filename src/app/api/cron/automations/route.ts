@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildAutomationMerge, emptyAutomationMerge } from "@/lib/automations/merge";
+import { loadCompanyEmailTemplates } from "@/lib/email-templates-server";
 import { executeAutomationActions } from "@/lib/automations/execute";
 import { previewActionLine } from "@/lib/automations/queue";
 import { amountForEstimate } from "@/lib/estimate-totals";
@@ -162,6 +163,7 @@ export async function GET(request: Request) {
     const result = await executeAutomationActions({
       automation,
       merge,
+      emailTemplates: await loadCompanyEmailTemplates(supabase, companyId),
       estimateTotal,
       customerPhone: String(row.contact_phone ?? ""),
       customerEmail: String(row.contact_email ?? ""),

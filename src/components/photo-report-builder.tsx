@@ -568,6 +568,7 @@ export function PhotoReportBuilder({
         propertyAddress={propertyAddress}
         companyName={crm.company.name}
         companyLogoUrl={cardHeaderLogo(crm.company)}
+        emailTemplates={crm.company.emailTemplates}
         sender={emailOwner}
         recipients={resolveShareContacts(
           { jobId: job.id, primaryContactId: job.primaryContactId },
