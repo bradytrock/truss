@@ -3,22 +3,29 @@
 import { isPublicAppPath } from "@/lib/auth-paths";
 import { isLegalPath } from "@/lib/legal";
 import { ThemeProvider } from "next-themes";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { Toaster } from "@/components/ui/sonner";
-import { AppShell } from "@/components/app-shell";
-import { CrmProvider } from "@/lib/crm-store";
+import { useSyncExternalStore, type ReactNode } from "react";
+
+const Toaster = dynamic(() => import("@/components/ui/sonner").then((mod) => mod.Toaster));
+const TooltipProvider = dynamic(() =>
+  import("@/components/ui/tooltip").then((mod) => mod.TooltipProvider),
+);
+const AppShell = dynamic(() => import("@/components/app-shell").then((mod) => mod.AppShell));
+const CrmProvider = dynamic(() => import("@/lib/crm-store").then((mod) => mod.CrmProvider));
+
+function subscribeToClient() {
+  return () => {};
+}
 
 export function Providers({ children }: { children: ReactNode }) {
+  const clientReady = useSyncExternalStore(subscribeToClient, () => true, () => false);
   return (
     <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
-      <TooltipProvider delay={200}>
-        <div className="flex min-h-dvh flex-1 flex-col">
-          <Shell>{children}</Shell>
-          <Toaster />
-        </div>
-      </TooltipProvider>
+      <div className="flex min-h-dvh flex-1 flex-col">
+        <Shell>{children}</Shell>
+        {clientReady ? <Toaster /> : null}
+      </div>
     </ThemeProvider>
   );
 }
@@ -37,7 +44,9 @@ function Shell({ children }: { children: ReactNode }) {
 
   return (
     <CrmProvider>
-      <AppShell>{children}</AppShell>
+      <TooltipProvider delay={200}>
+        <AppShell>{children}</AppShell>
+      </TooltipProvider>
     </CrmProvider>
   );
 }
