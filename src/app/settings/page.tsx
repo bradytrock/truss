@@ -406,7 +406,8 @@ function WebsiteChatEmbed({ slug }: { slug: string }) {
       <CardHeader className="border-b">
         <CardTitle>Website chat</CardTitle>
         <CardDescription>
-          Asks for a name, phone, and street address, then opens a lead. Company admins are
+          Asks the same qualifying questions as a new lead: residential or commercial, the trades
+          involved, name, phone, email, and address, then opens a lead. Company admins are
           notified so they can assign it. The visitor can keep talking here or text this office&apos;s
           Photon line. A person’s own header code, on their profile, puts the lead in that person’s
           pipeline and notifies only them.

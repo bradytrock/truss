@@ -2939,7 +2939,20 @@ export type Database = {
         Returns: Json;
       };
       website_chat_intake: {
-        Args: { p_token: string; p_name: string; p_phone: string; p_street: string };
+        Args: {
+          p_token: string;
+          p_name: string;
+          p_phone: string;
+          p_street: string;
+          p_email?: string;
+          p_city?: string;
+          p_state?: string;
+          p_postal?: string;
+          p_market?: string;
+          p_trades?: string;
+          p_first?: string;
+          p_last?: string;
+        };
         Returns: Json;
       };
       website_chat_choose: {

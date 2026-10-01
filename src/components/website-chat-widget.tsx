@@ -3,20 +3,51 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { Send, X } from "lucide-react";
 import {
-  CHAT_ASK_NAME,
+  CHAT_ASK_CITY,
+  CHAT_ASK_EMAIL,
+  CHAT_ASK_FIRST,
+  CHAT_ASK_LAST,
+  CHAT_ASK_MARKET,
   CHAT_ASK_PHONE,
+  CHAT_ASK_STATE,
   CHAT_ASK_STREET,
+  CHAT_ASK_TRADES,
+  CHAT_ASK_ZIP,
+  CHAT_EMAIL_SKIP,
+  CHAT_TRADES,
+  chatMarketLabel,
+  formatChatTrades,
+  isChatEmailSkip,
   messagesAppLink,
-  parseChatName,
+  parseChatCity,
+  parseChatEmail,
+  parseChatPersonName,
   parseChatPhone,
+  parseChatState,
   parseChatStreet,
+  parseChatZip,
   textHandoffBody,
+  type ChatMarket,
+  type ChatTrade,
   type WebsiteChatMessage,
 } from "@/lib/website-chat";
 import { cn } from "@/lib/utils";
 
 type Office = { companyName: string; phone: string };
-type Step = "name" | "phone" | "street" | "choose" | "chat" | "text";
+type Step =
+  | "market"
+  | "trades"
+  | "first"
+  | "last"
+  | "phone"
+  | "email"
+  | "street"
+  | "city"
+  | "state"
+  | "zip"
+  | "choose"
+  | "chat"
+  | "text";
 
 type Intake = {
   visitorName?: string;
@@ -34,11 +65,7 @@ const OPEN_FRAME_WIDTH = "min(380px, calc(100vw - 32px))";
 const OPEN_FRAME_HEIGHT = "min(640px, calc(100vh - 32px))";
 
 function stepFor(intake: Intake | null): Step {
-  if (!intake?.ready) {
-    if (!intake?.visitorName) return "name";
-    if (!intake?.visitorPhone) return "phone";
-    return "street";
-  }
+  if (!intake?.ready) return "market";
   if (intake.channel === "text") return "text";
   if (intake.channel === "chat") return "chat";
   return "choose";
@@ -98,10 +125,17 @@ export function WebsiteChatWidget({
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [ready, setReady] = useState(false);
-  const [step, setStep] = useState<Step>("name");
+  const [step, setStep] = useState<Step>("market");
   const [draftName, setDraftName] = useState("");
+  const [draftFirst, setDraftFirst] = useState("");
+  const [draftLast, setDraftLast] = useState("");
   const [draftPhone, setDraftPhone] = useState("");
+  const [draftEmail, setDraftEmail] = useState("");
   const [draftStreet, setDraftStreet] = useState("");
+  const [draftCity, setDraftCity] = useState("");
+  const [draftRegion, setDraftRegion] = useState("");
+  const [market, setMarket] = useState<ChatMarket>("residential");
+  const [trades, setTrades] = useState<ChatTrade[]>([]);
   const [handoff, setHandoff] = useState("");
   const scroller = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLInputElement>(null);
@@ -212,7 +246,7 @@ export function WebsiteChatWidget({
       setToken(data.token);
       setOffice({ companyName: data.companyName || officeData.companyName || "Office", phone: data.phone || officeData.phone || "" });
       setMessages([]);
-      setStep("name");
+      setStep("market");
       setReady(true);
     }
 
@@ -249,13 +283,33 @@ export function WebsiteChatWidget({
   }, [messages, open, step]);
 
   useEffect(() => {
-    if (!open || !ready || !token || step === "choose" || step === "text") return;
+    if (!open || !ready || !token || step === "choose" || step === "text" || step === "market" || step === "trades") return;
     field.current?.focus();
   }, [open, ready, token, step]);
 
   const name = office?.companyName || "the office";
   const prompt =
-    step === "name" ? CHAT_ASK_NAME : step === "phone" ? CHAT_ASK_PHONE : step === "street" ? CHAT_ASK_STREET : "";
+    step === "market"
+      ? CHAT_ASK_MARKET
+      : step === "trades"
+        ? CHAT_ASK_TRADES
+        : step === "first"
+          ? CHAT_ASK_FIRST
+          : step === "last"
+            ? CHAT_ASK_LAST
+            : step === "phone"
+              ? CHAT_ASK_PHONE
+              : step === "email"
+                ? CHAT_ASK_EMAIL
+                : step === "street"
+                  ? CHAT_ASK_STREET
+                  : step === "city"
+                    ? CHAT_ASK_CITY
+                    : step === "state"
+                      ? CHAT_ASK_STATE
+                      : step === "zip"
+                        ? CHAT_ASK_ZIP
+                        : "";
 
   function remember(lines: Array<Pick<WebsiteChatMessage, "direction" | "body">>) {
     setMessages((current) => [
@@ -269,25 +323,98 @@ export function WebsiteChatWidget({
     ]);
   }
 
+  function noteAnswer(question: string, answerText: string) {
+    remember([
+      { direction: "outbound", body: question },
+      { direction: "inbound", body: answerText },
+    ]);
+    setBody("");
+    setError("");
+  }
+
+  function pickMarket(next: ChatMarket) {
+    if (sending) return;
+    setMarket(next);
+    noteAnswer(CHAT_ASK_MARKET, chatMarketLabel(next));
+    setStep("trades");
+  }
+
+  function toggleTrade(trade: ChatTrade) {
+    setTrades((current) => (current.includes(trade) ? current.filter((item) => item !== trade) : [...current, trade]));
+    setError("");
+  }
+
+  function confirmTrades() {
+    const label = formatChatTrades(trades);
+    if (!label) {
+      setError("Pick at least one trade.");
+      return;
+    }
+    noteAnswer(CHAT_ASK_TRADES, label);
+    setStep("first");
+  }
+
+  async function finishIntake(postalCode: string) {
+    const tradeLabel = formatChatTrades(trades);
+    setSending(true);
+    setError("");
+    try {
+      const response = await fetch("/api/chat/intake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token,
+          name: `${draftFirst} ${draftLast}`,
+          firstName: draftFirst,
+          lastName: draftLast,
+          phone: draftPhone,
+          email: draftEmail,
+          street: draftStreet,
+          city: draftCity,
+          state: draftRegion,
+          postalCode,
+          market,
+          trades: tradeLabel,
+        }),
+      });
+      const data = (await response.json()) as { ok?: boolean; error?: string };
+      if (!data.ok) {
+        setError(data.error || "Could not start that.");
+        return;
+      }
+      const read = await fetch(`/api/chat/messages?token=${encodeURIComponent(token)}`);
+      const thread = (await read.json()) as { ok?: boolean; messages?: WebsiteChatMessage[] };
+      if (thread.ok && thread.messages) setMessages(thread.messages);
+      setBody("");
+      setStep("choose");
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function answer(event: FormEvent) {
     event.preventDefault();
     const text = body.trim();
     if (!text || !token || sending) return;
     setError("");
 
-    if (step === "name") {
-      const parsed = parseChatName(text);
+    if (step === "first" || step === "last") {
+      const parsed = parseChatPersonName(text);
       if (!parsed) {
-        setError("Enter your name.");
+        setError(step === "first" ? "Enter your first name." : "Enter your last name.");
         return;
       }
-      remember([
-        { direction: "outbound", body: CHAT_ASK_NAME },
-        { direction: "inbound", body: parsed },
-      ]);
-      setDraftName(parsed);
-      setBody("");
-      setStep("phone");
+      if (step === "first") {
+        noteAnswer(CHAT_ASK_FIRST, parsed);
+        setDraftFirst(parsed);
+        setDraftName(`${parsed} ${draftLast}`.trim());
+        setStep("last");
+      } else {
+        noteAnswer(CHAT_ASK_LAST, parsed);
+        setDraftLast(parsed);
+        setDraftName(`${draftFirst} ${parsed}`.trim());
+        setStep("phone");
+      }
       return;
     }
 
@@ -297,12 +424,26 @@ export function WebsiteChatWidget({
         setError("Enter a phone number.");
         return;
       }
-      remember([
-        { direction: "outbound", body: CHAT_ASK_PHONE },
-        { direction: "inbound", body: parsed },
-      ]);
+      noteAnswer(CHAT_ASK_PHONE, parsed);
       setDraftPhone(parsed);
-      setBody("");
+      setStep("email");
+      return;
+    }
+
+    if (step === "email") {
+      if (isChatEmailSkip(text)) {
+        noteAnswer(CHAT_ASK_EMAIL, CHAT_EMAIL_SKIP);
+        setDraftEmail("");
+        setStep("street");
+        return;
+      }
+      const parsed = parseChatEmail(text);
+      if (!parsed) {
+        setError("Enter an email address.");
+        return;
+      }
+      noteAnswer(CHAT_ASK_EMAIL, parsed);
+      setDraftEmail(parsed);
       setStep("street");
       return;
     }
@@ -313,28 +454,51 @@ export function WebsiteChatWidget({
         setError("Enter the street address.");
         return;
       }
-      setSending(true);
-      try {
-        const response = await fetch("/api/chat/intake", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token, name: draftName, phone: draftPhone, street: parsed }),
-        });
-        const data = (await response.json()) as { ok?: boolean; error?: string };
-        if (!data.ok) {
-          setError(data.error || "Could not start that.");
-          return;
-        }
-        setDraftStreet(parsed);
-        const read = await fetch(`/api/chat/messages?token=${encodeURIComponent(token)}`);
-        const thread = (await read.json()) as { ok?: boolean; messages?: WebsiteChatMessage[] };
-        if (thread.ok && thread.messages) setMessages(thread.messages);
-        setBody("");
-        setStep("choose");
-      } finally {
-        setSending(false);
-      }
+      noteAnswer(CHAT_ASK_STREET, parsed);
+      setDraftStreet(parsed);
+      setStep("city");
+      return;
     }
+
+    if (step === "city") {
+      const parsed = parseChatCity(text);
+      if (!parsed) {
+        setError("Enter the city.");
+        return;
+      }
+      noteAnswer(CHAT_ASK_CITY, parsed);
+      setDraftCity(parsed);
+      setStep("state");
+      return;
+    }
+
+    if (step === "state") {
+      const parsed = parseChatState(text);
+      if (!parsed) {
+        setError("Enter the state.");
+        return;
+      }
+      noteAnswer(CHAT_ASK_STATE, parsed);
+      setDraftRegion(parsed);
+      setStep("zip");
+      return;
+    }
+
+    if (step === "zip") {
+      const parsed = parseChatZip(text);
+      if (!parsed) {
+        setError("Enter the ZIP code.");
+        return;
+      }
+      await finishIntake(parsed);
+    }
+  }
+
+  function skipEmail() {
+    if (!token || sending) return;
+    noteAnswer(CHAT_ASK_EMAIL, CHAT_EMAIL_SKIP);
+    setDraftEmail("");
+    setStep("street");
   }
 
   async function choose(channel: "chat" | "text") {
@@ -408,7 +572,23 @@ export function WebsiteChatWidget({
 
   const mark = officeInitial(office?.companyName || "");
   const placeholder =
-    step === "phone" ? "(469) 555-0100" : step === "street" ? "123 Oak Street" : step === "name" ? "Your name" : "Write a message";
+    step === "first"
+      ? "John"
+      : step === "last"
+        ? "Smith"
+        : step === "phone"
+          ? "(214) 555-0100"
+          : step === "email"
+            ? "john@example.com"
+            : step === "street"
+              ? "123 Oak Street"
+              : step === "city"
+                ? "Dallas"
+                : step === "state"
+                  ? "TX"
+                  : step === "zip"
+                    ? "75201"
+                    : "Write a message";
 
   const panel = !ready ? (
     <div className="flex flex-1 items-center justify-center px-6">
@@ -460,7 +640,57 @@ export function WebsiteChatWidget({
         </div>
       </div>
       {error ? <p className="px-4 pb-1 text-xs text-destructive">{error}</p> : null}
-      {step === "choose" ? (
+      {step === "market" ? (
+        <div className="grid gap-2 border-t border-border bg-background px-3 py-3">
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              className="h-11 rounded-full border border-border bg-card text-sm font-medium"
+              onClick={() => pickMarket("residential")}
+            >
+              Residential
+            </button>
+            <button
+              type="button"
+              className="h-11 rounded-full border border-border bg-card text-sm font-medium"
+              onClick={() => pickMarket("commercial")}
+            >
+              Commercial
+            </button>
+          </div>
+          <p className="text-center text-xs text-muted-foreground">Residential work is not taxed.</p>
+        </div>
+      ) : step === "trades" ? (
+        <div className="grid gap-2 border-t border-border bg-background px-3 py-3">
+          <div className="flex flex-wrap gap-2">
+            {CHAT_TRADES.map((trade) => {
+              const selected = trades.includes(trade);
+              return (
+                <button
+                  key={trade}
+                  type="button"
+                  aria-pressed={selected}
+                  className={cn(
+                    "h-9 rounded-full border px-3 text-sm font-medium",
+                    selected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card",
+                  )}
+                  onClick={() => toggleTrade(trade)}
+                >
+                  {trade}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            disabled={!trades.length}
+            className="h-11 rounded-full bg-primary text-sm font-medium text-primary-foreground disabled:opacity-40"
+            onClick={confirmTrades}
+          >
+            Continue
+          </button>
+        </div>
+      ) : step === "choose" ? (
         <div className="grid gap-2 border-t border-border bg-background px-3 py-3">
           <button
             type="button"
@@ -503,8 +733,26 @@ export function WebsiteChatWidget({
             value={body}
             onChange={(event) => setBody(event.target.value)}
             placeholder={placeholder}
-            inputMode={step === "phone" ? "tel" : "text"}
-            autoComplete={step === "name" ? "name" : step === "phone" ? "tel" : step === "street" ? "street-address" : "off"}
+            inputMode={step === "phone" ? "tel" : step === "email" ? "email" : step === "zip" ? "numeric" : "text"}
+            autoComplete={
+              step === "first"
+                ? "given-name"
+                : step === "last"
+                  ? "family-name"
+                  : step === "phone"
+                    ? "tel"
+                    : step === "email"
+                      ? "email"
+                      : step === "street"
+                        ? "street-address"
+                        : step === "city"
+                          ? "address-level2"
+                          : step === "state"
+                            ? "address-level1"
+                            : step === "zip"
+                              ? "postal-code"
+                              : "off"
+            }
             enterKeyHint="send"
             className="h-11 min-w-0 flex-1 rounded-full border border-border bg-card px-4 text-sm outline-none placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/25"
           />
@@ -518,6 +766,13 @@ export function WebsiteChatWidget({
           </button>
         </form>
       )}
+      {step === "email" ? (
+        <div className="bg-background px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <button type="button" className="text-xs font-medium text-muted-foreground underline-offset-2 hover:underline" onClick={skipEmail}>
+            No email
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 

@@ -12,6 +12,12 @@ export async function notifyWebsiteChatAdmins(input: {
   companyName: string;
   companyEmail: string;
   ownerName?: string;
+  email?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  market?: string;
+  trades?: string;
 }) {
   const recipients = websiteChatNotifyAdmins(input.admins, input.ownerName)
     .map((admin) => (admin.email ?? "").trim())
@@ -25,6 +31,12 @@ export async function notifyWebsiteChatAdmins(input: {
     street: input.street,
     companyName: input.companyName,
     ownerName: input.ownerName,
+    email: input.email,
+    city: input.city,
+    state: input.state,
+    postalCode: input.postalCode,
+    market: input.market === "commercial" ? "Commercial" : input.market ? "Residential" : "",
+    trades: input.trades,
   });
   const html = text
     .split("\n")

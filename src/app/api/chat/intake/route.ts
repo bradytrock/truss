@@ -19,6 +19,14 @@ export async function POST(request: Request) {
   const name = typeof body.name === "string" ? body.name : "";
   const phone = typeof body.phone === "string" ? body.phone : "";
   const street = typeof body.street === "string" ? body.street : "";
+  const email = typeof body.email === "string" ? body.email : "";
+  const city = typeof body.city === "string" ? body.city : "";
+  const state = typeof body.state === "string" ? body.state : "";
+  const postal = typeof body.postalCode === "string" ? body.postalCode : "";
+  const market = typeof body.market === "string" ? body.market : "";
+  const trades = typeof body.trades === "string" ? body.trades : "";
+  const first = typeof body.firstName === "string" ? body.firstName : "";
+  const last = typeof body.lastName === "string" ? body.lastName : "";
   if (!token) return NextResponse.json({ ok: false, error: "Missing chat." }, { status: 400 });
 
   const supabase = createAnonClient();
@@ -27,6 +35,14 @@ export async function POST(request: Request) {
     p_name: name,
     p_phone: phone,
     p_street: street,
+    p_email: email,
+    p_city: city,
+    p_state: state,
+    p_postal: postal,
+    p_market: market,
+    p_trades: trades,
+    p_first: first,
+    p_last: last,
   });
   if (error) return NextResponse.json({ ok: false, error: "Chat is not ready yet." }, { status: 503 });
 
@@ -38,6 +54,12 @@ export async function POST(request: Request) {
     visitorName?: string;
     visitorPhone?: string;
     visitorStreet?: string;
+    visitorEmail?: string;
+    visitorCity?: string;
+    visitorState?: string;
+    visitorPostal?: string;
+    market?: string;
+    trades?: string;
     companyName?: string;
     companyEmail?: string;
     companyPhone?: string;
@@ -57,6 +79,12 @@ export async function POST(request: Request) {
       companyName: payload.companyName || "",
       companyEmail: payload.companyEmail || "",
       ownerName: payload.ownerName || "",
+      email: payload.visitorEmail || email,
+      city: payload.visitorCity || city,
+      state: payload.visitorState || state,
+      postalCode: payload.visitorPostal || postal,
+      market: payload.market || market,
+      trades: payload.trades || trades,
     }).catch(() => undefined);
   }
 
