@@ -188,6 +188,10 @@ assert.equal(withOffice?.projectedCostOfSales, 50 * 80 + 400);
 assert.equal(withOffice?.projectedExpenses, 120);
 assert.equal(withOffice?.projectedNetIncome, (50 * 112 + 400) - (50 * 80 + 400) - 120);
 
+function roundExpected(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
 const income = 50 * 112 + 400;
 const atAverage = applyAverageMargin(compared, 35);
 assert.equal(atAverage?.marginBasis, "average");

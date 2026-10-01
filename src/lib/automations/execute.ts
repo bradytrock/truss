@@ -77,6 +77,7 @@ async function runAction(
     setJobStage?: (stage: WorkColumn) => Promise<boolean | void>;
     addNote?: (body: string) => Promise<void>;
     estimateTotal?: number | null;
+    emailTemplates?: CompanyEmailTemplates;
   },
 ): Promise<ExecuteActionResult> {
   const body = applyAutomationMerge(action.body ?? "", input.merge);
