@@ -11,6 +11,7 @@ import { AppShell } from "@/components/app-shell";
 import { SoftphoneBar } from "@/components/softphone-bar";
 import { CrmProvider } from "@/lib/crm-store";
 import { SoftphoneProvider } from "@/lib/calls/softphone";
+import { isDialerPopupPath } from "@/lib/calls/popup";
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -35,6 +36,15 @@ function Shell({ children }: { children: ReactNode }) {
       isLegalPath(pathname);
     if (isAuth) return children;
     return <CrmProvider>{children}</CrmProvider>;
+  }
+
+  // Compact dialer popup: softphone only, no app chrome, so the main window stays usable.
+  if (isDialerPopupPath(pathname)) {
+    return (
+      <CrmProvider>
+        <SoftphoneProvider>{children}</SoftphoneProvider>
+      </CrmProvider>
+    );
   }
 
   return (

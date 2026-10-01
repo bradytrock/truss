@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Phone, PhoneIncoming, PhoneOff, Mic, MicOff, ArrowRightLeft } from "lucide-react";
 import { toast } from "sonner";
@@ -14,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCrm } from "@/lib/crm-store";
+import { openDialerPopup } from "@/lib/calls/popup";
 import { useSoftphone } from "@/lib/calls/softphone";
 import { formatPhoneInput } from "@/lib/phone";
 import { cn } from "@/lib/utils";
@@ -90,9 +90,17 @@ export function SoftphoneBar() {
                 <p className="text-xs text-muted-foreground">
                   {/* tick forces re-render each second */}
                   {elapsed(phone.active.startedAt + (tick >= 0 ? 0 : 0))} ·{" "}
-                  <Link href="/calls" className="underline-offset-2 hover:underline">
-                    Calls
-                  </Link>
+                  <button
+                    type="button"
+                    className="underline-offset-2 hover:underline"
+                    onClick={() => {
+                      if (!openDialerPopup()) {
+                        toast.error("Allow pop-ups to open the dialer window.");
+                      }
+                    }}
+                  >
+                    Dialer
+                  </button>
                 </p>
               </div>
               <Button size="icon" variant="ghost" onClick={() => phone.toggleMute()} aria-label="Mute">
@@ -183,9 +191,17 @@ export function SoftphoneBar() {
             <span className="inline-flex items-center gap-1.5">
               <Phone className="size-3.5" /> Softphone ready
             </span>
-            <Link href="/calls" className="text-foreground underline-offset-2 hover:underline">
+            <button
+              type="button"
+              className="text-foreground underline-offset-2 hover:underline"
+              onClick={() => {
+                if (!openDialerPopup()) {
+                  toast.error("Allow pop-ups to open the dialer window.");
+                }
+              }}
+            >
               Open dialer
-            </Link>
+            </button>
           </div>
         ) : null}
       </div>
