@@ -42,6 +42,7 @@ import {
 import { canViewReports, canManageSettings, canManageAutomations, canViewAccounting } from "@/lib/visibility";
 import { groupLoginAsTargets, readLoginAsRecent, recentLoginAsTargets, rememberLoginAsRecent } from "@/lib/login-as";
 import { isInboxPath } from "@/lib/inbox";
+import { openDialerPopup } from "@/lib/calls/popup";
 import { actionableReturningClientNotices } from "@/lib/returning-client";
 import { actionableJobCodeReviews } from "@/lib/job-code";
 import { isBusinessDevelopment } from "@/lib/bd";
@@ -99,6 +100,7 @@ function navSections(options: { bdOnly: boolean }): NavSection[] {
         items: [
           { href: "/", label: "Home" },
           { href: "/messages", label: "Inbox" },
+          { href: "/calls", label: "Calls" },
           { href: "/jobs", label: "Jobs" },
           { href: "/insurance", label: "Insurance" },
           { href: "/map", label: "Map" },
@@ -115,6 +117,7 @@ function navSections(options: { bdOnly: boolean }): NavSection[] {
       items: [
         { href: "/", label: "Home" },
         { href: "/messages", label: "Inbox" },
+        { href: "/calls", label: "Calls" },
         { href: "/jobs", label: "Jobs" },
         { href: "/map", label: "Map" },
         { href: "/contacts", label: "Contacts" },
@@ -516,6 +519,21 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
           ) : null}
           {section.items.map((item) => {
             const active = itemIsActive(pathname, item.href);
+            if (item.href === "/calls") {
+              return (
+                <button
+                  key={item.href}
+                  type="button"
+                  className={cn(linkClass(false), "w-full text-left")}
+                  onClick={() => {
+                    onNavigate?.();
+                    openDialerPopup();
+                  }}
+                >
+                  {item.label}
+                </button>
+              );
+            }
             return (
               <Link
                 key={item.href}
@@ -686,6 +704,15 @@ function SearchTrigger() {
                 }}
               >
                 Mail tagged to jobs
+              </CommandItem>
+              <CommandItem
+                value="calls dialer phone softphone livekit popup"
+                onSelect={() => {
+                  setOpen(false);
+                  openDialerPopup();
+                }}
+              >
+                Open dialer
               </CommandItem>
             </CommandGroup>
             <CommandGroup heading="Photos">

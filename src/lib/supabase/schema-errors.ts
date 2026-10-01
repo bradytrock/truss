@@ -1281,3 +1281,32 @@ export function isMissingScheduleGuestInvites(error: { message?: string; code?: 
 export function missingScheduleGuestInvitesMessage() {
   return `Saved in this browser. Run ${SCHEDULE_GUEST_INVITES_SQL} in the SQL editor so guest emails and Google Calendar invites persist.`;
 }
+
+export const CALLING_SQL = "supabase/migrations/20261001180000_calling.sql";
+
+export function isMissingCalling(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentions =
+    message.includes("calling_settings") ||
+    message.includes("call_endpoints") ||
+    message.includes("call_queues") ||
+    message.includes("call_routes") ||
+    message.includes("call_sessions") ||
+    message.includes("call_legs") ||
+    message.includes("calling_company_") ||
+    message.includes("calling_");
+  return (
+    (code === "pgrst205" && mentions) ||
+    (code === "pgrst202" && mentions) ||
+    ((message.includes("schema cache") ||
+      message.includes("could not find the") ||
+      message.includes("does not exist")) &&
+      mentions)
+  );
+}
+
+export function missingCallingMessage() {
+  return `Run ${CALLING_SQL} in the SQL editor so Photon + LiveKit calling tables and RPCs exist.`;
+}

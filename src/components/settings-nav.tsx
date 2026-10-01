@@ -20,6 +20,7 @@ const SECTIONS = [
   { href: "/settings/price-book", label: "Price book", hint: "Catalog and lists", admin: true, accounting: false, automations: false },
   { href: "/settings/integrations", label: "Integrations", hint: "EagleView, CompanyCam, Stripe, messaging", admin: true, accounting: true, automations: false },
   { href: "/settings/photon", label: "Photon", hint: "Office texts", admin: true, accounting: false, automations: false },
+  { href: "/settings/calling", label: "Calling", hint: "Photon + LiveKit dialer", admin: true, accounting: false, automations: false },
 ] as const;
 
 export function isAutomationBuilderPath(pathname: string) {

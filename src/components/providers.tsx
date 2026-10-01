@@ -1,6 +1,7 @@
 "use client";
 
 import { isPublicAppPath } from "@/lib/auth-paths";
+import { isDialerPopupPath } from "@/lib/calls/popup";
 import { isLegalPath } from "@/lib/legal";
 import { ThemeProvider } from "next-themes";
 import dynamic from "next/dynamic";
@@ -13,6 +14,10 @@ const TooltipProvider = dynamic(() =>
 );
 const AppShell = dynamic(() => import("@/components/app-shell").then((mod) => mod.AppShell));
 const CrmProvider = dynamic(() => import("@/lib/crm-store").then((mod) => mod.CrmProvider));
+const SoftphoneBar = dynamic(() => import("@/components/softphone-bar").then((mod) => mod.SoftphoneBar));
+const SoftphoneProvider = dynamic(() =>
+  import("@/lib/calls/softphone").then((mod) => mod.SoftphoneProvider),
+);
 
 function subscribeToClient() {
   return () => {};
@@ -42,11 +47,23 @@ function Shell({ children }: { children: ReactNode }) {
     return <CrmProvider>{children}</CrmProvider>;
   }
 
+  // Compact dialer popup: softphone only, no app chrome, so the main window stays usable.
+  if (isDialerPopupPath(pathname)) {
+    return (
+      <CrmProvider>
+        <SoftphoneProvider>{children}</SoftphoneProvider>
+      </CrmProvider>
+    );
+  }
+
   return (
     <CrmProvider>
-      <TooltipProvider delay={200}>
-        <AppShell>{children}</AppShell>
-      </TooltipProvider>
+      <SoftphoneProvider>
+        <TooltipProvider delay={200}>
+          <AppShell>{children}</AppShell>
+          <SoftphoneBar />
+        </TooltipProvider>
+      </SoftphoneProvider>
     </CrmProvider>
   );
 }

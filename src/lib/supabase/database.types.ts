@@ -2913,6 +2913,226 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["voice_agents"]["Insert"]>;
         Relationships: [];
       };
+      calling_settings: {
+        Row: {
+          company_id: string;
+          enabled: boolean;
+          office_line: string;
+          livekit_outbound_trunk_id: string;
+          livekit_inbound_trunk_id: string;
+          livekit_dispatch_rule_id: string;
+          webhook_token: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          company_id: string;
+          enabled?: boolean;
+          office_line?: string;
+          livekit_outbound_trunk_id?: string;
+          livekit_inbound_trunk_id?: string;
+          livekit_dispatch_rule_id?: string;
+          webhook_token?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["calling_settings"]["Insert"]>;
+        Relationships: [];
+      };
+      call_endpoints: {
+        Row: {
+          id: string;
+          company_id: string;
+          staff_id: string;
+          kind: string;
+          phone: string;
+          enabled: boolean;
+          priority: number;
+          ring_timeout_seconds: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          staff_id: string;
+          kind: string;
+          phone?: string;
+          enabled?: boolean;
+          priority?: number;
+          ring_timeout_seconds?: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["call_endpoints"]["Insert"]>;
+        Relationships: [];
+      };
+      call_queues: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          strategy: string;
+          fallback: string;
+          fallback_voice_agent_staff_id: string | null;
+          ring_timeout_seconds: number;
+          enabled: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          strategy?: string;
+          fallback?: string;
+          fallback_voice_agent_staff_id?: string | null;
+          ring_timeout_seconds?: number;
+          enabled?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["call_queues"]["Insert"]>;
+        Relationships: [];
+      };
+      call_queue_members: {
+        Row: {
+          id: string;
+          company_id: string;
+          queue_id: string;
+          staff_id: string;
+          use_softphone: boolean;
+          use_cell: boolean;
+          use_app: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          queue_id: string;
+          staff_id: string;
+          use_softphone?: boolean;
+          use_cell?: boolean;
+          use_app?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["call_queue_members"]["Insert"]>;
+        Relationships: [];
+      };
+      call_routes: {
+        Row: {
+          id: string;
+          company_id: string;
+          match_number: string;
+          target_type: string;
+          target_queue_id: string | null;
+          target_staff_id: string | null;
+          priority: number;
+          enabled: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          match_number?: string;
+          target_type: string;
+          target_queue_id?: string | null;
+          target_staff_id?: string | null;
+          priority?: number;
+          enabled?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["call_routes"]["Insert"]>;
+        Relationships: [];
+      };
+      call_sessions: {
+        Row: {
+          id: string;
+          company_id: string;
+          direction: string;
+          room_name: string;
+          from_number: string;
+          to_number: string;
+          status: string;
+          queue_id: string | null;
+          answered_staff_id: string | null;
+          contact_id: string | null;
+          job_id: string | null;
+          opportunity_id: string | null;
+          caller_participant_identity: string;
+          livekit_sip_call_id: string;
+          disposition: string;
+          duration_seconds: number | null;
+          metadata: Json;
+          started_at: string;
+          answered_at: string | null;
+          ended_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          direction: string;
+          room_name: string;
+          from_number?: string;
+          to_number?: string;
+          status?: string;
+          queue_id?: string | null;
+          answered_staff_id?: string | null;
+          contact_id?: string | null;
+          job_id?: string | null;
+          opportunity_id?: string | null;
+          caller_participant_identity?: string;
+          livekit_sip_call_id?: string;
+          disposition?: string;
+          duration_seconds?: number | null;
+          metadata?: Json;
+          started_at?: string;
+          answered_at?: string | null;
+          ended_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["call_sessions"]["Insert"]>;
+        Relationships: [];
+      };
+      call_legs: {
+        Row: {
+          id: string;
+          company_id: string;
+          session_id: string;
+          staff_id: string | null;
+          kind: string;
+          phone: string;
+          participant_identity: string;
+          status: string;
+          started_at: string;
+          answered_at: string | null;
+          ended_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          session_id: string;
+          staff_id?: string | null;
+          kind: string;
+          phone?: string;
+          participant_identity?: string;
+          status?: string;
+          started_at?: string;
+          answered_at?: string | null;
+          ended_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["call_legs"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -3271,6 +3491,117 @@ export type Database = {
       };
       photon_outbound_for_voice: {
         Args: { p_token: string };
+        Returns: Json;
+      };
+      calling_company_status: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      calling_company_save: {
+        Args: {
+          p_enabled: boolean;
+          p_office_line: string;
+          p_livekit_outbound_trunk_id?: string;
+          p_livekit_inbound_trunk_id?: string;
+          p_livekit_dispatch_rule_id?: string;
+        };
+        Returns: Json;
+      };
+      calling_inbound_company: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      calling_settings_for_company: {
+        Args: { p_company: string };
+        Returns: Json;
+      };
+      calling_match_contact: {
+        Args: { p_company: string; p_phone: string };
+        Returns: Json;
+      };
+      calling_resolve_route: {
+        Args: { p_company: string; p_to_number: string };
+        Returns: Json;
+      };
+      calling_ring_targets: {
+        Args: { p_company: string; p_queue_id: string | null; p_staff_id: string | null };
+        Returns: Json;
+      };
+      calling_start_session: {
+        Args: {
+          p_company: string;
+          p_direction: string;
+          p_room_name: string;
+          p_from_number: string;
+          p_to_number: string;
+          p_queue_id?: string | null;
+          p_caller_participant_identity?: string;
+          p_livekit_sip_call_id?: string;
+          p_metadata?: Json;
+        };
+        Returns: Json;
+      };
+      calling_add_leg: {
+        Args: {
+          p_session_id: string;
+          p_staff_id: string | null;
+          p_kind: string;
+          p_phone?: string;
+          p_participant_identity?: string;
+        };
+        Returns: Json;
+      };
+      calling_answer_leg: {
+        Args: { p_leg_id: string; p_participant_identity?: string };
+        Returns: Json;
+      };
+      calling_end_session: {
+        Args: {
+          p_session_id: string;
+          p_status?: string;
+          p_disposition?: string;
+          p_duration_seconds?: number | null;
+        };
+        Returns: Json;
+      };
+      calling_log_activity: {
+        Args: { p_session_id: string };
+        Returns: Json;
+      };
+      calling_ensure_default_endpoints: {
+        Args: { p_staff_id: string };
+        Returns: Json;
+      };
+      calling_get_session: {
+        Args: { p_session_id: string };
+        Returns: Json;
+      };
+      calling_get_leg: {
+        Args: { p_leg_id: string };
+        Returns: Json;
+      };
+      calling_set_leg_identity: {
+        Args: { p_leg_id: string; p_identity: string };
+        Returns: Json;
+      };
+      calling_fail_leg: {
+        Args: { p_leg_id: string };
+        Returns: Json;
+      };
+      calling_queue_fallback: {
+        Args: { p_queue_id: string | null };
+        Returns: Json;
+      };
+      calling_voice_agent_number: {
+        Args: { p_company: string; p_staff_id: string };
+        Returns: Json;
+      };
+      calling_find_session_by_room: {
+        Args: { p_room_name: string };
+        Returns: Json;
+      };
+      calling_incoming_for_staff: {
+        Args: { p_staff_id: string };
         Returns: Json;
       };
       stripe_company_set_keys: {
