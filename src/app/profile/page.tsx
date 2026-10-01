@@ -251,7 +251,7 @@ export default function ProfilePage() {
             <CardTitle>Your website chat</CardTitle>
             <CardDescription>
               Paste this in the header of a site you run. A visitor who leaves their name, phone, and
-              street opens a lead in your pipeline.
+              street opens a lead in your pipeline. Only you are notified.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-4">

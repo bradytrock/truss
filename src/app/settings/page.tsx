@@ -401,7 +401,7 @@ function WebsiteChatEmbed({ slug, phone }: { slug: string; phone: string }) {
           Asks for a name, phone, and street address, then opens a lead. Company admins are
           notified so they can assign it. The visitor can keep talking here or text the main phone
           {phone.trim() ? ` (${phone.trim()})` : ""}. A person’s own header code, on their profile,
-          puts the lead in that person’s pipeline.
+          puts the lead in that person’s pipeline and notifies only them.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 pt-4">

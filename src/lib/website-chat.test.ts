@@ -11,6 +11,7 @@ import {
   websiteChatAdminSubject,
   websiteChatAdminText,
   websiteChatEmbedCode,
+  websiteChatNotifyAdmins,
   WEBSITE_CHAT_GREETING,
 } from "./website-chat.ts";
 
@@ -65,5 +66,18 @@ assert.equal(
   websiteChatEmbedCode("https://crmtrock.com/", "t-rock"),
   '<script src="https://crmtrock.com/api/chat/widget.js" data-company="t-rock" async></script>',
 );
+
+const officeAdmins = [
+  { name: "Jordan Hale", email: "jordan@example.com" },
+  { name: "Ada Lovelace", email: "ada@example.com" },
+];
+assert.deepEqual(websiteChatNotifyAdmins(officeAdmins), officeAdmins);
+assert.deepEqual(websiteChatNotifyAdmins(officeAdmins, "Ada Lovelace"), [
+  { name: "Ada Lovelace", email: "ada@example.com" },
+]);
+assert.deepEqual(websiteChatNotifyAdmins(officeAdmins, "  ada lovelace "), [
+  { name: "Ada Lovelace", email: "ada@example.com" },
+]);
+assert.deepEqual(websiteChatNotifyAdmins(officeAdmins, "Someone Else"), []);
 
 console.log("website-chat.test.ts ok");

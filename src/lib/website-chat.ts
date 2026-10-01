@@ -74,6 +74,13 @@ export function websiteChatAdminSubject(name: string, street: string) {
   return `New website conversation — ${place}`;
 }
 
+/** Office chats email every admin. A personal chat emails only that person. */
+export function websiteChatNotifyAdmins<T extends { name?: string }>(admins: T[], ownerName?: string): T[] {
+  const owner = ownerName?.trim().toLowerCase() ?? "";
+  if (!owner) return admins;
+  return admins.filter((admin) => (admin.name ?? "").trim().toLowerCase() === owner);
+}
+
 export function websiteChatAdminText(input: {
   name: string;
   phone: string;

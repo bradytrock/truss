@@ -1,6 +1,6 @@
 import { formatResendFrom, sendResendEmail } from "@/lib/resend-mail";
 import { looksLikeEmail } from "@/lib/share-text";
-import { websiteChatAdminSubject, websiteChatAdminText } from "@/lib/website-chat";
+import { websiteChatAdminSubject, websiteChatAdminText, websiteChatNotifyAdmins } from "@/lib/website-chat";
 
 type Admin = { name?: string; email?: string };
 
@@ -13,7 +13,7 @@ export async function notifyWebsiteChatAdmins(input: {
   companyEmail: string;
   ownerName?: string;
 }) {
-  const recipients = input.admins
+  const recipients = websiteChatNotifyAdmins(input.admins, input.ownerName)
     .map((admin) => (admin.email ?? "").trim())
     .filter((email, index, all) => looksLikeEmail(email) && all.indexOf(email) === index);
   if (!recipients.length) return { sent: 0 };

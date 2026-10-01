@@ -1015,7 +1015,7 @@ function EditProfileDialog({
               <p className="text-xs text-muted-foreground">
                 {member?.locked
                   ? "This seat is locked, so this header code will not open leads."
-                  : "Paste this in the header of a site they run. New conversations open a lead in their pipeline."}
+                  : "Paste this in the header of a site they run. New conversations open a lead in their pipeline and notify only them."}
               </p>
               {member ? (
                 <WebsiteChatSnippet
