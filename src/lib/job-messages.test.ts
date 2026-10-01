@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mailThreads, suggestedJobsForPeople } from "./job-emails.ts";
 import { contactsForTexting, jobForContact, messageThreads } from "./job-messages.ts";
-import type { Contact, GmailMessage, Job, TextMessage } from "./types.ts";
+import type { Contact, GmailMessage, Job, Opportunity, TextMessage } from "./types.ts";
 
 function contact(partial: Partial<Contact> & Pick<Contact, "id" | "name">): Contact {
   return {
@@ -101,5 +101,33 @@ assert.equal(mail[0].subject, "(no subject)");
 assert.equal(mail[0].preview, "");
 assert.equal(mail[0].job, undefined);
 assert.equal(suggestedJobsForPeople([ownedJob], [], [jenn.id])[0]?.id, "j2");
+
+const nameless = contact({
+  id: "c4",
+  name: null as unknown as string,
+  phone: "(214) 555-0199",
+});
+const blankLead = {
+  id: "o1",
+  primaryContactId: nameless.id,
+  stage: "pursuing",
+  createdAt: null,
+} as unknown as Opportunity;
+const blankText = {
+  ...text,
+  id: "m-blank",
+  contactId: nameless.id,
+  phone: null,
+  fromNumber: null,
+  toNumber: "(214) 555-0199",
+  body: null,
+  createdAt: null,
+  createdBy: null,
+} as unknown as TextMessage;
+const blankThreads = messageThreads([blankText], [nameless], [], [blankLead]);
+assert.equal(blankThreads.length, 1);
+assert.equal(blankThreads[0].title, "+12145550199");
+assert.equal(blankThreads[0].preview, "");
+assert.equal(blankThreads[0].opportunity?.id, "o1");
 
 console.log("job-messages.test.ts ok");

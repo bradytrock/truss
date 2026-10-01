@@ -92,6 +92,49 @@ export type WebsiteChatThread = {
   messages: WebsiteChatMessage[];
 };
 
+function chatText(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+/** Office list rows can arrive with a blank label or a missing message list. */
+export function officeWebsiteChats(value: unknown): WebsiteChatThread[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const chat = item as Record<string, unknown>;
+    const id = chatText(chat.id);
+    if (!id) return [];
+    const messages = Array.isArray(chat.messages)
+      ? chat.messages.flatMap((message) => {
+          if (!message || typeof message !== "object") return [];
+          const row = message as Record<string, unknown>;
+          const messageId = chatText(row.id);
+          if (!messageId) return [];
+          return [
+            {
+              id: messageId,
+              direction: row.direction === "outbound" ? ("outbound" as const) : ("inbound" as const),
+              body: chatText(row.body),
+              createdAt: chatText(row.createdAt),
+            },
+          ];
+        })
+      : [];
+    const label = chatText(chat.label).trim();
+    return [
+      {
+        id,
+        label: label || "Website visitor",
+        updatedAt: chatText(chat.updatedAt),
+        preview: chatText(chat.preview),
+        jobId: chatText(chat.jobId) || null,
+        channel: chatText(chat.channel) || undefined,
+        messages,
+      },
+    ];
+  });
+}
+
 /** Phones open Messages. Tablets and desktops stay in the chat box. */
 export function isPhoneUserAgent(userAgent: string) {
   const ua = userAgent || "";
