@@ -124,7 +124,7 @@ function CompanySettingsForm() {
         </CardContent>
       </Card>
 
-      <WebsiteChatEmbed slug={form.slug} phone={form.phone} />
+      <WebsiteChatEmbed slug={form.slug} />
 
       <Card>
         <CardHeader className="border-b">
@@ -398,7 +398,7 @@ function CompanySettingsForm() {
   );
 }
 
-function WebsiteChatEmbed({ slug, phone }: { slug: string; phone: string }) {
+function WebsiteChatEmbed({ slug }: { slug: string }) {
   const company = slug.trim() || "your-company";
 
   return (
@@ -407,15 +407,15 @@ function WebsiteChatEmbed({ slug, phone }: { slug: string; phone: string }) {
         <CardTitle>Website chat</CardTitle>
         <CardDescription>
           Asks for a name, phone, and street address, then opens a lead. Company admins are
-          notified so they can assign it. The visitor can keep talking here or text the main phone
-          {phone.trim() ? ` (${phone.trim()})` : ""}. A person’s own header code, on their profile,
-          puts the lead in that person’s pipeline and notifies only them.
+          notified so they can assign it. The visitor can keep talking here or text this office&apos;s
+          Photon line. A person’s own header code, on their profile, puts the lead in that person’s
+          pipeline and notifies only them.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 pt-4">
         <WebsiteChatSnippet company={company} fieldId="website-chat-snippet" />
         <p className="text-xs text-muted-foreground">
-          The conversation shows up in Inbox under Website. Set the main phone so the visitor can move it to a text.
+          The conversation shows up in Inbox under Website. Connect Photon so a text starts on that line.
         </p>
       </CardContent>
     </Card>

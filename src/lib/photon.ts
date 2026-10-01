@@ -36,6 +36,27 @@ export function photonNotSetupMessage(companyName: string) {
   return `Photon is not set up for ${name}.`;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+/** Dedicated iMessage line on a Photon project. Prefer a line that can send. */
+export function photonImessageLinePhone(payload: unknown) {
+  const data = asRecord(asRecord(payload)?.data);
+  const lines = Array.isArray(data?.lines) ? data.lines : [];
+  const phones = lines
+    .map((item) => asRecord(item))
+    .filter((item): item is Record<string, unknown> => Boolean(item))
+    .filter((item) => item.platform === "imessage")
+    .map((item) => ({
+      phone: typeof item.phoneNumber === "string" ? item.phoneNumber.trim() : "",
+      status: typeof item.status === "string" ? item.status : "",
+    }))
+    .filter((item) => item.phone);
+  return (phones.find((item) => item.status === "available") ?? phones[0])?.phone ?? "";
+}
+
 /** Supabase SQL editor runs the buffer as SQL. A chat title is not a statement. */
 export function isSqlScript(value: string) {
   const line = value.trim().split(/\r?\n/, 1)[0]?.trim() ?? "";

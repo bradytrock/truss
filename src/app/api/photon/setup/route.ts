@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadProfileCompany } from "@/lib/eagleview-server";
-import { verifyPhotonProject } from "@/lib/photon-server";
+import { syncOfficePhotonLine, verifyPhotonProject } from "@/lib/photon-server";
 import { photonNotSetupMessage, photonWebhookUrl } from "@/lib/photon";
 import { requestOrigin } from "@/lib/share-text";
 import { createClient } from "@/lib/supabase/server";
@@ -47,6 +47,7 @@ export async function GET(request: Request) {
   if (status.ok === false) {
     return NextResponse.json({ error: status.error || "Could not load Photon." }, { status: 400 });
   }
+  if (status.linked) await syncOfficePhotonLine().catch(() => undefined);
   const webhookToken = status.webhookToken ?? "";
   return NextResponse.json({
     linked: Boolean(status.linked),
@@ -112,6 +113,7 @@ export async function POST(request: Request) {
     if (status.ok === false) {
       return NextResponse.json({ error: status.error || "Could not save Photon." }, { status: 400 });
     }
+    await syncOfficePhotonLine().catch(() => undefined);
     return NextResponse.json({
       ok: true,
       linked: true,
@@ -138,6 +140,7 @@ export async function POST(request: Request) {
   if (status.ok === false) {
     return NextResponse.json({ error: status.error || photonNotSetupMessage(status.companyName ?? "") }, { status: 400 });
   }
+  if (status.linked) await syncOfficePhotonLine().catch(() => undefined);
   return NextResponse.json({
     ok: true,
     linked: Boolean(status.linked),

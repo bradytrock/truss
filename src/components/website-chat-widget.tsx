@@ -434,7 +434,7 @@ export function WebsiteChatWidget({
           Open Messages
         </a>
       ) : (
-        <p className="text-sm text-muted-foreground">This office does not have a main phone yet. Keep talking here.</p>
+        <p className="text-sm text-muted-foreground">This office does not have a Photon line yet. Keep talking here.</p>
       )}
     </div>
   ) : (
