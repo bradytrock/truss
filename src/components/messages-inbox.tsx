@@ -411,16 +411,16 @@ export function MessagesInbox() {
   if (!crm.hydrated) return <LoadingScreen />;
 
   return (
-    <div className="-m-5 flex h-[calc(100dvh-3rem)] min-h-0 flex-col bg-background sm:-m-7">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       {crm.hydrateError ? (
         <div className="border-b px-4 py-3">
           <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
         </div>
       ) : null}
-      <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[20rem_minmax(0,1fr)]">
+      <div className="grid h-full min-h-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden lg:grid-cols-[20rem_minmax(0,1fr)]">
         <aside
           className={cn(
-            "flex min-h-0 flex-col border-b bg-background lg:border-r lg:border-b-0",
+            "flex min-h-0 flex-1 flex-col overflow-hidden border-b bg-background lg:border-r lg:border-b-0",
             conversationOpen && "hidden lg:flex",
           )}
         >
@@ -450,7 +450,7 @@ export function MessagesInbox() {
               />
             </div>
           </div>
-          <div className="min-h-0 flex-1">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {visibleWebChats.length > 0 ? (
               <div className="border-b">
                 <p className="px-4 pt-3 text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
@@ -499,29 +499,25 @@ export function MessagesInbox() {
               </p>
               )
             ) : (
-              <Virtuoso
-                className="h-full"
-                data={visibleThreads}
-                increaseViewportBy={240}
-                itemContent={(_index, thread) => (
-                  <ThreadRow
-                    thread={thread}
-                    active={!showCompose && selected?.key === thread.key}
-                    unreadCount={threadUnreadCount(
-                      thread,
-                      openedAtFor(book.messageThreadOpens, crm.user.id, thread.key),
-                    )}
-                    onOpen={openThread}
-                  />
-                )}
-              />
+              visibleThreads.map((thread) => (
+                <ThreadRow
+                  key={thread.key}
+                  thread={thread}
+                  active={!showCompose && selected?.key === thread.key}
+                  unreadCount={threadUnreadCount(
+                    thread,
+                    openedAtFor(book.messageThreadOpens, crm.user.id, thread.key),
+                  )}
+                  onOpen={openThread}
+                />
+              ))
             )}
           </div>
         </aside>
 
         <section
           className={cn(
-            "flex min-h-0 flex-1 flex-col",
+            "flex min-h-0 flex-1 flex-col overflow-hidden",
             !conversationOpen && "hidden lg:flex",
           )}
         >
@@ -665,8 +661,8 @@ export function MessagesInbox() {
 
           <div
             className={cn(
-              "min-h-0 flex-1 bg-muted/20",
-              !selectedWeb && (showCompose || !selected) ? "overflow-y-auto px-4 py-4" : "",
+              "flex min-h-0 flex-1 flex-col bg-muted/20",
+              !selectedWeb && (showCompose || !selected) ? "overflow-y-auto px-4 py-4" : "overflow-hidden",
             )}
           >
             {selectedWeb ? (
@@ -974,7 +970,7 @@ function WebsiteConversation({ messages }: { messages: WebsiteChatThread["messag
   }
   return (
     <Virtuoso
-      className="h-full"
+      className="h-full min-h-0 flex-1"
       data={messages}
       increaseViewportBy={{ top: 240, bottom: 400 }}
       initialTopMostItemIndex={lastIndex}
@@ -1203,7 +1199,7 @@ function Conversation({
   const lastIndex = Math.max(0, messages.length - 1);
   return (
     <Virtuoso
-      className="h-full"
+      className="h-full min-h-0 flex-1"
       data={messages}
       increaseViewportBy={{ top: 240, bottom: 400 }}
       initialTopMostItemIndex={lastIndex}

@@ -272,16 +272,16 @@ export function MailInbox() {
   const paneOpen = conversationOpen;
 
   return (
-    <div className="-m-5 flex h-[calc(100dvh-3rem)] min-h-0 flex-col bg-background sm:-m-7">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       {crm.hydrateError ? (
         <div className="border-b px-4 py-3">
           <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
         </div>
       ) : null}
-      <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[20rem_minmax(0,1fr)]">
+      <div className="grid h-full min-h-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden lg:grid-cols-[20rem_minmax(0,1fr)]">
         <aside
           className={cn(
-            "flex min-h-0 flex-col border-b bg-background lg:border-r lg:border-b-0",
+            "flex min-h-0 flex-1 flex-col overflow-hidden border-b bg-background lg:border-r lg:border-b-0",
             paneOpen && "hidden lg:flex",
           )}
         >
@@ -374,7 +374,7 @@ export function MailInbox() {
               />
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
             {visibleThreads.length === 0 ? (
               <div className="px-4 py-8">
                 {threads.length === 0 ? (
@@ -439,7 +439,7 @@ export function MailInbox() {
           </div>
         </aside>
 
-        <section className={cn("flex min-h-0 flex-1 flex-col", !paneOpen && "hidden lg:flex")}>
+        <section className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", !paneOpen && "hidden lg:flex")}>
           {composeOpen ? (
             <form
               className="flex min-h-0 flex-1 flex-col"
