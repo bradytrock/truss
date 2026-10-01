@@ -7,10 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ActivityComposer, ActivityList } from "@/components/activity";
 import { RecordProperty } from "@/components/app-shell";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
-import { JobStatusBadge, StageBadge, TypeBadge } from "@/components/status-badge";
+import { StageBadge, TypeBadge, WorkColumnBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency, formatCurrencyFull, formatPhone } from "@/lib/format";
 import { CLIENT_TYPE_LABELS } from "@/lib/types";
+import { workColumnFor } from "@/lib/work-board";
 
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -132,7 +133,12 @@ export default function ClientDetailPage() {
                           {formatCurrencyFull(job.contractValue)} · {job.projectManager}
                         </p>
                       </div>
-                      <JobStatusBadge status={job.status} />
+                      <WorkColumnBadge
+                        column={workColumnFor(
+                          job,
+                          crm.opportunities.find((item) => item.id === job.opportunityId),
+                        )}
+                      />
                     </li>
                   ))}
                 </ul>

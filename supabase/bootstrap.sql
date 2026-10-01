@@ -17250,3 +17250,11 @@ grant execute on function public.photon_inbound_company(text) to anon, authentic
 grant execute on function public.ingest_inbound_text(text, text, text, text, text, uuid) to anon, authenticated, service_role;
 
 notify pgrst, 'reload schema';
+
+-- ========== 20261001140000_job_trades.sql ==========
+-- Trades involved on a job: fencing, roofing, gutters, siding, flooring, other.
+
+alter table public.jobs
+  add column if not exists trades text[] not null default '{}';
+
+notify pgrst, 'reload schema';

@@ -25,7 +25,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingJobInsurance, missingJobInsuranceMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingTradesColumn, missingTradesMessage } from "@/lib/supabase/schema-errors";
 import {
   eventTimesAreInvitable,
   externalInvitees,
@@ -2872,6 +2872,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       toast.message(missingMarketMessage());
       return finish(true);
     }
+    if (error && isMissingTradesColumn(error)) {
+      apply();
+      toast.message(missingTradesMessage());
+      return finish(true);
+    }
     if (error && isMissingPrimaryPhotoColumn(error)) {
       apply();
       toast.message(missingPrimaryPhotoMessage());
@@ -4483,14 +4488,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         const contactName =
           (notice.contactId ? state.contacts.find((item) => item.id === notice.contactId)?.name : "") ||
           "past client";
+        const previousJob = notice.previousJobId
+          ? state.jobs.find((job) => job.id === notice.previousJobId) ?? null
+          : null;
         const sms = returningClientSms("pending", {
           openerName: notice.openedByName,
           contactName,
           previousStaffName: notice.previousStaffName,
           jobCode: notice.previousJobCode,
           when: returningClientWhen({
-            job: notice.previousJobId ? state.jobs.find((job) => job.id === notice.previousJobId) ?? null : null,
+            job: previousJob,
             completedAt: notice.completedAt,
+            opportunity: previousJob?.opportunityId
+              ? state.opportunities.find((item) => item.id === previousJob.opportunityId) ?? null
+              : null,
           }),
         });
         const audience = companyAdminsForNotice(state.staff, [actor.id, notice.previousStaffId].filter(Boolean));

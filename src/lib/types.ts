@@ -42,6 +42,39 @@ export const JOB_MARKETS = ["residential", "commercial"] as const;
 
 export type JobMarket = (typeof JOB_MARKETS)[number];
 
+export const TRADES = ["fencing", "roofing", "gutters", "siding", "flooring", "other"] as const;
+
+export type Trade = (typeof TRADES)[number];
+
+export const TRADE_LABELS: Record<Trade, string> = {
+  fencing: "Fencing",
+  roofing: "Roofing",
+  gutters: "Gutters",
+  siding: "Siding",
+  flooring: "Flooring",
+  other: "Other",
+};
+
+export function parseTrades(value: unknown): Trade[] {
+  if (!Array.isArray(value)) return [];
+  const allowed = new Set<string>(TRADES);
+  const seen = new Set<string>();
+  const next: Trade[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const key = item.trim().toLowerCase();
+    if (!allowed.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    next.push(key as Trade);
+  }
+  return TRADES.filter((trade) => seen.has(trade));
+}
+
+export function tradeSummary(value: unknown) {
+  const labels = parseTrades(value).map((trade) => TRADE_LABELS[trade]);
+  return labels.length ? labels.join(", ") : "Trades involved";
+}
+
 export const DELIVERY_METHODS = [
   "insurance_claim",
   "fixed_price",
@@ -347,6 +380,8 @@ export interface Job {
   customFields: JobCustomField[];
   projectType: ProjectType | "";
   market: JobMarket;
+  /** Work on this job: fencing, roofing, gutters, siding, flooring, or other. */
+  trades: Trade[];
   leadSource: LeadSource | "";
   /** Stable cover photo for the job header / front of the project page. */
   primaryPhotoId: string | null;

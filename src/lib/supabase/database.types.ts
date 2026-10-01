@@ -417,6 +417,7 @@ export type Database = {
           project_type: Database["public"]["Enums"]["project_type"] | null;
           lead_source: string;
           market: string;
+          trades: string[];
           primary_photo_id: string | null;
           deleted_at: string | null;
           deleted_reason: string;
@@ -456,6 +457,7 @@ export type Database = {
           project_type?: Database["public"]["Enums"]["project_type"] | null;
           lead_source?: string;
           market?: string;
+          trades?: string[];
           primary_photo_id?: string | null;
           deleted_at?: string | null;
           deleted_reason?: string;

@@ -4,7 +4,6 @@ import { isDeletedJob } from "@/lib/job-record";
 import { phonesMatch } from "@/lib/job-messages";
 import { digitsOnly } from "@/lib/phone";
 import {
-  JOB_STATUS_LABELS,
   type Contact,
   type Job,
   type Opportunity,
@@ -12,6 +11,7 @@ import {
   type ReturningClientLeadStatus,
   type StaffMember,
 } from "@/lib/types";
+import { WORK_COLUMN_LABELS, workColumnFor } from "@/lib/work-board";
 import { canManageSettings } from "@/lib/visibility";
 
 export type { ReturningClientLead, ReturningClientLeadStatus } from "@/lib/types";
@@ -38,6 +38,7 @@ export type ReturningClientMatch = {
   completedAt: string | null;
   assignable: boolean;
   matchedOn: ReturningClientMatchOn;
+  opportunity?: Opportunity | null;
 };
 
 function jobTouchesContact(job: Job, opportunity: Opportunity | undefined, contactIds: Set<string>) {
@@ -153,13 +154,17 @@ export function findReturningClient(input: {
     completedAt: job.status === "complete" ? jobRecency(job) || null : null,
     assignable,
     matchedOn: found.matchedOn,
+    opportunity,
   };
 }
 
-export function returningClientWhen(match: Pick<ReturningClientMatch, "job" | "completedAt">) {
+export function returningClientWhen(
+  match: Pick<ReturningClientMatch, "job" | "completedAt" | "opportunity">,
+) {
   if (!match.job) return "No past job is linked yet.";
   if (match.completedAt) return `Completed ${formatDate(match.completedAt)}`;
-  return `Last job is ${JOB_STATUS_LABELS[match.job.status]} (started ${formatDate(match.job.startDate)})`;
+  const label = WORK_COLUMN_LABELS[workColumnFor(match.job, match.opportunity)];
+  return `Last job is ${label} (started ${formatDate(match.job.startDate)})`;
 }
 
 export function returningClientBannerTitle(match: ReturningClientMatch) {

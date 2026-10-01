@@ -27,6 +27,7 @@ import { parseMarket } from "@/lib/market";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { TaskRow } from "@/components/task-row";
 import { LeadAssigneeSelect } from "@/components/lead-assignee";
+import { TradesField } from "@/components/trades-field";
 import {
   DELIVERY_LABELS,
   JOB_MARKET_LABELS,
@@ -380,6 +381,18 @@ export default function OpportunityDetailPage() {
                   </SelectContent>
                 </Select>
               </RecordProperty>
+              {job ? (
+                <RecordProperty label="Trades involved">
+                  <TradesField
+                    id="opportunity-trades"
+                    hideLabel
+                    value={job.trades}
+                    onChange={(trades) => {
+                      void crm.updateJob(job.id, { trades });
+                    }}
+                  />
+                </RecordProperty>
+              ) : null}
               <RecordProperty label="Delivery">{DELIVERY_LABELS[opportunity.deliveryMethod]}</RecordProperty>
               <RecordProperty label="Sourced by">
                 {crm.book.staff.find((member) => member.id === originatorStaffId(opportunity))?.name ??
