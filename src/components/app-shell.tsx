@@ -164,6 +164,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   >(null);
 
   const launcherApps = appLauncherItems();
+  const inboxLayout = isInboxPath(pathname);
 
   const createMenu =
     effectiveStaff && isBusinessDevelopment(effectiveStaff.role) ? (
@@ -191,8 +192,18 @@ export function AppShell({ children }: { children: ReactNode }) {
     );
 
   return (
-    <div className="grid min-h-dvh w-full flex-1 bg-sidebar md:grid-cols-[13.5rem_minmax(0,1fr)]">
-      <aside className="hidden h-full min-h-dvh flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
+    <div
+      className={cn(
+        "grid w-full flex-1 bg-sidebar md:grid-cols-[13.5rem_minmax(0,1fr)]",
+        inboxLayout ? "h-dvh overflow-hidden" : "min-h-dvh",
+      )}
+    >
+      <aside
+        className={cn(
+          "hidden h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex",
+          inboxLayout ? "min-h-0" : "min-h-dvh",
+        )}
+      >
         <div className="flex items-start gap-1 border-b border-sidebar-border px-3 py-3.5">
           <AppLauncher apps={launcherApps} pathname={pathname} />
           <Link href="/" className="min-w-0 flex-1 rounded-sm px-1.5 py-0.5 hover:bg-white/6">
@@ -204,7 +215,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </span>
           </Link>
         </div>
-        <div className="flex-1 py-1">
+        <div className={cn("py-1", inboxLayout ? "min-h-0 flex-1 overflow-y-auto" : "flex-1")}>
           <Nav pathname={pathname} />
         </div>
         <div className="mt-auto border-t border-sidebar-border px-4 py-3">
@@ -239,8 +250,13 @@ export function AppShell({ children }: { children: ReactNode }) {
         </SheetContent>
       </Sheet>
 
-      <div className="flex min-h-dvh min-w-0 flex-col bg-background">
-        <header className="sticky top-0 z-30 border-b bg-background">
+      <div
+        className={cn(
+          "flex min-w-0 flex-col bg-background",
+          inboxLayout ? "h-full min-h-0 overflow-hidden" : "min-h-dvh",
+        )}
+      >
+        <header className={cn("z-30 border-b bg-background", inboxLayout ? "shrink-0" : "sticky top-0")}>
           <div className="flex h-12 items-center gap-2 px-3 sm:px-5">
             <Button
               variant="ghost"
@@ -277,7 +293,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
 
         <ScopeBanners />
-        <main className="flex-1 bg-background p-5 sm:p-7">{children}</main>
+        <main
+          className={cn(
+            "bg-background",
+            inboxLayout ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "flex-1 p-5 sm:p-7",
+          )}
+        >
+          {children}
+        </main>
       </div>
 
       <CreateOpportunityDialog
@@ -772,7 +795,7 @@ function ScopeBanners() {
   const { impersonatedStaff, stopLoginAs, scopeLabel, viewer } = useCrm();
   if (!viewer) return null;
   return (
-    <div className="space-y-0">
+    <div className="shrink-0 space-y-0">
       {impersonatedStaff ? (
         <div className="flex flex-col gap-2 border-b border-primary/20 bg-primary/8 px-4 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
           <p>
