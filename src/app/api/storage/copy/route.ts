@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadProfileCompany } from "@/lib/eagleview-server";
 import {
+  b2FailureMessage,
   companyIdFromObjectKey,
   copyObjectInB2,
   isAllowedObjectKey,
@@ -79,7 +80,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[storage/copy]", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Could not copy that file." },
+      { error: b2FailureMessage(error, "Could not copy that file.") },
       { status: 500 },
     );
   }

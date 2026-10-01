@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  b2FailureMessage,
   isB2Configured,
   isStorageKind,
   removeFromB2,
@@ -98,7 +99,7 @@ export async function POST(request: Request) {
     console.error("[storage/upload]", error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Could not upload that file.",
+        error: b2FailureMessage(error, "Could not upload that file."),
       },
       { status: 500 },
     );
@@ -145,7 +146,7 @@ export async function DELETE(request: Request) {
     console.error("[storage/delete]", error);
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Could not delete that file.",
+        error: b2FailureMessage(error, "Could not delete that file."),
       },
       { status: 500 },
     );
