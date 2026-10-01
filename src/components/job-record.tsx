@@ -645,6 +645,7 @@ export function JobRecord({
           </Select>
           <Select
             value={job.market || "residential"}
+            disabled={deleted}
             onValueChange={(value) => {
               const market = value as Job["market"];
               if (market !== "residential" && market !== "commercial") return;
