@@ -357,6 +357,24 @@ export function missingMarketMessage() {
   return `Saved in this browser. Run ${JOB_MARKET_SQL} in the SQL editor so residential vs commercial persists.`;
 }
 
+export const JOB_TRADES_SQL = "supabase/migrations/20261001140000_job_trades.sql";
+
+export function isMissingTradesColumn(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    (error.code === "PGRST204" ||
+      error.code === "PGRST205" ||
+      message.includes("schema cache") ||
+      message.includes("Could not find the")) &&
+    /\btrades\b/i.test(message)
+  );
+}
+
+export function missingTradesMessage() {
+  return `Saved in this browser. Run ${JOB_TRADES_SQL} in the SQL editor so trades involved stay on the job.`;
+}
+
 export const JOB_PRIMARY_PHOTO_SQL = "supabase/migrations/20260914140000_job_primary_photo.sql";
 
 export function isMissingPrimaryPhotoColumn(error: { message?: string; code?: string } | null | undefined) {

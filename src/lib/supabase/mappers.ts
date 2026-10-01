@@ -25,7 +25,7 @@ import { parseMarket } from "@/lib/market";
 import { storedPhone } from "@/lib/phone";
 import { resolveStoredFileUrl, normalizeObjectKey } from "@/lib/storage/urls";
 import type { Database, Json } from "@/lib/supabase/database.types";
-import { parseQbStatus } from "@/lib/types";
+import { parseQbStatus, parseTrades } from "@/lib/types";
 import { isExpenseAccount } from "@/lib/job-financials";
 import {
   isClaimPeril,
@@ -382,6 +382,7 @@ export function mapJob(row: JobRow): Job {
     customFields: parseCustomFields(row.custom_fields),
     projectType: row.project_type ?? "",
     market: parseMarket(row.market, row.project_type),
+    trades: parseTrades(row.trades),
     leadSource: (row.lead_source as Job["leadSource"]) ?? "",
     primaryPhotoId:
       "primary_photo_id" in row
@@ -521,6 +522,7 @@ export function jobPatch(patch: Partial<Job>) {
   if (patch.customFields !== undefined) row.custom_fields = customFieldsJson(patch.customFields);
   if (patch.projectType !== undefined) row.project_type = patch.projectType || null;
   if (patch.market !== undefined) row.market = patch.market;
+  if (patch.trades !== undefined) row.trades = patch.trades;
   if (patch.leadSource !== undefined) row.lead_source = patch.leadSource ?? "";
   if (patch.primaryPhotoId !== undefined) {
     (row as { primary_photo_id?: string | null }).primary_photo_id = patch.primaryPhotoId;

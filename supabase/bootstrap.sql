@@ -18838,4 +18838,10 @@ alter table public.jobs
 comment on column public.jobs.projected_margin_percent is
   'When set, job projected profit uses this net margin percent of projected income.';
 
+-- ========== 20261001140000_job_trades.sql ==========
+-- Trades involved on a job: fencing, roofing, gutters, siding, flooring, other.
+
+alter table public.jobs
+  add column if not exists trades text[] not null default '{}';
+
 notify pgrst, 'reload schema';

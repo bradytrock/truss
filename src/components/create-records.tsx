@@ -34,6 +34,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { AddressStreetField } from "@/components/address-street-field";
 import { MarketField } from "@/components/market-field";
+import { TradesField } from "@/components/trades-field";
 import { PhoneInput } from "@/components/phone-input";
 import { useCrm } from "@/lib/crm-store";
 import { localYmd } from "@/lib/format";
@@ -55,6 +56,7 @@ import {
   type Contact,
   type JobMarket,
   type LeadSource,
+  type Trade,
 } from "@/lib/types";
 import { LeadAssigneeSelect } from "@/components/lead-assignee";
 import { assignmentOptions } from "@/lib/visibility";
@@ -93,6 +95,7 @@ export function CreateOpportunityDialog({
   const [postalCode, setPostalCode] = useState("");
   const [source, setSource] = useState<LeadSource | "">("");
   const [market, setMarket] = useState<JobMarket>("residential");
+  const [trades, setTrades] = useState<Trade[]>([]);
   const [referralId, setReferralId] = useState("");
   const [referralQuery, setReferralQuery] = useState("");
   const [notes, setNotes] = useState("");
@@ -142,6 +145,7 @@ export function CreateOpportunityDialog({
     setPostalCode("");
     setSource("");
     setMarket("residential");
+    setTrades([]);
     setReferralId("");
     setReferralQuery("");
     setNotes("");
@@ -218,6 +222,9 @@ export function CreateOpportunityDialog({
         postalCode: postalCode.trim(),
         notes: notes.trim(),
       });
+      if (trades.length && opportunity.costingJob?.id) {
+        await crm.updateJob(opportunity.costingJob.id, { trades });
+      }
       const referrer = leadNeedsReferrer(source) ? selectedReferral : undefined;
       const returningNote = match
         ? match.job
@@ -318,6 +325,7 @@ export function CreateOpportunityDialog({
         <form onSubmit={handleSubmit} className="flex flex-1 flex-col">
           <div className="grid gap-3.5 px-4 py-4">
             <MarketField value={market} onChange={setMarket} id="lead-market" />
+            <TradesField value={trades} onChange={setTrades} id="lead-trades" />
 
             <div className="grid gap-1.5">
               <div className="flex items-end justify-between gap-2">

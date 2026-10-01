@@ -69,6 +69,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { RecordCode } from "@/components/page-chrome";
+import { TradesMenu } from "@/components/trades-field";
 import { EstimateStatusBadge, InvoiceStatusBadge, QbStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate, formatInboxTime, formatPhone } from "@/lib/format";
@@ -99,21 +100,16 @@ import { amountForEstimate, featuredEstimateForJob } from "@/lib/estimate-totals
 import { jobProfitAndLoss } from "@/lib/job-financials";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { workMarket } from "@/lib/market";
+import { WORK_COLUMNS, WORK_COLUMN_LABELS, workColumnFor, type WorkColumn } from "@/lib/work-board";
 import { COURSE } from "@/lib/training/engine";
 import { recommendedChapterIds } from "@/lib/training/recommend";
 import {
   ESTIMATE_STATUS_LABELS,
   JOB_MARKET_LABELS,
-  JOB_STATUS_LABELS,
-  JOB_STATUSES,
-  PROJECT_TYPE_LABELS,
-  PROJECT_TYPES,
   type Contact,
   type Job,
-  type JobStatus,
   type LeadSource,
   type PageTemplateId,
-  type ProjectType,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { PhotoReportBuilder } from "@/components/photo-report-builder";
@@ -459,8 +455,10 @@ export function JobRecord({
     .filter((task) => !task.completed)
     .slice()
     .sort((left, right) => (left.dueAt || "z").localeCompare(right.dueAt || "z"))[0];
+  const pipelineColumn = workColumnFor(job, opportunity);
   const nextStepTitle =
-    nextTask?.title.trim() || (job.status === "precon" ? "Scope review" : JOB_STATUS_LABELS[job.status]);
+    nextTask?.title.trim() ||
+    (pipelineColumn === "lead" ? "Scope review" : WORK_COLUMN_LABELS[pipelineColumn]);
   const nextStepDate = nextTask?.dueAt ? formatDate(nextTask.dueAt) : "No date set";
   const latestPage = reports[0];
   const jobMail = (crm.gmailMessages ?? [])
@@ -620,31 +618,34 @@ export function JobRecord({
             </Button>
           ) : null}
           <Select
-            value={JOB_STATUSES.includes(job.status) ? job.status : "precon"}
+            value={pipelineColumn}
             disabled={deleted}
             onValueChange={(value) => {
               if (!value || deleted) return;
-              patch({ status: value as JobStatus });
-              toast.success("Job status updated.");
+              const column = value as WorkColumn;
+              if (column === pipelineColumn || column === "deleted") return;
+              void crm.moveWork(job.id, column);
+              toast.success("Pipeline status updated.");
             }}
-            items={JOB_STATUSES.map((status) => ({
-              value: status,
-              label: JOB_STATUS_LABELS[status],
+            items={WORK_COLUMNS.filter((column) => column !== "deleted" || pipelineColumn === "deleted").map((column) => ({
+              value: column,
+              label: WORK_COLUMN_LABELS[column],
             }))}
           >
-            <SelectTrigger className={pillSelect}>
+            <SelectTrigger className={pillSelect} aria-label="Pipeline status">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {JOB_STATUSES.map((status) => (
-                <SelectItem key={status} value={status}>
-                  {JOB_STATUS_LABELS[status]}
+              {WORK_COLUMNS.filter((column) => column !== "deleted" || pipelineColumn === "deleted").map((column) => (
+                <SelectItem key={column} value={column}>
+                  {WORK_COLUMN_LABELS[column]}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select
             value={job.market || "residential"}
+            disabled={deleted}
             onValueChange={(value) => {
               const market = value as Job["market"];
               if (market !== "residential" && market !== "commercial") return;
@@ -668,7 +669,7 @@ export function JobRecord({
               { value: "commercial", label: JOB_MARKET_LABELS.commercial },
             ]}
           >
-            <SelectTrigger className={pillSelect}>
+            <SelectTrigger className={pillSelect} aria-label="Residential">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -676,27 +677,11 @@ export function JobRecord({
               <SelectItem value="commercial">{JOB_MARKET_LABELS.commercial}</SelectItem>
             </SelectContent>
           </Select>
-          <Select
-            value={job.projectType || undefined}
-            onValueChange={(value) => {
-              if (value) patch({ projectType: value as ProjectType });
-            }}
-            items={PROJECT_TYPES.map((type) => ({
-              value: type,
-              label: PROJECT_TYPE_LABELS[type],
-            }))}
-          >
-            <SelectTrigger className={cn(pillSelect, !job.projectType && "text-muted-foreground")}>
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              {PROJECT_TYPES.map((type) => (
-                <SelectItem key={type} value={type}>
-                  {PROJECT_TYPE_LABELS[type]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <TradesMenu
+            value={job.trades}
+            disabled={deleted}
+            onChange={(trades) => patch({ trades })}
+          />
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <p className="shrink-0 text-sm tabular-nums">

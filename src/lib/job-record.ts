@@ -4,6 +4,7 @@ import type { Json } from "@/lib/supabase/database.types";
 import {
   STAGE_LABELS,
   isNorthlineDemoName,
+  parseTrades,
   type Job,
   type JobCustomField,
   type LeadSource,
@@ -32,6 +33,7 @@ export type JobDraft = Omit<
   | "projectType"
   | "leadSource"
   | "market"
+  | "trades"
   | "primaryPhotoId"
   | "deletedAt"
   | "deletedReason"
@@ -59,6 +61,7 @@ export type JobDraft = Omit<
       | "projectType"
       | "leadSource"
       | "market"
+      | "trades"
       | "primaryPhotoId"
       | "deletedAt"
       | "deletedReason"
@@ -239,6 +242,7 @@ export function fillJobRecord(job: JobDraft, opportunity?: Opportunity | null): 
     customFields: job.customFields ?? [],
     projectType: (job.projectType || opportunity?.projectType || "") as ProjectType | "",
     market: workMarket(job, opportunity),
+    trades: parseTrades(job.trades),
     leadSource: (job.leadSource || opportunity?.leadSource || "") as LeadSource | "",
     primaryPhotoId: job.primaryPhotoId ?? null,
     projectedMarginPercent: job.projectedMarginPercent ?? null,
@@ -335,6 +339,7 @@ export function jobInsertPayload(job: Job, companyId: string, extras?: { id?: st
     project_type: job.projectType || null,
     lead_source: job.leadSource ?? "",
     market: job.market,
+    ...(job.trades.length ? { trades: job.trades } : {}),
   };
 }
 

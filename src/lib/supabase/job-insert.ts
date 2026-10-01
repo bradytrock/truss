@@ -24,6 +24,7 @@ const OVERVIEW_KEYS = [
   "project_type",
   "lead_source",
   "market",
+  "trades",
 ] as const;
 
 const FIRST_MIGRATION_KEYS = [

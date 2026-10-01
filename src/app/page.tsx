@@ -8,7 +8,7 @@ import { TaskRow } from "@/components/task-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ErrorBanner, LoadingScreen, PageHeader, RecordCode } from "@/components/page-chrome";
-import { JobStatusBadge } from "@/components/status-badge";
+import { WorkColumnBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import {
   daysUntil,
@@ -25,6 +25,7 @@ import { amountForEstimate } from "@/lib/estimate-totals";
 import { marketForEstimate } from "@/lib/market";
 import { PIPELINE_STAGES, STAGE_LABELS } from "@/lib/types";
 import { dedupeJobsByOpportunity, isDeletedJob } from "@/lib/job-record";
+import { workColumnFor } from "@/lib/work-board";
 import { cn } from "@/lib/utils";
 import { COURSE, overallProgress, staffProgress } from "@/lib/training/engine";
 import { qbQueue } from "@/lib/job-financials";
@@ -809,7 +810,7 @@ export default function HomePage() {
         return (
           <RelatedList
             title="Active jobs"
-            description="Jobs in precon, production, or punch."
+            description="Open jobs on the board."
             action={<RelatedListLink href="/jobs">View all</RelatedListLink>}
           >
             {stats.activeJobs.length === 0 ? (
@@ -821,7 +822,7 @@ export default function HomePage() {
                     <tr>
                       <th className="px-5 py-2">Job</th>
                       <th className="px-3 py-2">Customer</th>
-                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2">Pipeline status</th>
                       <th className="px-3 py-2">PM</th>
                       <th className="px-5 py-2 text-right">Contract</th>
                     </tr>
@@ -842,7 +843,12 @@ export default function HomePage() {
                           <div className="text-xs">{job.location}</div>
                         </td>
                         <td className="px-3 py-2">
-                          <JobStatusBadge status={job.status} />
+                          <WorkColumnBadge
+                            column={workColumnFor(
+                              job,
+                              crm.opportunities.find((item) => item.id === job.opportunityId),
+                            )}
+                          />
                         </td>
                         <td className="px-3 py-2 text-[#706e6b]">{job.projectManager}</td>
                         <td className="px-5 py-2 text-right font-semibold tabular-nums text-[#181818]">

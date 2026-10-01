@@ -8,11 +8,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RecordProperty } from "@/components/app-shell";
-import { JobStatusBadge, StageBadge } from "@/components/status-badge";
+import { StageBadge, WorkColumnBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency, formatInboxTime, formatPhone, initials } from "@/lib/format";
 import { mailForContact, mailHref } from "@/lib/job-emails";
 import { jobsForContact, opportunitiesForContact } from "@/lib/parties";
+import { workColumnFor } from "@/lib/work-board";
 import { SEAT_ROLE_LABELS, type Contact } from "@/lib/types";
 
 export function ContactRecord({ contact }: { contact: Contact }) {
@@ -199,7 +200,12 @@ export function ContactRecord({ contact }: { contact: Contact }) {
                           {job.projectManager}
                         </p>
                       </div>
-                      <JobStatusBadge status={job.status} />
+                      <WorkColumnBadge
+                        column={workColumnFor(
+                          job,
+                          opportunities.find((item) => item.id === job.opportunityId),
+                        )}
+                      />
                     </li>
                   ))}
                 </ul>

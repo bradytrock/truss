@@ -3,9 +3,9 @@ import { formatDateShort, formatPhone, localYmd } from "@/lib/format";
 import { leadSourceLabel } from "@/lib/leads";
 import { jobsForContact, opportunitiesForContact } from "@/lib/parties";
 import { contactMatchesQuery, storedPhone } from "@/lib/phone";
+import { workColumnFor, WORK_COLUMN_LABELS } from "@/lib/work-board";
 import {
   CLIENT_TYPE_LABELS,
-  JOB_STATUS_LABELS,
   type Activity,
   type ActivityType,
   type Client,
@@ -317,7 +317,12 @@ export function buildContactBookRow(
       name: job.name,
       code: job.code,
       status: job.status,
-      statusLabel: JOB_STATUS_LABELS[job.status],
+      statusLabel: WORK_COLUMN_LABELS[
+        workColumnFor(
+          job,
+          opportunities.find((item) => item.id === job.opportunityId),
+        )
+      ],
     })),
     tasks,
     activity: buildActivity(activities, estimates, opportunities, now),
