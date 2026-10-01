@@ -22,7 +22,26 @@ npm run dev
 
 The app listens on port 3847. Everyone signs in with their own account. After you attach a Supabase project, create an account or use an existing one. Truss does not add sample people you can log in as.
 
-Production (`npm run build`) uses webpack instead of Turbopack. Restricted hosts that block extra localhost ports otherwise panic while compiling `globals.css`. Honors `PORT` on `npm start`.
+Production (`npm run build`) uses webpack instead of Turbopack. Restricted hosts that block extra localhost ports otherwise panic while compiling `globals.css`. Honors `PORT` on `npm start`. On Vercel, standalone output is skipped so the platform adapter runs.
+
+## Deploy on Vercel
+
+Production is `github.com/bradytrock/truss` `main` → Vercel. Pushing `main` ships; there is no GoDaddy Publish step.
+
+1. [vercel.com](https://vercel.com) → **Add New… → Project** → import **`bradytrock/truss`**.
+2. Framework: Next.js. Build: `npm run build`. Node **20.x**. Production branch: **`main`**.
+3. Copy env vars from GoDaddy into Vercel **Production** (and Preview if you want preview deploys to talk to the same book). Required for files: `B2_KEY_ID`, `B2_APPLICATION_KEY`, `B2_BUCKET`, `B2_REGION`. Also set `NEXT_PUBLIC_APP_URL=https://myroofingtools.com` and a `CRON_SECRET` (Vercel Cron sends `Authorization: Bearer …`).
+4. Use a **Pro** plan so `vercel.json` crons and 60–300s routes (`/api/cron/*`, uploads) actually run. Hobby does not run those crons.
+5. First deploy will be `*.vercel.app`. Confirm login, a share link, a photo upload, and a cron GET with the secret.
+6. Vercel → **Domains** → add `myroofingtools.com` and `www`. At GoDaddy DNS only: remove the old A/AAAA that pointed at the Node app; add the CNAME/A records Vercel shows. Keep the domain billed at GoDaddy.
+7. After DNS is live, add these origins (Production + `https://*.vercel.app` if you use Preview):
+   - Supabase Auth → URL configuration: `https://myroofingtools.com/auth/callback`
+   - Google OAuth: `https://myroofingtools.com/api/google/calendar/callback` and `…/api/gmail/callback`
+   - Sendblue inbound: `{origin}/api/messages/inbound?token=…`
+   - Stripe / EagleView webhooks: same host as today
+8. Turn off the GoDaddy Node app so only Vercel serves the site.
+
+Vercel serverless request bodies cap around **4.5 MB**. Job photos and receipts over that will fail until uploads go straight to Backblaze with a presigned PUT. Phone-sized photos are usually fine.
 
 ## Connect Supabase
 
