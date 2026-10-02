@@ -16,6 +16,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Bad request." }, { status: 400 });
   }
   const token = typeof body.token === "string" ? body.token.trim() : "";
+  const company = typeof body.company === "string" ? body.company.trim().toLowerCase() : "";
+  const person = typeof body.person === "string" ? body.person.trim() : "";
   const name = typeof body.name === "string" ? body.name : "";
   const phone = typeof body.phone === "string" ? body.phone : "";
   const street = typeof body.street === "string" ? body.street : "";
@@ -43,6 +45,8 @@ export async function POST(request: Request) {
     p_trades: trades,
     p_first: first,
     p_last: last,
+    p_slug: company,
+    p_owner: person,
   });
   if (error) return NextResponse.json({ ok: false, error: "Chat is not ready yet." }, { status: 503 });
 
@@ -67,6 +71,7 @@ export async function POST(request: Request) {
     jobId?: string;
     opportunityId?: string;
     channel?: string;
+    token?: string;
   };
   if (payload.ok === false) return NextResponse.json({ ok: false, error: payload.error || "Could not start that." }, { status: 400 });
 
@@ -98,5 +103,6 @@ export async function POST(request: Request) {
     visitorStreet: payload.visitorStreet || street,
     phone: payload.companyPhone || "",
     companyName: payload.companyName || "",
+    token: payload.token || token,
   });
 }

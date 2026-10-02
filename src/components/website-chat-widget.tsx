@@ -139,6 +139,7 @@ export function WebsiteChatWidget({
   const [handoff, setHandoff] = useState("");
   const scroller = useRef<HTMLDivElement>(null);
   const field = useRef<HTMLInputElement>(null);
+  const storageKey = `truss.websiteChat.${companySlug}${ownerId ? `.${ownerId}` : ""}`;
 
   const publishSize = useCallback((nextOpen: boolean) => {
     if (!embed || window.parent === window) return;
@@ -186,7 +187,6 @@ export function WebsiteChatWidget({
   }, [embed, open, publishSize]);
 
   useEffect(() => {
-    const storageKey = `truss.websiteChat.${companySlug}${ownerId ? `.${ownerId}` : ""}`;
     const saved = readStored(storageKey);
     let cancelled = false;
 
@@ -230,21 +230,7 @@ export function WebsiteChatWidget({
         removeStored(storageKey);
       }
 
-      const started = await fetch("/api/chat/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ company: companySlug, person: ownerId }),
-      });
-      const data = (await started.json()) as { ok?: boolean; token?: string; error?: string; companyName?: string; phone?: string };
       if (cancelled) return;
-      if (!data.ok || !data.token) {
-        setError(data.error || "Chat is not available.");
-        setReady(true);
-        return;
-      }
-      writeStored(storageKey, data.token);
-      setToken(data.token);
-      setOffice({ companyName: data.companyName || officeData.companyName || "Office", phone: data.phone || officeData.phone || "" });
       setMessages([]);
       setStep("market");
       setReady(true);
@@ -259,7 +245,7 @@ export function WebsiteChatWidget({
     return () => {
       cancelled = true;
     };
-  }, [companySlug, ownerId]);
+  }, [companySlug, ownerId, storageKey]);
 
   useEffect(() => {
     if (!token || !open || step !== "chat") return;
@@ -283,9 +269,9 @@ export function WebsiteChatWidget({
   }, [messages, open, step]);
 
   useEffect(() => {
-    if (!open || !ready || !token || step === "choose" || step === "text" || step === "market" || step === "trades") return;
+    if (!open || !ready || step === "choose" || step === "text" || step === "market" || step === "trades") return;
     field.current?.focus();
-  }, [open, ready, token, step]);
+  }, [open, ready, step]);
 
   const name = office?.companyName || "the office";
   const prompt =
@@ -354,8 +340,20 @@ export function WebsiteChatWidget({
     setStep("first");
   }
 
+  function reserveToken() {
+    if (token) return token;
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    const next = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    // Keep this token before the request so a retry finishes the same conversation.
+    writeStored(storageKey, next);
+    setToken(next);
+    return next;
+  }
+
   async function finishIntake(postalCode: string) {
     const tradeLabel = formatChatTrades(trades);
+    const chatToken = reserveToken();
     setSending(true);
     setError("");
     try {
@@ -363,7 +361,9 @@ export function WebsiteChatWidget({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          token,
+          token: chatToken,
+          company: companySlug,
+          person: ownerId,
           name: `${draftFirst} ${draftLast}`,
           firstName: draftFirst,
           lastName: draftLast,
@@ -377,16 +377,33 @@ export function WebsiteChatWidget({
           trades: tradeLabel,
         }),
       });
-      const data = (await response.json()) as { ok?: boolean; error?: string };
+      const data = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        token?: string;
+        companyName?: string;
+        phone?: string;
+      };
       if (!data.ok) {
         setError(data.error || "Could not start that.");
         return;
       }
-      const read = await fetch(`/api/chat/messages?token=${encodeURIComponent(token)}`);
+      const savedToken = data.token || chatToken;
+      writeStored(storageKey, savedToken);
+      setToken(savedToken);
+      if (data.companyName || data.phone) {
+        setOffice((current) => ({
+          companyName: data.companyName || current?.companyName || "Office",
+          phone: data.phone || current?.phone || "",
+        }));
+      }
+      const read = await fetch(`/api/chat/messages?token=${encodeURIComponent(savedToken)}`);
       const thread = (await read.json()) as { ok?: boolean; messages?: WebsiteChatMessage[] };
       if (thread.ok && thread.messages) setMessages(thread.messages);
       setBody("");
       setStep("choose");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Chat is not available.");
     } finally {
       setSending(false);
     }
@@ -395,7 +412,7 @@ export function WebsiteChatWidget({
   async function answer(event: FormEvent) {
     event.preventDefault();
     const text = body.trim();
-    if (!text || !token || sending) return;
+    if (!text || sending) return;
     setError("");
 
     if (step === "first" || step === "last") {
@@ -495,7 +512,7 @@ export function WebsiteChatWidget({
   }
 
   function skipEmail() {
-    if (!token || sending) return;
+    if (sending) return;
     noteAnswer(CHAT_ASK_EMAIL, CHAT_EMAIL_SKIP);
     setDraftEmail("");
     setStep("street");
@@ -594,7 +611,7 @@ export function WebsiteChatWidget({
     <div className="flex flex-1 items-center justify-center px-6">
       <p className="text-sm text-muted-foreground">Opening chat…</p>
     </div>
-  ) : !token ? (
+  ) : !office ? (
     <div className="flex flex-1 items-center px-6">
       <p className="text-sm leading-relaxed text-muted-foreground">{error || "Chat is not available."}</p>
     </div>
@@ -758,7 +775,7 @@ export function WebsiteChatWidget({
           />
           <button
             type="submit"
-            disabled={sending || !body.trim() || !token}
+            disabled={sending || !body.trim() || (step === "chat" && !token)}
             className="inline-flex size-11 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground disabled:opacity-40"
             aria-label="Send"
           >
