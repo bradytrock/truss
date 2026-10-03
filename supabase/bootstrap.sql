@@ -3081,7 +3081,7 @@ create policy "company isolation" on public.photo_reports
   with check (company_id = public.current_company_id());
 
 -- ========== 20260821160000_job_market.sql ==========
--- Residential vs commercial on leads and jobs. Residential estimates are not taxed.
+-- Residential vs commercial on leads and jobs.
 
 alter table public.opportunities
   add column if not exists market text not null default 'residential';

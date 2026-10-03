@@ -220,9 +220,11 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
               value={residential ? 0 : template.taxRate}
               onCommit={(value) => void crm.updateEstimateTemplate(template.id, { taxRate: Number(value) || 0 })}
             />
-            <p className="mt-1 text-xs text-muted-foreground">
-              {residential ? "Residential work is not taxed." : "Copied onto new estimates unless you change the market."}
-            </p>
+            {residential ? null : (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Copied onto new estimates unless you change the market.
+              </p>
+            )}
           </div>
           <AdjustmentFields
             label="Discount"
