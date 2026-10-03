@@ -675,7 +675,6 @@ export function WebsiteChatWidget({
               Commercial
             </button>
           </div>
-          <p className="text-center text-xs text-muted-foreground">Residential work is not taxed.</p>
         </div>
       ) : step === "trades" ? (
         <div className="grid gap-2 border-t border-border bg-background px-3 py-3">

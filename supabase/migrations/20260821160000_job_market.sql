@@ -1,4 +1,4 @@
--- Residential vs commercial on leads and jobs. Residential estimates are not taxed.
+-- Residential vs commercial on leads and jobs.
 
 alter table public.opportunities
   add column if not exists market text not null default 'residential';

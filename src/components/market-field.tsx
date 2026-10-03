@@ -29,11 +29,9 @@ export function MarketField({
           </Button>
         ))}
       </div>
-      <p className="text-xs text-muted-foreground">
-        {value === "residential"
-          ? "Residential work is not taxed."
-          : "Commercial proposals include sales tax."}
-      </p>
+      {value === "commercial" ? (
+        <p className="text-xs text-muted-foreground">Commercial proposals include sales tax.</p>
+      ) : null}
     </div>
   );
 }
