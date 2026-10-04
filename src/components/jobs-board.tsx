@@ -246,17 +246,17 @@ function JobColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex w-[184px] shrink-0 flex-col rounded-md border bg-card",
+        "flex w-[148px] shrink-0 flex-col rounded-md border bg-card",
         isOver && "border-primary",
       )}
     >
-      <div className="border-b px-2 py-2">
-        <div className="flex items-center gap-1.5">
-          <span className={cn("size-1.5 rounded-full", columnAccent[column])} />
-          <h2 className="min-w-0 truncate text-sm font-medium">{WORK_COLUMN_LABELS[column]}</h2>
-          <span className="ml-auto shrink-0 text-xs tabular-nums text-muted-foreground">{count}</span>
+      <div className="border-b px-1.5 py-1.5">
+        <div className="flex items-center gap-1">
+          <span className={cn("size-1.5 shrink-0 rounded-full", columnAccent[column])} />
+          <h2 className="min-w-0 truncate text-xs font-medium">{WORK_COLUMN_LABELS[column]}</h2>
+          <span className="ml-auto shrink-0 text-[11px] tabular-nums text-muted-foreground">{count}</span>
         </div>
-        <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+        <p className="mt-0.5 truncate text-[11px] tabular-nums text-muted-foreground">
           {count === 0
             ? column === "deleted"
               ? "Nothing in the trash"
@@ -264,7 +264,7 @@ function JobColumn({
             : formatCurrency(total)}
         </p>
       </div>
-      <div className="flex flex-1 flex-col gap-1.5 p-1.5">{children}</div>
+      <div className="flex flex-1 flex-col gap-1 p-1">{children}</div>
     </div>
   );
 }
@@ -342,23 +342,23 @@ function JobCard({
       ref={setNodeRef}
       size="sm"
       className={cn(
-        "bg-card shadow-none [--card-spacing:--spacing(2)]",
+        "bg-card shadow-none [--card-spacing:--spacing(1.5)]",
         isDragging && !overlay && "opacity-40",
-        overlay && "w-[170px] shadow-md",
+        overlay && "w-[138px] shadow-md",
         deleted && "opacity-80",
       )}
     >
-      <CardContent className="space-y-1.5">
+      <CardContent className="space-y-1">
         <div>
-          <div className="flex items-start gap-1">
+          <div className="flex items-start gap-0.5">
             <button
               type="button"
-              className="mt-0.5 cursor-grab touch-none text-muted-foreground hover:text-foreground"
+              className="mt-px cursor-grab touch-none text-muted-foreground hover:text-foreground"
               aria-label="Drag job"
               {...listeners}
               {...attributes}
             >
-              <GripVertical className="size-3.5" />
+              <GripVertical className="size-3" />
             </button>
             <JobOpenLink
               jobId={job.id}
@@ -383,23 +383,23 @@ function JobCard({
             className="mt-0.5 block w-full text-left"
           >
             {details.title ? (
-              <span className="block text-sm font-medium leading-snug hover:underline">
+              <span className="block text-xs font-medium leading-tight hover:underline">
                 {details.title}
               </span>
             ) : null}
             {details.streetLine ? (
-              <span className="mt-0.5 block text-sm font-medium leading-snug">
+              <span className="mt-0.5 block text-xs font-medium leading-tight">
                 {details.streetLine}
               </span>
             ) : null}
             {details.locality ? (
-              <span className="mt-0.5 block text-xs leading-snug">{details.locality}</span>
+              <span className="mt-0.5 block text-[11px] leading-tight">{details.locality}</span>
             ) : null}
             {details.showLocation && !details.streetLine && !details.locality ? (
-              <span className="mt-0.5 block text-sm leading-snug">{details.location}</span>
+              <span className="mt-0.5 block text-xs leading-tight">{details.location}</span>
             ) : null}
             {details.showCustomer ? (
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">{details.customer}</p>
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{details.customer}</p>
             ) : null}
             {job.leadSource ? (
               <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
@@ -412,9 +412,9 @@ function JobCard({
           jobId={job.id}
           overlay={overlay}
           onSelectJob={onSelectJob}
-          className="flex w-full items-center justify-between gap-1.5 text-left"
+          className="flex w-full flex-wrap items-center gap-1 text-left"
         >
-          <span className="min-w-0 truncate font-heading text-sm font-medium tabular-nums">
+          <span className="min-w-0 font-heading text-xs font-medium tabular-nums">
             {formatCurrency(
               boardValue(
                 job,
