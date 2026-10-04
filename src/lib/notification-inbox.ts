@@ -1,4 +1,4 @@
-import { alertStamp, type LeadAlert } from "@/lib/lead-alerts";
+import { alertStamp, type AlertKind, type LeadAlert } from "@/lib/lead-alerts";
 
 export const NOTIFICATIONS_REFRESH = "notifications:refresh";
 export const INBOX_LIMIT = 40;
@@ -51,4 +51,9 @@ export function unreadInbox(items: InboxItem[], readStamps: string[]) {
 
 export function markInboxStampsRead(readStamps: string[], stamps: string[]) {
   return [...new Set([...readStamps, ...stamps])].slice(-400);
+}
+
+/** A new or passed-back lead opens the assign sheet for a company admin. */
+export function notificationAssignsRep(kind: AlertKind, isAdmin: boolean) {
+  return isAdmin && (kind === "needs_rep" || kind === "passed_back");
 }

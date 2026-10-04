@@ -4,6 +4,7 @@ import {
   inboxItem,
   markInboxStampsRead,
   mergeInbox,
+  notificationAssignsRep,
   unreadInbox,
 } from "./notification-inbox.ts";
 
@@ -53,3 +54,8 @@ assert.equal(unreadInbox([newer, other], [older.stamp]).length, 2);
 assert.equal(unreadInbox([newer], [newer.stamp]).length, 0);
 assert.deepEqual(markInboxStampsRead([older.stamp], [newer.stamp]), [older.stamp, newer.stamp]);
 assert.notEqual(alertStamp(older.alert), alertStamp(newer.alert));
+assert.equal(notificationAssignsRep("needs_rep", true), true);
+assert.equal(notificationAssignsRep("passed_back", true), true);
+assert.equal(notificationAssignsRep("needs_rep", false), false);
+assert.equal(notificationAssignsRep("rep_note", true), false);
+assert.equal(notificationAssignsRep("new_lead", true), false);
