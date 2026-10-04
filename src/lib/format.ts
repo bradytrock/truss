@@ -152,9 +152,15 @@ export function localDayInRange(iso: string, start: Date, end: Date) {
   return day >= localYmd(start) && day <= localYmd(end);
 }
 
-function parseDate(iso: string) {
+function parseDate(iso: string | null | undefined) {
+  if (typeof iso !== "string" || !iso) return new Date(NaN);
   if (iso.includes("T")) return new Date(iso);
   return new Date(`${iso}T12:00:00`);
+}
+
+function validDate(iso: string | null | undefined) {
+  const date = parseDate(iso);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 export function formatDate(iso: string | null | undefined) {
@@ -203,8 +209,9 @@ export function formatRelative(iso: string) {
   return formatDate(iso);
 }
 
-export function formatInboxTime(iso: string) {
-  const date = parseDate(iso);
+export function formatInboxTime(iso: string | null | undefined) {
+  const date = validDate(iso);
+  if (!date || typeof iso !== "string") return "—";
   const today = localYmd(new Date());
   const day = localYmd(date);
   if (day === today) return formatTime(iso);
@@ -218,14 +225,18 @@ export function formatInboxTime(iso: string) {
   return formatDateShort(iso);
 }
 
-export function formatMessageStamp(iso: string) {
-  const date = parseDate(iso);
-  if (localYmd(date) === localYmd(new Date())) return formatTime(iso);
-  return `${formatDateShort(iso)}, ${formatTime(iso)}`;
+export function formatMessageStamp(iso: string | null | undefined) {
+  const date = validDate(iso);
+  if (!date) return "";
+  if (localYmd(date) === localYmd(new Date())) return formatTime(iso ?? "");
+  return `${formatDateShort(iso)}, ${formatTime(iso ?? "")}`;
 }
 
-export function sameLocalDay(left: string, right: string) {
-  return localYmd(parseDate(left)) === localYmd(parseDate(right));
+export function sameLocalDay(left: string | null | undefined, right: string | null | undefined) {
+  const a = validDate(left);
+  const b = validDate(right);
+  if (!a || !b) return false;
+  return localYmd(a) === localYmd(b);
 }
 
 export function daysUntil(iso: string | null | undefined) {
@@ -244,8 +255,8 @@ export function greeting() {
   return "Good evening";
 }
 
-export function initials(name: string) {
-  return name
+export function initials(name: string | null | undefined) {
+  return (name ?? "")
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)

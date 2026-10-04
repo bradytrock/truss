@@ -12,6 +12,7 @@ import {
   parseChatMarket,
   parseChatName,
   parseChatPersonName,
+  officeWebsiteChats,
   parseChatPhone,
   parseChatState,
   parseChatStreet,
@@ -129,5 +130,24 @@ assert.deepEqual(websiteChatNotifyAdmins(officeAdmins, "  ada lovelace "), [
   { name: "Ada Lovelace", email: "ada@example.com" },
 ]);
 assert.deepEqual(websiteChatNotifyAdmins(officeAdmins, "Someone Else"), []);
+
+const officeChats = officeWebsiteChats([
+  {
+    id: "chat-1",
+    label: null,
+    updatedAt: null,
+    preview: null,
+    messages: [{ id: "m1", direction: "inbound", body: null, createdAt: null }, { id: "" }, null],
+  },
+  { label: "Missing id" },
+  null,
+]);
+assert.equal(officeChats.length, 1);
+assert.equal(officeChats[0].label, "Website visitor");
+assert.equal(officeChats[0].updatedAt, "");
+assert.equal(officeChats[0].preview, "");
+assert.equal(officeChats[0].messages.length, 1);
+assert.equal(officeChats[0].messages[0].body, "");
+assert.deepEqual(officeWebsiteChats({ chats: [] }), []);
 
 console.log("website-chat.test.ts ok");
