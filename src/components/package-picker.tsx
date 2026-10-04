@@ -73,10 +73,15 @@ export function PackagePicker({
   const managerName = manager?.name.trim() ?? "";
   const phone = formatPhone(manager?.phone);
   const phoneLine = phone && phone !== "—" ? phone : "";
-  const columns = ordered.length >= 3 ? "lg:grid-cols-3" : ordered.length === 2 ? "sm:grid-cols-2" : "";
+  const columns =
+    ordered.length >= 3
+      ? "@min-[960px]:grid-cols-3"
+      : ordered.length === 2
+        ? "@min-[640px]:grid-cols-2"
+        : "";
 
   return (
-    <div className={cn("rounded-2xl px-3 py-5 sm:px-4", className)} style={{ background: BAND }}>
+    <div className={cn("@container rounded-2xl px-3 py-5 sm:px-4", className)} style={{ background: BAND }}>
       <div className={cn("grid items-stretch gap-4 pt-3", columns, ordered.length === 1 && "max-w-md")}>
         {ordered.map((option) => {
           const identity = gbbCardIdentity(option.key, lines, option.name);

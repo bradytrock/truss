@@ -26,7 +26,7 @@ import { coOwnerContact, customerContactDetails } from "@/lib/parties";
 import { parseSharedEstimate, type ShareSender, type SharedEstimatePayload } from "@/lib/share";
 import { SHARE_FETCH, useRemoteShare } from "@/lib/use-remote-share";
 import type { EstimateLine } from "@/lib/types";
-import type { EstimatePackage } from "@/lib/estimate-packages";
+import { isGbbEstimate, type EstimatePackage } from "@/lib/estimate-packages";
 
 function payloadError(data: unknown, fallback: string) {
   if (data && typeof data === "object" && "error" in data && typeof data.error === "string") {
@@ -190,6 +190,7 @@ export function ShareEstimateClient({
       null;
     return (
       <ShareFrame
+        wide={isGbbEstimate(fromStore)}
         actions={
           <>
             <SharePdfButton
@@ -299,6 +300,7 @@ export function ShareEstimateClient({
 
   return (
     <ShareFrame
+      wide={isGbbEstimate(estimate)}
       actions={
         <>
           <SharePdfButton
