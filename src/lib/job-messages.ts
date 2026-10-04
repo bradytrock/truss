@@ -55,7 +55,7 @@ export function jobForContact(jobs: Job[], opportunities: Opportunity[], contact
 export function opportunityForContact(opportunities: Opportunity[], contactId: string) {
   return [...opportunities]
     .filter((item) => item.primaryContactId === contactId && item.stage !== "lost")
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))[0];
 }
 
 export function conversationThreadKey(input: {
@@ -148,7 +148,7 @@ function messageMatchesThreadKey(
 function namedContact(candidates: Contact[]) {
   return (
     candidates.find((contact) => {
-      const name = contact.name.trim();
+      const name = (contact.name || "").trim();
       return Boolean(name) && !looksLikePhone(name);
     }) ?? candidates[0]
   );

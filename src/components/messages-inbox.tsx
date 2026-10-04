@@ -221,7 +221,9 @@ export function MessagesInbox() {
     const needle = query.trim().toLowerCase();
     if (!needle) return webChats;
     return webChats.filter(
-      (chat) => chat.label.toLowerCase().includes(needle) || chat.preview.toLowerCase().includes(needle),
+      (chat) =>
+        (chat.label || "").toLowerCase().includes(needle) ||
+        (chat.preview || "").toLowerCase().includes(needle),
     );
   }, [query, webChats]);
 
@@ -472,7 +474,7 @@ export function MessagesInbox() {
                   >
                     <Avatar size="sm" className="mt-0.5">
                       <AvatarFallback className="bg-primary/10 text-primary">
-                        {initials(chat.label) || "W"}
+                        {initials(chat.label || "") || "W"}
                       </AvatarFallback>
                     </Avatar>
                     <span className="min-w-0 flex-1">
@@ -693,7 +695,7 @@ export function MessagesInbox() {
                 onReply={(message) =>
                   setReplyTo({
                     handle: message.handle,
-                    preview: message.body.replace(/\s+/g, " ").slice(0, 80),
+                    preview: (message.body || "").replace(/\s+/g, " ").slice(0, 80),
                   })
                 }
                 onUnsend={(message) => void unsend(message)}

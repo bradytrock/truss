@@ -109,7 +109,8 @@ export function projectTouchesHomeowner(
   contactIds: Set<string>,
 ) {
   if (job.primaryContactId && contactIds.has(job.primaryContactId)) return true;
-  if (job.relatedContactIds.some((id) => contactIds.has(id))) return true;
+  const related = Array.isArray(job.relatedContactIds) ? job.relatedContactIds : [];
+  if (related.some((id) => contactIds.has(id))) return true;
   if (opportunity?.primaryContactId && contactIds.has(opportunity.primaryContactId)) return true;
   return Boolean(opportunity && job.opportunityId === opportunity.id && opportunity.primaryContactId && contactIds.has(opportunity.primaryContactId));
 }
@@ -147,7 +148,7 @@ export function homeownerProjects(
 
 export function threadHasSender(thread: Pick<MessageThread, "messages">, person: ThreadViewer) {
   return thread.messages.some((message) => {
-    const created = message.createdBy.trim();
+    const created = (message.createdBy || "").trim();
     if (!created) return false;
     if (idEquals(created, person)) return true;
     return namesMatch(created, person.name);
