@@ -38,7 +38,7 @@ import {
   type PipelineStage,
 } from "@/lib/types";
 import { originatorStaffId } from "@/lib/bd";
-import { assignmentOptions, canAssignLeadsToAnyone } from "@/lib/visibility";
+import { companyLeadAssignees } from "@/lib/visibility";
 
 export default function OpportunityDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -74,11 +74,9 @@ export default function OpportunityDetailPage() {
   const estimates = crm.estimates.filter((estimate) => estimate.opportunityId === opportunity.id);
   const due = daysUntil(opportunity.bidDueAt);
   const step = nextStep ?? opportunity.nextStep;
-  const assignees = assignmentOptions(crm.viewer, crm.book.staff, opportunity.ownerStaffId, crm.user.role);
+  const assignees = companyLeadAssignees(crm.viewer, crm.book.staff, opportunity.ownerStaffId);
   const canReassign =
-    canAssignLeadsToAnyone(crm.viewer, crm.user.role) ||
-    assignees.length > 1 ||
-    assignees.some((member) => member.id !== opportunity.ownerStaffId);
+    assignees.length > 1 || assignees.some((member) => member.id !== opportunity.ownerStaffId);
 
   function handleStage(stage: PipelineStage) {
     void (async () => {

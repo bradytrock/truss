@@ -242,6 +242,23 @@ export function assignmentOptions(
   return allowed;
 }
 
+/** New Lead “Assigned to” is the project manager. Any unlocked seat in the company can take it. */
+export function companyLeadAssignees(
+  viewer: StaffMember | undefined,
+  staff: StaffMember[],
+  currentId?: string,
+) {
+  const allowed = sortAssignable(
+    staff.filter((member) => !member.locked),
+    viewer,
+  );
+  if (currentId && !allowed.some((member) => member.id === currentId)) {
+    const current = staff.find((member) => member.id === currentId);
+    if (current) return sortAssignable([current, ...allowed], viewer);
+  }
+  return allowed;
+}
+
 export function staffAssignmentLabel(member: StaffMember) {
   return `${member.name} · ${SEAT_ROLE_LABELS[member.role]}`;
 }
