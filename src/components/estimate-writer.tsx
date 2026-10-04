@@ -1423,11 +1423,11 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
               value={residential ? 0 : estimate.taxRate}
               onCommit={(value) => void crm.updateEstimate(estimate.id, { taxRate: Number(value) || 0 })}
             />
-            <p className="mt-1 text-xs text-muted-foreground">
-              {residential
-                ? "Residential work is not taxed."
-                : "Applied only to taxable included lines, after discount."}
-            </p>
+            {residential ? null : (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Applied only to taxable included lines, after discount.
+              </p>
+            )}
           </div>
           <AdjustmentFields
             label="Discount"

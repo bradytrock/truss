@@ -3280,6 +3280,8 @@ export type Database = {
           p_trades?: string;
           p_first?: string;
           p_last?: string;
+          p_slug?: string;
+          p_owner?: string;
         };
         Returns: Json;
       };
