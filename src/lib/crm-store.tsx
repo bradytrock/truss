@@ -14,7 +14,13 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { isPendingPayment } from "@/lib/payment-posting";
-import { applyDeferredBook, fetchCompanyBook, loadCompanyBook } from "@/lib/supabase/load-book";
+import {
+  applyDeferredBook,
+  fetchCompanyBook,
+  isTransientRequestError,
+  loadCompanyBook,
+  TEXTS_UNAVAILABLE,
+} from "@/lib/supabase/load-book";
 import {
   asAuditState,
   canRevertCompanyAudit,
@@ -360,12 +366,14 @@ export type LiveStatus = "offline" | "connecting" | "live";
 export type CompanyLogoSlot = "document" | "card";
 
 function loadErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message.trim()) return error.message;
-  if (error && typeof error === "object" && "message" in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === "string" && message.trim()) return message;
-  }
-  return "Could not load the book of work.";
+  const raw =
+    error instanceof Error
+      ? error.message
+      : error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string"
+        ? (error as { message: string }).message
+        : "";
+  if (raw.trim() && !isTransientRequestError({ message: raw })) return raw;
+  return "Could not load the book of work. Check the connection and try again.";
 }
 
 function uiBook(state: CrmState): CrmState {
@@ -857,7 +865,7 @@ async function linkProfileStaff(
   staffId: string,
 ) {
   const { error } = await supabase.from("profiles").update({ staff_id: staffId }).eq("id", profileId);
-  if (error && !isMissingStaffLink(error)) {
+  if (error && !isMissingStaffLink(error) && !isTransientRequestError(error)) {
     toast.error(error.message);
   }
 }
@@ -914,7 +922,7 @@ async function ensureSignedInStaff(
     .select("*")
     .single();
   if (error || !data) {
-    if (error && !isMissingStaffLink(error)) {
+    if (error && !isMissingStaffLink(error) && !isTransientRequestError(error)) {
       toast.error(error.message);
     }
     return { roster, matched: undefined };
@@ -937,6 +945,8 @@ type CrmContextValue = CrmState & {
   configured: boolean;
   hydrated: boolean;
   hydrateError: string | null;
+  messagesReady: boolean;
+  messagesError: string | null;
   liveStatus: LiveStatus;
   switchSeat: (staffId: string) => void;
   loginAs: (staffId: string) => void;
@@ -1449,6 +1459,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const [impersonatedStaffId, setImpersonatedStaffId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [hydrateError, setHydrateError] = useState<string | null>(null);
+  const [messagesReady, setMessagesReady] = useState(() => !isSupabaseConfigured());
+  const [messagesError, setMessagesError] = useState<string | null>(null);
   const [liveStatus, setLiveStatus] = useState<LiveStatus>("offline");
   const seeding = useRef(false);
   const bookEpoch = useRef(0);
@@ -1481,6 +1493,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const load = useCallback(async () => {
     if (!isSupabaseConfigured()) {
       setHydrated(true);
+      setMessagesReady(true);
+      setMessagesError(null);
       setLiveStatus("offline");
       return;
     }
@@ -1497,6 +1511,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       setUser(guestUser);
       setHydrateError(null);
       setHydrated(true);
+      setMessagesReady(true);
+      setMessagesError(null);
       setLiveStatus("offline");
       const here = `${window.location.pathname}${window.location.search}`;
       if (!isPublicAppPath(window.location.pathname)) {
@@ -1539,10 +1555,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       setHydrateError(
         missingSchema
           ? "Signed in, but this project is missing the Truss tables. Run the files in supabase/migrations in the SQL editor (in order), then sign out and back in."
-          : profileError?.message ??
-            "No profile yet. Create an account after the migrations have been applied."
+          : profileError && isTransientRequestError(profileError)
+            ? "Could not load the book of work. Check the connection and try again."
+            : profileError?.message ??
+              "No profile yet. Create an account after the migrations have been applied."
       );
       setHydrated(true);
+      setMessagesReady(true);
       setLiveStatus("offline");
       return;
     }
@@ -1617,6 +1636,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut();
         setHydrateError(null);
         setHydrated(true);
+        setMessagesReady(true);
         toast.error("This account is locked. Ask a company admin to unlock it.");
         router.replace("/login?error=" + encodeURIComponent("This account is locked. Ask a company admin to unlock it."));
         return;
@@ -1666,57 +1686,69 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       jobs = jobsFilledFromLeads(backfilled.jobs, opportunities);
       const remapJob = (jobId: string | null) => remapDroppedJobId(jobId, pruned.dropped);
       if (epoch !== bookEpoch.current) return;
-      setState({
-        ...book.state,
-        staff: roster,
-        opportunities,
-        jobs,
-        estimates: book.state.estimates.map((estimate) => ({
-          ...estimate,
-          jobId: remapJob(estimate.jobId),
-        })),
-        invoices: book.state.invoices.map((invoice) => ({
-          ...invoice,
-          jobId: remapJob(invoice.jobId),
-        })),
-        expenses: book.state.expenses.map((expense) => ({
-          ...expense,
-          jobId: remapJob(expense.jobId),
-        })),
-        payments: book.state.payments.map((payment) => ({
-          ...payment,
-          jobId: remapJob(payment.jobId),
-        })),
-        events: book.state.events.map((event) => ({
-          ...event,
-          jobId: remapJob(event.jobId),
-        })),
-        photos: book.state.photos.map((photo) => ({
-          ...photo,
-          jobId: remapDroppedJobId(photo.jobId, pruned.dropped) ?? photo.jobId,
-        })),
-        jobFiles: (book.state.jobFiles ?? []).map((file) => ({
-          ...file,
-          jobId: remapDroppedJobId(file.jobId, pruned.dropped) ?? file.jobId,
-        })),
-        photoReports: book.state.photoReports.map((report) => ({
-          ...report,
-          jobId: remapDroppedJobId(report.jobId, pruned.dropped) ?? report.jobId,
-          template: parsePageTemplate(report.template),
-          shareToken: report.shareToken ?? "",
-        })),
-        materialOrders: (book.state.materialOrders ?? []).map((order) => ({
-          ...order,
-          jobId: remapDroppedJobId(order.jobId, pruned.dropped) ?? order.jobId,
-        })),
-        jobInsurance: (book.state.jobInsurance ?? []).map((claim) => ({
-          ...claim,
-          jobId: remapDroppedJobId(claim.jobId, pruned.dropped) ?? claim.jobId,
-        })),
-        materialOrderLines: book.state.materialOrderLines ?? [],
+      const keptMessages =
+        (!loadedFullBook || book.messagesError) && bookRef.current.messages.length
+          ? bookRef.current.messages
+          : book.state.messages;
+      setState((prev) => {
+        const next = {
+          ...book.state,
+          staff: roster,
+          opportunities,
+          jobs,
+          estimates: book.state.estimates.map((estimate) => ({
+            ...estimate,
+            jobId: remapJob(estimate.jobId),
+          })),
+          invoices: book.state.invoices.map((invoice) => ({
+            ...invoice,
+            jobId: remapJob(invoice.jobId),
+          })),
+          expenses: book.state.expenses.map((expense) => ({
+            ...expense,
+            jobId: remapJob(expense.jobId),
+          })),
+          payments: book.state.payments.map((payment) => ({
+            ...payment,
+            jobId: remapJob(payment.jobId),
+          })),
+          events: book.state.events.map((event) => ({
+            ...event,
+            jobId: remapJob(event.jobId),
+          })),
+          photos: book.state.photos.map((photo) => ({
+            ...photo,
+            jobId: remapDroppedJobId(photo.jobId, pruned.dropped) ?? photo.jobId,
+          })),
+          jobFiles: (book.state.jobFiles ?? []).map((file) => ({
+            ...file,
+            jobId: remapDroppedJobId(file.jobId, pruned.dropped) ?? file.jobId,
+          })),
+          photoReports: book.state.photoReports.map((report) => ({
+            ...report,
+            jobId: remapDroppedJobId(report.jobId, pruned.dropped) ?? report.jobId,
+            template: parsePageTemplate(report.template),
+            shareToken: report.shareToken ?? "",
+          })),
+          materialOrders: (book.state.materialOrders ?? []).map((order) => ({
+            ...order,
+            jobId: remapDroppedJobId(order.jobId, pruned.dropped) ?? order.jobId,
+          })),
+          jobInsurance: (book.state.jobInsurance ?? []).map((claim) => ({
+            ...claim,
+            jobId: remapDroppedJobId(claim.jobId, pruned.dropped) ?? claim.jobId,
+          })),
+          materialOrderLines: book.state.materialOrderLines ?? [],
+        };
+        if (!loadedFullBook || book.messagesError) {
+          next.messages = prev.messages.length ? prev.messages : next.messages;
+        }
+        return next;
       });
       setHydrateError(null);
       setHydrated(true);
+      setMessagesReady(loadedFullBook);
+      setMessagesError(loadedFullBook && book.messagesError && keptMessages.length === 0 ? TEXTS_UNAVAILABLE : null);
       if (!loadedFullBook) {
         try {
           const full = await bookLoad.full;
@@ -1724,8 +1756,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           setState((prev) => {
             const merged = applyDeferredBook(prev, full.state);
             const dropped = pruned.dropped;
+            const messages = full.messagesError ? prev.messages : merged.messages;
             return {
               ...merged,
+              messages,
               photos: merged.photos.map((photo) => ({
                 ...photo,
                 jobId: remapDroppedJobId(photo.jobId, dropped) ?? photo.jobId,
@@ -1748,14 +1782,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               })),
             };
           });
+          if (epoch !== bookEpoch.current) return;
+          const stillEmpty = bookRef.current.messages.length === 0 && full.state.messages.length === 0;
+          setMessagesError(full.messagesError && stillEmpty ? TEXTS_UNAVAILABLE : null);
         } catch {
-          // The desk is already up. The next live refresh fills photos, mail, and files.
+          if (bookRef.current.messages.length === 0) setMessagesError(TEXTS_UNAVAILABLE);
+        } finally {
+          if (epoch === bookEpoch.current) setMessagesReady(true);
         }
       }
     } catch (error) {
       if (epoch !== bookEpoch.current) return;
       setHydrateError(loadErrorMessage(error));
       setHydrated(true);
+      setMessagesReady(true);
     }
   }, [router]);
 
@@ -1804,7 +1844,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           current.companyId === companyId ? { ...current, company: settings.name } : current,
         );
       }
-      setState(uiBook(book.state));
+      setState((current) => {
+        const next = uiBook(book.state);
+        if (book.messagesError) next.messages = current.messages;
+        return next;
+      });
+      setMessagesError(
+        book.messagesError && bookRef.current.messages.length === 0 ? TEXTS_UNAVAILABLE : null,
+      );
+      setMessagesReady(true);
     } catch {
       // Keep the current book; the next event, focus, or reconnect will try again.
     }
@@ -2661,16 +2709,23 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       const supabase = maybeClient();
       if (!supabase) return;
-      const { error } = await supabase.from("message_thread_opens").upsert(
-        {
-          company_id: user.companyId,
-          profile_id: user.id,
-          thread_key: key,
-          opened_at: openedAt,
-        },
-        { onConflict: "company_id,profile_id,thread_key" },
-      );
-      if (error && !isMissingThreadOpens(error)) toast.error(error.message);
+      let error: { message?: string; code?: string } | null = null;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (attempt) await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+        const result = await supabase.from("message_thread_opens").upsert(
+          {
+            company_id: user.companyId,
+            profile_id: user.id,
+            thread_key: key,
+            opened_at: openedAt,
+          },
+          { onConflict: "company_id,profile_id,thread_key" },
+        );
+        error = result.error;
+        if (!error || !isTransientRequestError(error)) break;
+      }
+      // A dropped read-receipt must not toast "TypeError: Failed to fetch" over the inbox.
+      if (error && !isMissingThreadOpens(error) && !isTransientRequestError(error)) toast.error(error.message);
     },
     [user.companyId, user.id],
   );
@@ -13549,6 +13604,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       configured,
       hydrated,
       hydrateError,
+      messagesReady,
+      messagesError,
       liveStatus,
       switchSeat,
       loginAs,
@@ -13745,6 +13802,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       configured,
       hydrated,
       hydrateError,
+      messagesReady,
+      messagesError,
       liveStatus,
       switchSeat,
       loginAs,

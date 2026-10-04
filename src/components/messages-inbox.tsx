@@ -419,6 +419,11 @@ export function MessagesInbox() {
           <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
         </div>
       ) : null}
+      {crm.messagesError ? (
+        <div className="border-b px-4 py-3">
+          <ErrorBanner message={crm.messagesError} onRetry={() => void crm.reload()} />
+        </div>
+      ) : null}
       <div className="grid h-full min-h-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden lg:grid-cols-[20rem_minmax(0,1fr)]">
         <aside
           className={cn(
@@ -496,7 +501,11 @@ export function MessagesInbox() {
               visibleWebChats.length > 0 ? null : (
               <p className="px-4 py-8 text-sm text-muted-foreground">
                 {threads.length === 0
-                  ? "No conversations yet. Text a homeowner — replies land here and on the job."
+                  ? crm.messagesError
+                    ? "Texts could not load."
+                    : crm.messagesReady
+                      ? "No conversations yet. Text a homeowner — replies land here and on the job."
+                      : "Loading texts…"
                   : "No threads match that search."}
               </p>
               )
@@ -678,6 +687,9 @@ export function MessagesInbox() {
               <p className="text-sm text-muted-foreground">Loading this website chat.</p>
             ) : showCompose || !selected ? (
               threads.length === 0 && !showCompose ? (
+                crm.messagesError ? (
+                  <p className="text-sm text-muted-foreground">Texts could not load.</p>
+                ) : crm.messagesReady ? (
                 <EmptyState
                   title="No texts yet"
                   description="Send a message to a homeowner. Incoming replies land here and on the job record as communication."
@@ -687,6 +699,9 @@ export function MessagesInbox() {
                     </Button>
                   }
                 />
+                ) : (
+                  <p className="text-sm text-muted-foreground">Loading texts…</p>
+                )
               ) : (
                 <p className="text-sm text-muted-foreground">
                   Replies attach to the matching job automatically and show up on that job’s activity.
