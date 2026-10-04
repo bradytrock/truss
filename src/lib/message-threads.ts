@@ -39,7 +39,9 @@ export function viewerFromStaff(
       ? profiles.find((row) => row.id === extras.profileId)
       : undefined) ??
     profiles.find((row) => row.staffId && row.staffId === staff.id) ??
-    profiles.find((row) => namesMatch(row.name, staff.name));
+    profiles.find(
+      (row) => typeof row.name === "string" && typeof staff.name === "string" && namesMatch(row.name, staff.name),
+    );
   return {
     profileId: extras?.profileId || profile?.id || staff.id,
     staffId: staff.id,
@@ -72,7 +74,7 @@ export function relatedContactIdsForThread(threadKey: string, contacts: Contact[
 }
 
 function idEquals(value: string | null | undefined, person: ThreadViewer) {
-  if (!value) return false;
+  if (typeof value !== "string" || !value) return false;
   const needle = value.trim().toLowerCase();
   if (!needle) return false;
   return needle === person.profileId.toLowerCase() || needle === person.staffId.toLowerCase();
@@ -93,12 +95,12 @@ export function personOnProject(
     if (idEquals(opportunity.assignedTo, person)) return true;
     if (staffIdEquals(opportunity.ownerStaffId, person)) return true;
     if (staffIdEquals(opportunity.originatorStaffId, person)) return true;
-    if (opportunity.estimator && namesMatch(opportunity.estimator, person.name)) return true;
+    if (typeof opportunity.estimator === "string" && typeof person.name === "string" && namesMatch(opportunity.estimator, person.name)) return true;
   }
   if (job) {
     if (staffIdEquals(job.ownerStaffId, person)) return true;
-    if (job.projectManager && namesMatch(job.projectManager, person.name)) return true;
-    if (job.superintendent && namesMatch(job.superintendent, person.name)) return true;
+    if (typeof job.projectManager === "string" && typeof person.name === "string" && namesMatch(job.projectManager, person.name)) return true;
+    if (typeof job.superintendent === "string" && typeof person.name === "string" && namesMatch(job.superintendent, person.name)) return true;
   }
   return false;
 }
@@ -313,7 +315,7 @@ export function messageBelongsToThread(
   if (threadKey.startsWith("p:")) {
     const last10 = threadKey.slice(2);
     return [message.phone, message.fromNumber, message.toNumber].some((value) => {
-      if (!value) return false;
+      if (typeof value !== "string" || !value) return false;
       return phoneKey(value) === last10 || value.includes(last10);
     });
   }

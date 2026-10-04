@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { formatInboxTime, formatMessageStamp, sameLocalDay } from "./format.ts";
+import { formatDate, formatInboxTime, formatMessageStamp, sameLocalDay } from "./format.ts";
 import { mailThreads, suggestedJobsForPeople } from "./job-emails.ts";
 import { contactsForTexting, jobForContact, messageThreads } from "./job-messages.ts";
 import { implicitThreadCrew } from "./message-threads.ts";
@@ -106,7 +106,23 @@ assert.equal(suggestedJobsForPeople([ownedJob], [], [jenn.id])[0]?.id, "j2");
 
 assert.equal(formatMessageStamp(null), "");
 assert.equal(formatInboxTime(undefined), "");
+assert.equal(formatDate(null), "—");
+assert.equal(formatDate("not-a-date"), "—");
 assert.equal(sameLocalDay(null, "2026-10-04T12:00:00.000Z"), false);
+
+const nameless = contact({ id: "c9", name: null as unknown as string, phone: "(214) 555-0199" });
+const brokenText = {
+  ...text,
+  id: "m9",
+  contactId: nameless.id,
+  phone: null,
+  body: { unexpected: true },
+  createdAt: 0,
+} as unknown as TextMessage;
+const kept = messageThreads([brokenText, text], [nameless, jenn], [brokenJob], []);
+assert.equal(kept.length, 2);
+assert.equal(kept.find((thread) => thread.contactId === jenn.id)?.title, "Jenn Whitby");
+assert.equal(kept.find((thread) => thread.contactId === nameless.id)?.preview, "");
 
 const dated = messageThreads(
   [text],

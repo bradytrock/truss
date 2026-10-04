@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Virtuoso } from "react-virtuoso";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronsUpDown, Mail, MessageSquare, Phone, Search, Send, Smartphone, UserPlus, X } from "lucide-react";
@@ -20,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, ErrorBanner, LoadingScreen } from "@/components/page-chrome";
+import { RecordErrorBoundary } from "@/components/record-error-boundary";
 import { InboxChannelSwitch } from "@/components/inbox-channel-switch";
 import { useCrm } from "@/lib/crm-store";
 import {
@@ -403,8 +403,8 @@ export function MessagesInbox() {
     const digits = pickerQuery.replace(/\D/g, "");
     return textable.filter((contact) => {
       if (!needle) return true;
-      if (contact.name.toLowerCase().includes(needle)) return true;
-      if (contact.title.toLowerCase().includes(needle)) return true;
+      if ((contact.name || "").toLowerCase().includes(needle)) return true;
+      if ((contact.title || "").toLowerCase().includes(needle)) return true;
       if (digits.length >= 3 && phoneKey(contact.phone).includes(digits)) return true;
       return false;
     });
@@ -668,7 +668,12 @@ export function MessagesInbox() {
             )}
           >
             {selectedWeb ? (
-              <WebsiteConversation key={selectedWeb.id} messages={selectedWeb.messages} />
+              <RecordErrorBoundary
+                fallbackTitle="This conversation could not open"
+                fallbackDescription="The other threads are still in the list."
+              >
+                <WebsiteConversation key={selectedWeb.id} messages={selectedWeb.messages} />
+              </RecordErrorBoundary>
             ) : webChatId ? (
               <p className="text-sm text-muted-foreground">Loading this website chat.</p>
             ) : showCompose || !selected ? (
@@ -688,18 +693,23 @@ export function MessagesInbox() {
                 </p>
               )
             ) : (
-              <Conversation
-                key={selected.key}
-                messages={selected.messages}
-                onReact={(message, emoji) => void react(message, emoji)}
-                onReply={(message) =>
-                  setReplyTo({
-                    handle: message.handle,
-                    preview: (message.body || "").replace(/\s+/g, " ").slice(0, 80),
-                  })
-                }
-                onUnsend={(message) => void unsend(message)}
-              />
+              <RecordErrorBoundary
+                fallbackTitle="This conversation could not open"
+                fallbackDescription="The other threads are still in the list."
+              >
+                <Conversation
+                  key={selected.key}
+                  messages={selected.messages}
+                  onReact={(message, emoji) => void react(message, emoji)}
+                  onReply={(message) =>
+                    setReplyTo({
+                      handle: message.handle,
+                      preview: (message.body || "").replace(/\s+/g, " ").slice(0, 80),
+                    })
+                  }
+                  onUnsend={(message) => void unsend(message)}
+                />
+              </RecordErrorBoundary>
             )}
           </div>
 
@@ -887,17 +897,22 @@ export function MessagesInbox() {
           )}
         </section>
       </div>
-      {selected ? (
-        <ThreadPeopleSheet
-          open={peopleOpen}
-          onOpenChange={(open) => {
-            setPeopleOpen(open);
-            if (!open) setPeopleQuery("");
-          }}
-          thread={selected}
-          query={peopleQuery}
-          onQueryChange={setPeopleQuery}
-        />
+      {selected && peopleOpen ? (
+        <RecordErrorBoundary
+          fallbackTitle="People could not open"
+          fallbackDescription="This conversation is still here."
+        >
+          <ThreadPeopleSheet
+            open={peopleOpen}
+            onOpenChange={(open) => {
+              setPeopleOpen(open);
+              if (!open) setPeopleQuery("");
+            }}
+            thread={selected}
+            query={peopleQuery}
+            onQueryChange={setPeopleQuery}
+          />
+        </RecordErrorBoundary>
       ) : null}
     </div>
   );
@@ -961,27 +976,42 @@ function ThreadRow({
   );
 }
 
+function messageText(body: unknown) {
+  return typeof body === "string" ? body : "";
+}
+
+function ConversationScroll({ scrollKey, children }: { scrollKey: string; children: ReactNode }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const node = scroller.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+  }, [scrollKey]);
+  return (
+    <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      {children}
+    </div>
+  );
+}
+
 function WebsiteConversation({ messages }: { messages: WebsiteChatThread["messages"] }) {
-  const lastIndex = Math.max(0, messages.length - 1);
-  if (messages.length === 0) {
+  const rows = Array.isArray(messages) ? messages.filter((message) => message && typeof message === "object") : [];
+  const lastIndex = Math.max(0, rows.length - 1);
+  if (rows.length === 0) {
     return (
       <p className="px-4 py-4 text-sm text-muted-foreground">
         Waiting for the visitor. Replies you send here appear in their chat box.
       </p>
     );
   }
+  const last = rows[rows.length - 1];
   return (
-    <Virtuoso
-      className="h-full min-h-0 flex-1"
-      data={messages}
-      increaseViewportBy={{ top: 240, bottom: 400 }}
-      initialTopMostItemIndex={lastIndex}
-      followOutput="smooth"
-      itemContent={(index, message) => {
-        const prior = messages[index - 1];
+    <ConversationScroll scrollKey={`${rows.length}:${last?.id ?? ""}`}>
+      {rows.map((message, index) => {
+        const prior = rows[index - 1];
         const showDay = !prior || !sameLocalDay(prior.createdAt, message.createdAt);
         return (
-          <div className={cn("px-4", index === 0 ? "pt-4" : "pt-3", index === lastIndex ? "pb-4" : "")}>
+          <div key={message.id || index} className={cn("px-4", index === 0 ? "pt-4" : "pt-3", index === lastIndex ? "pb-4" : "")}>
             {showDay ? (
               <p className="mb-3 text-center text-[11px] tracking-wide text-muted-foreground uppercase">
                 {formatDate(message.createdAt)}
@@ -995,7 +1025,7 @@ function WebsiteConversation({ messages }: { messages: WebsiteChatThread["messag
                   : "bg-card shadow-sm",
               )}
             >
-              <p className="whitespace-pre-wrap">{message.body}</p>
+              <p className="whitespace-pre-wrap">{messageText(message.body)}</p>
               <p
                 className={cn(
                   "mt-1 text-[10px] tracking-wide uppercase",
@@ -1007,17 +1037,18 @@ function WebsiteConversation({ messages }: { messages: WebsiteChatThread["messag
             </div>
           </div>
         );
-      }}
-    />
+      })}
+    </ConversationScroll>
   );
 }
 
 function addonNote(message: TextMessage) {
-  if (!message.detail) return "";
+  const detail = messageText(message.detail);
+  if (!detail) return "";
   if (message.kind === "effect" || message.kind === "reply" || message.kind === "poll" || message.kind === "edit") {
-    return message.detail;
+    return detail;
   }
-  if (message.kind === "rename" || message.kind === "membership") return message.detail;
+  if (message.kind === "rename" || message.kind === "membership") return detail;
   return "";
 }
 
@@ -1056,8 +1087,8 @@ function ThreadPeopleSheet({
     const needle = query.trim().toLowerCase();
     if (!needle) return people;
     return people.filter((person) => {
-      if (person.name.toLowerCase().includes(needle)) return true;
-      return person.title.toLowerCase().includes(needle);
+      if ((person.name || "").toLowerCase().includes(needle)) return true;
+      return (person.title || "").toLowerCase().includes(needle);
     });
   }, [
     book.companyProfiles,
@@ -1198,19 +1229,16 @@ function Conversation({
   onReply: (message: TextMessage) => void;
   onUnsend: (message: TextMessage) => void;
 }) {
-  const lastIndex = Math.max(0, messages.length - 1);
+  const rows = Array.isArray(messages) ? messages.filter((message) => message && typeof message.id === "string") : [];
+  const lastIndex = Math.max(0, rows.length - 1);
+  const last = rows[rows.length - 1];
   return (
-    <Virtuoso
-      className="h-full min-h-0 flex-1"
-      data={messages}
-      increaseViewportBy={{ top: 240, bottom: 400 }}
-      initialTopMostItemIndex={lastIndex}
-      followOutput="smooth"
-      itemContent={(index, message) => {
-        const prior = messages[index - 1];
+    <ConversationScroll scrollKey={`${rows.length}:${last?.id ?? ""}`}>
+      {rows.map((message, index) => {
+        const prior = rows[index - 1];
         const showDay = !prior || !sameLocalDay(prior.createdAt, message.createdAt);
         return (
-          <div className={cn("px-4", index === 0 ? "pt-4" : "pt-3", index === lastIndex ? "pb-4" : "")}>
+          <div key={message.id} className={cn("px-4", index === 0 ? "pt-4" : "pt-3", index === lastIndex ? "pb-4" : "")}>
             {showDay ? (
               <p className="mb-3 text-center text-[11px] tracking-wide text-muted-foreground uppercase">
                 {formatDate(message.createdAt)}
@@ -1243,7 +1271,7 @@ function Conversation({
                 </p>
               ) : null}
               <p className={cn("whitespace-pre-wrap", message.status === "unsent" && "italic opacity-70")}>
-                {message.body}
+                {messageText(message.body)}
               </p>
               {message.handle && message.status !== "unsent" && message.kind !== "reaction" ? (
                 <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -1293,8 +1321,8 @@ function Conversation({
             </div>
           </div>
         );
-      }}
-    />
+      })}
+    </ConversationScroll>
   );
 }
 
