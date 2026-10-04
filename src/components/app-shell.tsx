@@ -50,6 +50,7 @@ import { COURSE } from "@/lib/training/engine";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BrandMark } from "@/components/brand";
+import { NotificationsMenu } from "@/components/notifications-menu";
 import { PRODUCT_NAME } from "@/lib/product";
 import { SettingsMobileBar } from "@/components/settings-nav";
 import { useStartEstimate } from "@/lib/start-estimate";
@@ -328,6 +329,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Button>
             <SearchTrigger />
             <div className="ml-auto flex items-center gap-1.5">
+              <NotificationsMenu />
               <AssistantPanel />
               <DropdownMenu>
                 <DropdownMenuTrigger

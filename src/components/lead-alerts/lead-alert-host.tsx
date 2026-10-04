@@ -34,6 +34,7 @@ import {
   passLeadBack,
   sendRepNote,
 } from "@/lib/lead-alerts-api";
+import { NOTIFICATIONS_REFRESH } from "@/lib/notification-inbox";
 import { isUnsignedDemo } from "@/lib/seats";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -132,6 +133,7 @@ function LeadAlertSession() {
       persist(next);
       setAnnouncement(announcementFor(alert));
       maybeBrowserNotify(alert, () => focusAlert(alert.id));
+      window.dispatchEvent(new Event(NOTIFICATIONS_REFRESH));
       return true;
     },
     [persist, user.id],
