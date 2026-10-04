@@ -3,3 +3,7 @@ project_id = "truss"
 
 [functions.receive-text]
 verify_jwt = false
+
+# notify-admins authenticates with x-notify-secret or the service-role bearer.
+[functions.notify-admins]
+verify_jwt = false
