@@ -81,6 +81,19 @@ create table if not exists public.lead_activity (
   constraint lead_activity_kind_check check (kind in ('rep_note'))
 );
 
+-- A previous draft of this table may exist without the rep who wrote the note.
+-- CREATE TABLE IF NOT EXISTS does not add columns, so the index and policies
+-- below would fail with: column "user_id" does not exist.
+alter table public.lead_activity
+  add column if not exists user_id uuid references public.profiles (id) on delete cascade;
+
+do $$
+begin
+  if not exists (select 1 from public.lead_activity where user_id is null) then
+    alter table public.lead_activity alter column user_id set not null;
+  end if;
+end $$;
+
 create index if not exists lead_activity_lead_id_idx
   on public.lead_activity (lead_id, created_at desc);
 
@@ -98,6 +111,19 @@ create table if not exists public.device_tokens (
   constraint device_tokens_platform_check check (platform in ('ios', 'web')),
   constraint device_tokens_user_token_uidx unique (user_id, token)
 );
+
+alter table public.device_tokens
+  add column if not exists user_id uuid references public.profiles (id) on delete cascade;
+
+do $$
+begin
+  if not exists (select 1 from public.device_tokens where user_id is null) then
+    alter table public.device_tokens alter column user_id set not null;
+  end if;
+end $$;
+
+create unique index if not exists device_tokens_user_token_uidx
+  on public.device_tokens (user_id, token);
 
 create index if not exists device_tokens_user_idx on public.device_tokens (user_id);
 create index if not exists device_tokens_company_idx on public.device_tokens (company_id);
@@ -475,7 +501,7 @@ drop policy if exists "read lead activity" on public.lead_activity;
 create policy "read lead activity" on public.lead_activity
   for select to authenticated
   using (
-    user_id = auth.uid()
+    lead_activity.user_id = auth.uid()
     or (
       public.current_is_company_admin()
       and exists (
@@ -491,8 +517,8 @@ drop policy if exists "pm inserts rep note" on public.lead_activity;
 create policy "pm inserts rep note" on public.lead_activity
   for insert to authenticated
   with check (
-    user_id = auth.uid()
-    and kind = 'rep_note'
+    lead_activity.user_id = auth.uid()
+    and lead_activity.kind = 'rep_note'
     and exists (
       select 1
       from public.leads l
@@ -506,12 +532,12 @@ drop policy if exists "manage own device tokens" on public.device_tokens;
 create policy "manage own device tokens" on public.device_tokens
   for all to authenticated
   using (
-    user_id = auth.uid()
-    and company_id = public.current_company_id()
+    device_tokens.user_id = auth.uid()
+    and device_tokens.company_id = public.current_company_id()
   )
   with check (
-    user_id = auth.uid()
-    and company_id = public.current_company_id()
+    device_tokens.user_id = auth.uid()
+    and device_tokens.company_id = public.current_company_id()
   );
 
 revoke all on public.leads from anon;
