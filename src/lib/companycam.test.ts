@@ -4,9 +4,11 @@ import {
   companyCamCapturedDate,
   companyCamCapturedUnix,
   companyCamListedPhotoId,
+  companyCamNextPhotoCursor,
   companyCamPhotoCreateBody,
   companyCamPhotoIdsToDrop,
   companyCamPhotoPageState,
+  companyCamPhotoQuery,
   companyCamProjectBody,
   companyCamUploadUrl,
   companyCamSignature,
@@ -129,9 +131,40 @@ assert.deepEqual(
 assert.deepEqual(companyCamPhotoIdsToDrop(["a", "b", ""], ["b"], true), ["a"]);
 assert.deepEqual(companyCamPhotoIdsToDrop(["a"], [], false), []);
 
+assert.equal(companyCamPhotoQuery({}), "per_page=100");
+assert.equal(companyCamPhotoQuery({ after: "cursor-2" }), "per_page=100&after=cursor-2");
+assert.equal(companyCamPhotoQuery({ after: "cursor 2", page: 4 }), "per_page=100&after=cursor+2");
+assert.equal(companyCamPhotoQuery({ page: 2 }), "per_page=100&page=2");
+assert.equal(
+  companyCamNextPhotoCursor({
+    get(name: string) {
+      return name === "x-next-cursor" ? "cursor-2" : null;
+    },
+  }),
+  "cursor-2",
+);
+assert.equal(
+  companyCamNextPhotoCursor({
+    get(name: string) {
+      return name === "link"
+        ? `<https://api.companycam.com/v2/projects/1/photos?per_page=100&after=cursor%2F2>; rel="next"`
+        : null;
+    },
+  }),
+  "cursor/2",
+);
+
 assert.deepEqual(
   companyCamPhotoPageState({ rawCount: 50, nextCursor: "cursor-2", hasNext: "true", page: 1, previousCursor: "" }),
   { mode: "cursor", cursor: "cursor-2", page: 1, complete: false },
+);
+assert.deepEqual(
+  companyCamPhotoPageState({ rawCount: 25, nextCursor: "cursor-2", hasNext: "false", page: 1, previousCursor: "" }),
+  { mode: "cursor", cursor: "cursor-2", page: 1, complete: false },
+);
+assert.deepEqual(
+  companyCamPhotoPageState({ rawCount: 25, nextCursor: "cursor-2", hasNext: "false", page: 2, previousCursor: "cursor-2" }),
+  { mode: "stop", cursor: "", page: 2, complete: false },
 );
 assert.deepEqual(
   companyCamPhotoPageState({ rawCount: 100, nextCursor: "", hasNext: "false", page: 3, previousCursor: "cursor-2" }),
