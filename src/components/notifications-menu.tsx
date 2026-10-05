@@ -25,6 +25,7 @@ import {
 } from "@/lib/notification-inbox";
 import { loadNotificationInbox } from "@/lib/notification-inbox-api";
 import { assignLead } from "@/lib/lead-alerts-api";
+import { markSelfAssignedLead } from "@/lib/lead-alerts";
 import { isUnsignedDemo } from "@/lib/seats";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -244,9 +245,11 @@ function NotificationsSession() {
       <AssignRepDialog
         alert={assigning?.alert ?? null}
         companyId={user.companyId}
+        viewerId={user.id}
         onClose={() => setAssigning(null)}
         onSubmit={async (repId, note) => {
           if (!assigning) return;
+          if (repId === user.id) markSelfAssignedLead(assigning.alert.lead.id);
           await assignLead(createClient(), { leadId: assigning.alert.lead.id, repId, note });
           setAssigning(null);
           window.dispatchEvent(new Event(NOTIFICATIONS_REFRESH));
