@@ -2685,14 +2685,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (!key || !looksLikeUuid(user.id) || !user.companyId) return;
       const openedAt = new Date().toISOString();
       setState((prev) => {
-        const existing = prev.messageThreadOpens.find(
+        const opens = Array.isArray(prev.messageThreadOpens) ? prev.messageThreadOpens : [];
+        const existing = opens.find(
           (row) => row.profileId === user.id && row.threadKey === key,
         );
         if (existing && existing.openedAt >= openedAt) return prev;
         return {
           ...prev,
           messageThreadOpens: existing
-            ? prev.messageThreadOpens.map((row) =>
+            ? opens.map((row) =>
                 row.id === existing.id ? { ...row, openedAt } : row,
               )
             : [
@@ -2703,7 +2704,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
                   threadKey: key,
                   openedAt,
                 },
-                ...prev.messageThreadOpens,
+                ...opens,
               ],
         };
       });

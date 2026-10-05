@@ -217,18 +217,20 @@ export function visibleInboxThreads(
 }
 
 export function openedAtFor(
-  opens: MessageThreadOpen[],
+  opens: MessageThreadOpen[] | null | undefined,
   profileId: string,
   threadKey: string,
 ) {
+  if (!Array.isArray(opens)) return null;
   return opens.find((row) => row.profileId === profileId && row.threadKey === threadKey)?.openedAt ?? null;
 }
 
 export function threadUnreadCount(thread: MessageThread, openedAt: string | null | undefined) {
-  const last = thread.messages[thread.messages.length - 1];
+  const messages = Array.isArray(thread?.messages) ? thread.messages : [];
+  const last = messages[messages.length - 1];
   if (!last || last.direction !== "inbound") return 0;
   if (openedAt && last.createdAt <= openedAt) return 0;
-  return thread.messages.filter(
+  return messages.filter(
     (message) => message.direction === "inbound" && (!openedAt || message.createdAt > openedAt),
   ).length;
 }

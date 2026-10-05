@@ -261,7 +261,8 @@ export function greeting() {
 }
 
 export function initials(name: string) {
-  return name
+  const text = typeof name === "string" ? name : "";
+  return text
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)

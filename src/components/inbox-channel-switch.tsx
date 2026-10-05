@@ -9,11 +9,11 @@ import { cn } from "@/lib/utils";
 export function InboxChannelSwitch() {
   const pathname = usePathname();
   const params = useSearchParams();
-  const channel = inboxChannelFromPath(pathname);
-  const contact = params.get("contact");
-  const job = params.get("job");
-  const email = params.get("email");
-  const compose = params.get("compose") === "1";
+  const channel = inboxChannelFromPath(pathname ?? "");
+  const contact = params?.get("contact") ?? null;
+  const job = params?.get("job") ?? null;
+  const email = params?.get("email") ?? null;
+  const compose = params?.get("compose") === "1";
   const carry = { contact, job, email, compose };
 
   return (

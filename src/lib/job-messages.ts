@@ -14,7 +14,7 @@ export function phonesMatch(left: string | null | undefined, right: string | nul
 }
 
 export function contactForPhone(contacts: Contact[], phone: string) {
-  return contacts.find((contact) => phonesMatch(contact.phone, phone));
+  return contacts.find((contact) => contact && phonesMatch(contact.phone, phone));
 }
 
 function relatedIds(job: Pick<Job, "relatedContactIds"> | { relatedContactIds?: string[] | null }) {
@@ -79,7 +79,7 @@ export function messageConversationKey(
   const direct = conversationThreadKey(message);
   if (direct.startsWith("p:")) return direct;
   const contact = message.contactId
-    ? contacts.find((item) => item.id === message.contactId)
+    ? contacts.find((item) => item?.id === message.contactId)
     : contactForPhone(contacts, message.phone);
   if (contact) {
     const fromContact = conversationThreadKey({
@@ -169,7 +169,9 @@ export function messageThreads(
     (message): message is TextMessage =>
       Boolean(message) && typeof message === "object" && typeof message.id === "string",
   );
-  const people = Array.isArray(contacts) ? contacts : [];
+  const people = (Array.isArray(contacts) ? contacts : []).filter(
+    (contact): contact is Contact => Boolean(contact) && typeof contact === "object",
+  );
   const work = Array.isArray(jobs) ? jobs : [];
   const leads = Array.isArray(opportunities) ? opportunities : [];
   const keys = new Set<string>();
@@ -267,8 +269,8 @@ export function messageThreads(
 
 export function contactsForTexting(contacts: Contact[]) {
   return [...(contacts ?? [])]
-    .filter((contact) => typeof contact?.phone === "string" && looksLikePhone(contact.phone))
-    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    .filter((contact) => contact && typeof contact.phone === "string" && looksLikePhone(contact.phone))
+    .sort((a, b) => asText(a?.name).localeCompare(asText(b?.name)));
 }
 
 export function filterMessageThreads(threads: MessageThread[], query: string) {
@@ -276,10 +278,10 @@ export function filterMessageThreads(threads: MessageThread[], query: string) {
   if (!needle) return threads;
   const digits = needle.replace(/\D/g, "");
   return threads.filter((thread) => {
-    if ((thread.title || "").toLowerCase().includes(needle)) return true;
-    if ((thread.preview || "").toLowerCase().includes(needle)) return true;
-    if ((thread.job?.name || "").toLowerCase().includes(needle)) return true;
-    if ((thread.job?.code || "").toLowerCase().includes(needle)) return true;
+    if (asText(thread?.title).toLowerCase().includes(needle)) return true;
+    if (asText(thread?.preview).toLowerCase().includes(needle)) return true;
+    if (asText(thread?.job?.name).toLowerCase().includes(needle)) return true;
+    if (asText(thread?.job?.code).toLowerCase().includes(needle)) return true;
     if (digits.length >= 3 && phoneKey(thread.phone).includes(digits)) return true;
     return false;
   });
