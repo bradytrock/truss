@@ -184,10 +184,38 @@ export function companyCamPhotoIdsToDrop(localIds: string[], remoteIds: string[]
   return [...new Set(localIds.map((id) => id.trim()).filter((id) => id && !remote.has(id)))];
 }
 
+/** Query string for one CompanyCam photo page. `after` and `page` are never sent together. */
+export function companyCamPhotoQuery(input: { after?: string; page?: number; perPage?: number }) {
+  const params = new URLSearchParams({ per_page: String(input.perPage ?? 100) });
+  const after = input.after?.trim() ?? "";
+  if (after) params.set("after", after);
+  else if ((input.page ?? 1) > 1) params.set("page", String(input.page));
+  return params.toString();
+}
+
+/**
+ * Cursor for the next photo page, from `X-Next-Cursor` or a `Link` header `after` param.
+ * An empty cursor means CompanyCam did not offer another page.
+ */
+export function companyCamNextPhotoCursor(headers: { get(name: string): string | null }) {
+  const direct = headers.get("x-next-cursor")?.trim() ?? "";
+  if (direct) return direct;
+  const link = headers.get("link") ?? "";
+  const match = /(?:^|,\s*)<[^>]*[?&]after=([^&>\s]+)[^>]*>\s*;\s*rel="?next"?/i.exec(link);
+  if (!match?.[1]) return "";
+  try {
+    return decodeURIComponent(match[1]).trim();
+  } catch {
+    return match[1].trim();
+  }
+}
+
 /**
  * How to fetch the next CompanyCam photo page.
- * Offset pages are not the end of a project: CompanyCam often returns fewer rows than
- * `per_page`, and a full project now continues from `X-Next-Cursor` until `X-Has-Next` is false.
+ * Keep requesting `per_page=100` with `after` set to the previous response cursor until
+ * that cursor is empty. A short page is not the end of the project, and `X-Has-Next: false`
+ * does not stop the walk while a new cursor is present.
+ * Offset `page` is only used when CompanyCam sends no cursor at all.
  * A stuck or missing cursor never counts as a complete list, so unsynced photos are not deleted.
  */
 export function companyCamPhotoPageState(input: {
@@ -200,14 +228,17 @@ export function companyCamPhotoPageState(input: {
   const hasNext = input.hasNext.trim().toLowerCase();
   const nextCursor = input.nextCursor.trim();
   const previousCursor = input.previousCursor.trim();
-  if (input.rawCount <= 0 || hasNext === "false") {
+  if (input.rawCount <= 0) {
     return { mode: "stop", cursor: "", page: input.page, complete: true };
   }
-  if (hasNext === "true" || nextCursor) {
-    if (!nextCursor || nextCursor === previousCursor) {
-      return { mode: "stop", cursor: "", page: input.page, complete: false };
-    }
+  if (nextCursor && nextCursor !== previousCursor) {
     return { mode: "cursor", cursor: nextCursor, page: input.page, complete: false };
+  }
+  if (hasNext === "true" || nextCursor) {
+    return { mode: "stop", cursor: "", page: input.page, complete: false };
+  }
+  if (hasNext === "false") {
+    return { mode: "stop", cursor: "", page: input.page, complete: true };
   }
   return { mode: "page", cursor: "", page: input.page + 1, complete: false };
 }
