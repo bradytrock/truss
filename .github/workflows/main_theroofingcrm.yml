@@ -29,11 +29,18 @@ jobs:
           npm run build --if-present
           npm run test --if-present
 
+      - name: Package standalone server
+        run: |
+          test -f .next/standalone/server.js
+          mkdir -p deploy
+          cp -a .next/standalone/. deploy/
+
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: .
+          include-hidden-files: true
+          path: deploy
 
   deploy:
     runs-on: ubuntu-latest
@@ -47,13 +54,25 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: node-app
-      
+          include-hidden-files: true
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_8C3F71A27F2C405AB34D91B39F3C2FFC }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_375069650E1048208FBEA8FA9BDDE38E }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_7BAF75E7F2234D2DBD602A02A707B968 }}
+
+      - name: Run the standalone server without a second npm build
+        run: |
+          set -euo pipefail
+          rg=$(az webapp list --query "[?name=='TheRoofingCRM'].resourceGroup | [0]" -o tsv)
+          if [ -z "$rg" ]; then
+            echo "TheRoofingCRM was not found in this subscription."
+            exit 1
+          fi
+          az webapp config set --name TheRoofingCRM --resource-group "$rg" --startup-file "node server.js"
+          az webapp config appsettings set --name TheRoofingCRM --resource-group "$rg" --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp

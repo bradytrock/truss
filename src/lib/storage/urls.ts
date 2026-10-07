@@ -59,9 +59,8 @@ export function storageProxyPath(key: string) {
 
 /**
  * Durable browser URL for a stored object.
- * Always use the app proxy — the B2 bucket is private, so friendly
- * `f005.backblazeb2.com/file/...` URLs 401 in the browser as raw JSON.
- * (Leave B2_PUBLIC_BASE_URL unset until the bucket is actually public.)
+ * Always use the app proxy. The Azure container (and the old B2 bucket) are
+ * private, so a raw blob or Backblaze URL 401s in the browser.
  */
 export function publicObjectUrl(key: string, _publicBaseUrl?: string) {
   const objectKey = normalizeObjectKey(key) || key.replace(/^\/+/, "");
@@ -69,8 +68,9 @@ export function publicObjectUrl(key: string, _publicBaseUrl?: string) {
 }
 
 /**
- * Pull the object key out of a stored proxy URL or a Backblaze friendly URL
- * (`https://f005.backblazeb2.com/file/TheCRM/{key}`).
+ * Pull the object key out of a stored proxy URL, a Backblaze friendly URL
+ * (`https://f005.backblazeb2.com/file/TheCRM/{key}`), or an Azure blob URL
+ * (`https://{account}.blob.core.windows.net/{container}/{key}`).
  */
 export function objectKeyFromStoredUrl(url: string) {
   const raw = url.trim();
@@ -93,6 +93,13 @@ export function objectKeyFromStoredUrl(url: string) {
       const parts = parsed.pathname.replace(/^\/+/, "").split("/");
       if (parts.length >= 2) {
         return parts.slice(1).join("/");
+      }
+    }
+    // Azure Blob: /{container}/{objectKey}
+    if (/\.blob\.core\.windows\.net$/i.test(parsed.hostname)) {
+      const parts = parsed.pathname.replace(/^\/+/, "").split("/");
+      if (parts.length >= 2) {
+        return decodeURIComponent(parts.slice(1).join("/")).replace(/^\/+/, "");
       }
     }
   } catch {
@@ -158,8 +165,8 @@ export function resolveStoredFileUrl(input: {
 }) {
   const key = storedObjectKeyCandidates(input)[0];
   if (key) return publicObjectUrl(key, input.publicBaseUrl);
-  // Never hand the browser a private B2 friendly URL — it 401s as raw JSON.
+  // Never hand the browser a private blob URL — it 401s outside the app proxy.
   const raw = (input.url || "").trim();
-  if (/backblazeb2\.com/i.test(raw)) return "";
+  if (/backblazeb2\.com/i.test(raw) || /\.blob\.core\.windows\.net/i.test(raw)) return "";
   return raw;
 }

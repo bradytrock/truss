@@ -1,0 +1,41 @@
+# Calls the same cron routes Vercel used to schedule. The public host stays
+# https://myroofingtools.com. Repository secret CRON_SECRET must match the
+# App Service setting of the same name.
+name: Scheduled jobs
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call cron routes
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: https://myroofingtools.com
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "Add repository secret CRON_SECRET (same value as App Service)."
+            exit 1
+          fi
+          call() {
+            local path="$1"
+            local timeout="$2"
+            curl --fail-with-body --silent --show-error --max-time "$timeout" \
+              -H "Authorization: Bearer ${CRON_SECRET}" \
+              "${APP_URL}${path}"
+            echo
+          }
+          call /api/cron/automations 120
+          hour=$(date -u +%H)
+          minute=$(date -u +%M)
+          if [ "$hour" = "13" ] && [ "$minute" -lt 15 ]; then
+            call /api/cron/tasks 120
+          fi
+          if [ "$hour" = "14" ] && [ "$minute" -lt 15 ]; then
+            call /api/cron/realtor-listings 300
+          fi

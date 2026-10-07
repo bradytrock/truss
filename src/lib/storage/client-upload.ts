@@ -17,7 +17,7 @@ export type UploadedObject = {
   bucket: string;
 };
 
-/** Upload a file through the authenticated B2 proxy.
+/** Upload a file through the authenticated storage proxy.
  * `path` is relative under the kind folder (e.g. `payments/uuid.jpg` or `{jobId}/{fileId}.pdf`).
  * The server stores objects as `{companyId}/{kind}/{path}`.
  */
@@ -60,7 +60,7 @@ export async function uploadViaApi(
     publicUrl,
     contentType: json.contentType || "application/octet-stream",
     size: json.size || 0,
-    bucket: json.bucket || `b2:${kind}`,
+    bucket: json.bucket || `azure:${kind}`,
   };
 }
 

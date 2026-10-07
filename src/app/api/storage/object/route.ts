@@ -16,7 +16,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Streams a B2 object.
+ * Streams a stored object (Azure Blob, with a Backblaze read fallback).
  *
  * Access rules:
  * - `company-assets` (logos) — readable without a session (needed on share pages / cards)
@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     if (!isB2Configured()) {
-      return NextResponse.json({ error: "Backblaze B2 is not configured." }, { status: 503 });
+      return NextResponse.json({ error: "File storage is not configured." }, { status: 503 });
     }
 
     const url = new URL(request.url);
