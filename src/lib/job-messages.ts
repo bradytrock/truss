@@ -3,7 +3,7 @@ import { isDeletedJob } from "@/lib/job-record";
 import type { Contact, Job, Opportunity, TextMessage } from "@/lib/types";
 
 export function phoneKey(value: string | null | undefined) {
-  const digits = digitsOnly(value ?? "");
+  const digits = digitsOnly(typeof value === "string" ? value : "");
   return digits.length >= 10 ? digits.slice(-10) : digits;
 }
 
@@ -14,7 +14,7 @@ export function phonesMatch(left: string | null | undefined, right: string | nul
 }
 
 export function contactForPhone(contacts: Contact[], phone: string) {
-  return contacts.find((contact) => phonesMatch(contact.phone, phone));
+  return contacts.find((contact) => contact && phonesMatch(contact.phone, phone));
 }
 
 function relatedIds(job: Pick<Job, "relatedContactIds"> | { relatedContactIds?: string[] | null }) {
@@ -68,7 +68,7 @@ export function conversationThreadKey(input: {
     const last10 = phoneKey(value);
     if (last10.length >= 10) return `p:${last10}`;
   }
-  const contactId = input.contactId?.trim().toLowerCase();
+  const contactId = asText(input.contactId).trim().toLowerCase();
   return contactId ? `c:${contactId}` : "";
 }
 
@@ -79,7 +79,7 @@ export function messageConversationKey(
   const direct = conversationThreadKey(message);
   if (direct.startsWith("p:")) return direct;
   const contact = message.contactId
-    ? contacts.find((item) => item.id === message.contactId)
+    ? contacts.find((item) => item?.id === message.contactId)
     : contactForPhone(contacts, message.phone);
   if (contact) {
     const fromContact = conversationThreadKey({
@@ -125,7 +125,7 @@ export type MessageThread = {
 };
 
 function previewOf(body: string | null | undefined) {
-  const text = (body ?? "").replace(/\s+/g, " ").trim();
+  const text = asText(body).replace(/\s+/g, " ").trim();
   return text.length > 72 ? `${text.slice(0, 71)}…` : text;
 }
 
@@ -138,20 +138,25 @@ function messageMatchesThreadKey(
   if (key.startsWith("p:")) {
     const last10 = key.slice(2);
     return [message.phone, message.fromNumber, message.toNumber].some((value) => {
-      if (!value) return false;
+      if (typeof value !== "string" || !value) return false;
       return phoneKey(value) === last10 || value.includes(last10);
     });
   }
   return false;
 }
 
+function asText(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function displayName(contact: Contact | undefined) {
+  const name = asText(contact?.name).trim();
+  if (!name || looksLikePhone(name)) return "";
+  return name;
+}
+
 function namedContact(candidates: Contact[]) {
-  return (
-    candidates.find((contact) => {
-      const name = (contact.name || "").trim();
-      return Boolean(name) && !looksLikePhone(name);
-    }) ?? candidates[0]
-  );
+  return candidates.find((contact) => displayName(contact)) ?? candidates[0];
 }
 
 export function messageThreads(
@@ -160,9 +165,18 @@ export function messageThreads(
   jobs: Job[],
   opportunities: Opportunity[],
 ): MessageThread[] {
+  const source = (Array.isArray(messages) ? messages : []).filter(
+    (message): message is TextMessage =>
+      Boolean(message) && typeof message === "object" && typeof message.id === "string",
+  );
+  const people = (Array.isArray(contacts) ? contacts : []).filter(
+    (contact): contact is Contact => Boolean(contact) && typeof contact === "object",
+  );
+  const work = Array.isArray(jobs) ? jobs : [];
+  const leads = Array.isArray(opportunities) ? opportunities : [];
   const keys = new Set<string>();
-  for (const message of messages ?? []) {
-    const key = messageConversationKey(message, contacts);
+  for (const message of source) {
+    const key = messageConversationKey(message, people);
     if (key) keys.add(key);
   }
 
@@ -171,14 +185,14 @@ export function messageThreads(
   for (const key of keys) {
     const relatedIds = new Set(
       key.startsWith("p:")
-        ? contacts.filter((contact) => phoneKey(contact.phone) === key.slice(2)).map((contact) => contact.id)
+        ? people.filter((contact) => phoneKey(contact.phone) === key.slice(2)).map((contact) => contact.id)
         : key.startsWith("c:")
           ? [key.slice(2)]
           : [],
     );
-    const items = messages.filter((message) => {
+    const items = source.filter((message) => {
       if (used.has(message.id)) return false;
-      if (messageConversationKey(message, contacts) === key) return true;
+      if (messageConversationKey(message, people) === key) return true;
       return messageMatchesThreadKey(message, key, relatedIds);
     });
     if (items.length === 0) continue;
@@ -187,72 +201,76 @@ export function messageThreads(
   }
 
   return [...groups.entries()]
-    .map(([key, items]) => {
-      const sorted = [...items].sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
-      const last = sorted[sorted.length - 1];
-      const relatedIds =
-        key.startsWith("p:")
-          ? contacts.filter((contact) => phoneKey(contact.phone) === key.slice(2))
-          : contacts.filter(
-              (contact) =>
-                sorted.some((message) => message.contactId === contact.id) ||
-                (key.startsWith("c:") && contact.id.toLowerCase() === key.slice(2)),
-            );
-      const contact =
-        namedContact(relatedIds) ??
-        contacts.find((item) => item.id === last.contactId) ??
-        contactForPhone(contacts, last.phone);
-      const contactIds = [
-        ...new Set(
-          [
-            ...relatedIds.map((item) => item.id),
-            ...sorted.map((message) => message.contactId).filter((id): id is string => Boolean(id)),
-          ],
-        ),
-      ];
-      const job =
-        jobs.find((item) => item.id === last.jobId) ??
-        (contact ? jobForContact(jobs, opportunities, contact.id) : undefined) ??
-        contactIds.map((id) => jobForContact(jobs, opportunities, id)).find(Boolean);
-      const opportunity =
-        opportunities.find((item) => item.id === last.opportunityId) ??
-        (job?.opportunityId
-          ? opportunities.find((item) => item.id === job.opportunityId)
-          : undefined) ??
-        (contact ? opportunityForContact(opportunities, contact.id) : undefined) ??
-        contactIds.map((id) => opportunityForContact(opportunities, id)).find(Boolean);
-      const phone =
-        last.phone ||
-        last.fromNumber ||
-        last.toNumber ||
-        contact?.phone ||
-        (key.startsWith("p:") ? key.slice(2) : "");
-      return {
-        key,
-        phone: toE164(phone) || phone,
-        contactId: contact?.id ?? last.contactId,
-        contactIds,
-        jobId: job?.id ?? last.jobId,
-        opportunityId: opportunity?.id ?? last.opportunityId,
-        contact,
-        job,
-        opportunity,
-        title: (contact && contact.name.trim() && !looksLikePhone(contact.name) ? contact.name.trim() : "") ||
-          toE164(phone) ||
-          phone ||
-          "Unknown number",
-        preview: previewOf(last.body),
-        messages: sorted,
-        lastAt: last.createdAt || "",
-      };
+    .flatMap(([key, items]) => {
+      try {
+        const sorted = [...items].sort((a, b) => asText(a.createdAt).localeCompare(asText(b.createdAt)));
+        const last = sorted[sorted.length - 1];
+        const relatedIds =
+          key.startsWith("p:")
+            ? people.filter((contact) => phoneKey(contact.phone) === key.slice(2))
+            : people.filter(
+                (contact) =>
+                  sorted.some((message) => message.contactId === contact.id) ||
+                  (key.startsWith("c:") &&
+                    typeof contact.id === "string" &&
+                    contact.id.toLowerCase() === key.slice(2)),
+              );
+        const contact =
+          namedContact(relatedIds) ??
+          people.find((item) => item.id === last.contactId) ??
+          contactForPhone(people, asText(last.phone));
+        const contactIds = [
+          ...new Set(
+            [
+              ...relatedIds.map((item) => item.id),
+              ...sorted.map((message) => message.contactId).filter((id): id is string => Boolean(id)),
+            ],
+          ),
+        ];
+        const job =
+          work.find((item) => item.id === last.jobId) ??
+          (contact ? jobForContact(work, leads, contact.id) : undefined) ??
+          contactIds.map((id) => jobForContact(work, leads, id)).find(Boolean);
+        const opportunity =
+          leads.find((item) => item.id === last.opportunityId) ??
+          (job?.opportunityId ? leads.find((item) => item.id === job.opportunityId) : undefined) ??
+          (contact ? opportunityForContact(leads, contact.id) : undefined) ??
+          contactIds.map((id) => opportunityForContact(leads, id)).find(Boolean);
+        const phone =
+          asText(last.phone) ||
+          asText(last.fromNumber) ||
+          asText(last.toNumber) ||
+          asText(contact?.phone) ||
+          (key.startsWith("p:") ? key.slice(2) : "");
+        return [
+          {
+            key,
+            phone: toE164(phone) || phone,
+            contactId: contact?.id ?? last.contactId,
+            contactIds,
+            jobId: job?.id ?? last.jobId,
+            opportunityId: opportunity?.id ?? last.opportunityId,
+            contact,
+            job,
+            opportunity,
+            title: displayName(contact) || toE164(phone) || phone || "Unknown number",
+            preview: previewOf(last.body),
+            messages: sorted,
+            lastAt: asText(last.createdAt),
+          },
+        ];
+      } catch (error) {
+        console.error(error);
+        return [];
+      }
     })
     .sort((a, b) => b.lastAt.localeCompare(a.lastAt));
 }
 
 export function contactsForTexting(contacts: Contact[]) {
   return [...(contacts ?? [])]
-    .filter((contact) => typeof contact?.phone === "string" && looksLikePhone(contact.phone))
-    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    .filter((contact) => contact && typeof contact.phone === "string" && looksLikePhone(contact.phone))
+    .sort((a, b) => asText(a?.name).localeCompare(asText(b?.name)));
 }
 
 export function filterMessageThreads(threads: MessageThread[], query: string) {
@@ -260,10 +278,10 @@ export function filterMessageThreads(threads: MessageThread[], query: string) {
   if (!needle) return threads;
   const digits = needle.replace(/\D/g, "");
   return threads.filter((thread) => {
-    if (thread.title.toLowerCase().includes(needle)) return true;
-    if (thread.preview.toLowerCase().includes(needle)) return true;
-    if (thread.job?.name.toLowerCase().includes(needle)) return true;
-    if (thread.job?.code?.toLowerCase().includes(needle)) return true;
+    if (asText(thread?.title).toLowerCase().includes(needle)) return true;
+    if (asText(thread?.preview).toLowerCase().includes(needle)) return true;
+    if (asText(thread?.job?.name).toLowerCase().includes(needle)) return true;
+    if (asText(thread?.job?.code).toLowerCase().includes(needle)) return true;
     if (digits.length >= 3 && phoneKey(thread.phone).includes(digits)) return true;
     return false;
   });

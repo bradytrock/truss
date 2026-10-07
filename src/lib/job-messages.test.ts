@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { formatInboxTime, formatMessageStamp, sameLocalDay } from "./format.ts";
+import { formatDate, formatInboxTime, formatMessageStamp, sameLocalDay } from "./format.ts";
 import { mailThreads, suggestedJobsForPeople } from "./job-emails.ts";
-import { contactsForTexting, jobForContact, messageThreads } from "./job-messages.ts";
-import { implicitThreadCrew } from "./message-threads.ts";
+import { contactsForTexting, filterMessageThreads, jobForContact, messageThreads } from "./job-messages.ts";
+import { implicitThreadCrew, openedAtFor, threadUnreadCount } from "./message-threads.ts";
 import type { Contact, GmailMessage, Job, Opportunity, TextMessage } from "./types.ts";
 
 function contact(partial: Partial<Contact> & Pick<Contact, "id" | "name">): Contact {
@@ -106,7 +106,23 @@ assert.equal(suggestedJobsForPeople([ownedJob], [], [jenn.id])[0]?.id, "j2");
 
 assert.equal(formatMessageStamp(null), "");
 assert.equal(formatInboxTime(undefined), "");
+assert.equal(formatDate(null), "—");
+assert.equal(formatDate("not-a-date"), "—");
 assert.equal(sameLocalDay(null, "2026-10-04T12:00:00.000Z"), false);
+
+const nameless = contact({ id: "c9", name: null as unknown as string, phone: "(214) 555-0199" });
+const brokenText = {
+  ...text,
+  id: "m9",
+  contactId: nameless.id,
+  phone: null,
+  body: { unexpected: true },
+  createdAt: 0,
+} as unknown as TextMessage;
+const kept = messageThreads([brokenText, text], [nameless, jenn], [brokenJob], []);
+assert.equal(kept.length, 2);
+assert.equal(kept.find((thread) => thread.contactId === jenn.id)?.title, "Jenn Whitby");
+assert.equal(kept.find((thread) => thread.contactId === nameless.id)?.preview, "");
 
 const dated = messageThreads(
   [text],
@@ -119,5 +135,19 @@ assert.deepEqual(
   implicitThreadCrew({ contactId: jenn.id, contactIds: [jenn.id] }, [], [], [brokenJob], []),
   [],
 );
+
+assert.deepEqual(
+  contactsForTexting([
+    contact({ id: "c4", name: { bad: true } as unknown as string, phone: "(214) 555-0100" }),
+    jenn,
+  ]).map((item) => item.id),
+  ["c4", "c1"],
+);
+assert.equal(messageThreads([text], [null as unknown as Contact, jenn], [brokenJob], []).length, 1);
+const objectName = messageThreads([text], [jenn], [ownedJob], []);
+objectName[0].job = { ...ownedJob, name: { bad: true } as unknown as string };
+assert.equal(filterMessageThreads(objectName, "falcon").length, 0);
+assert.equal(openedAtFor(undefined, "profile", "thread"), null);
+assert.equal(threadUnreadCount({ ...objectName[0], messages: undefined as unknown as TextMessage[] }, null), 0);
 
 console.log("job-messages.test.ts ok");

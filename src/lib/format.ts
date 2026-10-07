@@ -163,9 +163,14 @@ function validDate(iso: string | null | undefined) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function formatValidDate(iso: string | null | undefined, options: Intl.DateTimeFormatOptions) {
+  const date = validDate(iso);
+  if (!date) return "—";
+  return date.toLocaleDateString("en-US", options);
+}
+
 export function formatDate(iso: string | null | undefined) {
-  if (!iso) return "—";
-  return parseDate(iso).toLocaleDateString("en-US", {
+  return formatValidDate(iso, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -173,8 +178,9 @@ export function formatDate(iso: string | null | undefined) {
 }
 
 export function formatDateTimeUtc(iso: string | null | undefined) {
-  if (!iso) return "—";
-  return `${parseDate(iso).toLocaleString("en-US", {
+  const date = validDate(iso);
+  if (!date) return "—";
+  return `${date.toLocaleString("en-US", {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone: "UTC",
@@ -182,8 +188,7 @@ export function formatDateTimeUtc(iso: string | null | undefined) {
 }
 
 export function formatDateShort(iso: string | null | undefined) {
-  if (!iso) return "—";
-  return parseDate(iso).toLocaleDateString("en-US", {
+  return formatValidDate(iso, {
     month: "short",
     day: "numeric",
   });
@@ -256,7 +261,8 @@ export function greeting() {
 }
 
 export function initials(name: string) {
-  return name
+  const text = typeof name === "string" ? name : "";
+  return text
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
