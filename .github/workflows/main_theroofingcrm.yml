@@ -33,12 +33,24 @@ jobs:
         run: |
           test -f .next/standalone/server.js
           test -d .next/standalone/.next
-          # Zip from inside the standalone folder so .next is inside the archive.
-          # upload-artifact drops hidden files, which is why the last deploy had
-          # no build and App Service returned 503.
+          # App Service zip deploy drops folders whose names start with a dot.
+          # That removes .next after upload, so the process stays up and every
+          # page returns "Internal Server Error". Ship the build as next-server
+          # and move it back before node starts.
+          mv .next/standalone/.next .next/standalone/next-server
+          printf '%s\n' \
+            '#!/bin/sh' \
+            'cd "$(dirname "$0")"' \
+            'if [ ! -d .next ] && [ -d next-server ]; then' \
+            '  mv next-server .next' \
+            'fi' \
+            'exec node server.js' \
+            > .next/standalone/start.sh
+          chmod +x .next/standalone/start.sh
           (cd .next/standalone && zip -qr "$GITHUB_WORKSPACE/standalone.zip" .)
           unzip -l standalone.zip | grep -q 'server.js'
-          unzip -l standalone.zip | grep -q '\.next/'
+          unzip -l standalone.zip | grep -q 'start.sh'
+          unzip -l standalone.zip | grep -q 'next-server/'
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
@@ -84,7 +96,7 @@ jobs:
           name=$(printf '%s' "$found" | cut -f1)
           rg=$(printf '%s' "$found" | cut -f2-)
           echo "Configuring ${name} in ${rg}"
-          az webapp config set --name "$name" --resource-group "$rg" --startup-file "node server.js"
+          az webapp config set --name "$name" --resource-group "$rg" --startup-file "sh start.sh"
           az webapp config appsettings set --name "$name" --resource-group "$rg" \
             --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false ENABLE_ORYX_BUILD=false
           echo "APP_NAME=${name}" >> "$GITHUB_ENV"
