@@ -213,7 +213,7 @@ export function CreateOpportunityDialog({
         estimator: owner?.name || crm.user.name,
         ownerStaffId: owner?.id,
         originatorStaffId: crm.user.staffId,
-        nextStep: "Call back within 5 minutes.",
+        nextStep: owner?.id === crm.user.staffId ? "Set an appointment or skip." : "Call back within 5 minutes.",
         leadSource: source,
         referralContactId: leadNeedsReferrer(source) ? referralId : null,
         street: street.trim(),
@@ -244,13 +244,15 @@ export function CreateOpportunityDialog({
           .filter(Boolean)
           .join(" "),
       });
-      await crm.addTask({
-        title: `Call ${fullName} back`,
-        dueAt: localYmd(new Date()),
-        relatedType: "opportunity",
-        relatedId: opportunity.id,
-        assignee: owner?.name || crm.user.name,
-      });
+      if (owner?.id !== crm.user.staffId) {
+        await crm.addTask({
+          title: `Call ${fullName} back`,
+          dueAt: localYmd(new Date()),
+          relatedType: "opportunity",
+          relatedId: opportunity.id,
+          assignee: owner?.name || crm.user.name,
+        });
+      }
       if (match) {
         await crm.fileReturningClientNotice({
           opportunityId: opportunity.id,
@@ -262,6 +264,8 @@ export function CreateOpportunityDialog({
       }
       if (match && assignsToPreviousPm(match, owner?.id)) {
         toast.success(`Lead opened: ${opportunity.code}. Assigned to ${match.previousStaffName}, who ran the last job.`);
+      } else if (owner && owner.id !== crm.user.staffId) {
+        toast.success(`Lead opened: ${opportunity.code}. ${owner.name} is the project manager.`);
       } else {
         toast.success(`Lead opened: ${opportunity.code}. Costs post to this job.`);
       }
@@ -308,8 +312,8 @@ export function CreateOpportunityDialog({
           <SheetTitle className="font-heading text-xl">New Lead</SheetTitle>
           <SheetDescription>
             {bdSeat
-              ? "You keep credit on this lead. Assign it to anyone with an unlocked seat — estimator, PM, or another closer."
-              : "This slides in so you can finish a quick task without leaving your page."}
+              ? "Assigned to is the project manager. You still keep credit on this lead."
+              : "Assigned to is the project manager on this lead."}
           </SheetDescription>
           <Button
             type="button"

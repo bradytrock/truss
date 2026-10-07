@@ -181,6 +181,11 @@ export function CreateEventDialog({
   defaultStart,
   defaultEnd,
   defaultTitle,
+  defaultLocation,
+  defaultJobId,
+  defaultOpportunityId,
+  defaultKind,
+  onCreated,
   event,
 }: {
   open: boolean;
@@ -189,6 +194,11 @@ export function CreateEventDialog({
   defaultStart?: string;
   defaultEnd?: string;
   defaultTitle?: string;
+  defaultLocation?: string;
+  defaultJobId?: string;
+  defaultOpportunityId?: string;
+  defaultKind?: EventKind;
+  onCreated?: () => void;
   event?: ScheduleEvent | null;
 }) {
   const {
@@ -244,14 +254,14 @@ export function CreateEventDialog({
       return;
     }
     setTitle(defaultTitle ?? "");
-    setKind("meeting");
+    setKind(defaultKind ?? "meeting");
     setDate(defaultDay || localYmd(new Date()));
     setStartTime(defaultStart || "09:00");
     setEndTime(defaultEnd || "10:00");
-    setLocation("");
+    setLocation(defaultLocation ?? "");
     setAssignee(defaultAssignee);
-    setJobId("");
-    setOpportunityId("");
+    setJobId(defaultJobId ?? "");
+    setOpportunityId(defaultOpportunityId ?? "");
     setNotes("");
     setGuestEmails([]);
     setGuestDraft("");
@@ -262,6 +272,10 @@ export function CreateEventDialog({
     defaultStart,
     defaultEnd,
     defaultTitle,
+    defaultLocation,
+    defaultJobId,
+    defaultOpportunityId,
+    defaultKind,
     defaultAssignee,
   ]);
 
@@ -307,6 +321,7 @@ export function CreateEventDialog({
       } else {
         await addScheduleEvent(payload);
         toast.success("Event added to the week.");
+        onCreated?.();
       }
       onOpenChange(false);
     } catch {

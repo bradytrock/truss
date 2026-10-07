@@ -218,11 +218,13 @@ export function NoteToAdminPanel({
 export function AssignRepDialog({
   alert,
   companyId,
+  viewerId,
   onClose,
   onSubmit,
 }: {
   alert: LeadAlert | null;
   companyId: string;
+  viewerId?: string;
   onClose: () => void;
   onSubmit: (repId: string, note: string) => Promise<void>;
 }) {
@@ -230,7 +232,14 @@ export function AssignRepDialog({
     <Dialog open={Boolean(alert)} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent aria-labelledby="assign-rep-title" className="sm:max-w-md">
         {alert ? (
-          <AssignRepPanel key={alert.id} alert={alert} companyId={companyId} onClose={onClose} onSubmit={onSubmit} />
+          <AssignRepPanel
+            key={alert.id}
+            alert={alert}
+            companyId={companyId}
+            viewerId={viewerId}
+            onClose={onClose}
+            onSubmit={onSubmit}
+          />
         ) : null}
       </DialogContent>
     </Dialog>
@@ -241,12 +250,14 @@ export function AssignRepPanel({
   alert,
   companyId,
   reps,
+  viewerId,
   onClose,
   onSubmit,
 }: {
   alert: LeadAlert;
   companyId: string;
   reps?: RepOption[];
+  viewerId?: string;
   onClose: () => void;
   onSubmit: (repId: string, note: string) => Promise<void>;
 }) {
@@ -325,7 +336,7 @@ export function AssignRepPanel({
         </div>
       ) : null}
       <label className="mt-4 block text-sm font-medium" htmlFor="assign-rep-search">
-        Project managers
+        Assigned to
       </label>
       <Input
         id="assign-rep-search"
@@ -335,10 +346,10 @@ export function AssignRepPanel({
         className="mt-2"
         autoComplete="off"
       />
-      <div role="radiogroup" aria-label="Project managers" className="mt-2 flex max-h-52 flex-col gap-1 overflow-y-auto">
-        {loaded === null ? <p className="text-sm text-muted-foreground">Loading reps…</p> : null}
+      <div role="radiogroup" aria-label="Assigned to" className="mt-2 flex max-h-52 flex-col gap-1 overflow-y-auto">
+        {loaded === null ? <p className="text-sm text-muted-foreground">Loading people…</p> : null}
         {loaded && choices.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No project managers to assign.</p>
+          <p className="text-sm text-muted-foreground">No one to assign.</p>
         ) : null}
         {choices.map((rep) => {
           const initials = rep.initials.trim() || initialsFromName(rep.fullName);
@@ -358,7 +369,7 @@ export function AssignRepPanel({
               <Avatar size="sm">
                 <AvatarFallback>{initials}</AvatarFallback>
               </Avatar>
-              <span>{rep.fullName}</span>
+              <span>{rep.id === viewerId ? `${rep.fullName} (you)` : rep.fullName}</span>
             </button>
           );
         })}

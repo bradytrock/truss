@@ -3145,6 +3145,7 @@ export type Database = {
           passed_back_by_name: string | null;
           passback_reason: string | null;
           handoff_note: string | null;
+          assigned_by: string | null;
           homeowner_name: string;
           street: string;
           city: string;
@@ -3165,6 +3166,7 @@ export type Database = {
           passed_back_by_name?: string | null;
           passback_reason?: string | null;
           handoff_note?: string | null;
+          assigned_by?: string | null;
           homeowner_name?: string;
           street?: string;
           city?: string;

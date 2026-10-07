@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { AddressStreetField } from "@/components/address-street-field";
+import { LeadAssigneeSelect } from "@/components/lead-assignee";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,6 +30,7 @@ import { localYmd } from "@/lib/format";
 import { DEFAULT_LEAD_STATE, defaultDeliveryForSource, formatJobSite } from "@/lib/leads";
 import { projectTypeForMarket } from "@/lib/market";
 import type { Contact } from "@/lib/types";
+import { assignmentOptions } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
 
 const emptySite = (): JobSiteFields => ({
@@ -48,6 +50,11 @@ export function ContactNewSeedDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const crm = useCrm();
+  const people = assignmentOptions(crm.viewer, crm.book.staff, crm.user.staffId, crm.user.role);
+  const defaultAssignee = people.find((member) => member.id === crm.user.staffId)?.id ?? people[0]?.id ?? "";
+  const [assigneeId, setAssigneeId] = useState(defaultAssignee);
+  const assignee = people.find((member) => member.id === assigneeId) ?? null;
+  const isMe = (assignee?.id || crm.viewer?.id || crm.user.staffId) === crm.user.staffId;
   const previousJob = useMemo(
     () => (contact ? previousJobForContact(contact, crm.jobs) : null),
     [contact, crm.jobs],
@@ -64,7 +71,8 @@ export function ContactNewSeedDialog({
     if (!open) return;
     setSameAsPrevious(canReuse);
     setNext(emptySite());
-  }, [open, canReuse, contact?.id]);
+    setAssigneeId(defaultAssignee);
+  }, [open, canReuse, contact?.id, defaultAssignee]);
 
   function patchNext(partial: Partial<JobSiteFields>) {
     setNext((current) => ({ ...current, ...partial }));
@@ -85,6 +93,8 @@ export function ContactNewSeedDialog({
     }
     const site = resolved.site;
     const source = contactSeedLeadSource(previousJob);
+    const owner = assignee ?? crm.viewer;
+    const kept = Boolean(owner && owner.id === crm.user.staffId);
     setSaving(true);
     try {
       const opportunity = await crm.addOpportunity({
@@ -99,10 +109,10 @@ export function ContactNewSeedDialog({
         projectType: projectTypeForMarket(previousJob?.market ?? "residential"),
         market: previousJob?.market ?? "residential",
         deliveryMethod: defaultDeliveryForSource(source),
-        estimator: crm.user.name,
-        ownerStaffId: contact.ownerStaffId || crm.user.staffId,
+        estimator: owner?.name || crm.user.name,
+        ownerStaffId: owner?.id || crm.user.staffId,
         originatorStaffId: crm.user.staffId,
-        nextStep: "Call back within 5 minutes.",
+        nextStep: kept ? "Set an appointment or skip." : "Call back within 5 minutes.",
         leadSource: source,
         referralContactId: null,
         street: site.street,
@@ -115,16 +125,24 @@ export function ContactNewSeedDialog({
         entityType: "opportunity",
         entityId: opportunity.id,
         type: "note",
-        body: `Seed opened from Contacts for ${contact.name} at ${formatJobSite(site)}.`,
+        body: kept
+          ? `Lead opened from Contacts for ${contact.name} at ${formatJobSite(site)}.`
+          : `Seed opened from Contacts for ${contact.name} at ${formatJobSite(site)}. ${owner?.name || "The project manager"} is assigned.`,
       });
-      await crm.addTask({
-        title: `Call ${contact.name} back`,
-        dueAt: localYmd(new Date()),
-        relatedType: "opportunity",
-        relatedId: opportunity.id,
-        assignee: crm.user.name,
-      });
-      toast.success(`Seed opened: ${opportunity.code}.`);
+      if (!kept) {
+        await crm.addTask({
+          title: `Call ${contact.name} back`,
+          dueAt: localYmd(new Date()),
+          relatedType: "opportunity",
+          relatedId: opportunity.id,
+          assignee: owner?.name || crm.user.name,
+        });
+      }
+      toast.success(
+        kept
+          ? `Lead opened: ${opportunity.code}.`
+          : `Seed opened: ${opportunity.code}. ${owner?.name || "They"} is the project manager.`,
+      );
       onOpenChange(false);
     } catch {
       // Store already toasted.
@@ -139,15 +157,28 @@ export function ContactNewSeedDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>New seed</DialogTitle>
+          <DialogTitle>{isMe ? "New lead" : "New seed"}</DialogTitle>
           <DialogDescription>
-            Opens a seed for {contact?.name || "this contact"} using their phone and email.
+            {isMe
+              ? `This opens a lead for ${contact?.name || "this contact"} on your book. Set an appointment or skip.`
+              : `Assigned to is the project manager. ${assignee?.name || "They"} gets this seed for ${contact?.name || "this contact"}.`}
             {canReuse
               ? " Use the last job address or enter a new one."
               : " Enter the job site address."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-3">
+          {people.length > 0 ? (
+            <div className="grid gap-1.5">
+              <Label htmlFor="seed-assignee">Assigned to</Label>
+              <LeadAssigneeSelect
+                id="seed-assignee"
+                value={assigneeId}
+                people={people}
+                onChange={setAssigneeId}
+              />
+            </div>
+          ) : null}
           {canReuse ? (
             <div className="grid gap-2">
               <p className="text-sm font-medium">Job site</p>
@@ -233,7 +264,7 @@ export function ContactNewSeedDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={saving || !contact}>
-              {saving ? "Opening…" : "Open seed"}
+              {saving ? "Opening…" : isMe ? "Open lead" : "Open seed"}
             </Button>
           </DialogFooter>
         </form>
