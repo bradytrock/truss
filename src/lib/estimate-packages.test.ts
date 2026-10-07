@@ -18,6 +18,13 @@ import {
   optionHighlightLabels,
   cheapestOptionKey,
   gbbPrintSections,
+  gbbBanner,
+  gbbCardIdentity,
+  gbbCardOrder,
+  gbbFeatureRows,
+  gbbMonthlyAbout,
+  gbbNoteFromIntro,
+  gbbPriceNote,
 } from "./estimate-packages.ts";
 
 assert.equal(parseLinePackage(" opt_2 "), "opt_2");
@@ -134,5 +141,98 @@ assert.deepEqual(
   printed.map((section) => `${section.kind}:${section.name}:${section.lines.length}`),
   ["shared:Included in every option:1", "option:Good:1", "option:Better:1", "option:Best:1"],
 );
+
+const roof = [
+  { package: "", title: "Full tear-off & decking inspection", sortOrder: 0 },
+  { package: "", title: "New architectural shingles", sortOrder: 1 },
+  { package: "best", groupName: "Storm Shield", title: "Class 4 impact-resistant shingles", sortOrder: 2 },
+  { package: "better", groupName: "Full System", title: "Class 4 impact-resistant shingles", sortOrder: 2 },
+  { package: "best", groupName: "Storm Shield", title: "Synthetic underlayment", sortOrder: 3 },
+  { package: "better", groupName: "Full System", title: "Synthetic underlayment", sortOrder: 3 },
+  { package: "best", groupName: "Storm Shield", title: "Ice & water shield in valleys", sortOrder: 4 },
+  { package: "better", groupName: "Full System", title: "Ice & water shield in valleys", sortOrder: 4 },
+  { package: "best", groupName: "Storm Shield", title: "Matched manufacturer system", sortOrder: 5 },
+  { package: "best", groupName: "Storm Shield", title: "Upgraded attic ventilation", sortOrder: 6 },
+  { package: "good", groupName: "Essential", title: "Upgraded attic ventilation", sortOrder: 6 },
+  { package: "best", groupName: "Storm Shield", title: "15-year workmanship warranty", sortOrder: 7 },
+  { package: "better", groupName: "Full System", title: "10-year workmanship warranty", sortOrder: 7 },
+  { package: "good", groupName: "Essential", title: "5-year workmanship warranty", sortOrder: 7 },
+];
+const roofOptions = [
+  { key: "good", name: "Good" },
+  { key: "better", name: "Better" },
+  { key: "best", name: "Best" },
+];
+const roofTotal = (key: string) => (key === "best" ? 24850 : key === "better" ? 19400 : 16200);
+
+assert.deepEqual(
+  gbbCardOrder(roofOptions, roofTotal).map((item) => item.key),
+  ["best", "better", "good"],
+);
+assert.equal(gbbMonthlyAbout(24850), 297);
+assert.equal(gbbMonthlyAbout(19400), 232);
+assert.equal(gbbMonthlyAbout(16200), 194);
+assert.equal(gbbMonthlyAbout(0), null);
+assert.deepEqual(gbbBanner("best", roofOptions, roofTotal), {
+  label: "Maximum protection",
+  tone: "ink",
+});
+assert.deepEqual(gbbBanner("better", roofOptions, roofTotal), {
+  label: "Most popular",
+  tone: "popular",
+});
+assert.deepEqual(gbbBanner("good", roofOptions, roofTotal), {
+  label: "Lowest investment",
+  tone: "ink",
+});
+assert.deepEqual(gbbCardIdentity("best", roof, "Best"), {
+  grade: "Best",
+  title: "Storm Shield",
+  tagline: "Built for the next hailstorm",
+  chooseLabel: "Best",
+});
+assert.equal(gbbCardIdentity("good", [{ package: "good", groupName: "Good" }], "Good").grade, null);
+assert.deepEqual(gbbPriceNote("best", roofOptions, roofTotal), {
+  kind: "delta",
+  amount: 5450,
+  versus: "Better",
+});
+assert.deepEqual(gbbPriceNote("better", roofOptions, roofTotal), {
+  kind: "delta",
+  amount: 3200,
+  versus: "Good",
+});
+assert.deepEqual(gbbPriceNote("good", roofOptions, roofTotal), { kind: "start" });
+
+const features = gbbFeatureRows(roof, ["best", "better", "good"]);
+assert.deepEqual(
+  features.map((row) => row.key),
+  [
+    "full tear off decking inspection",
+    "new architectural shingles",
+    "class 4 impact resistant shingles",
+    "synthetic underlayment",
+    "ice water shield in valleys",
+    "matched manufacturer system",
+    "upgraded attic ventilation",
+    "workmanship warranty",
+  ],
+);
+assert.equal(features[2]?.labels.good, undefined);
+assert.equal(features[2]?.labels.better, "Class 4 impact-resistant shingles");
+assert.equal(features[6]?.labels.better, undefined);
+assert.equal(features[6]?.labels.good, "Upgraded attic ventilation");
+assert.equal(features[7]?.labels.best, "15-year workmanship warranty");
+assert.equal(features[7]?.labels.better, "10-year workmanship warranty");
+assert.equal(features[7]?.labels.good, "5-year workmanship warranty");
+assert.equal(features[7]?.canonical, "15-year workmanship warranty");
+assert.deepEqual(
+  gbbNoteFromIntro("Why Class 4 matters in DFW\nImpact-resistant shingles take a harder hit."),
+  {
+    title: "Why Class 4 matters in DFW",
+    body: "Impact-resistant shingles take a harder hit.",
+  },
+);
+assert.equal(gbbNoteFromIntro("   "), null);
 
 console.log("estimate-packages tests passed");
