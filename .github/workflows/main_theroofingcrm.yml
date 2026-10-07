@@ -40,17 +40,24 @@ jobs:
           mv .next/standalone/.next .next/standalone/next-server
           printf '%s\n' \
             '#!/bin/sh' \
-            'cd "$(dirname "$0")"' \
-            'if [ ! -d .next ] && [ -d next-server ]; then' \
+            'cd /home/site/wwwroot 2>/dev/null || cd "$(dirname "$0")"' \
+            'echo "start.sh cwd=$(pwd)"' \
+            'if [ -d next-server ]; then' \
+            '  rm -rf .next' \
             '  mv next-server .next' \
             'fi' \
+            'ls -d .next >/dev/null || echo "start.sh missing .next"' \
             'exec node server.js' \
             > .next/standalone/start.sh
           chmod +x .next/standalone/start.sh
+          # Azure runs `npm start` from this package.json and ignores a
+          # startup command that is only `node server.js`.
+          node -e 'const fs=require("fs"); const p=".next/standalone/package.json"; const pkg=JSON.parse(fs.readFileSync(p,"utf8")); pkg.scripts={...(pkg.scripts||{}), start:"sh start.sh"}; fs.writeFileSync(p, JSON.stringify(pkg,null,2)+"\n");'
           (cd .next/standalone && zip -qr "$GITHUB_WORKSPACE/standalone.zip" .)
           unzip -l standalone.zip | grep -q 'server.js'
           unzip -l standalone.zip | grep -q 'start.sh'
           unzip -l standalone.zip | grep -q 'next-server/'
+          unzip -p standalone.zip package.json | grep -q 'sh start.sh'
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
