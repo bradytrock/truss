@@ -125,7 +125,7 @@ export function PipelineBoard({ query }: { query: string }) {
       onDragCancel={() => setActiveId(null)}
     >
       <KanbanScroller>
-        <div className="flex min-h-[32rem] gap-3 pb-3">
+        <div className="flex min-h-[32rem] gap-2 pb-3">
           {SELECTABLE_PIPELINE_STAGES.map((stage) => {
             const cards = filtered.filter((opportunity) =>
               stage === "supplementing"
@@ -182,21 +182,21 @@ function PipelineColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex w-[272px] shrink-0 flex-col rounded-md border bg-card",
+        "flex w-[168px] shrink-0 flex-col rounded-md border bg-card",
         isOver && "border-primary"
       )}
     >
-      <div className="border-b px-3 py-2.5">
-        <div className="flex items-center gap-2">
-          <span className={cn("size-1.5 rounded-full", columnAccent[stage])} />
-          <h2 className="text-sm font-medium">{STAGE_LABELS[stage]}</h2>
-          <span className="ml-auto text-xs tabular-nums text-muted-foreground">{count}</span>
+      <div className="border-b px-1.5 py-1.5">
+        <div className="flex items-center gap-1">
+          <span className={cn("size-1.5 shrink-0 rounded-full", columnAccent[stage])} />
+          <h2 className="min-w-0 truncate text-xs font-medium">{STAGE_LABELS[stage]}</h2>
+          <span className="ml-auto shrink-0 text-[11px] tabular-nums text-muted-foreground">{count}</span>
         </div>
-        <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+        <p className="mt-0.5 truncate text-[11px] tabular-nums text-muted-foreground">
           {count === 0 ? "No work in this stage" : formatCurrency(total)}
         </p>
       </div>
-      <div className="flex flex-1 flex-col gap-2 p-2">{children}</div>
+      <div className="flex flex-1 flex-col gap-1 p-1">{children}</div>
     </div>
   );
 }
@@ -230,22 +230,22 @@ function OpportunityCard({
       ref={setNodeRef}
       size="sm"
       className={cn(
-          "bg-card shadow-none",
+          "bg-card shadow-none [--card-spacing:--spacing(1.5)]",
           isDragging && !overlay && "opacity-40",
-          overlay && "w-[248px] shadow-md"
+          overlay && "w-[158px] shadow-md"
       )}
     >
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-1">
         <div>
-          <div className="flex items-start gap-1">
+          <div className="flex items-start gap-0.5">
             <button
               type="button"
-              className="mt-0.5 cursor-grab touch-none text-muted-foreground hover:text-foreground"
+              className="mt-px cursor-grab touch-none text-muted-foreground hover:text-foreground"
               aria-label="Drag pursuit"
               {...listeners}
               {...attributes}
             >
-              <GripVertical className="size-3.5" />
+              <GripVertical className="size-3" />
             </button>
             <div className="min-w-0 flex-1">
               <RecordCode code={opportunity.code} />
@@ -254,21 +254,21 @@ function OpportunityCard({
           <div className="mt-0.5 w-full">
             <Link
               href={`/opportunities/${opportunity.id}`}
-              className="block text-sm font-medium leading-snug hover:underline"
+              className="block text-xs font-medium leading-tight hover:underline"
             >
               {details.title}
             </Link>
             {details.streetLine ? (
-              <p className="mt-0.5 text-sm font-medium leading-snug">{details.streetLine}</p>
+              <p className="mt-0.5 text-xs font-medium leading-tight">{details.streetLine}</p>
             ) : null}
             {details.locality ? (
-              <p className="mt-0.5 text-xs leading-snug">{details.locality}</p>
+              <p className="mt-0.5 text-[11px] leading-tight">{details.locality}</p>
             ) : null}
             {details.showLocation && !details.streetLine && !details.locality ? (
-              <p className="mt-0.5 text-sm leading-snug">{details.location}</p>
+              <p className="mt-0.5 text-xs leading-tight">{details.location}</p>
             ) : null}
             {details.showCustomer ? (
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">{details.customer}</p>
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{details.customer}</p>
             ) : null}
             {opportunity.leadSource ? (
               <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
@@ -277,15 +277,15 @@ function OpportunityCard({
             ) : null}
           </div>
         </div>
-        <div className="flex items-center justify-between gap-2">
-          <span className="font-heading text-sm font-medium tabular-nums">
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="font-heading text-xs font-medium tabular-nums">
             {formatCurrency(opportunity.value)}
           </span>
           <MarketBadge market={parseMarket(opportunity.market, opportunity.projectType)} />
           <TypeBadge type={opportunity.projectType} />
         </div>
         {opportunity.bidDueAt ? (
-          <div className="flex items-center justify-end text-xs text-muted-foreground">
+          <div className="flex items-center justify-end text-[11px] text-muted-foreground">
             <span
               className={cn(
                 "shrink-0 tabular-nums",
