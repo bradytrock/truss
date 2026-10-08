@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import {
+  BadgeCheck,
   FileArchive,
   FileSpreadsheet,
   FileText,
@@ -13,6 +14,7 @@ import {
   Paperclip,
   Trash2,
 } from "lucide-react";
+import { CompletionCertificateDialog } from "@/components/completion-certificate-dialog";
 import { toast } from "sonner";
 import { CompanyFilePickerList } from "@/components/company-files";
 import { FileDropZone } from "@/components/file-drop-zone";
@@ -41,8 +43,10 @@ export function JobFilesPanel({
   const [uploading, setUploading] = useState(false);
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [directoryOpen, setDirectoryOpen] = useState(false);
+  const [certificateOpen, setCertificateOpen] = useState(false);
   const [attachingFromDirectory, setAttachingFromDirectory] = useState(false);
   const files = (crm.jobFiles ?? []).filter((file) => file.jobId === jobId);
+  const job = crm.getJob(jobId);
 
   async function attach(list: FileList | File[] | null) {
     const incoming = list ? Array.from(list) : [];
@@ -130,7 +134,7 @@ export function JobFilesPanel({
           </p>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {files.length === 0
-              ? "Drop files onto this job, or use Attach."
+              ? "Drop files onto this job, attach one, or generate a certificate."
               : `${files.length} file${files.length === 1 ? "" : "s"} · private unless you share a link`}
           </p>
         </div>
@@ -144,6 +148,17 @@ export function JobFilesPanel({
           onChange={(event) => void attach(event.target.files)}
         />
         <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={disabled || !job || uploading || attachingFromDirectory}
+            title="Certificate of completion"
+            onClick={() => setCertificateOpen(true)}
+          >
+            <BadgeCheck data-icon="inline-start" />
+            Certificate
+          </Button>
           <Button
             type="button"
             size="sm"
@@ -165,6 +180,9 @@ export function JobFilesPanel({
           </Button>
         </div>
       </div>
+      {job ? (
+        <CompletionCertificateDialog job={job} open={certificateOpen} onOpenChange={setCertificateOpen} />
+      ) : null}
       <Dialog open={directoryOpen} onOpenChange={setDirectoryOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
