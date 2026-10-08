@@ -126,6 +126,62 @@ export function legacyKindlessObjectKey(path: string) {
   return "";
 }
 
+/** `{companyId}/{kind}/…` ↔ `{kind}/{companyId}/…` */
+export function swapCompanyAndKind(path: string) {
+  const parts = path.replace(/^\/+/, "").split("/");
+  if (parts.length < 3) return "";
+  const [first, second, ...rest] = parts;
+  if (!first || !second) return "";
+  if (isCompanyId(first) && isStorageKindValue(second)) {
+    return [second, first, ...rest].join("/");
+  }
+  if (isStorageKindValue(first) && isCompanyId(second)) {
+    return [second, first, ...rest].join("/");
+  }
+  return "";
+}
+
+/**
+ * Blob names to try for one stored file.
+ * Canonical company-first, the older kindless key, and the kind-first key.
+ */
+export function storageReadKeys(path: string) {
+  const keys: string[] = [];
+  const add = (candidate: string) => {
+    const value = candidate.replace(/^\/+/, "");
+    if (!value || value.includes("..") || keys.includes(value)) return;
+    keys.push(value);
+  };
+  const clean = path.replace(/^\/+/, "");
+  add(clean);
+  add(legacyKindlessObjectKey(clean));
+  const swapped = swapCompanyAndKind(clean);
+  add(swapped);
+  if (swapped) add(legacyKindlessObjectKey(swapped));
+  return keys;
+}
+
+/** A folder sitting in front of every company id, such as the old bucket name. */
+export function isBlobWrapperPrefix(prefix: string) {
+  const segment = prefix.replace(/^\/+|\/+$/g, "").split("/")[0] || "";
+  if (!segment || segment.startsWith("$") || segment.includes("..")) return false;
+  if (isCompanyId(segment) || isStorageKindValue(segment)) return false;
+  return true;
+}
+
+export function prefixedStorageKeys(prefixes: string[], keys: string[]) {
+  const out: string[] = [];
+  for (const prefix of prefixes) {
+    const segment = prefix.replace(/^\/+|\/+$/g, "");
+    if (!isBlobWrapperPrefix(segment)) continue;
+    for (const key of keys) {
+      const candidate = `${segment}/${key}`;
+      if (!out.includes(candidate)) out.push(candidate);
+    }
+  }
+  return out;
+}
+
 function pushAllowedKey(keys: string[], key: string) {
   const clean = key.replace(/^\/+/, "");
   if (!clean || !isAllowedObjectKey(clean) || keys.includes(clean)) return;

@@ -11,7 +11,13 @@ import {
 } from "@/lib/storage/b2-legacy";
 import { companyStoragePrefix, objectKeyFromStoredPath, storageObjectKey } from "@/lib/storage/keys";
 import { isMissingStorageError, readableToBytes, type StoredObject } from "@/lib/storage/object-body";
-import { isCompanyId, legacyKindlessObjectKey, publicObjectUrl } from "@/lib/storage/urls";
+import {
+  isBlobWrapperPrefix,
+  isCompanyId,
+  prefixedStorageKeys,
+  publicObjectUrl,
+  storageReadKeys,
+} from "@/lib/storage/urls";
 
 export { STORAGE_KINDS, isStorageKind, type StorageKind };
 export { isB2Configured, b2Config, b2FailureMessage };
@@ -122,15 +128,66 @@ async function downloadAzure(key: string): Promise<StoredObject> {
   };
 }
 
-async function downloadAzureWithLegacy(path: string): Promise<StoredObject> {
-  const key = path.replace(/^\/+/, "");
-  try {
-    return await downloadAzure(key);
-  } catch (error) {
-    const fallback = isMissingStorageError(error) ? legacyKindlessObjectKey(key) : "";
-    if (!fallback) throw error;
-    return await downloadAzure(fallback);
+const KNOWN_BLOB_WRAPPERS = ["TheCRM", "thecrm"];
+let cachedWrapperPrefixes: string[] | null = null;
+let pinnedWrapperPrefix = "";
+
+async function downloadFirstExisting(keys: string[]): Promise<StoredObject> {
+  let lastError: unknown = new Error("The specified blob does not exist.");
+  for (const key of keys) {
+    try {
+      return await downloadAzure(key);
+    } catch (error) {
+      if (!isMissingStorageError(error)) throw error;
+      lastError = error;
+    }
   }
+  throw lastError;
+}
+
+function rememberWrapper(foundKey: string, plainKeys: string[]) {
+  if (plainKeys.includes(foundKey)) return;
+  const segment = foundKey.split("/")[0] || "";
+  if (!isBlobWrapperPrefix(segment) || pinnedWrapperPrefix === segment) return;
+  pinnedWrapperPrefix = segment;
+  console.info(`[storage] reading blobs under ${segment}/`);
+}
+
+async function blobWrapperPrefixes() {
+  if (cachedWrapperPrefixes) return cachedWrapperPrefixes;
+  const found = new Set<string>(KNOWN_BLOB_WRAPPERS);
+  try {
+    const container = await getContainerClient();
+    let scanned = 0;
+    for await (const item of container.listBlobsByHierarchy("/")) {
+      scanned += 1;
+      if (item.kind === "prefix" && item.name && isBlobWrapperPrefix(item.name)) {
+        found.add(item.name.replace(/\/+$/, ""));
+      }
+      if (scanned > 500) break;
+    }
+  } catch (error) {
+    console.error("[storage] list blob prefixes", error);
+  }
+  cachedWrapperPrefixes = [...found];
+  return cachedWrapperPrefixes;
+}
+
+async function downloadAzureWithLegacy(path: string): Promise<StoredObject> {
+  const keys = storageReadKeys(path);
+  const pinned = pinnedWrapperPrefix ? prefixedStorageKeys([pinnedWrapperPrefix], keys) : [];
+  try {
+    const object = await downloadFirstExisting([...pinned, ...keys]);
+    rememberWrapper(object.key, keys);
+    return object;
+  } catch (error) {
+    if (!isMissingStorageError(error) || pinnedWrapperPrefix) throw error;
+  }
+
+  const prefixed = prefixedStorageKeys(await blobWrapperPrefixes(), keys);
+  const object = await downloadFirstExisting(prefixed);
+  rememberWrapper(object.key, keys);
+  return object;
 }
 
 export async function getStoredObject(path: string): Promise<StoredObject> {

@@ -95,7 +95,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     const message = b2FailureMessage(error, "Could not read that file.");
-    const missing = /NoSuchKey|NotFound|404|Key not found|NoSuchBucket/i.test(message);
+    const missing = /NoSuchKey|NotFound|404|Key not found|NoSuchBucket|BlobNotFound|specified blob does not exist/i.test(message);
     console.error("[storage/object]", error);
     return NextResponse.json(
       { error: missing ? "File not found." : message },

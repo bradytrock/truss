@@ -9,7 +9,7 @@ import {
 import { STORAGE_KINDS, type StorageKind } from "@/lib/storage/kinds";
 import { resolveB2Location } from "@/lib/storage/b2-region.mjs";
 import { companyStoragePrefix, storageObjectKey } from "@/lib/storage/keys";
-import { isCompanyId, legacyKindlessObjectKey, publicObjectUrl } from "@/lib/storage/urls";
+import { isCompanyId, publicObjectUrl, storageReadKeys } from "@/lib/storage/urls";
 import { isMissingStorageError, type StoredObject } from "@/lib/storage/object-body";
 
 export function b2Config() {
@@ -89,13 +89,17 @@ export async function getObjectFromB2(path: string): Promise<StoredObject> {
 }
 
 export async function getObjectFromB2WithLegacy(path: string): Promise<StoredObject> {
-  try {
-    return await getObjectFromB2(path);
-  } catch (error) {
-    const fallback = isMissingStorageError(error) ? legacyKindlessObjectKey(path) : "";
-    if (!fallback) throw error;
-    return await getObjectFromB2(fallback);
+  const keys = storageReadKeys(path);
+  let lastError: unknown = new Error("The specified blob does not exist.");
+  for (const key of keys) {
+    try {
+      return await getObjectFromB2(key);
+    } catch (error) {
+      if (!isMissingStorageError(error)) throw error;
+      lastError = error;
+    }
   }
+  throw lastError;
 }
 
 export async function uploadToB2(input: {

@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import {
+  isBlobWrapperPrefix,
   legacyKindlessObjectKey,
   objectKeyFromStoredUrl,
+  prefixedStorageKeys,
   resolveStoredFileUrl,
+  storageReadKeys,
   storedObjectKeyCandidates,
 } from "./urls.ts";
 
@@ -15,6 +18,19 @@ const b2 = `https://f005.backblazeb2.com/file/TheCRM/${canonical}`;
 
 assert.equal(legacyKindlessObjectKey(canonical), kindless);
 assert.equal(legacyKindlessObjectKey(kindless), "");
+
+const jobFile = `${company}/job-files/${uploadId}/file.pdf`;
+assert.deepEqual(storageReadKeys(jobFile), [
+  jobFile,
+  `${company}/${uploadId}/file.pdf`,
+  `job-files/${company}/${uploadId}/file.pdf`,
+]);
+assert.equal(isBlobWrapperPrefix("TheCRM"), true);
+assert.equal(isBlobWrapperPrefix(company), false);
+assert.equal(isBlobWrapperPrefix("job-files"), false);
+assert.deepEqual(prefixedStorageKeys(["TheCRM", company, "job-files"], [jobFile]), [
+  `TheCRM/${jobFile}`,
+]);
 
 const candidates = storedObjectKeyCandidates({
   storagePath: kindless,
