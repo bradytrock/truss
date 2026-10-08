@@ -856,7 +856,7 @@ async function runTool(
           }
         }
       }
-      await crm.recordPayment({
+      const saved = await crm.recordPayment({
         invoiceId: invoice?.id ?? null,
         jobId: job?.id ?? invoice?.jobId ?? null,
         amount,
@@ -865,6 +865,7 @@ async function runTool(
         reference,
         file,
       });
+      if (!saved) return fail("Could not record the payment.");
       return ok(
         { amount, invoiceId: invoice?.id, jobId: job?.id },
         invoice

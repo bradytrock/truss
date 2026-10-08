@@ -1262,7 +1262,7 @@ type CrmContextValue = CrmState & {
     reference: string;
     receiptUrl?: string;
     file?: File;
-  }) => Promise<void>;
+  }) => Promise<boolean>;
   addExpense: (input: {
     jobId: string | null;
     vendor: string;
@@ -7765,9 +7765,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ? state.invoices.find((item) => item.id === input.invoiceId)
         : undefined;
       const jobId = input.jobId ?? invoice?.jobId ?? null;
+      const job = jobId ? state.jobs.find((item) => item.id === jobId) : undefined;
+      const opportunityId = job?.opportunityId ?? null;
       if (!input.invoiceId && !jobId) {
         toast.error("Tie the payment to a job or an invoice.");
-        return;
+        return false;
       }
       let receiptUrl = input.receiptUrl?.trim() ?? "";
       let receiptStoragePath: string | null = null;
@@ -7782,7 +7784,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             receiptUrl = uploaded.publicUrl;
           } catch (error) {
             toast.error(error instanceof Error ? error.message : "Could not upload the receipt.");
-            return;
+            return false;
           }
         } else {
           receiptUrl = await fileToDataUrl(input.file);
@@ -7790,7 +7792,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       if (!receiptUrl) {
         toast.error("Photograph the check, remit, or deposit slip. Every payment keeps the image.");
-        return;
+        return false;
       }
       const payment = fillPayment({
         id: crypto.randomUUID(),
@@ -7839,21 +7841,23 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           detail: `Payment of ${payment.amount} recorded`,
           relatedJobId: payment.jobId,
         });
-        return;
+        return true;
       }
+      const actor = actorUuid(user);
       const payload = {
         id: payment.id,
         company_id: user.companyId,
         invoice_id: payment.invoiceId,
         job_id: payment.jobId,
+        opportunity_id: opportunityId,
         amount: payment.amount,
         method: payment.method,
         paid_at: payment.paidAt,
         reference: payment.reference,
         receipt_url: payment.receiptUrl,
-        receipt_storage_path: payment.receiptStoragePath,
+        receipt_storage_path: payment.receiptStoragePath || "",
         qb_status: payment.qbStatus,
-        created_by: payment.createdBy,
+        ...(actor ? { created_by: actor } : {}),
       };
       let { data, error } = await supabase.from("payments").insert(payload).select("*").single();
       const uuidRetry = withCreatedByRetry(payload, user, error);
@@ -7862,11 +7866,21 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         data = retryUuid.data;
         error = retryUuid.error;
       }
+      if (error && /opportunity_id/i.test(error.message ?? "")) {
+        const { opportunity_id: _opportunityId, ...withoutOpportunity } = payload;
+        const retryOpportunity = await supabase
+          .from("payments")
+          .insert(withoutOpportunity)
+          .select("*")
+          .single();
+        data = retryOpportunity.data;
+        error = retryOpportunity.error;
+      }
       if (error && isMissingFinancials(error)) {
         if (!payment.invoiceId) {
           toast.error(missingFinancialsMessage());
           setState((prev) => ({ ...prev, payments: [payment, ...prev.payments] }));
-          return;
+          return true;
         }
         const retry = await supabase
           .from("payments")
@@ -7885,8 +7899,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         if (!error) toast.message(missingFinancialsMessage());
       }
       if (error || !data) {
-        toast.error(error?.message ?? "Could not record the payment.");
-        return;
+        const message = error?.message ?? "Could not record the payment.";
+        toast.error(
+          /payments_has_job_or_invoice/i.test(message)
+            ? "Tie the payment to an invoice, or open it from a job that came from a lead."
+            : message,
+        );
+        return false;
       }
       const saved = { ...mapPayment(data), createdBy: user.name };
       const nextPayments = [saved, ...state.payments];
@@ -7938,8 +7957,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         invoiceId: saved.invoiceId ?? undefined,
         jobId: saved.jobId ?? undefined,
       });
+      return true;
     },
-    [addActivity, recordCompanyAudit, state.invoiceLines, state.invoices, state.payments, user.companyId, user.id, user.name, user.staffId]
+    [addActivity, recordCompanyAudit, state.invoiceLines, state.invoices, state.jobs, state.payments, user.companyId, user.id, user.name, user.staffId]
   );
 
   const addExpense = useCallback(

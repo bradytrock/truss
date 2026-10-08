@@ -1004,6 +1004,7 @@ export type Database = {
           company_id: string;
           invoice_id: string | null;
           job_id: string | null;
+          opportunity_id: string | null;
           estimate_id: string | null;
           amount: number;
           method: string;
@@ -1026,6 +1027,7 @@ export type Database = {
           company_id: string;
           invoice_id?: string | null;
           job_id?: string | null;
+          opportunity_id?: string | null;
           estimate_id?: string | null;
           amount: number;
           method?: string;
