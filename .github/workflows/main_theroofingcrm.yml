@@ -42,11 +42,23 @@ jobs:
             '#!/bin/sh' \
             'cd /home/site/wwwroot 2>/dev/null || cd "$(dirname "$0")"' \
             'echo "start.sh cwd=$(pwd)"' \
-            'if [ -d next-server ]; then' \
+            'lock="/home/site/wwwroot/.start.lock"' \
+            'if command -v flock >/dev/null 2>&1; then' \
+            '  exec 9>"$lock"' \
+            '  if ! flock -n 9; then' \
+            '    echo "start.sh another process holds the server lock"' \
+            '    while true; do sleep 3600; done' \
+            '  fi' \
+            'fi' \
+            'if [ -d next-server ] && [ ! -f .next/BUILD_ID ]; then' \
             '  rm -rf .next' \
             '  mv next-server .next' \
             'fi' \
-            'ls -d .next >/dev/null || echo "start.sh missing .next"' \
+            'if [ ! -f .next/BUILD_ID ]; then' \
+            '  echo "start.sh missing .next/BUILD_ID"' \
+            '  ls -la' \
+            '  exit 1' \
+            'fi' \
             'exec node server.js' \
             > .next/standalone/start.sh
           chmod +x .next/standalone/start.sh
@@ -122,16 +134,26 @@ jobs:
           set -euo pipefail
           host=$(az webapp show --name "$APP_NAME" --resource-group "$APP_RG" --query defaultHostName -o tsv)
           url="https://${host}/login"
+          echo "Restarting ${APP_NAME} so start.sh runs on the new package"
+          az webapp restart --name "$APP_NAME" --resource-group "$APP_RG"
           echo "Checking ${url}"
-          for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+          ok=0
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16; do
             code=$(curl -sS -o /tmp/app-body.html -w "%{http_code}" --max-time 30 "$url" || true)
             echo "attempt ${i}: ${code}"
             if [ "$code" = "200" ] || [ "$code" = "307" ] || [ "$code" = "302" ]; then
-              exit 0
+              ok=$((ok + 1))
+              if [ "$ok" -ge 2 ]; then
+                exit 0
+              fi
+            else
+              ok=0
             fi
             sleep 15
           done
           echo "App Service did not become ready."
           head -c 500 /tmp/app-body.html || true
+          echo
+          az webapp log tail --name "$APP_NAME" --resource-group "$APP_RG" --timeout 20 || true
           exit 1
           
