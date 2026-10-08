@@ -7902,7 +7902,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         const message = error?.message ?? "Could not record the payment.";
         toast.error(
           /payments_has_job_or_invoice/i.test(message)
-            ? "Tie the payment to an invoice, or open it from a job that came from a lead."
+            ? "Tie the payment to a job or an invoice."
             : message,
         );
         return false;
