@@ -3389,6 +3389,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         input.ownerStaffId ||
         staffByName(input.estimator, state.staff)?.id ||
         user.staffId;
+      const ownerName =
+        state.staff.find((member) => member.id === ownerStaffId)?.name?.trim() || input.estimator;
       const originatorStaffId = input.originatorStaffId || user.staffId;
       const code = allocateCode(
         jobCodeOwnerName({
@@ -3425,7 +3427,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             : fillJobRecord(
                 jobDraftFromOpportunity(opportunity, {
                   ownerStaffId,
-                  projectManager: opportunity.estimator,
+                  projectManager: ownerName,
                 }),
                 opportunity,
               );
@@ -3590,7 +3592,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               jobDraftFromOpportunity(opportunity, {
                 id: crypto.randomUUID(),
                 ownerStaffId,
-                projectManager: opportunity.estimator,
+                projectManager: ownerName,
               }),
               opportunity,
             );

@@ -20,7 +20,7 @@ import {
   passbackSummary,
   type LeadAlert,
 } from "@/lib/lead-alerts";
-import { listProjectManagers, type RepOption } from "@/lib/lead-alerts-api";
+import { listLeadAssignees, type RepOption } from "@/lib/lead-alerts-api";
 import { createClient } from "@/lib/supabase/client";
 import { initialsFromName } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -264,7 +264,7 @@ export function AssignRepPanel({
     if (reps) return;
     let cancelled = false;
     const supabase = createClient();
-    listProjectManagers(supabase, companyId)
+    listLeadAssignees(supabase, companyId)
       .then((rows) => {
         if (!cancelled) setLoaded(rows);
       })
@@ -325,7 +325,7 @@ export function AssignRepPanel({
         </div>
       ) : null}
       <label className="mt-4 block text-sm font-medium" htmlFor="assign-rep-search">
-        Project managers
+        Assign to
       </label>
       <Input
         id="assign-rep-search"
@@ -335,10 +335,10 @@ export function AssignRepPanel({
         className="mt-2"
         autoComplete="off"
       />
-      <div role="radiogroup" aria-label="Project managers" className="mt-2 flex max-h-52 flex-col gap-1 overflow-y-auto">
-        {loaded === null ? <p className="text-sm text-muted-foreground">Loading reps…</p> : null}
+      <div role="radiogroup" aria-label="Assign to" className="mt-2 flex max-h-52 flex-col gap-1 overflow-y-auto">
+        {loaded === null ? <p className="text-sm text-muted-foreground">Loading people…</p> : null}
         {loaded && choices.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No project managers to assign.</p>
+          <p className="text-sm text-muted-foreground">No one to assign.</p>
         ) : null}
         {choices.map((rep) => {
           const initials = rep.initials.trim() || initialsFromName(rep.fullName);
