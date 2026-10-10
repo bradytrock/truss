@@ -22,6 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, ErrorBanner, LoadingScreen } from "@/components/page-chrome";
 import { InboxChannelSwitch } from "@/components/inbox-channel-switch";
+import { InboxScroll } from "@/components/inbox-scroll";
 import { askCassio } from "@/lib/assistant/ask";
 import { ASSISTANT_ASK_LABEL } from "@/lib/product";
 import { useCrm } from "@/lib/crm-store";
@@ -285,7 +286,7 @@ export function MailInbox() {
             paneOpen && "hidden lg:flex",
           )}
         >
-          <div className="border-b px-4 py-3">
+          <div className="shrink-0 border-b px-4 py-3">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
@@ -374,7 +375,7 @@ export function MailInbox() {
               />
             </div>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <InboxScroll>
             {visibleThreads.length === 0 ? (
               <div className="px-4 py-8">
                 {threads.length === 0 ? (
@@ -436,7 +437,7 @@ export function MailInbox() {
                 );
               })
             )}
-          </div>
+          </InboxScroll>
         </aside>
 
         <section className={cn("flex min-h-0 flex-1 flex-col overflow-hidden", !paneOpen && "hidden lg:flex")}>
@@ -448,7 +449,7 @@ export function MailInbox() {
                 void sendCompose();
               }}
             >
-              <header className="flex items-start gap-2 border-b px-3 py-3 sm:px-4">
+              <header className="flex shrink-0 items-start gap-2 border-b px-3 py-3 sm:px-4">
                 <Button
                   type="button"
                   variant="ghost"
@@ -476,7 +477,7 @@ export function MailInbox() {
                   Send
                 </Button>
               </header>
-              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
+              <InboxScroll className="space-y-3 px-4 py-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="mail-to">To</Label>
                   <Input
@@ -510,11 +511,11 @@ export function MailInbox() {
                     required
                   />
                 </div>
-              </div>
+              </InboxScroll>
             </form>
           ) : selected ? (
             <>
-              <header className="flex items-start gap-2 border-b px-3 py-3 sm:px-4">
+              <header className="flex shrink-0 items-start gap-2 border-b px-3 py-3 sm:px-4">
                 <Button
                   type="button"
                   variant="ghost"
@@ -678,7 +679,7 @@ export function MailInbox() {
                   ))}
                 </div>
               ) : null}
-              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+              <InboxScroll className="space-y-4 px-4 py-4">
                 {selected.messages.map((message) => (
                   <article key={message.id} className="border px-3 py-3">
                     <div className="flex items-baseline justify-between gap-2">
@@ -698,7 +699,7 @@ export function MailInbox() {
                     </pre>
                   </article>
                 ))}
-              </div>
+              </InboxScroll>
             </>
           ) : (
             <div className="flex flex-1 items-center justify-center p-8">
