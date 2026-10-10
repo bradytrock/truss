@@ -8,6 +8,7 @@ import { useCrm } from "@/lib/crm-store";
 import {
   acceptAlert,
   alertForMyAssignmentInsert,
+  staleAssignmentAlertIds,
   alertForMyAssignmentUpdate,
   alertForRepNote,
   alertForUnassignedInsert,
@@ -257,6 +258,15 @@ function LeadAlertSession() {
           },
         );
       }
+      topic.on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "leads" },
+        (payload) => {
+          const row = snapshotFromPayload(payload.new);
+          if (!row || row.company_id !== user.companyId) return;
+          for (const id of staleAssignmentAlertIds(row, user.id)) dismiss(id);
+        },
+      );
       channel = topic.subscribe((status) => {
         if (stopped || gen !== generation) return;
         if (status === "SUBSCRIBED") {
@@ -291,7 +301,7 @@ function LeadAlertSession() {
       window.removeEventListener("online", onOnline);
       if (channel) void supabase.removeChannel(channel);
     };
-  }, [accept, isAdmin, user.companyId, user.id]);
+  }, [accept, dismiss, isAdmin, user.companyId, user.id]);
 
   const { visible, hiddenCount } = stackAlerts(memory.queue);
   const showNotifyPrompt = permission === "default" && memory.queue.length > 0;

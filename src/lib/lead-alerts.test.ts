@@ -9,7 +9,9 @@ import {
   alertForUnassignedUpdate,
   alertFromCatchUp,
   alertKey,
+  assignmentAlertSuppressed,
   dismissAlert,
+  staleAssignmentAlertIds,
   emptyAlertMemory,
   leadDetailLine,
   leadPhoneHref,
@@ -30,6 +32,7 @@ function lead(overrides: Partial<LeadSnapshot> = {}): LeadSnapshot {
     job_id: "job-1",
     status: "assigned",
     assigned_to: "pm-1",
+    assigned_by: "admin-1",
     passed_back_by: null,
     passed_back_by_name: "",
     passback_reason: "",
@@ -62,6 +65,29 @@ assert.equal(inserted.kind, "new_lead");
 assert.equal(inserted.title, "New lead");
 assert.equal(inserted.id, alertKey("new_lead", "lead-1"));
 assert.equal(alertForMyAssignmentInsert(lead(), "someone-else"), null);
+assert.equal(
+  alertForMyAssignmentInsert(lead({ assigned_to: "admin-1", assigned_by: "admin-1" }), "admin-1"),
+  null,
+);
+assert.equal(alertFromCatchUp(lead({ assigned_to: "admin-1", assigned_by: "admin-1" }), "admin-1", true), null);
+assert.equal(
+  alertFromCatchUp(lead({ assigned_to: "admin-1", assigned_by: null, status: "assigned" }), "admin-1", true),
+  null,
+);
+assert.ok(alertForMyAssignmentUpdate(lead({ assigned_by: "admin-1", updated_at: "2026-10-04T18:00:00.000Z" }), { assigned_to: null }, "pm-1"));
+assert.equal(
+  alertForMyAssignmentUpdate(
+    lead({ assigned_to: "admin-1", assigned_by: "admin-1", updated_at: "2026-10-04T18:00:00.000Z" }),
+    { assigned_to: null },
+    "admin-1",
+  ),
+  null,
+);
+assert.deepEqual(
+  staleAssignmentAlertIds(lead({ status: "assigned", assigned_to: "pm-1" }), "admin-1"),
+  [alertKey("needs_rep", "lead-1"), alertKey("passed_back", "lead-1"), alertKey("new_lead", "lead-1"), alertKey("assigned_to_you", "lead-1")],
+);
+assert.equal(assignmentAlertSuppressed(lead({ assigned_to: "pm-1", assigned_by: "admin-1" }), "pm-1"), false);
 
 const assigned = alertForMyAssignmentUpdate(lead({ updated_at: "2026-10-04T17:10:00.000Z" }), { assigned_to: null }, "pm-1", 200);
 assert.ok(assigned);
@@ -146,5 +172,6 @@ assert.equal(caught?.kind, "passed_back");
 assert.deepEqual(actionsForViewer("new_lead", false), ["call", "pass", "note"]);
 assert.deepEqual(actionsForViewer("needs_rep", true), ["call", "assign"]);
 assert.deepEqual(actionsForViewer("rep_note", true), ["got_it", "reassign"]);
-assert.deepEqual(actionsForViewer("new_lead", true), ["call", "assign"]);
+assert.deepEqual(actionsForViewer("new_lead", true), ["call", "pass", "note"]);
+assert.deepEqual(actionsForViewer("assigned_to_you", true), ["call", "pass", "note"]);
 assert.deepEqual(actionsForViewer("needs_rep", false), []);

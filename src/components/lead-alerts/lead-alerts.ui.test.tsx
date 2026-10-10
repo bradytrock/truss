@@ -24,6 +24,7 @@ function lead(overrides: Partial<LeadSnapshot> = {}): LeadSnapshot {
     job_id: "job-1",
     status: "assigned",
     assigned_to: "pm-1",
+    assigned_by: "admin-1",
     homeowner_name: "Dana Alvarez",
     street: "100 Main",
     city: "Plano",
@@ -75,6 +76,23 @@ assert.match(freshHtml, />Copy</);
 assert.match(freshHtml, /Pass it along/);
 assert.match(freshHtml, /Respond with note/);
 assert.doesNotMatch(freshHtml, /Assign rep/);
+
+const adminFresh = text(
+  renderToStaticMarkup(
+    <LeadAlertCard
+      alert={fresh}
+      now={now}
+      isAdmin
+      onDismiss={noop}
+      onCalled={noop}
+      onPass={noop}
+      onNote={noop}
+      onAssign={noop}
+    />,
+  ),
+);
+assert.match(adminFresh, /Pass it along/);
+assert.doesNotMatch(adminFresh, /Assign rep/);
 assert.match(freshHtml, /just now/);
 assert.match(freshHtml, /Dismiss alert/);
 

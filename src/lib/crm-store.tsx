@@ -323,6 +323,7 @@ import {
 } from "@/lib/job-code";
 import { formatJobSite } from "@/lib/leads";
 import { leadAssignNeedsEmail, requestLeadAssignNotification } from "@/lib/lead-assign-email";
+import { NOTIFICATIONS_REFRESH } from "@/lib/notification-inbox";
 import { defaultEstimateValidUntil, localYmd } from "@/lib/format";
 import { fillPayment, fileToDataUrl } from "@/lib/job-financials";
 import {
@@ -3973,6 +3974,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         };
         enqueueAutomationEventRef.current({ kind: "lead_assigned", jobId: job.id });
       }
+      if (typeof window !== "undefined") window.dispatchEvent(new Event(NOTIFICATIONS_REFRESH));
       return true;
     },
     [state.contacts, state.jobs, state.opportunities, state.staff, updateContact, updateJob, updateOpportunity, recordCompanyAudit]

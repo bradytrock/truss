@@ -3143,6 +3143,7 @@ export type Database = {
           job_id: string | null;
           status: string;
           assigned_to: string | null;
+          assigned_by: string | null;
           passed_back_by: string | null;
           passed_back_by_name: string | null;
           passback_reason: string | null;
@@ -3163,6 +3164,7 @@ export type Database = {
           job_id?: string | null;
           status?: string;
           assigned_to?: string | null;
+          assigned_by?: string | null;
           passed_back_by?: string | null;
           passed_back_by_name?: string | null;
           passback_reason?: string | null;
