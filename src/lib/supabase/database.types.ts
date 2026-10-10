@@ -3413,6 +3413,10 @@ export type Database = {
         Args: { p_token: string };
         Returns: Json;
       };
+      estimate_guest_share_path: {
+        Args: { p_id: string };
+        Returns: string;
+      };
       shared_portal: {
         Args: { p_token: string };
         Returns: Json;

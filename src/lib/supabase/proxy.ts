@@ -1,7 +1,9 @@
 import { isPublicAppPath, isPublicCardPath } from "@/lib/auth-paths";
+import { estimateIdFromStaffPath, isGuestEstimateSharePath } from "@/lib/estimate-guest-path";
 import { isLegalPath } from "@/lib/legal";
 import { DEMO_SCHEDULE_URL, shouldForceDemo, subscriptionActiveFromRpc } from "@/lib/subscription";
 import { createServerClient } from "@supabase/ssr";
+import { createClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   getSupabaseKey,
@@ -59,7 +61,30 @@ function rememberGate(response: NextResponse, open: boolean) {
   });
 }
 
-function finishSession(
+/** Sent proposals open with no CRM login. Drafts and unknown ids still go to the office login. */
+async function redirectGuestEstimate(request: NextRequest) {
+  const estimateId = estimateIdFromStaffPath(request.nextUrl.pathname);
+  if (!estimateId) return null;
+  const url = getSupabaseUrl() || request.cookies.get(SB_URL_COOKIE)?.value || "";
+  const key = getSupabaseKey() || request.cookies.get(SB_KEY_COOKIE)?.value || "";
+  if (!url || !key) return null;
+  try {
+    const supabase = createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    const { data, error } = await supabase.rpc("estimate_guest_share_path", { p_id: estimateId });
+    if (error || !isGuestEstimateSharePath(data)) return null;
+    const dest = request.nextUrl.clone();
+    const share = new URL(data, request.nextUrl.origin);
+    dest.pathname = share.pathname;
+    dest.search = "";
+    return NextResponse.redirect(dest);
+  } catch {
+    return null;
+  }
+}
+
+async function finishSession(
   request: NextRequest,
   path: string,
   signedIn: boolean,
@@ -98,6 +123,8 @@ function finishSession(
   }
 
   if (!signedIn && !isPublicAppPath(path)) {
+    const guestEstimate = await redirectGuestEstimate(request);
+    if (guestEstimate) return guestEstimate;
     return redirectToLogin(request);
   }
 
@@ -130,10 +157,10 @@ export async function updateSession(request: NextRequest) {
 
   // A live access token plus a recent subscription check can skip Auth and Postgres.
   if (!session.present) {
-    return finishSession(request, path, false, false, NextResponse.next({ request }));
+    return await finishSession(request, path, false, false, NextResponse.next({ request }));
   }
   if (session.fresh && gateOpen) {
-    return finishSession(request, path, true, true, NextResponse.next({ request }));
+    return await finishSession(request, path, true, true, NextResponse.next({ request }));
   }
 
   let supabaseResponse = NextResponse.next({ request });
@@ -167,5 +194,5 @@ export async function updateSession(request: NextRequest) {
     : false;
   rememberGate(supabaseResponse, signedIn && subscriptionActive);
 
-  return finishSession(request, path, signedIn, subscriptionActive, supabaseResponse);
+  return await finishSession(request, path, signedIn, subscriptionActive, supabaseResponse);
 }

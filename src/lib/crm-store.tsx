@@ -1556,6 +1556,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     if (!companyError && !companySubscriptionActive(companyRow)) {
       await supabase.auth.signOut();
       if (epoch !== bookEpoch.current) return;
+      if (isPublicAppPath(window.location.pathname)) {
+        setCompanySettings(NORTHLINE_COMPANY);
+        setState(emptyState);
+        setUser(guestUser);
+        setHydrateError(null);
+        setHydrated(true);
+        setLiveStatus("offline");
+        return;
+      }
       window.location.replace(DEMO_SCHEDULE_URL);
       return;
     }
@@ -1618,6 +1627,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         await supabase.auth.signOut();
         setHydrateError(null);
         setHydrated(true);
+        if (isPublicAppPath(window.location.pathname)) {
+          setCompanySettings(NORTHLINE_COMPANY);
+          setState(emptyState);
+          setUser(guestUser);
+          setLiveStatus("offline");
+          return;
+        }
         toast.error("This account is locked. Ask a company admin to unlock it.");
         router.replace("/login?error=" + encodeURIComponent("This account is locked. Ask a company admin to unlock it."));
         return;

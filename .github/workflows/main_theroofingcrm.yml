@@ -125,7 +125,7 @@ jobs:
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'TheRoofingCRM'
+          app-name: ${{ env.APP_NAME }}
           slot-name: 'Production'
           package: standalone.zip
 
