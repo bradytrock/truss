@@ -71,18 +71,23 @@ export async function assignLead(
 }
 
 export async function listProjectManagers(supabase: LeadClient, companyId: string): Promise<RepOption[]> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, full_name, initials")
-    .eq("company_id", companyId)
-    .eq("role", "project_manager")
-    .order("full_name");
-  if (error) throw error;
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    fullName: row.full_name,
-    initials: row.initials,
-  }));
+  const [profiles, locked] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, full_name, initials, staff_id")
+      .eq("company_id", companyId)
+      .order("full_name"),
+    supabase.from("team_members").select("id").eq("company_id", companyId).eq("locked", true),
+  ]);
+  if (profiles.error) throw profiles.error;
+  const lockedIds = new Set((locked.data ?? []).map((row) => row.id));
+  return (profiles.data ?? [])
+    .filter((row) => row.staff_id && !lockedIds.has(row.staff_id))
+    .map((row) => ({
+      id: row.id,
+      fullName: row.full_name,
+      initials: row.initials,
+    }));
 }
 
 export async function fetchLead(supabase: LeadClient, leadId: string): Promise<LeadSnapshot | null> {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   acceptAlert,
   actionsForViewer,
+  asSelfOpened,
   alertForMyAssignmentInsert,
   alertForMyAssignmentUpdate,
   alertForRepNote,
@@ -12,6 +13,7 @@ import {
   dismissAlert,
   emptyAlertMemory,
   leadDetailLine,
+  leadOpenedByAssignee,
   leadPhoneHref,
   leadPlaceLine,
   notificationBody,
@@ -148,3 +150,22 @@ assert.deepEqual(actionsForViewer("needs_rep", true), ["call", "assign"]);
 assert.deepEqual(actionsForViewer("rep_note", true), ["got_it", "reassign"]);
 assert.deepEqual(actionsForViewer("new_lead", true), ["call", "assign"]);
 assert.deepEqual(actionsForViewer("needs_rep", false), []);
+
+const kept = lead({ assigned_to: "pm-1", assigned_by: "pm-1" });
+assert.equal(leadOpenedByAssignee(kept), true);
+assert.equal(leadOpenedByAssignee(lead({ assigned_to: "pm-1", assigned_by: "admin-1" })), false);
+assert.equal(leadOpenedByAssignee(lead()), false);
+const opened = alertForMyAssignmentInsert(kept, "pm-1", 300);
+assert.equal(opened?.title, "Lead opened");
+assert.deepEqual(actionsForViewer("new_lead", true, kept), ["appointment", "skip"]);
+assert.deepEqual(actionsForViewer("assigned_to_you", false, kept), ["appointment", "skip"]);
+const handed = alertForMyAssignmentUpdate(
+  lead({ assigned_to: "pm-1", assigned_by: "admin-1", updated_at: "2026-10-04T17:15:00.000Z" }),
+  { assigned_to: null },
+  "pm-1",
+  400,
+);
+assert.equal(handed?.title, "Lead assigned to you");
+const forced = asSelfOpened(handed!);
+assert.equal(forced.title, "Lead opened");
+assert.equal(leadOpenedByAssignee(forced.lead), true);

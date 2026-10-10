@@ -58,6 +58,7 @@ function card(alert: NonNullable<ReturnType<typeof alertForMyAssignmentInsert>>,
       onPass={noop}
       onNote={noop}
       onAssign={noop}
+      onAppointment={noop}
     />,
   );
 }
@@ -75,6 +76,22 @@ assert.match(freshHtml, />Copy</);
 assert.match(freshHtml, /Pass it along/);
 assert.match(freshHtml, /Respond with note/);
 assert.doesNotMatch(freshHtml, /Assign rep/);
+assert.doesNotMatch(freshHtml, /Set an appointment/);
+
+const kept = alertForMyAssignmentInsert(
+  lead({ assigned_to: "pm-1", assigned_by: "pm-1" }),
+  "pm-1",
+  now,
+)!;
+const keptHtml = text(card(kept));
+assert.match(keptHtml, /Lead opened/);
+assert.match(keptHtml, /Set an appointment/);
+assert.match(keptHtml, />Skip</);
+assert.doesNotMatch(keptHtml, /Pass it along/);
+assert.doesNotMatch(keptHtml, /Respond with note/);
+assert.doesNotMatch(keptHtml, /Assign rep/);
+assert.doesNotMatch(keptHtml, /Call now/);
+assert.doesNotMatch(keptHtml, /tel:/);
 assert.match(freshHtml, /just now/);
 assert.match(freshHtml, /Dismiss alert/);
 

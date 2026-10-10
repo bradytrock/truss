@@ -35,6 +35,7 @@ export type LeadSnapshot = {
   passed_back_by_name: string;
   passback_reason: string;
   handoff_note: string;
+  assigned_by: string;
   homeowner_name: string;
   street: string;
   city: string;
@@ -82,6 +83,7 @@ type LeadRowInput = {
   passed_back_by_name?: string | null;
   passback_reason?: string | null;
   handoff_note?: string | null;
+  assigned_by?: string | null;
   homeowner_name?: string | null;
   street?: string | null;
   city?: string | null;
@@ -109,6 +111,7 @@ export function snapshotFromPayload(value: unknown): LeadSnapshot | null {
     passed_back_by_name: typeof row.passed_back_by_name === "string" ? row.passed_back_by_name : "",
     passback_reason: typeof row.passback_reason === "string" ? row.passback_reason : "",
     handoff_note: typeof row.handoff_note === "string" ? row.handoff_note : "",
+    assigned_by: typeof row.assigned_by === "string" ? row.assigned_by : "",
     homeowner_name: typeof row.homeowner_name === "string" ? row.homeowner_name : "",
     street: typeof row.street === "string" ? row.street : "",
     city: typeof row.city === "string" ? row.city : "",
@@ -133,6 +136,7 @@ export function snapshotFromRow(row: LeadRowInput): LeadSnapshot {
     passed_back_by_name: row.passed_back_by_name?.trim() ?? "",
     passback_reason: row.passback_reason?.trim() ?? "",
     handoff_note: row.handoff_note?.trim() ?? "",
+    assigned_by: row.assigned_by?.trim() ?? "",
     homeowner_name: row.homeowner_name?.trim() ?? "",
     street: row.street?.trim() ?? "",
     city: row.city?.trim() ?? "",
@@ -195,7 +199,36 @@ function buildAlert(
   };
 }
 
+const selfAssignedLeadIds = new Set<string>();
+
+/** Remember a seed this person just assigned to themselves, before the row echoes back. */
+export function markSelfAssignedLead(leadId: string) {
+  if (leadId) selfAssignedLeadIds.add(leadId);
+}
+
+export function takeSelfAssignedLead(leadId: string) {
+  return selfAssignedLeadIds.has(leadId);
+}
+
+/** The person who opened or assigned the lead kept it. */
+export function leadOpenedByAssignee(lead: Pick<LeadSnapshot, "assigned_to" | "assigned_by">) {
+  const assignee = lead.assigned_to?.trim() ?? "";
+  const opener = lead.assigned_by?.trim() ?? "";
+  return Boolean(assignee && opener && assignee === opener);
+}
+
+export function asSelfOpened(alert: LeadAlert): LeadAlert {
+  if (!alert.lead.assigned_to) return alert;
+  if (leadOpenedByAssignee(alert.lead) && alert.title === "Lead opened") return alert;
+  return {
+    ...alert,
+    title: "Lead opened",
+    lead: { ...alert.lead, assigned_by: alert.lead.assigned_to ?? "" },
+  };
+}
+
 function titleFor(kind: AlertKind, lead: LeadSnapshot, authorName: string) {
+  if ((kind === "new_lead" || kind === "assigned_to_you") && leadOpenedByAssignee(lead)) return "Lead opened";
   if (kind === "new_lead") return "New lead";
   if (kind === "assigned_to_you") return "Lead assigned to you";
   if (kind === "needs_rep") return "New lead needs a rep";
@@ -269,15 +302,25 @@ export function alertFromCatchUp(row: LeadSnapshot, me: string, isAdmin: boolean
   return buildAlert("needs_rep", row, { arrivedAt });
 }
 
-export type AlertAction = "call" | "pass" | "note" | "assign" | "got_it" | "reassign";
+export type AlertAction = "call" | "pass" | "note" | "assign" | "got_it" | "reassign" | "appointment" | "skip";
 
-export function alertActions(kind: AlertKind): AlertAction[] {
+export function alertActions(kind: AlertKind, lead?: Pick<LeadSnapshot, "assigned_to" | "assigned_by"> | null): AlertAction[] {
+  if (lead && leadOpenedByAssignee(lead) && (kind === "new_lead" || kind === "assigned_to_you")) {
+    return ["appointment", "skip"];
+  }
   if (kind === "new_lead" || kind === "assigned_to_you") return ["call", "pass", "note"];
   if (kind === "rep_note") return ["got_it", "reassign"];
   return ["call", "assign"];
 }
 
-export function actionsForViewer(kind: AlertKind, isAdmin: boolean): AlertAction[] {
+export function actionsForViewer(
+  kind: AlertKind,
+  isAdmin: boolean,
+  lead?: Pick<LeadSnapshot, "assigned_to" | "assigned_by"> | null,
+): AlertAction[] {
+  if (lead && leadOpenedByAssignee(lead) && (kind === "new_lead" || kind === "assigned_to_you")) {
+    return ["appointment", "skip"];
+  }
   if (isAdmin) {
     if (kind === "rep_note") return ["got_it", "reassign"];
     return ["call", "assign"];

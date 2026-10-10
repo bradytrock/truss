@@ -29,6 +29,7 @@ export function LeadAlertCard({
   onPass,
   onNote,
   onAssign,
+  onAppointment,
 }: {
   alert: LeadAlert;
   now: number;
@@ -39,8 +40,9 @@ export function LeadAlertCard({
   onPass: () => void;
   onNote: () => void;
   onAssign: () => void;
+  onAppointment?: () => void;
 }) {
-  const actions = actionsForViewer(alert.kind, isAdmin);
+  const actions = actionsForViewer(alert.kind, isAdmin, alert.lead);
   const place = leadPlaceLine(alert.lead);
   const detail = leadDetailLine(alert.lead);
   const href = leadRecordHref(alert.lead);
@@ -127,6 +129,16 @@ export function LeadAlertCard({
         {actions.includes("assign") ? (
           <button type="button" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "text-foreground")} onClick={onAssign}>
             Assign rep
+          </button>
+        ) : null}
+        {actions.includes("appointment") ? (
+          <button type="button" className={cn(buttonVariants({ size: "sm" }), urgentButton)} onClick={onAppointment}>
+            Set an appointment
+          </button>
+        ) : null}
+        {actions.includes("skip") ? (
+          <button type="button" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "text-foreground")} onClick={onDismiss}>
+            Skip
           </button>
         ) : null}
         {actions.includes("got_it") ? (
