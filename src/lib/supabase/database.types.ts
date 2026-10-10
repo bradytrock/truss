@@ -3938,7 +3938,8 @@ export type Database = {
         | "interview"
         | "supplementing"
         | "awarded"
-        | "lost";
+        | "lost"
+        | "unqualified";
       job_status: "precon" | "in_progress" | "punch" | "complete" | "on_hold";
       project_type:
         | "restoration"

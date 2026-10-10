@@ -1,6 +1,6 @@
 import { digitsOnly, looksLikePhone, toE164 } from "@/lib/phone";
 import { isDeletedJob } from "@/lib/job-record";
-import type { Contact, Job, Opportunity, TextMessage } from "@/lib/types";
+import { isShelvedStage, type Contact, type Job, type Opportunity, type TextMessage } from "@/lib/types";
 
 export function phoneKey(value: string | null | undefined) {
   const digits = digitsOnly(value ?? "");
@@ -54,7 +54,7 @@ export function jobForContact(jobs: Job[], opportunities: Opportunity[], contact
 
 export function opportunityForContact(opportunities: Opportunity[], contactId: string) {
   return [...opportunities]
-    .filter((item) => item.primaryContactId === contactId && item.stage !== "lost")
+    .filter((item) => item.primaryContactId === contactId && !isShelvedStage(item.stage))
     .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))[0];
 }
 

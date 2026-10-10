@@ -221,6 +221,7 @@ import {
   NORTHLINE_COMPANY,
   STAGE_LABELS,
   STAGE_PROBABILITY,
+  isShelvedStage,
   initialsFromName,
   staffByName,
   type ActivityType,
@@ -2843,7 +2844,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         setState((prev) => {
           const jobs = [...prev.jobs];
           let nextJobs = jobs;
-          if (stage !== "lost" && !jobs.some((job) => job.opportunityId === id)) {
+          if (!isShelvedStage(stage) && !jobs.some((job) => job.opportunityId === id)) {
             nextJobs = [
               fillJobRecord(
                 jobDraftFromOpportunity(current, {
@@ -2860,7 +2861,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             createdJob = jobs.find((job) => job.opportunityId === id) ?? null;
             nextJobs = jobs.map((job) => {
               if (job.opportunityId !== id) return job;
-              if (stage === "lost") return { ...job, status: "on_hold" as const };
+              if (isShelvedStage(stage)) return { ...job, status: "on_hold" as const };
               if (stage === "awarded") return { ...job, contractValue, street, city, state: stateCode, postalCode, location };
               return job;
             });
@@ -2930,7 +2931,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (error) {
         toast.error(
           isInvalidEnumValue(error)
-            ? `Cannot move to ${STAGE_LABELS[stage]}. Run the pipeline supplementing migration in the SQL editor.`
+            ? stage === "unqualified"
+              ? "Cannot mark this unqualified yet. Run supabase/migrations/20261010170000_pipeline_unqualified.sql in the SQL editor."
+              : `Cannot move to ${STAGE_LABELS[stage]}. Run the pipeline supplementing migration in the SQL editor.`
             : error.message,
         );
         return null;
@@ -2956,7 +2959,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         relatedJobId: state.jobs.find((job) => job.opportunityId === id)?.id ?? null,
       });
 
-      if (stage !== "lost") {
+      if (!isShelvedStage(stage)) {
         const already = state.jobs.find((job) => job.opportunityId === id);
         if (already) {
           createdJob = already;
@@ -3041,7 +3044,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      if (stage === "lost") {
+      if (isShelvedStage(stage)) {
         const existing = state.jobs.find((job) => job.opportunityId === id);
         if (existing) {
           await supabase.from("jobs").update({ status: "on_hold" }).eq("id", existing.id);
@@ -3420,7 +3423,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           notes: input.notes ?? "",
         };
         const pipelineJob =
-          input.stage === "lost"
+          isShelvedStage(input.stage)
             ? null
             : fillJobRecord(
                 jobDraftFromOpportunity(opportunity, {
@@ -3584,7 +3587,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         originatorStaffId: data.originator_staff_id || originatorStaffId,
       };
       const pipelineJob =
-        opportunity.stage === "lost"
+        isShelvedStage(opportunity.stage)
           ? null
           : fillJobRecord(
               jobDraftFromOpportunity(opportunity, {
@@ -3685,7 +3688,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (input.contactId) {
         const sameSite = state.opportunities.find(
           (opportunity) =>
-            opportunity.stage !== "lost" &&
+            !isShelvedStage(opportunity.stage) &&
             opportunity.primaryContactId === input.contactId &&
             Boolean(site) &&
             (formatJobSite(opportunity) === site || opportunity.location === site),
@@ -3693,7 +3696,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         if (sameSite) return sameSite.id;
         const openLead = state.opportunities.find(
           (opportunity) =>
-            opportunity.stage !== "lost" && opportunity.primaryContactId === input.contactId,
+            !isShelvedStage(opportunity.stage) && opportunity.primaryContactId === input.contactId,
         );
         if (openLead) return openLead.id;
         const openJob = state.jobs.find(

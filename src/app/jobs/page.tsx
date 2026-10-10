@@ -116,7 +116,7 @@ function JobsBoardPage() {
     if (isDeletedJob(job)) return false;
     const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
     const column = workColumnFor(job, opportunity);
-    if (column === "complete" || column === "lost") return false;
+    if (column === "complete" || column === "lost" || column === "unqualified") return false;
     return jobMatchesOwnerFilter(job, opportunity, ownerIds, crm.book.staff);
   });
   const bookValue = active.reduce((sum, job) => {

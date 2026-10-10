@@ -58,6 +58,17 @@ assert(workColumnFor(precon, { stage: "estimating" }) === "supplementing", "esti
 assert(workColumnFor(precon, { stage: "interview" }) === "proposal_sent", "follow-up still maps to proposal sent");
 assert(workColumnFor(precon, { stage: "bid_submitted" }) === "proposal_sent", "proposal sent stays proposal sent");
 assert(workColumnFor(precon, { stage: "awarded" }) === "in_progress", "awarded maps to in progress");
+assert(workColumnFor(precon, { stage: "unqualified" }) === "unqualified", "unqualified is its own column");
+assert(workColumnFor({ ...precon, deletedAt: "2026-01-01" }, { stage: "unqualified" }) === "deleted", "delete still wins over unqualified");
+assert(
+  JSON.stringify(patchForWorkColumn("unqualified")) ===
+    JSON.stringify({ status: "on_hold", stage: "unqualified" }),
+  "unqualified parks the job without deleting it",
+);
+assert(
+  WORK_COLUMNS.indexOf("unqualified") === WORK_COLUMNS.indexOf("lost") - 1,
+  "unqualified sits immediately before lost",
+);
 assert(
   JSON.stringify(patchForWorkColumn("supplementing")) ===
     JSON.stringify({ status: "precon", stage: "supplementing" }),
