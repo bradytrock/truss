@@ -111,13 +111,13 @@ export function ContactNewSeedDialog({
         postalCode: site.postalCode,
         notes: "",
       });
-      await crm.addActivity({
+      void crm.addActivity({
         entityType: "opportunity",
         entityId: opportunity.id,
         type: "note",
         body: `Seed opened from Contacts for ${contact.name} at ${formatJobSite(site)}.`,
       });
-      await crm.addTask({
+      void crm.addTask({
         title: `Call ${contact.name} back`,
         dueAt: localYmd(new Date()),
         relatedType: "opportunity",

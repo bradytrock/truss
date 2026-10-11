@@ -223,7 +223,7 @@ export function CreateOpportunityDialog({
         notes: notes.trim(),
       });
       if (trades.length && opportunity.costingJob?.id) {
-        await crm.updateJob(opportunity.costingJob.id, { trades });
+        void crm.updateJob(opportunity.costingJob.id, { trades }).catch(() => undefined);
       }
       const referrer = leadNeedsReferrer(source) ? selectedReferral : undefined;
       const returningNote = match
@@ -231,7 +231,7 @@ export function CreateOpportunityDialog({
           ? ` Returning client: ${match.contact.name}. ${match.previousStaffName || "Previous project manager"} ran ${match.job.code}. ${returningClientWhen(match)}.`
           : ` Returning client: ${match.contact.name} is already in the book.`
         : "";
-      await crm.addActivity({
+      void crm.addActivity({
         entityType: "opportunity",
         entityId: opportunity.id,
         type: "note",
@@ -244,7 +244,7 @@ export function CreateOpportunityDialog({
           .filter(Boolean)
           .join(" "),
       });
-      await crm.addTask({
+      void crm.addTask({
         title: `Call ${fullName} back`,
         dueAt: localYmd(new Date()),
         relatedType: "opportunity",
@@ -252,13 +252,15 @@ export function CreateOpportunityDialog({
         assignee: owner?.name || crm.user.name,
       });
       if (match) {
-        await crm.fileReturningClientNotice({
-          opportunityId: opportunity.id,
-          jobId: opportunity.costingJob?.id ?? null,
-          contactId: contact.id,
-          previous: match,
-          assigneeId: owner?.id,
-        });
+        void crm
+          .fileReturningClientNotice({
+            opportunityId: opportunity.id,
+            jobId: opportunity.costingJob?.id ?? null,
+            contactId: contact.id,
+            previous: match,
+            assigneeId: owner?.id,
+          })
+          .catch(() => undefined);
       }
       if (match && assignsToPreviousPm(match, owner?.id)) {
         toast.success(`Lead opened: ${opportunity.code}. Assigned to ${match.previousStaffName}, who ran the last job.`);

@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { isPendingPayment } from "@/lib/payment-posting";
 import { applyDeferredBook, fetchCompanyBook, loadCompanyBook } from "@/lib/supabase/load-book";
+import { changedRowId, liveRefreshDecision } from "@/lib/supabase/local-writes";
 import {
   asAuditState,
   canRevertCompanyAudit,
@@ -1836,13 +1837,28 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     const supabase = createClient();
     let timer: number | undefined;
     let cancelled = false;
+    const pendingIds: string[] = [];
     setLiveStatus("connecting");
 
-    const kick = () => {
+    const drain = (grace: number) => {
+      if (cancelled) return;
+      const decision = liveRefreshDecision(pendingIds, grace);
+      if (decision === "skip") {
+        pendingIds.length = 0;
+        return;
+      }
+      if (decision === "wait") {
+        timer = window.setTimeout(() => drain(grace + 1), 700);
+        return;
+      }
+      pendingIds.length = 0;
+      void liveRefresh();
+    };
+
+    const kick = (payload: { new?: unknown; old?: unknown }) => {
+      pendingIds.push(changedRowId(payload));
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        void liveRefresh();
-      }, 300);
+      timer = window.setTimeout(() => drain(0), 350);
     };
 
     const channel = supabase
@@ -3655,7 +3671,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         opportunities: [opportunity, ...prev.opportunities],
         jobs: pipelineJob ? dedupeJobsByOpportunity([pipelineJob, ...prev.jobs]) : prev.jobs,
       }));
-      await addActivity({
+      void addActivity({
         entityType: "opportunity",
         entityId: opportunity.id,
         type: "note",
@@ -4031,7 +4047,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       const mapped = fillJobRecord({ ...job, id: data.id, code: data.code || code }, linked);
       setState((prev) => ({ ...prev, jobs: [mapped, ...prev.jobs] }));
-      await addActivity({
+      void addActivity({
         entityType: "job",
         entityId: mapped.id,
         type: "note",
@@ -4701,7 +4717,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           jobCode: input.previous.job?.code,
         })} ${returningClientWhen(input.previous)}`,
       };
-      await addActivity({
+      void addActivity({
         entityType: "opportunity",
         entityId: input.opportunityId,
         type: "note",
@@ -4726,22 +4742,27 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           ? [openerId].filter(Boolean)
           : [openerId, input.previous.previousStaffId].filter(Boolean),
       );
-      for (const member of returningClientTaskAssignees(kind, state.staff, input.previous.previousStaffId)) {
-        try {
-          await addTask({
-            title,
-            dueAt: localYmd(new Date()),
-            relatedType: "opportunity",
-            relatedId: input.opportunityId,
-            assignee: member.name,
-          });
-        } catch {
-          // Local book or missing tasks table — notice still stands.
-        }
-      }
-      for (const member of smsAudience) {
-        await notifyStaffByText(member, sms);
-      }
+      const taskAssignees = returningClientTaskAssignees(
+        kind,
+        state.staff,
+        input.previous.previousStaffId,
+      );
+      await Promise.all([
+        ...taskAssignees.map(async (member) => {
+          try {
+            await addTask({
+              title,
+              dueAt: localYmd(new Date()),
+              relatedType: "opportunity",
+              relatedId: input.opportunityId,
+              assignee: member.name,
+            });
+          } catch {
+            // Local book or missing tasks table — notice still stands.
+          }
+        }),
+        ...smsAudience.map((member) => notifyStaffByText(member, sms)),
+      ]);
     },
     [
       addActivity,
@@ -7956,7 +7977,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           : prev.invoices,
       }));
       if (jobId) {
-        await addActivity({
+        void addActivity({
           entityType: "job",
           entityId: jobId,
           type: "note",
@@ -8053,7 +8074,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (!supabase) {
         setState((prev) => ({ ...prev, expenses: [expense, ...prev.expenses] }));
         if (expense.jobId) {
-          await addActivity({
+          void addActivity({
             entityType: "job",
             entityId: expense.jobId,
             type: "note",
@@ -8104,7 +8125,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const saved = { ...mapExpense(savedRow), createdBy: user.name };
       setState((prev) => ({ ...prev, expenses: [saved, ...prev.expenses] }));
       if (saved.jobId) {
-        await addActivity({
+        void addActivity({
           entityType: "job",
           entityId: saved.jobId,
           type: "note",
@@ -8167,7 +8188,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           ...prev,
           forecastedExpenses: [forecast, ...(prev.forecastedExpenses ?? [])],
         }));
-        await addActivity({
+        void addActivity({
           entityType: "job",
           entityId: forecast.jobId ?? input.jobId,
           type: "note",
@@ -8206,7 +8227,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             ...prev,
             forecastedExpenses: [forecast, ...(prev.forecastedExpenses ?? [])],
           }));
-          await addActivity({
+          void addActivity({
             entityType: "job",
             entityId: input.jobId,
             type: "note",
@@ -8223,7 +8244,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         forecastedExpenses: [saved, ...(prev.forecastedExpenses ?? [])],
       }));
       if (saved.jobId) {
-        await addActivity({
+        void addActivity({
           entityType: "job",
           entityId: saved.jobId,
           type: "note",
@@ -8317,7 +8338,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const supabase = maybeClient();
       if (!supabase) {
         if (note) {
-          await addActivity({ entityType: "job", entityId: next.jobId, type: "note", body: note });
+          void addActivity({ entityType: "job", entityId: next.jobId, type: "note", body: note });
         }
         toast.success("Claim saved.");
         return next;
@@ -8342,7 +8363,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         if (error && isMissingJobInsurance(error)) {
           toast.message(missingJobInsuranceMessage());
           if (note) {
-            await addActivity({ entityType: "job", entityId: next.jobId, type: "note", body: note });
+            void addActivity({ entityType: "job", entityId: next.jobId, type: "note", body: note });
           }
           return next;
         }
@@ -8356,7 +8377,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const saved = mapJobInsurance(data);
       setState(place(saved));
       if (note) {
-        await addActivity({ entityType: "job", entityId: saved.jobId, type: "note", body: note });
+        void addActivity({ entityType: "job", entityId: saved.jobId, type: "note", body: note });
       }
       toast.success(saved.claimNumber ? `Claim ${saved.claimNumber} saved.` : "Claim saved.");
       return saved;
@@ -9763,7 +9784,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           relatedOpportunityId: event.opportunityId,
         });
         queueAppointmentScheduled(event);
-        return pushExternalCalendarInvite(null, event, "save");
+        void pushExternalCalendarInvite(null, event, "save");
+        return event;
       }
       const inserted = await supabase
         .from("schedule_events")
@@ -9804,7 +9826,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         relatedOpportunityId: event.opportunityId,
       });
       queueAppointmentScheduled(event);
-      return pushExternalCalendarInvite(null, event, "save");
+      void pushExternalCalendarInvite(null, event, "save");
+      return event;
     },
     [pushExternalCalendarInvite, recordCompanyAudit, user.companyId, warnMissingGuestInviteColumns]
   );
