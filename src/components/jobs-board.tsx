@@ -51,6 +51,7 @@ const columnAccent: Record<WorkColumn, string> = {
   punch: "bg-foreground",
   complete: "bg-foreground/40",
   on_hold: "bg-foreground/15",
+  unqualified: "bg-foreground/15",
   lost: "bg-foreground/15",
   deleted: "bg-destructive/60",
 };
@@ -135,10 +136,13 @@ export function JobsBoard({
     }
     void (async () => {
       await crm.moveWork(job.id, overColumn);
+      const label = WORK_COLUMN_LABELS[overColumn];
       toast.success(
         isDeletedJob(job)
-          ? `${job.code || job.name} restored to ${WORK_COLUMN_LABELS[overColumn]}.`
-          : `${job.code || job.name} → ${WORK_COLUMN_LABELS[overColumn]}.`,
+          ? `${job.code || job.name} restored to ${label}.`
+          : overColumn === "unqualified"
+            ? `${job.code || job.name} marked unqualified.`
+            : `${job.code || job.name} → ${label}.`,
       );
     })();
   }
@@ -260,7 +264,9 @@ function JobColumn({
           {count === 0
             ? column === "deleted"
               ? "Nothing in the trash"
-              : "No work in this stage"
+              : column === "unqualified"
+                ? "Left out of close rate"
+                : "No work in this stage"
             : formatCurrency(total)}
         </p>
       </div>

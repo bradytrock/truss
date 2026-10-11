@@ -42,6 +42,7 @@ const stageClass: Record<PipelineStage, string> = {
   supplementing: hot,
   awarded: done,
   lost: mute,
+  unqualified: mute,
 };
 
 const jobClass: Record<JobStatus, string> = {
@@ -93,6 +94,7 @@ const workClass: Record<WorkColumn, string> = {
   punch: hot,
   complete: done,
   on_hold: mute,
+  unqualified: mute,
   lost: mute,
   deleted: danger,
 };

@@ -227,9 +227,9 @@ export function formatInboxTime(iso: string | null | undefined) {
 
 export function formatMessageStamp(iso: string | null | undefined) {
   const date = validDate(iso);
-  if (!date) return "";
-  if (localYmd(date) === localYmd(new Date())) return formatTime(iso ?? "");
-  return `${formatDateShort(iso)}, ${formatTime(iso ?? "")}`;
+  if (!date || typeof iso !== "string") return "";
+  if (localYmd(date) === localYmd(new Date())) return formatTime(iso);
+  return `${formatDateShort(iso)}, ${formatTime(iso)}`;
 }
 
 export function sameLocalDay(left: string | null | undefined, right: string | null | undefined) {

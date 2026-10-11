@@ -10,7 +10,7 @@ import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { StageBadge, TypeBadge, WorkColumnBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency, formatCurrencyFull, formatPhone } from "@/lib/format";
-import { CLIENT_TYPE_LABELS } from "@/lib/types";
+import { CLIENT_TYPE_LABELS, isShelvedStage } from "@/lib/types";
 import { workColumnFor } from "@/lib/work-board";
 
 export default function ClientDetailPage() {
@@ -42,7 +42,7 @@ export default function ClientDetailPage() {
     (activity) => activity.entityType === "client" && activity.entityId === client.id
   );
   const openValue = opportunities
-    .filter((opportunity) => opportunity.stage !== "lost" && opportunity.stage !== "awarded")
+    .filter((opportunity) => !isShelvedStage(opportunity.stage) && opportunity.stage !== "awarded")
     .reduce((sum, opportunity) => sum + opportunity.value, 0);
 
   return (

@@ -60,8 +60,9 @@ export function DeleteJobDialog({
         <DialogHeader>
           <DialogTitle>Delete {job?.code || "this job"}?</DialogTitle>
           <DialogDescription>
-            It leaves the live board and sits in Deleted so a company admin can restore it. The reason stays on the job
-            record and in the activity history.
+            Delete is for a card that should not be on the books, such as a duplicate. A lead that never qualified
+            belongs in Unqualified. That stays on the board and does not count against close rate. A deleted card sits
+            in Deleted so a company admin can restore it.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-2">

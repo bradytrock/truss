@@ -17,7 +17,7 @@ import type { Job, JobPhoto, Opportunity } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const STAGE_FILTERS: WorkColumn[] = WORK_COLUMNS.filter(
-  (column) => column !== "on_hold" && column !== "lost" && column !== "deleted",
+  (column) => column !== "on_hold" && column !== "unqualified" && column !== "lost" && column !== "deleted",
 );
 
 export function MapSearchBar({

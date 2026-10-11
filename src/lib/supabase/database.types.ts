@@ -1004,6 +1004,7 @@ export type Database = {
           company_id: string;
           invoice_id: string | null;
           job_id: string | null;
+          opportunity_id: string | null;
           estimate_id: string | null;
           amount: number;
           method: string;
@@ -1026,6 +1027,7 @@ export type Database = {
           company_id: string;
           invoice_id?: string | null;
           job_id?: string | null;
+          opportunity_id?: string | null;
           estimate_id?: string | null;
           amount: number;
           method?: string;
@@ -3133,6 +3135,114 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["call_legs"]["Insert"]>;
         Relationships: [];
       };
+      leads: {
+        Row: {
+          id: string;
+          company_id: string;
+          opportunity_id: string | null;
+          job_id: string | null;
+          status: string;
+          assigned_to: string | null;
+          assigned_by: string | null;
+          passed_back_by: string | null;
+          passed_back_by_name: string | null;
+          passback_reason: string | null;
+          handoff_note: string | null;
+          homeowner_name: string;
+          street: string;
+          city: string;
+          service_type: string;
+          source: string;
+          phone: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          opportunity_id?: string | null;
+          job_id?: string | null;
+          status?: string;
+          assigned_to?: string | null;
+          assigned_by?: string | null;
+          passed_back_by?: string | null;
+          passed_back_by_name?: string | null;
+          passback_reason?: string | null;
+          handoff_note?: string | null;
+          homeowner_name?: string;
+          street?: string;
+          city?: string;
+          service_type?: string;
+          source?: string;
+          phone?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["leads"]["Insert"]>;
+        Relationships: [];
+      };
+      lead_activity: {
+        Row: {
+          id: string;
+          lead_id: string;
+          user_id: string;
+          author_name: string;
+          kind: string;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          lead_id: string;
+          user_id: string;
+          author_name: string;
+          kind: string;
+          body: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["lead_activity"]["Insert"]>;
+        Relationships: [];
+      };
+      device_tokens: {
+        Row: {
+          id: string;
+          user_id: string;
+          company_id: string;
+          token: string;
+          platform: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          company_id: string;
+          token: string;
+          platform?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["device_tokens"]["Insert"]>;
+        Relationships: [];
+      };
+      admin_push_outbox: {
+        Row: {
+          id: string;
+          event: string;
+          payload: Json;
+          created_at: string;
+          sent_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          event: string;
+          payload: Json;
+          created_at?: string;
+          sent_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["admin_push_outbox"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -3304,6 +3414,10 @@ export type Database = {
       shared_estimate: {
         Args: { p_token: string };
         Returns: Json;
+      };
+      estimate_guest_share_path: {
+        Args: { p_id: string };
+        Returns: string;
       };
       shared_portal: {
         Args: { p_token: string };
@@ -3830,7 +3944,8 @@ export type Database = {
         | "interview"
         | "supplementing"
         | "awarded"
-        | "lost";
+        | "lost"
+        | "unqualified";
       job_status: "precon" | "in_progress" | "punch" | "complete" | "on_hold";
       project_type:
         | "restoration"

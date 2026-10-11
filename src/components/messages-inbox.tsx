@@ -495,7 +495,7 @@ export function MessagesInbox() {
                   >
                     <Avatar size="sm" className="mt-0.5">
                       <AvatarFallback className="bg-primary/10 text-primary">
-                        {initials(chat.label) || "W"}
+                        {initials(chat.label || "") || "W"}
                       </AvatarFallback>
                     </Avatar>
                     <span className="min-w-0 flex-1">

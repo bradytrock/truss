@@ -18,6 +18,9 @@ const SoftphoneBar = dynamic(() => import("@/components/softphone-bar").then((mo
 const SoftphoneProvider = dynamic(() =>
   import("@/lib/calls/softphone").then((mod) => mod.SoftphoneProvider),
 );
+const LeadAlertHost = dynamic(() =>
+  import("@/components/lead-alerts/lead-alert-host").then((mod) => mod.LeadAlertHost),
+);
 
 function subscribeToClient() {
   return () => {};
@@ -62,6 +65,7 @@ function Shell({ children }: { children: ReactNode }) {
         <TooltipProvider delay={200}>
           <AppShell>{children}</AppShell>
           <SoftphoneBar />
+          <LeadAlertHost />
         </TooltipProvider>
       </SoftphoneProvider>
     </CrmProvider>
