@@ -31,6 +31,7 @@ export type LeadSnapshot = {
   job_id: string | null;
   status: "unassigned" | "assigned";
   assigned_to: string | null;
+  assigned_by: string | null;
   passed_back_by: string | null;
   passed_back_by_name: string;
   passback_reason: string;
@@ -78,6 +79,7 @@ type LeadRowInput = {
   job_id?: string | null;
   status?: string | null;
   assigned_to?: string | null;
+  assigned_by?: string | null;
   passed_back_by?: string | null;
   passed_back_by_name?: string | null;
   passback_reason?: string | null;
@@ -105,6 +107,7 @@ export function snapshotFromPayload(value: unknown): LeadSnapshot | null {
     job_id: typeof row.job_id === "string" ? row.job_id : null,
     status: typeof row.status === "string" ? row.status : "unassigned",
     assigned_to: typeof row.assigned_to === "string" ? row.assigned_to : null,
+    assigned_by: typeof row.assigned_by === "string" ? row.assigned_by : null,
     passed_back_by: typeof row.passed_back_by === "string" ? row.passed_back_by : null,
     passed_back_by_name: typeof row.passed_back_by_name === "string" ? row.passed_back_by_name : "",
     passback_reason: typeof row.passback_reason === "string" ? row.passback_reason : "",
@@ -129,6 +132,7 @@ export function snapshotFromRow(row: LeadRowInput): LeadSnapshot {
     job_id: row.job_id ?? null,
     status,
     assigned_to: row.assigned_to ?? null,
+    assigned_by: row.assigned_by ?? null,
     passed_back_by: row.passed_back_by ?? null,
     passed_back_by_name: row.passed_back_by_name?.trim() ?? "",
     passback_reason: row.passback_reason?.trim() ?? "",
@@ -203,8 +207,33 @@ function titleFor(kind: AlertKind, lead: LeadSnapshot, authorName: string) {
   return `Note from ${authorName || "a rep"}`;
 }
 
+/**
+ * The person who just put this lead on themselves already knows about it.
+ * A backfilled row has no assigned_by and an unchanged clock, so it is not news either.
+ */
+export function assignmentAlertSuppressed(row: LeadSnapshot, me: string) {
+  if (!me || row.assigned_to !== me || row.status !== "assigned") return false;
+  if (row.assigned_by === me) return true;
+  if (row.assigned_by) return false;
+  const created = Date.parse(row.created_at);
+  const updated = Date.parse(row.updated_at);
+  return Number.isFinite(created) && Number.isFinite(updated) && Math.abs(updated - created) < 2000;
+}
+
+export function staleAssignmentAlertIds(row: LeadSnapshot, me: string) {
+  const ids: string[] = [];
+  if (row.status !== "unassigned") {
+    ids.push(alertKey("needs_rep", row.id), alertKey("passed_back", row.id));
+  }
+  if (row.assigned_to !== me) {
+    ids.push(alertKey("new_lead", row.id), alertKey("assigned_to_you", row.id));
+  }
+  return ids;
+}
+
 export function alertForMyAssignmentInsert(row: LeadSnapshot, me: string, arrivedAt = Date.now()) {
   if (!me || row.assigned_to !== me) return null;
+  if (assignmentAlertSuppressed(row, me)) return null;
   return buildAlert("new_lead", row, { arrivedAt });
 }
 
@@ -215,6 +244,7 @@ export function alertForMyAssignmentUpdate(
   arrivedAt = Date.now(),
 ) {
   if (!me || row.assigned_to !== me) return null;
+  if (assignmentAlertSuppressed(row, me)) return null;
   if (!old || !Object.prototype.hasOwnProperty.call(old, "assigned_to")) return null;
   if (old.assigned_to === me) return null;
   return buildAlert("assigned_to_you", row, { arrivedAt });
@@ -259,6 +289,7 @@ export function alertForRepNote(
 
 export function alertFromCatchUp(row: LeadSnapshot, me: string, isAdmin: boolean, arrivedAt = Date.now()) {
   if (row.assigned_to === me && row.status === "assigned") {
+    if (assignmentAlertSuppressed(row, me)) return null;
     const created = Date.parse(row.created_at);
     const updated = Date.parse(row.updated_at);
     const fresh = Number.isFinite(created) && Number.isFinite(updated) && Math.abs(updated - created) < 2000;
@@ -278,12 +309,10 @@ export function alertActions(kind: AlertKind): AlertAction[] {
 }
 
 export function actionsForViewer(kind: AlertKind, isAdmin: boolean): AlertAction[] {
-  if (isAdmin) {
-    if (kind === "rep_note") return ["got_it", "reassign"];
-    return ["call", "assign"];
-  }
   if (kind === "new_lead" || kind === "assigned_to_you") return ["call", "pass", "note"];
-  return [];
+  if (!isAdmin) return [];
+  if (kind === "rep_note") return ["got_it", "reassign"];
+  return ["call", "assign"];
 }
 
 export function serviceTypeLabel(value: string) {

@@ -545,7 +545,7 @@ function CrewCard({
 
 function Legend() {
   const items: WorkColumn[] = WORK_COLUMNS.filter(
-    (column) => column !== "on_hold" && column !== "lost" && column !== "deleted",
+    (column) => column !== "on_hold" && column !== "unqualified" && column !== "lost" && column !== "deleted",
   );
   return (
     <div className="border border-[#c9c9c9] bg-white px-4 py-3 text-xs text-[#706e6b]">

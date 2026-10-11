@@ -23,7 +23,7 @@ import {
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
 import { amountForEstimate } from "@/lib/estimate-totals";
 import { marketForEstimate } from "@/lib/market";
-import { PIPELINE_STAGES, STAGE_LABELS } from "@/lib/types";
+import { PIPELINE_STAGES, STAGE_LABELS, closingRate, isShelvedStage } from "@/lib/types";
 import { dedupeJobsByOpportunity, isDeletedJob } from "@/lib/job-record";
 import { workColumnFor } from "@/lib/work-board";
 import { cn } from "@/lib/utils";
@@ -85,12 +85,10 @@ export default function HomePage() {
 
   const stats = useMemo(() => {
     const open = crm.opportunities.filter(
-      (opportunity) => opportunity.stage !== "awarded" && opportunity.stage !== "lost"
-    );
-    const closed = crm.opportunities.filter(
-      (opportunity) => opportunity.stage === "awarded" || opportunity.stage === "lost"
+      (opportunity) => opportunity.stage !== "awarded" && !isShelvedStage(opportunity.stage)
     );
     const awarded = crm.opportunities.filter((opportunity) => opportunity.stage === "awarded");
+    const lost = crm.opportunities.filter((opportunity) => opportunity.stage === "lost");
     const pipelineValue = open.reduce((sum, opportunity) => sum + opportunity.value, 0);
     const weighted = open.reduce(
       (sum, opportunity) => sum + opportunity.value * (opportunity.winProbability / 100),
@@ -104,7 +102,7 @@ export default function HomePage() {
       (job) => job.status !== "complete" && job.status !== "on_hold" && !isDeletedJob(job)
     );
     const activeValue = activeJobs.reduce((sum, job) => sum + job.contractValue, 0);
-    const winRate = closed.length === 0 ? 0 : Math.round((awarded.length / closed.length) * 100);
+    const winRate = Math.round(closingRate(awarded.length, lost.length) * 100);
     const proposals = crm.estimates.filter(
       (estimate) => estimate.status === "sent" || estimate.status === "viewed"
     );
@@ -128,7 +126,7 @@ export default function HomePage() {
       .filter((event) => localYmd(new Date(event.startsAt)) === todayKey)
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
     const byStage = PIPELINE_STAGES.filter(
-      (stage) => stage !== "awarded" && stage !== "lost" && stage !== "estimating",
+      (stage) => stage !== "awarded" && !isShelvedStage(stage) && stage !== "estimating",
     ).map((stage) => ({
       stage,
       value: open
@@ -149,7 +147,7 @@ export default function HomePage() {
       activeValue,
       winRate,
       awardedCount: awarded.length,
-      closedCount: closed.length,
+      closedCount: awarded.length + lost.length,
       byStage,
       maxStage,
       proposals,

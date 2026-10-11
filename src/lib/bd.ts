@@ -1,4 +1,13 @@
-import type { Contact, CrmState, Expense, Job, Opportunity, SeatRole, StaffMember } from "@/lib/types";
+import {
+  isShelvedStage,
+  type Contact,
+  type CrmState,
+  type Expense,
+  type Job,
+  type Opportunity,
+  type SeatRole,
+  type StaffMember,
+} from "@/lib/types";
 import { yearOf } from "@/lib/reports";
 import { paymentsForJob } from "@/lib/job-financials";
 import { acceptedAmountForJob } from "@/lib/estimate-totals";
@@ -81,7 +90,7 @@ function isOpenLead(
   estimates: CrmState["estimates"],
   jobs: Job[],
 ) {
-  if (opportunity.stage === "lost") return false;
+  if (isShelvedStage(opportunity.stage)) return false;
   return !opportunityWonAt(opportunity, estimates, jobs);
 }
 

@@ -8,6 +8,7 @@ export const PIPELINE_STAGES = [
   "supplementing",
   "awarded",
   "lost",
+  "unqualified",
 ] as const;
 
 export type PipelineStage = (typeof PIPELINE_STAGES)[number];
@@ -1433,6 +1434,7 @@ export const STAGE_LABELS: Record<PipelineStage, string> = {
   supplementing: "Supplementing",
   awarded: "Job Sold",
   lost: "Lost",
+  unqualified: "Unqualified",
 };
 
 /** Pursuit stages shown in pickers. Older `estimating` rows display as Supplementing. */
@@ -1448,7 +1450,22 @@ export const STAGE_PROBABILITY: Record<PipelineStage, number> = {
   supplementing: 80,
   awarded: 100,
   lost: 0,
+  unqualified: 0,
 };
+
+/** Lost or unqualified: off the open pipeline. Delete is a separate trash action. */
+export function isShelvedStage(stage: string | null | undefined) {
+  return stage === "lost" || stage === "unqualified";
+}
+
+/**
+ * Close rate is won ÷ (won + lost).
+ * Callers must leave unqualified leads out of both counts so they do not lower the percentage.
+ */
+export function closingRate(won: number, lost: number) {
+  const decided = won + lost;
+  return decided > 0 ? won / decided : 0;
+}
 
 export const JOB_STATUS_LABELS: Record<JobStatus, string> = {
   precon: "Preconstruction",

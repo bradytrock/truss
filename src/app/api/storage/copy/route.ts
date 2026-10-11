@@ -16,11 +16,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-/** Copy a company-owned B2 object into another key (e.g. directory → job file). */
+/** Copy a company-owned object into another key (e.g. directory → job file). */
 export async function POST(request: Request) {
   try {
     if (!isB2Configured()) {
-      return NextResponse.json({ error: "Backblaze B2 is not configured." }, { status: 503 });
+      return NextResponse.json({ error: "File storage is not configured." }, { status: 503 });
     }
 
     const supabase = await createClient();

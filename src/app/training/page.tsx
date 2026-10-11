@@ -16,6 +16,7 @@ import { useCrm } from "@/lib/crm-store";
 import { COURSE, examUnlocked, overallProgress, staffProgress } from "@/lib/training/engine";
 import { recommendedChapterIds } from "@/lib/training/recommend";
 import { canPostTrainingBulletin, canViewTeamTraining } from "@/lib/visibility";
+import { isShelvedStage } from "@/lib/types";
 
 export default function TrainingHubPage() {
   const crm = useCrm();
@@ -36,7 +37,7 @@ export default function TrainingHubPage() {
         return opportunity?.projectType;
       }),
       ...crm.opportunities
-        .filter((opportunity) => opportunity.stage !== "awarded" && opportunity.stage !== "lost")
+        .filter((opportunity) => opportunity.stage !== "awarded" && !isShelvedStage(opportunity.stage))
         .map((opportunity) => opportunity.projectType),
     ];
     const ids = [...new Set(types.flatMap((type) => recommendedChapterIds(type)))];
