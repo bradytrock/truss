@@ -4,6 +4,7 @@ import {
   inboxItem,
   markInboxStampsRead,
   mergeInbox,
+  notificationAssignsRep,
   unreadInbox,
 } from "./notification-inbox.ts";
 
@@ -19,6 +20,7 @@ function item(id: string, at: string, updated = at): ReturnType<typeof inboxItem
       job_id: null,
       status: "unassigned",
       assigned_to: null,
+      assigned_by: null,
       passed_back_by: null,
       passed_back_by_name: "",
       passback_reason: "",
@@ -53,3 +55,8 @@ assert.equal(unreadInbox([newer, other], [older.stamp]).length, 2);
 assert.equal(unreadInbox([newer], [newer.stamp]).length, 0);
 assert.deepEqual(markInboxStampsRead([older.stamp], [newer.stamp]), [older.stamp, newer.stamp]);
 assert.notEqual(alertStamp(older.alert), alertStamp(newer.alert));
+assert.equal(notificationAssignsRep("needs_rep", true), true);
+assert.equal(notificationAssignsRep("passed_back", true), true);
+assert.equal(notificationAssignsRep("needs_rep", false), false);
+assert.equal(notificationAssignsRep("rep_note", true), false);
+assert.equal(notificationAssignsRep("new_lead", true), false);

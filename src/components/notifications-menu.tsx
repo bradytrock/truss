@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { AssignRepDialog } from "@/components/lead-alerts/lead-alert-dialogs";
 import { useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -15,6 +16,7 @@ import {
 import {
   inboxReadKey,
   markInboxStampsRead,
+  notificationAssignsRep,
   NOTIFICATIONS_REFRESH,
   readInboxStamps,
   rememberInboxStamps,
@@ -22,6 +24,7 @@ import {
   type InboxItem,
 } from "@/lib/notification-inbox";
 import { loadNotificationInbox } from "@/lib/notification-inbox-api";
+import { assignLead } from "@/lib/lead-alerts-api";
 import { isUnsignedDemo } from "@/lib/seats";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -69,6 +72,7 @@ function NotificationsSession() {
   const isAdmin = user.role === "company_admin";
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(0);
+  const [assigning, setAssigning] = useState<InboxItem | null>(null);
   const inboxKey = `${user.id}:${isAdmin ? "admin" : "rep"}`;
   const inbox = useSyncExternalStore(
     (listener) => subscribeInbox(inboxKey, listener),
@@ -136,6 +140,10 @@ function NotificationsSession() {
   function openItem(item: InboxItem) {
     saveRead([item.stamp]);
     setOpen(false);
+    if (notificationAssignsRep(item.alert.kind, isAdmin)) {
+      setAssigning(item);
+      return;
+    }
     const href = leadRecordHref(item.alert.lead);
     if (href) router.push(href);
   }
@@ -143,6 +151,7 @@ function NotificationsSession() {
   const countLabel = unread.length > 9 ? "9+" : String(unread.length);
 
   return (
+    <>
     <Popover
       open={open}
       onOpenChange={(next) => {
@@ -231,5 +240,19 @@ function NotificationsSession() {
         </div>
       </PopoverContent>
     </Popover>
+    {isAdmin ? (
+      <AssignRepDialog
+        alert={assigning?.alert ?? null}
+        companyId={user.companyId}
+        onClose={() => setAssigning(null)}
+        onSubmit={async (repId, note) => {
+          if (!assigning) return;
+          await assignLead(createClient(), { leadId: assigning.alert.lead.id, repId, note });
+          setAssigning(null);
+          window.dispatchEvent(new Event(NOTIFICATIONS_REFRESH));
+        }}
+      />
+    ) : null}
+    </>
   );
 }

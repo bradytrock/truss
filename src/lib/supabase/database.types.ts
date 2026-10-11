@@ -1004,6 +1004,7 @@ export type Database = {
           company_id: string;
           invoice_id: string | null;
           job_id: string | null;
+          opportunity_id: string | null;
           estimate_id: string | null;
           amount: number;
           method: string;
@@ -1026,6 +1027,7 @@ export type Database = {
           company_id: string;
           invoice_id?: string | null;
           job_id?: string | null;
+          opportunity_id?: string | null;
           estimate_id?: string | null;
           amount: number;
           method?: string;
@@ -3141,6 +3143,7 @@ export type Database = {
           job_id: string | null;
           status: string;
           assigned_to: string | null;
+          assigned_by: string | null;
           passed_back_by: string | null;
           passed_back_by_name: string | null;
           passback_reason: string | null;
@@ -3161,6 +3164,7 @@ export type Database = {
           job_id?: string | null;
           status?: string;
           assigned_to?: string | null;
+          assigned_by?: string | null;
           passed_back_by?: string | null;
           passed_back_by_name?: string | null;
           passback_reason?: string | null;
@@ -3410,6 +3414,10 @@ export type Database = {
       shared_estimate: {
         Args: { p_token: string };
         Returns: Json;
+      };
+      estimate_guest_share_path: {
+        Args: { p_id: string };
+        Returns: string;
       };
       shared_portal: {
         Args: { p_token: string };
@@ -3936,7 +3944,8 @@ export type Database = {
         | "interview"
         | "supplementing"
         | "awarded"
-        | "lost";
+        | "lost"
+        | "unqualified";
       job_status: "precon" | "in_progress" | "punch" | "complete" | "on_hold";
       project_type:
         | "restoration"

@@ -177,7 +177,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   },
   {
     name: "move_job",
-    description: "Move a job on the board. Order: lead, proposal_sent, in_progress, supplementing, punch, complete, on_hold, lost. Supplementing is the combined estimating and supplementing column, immediately after In progress.",
+    description: "Move a job on the board. Order: lead, proposal_sent, in_progress, supplementing, punch, complete, on_hold, unqualified, lost. Unqualified is not a delete and does not count against close rate. Supplementing is the combined estimating and supplementing column, immediately after In progress.",
     status: "Moving the job…",
     gate: "any",
     parameters: object(
@@ -185,7 +185,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
         job: str("Job id or code"),
         column: {
           type: "string",
-          enum: ["lead", "proposal_sent", "in_progress", "supplementing", "punch", "complete", "on_hold", "lost"],
+          enum: ["lead", "proposal_sent", "in_progress", "supplementing", "punch", "complete", "on_hold", "unqualified", "lost"],
         },
       },
       ["job", "column"],

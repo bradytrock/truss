@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
+import { formatInboxTime, formatMessageStamp, sameLocalDay } from "./format.ts";
 import { mailThreads, suggestedJobsForPeople } from "./job-emails.ts";
 import { contactsForTexting, jobForContact, messageThreads } from "./job-messages.ts";
-import type { Contact, GmailMessage, Job, TextMessage } from "./types.ts";
+import { implicitThreadCrew } from "./message-threads.ts";
+import type { Contact, GmailMessage, Job, Opportunity, TextMessage } from "./types.ts";
 
 function contact(partial: Partial<Contact> & Pick<Contact, "id" | "name">): Contact {
   return {
@@ -101,5 +103,21 @@ assert.equal(mail[0].subject, "(no subject)");
 assert.equal(mail[0].preview, "");
 assert.equal(mail[0].job, undefined);
 assert.equal(suggestedJobsForPeople([ownedJob], [], [jenn.id])[0]?.id, "j2");
+
+assert.equal(formatMessageStamp(null), "");
+assert.equal(formatInboxTime(undefined), "");
+assert.equal(sameLocalDay(null, "2026-10-04T12:00:00.000Z"), false);
+
+const dated = messageThreads(
+  [text],
+  [jenn],
+  [brokenJob],
+  [{ id: "o1", primaryContactId: jenn.id, stage: "pursuing", createdAt: null, name: "Roof" } as unknown as Opportunity],
+);
+assert.equal(dated[0]?.opportunity?.id, "o1");
+assert.deepEqual(
+  implicitThreadCrew({ contactId: jenn.id, contactIds: [jenn.id] }, [], [], [brokenJob], []),
+  [],
+);
 
 console.log("job-messages.test.ts ok");

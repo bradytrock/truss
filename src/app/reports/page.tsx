@@ -277,12 +277,13 @@ function ReportsPageInner() {
         </TabsContent>
 
         <TabsContent value="leads" className="mt-5 space-y-5">
-          <MetricStrip className="sm:grid-cols-2 xl:grid-cols-5">
+          <MetricStrip className="sm:grid-cols-2 xl:grid-cols-6">
             <Metric label="Incoming jobs" value={String(report.kpis.incoming)} hint="Leads opened in this range" />
+            <Metric label="Unqualified" value={String(report.kpis.unqualified)} hint="Kept on the board, left out of close rate" />
             <Metric label="Avg. days to sold" value={report.kpis.daysToSold.toFixed(1)} hint="Lead created to signed contract" />
             <Metric label="New lead to qualified" value={formatShare(report.kpis.newToQualified)} hint="Moved past Lead" />
             <Metric label="Qualified close rate" value={formatShare(report.kpis.qualifiedClose)} hint="Qualified leads with a signed contract" />
-            <Metric label="Close rate" value={formatShare(report.kpis.closeRate)} hint="Won vs lost in range" />
+            <Metric label="Close rate" value={formatShare(report.kpis.closeRate)} hint="Won versus lost. Unqualified is left out." />
           </MetricStrip>
           <Panel title="Lead performance" description="Where work came from, and how much of it sold.">
             <div className="mb-4">
@@ -533,12 +534,13 @@ function ReportsPageInner() {
 
         <TabsContent value="workflow" className="mt-5 space-y-5">
           <Panel title="Workflow at a glance">
-            <div className="grid gap-px bg-border sm:grid-cols-2 xl:grid-cols-5">
+            <div className="grid gap-px bg-border sm:grid-cols-2 xl:grid-cols-6">
               <Metric label="New leads" value={String(report.kpis.incoming)} />
+              <Metric label="Unqualified" value={String(report.kpis.unqualified)} hint="Left out of close rate" />
               <Metric label="Days to sold" value={report.kpis.daysToSold.toFixed(1)} hint="Created to signed contract" />
               <Metric label="New lead to qualified" value={formatShare(report.kpis.newToQualified)} />
               <Metric label="Qualified close rate" value={formatShare(report.kpis.qualifiedClose)} />
-              <Metric label="Close rate" value={formatShare(report.kpis.closeRate)} />
+              <Metric label="Close rate" value={formatShare(report.kpis.closeRate)} hint="Won versus lost. Unqualified is left out." />
             </div>
           </Panel>
           <Panel title="Lead performance" description="Sources feeding this workflow.">

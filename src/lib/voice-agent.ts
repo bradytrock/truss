@@ -1,3 +1,5 @@
+import { isShelvedStage } from "@/lib/types";
+
 export const VOICE_AUTHOR_PREFIX = "Voice · ";
 
 export type VoiceIntakeAction = "attach" | "create";
@@ -40,7 +42,7 @@ export function isOpenVoiceJob(job: { deletedAt?: string | null; status?: string
 }
 
 export function isOpenVoiceOpportunity(opportunity: { stage?: string | null }) {
-  return opportunity.stage !== "lost";
+  return !isShelvedStage(opportunity.stage);
 }
 
 /**

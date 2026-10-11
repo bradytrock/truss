@@ -59,9 +59,8 @@ export function storageProxyPath(key: string) {
 
 /**
  * Durable browser URL for a stored object.
- * Always use the app proxy — the B2 bucket is private, so friendly
- * `f005.backblazeb2.com/file/...` URLs 401 in the browser as raw JSON.
- * (Leave B2_PUBLIC_BASE_URL unset until the bucket is actually public.)
+ * Always use the app proxy. The Azure container (and the old B2 bucket) are
+ * private, so a raw blob or Backblaze URL 401s in the browser.
  */
 export function publicObjectUrl(key: string, _publicBaseUrl?: string) {
   const objectKey = normalizeObjectKey(key) || key.replace(/^\/+/, "");
@@ -69,8 +68,9 @@ export function publicObjectUrl(key: string, _publicBaseUrl?: string) {
 }
 
 /**
- * Pull the object key out of a stored proxy URL or a Backblaze friendly URL
- * (`https://f005.backblazeb2.com/file/TheCRM/{key}`).
+ * Pull the object key out of a stored proxy URL, a Backblaze friendly URL
+ * (`https://f005.backblazeb2.com/file/TheCRM/{key}`), or an Azure blob URL
+ * (`https://{account}.blob.core.windows.net/{container}/{key}`).
  */
 export function objectKeyFromStoredUrl(url: string) {
   const raw = url.trim();
@@ -95,6 +95,13 @@ export function objectKeyFromStoredUrl(url: string) {
         return parts.slice(1).join("/");
       }
     }
+    // Azure Blob: /{container}/{objectKey}
+    if (/\.blob\.core\.windows\.net$/i.test(parsed.hostname)) {
+      const parts = parsed.pathname.replace(/^\/+/, "").split("/");
+      if (parts.length >= 2) {
+        return decodeURIComponent(parts.slice(1).join("/")).replace(/^\/+/, "");
+      }
+    }
   } catch {
     // ignore
   }
@@ -117,6 +124,62 @@ export function legacyKindlessObjectKey(path: string) {
     return [parts[0], ...parts.slice(2)].join("/");
   }
   return "";
+}
+
+/** `{companyId}/{kind}/…` ↔ `{kind}/{companyId}/…` */
+export function swapCompanyAndKind(path: string) {
+  const parts = path.replace(/^\/+/, "").split("/");
+  if (parts.length < 3) return "";
+  const [first, second, ...rest] = parts;
+  if (!first || !second) return "";
+  if (isCompanyId(first) && isStorageKindValue(second)) {
+    return [second, first, ...rest].join("/");
+  }
+  if (isStorageKindValue(first) && isCompanyId(second)) {
+    return [second, first, ...rest].join("/");
+  }
+  return "";
+}
+
+/**
+ * Blob names to try for one stored file.
+ * Canonical company-first, the older kindless key, and the kind-first key.
+ */
+export function storageReadKeys(path: string) {
+  const keys: string[] = [];
+  const add = (candidate: string) => {
+    const value = candidate.replace(/^\/+/, "");
+    if (!value || value.includes("..") || keys.includes(value)) return;
+    keys.push(value);
+  };
+  const clean = path.replace(/^\/+/, "");
+  add(clean);
+  add(legacyKindlessObjectKey(clean));
+  const swapped = swapCompanyAndKind(clean);
+  add(swapped);
+  if (swapped) add(legacyKindlessObjectKey(swapped));
+  return keys;
+}
+
+/** A folder sitting in front of every company id, such as the old bucket name. */
+export function isBlobWrapperPrefix(prefix: string) {
+  const segment = prefix.replace(/^\/+|\/+$/g, "").split("/")[0] || "";
+  if (!segment || segment.startsWith("$") || segment.includes("..")) return false;
+  if (isCompanyId(segment) || isStorageKindValue(segment)) return false;
+  return true;
+}
+
+export function prefixedStorageKeys(prefixes: string[], keys: string[]) {
+  const out: string[] = [];
+  for (const prefix of prefixes) {
+    const segment = prefix.replace(/^\/+|\/+$/g, "");
+    if (!isBlobWrapperPrefix(segment)) continue;
+    for (const key of keys) {
+      const candidate = `${segment}/${key}`;
+      if (!out.includes(candidate)) out.push(candidate);
+    }
+  }
+  return out;
 }
 
 function pushAllowedKey(keys: string[], key: string) {
@@ -158,8 +221,8 @@ export function resolveStoredFileUrl(input: {
 }) {
   const key = storedObjectKeyCandidates(input)[0];
   if (key) return publicObjectUrl(key, input.publicBaseUrl);
-  // Never hand the browser a private B2 friendly URL — it 401s as raw JSON.
+  // Never hand the browser a private blob URL — it 401s outside the app proxy.
   const raw = (input.url || "").trim();
-  if (/backblazeb2\.com/i.test(raw)) return "";
+  if (/backblazeb2\.com/i.test(raw) || /\.blob\.core\.windows\.net/i.test(raw)) return "";
   return raw;
 }

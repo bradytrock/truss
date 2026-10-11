@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  STORAGE_NOT_CONFIGURED,
   b2FailureMessage,
   isB2Configured,
   isStorageKind,
@@ -25,10 +26,7 @@ export async function POST(request: Request) {
   try {
     if (!isB2Configured()) {
       return NextResponse.json(
-        {
-          error:
-            "Backblaze B2 is not configured on this host. Add B2_KEY_ID, B2_APPLICATION_KEY, B2_BUCKET, and B2_REGION.",
-        },
+        { error: STORAGE_NOT_CONFIGURED },
         { status: 503 },
       );
     }
@@ -109,7 +107,7 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   try {
     if (!isB2Configured()) {
-      return NextResponse.json({ error: "Backblaze B2 is not configured." }, { status: 503 });
+      return NextResponse.json({ error: STORAGE_NOT_CONFIGURED }, { status: 503 });
     }
 
     const supabase = await createClient();

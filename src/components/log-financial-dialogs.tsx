@@ -534,7 +534,7 @@ export function LogPaymentDialog({
     }
     setPending(true);
     try {
-      await crm.recordPayment({
+      const saved = await crm.recordPayment({
         invoiceId: invoiceId || null,
         jobId: jobId || null,
         amount: value,
@@ -544,7 +544,7 @@ export function LogPaymentDialog({
         file,
         receiptUrl: file ? undefined : preview,
       });
-      onOpenChange(false);
+      if (saved) onOpenChange(false);
     } finally {
       setPending(false);
     }

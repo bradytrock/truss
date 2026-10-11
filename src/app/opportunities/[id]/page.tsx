@@ -34,6 +34,7 @@ import {
   JOB_MARKETS,
   SELECTABLE_PIPELINE_STAGES,
   STAGE_LABELS,
+  isShelvedStage,
   type JobMarket,
   type PipelineStage,
 } from "@/lib/types";
@@ -85,6 +86,8 @@ export default function OpportunityDetailPage() {
         toast.success(created ? "Job Sold. The pipeline job is now production." : "Already on a job.");
       } else if (stage === "lost") {
         toast.message("Marked lost.");
+      } else if (stage === "unqualified") {
+        toast.message("Marked unqualified.");
       }
     })();
   }
@@ -150,7 +153,7 @@ export default function OpportunityDetailPage() {
         </div>
       </div>
 
-      {opportunity.bidDueAt && opportunity.stage !== "awarded" && opportunity.stage !== "lost" ? (
+      {opportunity.bidDueAt && opportunity.stage !== "awarded" && !isShelvedStage(opportunity.stage) ? (
         <p
           className={
             due !== null && due <= 3
