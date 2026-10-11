@@ -264,8 +264,8 @@ export function TemplateWriter({ template }: { template: EstimateTemplate }) {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Preview the comparison cards. Unique items on each option become the bullets homeowners see.
-              The selected option is the starting pick on new estimates.
+              Preview the comparison homeowners see. Shared work is checked on every card. A dash means that
+              option leaves it out. The selected option is the starting pick on new estimates.
             </p>
             <PackagePicker
               estimate={template}

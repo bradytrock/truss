@@ -4,9 +4,11 @@ import {
   asCompanyCamList,
   companyCamErrorMessage,
   companyCamListedPhotoId,
+  companyCamNextPhotoCursor,
   companyCamPhotoCreateBody,
   companyCamPhotoIdsToDrop,
   companyCamPhotoPageState,
+  companyCamPhotoQuery,
   companyCamProjectBody,
   companyCamTokenHint,
   companyCamUploadUrl,
@@ -113,6 +115,7 @@ export async function companyCamRequest(token: string, path: string, init?: Requ
   try {
     response = await fetch(`${COMPANYCAM_API}${path}`, {
       ...init,
+      cache: "no-store",
       headers,
       signal: init?.signal ?? AbortSignal.timeout(20_000),
     });
@@ -210,25 +213,34 @@ const COMPANYCAM_PHOTO_PAGE_SIZE = 100;
 /** Enough for a full project at CompanyCam's smaller page sizes. Hitting the cap is an incomplete list. */
 const COMPANYCAM_PHOTO_MAX_PAGES = 100;
 
-export async function listCompanyCamPhotos(token: string, projectId: string) {
+export async function listCompanyCamPhotos(
+  token: string,
+  projectId: string,
+  options?: {
+    onPage?: (photos: CompanyCamPhoto[]) => Promise<{ error: string | null }>;
+  },
+) {
   const photos: CompanyCamPhoto[] = [];
   const remoteIds: string[] = [];
   const seen = new Set<string>();
-  let page = 1;
-  let cursor = "";
-  let mode: "page" | "cursor" = "page";
+  let after: string | undefined;
+  let offsetPage = 1;
+  let step = 0;
   let complete = false;
 
-  for (let step = 0; step < COMPANYCAM_PHOTO_MAX_PAGES; step += 1) {
-    const params = new URLSearchParams({ per_page: String(COMPANYCAM_PHOTO_PAGE_SIZE) });
-    if (mode === "cursor") {
-      if (cursor) params.set("after", cursor);
-    } else if (page > 1) {
-      params.set("page", String(page));
+  do {
+    step += 1;
+    if (step > COMPANYCAM_PHOTO_MAX_PAGES) {
+      complete = false;
+      break;
     }
     const result = await companyCamRequest(
       token,
-      `/projects/${encodeURIComponent(projectId)}/photos?${params.toString()}`,
+      `/projects/${encodeURIComponent(projectId)}/photos?${companyCamPhotoQuery({
+        after,
+        page: offsetPage,
+        perPage: COMPANYCAM_PHOTO_PAGE_SIZE,
+      })}`,
     );
     if (!result.ok) {
       if (seen.size === 0) {
@@ -237,7 +249,12 @@ export async function listCompanyCamPhotos(token: string, projectId: string) {
       return { ok: true as const, error: "", photos, remoteIds, complete: false };
     }
     const raw = asCompanyCamList(result.json);
+    if (raw.length === 0) {
+      complete = true;
+      break;
+    }
     const before = seen.size;
+    const pagePhotos: CompanyCamPhoto[] = [];
     for (const item of raw) {
       const id = companyCamListedPhotoId(item);
       if (!id || seen.has(id)) continue;
@@ -245,27 +262,35 @@ export async function listCompanyCamPhotos(token: string, projectId: string) {
       remoteIds.push(id);
       const photo = parseCompanyCamPhoto(item);
       if (!photo) continue;
-      photos.push(photo.projectId ? photo : { ...photo, projectId });
+      const withProject = photo.projectId ? photo : { ...photo, projectId };
+      photos.push(withProject);
+      pagePhotos.push(withProject);
+    }
+    if (pagePhotos.length > 0 && options?.onPage) {
+      const saved = await options.onPage(pagePhotos);
+      if (saved.error) {
+        return { ok: false as const, error: saved.error, photos, remoteIds, complete: false };
+      }
     }
     const state = companyCamPhotoPageState({
       rawCount: raw.length,
-      nextCursor: result.headers.get("x-next-cursor") ?? "",
+      nextCursor: companyCamNextPhotoCursor(result.headers),
       hasNext: result.headers.get("x-has-next") ?? "",
-      page,
-      previousCursor: cursor,
+      page: offsetPage,
+      previousCursor: after ?? "",
     });
-    if (state.mode === "stop" || (state.mode === "page" && raw.length > 0 && seen.size === before)) {
+    if (state.mode === "stop" || (state.mode === "page" && seen.size === before)) {
       complete = state.mode === "stop" && state.complete;
       break;
     }
     if (state.mode === "cursor") {
-      mode = "cursor";
-      cursor = state.cursor;
+      after = state.cursor;
+      offsetPage = 1;
     } else {
-      mode = "page";
-      page = state.page;
+      after = undefined;
+      offsetPage = state.page;
     }
-  }
+  } while (after || offsetPage > 1);
 
   return { ok: true as const, error: "", photos, remoteIds, complete };
 }
@@ -423,27 +448,47 @@ export async function syncCompanyCamJob(
   supabase: Client,
   input: { token: string; companyId: string; jobId: string; projectId: string },
 ) {
-  const listed = await listCompanyCamPhotos(input.token, input.projectId);
-  if (!listed.ok) {
-    return { ok: false as const, error: listed.error, imported: 0, removed: 0, pushed: 0, total: listed.photos.length };
-  }
-  const imported = await importCompanyCamPhotos(supabase, {
-    companyId: input.companyId,
-    jobId: input.jobId,
-    photos: listed.photos.map((photo) => ({
-      ...photo,
-      projectId: photo.projectId || input.projectId,
-    })),
+  let importedCount = 0;
+  const listed = await listCompanyCamPhotos(input.token, input.projectId, {
+    onPage: async (pagePhotos) => {
+      const imported = await importCompanyCamPhotos(supabase, {
+        companyId: input.companyId,
+        jobId: input.jobId,
+        photos: pagePhotos.map((photo) => ({
+          ...photo,
+          projectId: photo.projectId || input.projectId,
+        })),
+      });
+      importedCount += imported.imported;
+      return { error: imported.error ? imported.error.message : null };
+    },
   });
-  if (imported.error) {
+  if (!listed.ok) {
     return {
       ok: false as const,
-      error: imported.error.message,
-      imported: imported.imported,
+      error: listed.error,
+      imported: importedCount,
       removed: 0,
       pushed: 0,
       total: listed.photos.length,
     };
+  }
+  if (importedCount === 0) {
+    const stamped = await importCompanyCamPhotos(supabase, {
+      companyId: input.companyId,
+      jobId: input.jobId,
+      photos: [],
+    });
+    if (stamped.error) {
+      return {
+        ok: false as const,
+        error: stamped.error.message,
+        imported: 0,
+        removed: 0,
+        pushed: 0,
+        total: listed.photos.length,
+      };
+    }
   }
 
   let removed = 0;
@@ -499,7 +544,7 @@ export async function syncCompanyCamJob(
   return {
     ok: true as const,
     error: "",
-    imported: imported.imported,
+    imported: importedCount,
     removed,
     pushed: pushed.pushed,
     total: listed.photos.length,

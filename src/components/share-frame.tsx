@@ -6,17 +6,26 @@ import { Button } from "@/components/ui/button";
 import { formatPhone } from "@/lib/format";
 import { digitsOnly, toE164 } from "@/lib/phone";
 import type { ShareSender } from "@/lib/share";
+import { cn } from "@/lib/utils";
 
 export function ShareFrame({
   children,
   actions,
+  wide,
 }: {
   children: ReactNode;
   actions?: ReactNode;
+  /** Use the browser width. Good / Better / Best cards need the screen, not a centered letter column. */
+  wide?: boolean;
 }) {
   return (
     <div className="min-h-full bg-muted/40">
-      <div className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6 sm:py-10">
+      <div
+        className={cn(
+          "mx-auto flex w-full flex-col gap-4 px-4 py-6 sm:px-6 sm:py-10",
+          wide ? "max-w-[100rem] lg:px-10 xl:px-14" : "max-w-3xl",
+        )}
+      >
         {actions ? <div className="flex flex-wrap justify-end gap-2">{actions}</div> : null}
         {children}
       </div>
