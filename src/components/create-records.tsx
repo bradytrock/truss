@@ -59,7 +59,7 @@ import {
   type Trade,
 } from "@/lib/types";
 import { LeadAssigneeSelect } from "@/components/lead-assignee";
-import { assignmentOptions } from "@/lib/visibility";
+import { assignmentOptions, companyLeadAssignees } from "@/lib/visibility";
 import { hasBusinessDevelopmentSeat } from "@/lib/bd";
 import { phonesMatch } from "@/lib/job-messages";
 import { formatPhone } from "@/lib/format";
@@ -81,7 +81,7 @@ export function CreateOpportunityDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const crm = useCrm();
-  const people = assignmentOptions(crm.viewer, crm.book.staff, crm.user.staffId, crm.user.role);
+  const people = companyLeadAssignees(crm.viewer, crm.book.staff, crm.user.staffId);
   const defaultAssignee = people.find((member) => member.id === crm.user.staffId)?.id ?? people[0]?.id ?? "";
   const bdSeat = hasBusinessDevelopmentSeat(crm.viewer, crm.user.role);
   const [assigneeId, setAssigneeId] = useState(defaultAssignee);

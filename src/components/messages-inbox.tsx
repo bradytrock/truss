@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Virtuoso } from "react-virtuoso";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronsUpDown, Mail, MessageSquare, Phone, Search, Send, Smartphone, UserPlus, X } from "lucide-react";
@@ -20,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, ErrorBanner, LoadingScreen } from "@/components/page-chrome";
+import { RecordErrorBoundary } from "@/components/record-error-boundary";
 import { InboxChannelSwitch } from "@/components/inbox-channel-switch";
 import { useCrm } from "@/lib/crm-store";
 import {
@@ -65,80 +65,117 @@ import { fallbackChatReplies, type WebsiteChatThread } from "@/lib/website-chat"
 import { IMESSAGE_EFFECTS, IMESSAGE_TAPBACKS } from "@/lib/imessage";
 import type { TextMessage } from "@/lib/types";
 
+function textOf(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
 export function MessagesInbox() {
   const crm = useCrm();
   const router = useRouter();
   const params = useSearchParams();
   const book = crm.book;
-  const allThreads = useMemo(
-    () => messageThreads(book.messages, book.contacts, book.jobs, book.opportunities),
-    [book.messages, book.contacts, book.jobs, book.opportunities],
-  );
+  const contacts = Array.isArray(book?.contacts) ? book.contacts : [];
+  const jobs = Array.isArray(book?.jobs) ? book.jobs : [];
+  const opportunities = Array.isArray(book?.opportunities) ? book.opportunities : [];
+  const messages = Array.isArray(book?.messages) ? book.messages : [];
+  const profiles = Array.isArray(book?.companyProfiles) ? book.companyProfiles : [];
+  const staff = Array.isArray(book?.staff) ? book.staff : [];
+  const members = Array.isArray(book?.messageThreadMembers) ? book.messageThreadMembers : [];
+  const opens = Array.isArray(book?.messageThreadOpens) ? book.messageThreadOpens : [];
+  const allThreads = useMemo(() => {
+    try {
+      return messageThreads(messages, contacts, jobs, opportunities);
+    } catch (error) {
+      console.error(error);
+      return [];
+    }
+  }, [messages, contacts, jobs, opportunities]);
   const viewer = useMemo(() => {
     if (!crm.effectiveStaff) return null;
-    return viewerFromStaff(
-      crm.effectiveStaff,
-      book.companyProfiles,
-      crm.impersonatedStaff
-        ? undefined
-        : { profileId: crm.user.id, profileRole: crm.user.role },
-    );
+    try {
+      return viewerFromStaff(
+        crm.effectiveStaff,
+        profiles,
+        crm.impersonatedStaff
+          ? undefined
+          : { profileId: crm.user.id, profileRole: crm.user.role },
+      );
+    } catch (error) {
+      console.error(error);
+      return null;
+    }
   }, [
-    book.companyProfiles,
+    profiles,
     crm.effectiveStaff,
     crm.impersonatedStaff,
     crm.user.id,
     crm.user.role,
   ]);
-  const threads = useMemo(
-    () =>
-      viewer
-        ? visibleInboxThreads(allThreads, viewer, {
-            staff: book.staff,
-            profiles: book.companyProfiles,
-            members: book.messageThreadMembers,
-            jobs: book.jobs,
-            opportunities: book.opportunities,
-          })
-        : allThreads,
-    [allThreads, book.companyProfiles, book.jobs, book.messageThreadMembers, book.opportunities, book.staff, viewer],
-  );
-  const textable = useMemo(() => contactsForTexting(book.contacts), [book.contacts]);
+  const threads = useMemo(() => {
+    if (!viewer) return allThreads;
+    try {
+      return visibleInboxThreads(allThreads, viewer, {
+        staff,
+        profiles,
+        members,
+        jobs,
+        opportunities,
+      });
+    } catch (error) {
+      console.error(error);
+      return allThreads;
+    }
+  }, [allThreads, jobs, members, opportunities, profiles, staff, viewer]);
+  const textable = useMemo(() => {
+    try {
+      return contactsForTexting(contacts);
+    } catch (error) {
+      console.error(error);
+      return [];
+    }
+  }, [contacts]);
 
-  const wantedJob = params.get("job");
-  const wantedContact = params.get("contact");
-  const wantedThread = params.get("thread");
-  const composeParam = params.get("compose") === "1";
+  // useSearchParams() is null until the router publishes the URL. Calling .get
+  // on that null is what replaces this whole page with the error boundary.
+  const wantedJob = params?.get("job") ?? null;
+  const wantedContact = params?.get("contact") ?? null;
+  const wantedThread = params?.get("thread") ?? null;
+  const composeParam = params?.get("compose") === "1";
 
   const queryContact = useMemo(() => {
-    if (wantedContact) return book.contacts.find((row) => row.id === wantedContact);
+    if (wantedContact) return contacts.find((row) => row?.id === wantedContact);
     if (wantedJob) {
-      const job = book.jobs.find((row) => row.id === wantedJob);
-      return job ? book.contacts.find((row) => row.id === job.primaryContactId) : undefined;
+      const job = jobs.find((row) => row?.id === wantedJob);
+      return job ? contacts.find((row) => row?.id === job.primaryContactId) : undefined;
     }
     return undefined;
-  }, [wantedContact, wantedJob, book.contacts, book.jobs]);
+  }, [wantedContact, wantedJob, contacts, jobs]);
 
   const queryJob = useMemo(
-    () => (wantedJob ? book.jobs.find((row) => row.id === wantedJob) : undefined),
-    [wantedJob, book.jobs],
+    () => (wantedJob ? jobs.find((row) => row?.id === wantedJob) : undefined),
+    [wantedJob, jobs],
   );
 
   const queryThread = useMemo(() => {
-    const resolved = resolveInboxThreadKey(wantedThread, book.contacts);
-    if (resolved) return threads.find((thread) => thread.key === resolved);
-    if (queryContact) {
-      const key = conversationThreadKey({ contactId: queryContact.id, phone: queryContact.phone });
-      return threads.find(
-        (thread) =>
-          thread.key === key ||
-          thread.contactId === queryContact.id ||
-          thread.contactIds.includes(queryContact.id) ||
-          phoneKey(thread.phone) === phoneKey(queryContact.phone),
-      );
+    try {
+      const resolved = resolveInboxThreadKey(wantedThread, contacts);
+      if (resolved) return threads.find((thread) => thread.key === resolved);
+      if (queryContact) {
+        const key = conversationThreadKey({ contactId: queryContact.id, phone: queryContact.phone });
+        return threads.find(
+          (thread) =>
+            thread.key === key ||
+            thread.contactId === queryContact.id ||
+            (Array.isArray(thread.contactIds) && thread.contactIds.includes(queryContact.id)) ||
+            phoneKey(thread.phone) === phoneKey(queryContact.phone),
+        );
+      }
+      return undefined;
+    } catch (error) {
+      console.error(error);
+      return undefined;
     }
-    return undefined;
-  }, [wantedThread, queryContact, threads, book.contacts]);
+  }, [wantedThread, queryContact, threads, contacts]);
 
   const [query, setQuery] = useState("");
   const [draftPhone, setDraftPhone] = useState(() =>
@@ -181,14 +218,18 @@ export function MessagesInbox() {
   const visibleThreads = useMemo(() => filterMessageThreads(threads, query), [query, threads]);
 
   const composeContact =
-    (draftContactId ? book.contacts.find((row) => row.id === draftContactId) : undefined) ??
-    contactForPhone(book.contacts, draftPhone);
+    (draftContactId ? contacts.find((row) => row?.id === draftContactId) : undefined) ??
+    contactForPhone(contacts, draftPhone);
   const sendTo = selected?.phone || draftPhone;
-  const jobHint =
-    queryJob?.id ??
-    selected?.jobId ??
-    (composeContact ? jobForContact(book.jobs, book.opportunities, composeContact.id)?.id : "") ??
-    "";
+  let attachedJobId = "";
+  if (composeContact) {
+    try {
+      attachedJobId = jobForContact(jobs, opportunities, composeContact.id)?.id ?? "";
+    } catch (error) {
+      console.error(error);
+    }
+  }
+  const jobHint = queryJob?.id ?? selected?.jobId ?? attachedJobId;
   const contactHint = queryContact?.id ?? selected?.contactId ?? composeContact?.id ?? "";
   const conversationOpen = showCompose || Boolean(selected) || Boolean(webChatId);
   const threadSeed = selected?.key ?? "";
@@ -205,7 +246,7 @@ export function MessagesInbox() {
       void fetch("/api/chat/office")
         .then((response) => (response.ok ? response.json() : null))
         .then((data: { chats?: WebsiteChatThread[] } | null) => {
-          if (!cancelled && data?.chats) setWebChats(data.chats);
+          if (!cancelled) setWebChats(chatThreads(data?.chats));
         })
         .catch(() => undefined);
     }
@@ -218,12 +259,13 @@ export function MessagesInbox() {
   }, []);
 
   const visibleWebChats = useMemo(() => {
+    const rows = chatThreads(webChats);
     const needle = query.trim().toLowerCase();
-    if (!needle) return webChats;
-    return webChats.filter(
+    if (!needle) return rows;
+    return rows.filter(
       (chat) =>
-        (chat.label || "").toLowerCase().includes(needle) ||
-        (chat.preview || "").toLowerCase().includes(needle),
+        textOf(chat.label).toLowerCase().includes(needle) ||
+        textOf(chat.preview).toLowerCase().includes(needle),
     );
   }, [query, webChats]);
 
@@ -250,7 +292,12 @@ export function MessagesInbox() {
         setWebChats((current) =>
           current.map((chat) =>
             chat.id === selectedWeb.id
-              ? { ...chat, preview: text, messages: [...chat.messages, sent], updatedAt: sent.createdAt }
+              ? {
+                  ...chat,
+                  preview: text,
+                  messages: [...(Array.isArray(chat.messages) ? chat.messages : []), sent],
+                  updatedAt: sent.createdAt,
+                }
               : chat,
           ),
         );
@@ -403,8 +450,8 @@ export function MessagesInbox() {
     const digits = pickerQuery.replace(/\D/g, "");
     return textable.filter((contact) => {
       if (!needle) return true;
-      if (contact.name.toLowerCase().includes(needle)) return true;
-      if (contact.title.toLowerCase().includes(needle)) return true;
+      if ((contact.name || "").toLowerCase().includes(needle)) return true;
+      if ((contact.title || "").toLowerCase().includes(needle)) return true;
       if (digits.length >= 3 && phoneKey(contact.phone).includes(digits)) return true;
       return false;
     });
@@ -417,6 +464,11 @@ export function MessagesInbox() {
       {crm.hydrateError ? (
         <div className="border-b px-4 py-3">
           <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
+        </div>
+      ) : null}
+      {crm.messagesError ? (
+        <div className="border-b px-4 py-3">
+          <ErrorBanner message={crm.messagesError} onRetry={() => void crm.reload()} />
         </div>
       ) : null}
       <div className="grid h-full min-h-0 flex-1 grid-rows-[minmax(0,1fr)] overflow-hidden lg:grid-cols-[20rem_minmax(0,1fr)]">
@@ -474,18 +526,18 @@ export function MessagesInbox() {
                   >
                     <Avatar size="sm" className="mt-0.5">
                       <AvatarFallback className="bg-primary/10 text-primary">
-                        {initials(chat.label || "") || "W"}
+                        {initials(textOf(chat.label)) || "W"}
                       </AvatarFallback>
                     </Avatar>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline justify-between gap-2">
-                        <span className="truncate text-sm font-medium">{chat.label}</span>
+                        <span className="truncate text-sm font-medium">{textOf(chat.label) || "Website chat"}</span>
                         <span className="shrink-0 text-[10px] text-muted-foreground">
                           {formatInboxTime(chat.updatedAt)}
                         </span>
                       </span>
                       <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                        {chat.preview || "New website chat"}
+                        {textOf(chat.preview) || "New website chat"}
                       </span>
                     </span>
                   </button>
@@ -496,23 +548,27 @@ export function MessagesInbox() {
               visibleWebChats.length > 0 ? null : (
               <p className="px-4 py-8 text-sm text-muted-foreground">
                 {threads.length === 0
-                  ? "No conversations yet. Text a homeowner — replies land here and on the job."
+                  ? crm.messagesError
+                    ? "Texts could not load."
+                    : crm.messagesReady
+                      ? "No conversations yet. Text a homeowner — replies land here and on the job."
+                      : "Loading texts…"
                   : "No threads match that search."}
               </p>
               )
             ) : (
-              visibleThreads.map((thread) => (
-                <ThreadRow
-                  key={thread.key}
-                  thread={thread}
-                  active={!showCompose && selected?.key === thread.key}
-                  unreadCount={threadUnreadCount(
-                    thread,
-                    openedAtFor(book.messageThreadOpens, crm.user.id, thread.key),
-                  )}
+              <RecordErrorBoundary
+                fallbackTitle="The thread list could not open"
+                fallbackDescription="The conversation is still on the right."
+              >
+                <ThreadList
+                  threads={visibleThreads}
+                  opens={opens}
+                  profileId={crm.user.id}
+                  activeKey={!showCompose ? selected?.key ?? "" : ""}
                   onOpen={openThread}
                 />
-              ))
+              </RecordErrorBoundary>
             )}
           </div>
         </aside>
@@ -537,7 +593,7 @@ export function MessagesInbox() {
             {selectedWeb ? (
               <>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{selectedWeb.label}</p>
+                  <p className="truncate text-sm font-semibold">{textOf(selectedWeb.label) || "Website chat"}</p>
                   <p className="truncate text-xs text-muted-foreground">
                     {selectedWeb.channel === "text"
                       ? "Website chat · asked to continue by text"
@@ -577,10 +633,10 @@ export function MessagesInbox() {
                   </AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{selected.title}</p>
+                  <p className="truncate text-sm font-semibold">{textOf(selected.title) || "Unknown number"}</p>
                   <p className="truncate text-xs text-muted-foreground">
                     {formatPhone(selected.phone)}
-                    {selected.job ? ` · ${selected.job.name}` : ""}
+                    {selected.job ? ` · ${textOf(selected.job.name) || "Job"}` : ""}
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-1">
@@ -668,11 +724,19 @@ export function MessagesInbox() {
             )}
           >
             {selectedWeb ? (
-              <WebsiteConversation key={selectedWeb.id} messages={selectedWeb.messages} />
+              <RecordErrorBoundary
+                fallbackTitle="This conversation could not open"
+                fallbackDescription="The other threads are still in the list."
+              >
+                <WebsiteConversation key={selectedWeb.id} messages={selectedWeb.messages} />
+              </RecordErrorBoundary>
             ) : webChatId ? (
               <p className="text-sm text-muted-foreground">Loading this website chat.</p>
             ) : showCompose || !selected ? (
               threads.length === 0 && !showCompose ? (
+                crm.messagesError ? (
+                  <p className="text-sm text-muted-foreground">Texts could not load.</p>
+                ) : crm.messagesReady ? (
                 <EmptyState
                   title="No texts yet"
                   description="Send a message to a homeowner. Incoming replies land here and on the job record as communication."
@@ -682,24 +746,32 @@ export function MessagesInbox() {
                     </Button>
                   }
                 />
+                ) : (
+                  <p className="text-sm text-muted-foreground">Loading texts…</p>
+                )
               ) : (
                 <p className="text-sm text-muted-foreground">
                   Replies attach to the matching job automatically and show up on that job’s activity.
                 </p>
               )
             ) : (
-              <Conversation
-                key={selected.key}
-                messages={selected.messages}
-                onReact={(message, emoji) => void react(message, emoji)}
-                onReply={(message) =>
-                  setReplyTo({
-                    handle: message.handle,
-                    preview: (message.body || "").replace(/\s+/g, " ").slice(0, 80),
-                  })
-                }
-                onUnsend={(message) => void unsend(message)}
-              />
+              <RecordErrorBoundary
+                fallbackTitle="This conversation could not open"
+                fallbackDescription="The other threads are still in the list."
+              >
+                <Conversation
+                  key={selected.key}
+                  messages={selected.messages}
+                  onReact={(message, emoji) => void react(message, emoji)}
+                  onReply={(message) =>
+                    setReplyTo({
+                      handle: message.handle,
+                      preview: (message.body || "").replace(/\s+/g, " ").slice(0, 80),
+                    })
+                  }
+                  onUnsend={(message) => void unsend(message)}
+                />
+              </RecordErrorBoundary>
             )}
           </div>
 
@@ -777,7 +849,7 @@ export function MessagesInbox() {
                     )}
                   >
                     <span className={cn("truncate", !composeContact && "text-muted-foreground")}>
-                      {composeContact ? composeContact.name : "Choose a contact"}
+                      {composeContact ? textOf(composeContact.name) || "Contact" : "Choose a contact"}
                     </span>
                     <ChevronsUpDown className="opacity-50" />
                   </PopoverTrigger>
@@ -817,7 +889,7 @@ export function MessagesInbox() {
                   value={draftPhone}
                   onValueChange={(value) => {
                     setDraftPhone(value);
-                    const match = contactForPhone(book.contacts, value);
+                    const match = contactForPhone(contacts, value);
                     setDraftContactId(match?.id ?? "");
                   }}
                   placeholder="Mobile number"
@@ -887,20 +959,49 @@ export function MessagesInbox() {
           )}
         </section>
       </div>
-      {selected ? (
-        <ThreadPeopleSheet
-          open={peopleOpen}
-          onOpenChange={(open) => {
-            setPeopleOpen(open);
-            if (!open) setPeopleQuery("");
-          }}
-          thread={selected}
-          query={peopleQuery}
-          onQueryChange={setPeopleQuery}
-        />
+      {selected && peopleOpen ? (
+        <RecordErrorBoundary
+          fallbackTitle="People could not open"
+          fallbackDescription="This conversation is still here."
+        >
+          <ThreadPeopleSheet
+            open={peopleOpen}
+            onOpenChange={(open) => {
+              setPeopleOpen(open);
+              if (!open) setPeopleQuery("");
+            }}
+            thread={selected}
+            query={peopleQuery}
+            onQueryChange={setPeopleQuery}
+          />
+        </RecordErrorBoundary>
       ) : null}
     </div>
   );
+}
+
+function ThreadList({
+  threads,
+  opens,
+  profileId,
+  activeKey,
+  onOpen,
+}: {
+  threads: MessageThread[];
+  opens: Parameters<typeof openedAtFor>[0];
+  profileId: string;
+  activeKey: string;
+  onOpen: (key: string) => void;
+}) {
+  return threads.map((thread) => (
+    <ThreadRow
+      key={thread.key}
+      thread={thread}
+      active={thread.key === activeKey}
+      unreadCount={threadUnreadCount(thread, openedAtFor(opens, profileId, thread.key))}
+      onOpen={onOpen}
+    />
+  ));
 }
 
 function ThreadRow({
@@ -925,13 +1026,13 @@ function ThreadRow({
     >
       <Avatar size="sm" className="mt-0.5">
         <AvatarFallback className="bg-primary/10 text-primary">
-          {initials(thread.title) || "#"}
+          {initials(textOf(thread.title)) || "#"}
         </AvatarFallback>
       </Avatar>
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">
           <span className={cn("truncate text-sm", unreadCount > 0 ? "font-semibold" : "font-medium")}>
-            {thread.title}
+            {textOf(thread.title) || "Unknown number"}
           </span>
           <span className="shrink-0 text-[10px] text-muted-foreground">
             {formatInboxTime(thread.lastAt)}
@@ -943,12 +1044,12 @@ function ThreadRow({
             unreadCount > 0 ? "text-foreground" : "text-muted-foreground",
           )}
         >
-          {thread.preview}
+          {textOf(thread.preview)}
         </span>
         {thread.job ? (
           <span className="mt-1 block truncate text-[11px] text-muted-foreground">
-            {thread.job.code ? `${thread.job.code} · ` : ""}
-            {thread.job.name}
+            {textOf(thread.job.code) ? `${textOf(thread.job.code)} · ` : ""}
+            {textOf(thread.job.name) || "Job"}
           </span>
         ) : null}
       </span>
@@ -961,27 +1062,50 @@ function ThreadRow({
   );
 }
 
+function messageText(body: unknown) {
+  return typeof body === "string" ? body : "";
+}
+
+function chatThreads(value: unknown): WebsiteChatThread[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter(
+    (chat): chat is WebsiteChatThread =>
+      Boolean(chat) && typeof chat === "object" && typeof (chat as WebsiteChatThread).id === "string",
+  );
+}
+
+function ConversationScroll({ scrollKey, children }: { scrollKey: string; children: ReactNode }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const node = scroller.current;
+    if (!node) return;
+    node.scrollTop = node.scrollHeight;
+  }, [scrollKey]);
+  return (
+    <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      {children}
+    </div>
+  );
+}
+
 function WebsiteConversation({ messages }: { messages: WebsiteChatThread["messages"] }) {
-  const lastIndex = Math.max(0, messages.length - 1);
-  if (messages.length === 0) {
+  const rows = Array.isArray(messages) ? messages.filter((message) => message && typeof message === "object") : [];
+  const lastIndex = Math.max(0, rows.length - 1);
+  if (rows.length === 0) {
     return (
       <p className="px-4 py-4 text-sm text-muted-foreground">
         Waiting for the visitor. Replies you send here appear in their chat box.
       </p>
     );
   }
+  const last = rows[rows.length - 1];
   return (
-    <Virtuoso
-      className="h-full min-h-0 flex-1"
-      data={messages}
-      increaseViewportBy={{ top: 240, bottom: 400 }}
-      initialTopMostItemIndex={lastIndex}
-      followOutput="smooth"
-      itemContent={(index, message) => {
-        const prior = messages[index - 1];
+    <ConversationScroll scrollKey={`${rows.length}:${last?.id ?? ""}`}>
+      {rows.map((message, index) => {
+        const prior = rows[index - 1];
         const showDay = !prior || !sameLocalDay(prior.createdAt, message.createdAt);
         return (
-          <div className={cn("px-4", index === 0 ? "pt-4" : "pt-3", index === lastIndex ? "pb-4" : "")}>
+          <div key={message.id || index} className={cn("px-4", index === 0 ? "pt-4" : "pt-3", index === lastIndex ? "pb-4" : "")}>
             {showDay ? (
               <p className="mb-3 text-center text-[11px] tracking-wide text-muted-foreground uppercase">
                 {formatDate(message.createdAt)}
@@ -995,7 +1119,7 @@ function WebsiteConversation({ messages }: { messages: WebsiteChatThread["messag
                   : "bg-card shadow-sm",
               )}
             >
-              <p className="whitespace-pre-wrap">{message.body}</p>
+              <p className="whitespace-pre-wrap">{messageText(message.body)}</p>
               <p
                 className={cn(
                   "mt-1 text-[10px] tracking-wide uppercase",
@@ -1007,17 +1131,18 @@ function WebsiteConversation({ messages }: { messages: WebsiteChatThread["messag
             </div>
           </div>
         );
-      }}
-    />
+      })}
+    </ConversationScroll>
   );
 }
 
 function addonNote(message: TextMessage) {
-  if (!message.detail) return "";
+  const detail = messageText(message.detail);
+  if (!detail) return "";
   if (message.kind === "effect" || message.kind === "reply" || message.kind === "poll" || message.kind === "edit") {
-    return message.detail;
+    return detail;
   }
-  if (message.kind === "rename" || message.kind === "membership") return message.detail;
+  if (message.kind === "rename" || message.kind === "membership") return detail;
   return "";
 }
 
@@ -1056,8 +1181,8 @@ function ThreadPeopleSheet({
     const needle = query.trim().toLowerCase();
     if (!needle) return people;
     return people.filter((person) => {
-      if (person.name.toLowerCase().includes(needle)) return true;
-      return person.title.toLowerCase().includes(needle);
+      if ((person.name || "").toLowerCase().includes(needle)) return true;
+      return (person.title || "").toLowerCase().includes(needle);
     });
   }, [
     book.companyProfiles,
@@ -1198,19 +1323,16 @@ function Conversation({
   onReply: (message: TextMessage) => void;
   onUnsend: (message: TextMessage) => void;
 }) {
-  const lastIndex = Math.max(0, messages.length - 1);
+  const rows = Array.isArray(messages) ? messages.filter((message) => message && typeof message.id === "string") : [];
+  const lastIndex = Math.max(0, rows.length - 1);
+  const last = rows[rows.length - 1];
   return (
-    <Virtuoso
-      className="h-full min-h-0 flex-1"
-      data={messages}
-      increaseViewportBy={{ top: 240, bottom: 400 }}
-      initialTopMostItemIndex={lastIndex}
-      followOutput="smooth"
-      itemContent={(index, message) => {
-        const prior = messages[index - 1];
+    <ConversationScroll scrollKey={`${rows.length}:${last?.id ?? ""}`}>
+      {rows.map((message, index) => {
+        const prior = rows[index - 1];
         const showDay = !prior || !sameLocalDay(prior.createdAt, message.createdAt);
         return (
-          <div className={cn("px-4", index === 0 ? "pt-4" : "pt-3", index === lastIndex ? "pb-4" : "")}>
+          <div key={message.id} className={cn("px-4", index === 0 ? "pt-4" : "pt-3", index === lastIndex ? "pb-4" : "")}>
             {showDay ? (
               <p className="mb-3 text-center text-[11px] tracking-wide text-muted-foreground uppercase">
                 {formatDate(message.createdAt)}
@@ -1243,7 +1365,7 @@ function Conversation({
                 </p>
               ) : null}
               <p className={cn("whitespace-pre-wrap", message.status === "unsent" && "italic opacity-70")}>
-                {message.body}
+                {messageText(message.body)}
               </p>
               {message.handle && message.status !== "unsent" && message.kind !== "reaction" ? (
                 <div className="mt-1 flex flex-wrap items-center gap-1">
@@ -1293,8 +1415,8 @@ function Conversation({
             </div>
           </div>
         );
-      }}
-    />
+      })}
+    </ConversationScroll>
   );
 }
 

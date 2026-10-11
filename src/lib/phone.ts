@@ -1,11 +1,15 @@
 /** US-first E.164 helper for homeowner texts. */
+function phoneText(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
 export function digitsOnly(value: string) {
-  return value.replace(/\D/g, "");
+  return phoneText(value).replace(/\D/g, "");
 }
 
 /** `(214) 555-0100` as you type. Leaves non-US `+` numbers alone. */
 export function formatPhoneInput(value: string) {
-  const trimmed = value.trim();
+  const trimmed = phoneText(value).trim();
   if (!trimmed) return "";
   if (trimmed.startsWith("+") && !trimmed.startsWith("+1")) return trimmed;
   const digits = digitsOnly(trimmed);
@@ -22,7 +26,7 @@ export function storedPhone(value: string | null | undefined) {
 }
 
 export function toE164(value: string) {
-  const trimmed = value.trim();
+  const trimmed = phoneText(value).trim();
   if (!trimmed) return "";
   if (trimmed.startsWith("+")) {
     const rest = digitsOnly(trimmed.slice(1));
