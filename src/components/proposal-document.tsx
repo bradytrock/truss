@@ -37,6 +37,7 @@ import { isSignaturePng } from "@/lib/estimate-signature";
 import { estimateSignatureLines } from "@/lib/estimate-signers";
 import { customerContactDetails, coOwnerContact } from "@/lib/parties";
 import { EstimatePhotoThumb } from "@/components/estimate-line-photos";
+import { PackagePicker } from "@/components/package-picker";
 import { photosForEstimateLine } from "@/lib/estimate-line-photos";
 import type { SharedEstimateFile } from "@/lib/share";
 import type { CompanySettings, Estimate, EstimateLine, EstimateLinePhoto, JobMarket, JobPhoto } from "@/lib/types";
@@ -260,6 +261,7 @@ export function ProposalDocument({
     lines,
   );
   const gbb = isGbbEstimate(estimate);
+  const gbbOptions = gbb ? listEstimateOptions(billed.lines) : [];
   const visibleLines = gbb ? billed.lines : scopedEstimateLines(billed.estimate, billed.lines);
   const groups = groupEstimateLines(visibleLines);
   const printSections = gbb
@@ -334,13 +336,20 @@ export function ProposalDocument({
         })}
       />
       <PaperPartyCards left={preparedFor} right={paperManagerCard(manager)} />
-      {estimate.intro ? (
+      {estimate.intro && gbbOptions.length === 0 ? (
         <p className="text-sm leading-relaxed whitespace-pre-wrap">{estimate.intro}</p>
       ) : null}
-      {gbb && printSections.some((section) => section.kind === "option") ? (
-        <p className="text-sm text-muted-foreground">
-          {paperOptionChoiceCopy()}
-        </p>
+      {gbbOptions.length > 0 ? (
+        <PackagePicker
+          estimate={billed.estimate}
+          lines={billed.lines}
+          locked={!selectable || !onSelectPackage}
+          onSelect={onSelectPackage}
+          note={estimate.intro}
+          manager={manager}
+        />
+      ) : gbb && printSections.some((section) => section.kind === "option") ? (
+        <p className="text-sm text-muted-foreground">{paperOptionChoiceCopy()}</p>
       ) : null}
       {visibleLines.length === 0 ? (
         <p className="text-sm text-muted-foreground">No line items on this proposal yet.</p>
@@ -350,26 +359,32 @@ export function ProposalDocument({
           {printSections.map((section) => (
             <section key={section.key || section.name || "items"}>
               {section.kind === "option" ? (
-                <label className="mb-2 flex items-center gap-2.5">
-                  <Checkbox
-                    checked={
-                      selectable && onSelectPackage
-                        ? resolveSelectedPackage(billed.estimate, billed.lines) === section.key
-                        : false
-                    }
-                    disabled={!selectable || !onSelectPackage}
-                    onCheckedChange={(value) => {
-                      if (value) onSelectPackage?.(section.key);
-                    }}
-                    aria-label={`Choose ${section.name}`}
-                  />
-                  <h3 className="min-w-0 flex-1 text-[11px] font-semibold tracking-[0.16em] uppercase">
+                gbbOptions.length > 0 ? (
+                  <h3 className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">
                     {section.name}
                   </h3>
-                  <span className="text-[15px] font-medium tabular-nums">
-                    {formatMoney(totalsForPackage(billed.estimate, billed.lines, section.key).total)}
-                  </span>
-                </label>
+                ) : (
+                  <label className="mb-2 flex items-center gap-2.5">
+                    <Checkbox
+                      checked={
+                        selectable && onSelectPackage
+                          ? resolveSelectedPackage(billed.estimate, billed.lines) === section.key
+                          : false
+                      }
+                      disabled={!selectable || !onSelectPackage}
+                      onCheckedChange={(value) => {
+                        if (value) onSelectPackage?.(section.key);
+                      }}
+                      aria-label={`Choose ${section.name}`}
+                    />
+                    <h3 className="min-w-0 flex-1 text-[11px] font-semibold tracking-[0.16em] uppercase">
+                      {section.name}
+                    </h3>
+                    <span className="text-[15px] font-medium tabular-nums">
+                      {formatMoney(totalsForPackage(billed.estimate, billed.lines, section.key).total)}
+                    </span>
+                  </label>
+                )
               ) : section.name ? (
                 <h3 className="mb-2 text-[11px] font-semibold tracking-[0.16em] uppercase">
                   {section.name}

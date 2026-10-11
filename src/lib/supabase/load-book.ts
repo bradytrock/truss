@@ -98,7 +98,50 @@ function mapRows<T, R>(rows: T[] | null | undefined, map: (row: T) => R): R[] {
 export type CompanyBook = {
   state: CrmState;
   team: string[];
+  /** Set when the messages read failed. An empty list is not the same as no texts. */
+  messagesError: string | null;
 };
+
+export const TEXTS_UNAVAILABLE = "Texts could not load. Check the connection and try again.";
+
+/** PostgREST and the browser both surface a dropped pool connection this way. */
+export function isTransientRequestError(
+  error: { message?: string; code?: string } | null | undefined,
+) {
+  if (!error) return false;
+  if (error.code === "PGRST003" || error.code === "57014") return true;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("failed to fetch") ||
+    message.includes("fetcherror") ||
+    message.includes("network") ||
+    message.includes("connection pool") ||
+    message.includes("timed out") ||
+    message.includes("timeout")
+  );
+}
+
+const BOOK_QUERY_WIDTH = 4;
+let bookQueriesActive = 0;
+const bookQueryWaiters: Array<() => void> = [];
+
+/** Keep the company book from opening every table at once. That exhausts the pool. */
+export function limitBookQuery<T>(run: () => PromiseLike<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const start = () => {
+      bookQueriesActive += 1;
+      Promise.resolve()
+        .then(run)
+        .then(resolve, reject)
+        .finally(() => {
+          bookQueriesActive -= 1;
+          bookQueryWaiters.shift()?.();
+        });
+    };
+    if (bookQueriesActive < BOOK_QUERY_WIDTH) start();
+    else bookQueryWaiters.push(start);
+  });
+}
 
 const DEFERRED_ID_KEYS = [
   "googleLocations",
@@ -152,111 +195,207 @@ export function applyDeferredBook(current: CrmState, incoming: CrmState): CrmSta
   return next;
 }
 
+function messageQuery(supabase: Client, companyId: string) {
+  return supabase
+    .from("messages")
+    .select("*")
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: false });
+}
+
+async function loadMessages(supabase: Client, companyId: string) {
+  let last = await limitBookQuery(() => messageQuery(supabase, companyId));
+  for (let attempt = 1; attempt < 3 && last.error && isTransientRequestError(last.error); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
+    last = await limitBookQuery(() => messageQuery(supabase, companyId));
+  }
+  return last;
+}
+
 function queryCore(supabase: Client, companyId: string) {
   return Promise.all([
-    supabase.from("clients").select("*").eq("company_id", companyId).order("name"),
-    supabase.from("contacts").select("*").eq("company_id", companyId).order("name"),
-    supabase
-      .from("opportunities")
-      .select("*")
-      .eq("company_id", companyId)
-      .order("created_at", { ascending: false }),
-    supabase.from("jobs").select("*").eq("company_id", companyId).order("start_date", { ascending: false }),
-    supabase
-      .from("activities")
-      .select("*")
-      .eq("company_id", companyId)
-      .order("created_at", { ascending: false }),
-    supabase.from("tasks").select("*").eq("company_id", companyId).order("due_at"),
-    supabase.from("team_members").select("*").eq("company_id", companyId).order("name"),
-    supabase.from("teams").select("*").eq("company_id", companyId).order("name"),
-    supabase.from("catalog_items").select("*").eq("company_id", companyId).order("cost_code"),
-    supabase.from("estimates").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
-    supabase.from("estimate_lines").select("*").eq("company_id", companyId).order("sort_order"),
-    supabase.from("invoices").select("*").eq("company_id", companyId).order("issued_at", { ascending: false }),
-    supabase.from("invoice_lines").select("*").eq("company_id", companyId).order("sort_order"),
-    supabase.from("payments").select("*").eq("company_id", companyId).order("paid_at", { ascending: false }),
-    supabase.from("schedule_events").select("*").eq("company_id", companyId).order("starts_at"),
-    supabase.from("expenses").select("*").eq("company_id", companyId).order("incurred_at", { ascending: false }),
-    supabase.from("returning_client_leads").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
-    supabase.from("price_lists").select("*").eq("company_id", companyId).order("effective_on", { ascending: false }),
-    supabase.from("account_invites").select("staff_id, token, expires_at").eq("company_id", companyId),
+    limitBookQuery(() => supabase.from("clients").select("*").eq("company_id", companyId).order("name")),
+    limitBookQuery(() => supabase.from("contacts").select("*").eq("company_id", companyId).order("name")),
+    limitBookQuery(() =>
+      supabase
+        .from("opportunities")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false }),
+    ),
+    limitBookQuery(() =>
+      supabase.from("jobs").select("*").eq("company_id", companyId).order("start_date", { ascending: false }),
+    ),
+    limitBookQuery(() =>
+      supabase
+        .from("activities")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false }),
+    ),
+    limitBookQuery(() => supabase.from("tasks").select("*").eq("company_id", companyId).order("due_at")),
+    limitBookQuery(() => supabase.from("team_members").select("*").eq("company_id", companyId).order("name")),
+    limitBookQuery(() => supabase.from("teams").select("*").eq("company_id", companyId).order("name")),
+    limitBookQuery(() => supabase.from("catalog_items").select("*").eq("company_id", companyId).order("cost_code")),
+    limitBookQuery(() =>
+      supabase.from("estimates").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    ),
+    limitBookQuery(() => supabase.from("estimate_lines").select("*").eq("company_id", companyId).order("sort_order")),
+    limitBookQuery(() =>
+      supabase.from("invoices").select("*").eq("company_id", companyId).order("issued_at", { ascending: false }),
+    ),
+    limitBookQuery(() => supabase.from("invoice_lines").select("*").eq("company_id", companyId).order("sort_order")),
+    limitBookQuery(() =>
+      supabase.from("payments").select("*").eq("company_id", companyId).order("paid_at", { ascending: false }),
+    ),
+    limitBookQuery(() => supabase.from("schedule_events").select("*").eq("company_id", companyId).order("starts_at")),
+    limitBookQuery(() =>
+      supabase.from("expenses").select("*").eq("company_id", companyId).order("incurred_at", { ascending: false }),
+    ),
+    limitBookQuery(() =>
+      supabase
+        .from("returning_client_leads")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false }),
+    ),
+    limitBookQuery(() =>
+      supabase.from("price_lists").select("*").eq("company_id", companyId).order("effective_on", { ascending: false }),
+    ),
+    limitBookQuery(() =>
+      supabase.from("account_invites").select("staff_id, token, expires_at").eq("company_id", companyId),
+    ),
   ]);
 }
 
-function queryDeferred(supabase: Client, companyId: string) {
+function queryDeferred(
+  supabase: Client,
+  companyId: string,
+  messagesPromise: ReturnType<typeof loadMessages>,
+) {
   return Promise.all([
-    supabase.from("google_locations").select("*").eq("company_id", companyId).order("name"),
-    supabase
-      .from("estimate_signature_events")
-      .select("*")
-      .eq("company_id", companyId)
-      .order("created_at", { ascending: false }),
-    supabase.from("estimate_templates").select("*").eq("company_id", companyId).order("name"),
-    supabase.from("estimate_template_lines").select("*").eq("company_id", companyId).order("sort_order"),
-    supabase.from("job_photos").select("*").eq("company_id", companyId).order("taken_at", { ascending: false }),
-    supabase
-      .from("photo_audit_events")
-      .select("*")
-      .eq("company_id", companyId)
-      .order("created_at", { ascending: false })
-      .limit(2000),
-    supabase
-      .from("company_audit_events")
-      .select("*")
-      .eq("company_id", companyId)
-      .order("created_at", { ascending: false })
-      .limit(2000),
-    supabase
-      .from("forecasted_expenses")
-      .select("*")
-      .eq("company_id", companyId)
-      .order("expected_at", { ascending: false }),
-    supabase.from("job_insurance").select("*").eq("company_id", companyId).order("updated_at", { ascending: false }),
-    supabase.from("qb_vendors").select("*").eq("company_id", companyId).order("name"),
-    supabase.from("vendor_profiles").select("*").eq("company_id", companyId).order("name"),
-    supabase
-      .from("vendor_feedback")
-      .select("*")
-      .eq("company_id", companyId)
-      .order("created_at", { ascending: false }),
-    supabase.from("vendor_prices").select("*").eq("company_id", companyId).order("sort_order"),
-    supabase.from("qb_review_comments").select("*").eq("company_id", companyId).order("created_at"),
-    supabase.from("calendar_accounts").select("*").eq("company_id", companyId),
-    supabase.from("calendar_shares").select("*").eq("company_id", companyId),
-    supabase.from("training_progress").select("*").eq("company_id", companyId),
-    supabase.from("training_bulletins").select("*").eq("company_id", companyId).order("created_at", {
-      ascending: false,
-    }),
-    supabase.from("photo_reports").select("*").eq("company_id", companyId).order("updated_at", {
-      ascending: false,
-    }),
-    supabase.from("messages").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
-    supabase.from("profiles").select("*").eq("company_id", companyId).order("full_name"),
-    supabase.from("message_thread_members").select("*").eq("company_id", companyId),
-    supabase.from("message_thread_opens").select("*").eq("company_id", companyId),
-    supabase.from("gmail_accounts").select("*").eq("company_id", companyId),
-    supabase
-      .from("gmail_messages")
-      .select("*")
-      .eq("company_id", companyId)
-      .order("received_at", { ascending: false }),
-    supabase.from("job_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
-    supabase.from("estimate_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
-    supabase.from("invoice_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
-    supabase.from("company_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
-    supabase.from("material_orders").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
-    supabase.from("material_order_lines").select("*").eq("company_id", companyId).order("sort_order"),
-    supabase.from("material_order_templates").select("*").eq("company_id", companyId).order("name"),
-    supabase.from("material_order_template_lines").select("*").eq("company_id", companyId).order("sort_order"),
-    supabase
-      .from("eagleview_orders")
-      .select("*")
-      .eq("company_id", companyId)
-      .order("created_at", { ascending: false }),
-    supabase.from("automations").select("*").eq("company_id", companyId).order("updated_at", { ascending: false }),
-    supabase.from("automation_runs").select("*").eq("company_id", companyId).order("created_at", { ascending: false }).limit(500),
-    supabase.from("automation_templates").select("*").order("sort_order"),
+    limitBookQuery(() => supabase.from("google_locations").select("*").eq("company_id", companyId).order("name")),
+    limitBookQuery(() =>
+      supabase
+        .from("estimate_signature_events")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false }),
+    ),
+    limitBookQuery(() => supabase.from("estimate_templates").select("*").eq("company_id", companyId).order("name")),
+    limitBookQuery(() =>
+      supabase.from("estimate_template_lines").select("*").eq("company_id", companyId).order("sort_order"),
+    ),
+    limitBookQuery(() =>
+      supabase.from("job_photos").select("*").eq("company_id", companyId).order("taken_at", { ascending: false }),
+    ),
+    limitBookQuery(() =>
+      supabase
+        .from("photo_audit_events")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false })
+        .limit(2000),
+    ),
+    limitBookQuery(() =>
+      supabase
+        .from("company_audit_events")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false })
+        .limit(2000),
+    ),
+    limitBookQuery(() =>
+      supabase
+        .from("forecasted_expenses")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("expected_at", { ascending: false }),
+    ),
+    limitBookQuery(() =>
+      supabase.from("job_insurance").select("*").eq("company_id", companyId).order("updated_at", { ascending: false }),
+    ),
+    limitBookQuery(() => supabase.from("qb_vendors").select("*").eq("company_id", companyId).order("name")),
+    limitBookQuery(() => supabase.from("vendor_profiles").select("*").eq("company_id", companyId).order("name")),
+    limitBookQuery(() =>
+      supabase
+        .from("vendor_feedback")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false }),
+    ),
+    limitBookQuery(() => supabase.from("vendor_prices").select("*").eq("company_id", companyId).order("sort_order")),
+    limitBookQuery(() =>
+      supabase.from("qb_review_comments").select("*").eq("company_id", companyId).order("created_at"),
+    ),
+    limitBookQuery(() => supabase.from("calendar_accounts").select("*").eq("company_id", companyId)),
+    limitBookQuery(() => supabase.from("calendar_shares").select("*").eq("company_id", companyId)),
+    limitBookQuery(() => supabase.from("training_progress").select("*").eq("company_id", companyId)),
+    limitBookQuery(() =>
+      supabase.from("training_bulletins").select("*").eq("company_id", companyId).order("created_at", {
+        ascending: false,
+      }),
+    ),
+    limitBookQuery(() =>
+      supabase.from("photo_reports").select("*").eq("company_id", companyId).order("updated_at", {
+        ascending: false,
+      }),
+    ),
+    messagesPromise,
+    limitBookQuery(() => supabase.from("profiles").select("*").eq("company_id", companyId).order("full_name")),
+    limitBookQuery(() => supabase.from("message_thread_members").select("*").eq("company_id", companyId)),
+    limitBookQuery(() => supabase.from("message_thread_opens").select("*").eq("company_id", companyId)),
+    limitBookQuery(() => supabase.from("gmail_accounts").select("*").eq("company_id", companyId)),
+    limitBookQuery(() =>
+      supabase
+        .from("gmail_messages")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("received_at", { ascending: false }),
+    ),
+    limitBookQuery(() =>
+      supabase.from("job_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    ),
+    limitBookQuery(() =>
+      supabase.from("estimate_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    ),
+    limitBookQuery(() =>
+      supabase.from("invoice_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    ),
+    limitBookQuery(() =>
+      supabase.from("company_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    ),
+    limitBookQuery(() =>
+      supabase.from("material_orders").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    ),
+    limitBookQuery(() =>
+      supabase.from("material_order_lines").select("*").eq("company_id", companyId).order("sort_order"),
+    ),
+    limitBookQuery(() =>
+      supabase.from("material_order_templates").select("*").eq("company_id", companyId).order("name"),
+    ),
+    limitBookQuery(() =>
+      supabase.from("material_order_template_lines").select("*").eq("company_id", companyId).order("sort_order"),
+    ),
+    limitBookQuery(() =>
+      supabase
+        .from("eagleview_orders")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false }),
+    ),
+    limitBookQuery(() =>
+      supabase.from("automations").select("*").eq("company_id", companyId).order("updated_at", { ascending: false }),
+    ),
+    limitBookQuery(() =>
+      supabase
+        .from("automation_runs")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("created_at", { ascending: false })
+        .limit(500),
+    ),
+    limitBookQuery(() => supabase.from("automation_templates").select("*").order("sort_order")),
   ]);
 }
 
@@ -445,7 +584,7 @@ function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
     trainingBulletins: trainingBulletinsRes.error
       ? []
       : (trainingBulletinsRes.data ?? []).map(mapTrainingBulletin),
-    messages: messagesRes.error ? [] : (messagesRes.data ?? []).map(mapMessage),
+    messages: messagesRes.error ? [] : mapRows(messagesRes.data, mapMessage),
     companyProfiles: profilesRes.error ? [] : (profilesRes.data ?? []).map(mapCompanyProfile),
     messageThreadMembers: threadMembersRes.error
       ? []
@@ -487,6 +626,7 @@ function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
   return {
     state,
     team: state.staff.map((member) => member.name),
+    messagesError: messagesRes.error ? TEXTS_UNAVAILABLE : null,
   };
 }
 
@@ -495,8 +635,9 @@ function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
  * Both groups start together, so the slow tables do not add a second waterfall.
  */
 export function loadCompanyBook(supabase: Client, companyId: string) {
+  const messagesPromise = loadMessages(supabase, companyId);
   const corePromise = queryCore(supabase, companyId);
-  const deferredPromise = queryDeferred(supabase, companyId);
+  const deferredPromise = queryDeferred(supabase, companyId, messagesPromise);
   return {
     core: corePromise.then((core) => assembleBook(core, emptyDeferred())),
     full: Promise.all([corePromise, deferredPromise]).then(([core, deferred]) =>

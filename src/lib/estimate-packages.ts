@@ -257,3 +257,227 @@ export function linePackageSelectValue(value: string | null | undefined): "all" 
 export function linePackageFromSelect(value: string | null | undefined): LinePackage {
   return value === "all" ? "" : parseLinePackage(value);
 }
+
+/** Illustrative monthly on the comparison cards (~84 months). Not a credit offer. */
+export const GBB_MONTHLY_FACTOR = 0.01195;
+
+export const GBB_TAGLINE: Record<ClassicPackage, string> = {
+  good: "A solid new roof",
+  better: "Built right, backed by the manufacturer",
+  best: "Built for the next hailstorm",
+};
+
+const CLASSIC_CARD_ORDER: ClassicPackage[] = ["best", "better", "good"];
+
+export type GbbBannerTone = "popular" | "ink";
+
+export type GbbFeatureRow = {
+  key: string;
+  /** Label shown on options that do not include this row. */
+  canonical: string;
+  /** Included options, with the wording that option uses. */
+  labels: Record<string, string>;
+};
+
+export type GbbPriceNote =
+  | { kind: "start" }
+  | { kind: "delta"; amount: number; versus: string };
+
+function featureLabel(line: { title?: string | null; description?: string | null }) {
+  const title = String(line.title ?? "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (title) return title;
+  return (
+    String(line.description ?? "")
+      .replace(/<[^>]+>/g, " ")
+      .split(/\r?\n/)
+      .map((part) => part.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, "").replace(/\*\*/g, "").trim())
+      .find(Boolean) ?? ""
+  );
+}
+
+/** Collapse "15-year workmanship warranty" and "10-year…" onto one comparison row. */
+export function gbbFeatureMatchKey(label: string) {
+  return label
+    .toLowerCase()
+    .replace(/\b\d+\s*-\s*years?\b/g, " ")
+    .replace(/\b\d+\s+years?\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function featureLineIncluded(line: { optional?: boolean | null; selected?: boolean | null }) {
+  return !line.optional || Boolean(line.selected);
+}
+
+function isGenericOptionName(name: string, grade: string | null) {
+  if (grade && name.toLowerCase() === grade.toLowerCase()) return true;
+  if (/^(items|option|new section|shared|shared work)$/i.test(name)) return true;
+  if (/^option \d+$/i.test(name)) return true;
+  return false;
+}
+
+export function gbbMonthlyAbout(total: number) {
+  if (!Number.isFinite(total) || total <= 0) return null;
+  return Math.round(total * GBB_MONTHLY_FACTOR);
+}
+
+/** Premium on the left, value on the right. Classic books stay Best, Better, Good. */
+export function gbbCardOrder<T extends { key: string }>(
+  options: T[],
+  totalFor: (key: string) => number,
+): T[] {
+  const classic = options.length > 0 && options.every((item) => isClassicPackage(item.key));
+  if (classic) {
+    return [...options].sort(
+      (a, b) =>
+        CLASSIC_CARD_ORDER.indexOf(a.key as ClassicPackage) -
+        CLASSIC_CARD_ORDER.indexOf(b.key as ClassicPackage),
+    );
+  }
+  return [...options].sort(
+    (a, b) => totalFor(b.key) - totalFor(a.key) || a.key.localeCompare(b.key),
+  );
+}
+
+export function gbbCompareName(key: string, name: string) {
+  return isClassicPackage(key) ? PACKAGE_LABEL[key] : name.trim() || optionLabel(key);
+}
+
+export function gbbBanner(
+  key: string,
+  options: Array<{ key: string }>,
+  totalFor: (key: string) => number,
+): { label: string; tone: GbbBannerTone } {
+  const recommended = recommendedOptionKey(options);
+  if (recommended && key === recommended) return { label: "Most popular", tone: "popular" };
+  if (key === "best") return { label: "Maximum protection", tone: "ink" };
+  if (key === "good") return { label: "Lowest investment", tone: "ink" };
+  if (key === "better") return { label: "Most popular", tone: "popular" };
+  const totals = options.map((item) => totalFor(item.key));
+  const max = Math.max(...totals);
+  const min = Math.min(...totals);
+  const total = totalFor(key);
+  if (max !== min && total === max) return { label: "Maximum protection", tone: "ink" };
+  if (max !== min && total === min) return { label: "Lowest investment", tone: "ink" };
+  return { label: "Option", tone: "ink" };
+}
+
+export function gbbCardIdentity(
+  key: string,
+  lines: Array<{ package?: string | null; groupName?: string | null }>,
+  fallbackName?: string | null,
+) {
+  const grade = isClassicPackage(key) ? PACKAGE_LABEL[key] : null;
+  const tagline = isClassicPackage(key) ? GBB_TAGLINE[key] : optionBlurb(key);
+  const candidates = [
+    ...uniquePackageLines(lines, key).map((line) => line.groupName?.trim() || ""),
+    fallbackName?.trim() || "",
+  ].filter(Boolean);
+  const title =
+    candidates.find((name) => !isGenericOptionName(name, grade)) ||
+    grade ||
+    optionLabel(key, fallbackName);
+  return {
+    grade: grade && title.toLowerCase() !== grade.toLowerCase() ? grade : null,
+    title,
+    tagline,
+    chooseLabel: grade ?? title,
+  };
+}
+
+export function gbbPriceNote(
+  key: string,
+  options: Array<{ key: string; name: string }>,
+  totalFor: (key: string) => number,
+): GbbPriceNote | null {
+  if (options.length < 2) return null;
+  const priced = options.some((option) => totalFor(option.key) > 0);
+  if (!priced) return null;
+  const ranked = [...options].sort(
+    (a, b) => totalFor(a.key) - totalFor(b.key) || a.key.localeCompare(b.key),
+  );
+  const index = ranked.findIndex((option) => option.key === key);
+  if (index <= 0) return { kind: "start" };
+  const below = ranked[index - 1]!;
+  const amount = totalFor(key) - totalFor(below.key);
+  if (amount <= 0) return { kind: "start" };
+  return {
+    kind: "delta",
+    amount,
+    versus: gbbCompareName(below.key, below.name),
+  };
+}
+
+export function gbbFeatureRows<
+  T extends {
+    package?: string | null;
+    title?: string | null;
+    description?: string | null;
+    optional?: boolean | null;
+    selected?: boolean | null;
+    sortOrder?: number | null;
+  },
+>(lines: T[], optionKeys: string[]): GbbFeatureRow[] {
+  const keys = optionKeys.filter(Boolean);
+  const rows: GbbFeatureRow[] = [];
+  const indexByKey = new Map<string, number>();
+  const ordered = lines
+    .filter(featureLineIncluded)
+    .map((line, index) => ({ line, index }))
+    .sort((a, b) => (a.line.sortOrder ?? a.index) - (b.line.sortOrder ?? b.index));
+
+  for (const { line } of ordered) {
+    const label = featureLabel(line);
+    const match = gbbFeatureMatchKey(label);
+    if (!label || !match) continue;
+    const pkg = parseLinePackage(line.package);
+    if (pkg && !keys.includes(pkg)) continue;
+    let row = indexByKey.has(match) ? rows[indexByKey.get(match)!] : undefined;
+    if (!row) {
+      row = { key: match, canonical: label, labels: {} };
+      indexByKey.set(match, rows.length);
+      rows.push(row);
+    }
+    if (!pkg) {
+      for (const optionKey of keys) {
+        if (!row.labels[optionKey]) row.labels[optionKey] = label;
+      }
+    } else {
+      row.labels[pkg] = label;
+    }
+  }
+
+  for (const row of rows) {
+    const counts = new Map<string, number>();
+    for (const label of Object.values(row.labels)) {
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+    let canonical = row.canonical;
+    let bestCount = 0;
+    for (const [label, count] of counts) {
+      if (count > bestCount) {
+        canonical = label;
+        bestCount = count;
+      }
+    }
+    row.canonical = canonical;
+  }
+  return rows;
+}
+
+/** First line of a cover note becomes the card title when a longer note follows it. */
+export function gbbNoteFromIntro(intro: string | null | undefined) {
+  const text = String(intro ?? "").trim();
+  if (!text) return null;
+  const parts = text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (parts.length >= 2 && parts[0]!.length <= 72) {
+    return { title: parts[0]!, body: parts.slice(1).join("\n\n") };
+  }
+  return { title: "Why these options differ", body: text };
+}
