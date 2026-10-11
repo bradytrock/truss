@@ -27,6 +27,7 @@ import { parseMarket } from "@/lib/market";
 import {
   SELECTABLE_PIPELINE_STAGES,
   STAGE_LABELS,
+  isShelvedStage,
   type Opportunity,
   type PipelineStage,
 } from "@/lib/types";
@@ -41,6 +42,7 @@ const columnAccent: Record<PipelineStage, string> = {
   supplementing: "bg-primary",
   awarded: "bg-foreground",
   lost: "bg-foreground/15",
+  unqualified: "bg-foreground/15",
 };
 
 export function PipelineBoard({ query }: { query: string }) {
@@ -97,6 +99,8 @@ export function PipelineBoard({ query }: { query: string }) {
         );
       } else if (overStage === "lost") {
         toast.message(`${opportunity.name} marked lost.`);
+      } else if (overStage === "unqualified") {
+        toast.message(`${opportunity.name} marked unqualified.`);
       } else {
         toast.success(`Moved to ${STAGE_LABELS[overStage]}.`);
       }
@@ -290,7 +294,7 @@ function OpportunityCard({
               className={cn(
                 "shrink-0 tabular-nums",
                 dueIn !== null && dueIn <= 3 && dueIn >= 0 && "font-medium text-destructive",
-                dueIn !== null && dueIn < 0 && opportunity.stage !== "awarded" && opportunity.stage !== "lost"
+                dueIn !== null && dueIn < 0 && opportunity.stage !== "awarded" && !isShelvedStage(opportunity.stage)
                   && "text-destructive"
               )}
             >

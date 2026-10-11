@@ -2,21 +2,21 @@ import { localYmd } from "@/lib/format";
 import { acceptedAmountForJob } from "@/lib/estimate-totals";
 import { isDeletedJob } from "@/lib/job-record";
 import { boardValue, workColumnFor, WORK_COLUMNS, WORK_COLUMN_LABELS } from "@/lib/work-board";
-import type {
-  CrmState,
-  Estimate,
-  EstimateLine,
-  Expense,
-  Job,
-  LeadSource,
-  Opportunity,
-  Payment,
-  PipelineStage,
-  ProjectType,
-  StaffMember,
+import {
+  LEAD_SOURCE_LABELS,
+  PROJECT_TYPE_LABELS,
+  closingRate,
+  type CrmState,
+  type Estimate,
+  type EstimateLine,
+  type Job,
+  type LeadSource,
+  type Opportunity,
+  type PipelineStage,
+  type ProjectType,
+  type StaffMember,
 } from "@/lib/types";
 import { isJobWon, isOpportunityWon, jobWonAt } from "@/lib/won";
-import { LEAD_SOURCE_LABELS, PROJECT_TYPE_LABELS } from "@/lib/types";
 import { accessScope, staffForReports, type AccessScope } from "@/lib/visibility";
 
 export function yearOf(value: string | null | undefined) {
@@ -149,6 +149,7 @@ export type PerformanceReport = {
     topLostReason: string;
     daysToLoss: number;
     incoming: number;
+    unqualified: number;
     daysToSold: number;
     newToQualified: number;
     qualifiedClose: number;
@@ -341,6 +342,7 @@ export function buildPerformance(
   );
   const soldIds = new Set(soldJobs.map((job) => job.id));
   const lost = opportunities.filter((item) => item.stage === "lost");
+  const unqualified = opportunities.filter((item) => item.stage === "unqualified");
   const qualified = opportunities.filter((item) => QUALIFIED_STAGES.has(item.stage));
   const wonOpps = opportunities.filter((item) => isOpportunityWon(item, estimates, liveJobs));
 
@@ -453,7 +455,7 @@ export function buildPerformance(
     };
     row.incoming += 1;
     if (QUALIFIED_STAGES.has(opportunity.stage)) row.qualified += 1;
-    if (isOpportunityWon(opportunity, estimates, liveJobs)) {
+    if (opportunity.stage !== "unqualified" && isOpportunityWon(opportunity, estimates, liveJobs)) {
       row.won += 1;
       row.wonValue += wonAmountForOpportunity(opportunity, liveJobs, estimates, estimateLines);
     }
@@ -487,19 +489,18 @@ export function buildPerformance(
     if (!owner || !teamMap.has(owner.id)) continue;
     const row = teamMap.get(owner.id)!;
     row.assigned += 1;
-    if (QUALIFIED_STAGES.has(opportunity.stage)) row.qualified += 1;
+    if (opportunity.stage !== "unqualified" && QUALIFIED_STAGES.has(opportunity.stage)) row.qualified += 1;
     if (opportunity.stage === "lost") row.lost += 1;
-    if (isOpportunityWon(opportunity, estimates, liveJobs)) {
+    if (opportunity.stage !== "unqualified" && isOpportunityWon(opportunity, estimates, liveJobs)) {
       row.won += 1;
       row.wonValue += wonAmountForOpportunity(opportunity, liveJobs, estimates, estimateLines);
     }
   }
   const byTeam = [...teamMap.values()]
     .map((row) => {
-      const decided = row.won + row.lost;
       return {
         ...row,
-        closeRate: decided ? row.won / decided : 0,
+        closeRate: closingRate(row.won, row.lost),
         qualifiedClose: row.qualified ? row.won / row.qualified : 0,
         avgJob: row.won ? row.wonValue / row.won : 0,
       };
@@ -531,6 +532,10 @@ export function buildPerformance(
   }
   for (const job of jobs) {
     if (soldIds.has(job.id) || isJobWon(job, estimates, book.opportunities)) continue;
+    const linked = job.opportunityId
+      ? book.opportunities.find((item) => item.id === job.opportunityId)
+      : undefined;
+    if (linked?.stage === "unqualified") continue;
     const label = job.projectType ? PROJECT_TYPE_LABELS[job.projectType as ProjectType] : "Unspecified";
     const bucket = typeBucket(label);
     bucket.pending += 1;
@@ -546,7 +551,7 @@ export function buildPerformance(
     const totalValue = bucket.wonValue + bucket.lostValue + bucket.pendingValue;
     return {
       label,
-      winRate: bucket.won + bucket.lost ? bucket.won / (bucket.won + bucket.lost) : 0,
+      winRate: closingRate(bucket.won, bucket.lost),
       won: bucket.won,
       lost: bucket.lost,
       pending: bucket.pending,
@@ -605,7 +610,7 @@ export function buildPerformance(
       wonAmount(b, estimates, estimateLines, book.opportunities) -
       wonAmount(a, estimates, estimateLines, book.opportunities),
   )[0];
-  const decided = wonOpps.length + lost.length;
+  const countedWins = wonOpps.filter((item) => item.stage !== "unqualified");
   const soldValue = soldJobs.reduce(
     (sum, job) => sum + wonAmount(job, estimates, estimateLines, book.opportunities),
     0,
@@ -626,10 +631,11 @@ export function buildPerformance(
       topLostReason: lostReasons[0]?.reason ?? "—",
       daysToLoss: avg(lossDays),
       incoming: opportunities.length,
+      unqualified: unqualified.length,
       daysToSold: avg(soldDays),
       newToQualified: opportunities.length ? qualified.length / opportunities.length : 0,
-      qualifiedClose: qualified.length ? wonOpps.length / qualified.length : 0,
-      closeRate: decided ? wonOpps.length / decided : 0,
+      qualifiedClose: qualified.length ? countedWins.length / qualified.length : 0,
+      closeRate: closingRate(countedWins.length, lost.length),
       wonCount: soldJobs.length,
       wonValue: soldValue,
       daysToComplete: avg(completeDays),

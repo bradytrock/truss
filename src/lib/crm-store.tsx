@@ -227,6 +227,7 @@ import {
   NORTHLINE_COMPANY,
   STAGE_LABELS,
   STAGE_PROBABILITY,
+  isShelvedStage,
   initialsFromName,
   staffByName,
   type ActivityType,
@@ -328,6 +329,7 @@ import {
 } from "@/lib/job-code";
 import { formatJobSite } from "@/lib/leads";
 import { leadAssignNeedsEmail, requestLeadAssignNotification } from "@/lib/lead-assign-email";
+import { NOTIFICATIONS_REFRESH } from "@/lib/notification-inbox";
 import { defaultEstimateValidUntil, localYmd } from "@/lib/format";
 import { fillPayment, fileToDataUrl } from "@/lib/job-financials";
 import {
@@ -1272,7 +1274,7 @@ type CrmContextValue = CrmState & {
     reference: string;
     receiptUrl?: string;
     file?: File;
-  }) => Promise<void>;
+  }) => Promise<boolean>;
   addExpense: (input: {
     jobId: string | null;
     vendor: string;
@@ -1574,6 +1576,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     if (!companyError && !companySubscriptionActive(companyRow)) {
       await supabase.auth.signOut();
       if (epoch !== bookEpoch.current) return;
+      if (isPublicAppPath(window.location.pathname)) {
+        setCompanySettings(NORTHLINE_COMPANY);
+        setState(emptyState);
+        setUser(guestUser);
+        setHydrateError(null);
+        setHydrated(true);
+        setLiveStatus("offline");
+        return;
+      }
       window.location.replace(DEMO_SCHEDULE_URL);
       return;
     }
@@ -1637,6 +1648,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         setHydrateError(null);
         setHydrated(true);
         setMessagesReady(true);
+        if (isPublicAppPath(window.location.pathname)) {
+          setCompanySettings(NORTHLINE_COMPANY);
+          setState(emptyState);
+          setUser(guestUser);
+          setLiveStatus("offline");
+          return;
+        }
         toast.error("This account is locked. Ask a company admin to unlock it.");
         router.replace("/login?error=" + encodeURIComponent("This account is locked. Ask a company admin to unlock it."));
         return;
@@ -2899,7 +2917,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         setState((prev) => {
           const jobs = [...prev.jobs];
           let nextJobs = jobs;
-          if (stage !== "lost" && !jobs.some((job) => job.opportunityId === id)) {
+          if (!isShelvedStage(stage) && !jobs.some((job) => job.opportunityId === id)) {
             nextJobs = [
               fillJobRecord(
                 jobDraftFromOpportunity(current, {
@@ -2916,7 +2934,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             createdJob = jobs.find((job) => job.opportunityId === id) ?? null;
             nextJobs = jobs.map((job) => {
               if (job.opportunityId !== id) return job;
-              if (stage === "lost") return { ...job, status: "on_hold" as const };
+              if (isShelvedStage(stage)) return { ...job, status: "on_hold" as const };
               if (stage === "awarded") return { ...job, contractValue, street, city, state: stateCode, postalCode, location };
               return job;
             });
@@ -2986,7 +3004,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (error) {
         toast.error(
           isInvalidEnumValue(error)
-            ? `Cannot move to ${STAGE_LABELS[stage]}. Run the pipeline supplementing migration in the SQL editor.`
+            ? stage === "unqualified"
+              ? "Cannot mark this unqualified yet. Run supabase/migrations/20261010170000_pipeline_unqualified.sql in the SQL editor."
+              : `Cannot move to ${STAGE_LABELS[stage]}. Run the pipeline supplementing migration in the SQL editor.`
             : error.message,
         );
         return null;
@@ -3012,7 +3032,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         relatedJobId: state.jobs.find((job) => job.opportunityId === id)?.id ?? null,
       });
 
-      if (stage !== "lost") {
+      if (!isShelvedStage(stage)) {
         const already = state.jobs.find((job) => job.opportunityId === id);
         if (already) {
           createdJob = already;
@@ -3097,7 +3117,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      if (stage === "lost") {
+      if (isShelvedStage(stage)) {
         const existing = state.jobs.find((job) => job.opportunityId === id);
         if (existing) {
           await supabase.from("jobs").update({ status: "on_hold" }).eq("id", existing.id);
@@ -3476,7 +3496,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           notes: input.notes ?? "",
         };
         const pipelineJob =
-          input.stage === "lost"
+          isShelvedStage(input.stage)
             ? null
             : fillJobRecord(
                 jobDraftFromOpportunity(opportunity, {
@@ -3640,7 +3660,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         originatorStaffId: data.originator_staff_id || originatorStaffId,
       };
       const pipelineJob =
-        opportunity.stage === "lost"
+        isShelvedStage(opportunity.stage)
           ? null
           : fillJobRecord(
               jobDraftFromOpportunity(opportunity, {
@@ -3741,7 +3761,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (input.contactId) {
         const sameSite = state.opportunities.find(
           (opportunity) =>
-            opportunity.stage !== "lost" &&
+            !isShelvedStage(opportunity.stage) &&
             opportunity.primaryContactId === input.contactId &&
             Boolean(site) &&
             (formatJobSite(opportunity) === site || opportunity.location === site),
@@ -3749,7 +3769,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         if (sameSite) return sameSite.id;
         const openLead = state.opportunities.find(
           (opportunity) =>
-            opportunity.stage !== "lost" && opportunity.primaryContactId === input.contactId,
+            !isShelvedStage(opportunity.stage) && opportunity.primaryContactId === input.contactId,
         );
         if (openLead) return openLead.id;
         const openJob = state.jobs.find(
@@ -4010,6 +4030,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         };
         enqueueAutomationEventRef.current({ kind: "lead_assigned", jobId: job.id });
       }
+      if (typeof window !== "undefined") window.dispatchEvent(new Event(NOTIFICATIONS_REFRESH));
       return true;
     },
     [state.contacts, state.jobs, state.opportunities, state.staff, updateContact, updateJob, updateOpportunity, recordCompanyAudit]
@@ -7821,9 +7842,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ? state.invoices.find((item) => item.id === input.invoiceId)
         : undefined;
       const jobId = input.jobId ?? invoice?.jobId ?? null;
+      const job = jobId ? state.jobs.find((item) => item.id === jobId) : undefined;
+      const opportunityId = job?.opportunityId ?? null;
       if (!input.invoiceId && !jobId) {
         toast.error("Tie the payment to a job or an invoice.");
-        return;
+        return false;
       }
       let receiptUrl = input.receiptUrl?.trim() ?? "";
       let receiptStoragePath: string | null = null;
@@ -7838,7 +7861,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             receiptUrl = uploaded.publicUrl;
           } catch (error) {
             toast.error(error instanceof Error ? error.message : "Could not upload the receipt.");
-            return;
+            return false;
           }
         } else {
           receiptUrl = await fileToDataUrl(input.file);
@@ -7846,7 +7869,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       if (!receiptUrl) {
         toast.error("Photograph the check, remit, or deposit slip. Every payment keeps the image.");
-        return;
+        return false;
       }
       const payment = fillPayment({
         id: crypto.randomUUID(),
@@ -7895,21 +7918,23 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           detail: `Payment of ${payment.amount} recorded`,
           relatedJobId: payment.jobId,
         });
-        return;
+        return true;
       }
+      const actor = actorUuid(user);
       const payload = {
         id: payment.id,
         company_id: user.companyId,
         invoice_id: payment.invoiceId,
         job_id: payment.jobId,
+        opportunity_id: opportunityId,
         amount: payment.amount,
         method: payment.method,
         paid_at: payment.paidAt,
         reference: payment.reference,
         receipt_url: payment.receiptUrl,
-        receipt_storage_path: payment.receiptStoragePath,
+        receipt_storage_path: payment.receiptStoragePath || "",
         qb_status: payment.qbStatus,
-        created_by: payment.createdBy,
+        ...(actor ? { created_by: actor } : {}),
       };
       let { data, error } = await supabase.from("payments").insert(payload).select("*").single();
       const uuidRetry = withCreatedByRetry(payload, user, error);
@@ -7918,11 +7943,21 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         data = retryUuid.data;
         error = retryUuid.error;
       }
+      if (error && /opportunity_id/i.test(error.message ?? "")) {
+        const { opportunity_id: _opportunityId, ...withoutOpportunity } = payload;
+        const retryOpportunity = await supabase
+          .from("payments")
+          .insert(withoutOpportunity)
+          .select("*")
+          .single();
+        data = retryOpportunity.data;
+        error = retryOpportunity.error;
+      }
       if (error && isMissingFinancials(error)) {
         if (!payment.invoiceId) {
           toast.error(missingFinancialsMessage());
           setState((prev) => ({ ...prev, payments: [payment, ...prev.payments] }));
-          return;
+          return true;
         }
         const retry = await supabase
           .from("payments")
@@ -7941,8 +7976,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         if (!error) toast.message(missingFinancialsMessage());
       }
       if (error || !data) {
-        toast.error(error?.message ?? "Could not record the payment.");
-        return;
+        const message = error?.message ?? "Could not record the payment.";
+        toast.error(
+          /payments_has_job_or_invoice/i.test(message)
+            ? "Tie the payment to a job or an invoice."
+            : message,
+        );
+        return false;
       }
       const saved = { ...mapPayment(data), createdBy: user.name };
       const nextPayments = [saved, ...state.payments];
@@ -7994,8 +8034,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         invoiceId: saved.invoiceId ?? undefined,
         jobId: saved.jobId ?? undefined,
       });
+      return true;
     },
-    [addActivity, recordCompanyAudit, state.invoiceLines, state.invoices, state.payments, user.companyId, user.id, user.name, user.staffId]
+    [addActivity, recordCompanyAudit, state.invoiceLines, state.invoices, state.jobs, state.payments, user.companyId, user.id, user.name, user.staffId]
   );
 
   const addExpense = useCallback(

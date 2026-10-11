@@ -3,6 +3,7 @@ import { parseMarket, workMarket } from "@/lib/market";
 import type { Json } from "@/lib/supabase/database.types";
 import {
   STAGE_LABELS,
+  isShelvedStage,
   isNorthlineDemoName,
   parseTrades,
   type Job,
@@ -278,7 +279,7 @@ export function jobDraftFromOpportunity(
     name: opportunity.name,
     clientId: opportunity.clientId,
     primaryContactId: opportunity.primaryContactId || null,
-    status: opportunity.stage === "lost" ? "on_hold" : "precon",
+    status: isShelvedStage(opportunity.stage) ? "on_hold" : "precon",
     contractValue: opportunity.value,
     startDate: (opportunity.createdAt || new Date().toISOString()).slice(0, 10),
     substantialCompletion: null,
@@ -304,7 +305,7 @@ export function jobsFromOpenLeads(
 ): Job[] {
   const linked = new Set(jobs.map((job) => job.opportunityId).filter(Boolean));
   return opportunities
-    .filter((opportunity) => opportunity.stage !== "lost" && !linked.has(opportunity.id))
+    .filter((opportunity) => !isShelvedStage(opportunity.stage) && !linked.has(opportunity.id))
     .map((opportunity) => fillJobRecord(jobDraftFromOpportunity(opportunity), opportunity));
 }
 
@@ -476,7 +477,7 @@ export function costCenterLabel(job: Job, opportunities: Opportunity[]) {
     ? opportunities.find((opportunity) => opportunity.id === job.opportunityId)
     : undefined;
   const pipeline =
-    lead && lead.stage !== "awarded" && lead.stage !== "lost" ? `${STAGE_LABELS[lead.stage]} · ` : "";
+    lead && lead.stage !== "awarded" && !isShelvedStage(lead.stage) ? `${STAGE_LABELS[lead.stage]} · ` : "";
   return `${pipeline}${job.code ? `${job.code} · ` : ""}${job.name}`;
 }
 

@@ -9,6 +9,8 @@ const nextConfig = {
   // output — `output: "standalone"` there skips the platform adapter.
   ...(onVercel ? {} : { output: "standalone" }),
   serverExternalPackages: [
+    "@azure/identity",
+    "@azure/storage-blob",
     "@grpc/grpc-js",
     "@spectrum-ts/core",
     "@spectrum-ts/imessage",
@@ -28,7 +30,7 @@ const nextConfig = {
     "*.cvm.dev",
   ],
   experimental: {
-    proxyClientMaxBodySize: "15mb",
+    proxyClientMaxBodySize: "26mb",
     // Dynamic pages are not reused by the client router unless this is set.
     // Sidebar clicks then serve the prefetched segment instead of waiting on
     // the proxy and a fresh RSC request.

@@ -45,6 +45,7 @@ export const PROJECT_PIN_COLORS: Record<WorkColumn, string> = {
   punch: "#b45309",
   complete: "#4b5563",
   on_hold: "#6b7280",
+  unqualified: "#94a3b8",
   lost: "#9ca3af",
   deleted: "#b91c1c",
 };

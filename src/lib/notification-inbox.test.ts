@@ -20,6 +20,7 @@ function item(id: string, at: string, updated = at): ReturnType<typeof inboxItem
       job_id: null,
       status: "unassigned",
       assigned_to: null,
+      assigned_by: null,
       passed_back_by: null,
       passed_back_by_name: "",
       passback_reason: "",
