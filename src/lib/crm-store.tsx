@@ -8640,8 +8640,17 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error("Open the job before submitting it for closeout.");
         return null;
       }
-      if (!canSubmitProjectCloseout(actor.role, actor.name, job.projectManager)) {
-        toast.error("A project manager submits the project for closeout.");
+      if (
+        !canSubmitProjectCloseout({
+          role: actor.role,
+          title: actor.title,
+          viewerName: actor.name,
+          viewerStaffId: actor.id,
+          projectManager: job.projectManager,
+          ownerStaffId: job.ownerStaffId,
+        })
+      ) {
+        toast.error("A project manager sends this project for closeout.");
         return null;
       }
       const previous = (state.commissionCloseouts ?? []).find((item) => item.jobId === jobId) ?? null;

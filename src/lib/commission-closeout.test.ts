@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import {
   buildCommissionSheet,
+  canSubmitProjectCloseout,
   closeoutReleaseBlock,
   compareJobExpenses,
   defaultCommissionSplits,
+  payoutRecipients,
   seedQuickbooksLines,
 } from "./commission-closeout.ts";
-import type { Expense, ForecastedExpense, Job, Payment } from "./types.ts";
+import type { Expense, ForecastedExpense, Job, Payment, StaffMember } from "./types.ts";
 
 function job(patch: Partial<Job> = {}): Job {
   return {
@@ -233,5 +235,104 @@ assert.equal(scopes.scopes[0]?.zsow, 9000);
 assert.equal(scopes.carrier, "State Farm");
 assert.equal(scopes.overheadProfit, 1500);
 assert.equal(scopes.due, 9000);
+
+assert.equal(
+  canSubmitProjectCloseout({
+    role: "project_manager",
+    title: "Project manager",
+    viewerName: "Ada Lopez",
+    viewerStaffId: "staff_ada",
+    projectManager: "Someone Else",
+    ownerStaffId: "staff_other",
+  }),
+  true,
+);
+assert.equal(
+  canSubmitProjectCloseout({
+    role: "business_development",
+    title: "Business development",
+    viewerName: "Sam Lead",
+    viewerStaffId: "staff_sam",
+    projectManager: "Sam Lead",
+    ownerStaffId: "staff_other",
+  }),
+  true,
+);
+assert.equal(
+  canSubmitProjectCloseout({
+    role: "business_development",
+    title: "Director of Business Development",
+    viewerName: "Sam Lead",
+    viewerStaffId: "staff_sam",
+    projectManager: "Office name",
+    ownerStaffId: "staff_sam",
+  }),
+  true,
+);
+assert.equal(
+  canSubmitProjectCloseout({
+    role: "estimator",
+    title: "Project Manager",
+    viewerName: "Riley Est",
+    viewerStaffId: "staff_riley",
+    projectManager: "Ada Lopez",
+    ownerStaffId: "staff_ada",
+  }),
+  true,
+);
+assert.equal(
+  canSubmitProjectCloseout({
+    role: "estimator",
+    title: "Estimator",
+    viewerName: "Riley Est",
+    viewerStaffId: "staff_riley",
+    projectManager: "Ada Lopez",
+    ownerStaffId: "staff_ada",
+  }),
+  false,
+);
+assert.equal(
+  canSubmitProjectCloseout({
+    role: "accountant",
+    title: "Controller",
+    viewerName: "",
+    viewerStaffId: "staff_books",
+    projectManager: "",
+    ownerStaffId: null,
+  }),
+  false,
+);
+
+function staff(patch: Partial<StaffMember> & Pick<StaffMember, "id" | "name" | "role">): StaffMember {
+  return {
+    title: "",
+    teamId: null,
+    initials: "XX",
+    email: "",
+    phone: "",
+    cardSlug: patch.id,
+    emailSignature: "",
+    locked: false,
+    restricted: false,
+    inviteExpiresAt: null,
+    inviteToken: null,
+    ...patch,
+  };
+}
+
+const recipients = payoutRecipients(
+  [
+    staff({ id: "pm", name: "Ada Lopez", role: "project_manager" }),
+    staff({ id: "bd", name: "Sam Lead", role: "business_development" }),
+    staff({ id: "est", name: "Riley Est", role: "estimator" }),
+    staff({ id: "locked", name: "Locked PM", role: "project_manager", locked: true }),
+  ],
+  "Office name",
+  "bd",
+);
+assert.deepEqual(
+  recipients.map((member) => member.id),
+  ["pm", "bd"],
+);
 
 console.log("commission-closeout tests passed");

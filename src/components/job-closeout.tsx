@@ -58,7 +58,14 @@ export function JobCloseout({ job }: { job: Job }) {
 
   const canSubmit =
     Boolean(actor) &&
-    canSubmitProjectCloseout(actor?.role, actor?.name ?? "", job.projectManager) &&
+    canSubmitProjectCloseout({
+      role: actor?.role,
+      title: actor?.title,
+      viewerName: actor?.name ?? "",
+      viewerStaffId: actor?.id,
+      projectManager: job.projectManager,
+      ownerStaffId: job.ownerStaffId,
+    }) &&
     (!closeout || closeout.status === "returned");
   const canPayout =
     actor && closeout
@@ -92,7 +99,6 @@ export function JobCloseout({ job }: { job: Job }) {
 
   return (
     <section className="space-y-3 rounded-md border p-3">
-      <CommissionSheetView sheet={sheet} closeout={closeout} />
       {canSubmit ? (
         <div className="space-y-2">
           <Textarea
@@ -102,10 +108,11 @@ export function JobCloseout({ job }: { job: Job }) {
             aria-label="Note for accounting"
           />
           <Button type="button" disabled={busy} onClick={() => void submit()}>
-            {closeout?.status === "returned" ? "Submit again for closeout" : "Submit a project for closeout"}
+            {closeout?.status === "returned" ? "Send again for closeout" : "Send for closeout"}
           </Button>
         </div>
       ) : null}
+      <CommissionSheetView sheet={sheet} closeout={closeout} />
       {closeout?.status === "submitted" ? (
         <p className="text-sm text-muted-foreground">
           Accounting has this sheet. They compare QuickBooks with the expenses, then send it on for payout.

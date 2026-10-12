@@ -94,8 +94,13 @@ function CloseoutReview({ closeout }: { closeout: CommissionCloseout }) {
   const [recipientId, setRecipientId] = useState("");
   const [busy, setBusy] = useState(false);
   const editing = closeout.status === "submitted";
-  const recipients = job ? payoutRecipients(crm.staff, job.projectManager) : [];
-  const recipient = recipientId || recipients.find((member) => member.name === job?.projectManager)?.id || recipients[0]?.id || "";
+  const recipients = job ? payoutRecipients(crm.staff, job.projectManager, job.ownerStaffId) : [];
+  const recipient =
+    recipientId ||
+    recipients.find((member) => member.id === job?.ownerStaffId)?.id ||
+    recipients.find((member) => member.name.trim().toLowerCase() === (job?.projectManager ?? "").trim().toLowerCase())?.id ||
+    recipients[0]?.id ||
+    "";
 
   const client = job?.clientId ? crm.clients.find((item) => item.id === job.clientId) : null;
   const contact = job?.primaryContactId ? crm.contacts.find((item) => item.id === job.primaryContactId) : null;

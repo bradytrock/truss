@@ -113,6 +113,7 @@ import {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { PhotoReportBuilder } from "@/components/photo-report-builder";
+import { canSubmitProjectCloseout } from "@/lib/commission-closeout";
 import { canDeleteJobs } from "@/lib/visibility";
 import { useStartEstimate } from "@/lib/start-estimate";
 import { useStartMaterialOrder } from "@/lib/start-material-order";
@@ -329,6 +330,7 @@ export function JobRecord({
   const [codeOpen, setCodeOpen] = useState(false);
   const [codeDraft, setCodeDraft] = useState(job.code);
   const [reviewBusy, setReviewBusy] = useState(false);
+  const [closeoutBusy, setCloseoutBusy] = useState(false);
 
   const canTrash = canDeleteJobs(crm.viewer) && !crm.impersonatedStaff;
   const deleted = isDeletedJob(job);
@@ -419,6 +421,20 @@ export function JobRecord({
         activity.entityId === job.opportunityId)
   );
   const tasks = crm.tasks.filter((task) => task.relatedType === "job" && task.relatedId === job.id);
+  const actor = crm.effectiveStaff;
+  const closeout = (crm.commissionCloseouts ?? []).find((item) => item.jobId === job.id) ?? null;
+  const canSendCloseout =
+    !deleted &&
+    Boolean(actor) &&
+    canSubmitProjectCloseout({
+      role: actor?.role,
+      title: actor?.title,
+      viewerName: actor?.name ?? "",
+      viewerStaffId: actor?.id,
+      projectManager: job.projectManager,
+      ownerStaffId: job.ownerStaffId,
+    }) &&
+    (!closeout || closeout.status === "returned");
   const canEditCode = canReviewJobCodes(crm.effectiveStaff?.role);
   const codeReviewTask = tasks.find((task) => !task.completed && isJobCodeReviewTask(task));
   const codeReview = codeReviewTask ? parseJobCodeReviewNotes(codeReviewTask.notes) : null;
@@ -699,6 +715,21 @@ export function JobRecord({
               render={<Link href={`/messages?job=${job.id}&contact=${primary.id}`} />}
             >
               Text homeowner
+            </Button>
+          ) : null}
+          {canSendCloseout ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-full"
+              disabled={closeoutBusy}
+              onClick={() => {
+                setCloseoutBusy(true);
+                void crm.submitCommissionCloseout(job.id).finally(() => setCloseoutBusy(false));
+              }}
+            >
+              {closeout?.status === "returned" ? "Send again for closeout" : "Send for closeout"}
             </Button>
           ) : null}
           <Button

@@ -1,6 +1,7 @@
 import { claimTotals, type JobInsurance } from "@/lib/insurance";
 import { jobAddress } from "@/lib/job-record";
 import { isCardMethod, isPostedPayment, paymentMethodLabel } from "@/lib/payment-posting";
+import { namesMatch } from "@/lib/seats";
 import type {
   Client,
   Contact,
@@ -552,18 +553,26 @@ export function closeoutReleaseBlock(sheet: CommissionSheet, acknowledged: boole
   return "QuickBooks and the CRM expenses still differ. Match them, or acknowledge the difference, before releasing payout.";
 }
 
-export function canSubmitProjectCloseout(role: SeatRole | undefined, viewerName: string, projectManager: string) {
-  if (!role) return false;
+export function canSubmitProjectCloseout(input: {
+  role?: SeatRole;
+  title?: string;
+  viewerName: string;
+  viewerStaffId?: string;
+  projectManager?: string;
+  ownerStaffId?: string | null;
+}) {
   if (
-    role === "project_manager" ||
-    role === "company_admin" ||
-    role === "team_lead" ||
-    role === "superintendent"
+    input.role === "project_manager" ||
+    input.role === "company_admin" ||
+    input.role === "team_lead" ||
+    input.role === "superintendent" ||
+    /project manager/i.test(input.title ?? "")
   ) {
     return true;
   }
-  const manager = projectManager.trim().toLowerCase();
-  return manager.length > 0 && viewerName.trim().toLowerCase() === manager;
+  if (input.viewerStaffId && input.ownerStaffId && input.viewerStaffId === input.ownerStaffId) return true;
+  const manager = input.projectManager?.trim() ?? "";
+  return manager.length > 0 && namesMatch(input.viewerName, manager);
 }
 
 export function canReviewCloseout(role: SeatRole | undefined) {
@@ -583,14 +592,15 @@ export function canMarkCommissionPayout(input: {
   return named.length > 0 && named === input.viewerName.trim().toLowerCase();
 }
 
-export function payoutRecipients(staff: StaffMember[], projectManager: string) {
-  const named = projectManager.trim().toLowerCase();
+export function payoutRecipients(staff: StaffMember[], projectManager: string, ownerStaffId?: string | null) {
+  const named = projectManager.trim();
   return staff.filter((member) => {
     if (member.locked || member.restricted) return false;
     if (member.role === "project_manager" || member.role === "team_lead" || member.role === "company_admin") {
       return true;
     }
-    return named.length > 0 && member.name.trim().toLowerCase() === named;
+    if (ownerStaffId && member.id === ownerStaffId) return true;
+    return named.length > 0 && namesMatch(member.name, named);
   });
 }
 
