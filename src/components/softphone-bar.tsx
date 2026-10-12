@@ -46,7 +46,7 @@ export function SoftphoneBar() {
   const staff = crm.book.staff.filter((member) => !member.locked && member.id !== staffId);
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center p-3 sm:p-4">
+    <div className="pointer-events-none fixed inset-x-0 bottom-[4.75rem] z-40 flex justify-center p-3 sm:p-4 md:bottom-0">
       <div
         className={cn(
           "pointer-events-auto w-full max-w-xl rounded-xl border bg-background/95 shadow-lg backdrop-blur",
