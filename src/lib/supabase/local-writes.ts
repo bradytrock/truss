@@ -6,12 +6,16 @@
 
 const ECHO_TTL_MS = 20_000;
 const RECENT_WRITE_MS = 8_000;
+/** Longer than a full company reload, so an in-flight snapshot cannot paint over an edit. */
+const PROTECT_MS = 20_000;
 
 const echoes = new Map<string, number>();
+const protectedUntil = new Map<string, number>();
 let lastRestWriteAt = 0;
 
 export function resetLocalWriteEchoes() {
   echoes.clear();
+  protectedUntil.clear();
   lastRestWriteAt = 0;
 }
 
@@ -36,6 +40,60 @@ export function markRestWrite(now = Date.now()) {
 
 export function recentRestWrite(now = Date.now()) {
   return now - lastRestWriteAt < RECENT_WRITE_MS;
+}
+
+/** Hold these rows so a slower company reload keeps the copy already on screen. */
+export function protectLocalRows(ids: readonly string[], now = Date.now()) {
+  for (const id of ids) {
+    if (!id) continue;
+    protectedUntil.set(id, now + PROTECT_MS);
+    noteLocalRow(id, now);
+  }
+}
+
+export function unprotectLocalRows(ids: readonly string[]) {
+  for (const id of ids) protectedUntil.delete(id);
+}
+
+export function isRowProtected(id: string, now = Date.now()) {
+  if (!id) return false;
+  const expires = protectedUntil.get(id);
+  if (!expires) return false;
+  if (expires <= now) {
+    protectedUntil.delete(id);
+    return false;
+  }
+  return true;
+}
+
+export function protectedRowIds(now = Date.now()) {
+  const ids: string[] = [];
+  for (const [id, expires] of protectedUntil) {
+    if (expires <= now) protectedUntil.delete(id);
+    else ids.push(id);
+  }
+  return ids;
+}
+
+export function idsFromWriteTarget(target: { url: string; body: string | null }) {
+  const ids = new Set(idsFromRestUrl(target.url));
+  if (target.body) {
+    try {
+      collectIds(JSON.parse(target.body), ids);
+    } catch {
+      // Request body was not JSON.
+    }
+  }
+  return [...ids];
+}
+
+function collectIds(value: unknown, ids: Set<string>) {
+  if (Array.isArray(value)) {
+    for (const row of value) collectIds(row, ids);
+    return;
+  }
+  const id = rowId(value);
+  if (id) ids.add(id);
 }
 
 /** Skip a live reload when every echoed id came from a write this desk just made. */
@@ -135,7 +193,10 @@ export function installLocalWriteTracker() {
   const original = window.fetch.bind(window);
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const target = restWriteTarget(input, init);
-    if (target) markRestWrite();
+    if (target) {
+      markRestWrite();
+      protectLocalRows(idsFromWriteTarget(target));
+    }
     const response = await original(input, init);
     if (!target || !response.ok) return response;
     observeRestWrite(target, { ok: true });
