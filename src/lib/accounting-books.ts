@@ -20,7 +20,7 @@ import {
   type Payment,
 } from "@/lib/types";
 
-export const ACCOUNTING_TABS = ["overview", "review", "expenses", "sync", "reports", "tools"] as const;
+export const ACCOUNTING_TABS = ["overview", "review", "expenses", "closeouts", "sync", "reports", "tools"] as const;
 export type AccountingTab = (typeof ACCOUNTING_TABS)[number];
 
 export const INVOICE_REVIEW_FILTERS = ["all", "ready", "needs_review", "held"] as const;

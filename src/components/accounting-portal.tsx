@@ -20,6 +20,7 @@ import { ProfitAndLossReport } from "@/components/profit-and-loss";
 import { AccountingExpenseReview, ExpenseReviewCountBadge } from "@/components/accounting-expense-review";
 import { AccountingInvoiceReview, InvoiceReviewCountBadge } from "@/components/accounting-invoice-review";
 import { AccountingSyncQueues } from "@/components/accounting-qb-queue";
+import { AccountingCloseouts, CloseoutCountBadge } from "@/components/accounting-closeouts";
 import { QbwcPanel } from "@/components/qbwc-panel";
 import { LogPaymentDialog } from "@/components/log-financial-dialogs";
 import { useCrm } from "@/lib/crm-store";
@@ -165,6 +166,7 @@ export function AccountingPortal() {
   const paymentRows = useMemo(() => recentPaymentRows(crm.payments).slice(0, 8), [crm.payments]);
   const pendingRows = useMemo(() => pendingCardPaymentRows(crm.payments), [crm.payments]);
   const pendingAmount = pendingRows.reduce((sum, payment) => sum + payment.amount, 0);
+  const closeoutWaiting = (crm.commissionCloseouts ?? []).filter((item) => item.status === "submitted");
 
   async function settlePending(id: string, next: "posted" | "rejected") {
     setSettlingId(id);
@@ -181,6 +183,7 @@ export function AccountingPortal() {
     else params.set("tab", next);
     if (next !== "review") params.delete("invoice");
     if (next !== "expenses") params.delete("expense");
+    if (next !== "closeouts") params.delete("closeout");
     const qs = params.toString();
     router.replace(qs ? `/accounting?${qs}` : "/accounting", { scroll: false });
   }
@@ -191,6 +194,16 @@ export function AccountingPortal() {
     params.delete("expense");
     if (id) params.set("invoice", id);
     else params.delete("invoice");
+    router.replace(`/accounting?${params.toString()}`, { scroll: false });
+  }
+
+  function setCloseout(id: string | null) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", "closeouts");
+    params.delete("invoice");
+    params.delete("expense");
+    if (id) params.set("closeout", id);
+    else params.delete("closeout");
     router.replace(`/accounting?${params.toString()}`, { scroll: false });
   }
 
@@ -258,6 +271,10 @@ export function AccountingPortal() {
           <TabsTrigger value="expenses">
             Expense review
             <ExpenseReviewCountBadge />
+          </TabsTrigger>
+          <TabsTrigger value="closeouts">
+            Closeouts
+            <CloseoutCountBadge />
           </TabsTrigger>
           <TabsTrigger value="sync">
             QuickBooks sync
@@ -327,6 +344,21 @@ export function AccountingPortal() {
                 }}
               >
                 Open pending report
+              </Button>
+            </section>
+          ) : null}
+          {closeoutWaiting.length > 0 ? (
+            <section className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-[#c9c9c9] bg-white px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-[#181818]">
+                  {closeoutWaiting.length} closeout{closeoutWaiting.length === 1 ? "" : "s"} waiting
+                </p>
+                <p className="text-xs text-[#706e6b]">
+                  Compare QuickBooks with the job expenses, then release the sheet for commission payout.
+                </p>
+              </div>
+              <Button type="button" variant="outline" onClick={() => setTab("closeouts")}>
+                Open closeouts
               </Button>
             </section>
           ) : null}
@@ -420,6 +452,10 @@ export function AccountingPortal() {
 
         <TabsContent value="expenses" className="mt-4">
           <AccountingExpenseReview selectedId={selectedExpense} onSelect={setExpense} />
+        </TabsContent>
+
+        <TabsContent value="closeouts" className="mt-4">
+          <AccountingCloseouts selectedId={searchParams.get("closeout")} onSelect={setCloseout} />
         </TabsContent>
 
         <TabsContent value="sync" className="mt-4 space-y-4">

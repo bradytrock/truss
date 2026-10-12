@@ -34,6 +34,12 @@ import {
   parseSupplements,
   type JobInsurance,
 } from "@/lib/insurance";
+import {
+  parseCloseoutStatus,
+  parseQbLines,
+  parseSplits,
+  type CommissionCloseout,
+} from "@/lib/commission-closeout";
 import { parseReturningClientStatus } from "@/lib/returning-client";
 import type {
   Activity,
@@ -987,9 +993,38 @@ export function mapExpense(row: Database["public"]["Tables"]["expenses"]["Row"])
     }),
     receiptStoragePath: row.receipt_storage_path,
     qbStatus: parseQbStatus(row.qb_status),
+    qbTxnId: row.qb_txn_id ?? "",
+    qbTxnKind: row.qb_txn_kind ?? "",
     extractedByAi: Boolean(row.extracted_by_ai),
     createdAt: row.created_at,
     createdBy: row.created_by,
+  };
+}
+
+export function mapCommissionCloseout(
+  row: Database["public"]["Tables"]["commission_closeouts"]["Row"],
+): CommissionCloseout {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    status: parseCloseoutStatus(row.status),
+    submittedBy: row.submitted_by,
+    submittedByName: row.submitted_by_name,
+    submittedAt: row.submitted_at,
+    accountingNote: row.accounting_note,
+    reviewedBy: row.reviewed_by,
+    reviewedByName: row.reviewed_by_name,
+    reviewedAt: row.reviewed_at,
+    releasedToStaffId: row.released_to_staff_id,
+    releasedToName: row.released_to_name,
+    payoutMarkedBy: row.payout_marked_by,
+    payoutMarkedByName: row.payout_marked_by_name,
+    payoutMarkedAt: row.payout_marked_at,
+    qbLines: parseQbLines(row.qb_lines),
+    splits: parseSplits(row.splits),
+    varianceAck: row.variance_ack,
+    notes: row.notes,
+    updatedAt: row.updated_at,
   };
 }
 

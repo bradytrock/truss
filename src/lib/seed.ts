@@ -76,6 +76,7 @@ export const seedState: CrmState = {
   expenses: demoOps.expenses,
   forecastedExpenses: extraForecastedExpenses,
   jobInsurance: extraJobInsurance,
+  commissionCloseouts: [],
   materialOrders: [],
   materialOrderLines: [],
   materialOrderTemplates: [],

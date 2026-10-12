@@ -273,6 +273,24 @@ export function missingJobInsuranceMessage() {
   return `Saved in this browser. Run ${JOB_INSURANCE_SQL}, then ${JOB_INSURANCE_ADJUSTER_SQL}, in the SQL editor so the claim and its adjuster stay on the job.`;
 }
 
+export const COMMISSION_CLOSEOUT_SQL = "supabase/migrations/20261012120000_commission_closeouts.sql";
+
+export function isMissingCommissionCloseouts(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("schema cache") ||
+    message.includes("Could not find the") ||
+    message.includes("commission_closeouts")
+  );
+}
+
+export function missingCommissionCloseoutsMessage() {
+  return `Saved in this browser. Run ${COMMISSION_CLOSEOUT_SQL} in the SQL editor so commission closeouts stay on the job.`;
+}
+
 export function isMissingOriginator(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
   const message = error.message ?? "";

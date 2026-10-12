@@ -20,6 +20,7 @@ import {
   jobPeriodBounds,
   projectJobComparison,
 } from "@/lib/profit-and-loss";
+import { JobCloseout } from "@/components/job-closeout";
 import { JobPnlComparisonTable, ProfitAndLossReport } from "@/components/profit-and-loss";
 import { EXPENSE_ACCOUNT_LABELS, type Job } from "@/lib/types";
 import { LogExpenseDialog, LogForecastedExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
@@ -125,6 +126,8 @@ export function JobFinancials({ job }: { job: Job }) {
           Log payment
         </Button>
       </div>
+
+      <JobCloseout job={job} />
 
       {comparison ? (
         <JobPnlComparisonTable

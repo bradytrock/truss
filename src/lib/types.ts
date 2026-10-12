@@ -780,6 +780,9 @@ export interface Expense {
   receiptUrl: string;
   receiptStoragePath: string | null;
   qbStatus: QbSyncStatus;
+  /** QuickBooks transaction id once the bill is posted. Empty until then. */
+  qbTxnId?: string;
+  qbTxnKind?: string;
   extractedByAi: boolean;
   createdAt: string;
   createdBy: string;
@@ -1391,6 +1394,8 @@ export interface CrmState {
   forecastedExpenses: ForecastedExpense[];
   /** One insurance claim per job: carrier, supplements, and checks. */
   jobInsurance: import("@/lib/insurance").JobInsurance[];
+  /** One commission closeout per job. */
+  commissionCloseouts: import("@/lib/commission-closeout").CommissionCloseout[];
   materialOrders: MaterialOrder[];
   materialOrderLines: MaterialOrderLine[];
   materialOrderTemplates: MaterialOrderTemplate[];

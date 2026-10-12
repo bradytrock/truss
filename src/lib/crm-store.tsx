@@ -32,7 +32,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingTradesColumn, missingTradesMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingTradesColumn, missingTradesMessage } from "@/lib/supabase/schema-errors";
 import {
   eventTimesAreInvitable,
   externalInvitees,
@@ -187,6 +187,7 @@ import {
   mapPayment,
   mapExpense,
   mapForecastedExpense,
+  mapCommissionCloseout,
   mapJobInsurance,
   expensePatch,
   mapMaterialOrder,
@@ -224,6 +225,21 @@ import { plannedRunsForEvent, previewAutomation } from "@/lib/automations/queue"
 import { validateAutomationDraft, type Automation, type AutomationEvent } from "@/lib/automations";
 import { expenseRequiresJob } from "@/lib/qbwc/work";
 import { insuranceActivityNote, jobInsurancePayload, type JobInsurance } from "@/lib/insurance";
+import {
+  buildCommissionSheet,
+  canMarkCommissionPayout,
+  canReviewCloseout,
+  canSubmitProjectCloseout,
+  CLOSEOUT_PAYOUT_TASK,
+  CLOSEOUT_REVIEW_TASK,
+  closeoutReleaseBlock,
+  closeoutTaskTitle,
+  commissionCloseoutPayload,
+  newCommissionCloseout,
+  type CommissionCloseout,
+  type CommissionQbLine,
+  type CommissionSplitLine,
+} from "@/lib/commission-closeout";
 import {
   NORTHLINE_COMPANY,
   STAGE_LABELS,
@@ -332,7 +348,7 @@ import { formatJobSite } from "@/lib/leads";
 import { leadAssignNeedsEmail, requestLeadAssignNotification } from "@/lib/lead-assign-email";
 import { NOTIFICATIONS_REFRESH } from "@/lib/notification-inbox";
 import { defaultEstimateValidUntil, localYmd } from "@/lib/format";
-import { fillPayment, fileToDataUrl } from "@/lib/job-financials";
+import { expensesForJob, fillPayment, fileToDataUrl, forecastedExpensesForJob, paymentsForJob } from "@/lib/job-financials";
 import {
   contactForPhone,
   jobForContact,
@@ -422,6 +438,7 @@ const emptyState: CrmState = {
   expenses: [],
   forecastedExpenses: [],
   jobInsurance: [],
+  commissionCloseouts: [],
   materialOrders: [],
   materialOrderLines: [],
   materialOrderTemplates: [],
@@ -802,6 +819,7 @@ async function pruneDuplicateLeadJobs(supabase: ReturnType<typeof createClient>,
         "expenses",
         "forecasted_expenses",
         "job_insurance",
+        "commission_closeouts",
         "schedule_events",
         "job_photos",
         "job_files",
@@ -1299,6 +1317,30 @@ type CrmContextValue = CrmState & {
   }) => Promise<ForecastedExpense | null>;
   removeForecastedExpense: (id: string) => Promise<boolean>;
   saveJobInsurance: (claim: JobInsurance) => Promise<JobInsurance | null>;
+  submitCommissionCloseout: (jobId: string, notes?: string) => Promise<CommissionCloseout | null>;
+  saveCommissionCloseoutReview: (
+    id: string,
+    patch: {
+      qbLines: CommissionQbLine[];
+      splits: CommissionSplitLine[];
+      varianceAck: boolean;
+      accountingNote: string;
+      notes: string;
+    },
+  ) => Promise<CommissionCloseout | null>;
+  returnCommissionCloseout: (id: string, note: string) => Promise<CommissionCloseout | null>;
+  releaseCommissionCloseout: (
+    id: string,
+    staffId: string,
+    review?: {
+      qbLines: CommissionQbLine[];
+      splits: CommissionSplitLine[];
+      varianceAck: boolean;
+      accountingNote: string;
+      notes: string;
+    },
+  ) => Promise<CommissionCloseout | null>;
+  markCommissionPayout: (id: string) => Promise<CommissionCloseout | null>;
   addMaterialOrder: (input: {
     jobId: string;
     vendor?: string;
@@ -1757,6 +1799,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             ...claim,
             jobId: remapDroppedJobId(claim.jobId, pruned.dropped) ?? claim.jobId,
           })),
+          commissionCloseouts: (book.state.commissionCloseouts ?? []).map((closeout) => ({
+            ...closeout,
+            jobId: remapDroppedJobId(closeout.jobId, pruned.dropped) ?? closeout.jobId,
+          })),
           materialOrderLines: book.state.materialOrderLines ?? [],
         };
         if (!loadedFullBook || book.messagesError) {
@@ -1798,6 +1844,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               jobInsurance: merged.jobInsurance.map((claim) => ({
                 ...claim,
                 jobId: remapDroppedJobId(claim.jobId, dropped) ?? claim.jobId,
+              })),
+              commissionCloseouts: (merged.commissionCloseouts ?? []).map((closeout) => ({
+                ...closeout,
+                jobId: remapDroppedJobId(closeout.jobId, dropped) ?? closeout.jobId,
               })),
             };
           });
@@ -8443,6 +8493,384 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [addActivity, state.jobInsurance, user.companyId],
   );
 
+  const placeCloseout = useCallback(
+    (record: CommissionCloseout) => (current: CrmState) => ({
+      ...current,
+      commissionCloseouts: [
+        record,
+        ...(current.commissionCloseouts ?? []).filter((item) => item.jobId !== record.jobId && item.id !== record.id),
+      ],
+    }),
+    [],
+  );
+
+  const persistCloseout = useCallback(
+    async (next: CommissionCloseout, previous: CommissionCloseout | null) => {
+      setState(placeCloseout(next));
+      const supabase = maybeClient();
+      if (!supabase) return next;
+      const payload = {
+        ...commissionCloseoutPayload(next, user.companyId),
+        qb_lines: next.qbLines as unknown as Json,
+        splits: next.splits as unknown as Json,
+      };
+      const saved = await supabase
+        .from("commission_closeouts")
+        .upsert(payload, { onConflict: "job_id" })
+        .select("*")
+        .single();
+      if (saved.error || !saved.data) {
+        if (saved.error && isMissingCommissionCloseouts(saved.error)) {
+          toast.message(missingCommissionCloseoutsMessage());
+          return next;
+        }
+        setState((current) => {
+          const without = (current.commissionCloseouts ?? []).filter(
+            (item) => item.jobId !== next.jobId && item.id !== next.id,
+          );
+          return { ...current, commissionCloseouts: previous ? [previous, ...without] : without };
+        });
+        toast.error(saved.error?.message ?? "Could not save the closeout.");
+        return null;
+      }
+      const mapped = mapCommissionCloseout(saved.data);
+      setState(placeCloseout(mapped));
+      return mapped;
+    },
+    [placeCloseout, user.companyId],
+  );
+
+  const fileCloseoutNotice = useCallback(
+    async (input: { job: Job; title: string; notes: string; audience: StaffMember[]; sms: string; activity: string }) => {
+      const localTasks: Task[] = [];
+      for (const member of input.audience) {
+        const open = state.tasks.some(
+          (task) =>
+            !task.completed &&
+            task.relatedId === input.job.id &&
+            task.assignee === member.name &&
+            task.title === input.title,
+        );
+        if (!open) {
+          if (isSupabaseConfigured()) {
+            await addTask({
+              title: input.title,
+              dueAt: localYmd(new Date()),
+              relatedType: "job",
+              relatedId: input.job.id,
+              assignee: member.name,
+              notes: input.notes,
+            });
+          } else {
+            localTasks.push({
+              id: crypto.randomUUID(),
+              title: input.title,
+              dueAt: localYmd(new Date()),
+              completed: false,
+              relatedType: "job",
+              relatedId: input.job.id,
+              assignee: member.name,
+              notes: input.notes,
+              remindedAt: null,
+            });
+          }
+        }
+        if (isSupabaseConfigured()) await notifyStaffByText(member, input.sms);
+      }
+      if (localTasks.length) {
+        setState((prev) => ({ ...prev, tasks: [...localTasks, ...prev.tasks] }));
+      }
+      await addActivity({
+        entityType: "job",
+        entityId: input.job.id,
+        type: "note",
+        body: input.activity,
+      });
+    },
+    [addActivity, addTask, notifyStaffByText, state.tasks],
+  );
+
+  const finishCloseoutTasks = useCallback(
+    async (jobId: string, prefix: string) => {
+      const open = state.tasks.filter(
+        (task) => !task.completed && task.relatedId === jobId && task.title.startsWith(prefix),
+      );
+      if (!isSupabaseConfigured()) {
+        if (!open.length) return;
+        const ids = new Set(open.map((task) => task.id));
+        setState((prev) => ({
+          ...prev,
+          tasks: prev.tasks.map((task) => (ids.has(task.id) ? { ...task, completed: true } : task)),
+        }));
+        return;
+      }
+      for (const task of open) {
+        await toggleTask(task.id);
+      }
+    },
+    [state.tasks, toggleTask],
+  );
+
+  const sheetForCloseout = useCallback(
+    (closeout: CommissionCloseout) => {
+      const job = state.jobs.find((item) => item.id === closeout.jobId);
+      if (!job) return null;
+      return buildCommissionSheet({
+        job,
+        client: state.clients.find((item) => item.id === job.clientId) ?? null,
+        contact: state.contacts.find((item) => item.id === job.primaryContactId) ?? null,
+        opportunity: state.opportunities.find((item) => item.id === job.opportunityId) ?? null,
+        claim: (state.jobInsurance ?? []).find((item) => item.jobId === job.id) ?? null,
+        payments: paymentsForJob(job.id, state.payments, state.invoices),
+        expenses: expensesForJob(job.id, state.expenses),
+        forecasts: forecastedExpensesForJob(job.id, state.forecastedExpenses ?? []),
+        qbLines: closeout.qbLines,
+        splits: closeout.splits,
+        closingDate: job.substantialCompletion ?? closeout.submittedAt,
+      });
+    },
+    [state.clients, state.contacts, state.expenses, state.forecastedExpenses, state.invoices, state.jobInsurance, state.jobs, state.opportunities, state.payments],
+  );
+
+  const submitCommissionCloseout = useCallback(
+    async (jobId: string, notes = "") => {
+      const actor = effectiveStaff;
+      const job = state.jobs.find((item) => item.id === jobId);
+      if (!actor || !job) {
+        toast.error("Open the job before submitting it for closeout.");
+        return null;
+      }
+      if (!canSubmitProjectCloseout(actor.role, actor.name, job.projectManager)) {
+        toast.error("A project manager submits the project for closeout.");
+        return null;
+      }
+      const previous = (state.commissionCloseouts ?? []).find((item) => item.jobId === jobId) ?? null;
+      if (previous && previous.status !== "returned") {
+        toast.error(
+          previous.status === "payout"
+            ? "Commission payout is already marked on this job."
+            : "This project is already in closeout.",
+        );
+        return null;
+      }
+      const now = new Date().toISOString();
+      const next = newCommissionCloseout({
+        id: crypto.randomUUID(),
+        jobId,
+        submittedBy: actor.id,
+        submittedByName: actor.name,
+        expenses: expensesForJob(jobId, state.expenses),
+        now,
+        notes,
+        previous,
+      });
+      const saved = await persistCloseout(next, previous);
+      if (!saved) return null;
+      const code = job.code || job.name;
+      await fileCloseoutNotice({
+        job,
+        title: closeoutTaskTitle("review", job.code),
+        notes: `${actor.name} submitted ${code} for closeout. Compare QuickBooks with the job expenses, then release it for commission payout.`,
+        audience: codeReviewAudience(state.staff),
+        sms: `${actor.name} submitted ${code} for closeout. Review it in Accounting.`,
+        activity: `${actor.name} submitted this project for closeout. Accounting has the commission sheet.`,
+      });
+      toast.success(`${code} is with accounting.`);
+      return saved;
+    },
+    [effectiveStaff, fileCloseoutNotice, persistCloseout, state.commissionCloseouts, state.expenses, state.jobs, state.staff],
+  );
+
+  const saveCommissionCloseoutReview = useCallback(
+    async (
+      id: string,
+      patch: {
+        qbLines: CommissionQbLine[];
+        splits: CommissionSplitLine[];
+        varianceAck: boolean;
+        accountingNote: string;
+        notes: string;
+      },
+    ) => {
+      const actor = effectiveStaff;
+      const current = (state.commissionCloseouts ?? []).find((item) => item.id === id);
+      if (!actor || !current) return null;
+      if (!canReviewCloseout(actor.role) || current.status !== "submitted") {
+        toast.error("Accounting reviews a closeout while it is waiting on them.");
+        return null;
+      }
+      const next: CommissionCloseout = {
+        ...current,
+        qbLines: patch.qbLines,
+        splits: patch.splits,
+        varianceAck: patch.varianceAck,
+        accountingNote: patch.accountingNote.trim(),
+        notes: patch.notes,
+        updatedAt: new Date().toISOString(),
+      };
+      return persistCloseout(next, current);
+    },
+    [effectiveStaff, persistCloseout, state.commissionCloseouts],
+  );
+
+  const returnCommissionCloseout = useCallback(
+    async (id: string, note: string) => {
+      const actor = effectiveStaff;
+      const current = (state.commissionCloseouts ?? []).find((item) => item.id === id);
+      const job = current ? state.jobs.find((item) => item.id === current.jobId) : undefined;
+      const reason = note.trim();
+      if (!actor || !current || !job) return null;
+      if (!canReviewCloseout(actor.role) || (current.status !== "submitted" && current.status !== "released")) {
+        toast.error("Accounting can send a closeout back before payout is marked.");
+        return null;
+      }
+      if (!reason) {
+        toast.error("Write what needs to change before sending it back.");
+        return null;
+      }
+      const next: CommissionCloseout = {
+        ...current,
+        status: "returned",
+        accountingNote: reason,
+        reviewedBy: actor.id,
+        reviewedByName: actor.name,
+        reviewedAt: new Date().toISOString(),
+        releasedToStaffId: "",
+        releasedToName: "",
+        varianceAck: false,
+        updatedAt: new Date().toISOString(),
+      };
+      const saved = await persistCloseout(next, current);
+      if (!saved) return null;
+      await finishCloseoutTasks(job.id, CLOSEOUT_REVIEW_TASK);
+      const submitter = state.staff.find((member) => member.id === current.submittedBy || member.name === current.submittedByName);
+      await fileCloseoutNotice({
+        job,
+        title: `Closeout sent back ${job.code || job.name}`,
+        notes: reason,
+        audience: submitter ? [submitter] : [],
+        sms: `Accounting sent ${job.code || job.name} back. ${reason}`,
+        activity: `${actor.name} sent the closeout back. ${reason}`,
+      });
+      toast.success("Closeout sent back.");
+      return saved;
+    },
+    [effectiveStaff, fileCloseoutNotice, finishCloseoutTasks, persistCloseout, state.commissionCloseouts, state.jobs, state.staff],
+  );
+
+  const releaseCommissionCloseout = useCallback(
+    async (
+      id: string,
+      staffId: string,
+      review?: {
+        qbLines: CommissionQbLine[];
+        splits: CommissionSplitLine[];
+        varianceAck: boolean;
+        accountingNote: string;
+        notes: string;
+      },
+    ) => {
+      const actor = effectiveStaff;
+      const current = (state.commissionCloseouts ?? []).find((item) => item.id === id);
+      const job = current ? state.jobs.find((item) => item.id === current.jobId) : undefined;
+      const recipient = state.staff.find((member) => member.id === staffId);
+      if (!actor || !current || !job || !recipient) {
+        toast.error("Pick the project manager who will mark payout.");
+        return null;
+      }
+      if (!canReviewCloseout(actor.role) || current.status !== "submitted") {
+        toast.error("Release a closeout while accounting still has it.");
+        return null;
+      }
+      const draft: CommissionCloseout = review
+        ? {
+            ...current,
+            qbLines: review.qbLines,
+            splits: review.splits,
+            varianceAck: review.varianceAck,
+            accountingNote: review.accountingNote.trim(),
+            notes: review.notes,
+          }
+        : current;
+      const sheet = sheetForCloseout(draft);
+      const block = sheet ? closeoutReleaseBlock(sheet, draft.varianceAck) : "This closeout is missing its job.";
+      if (block) {
+        toast.error(block);
+        return null;
+      }
+      const now = new Date().toISOString();
+      const next: CommissionCloseout = {
+        ...draft,
+        status: "released",
+        reviewedBy: actor.id,
+        reviewedByName: actor.name,
+        reviewedAt: now,
+        releasedToStaffId: recipient.id,
+        releasedToName: recipient.name,
+        updatedAt: now,
+      };
+      const saved = await persistCloseout(next, current);
+      if (!saved) return null;
+      await finishCloseoutTasks(job.id, CLOSEOUT_REVIEW_TASK);
+      await fileCloseoutNotice({
+        job,
+        title: closeoutTaskTitle("payout", job.code),
+        notes: `${actor.name} released ${job.code || job.name} to ${recipient.name} for commission payout.`,
+        audience: [recipient],
+        sms: `${job.code || job.name} is ready for commission payout.`,
+        activity: `${actor.name} finished the closeout review and sent it to ${recipient.name} for commission payout.`,
+      });
+      toast.success(`Sent to ${recipient.name} for commission payout.`);
+      return saved;
+    },
+    [effectiveStaff, fileCloseoutNotice, finishCloseoutTasks, persistCloseout, sheetForCloseout, state.commissionCloseouts, state.jobs, state.staff],
+  );
+
+  const markCommissionPayout = useCallback(
+    async (id: string) => {
+      const actor = effectiveStaff;
+      const current = (state.commissionCloseouts ?? []).find((item) => item.id === id);
+      const job = current ? state.jobs.find((item) => item.id === current.jobId) : undefined;
+      if (!actor || !current || !job) return null;
+      if (
+        !canMarkCommissionPayout({
+          closeout: current,
+          viewerStaffId: actor.id,
+          viewerName: actor.name,
+          viewerRole: actor.role,
+        })
+      ) {
+        toast.error(
+          current.releasedToName
+            ? `${current.releasedToName} marks this for commission payout.`
+            : "This closeout is not ready for payout.",
+        );
+        return null;
+      }
+      const now = new Date().toISOString();
+      const next: CommissionCloseout = {
+        ...current,
+        status: "payout",
+        payoutMarkedBy: actor.id,
+        payoutMarkedByName: actor.name,
+        payoutMarkedAt: now,
+        updatedAt: now,
+      };
+      const saved = await persistCloseout(next, current);
+      if (!saved) return null;
+      await finishCloseoutTasks(job.id, CLOSEOUT_PAYOUT_TASK);
+      await addActivity({
+        entityType: "job",
+        entityId: job.id,
+        type: "note",
+        body: `${actor.name} marked this closeout for commission payout.`,
+      });
+      toast.success("Marked for commission payout.");
+      return saved;
+    },
+    [addActivity, effectiveStaff, finishCloseoutTasks, persistCloseout, state.commissionCloseouts, state.jobs],
+  );
+
   const addMaterialOrder = useCallback(
     async (input: {
       jobId: string;
@@ -13784,6 +14212,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addForecastedExpense,
       removeForecastedExpense,
       saveJobInsurance,
+      submitCommissionCloseout,
+      saveCommissionCloseoutReview,
+      returnCommissionCloseout,
+      releaseCommissionCloseout,
+      markCommissionPayout,
       addMaterialOrder,
       updateMaterialOrder,
       addMaterialOrderLineFromCatalog,
@@ -13982,6 +14415,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addForecastedExpense,
       removeForecastedExpense,
       saveJobInsurance,
+      submitCommissionCloseout,
+      saveCommissionCloseoutReview,
+      returnCommissionCloseout,
+      releaseCommissionCloseout,
+      markCommissionPayout,
       addMaterialOrder,
       updateMaterialOrder,
       addMaterialOrderLineFromCatalog,

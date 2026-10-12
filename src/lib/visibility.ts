@@ -446,6 +446,7 @@ export function scopeBook(
     expenses,
     forecastedExpenses,
     jobInsurance,
+    commissionCloseouts: (state.commissionCloseouts ?? []).filter((item) => jobIds.has(item.jobId)),
     materialOrders,
     materialOrderLines: (state.materialOrderLines ?? []).filter((line) =>
       materialOrderIds.has(line.materialOrderId),

@@ -1123,6 +1123,56 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["forecasted_expenses"]["Insert"]>;
         Relationships: [];
       };
+      commission_closeouts: {
+        Row: {
+          id: string;
+          company_id: string;
+          job_id: string;
+          status: string;
+          submitted_by: string;
+          submitted_by_name: string;
+          submitted_at: string;
+          accounting_note: string;
+          reviewed_by: string;
+          reviewed_by_name: string;
+          reviewed_at: string | null;
+          released_to_staff_id: string;
+          released_to_name: string;
+          payout_marked_by: string;
+          payout_marked_by_name: string;
+          payout_marked_at: string | null;
+          qb_lines: Json;
+          splits: Json;
+          variance_ack: boolean;
+          notes: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          job_id: string;
+          status?: string;
+          submitted_by?: string;
+          submitted_by_name?: string;
+          submitted_at?: string;
+          accounting_note?: string;
+          reviewed_by?: string;
+          reviewed_by_name?: string;
+          reviewed_at?: string | null;
+          released_to_staff_id?: string;
+          released_to_name?: string;
+          payout_marked_by?: string;
+          payout_marked_by_name?: string;
+          payout_marked_at?: string | null;
+          qb_lines?: Json;
+          splits?: Json;
+          variance_ack?: boolean;
+          notes?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["commission_closeouts"]["Insert"]>;
+        Relationships: [];
+      };
       job_insurance: {
         Row: {
           id: string;
