@@ -5,8 +5,11 @@ import {
   closeoutReleaseBlock,
   compareJobExpenses,
   defaultCommissionSplits,
+  isCommissionInYear,
   payoutRecipients,
   seedQuickbooksLines,
+  splitsForViewer,
+  viewerCommissionCheck,
 } from "./commission-closeout.ts";
 import type { Expense, ForecastedExpense, Job, Payment, StaffMember } from "./types.ts";
 
@@ -146,8 +149,65 @@ assert.equal(forecasted.profit, 6000);
 assert.equal(forecasted.estProfit, 6000);
 assert.equal(forecasted.validationOnly, true);
 assert.equal(forecasted.splits.find((line) => line.id === "pm")?.comm, 3000);
+assert.equal(forecasted.splits.find((line) => line.id === "pm")?.check, 3000);
 assert.equal(forecasted.splits.find((line) => line.id === "warranty")?.check, -50);
+assert.equal(forecasted.splitTotals.comm, 3000);
+assert.equal(forecasted.splitTotals.percent, 50);
 assert.equal(forecasted.splitTotals.check, 2950);
+
+const payeeSplits = defaultCommissionSplits().map((line) =>
+  line.id === "pm" ? { ...line, percent: 25 } : line,
+);
+payeeSplits.push({ id: "extra", label: "Project Manage", percent: 25, flat: 0, trades: 0, draw: 0 });
+const deducted = buildCommissionSheet({
+  job: job(),
+  payments: [payment({ id: "p1", amount: 10000, method: "check" })],
+  expenses: [],
+  forecasts: [],
+  splits: payeeSplits,
+});
+assert.equal(deducted.profit, 10000);
+assert.equal(deducted.splits.find((line) => line.id === "pm")?.comm, 2500);
+assert.equal(deducted.splits.find((line) => line.id === "pm")?.check, 0);
+assert.equal(deducted.splits.find((line) => line.id === "extra")?.comm, 2500);
+assert.equal(deducted.splits.find((line) => line.id === "extra")?.check, 2500);
+assert.equal(deducted.splitTotals.percent, 25);
+assert.equal(deducted.splitTotals.comm, 2500);
+assert.equal(deducted.splitTotals.check, 2450);
+assert.equal(
+  viewerCommissionCheck({
+    splits: deducted.splits,
+    viewerName: "Ada Lopez",
+    viewerStaffId: "staff_1",
+    projectManager: "Ada Lopez",
+    ownerStaffId: "staff_1",
+  }),
+  0,
+);
+assert.equal(
+  viewerCommissionCheck({
+    splits: deducted.splits,
+    viewerName: "Project Manage",
+    projectManager: "Ada Lopez",
+    ownerStaffId: "staff_1",
+  }),
+  2500,
+);
+assert.equal(
+  splitsForViewer({
+    splits: deducted.splits,
+    viewerName: "Riley Est",
+    viewerStaffId: "staff_riley",
+    projectManager: "Ada Lopez",
+    ownerStaffId: "staff_1",
+    releasedToStaffId: "staff_riley",
+    releasedToName: "Riley Est",
+  }).map((line) => line.id).join(","),
+  "pm",
+);
+assert.equal(isCommissionInYear("2026-03-01T00:00:00.000Z", 2026), true);
+assert.equal(isCommissionInYear("2025-12-31T00:00:00.000Z", 2026), false);
+assert.equal(isCommissionInYear(null, 2026), false);
 
 const actual = buildCommissionSheet({
   job: job(),

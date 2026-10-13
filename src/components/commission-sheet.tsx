@@ -364,11 +364,10 @@ export function CommissionSheetView({
               </Button>
             </div>
           ) : null}
-          {sheet.validationOnly ? (
-            <p className="border-t px-3 py-2 text-center text-xs text-muted-foreground">
-              These numbers are for validation only until accounting accepts the costs.
-            </p>
-          ) : null}
+          <p className="border-t px-3 py-2 text-center text-xs text-muted-foreground">
+            Payee checks come out of the project manager’s check. Warranty, trades, and draws stay on their own lines.
+            {sheet.validationOnly ? " These numbers are for validation only until accounting accepts the costs." : ""}
+          </p>
         </section>
       </div>
 

@@ -367,7 +367,7 @@ export function compareJobExpenses(expenses: Expense[], qbLines: CommissionQbLin
 }
 
 function computeSplits(lines: CommissionSplitLine[], profit: number): CommissionSplitComputed[] {
-  return lines.map((line) => {
+  const computed = lines.map((line) => {
     const comm = line.percent == null ? cents(line.flat) : cents(profit * (line.percent / 100));
     return {
       ...line,
@@ -378,6 +378,16 @@ function computeSplits(lines: CommissionSplitLine[], profit: number): Commission
       check: cents(comm - line.trades - line.draw),
     };
   });
+  const pmIndex = computed.findIndex((line) => line.id === "pm");
+  if (pmIndex < 0) return computed;
+  const taken = computed.reduce((sum, line, index) => {
+    if (index === pmIndex || line.check <= 0) return sum;
+    return sum + line.check;
+  }, 0);
+  const pm = computed[pmIndex];
+  const next = computed.slice();
+  next[pmIndex] = { ...pm, check: cents(pm.check - taken) };
+  return next;
 }
 
 export function buildCommissionSheet(input: {
@@ -480,6 +490,7 @@ export function buildCommissionSheet(input: {
   const needsAck = costBasis !== "actual" || openVariance;
   const validationOnly = needsAck;
   const splits = computeSplits(input.splits?.length ? input.splits : defaultCommissionSplits(), profit);
+  const pmSplit = splits.find((line) => line.id === "pm");
   const percentLines = splits.filter((line) => line.percent != null);
   const shown = receipts.slice(0, 6);
 
@@ -528,8 +539,12 @@ export function buildCommissionSheet(input: {
     validationOnly,
     splits,
     splitTotals: {
-      percent: percentLines.length ? percentLines.reduce((sum, line) => sum + (line.percent ?? 0), 0) : null,
-      comm: cents(splits.reduce((sum, line) => sum + line.comm, 0)),
+      percent: pmSplit
+        ? pmSplit.percent
+        : percentLines.length
+          ? percentLines.reduce((sum, line) => sum + (line.percent ?? 0), 0)
+          : null,
+      comm: cents(pmSplit ? pmSplit.comm : splits.reduce((sum, line) => sum + line.comm, 0)),
       trades: cents(splits.reduce((sum, line) => sum + line.trades, 0)),
       draw: cents(splits.reduce((sum, line) => sum + line.draw, 0)),
       check: cents(splits.reduce((sum, line) => sum + line.check, 0)),
@@ -551,6 +566,46 @@ export function closeoutReleaseBlock(sheet: CommissionSheet, acknowledged: boole
     return "This job has no expenses yet. Acknowledge that before releasing payout.";
   }
   return "QuickBooks and the CRM expenses still differ. Match them, or acknowledge the difference, before releasing payout.";
+}
+
+/** Lines on a closeout that belong to this person: the project-manager line when they run the job, a payee labeled with their name, or the sheet accounting released to them. */
+export function splitsForViewer(input: {
+  splits: CommissionSplitComputed[];
+  viewerName: string;
+  viewerStaffId?: string;
+  projectManager?: string;
+  ownerStaffId?: string | null;
+  releasedToStaffId?: string;
+  releasedToName?: string;
+}) {
+  const name = input.viewerName.trim();
+  const manager = input.projectManager?.trim() ?? "";
+  const isManager =
+    Boolean(input.viewerStaffId && input.ownerStaffId && input.viewerStaffId === input.ownerStaffId) ||
+    (name.length > 0 && manager.length > 0 && namesMatch(name, manager));
+  const matched = input.splits.filter((line) => {
+    if (line.id === "pm") return isManager;
+    const label = line.label.trim();
+    return name.length > 0 && label.length > 0 && namesMatch(label, name);
+  });
+  if (matched.length > 0) return matched;
+  const releasedName = input.releasedToName?.trim() ?? "";
+  const released =
+    Boolean(input.viewerStaffId && input.releasedToStaffId && input.viewerStaffId === input.releasedToStaffId) ||
+    (name.length > 0 && releasedName.length > 0 && namesMatch(name, releasedName));
+  if (!released) return [];
+  const pm = input.splits.find((line) => line.id === "pm");
+  return pm ? [pm] : [];
+}
+
+export function viewerCommissionCheck(input: Parameters<typeof splitsForViewer>[0]) {
+  return cents(splitsForViewer(input).reduce((sum, line) => sum + line.check, 0));
+}
+
+export function isCommissionInYear(iso: string | null | undefined, year: number) {
+  if (!iso) return false;
+  const time = new Date(iso);
+  return !Number.isNaN(time.getTime()) && time.getFullYear() === year;
 }
 
 export function canSubmitProjectCloseout(input: {
