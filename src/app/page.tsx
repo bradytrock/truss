@@ -37,6 +37,7 @@ import { isBusinessDevelopment } from "@/lib/bd";
 import { BdRoiPanel } from "@/components/bd-roi";
 import { HomeOnboarding } from "@/components/home-onboarding";
 import { AutomationConfirmations } from "@/components/automation-confirmations";
+import { FieldHome } from "@/components/field-home";
 import { HomeDashboardCanvas } from "@/components/home-dashboard-canvas";
 import { HomeToday } from "@/components/home-today";
 import {
@@ -871,7 +872,9 @@ export default function HomePage() {
   const staffId = crm.effectiveStaff?.id || crm.user.staffId || "anon";
 
   return (
-    <div className="space-y-4">
+    <>
+    <FieldHome />
+    <div className="hidden space-y-4 md:block">
       {crm.hydrateError ? (
         <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
       ) : null}
@@ -989,5 +992,6 @@ export default function HomePage() {
         task={editingTask}
       />
     </div>
+    </>
   );
 }

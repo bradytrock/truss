@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { LayoutGrid, Menu, Plus, Search } from "lucide-react";
+import { LayoutGrid, Menu, Plus, Search, Settings } from "lucide-react";
 import { useCrm } from "@/lib/crm-store";
 import { jobRecordHref } from "@/lib/job-record";
 import { phoneSearchText } from "@/lib/phone";
@@ -54,6 +54,8 @@ import { NotificationsMenu } from "@/components/notifications-menu";
 import { PRODUCT_NAME } from "@/lib/product";
 import { SettingsMobileBar } from "@/components/settings-nav";
 import { useStartEstimate } from "@/lib/start-estimate";
+import { FieldNav } from "@/components/field-nav";
+import { FIELD_CREATE_EVENT, FIELD_SEARCH_EVENT, type FieldCreateDetail } from "@/lib/field-chrome";
 
 const AssistantPanel = dynamic(
   () => import("@/components/assistant-panel").then((mod) => mod.AssistantPanel),
@@ -189,9 +191,35 @@ export function AppShell({ children }: { children: ReactNode }) {
   const startEstimateFlow = useStartEstimate();
   const startEstimate = startEstimateFlow.prompt;
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [createContext, setCreateContext] = useState<FieldCreateDetail | null>(null);
   const [create, setCreate] = useState<
     "opportunity" | "client" | "invoice" | "event" | "expense" | "forecast" | "payment" | "task" | null
   >(null);
+
+  function chooseCreate(kind: NonNullable<typeof create>) {
+    setCreateContext(null);
+    setCreate(kind);
+  }
+
+  useEffect(() => {
+    function onCreate(event: Event) {
+      const detail = (event as CustomEvent<FieldCreateDetail>).detail;
+      if (!detail?.kind) return;
+      if (detail.kind === "estimate") {
+        startEstimate({
+          jobId: detail.jobId,
+          opportunityId: detail.opportunityId,
+          contactId: detail.contactId,
+          clientId: detail.clientId,
+        });
+        return;
+      }
+      setCreateContext(detail);
+      setCreate(detail.kind);
+    }
+    window.addEventListener(FIELD_CREATE_EVENT, onCreate);
+    return () => window.removeEventListener(FIELD_CREATE_EVENT, onCreate);
+  }, [startEstimate]);
 
   useEffect(() => {
     const hrefs = [
@@ -232,25 +260,25 @@ export function AppShell({ children }: { children: ReactNode }) {
   const createMenu =
     effectiveStaff && isBusinessDevelopment(effectiveStaff.role) ? (
       <>
-        <DropdownMenuItem onClick={() => setCreate("opportunity")}>New lead</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("client")}>New contact</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("task")}>New task</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => chooseCreate("opportunity")}>New lead</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => chooseCreate("client")}>New contact</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => chooseCreate("task")}>New task</DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => setCreate("expense")}>Log expense</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("forecast")}>Log forecasted expense</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => chooseCreate("expense")}>Log expense</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => chooseCreate("forecast")}>Log forecasted expense</DropdownMenuItem>
       </>
     ) : (
       <>
-        <DropdownMenuItem onClick={() => setCreate("expense")}>Log expense</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("forecast")}>Log forecasted expense</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("payment")}>Log payment</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => chooseCreate("expense")}>Log expense</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => chooseCreate("forecast")}>Log forecasted expense</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => chooseCreate("payment")}>Log payment</DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => setCreate("opportunity")}>New lead</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => chooseCreate("opportunity")}>New lead</DropdownMenuItem>
         <DropdownMenuItem onClick={() => startEstimate()}>New estimate</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("invoice")}>New invoice</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("event")}>Calendar event</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("task")}>New task</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("client")}>New contact</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => chooseCreate("invoice")}>New invoice</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => chooseCreate("event")}>Calendar event</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => chooseCreate("task")}>New task</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => chooseCreate("client")}>New contact</DropdownMenuItem>
       </>
     );
 
@@ -319,7 +347,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           inboxLayout ? "h-full min-h-0 overflow-hidden" : "min-h-dvh",
         )}
       >
-        <header className={cn("z-30 border-b bg-background", inboxLayout ? "shrink-0" : "sticky top-0")}>
+        <header
+          className={cn(
+            "z-30 border-b bg-background",
+            inboxLayout ? "shrink-0" : "sticky top-0",
+            pathname === "/" && "max-md:hidden",
+          )}
+        >
           <div className="flex h-12 items-center gap-2 px-3 sm:px-5">
             <Button
               variant="ghost"
@@ -334,6 +368,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <div className="ml-auto flex items-center gap-1.5">
               <NotificationsMenu />
               <AssistantPanel />
+              <div className="hidden md:block">
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={
@@ -350,6 +385,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   {createMenu}
                 </DropdownMenuContent>
               </DropdownMenu>
+              </div>
               <UserMenu />
             </div>
           </div>
@@ -360,7 +396,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main
           className={cn(
             "bg-background",
-            inboxLayout ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "flex-1 p-5 sm:p-7",
+            inboxLayout
+              ? "flex min-h-0 flex-1 flex-col overflow-hidden max-md:pb-24"
+              : pathname === "/"
+                ? "flex-1 max-md:bg-[#0c0c0e] max-md:p-0 md:p-7"
+                : "flex-1 px-5 pt-5 pb-28 sm:px-7 sm:pt-7 md:pb-7",
           )}
         >
           {children}
@@ -377,13 +417,25 @@ export function AppShell({ children }: { children: ReactNode }) {
         <CreateClientDialog open onOpenChange={(open) => setCreate(open ? "client" : null)} />
       ) : null}
       {create === "invoice" ? (
-        <CreateInvoiceDialog open onOpenChange={(open) => setCreate(open ? "invoice" : null)} />
+        <CreateInvoiceDialog
+          open
+          onOpenChange={(open) => setCreate(open ? "invoice" : null)}
+          defaultJobId={createContext?.jobId || undefined}
+          defaultClientId={createContext?.clientId}
+        />
       ) : null}
       {create === "event" ? (
         <CreateEventDialog open onOpenChange={(open) => setCreate(open ? "event" : null)} />
       ) : null}
       {create === "task" ? (
-        <CreateTaskDialog open onOpenChange={(open) => setCreate(open ? "task" : null)} />
+        <CreateTaskDialog
+          open
+          onOpenChange={(open) => setCreate(open ? "task" : null)}
+          defaultRelatedType={
+            createContext?.jobId ? "job" : createContext?.opportunityId ? "opportunity" : undefined
+          }
+          defaultRelatedId={createContext?.jobId || createContext?.opportunityId || null}
+        />
       ) : null}
       {create === "expense" ? (
         <LogExpenseDialog open onOpenChange={(open) => setCreate(open ? "expense" : null)} />
@@ -399,6 +451,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       ) : null}
       {startEstimateFlow.open ? <StartEstimateDialogHost flow={startEstimateFlow} /> : null}
       <FirstWelcomeHost />
+      <FieldNav />
     </div>
   );
 }
@@ -595,8 +648,15 @@ function SearchTrigger() {
         setOpen((current) => !current);
       }
     }
+    function onFieldSearch() {
+      setOpen(true);
+    }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener(FIELD_SEARCH_EVENT, onFieldSearch);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(FIELD_SEARCH_EVENT, onFieldSearch);
+    };
   }, []);
 
   return (
@@ -882,10 +942,11 @@ function SearchTrigger() {
 }
 
 function ScopeBanners() {
+  const pathname = usePathname();
   const { impersonatedStaff, stopLoginAs, scopeLabel, viewer } = useCrm();
   if (!viewer) return null;
   return (
-    <div className="shrink-0 space-y-0">
+    <div className={cn("shrink-0 space-y-0", pathname === "/" && !impersonatedStaff && "max-md:hidden")}>
       {impersonatedStaff ? (
         <div className="flex flex-col gap-2 border-b border-primary/20 bg-primary/8 px-4 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
           <p>
@@ -984,7 +1045,7 @@ function LoginAsDialog({
   );
 }
 
-function UserMenu() {
+export function UserMenu({ appearance = "avatar" }: { appearance?: "avatar" | "gear" }) {
   const router = useRouter();
   const { signOut, user, loginAsOptions, viewer, impersonatedStaff, stopLoginAs } = useCrm();
   const [loginAsOpen, setLoginAsOpen] = useState(false);
@@ -998,17 +1059,25 @@ function UserMenu() {
           <Button
             variant="ghost"
             size="icon"
-            className="rounded-full"
+            className={
+              appearance === "gear"
+                ? "size-9 text-white/80 hover:bg-white/10 hover:text-white"
+                : "rounded-full"
+            }
             aria-label="Account"
           />
         }
       >
-        <Avatar size="sm">
-          {seatPhoto ? <AvatarImage src={seatPhoto} alt="" /> : null}
-          <AvatarFallback className="bg-primary text-primary-foreground">
-            {user.initials}
-          </AvatarFallback>
-        </Avatar>
+        {appearance === "gear" ? (
+          <Settings className="size-5" />
+        ) : (
+          <Avatar size="sm">
+            {seatPhoto ? <AvatarImage src={seatPhoto} alt="" /> : null}
+            <AvatarFallback className="bg-primary text-primary-foreground">
+              {user.initials}
+            </AvatarFallback>
+          </Avatar>
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-56">
         <DropdownMenuGroup>

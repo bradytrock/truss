@@ -60,13 +60,13 @@ function subscribeInbox(key: string, listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-export function NotificationsMenu() {
+export function NotificationsMenu({ tone = "light" }: { tone?: "light" | "dark" }) {
   const { user } = useCrm();
   if (!user.id || isUnsignedDemo(user)) return null;
-  return <NotificationsSession key={user.id} />;
+  return <NotificationsSession key={user.id} tone={tone} />;
 }
 
-function NotificationsSession() {
+function NotificationsSession({ tone }: { tone: "light" | "dark" }) {
   const { user } = useCrm();
   const router = useRouter();
   const isAdmin = user.role === "company_admin";
@@ -148,7 +148,7 @@ function NotificationsSession() {
     if (href) router.push(href);
   }
 
-  const countLabel = unread.length > 9 ? "9+" : String(unread.length);
+  const countLabel = unread.length > 99 ? "99+" : String(unread.length);
 
   return (
     <>
@@ -163,14 +163,21 @@ function NotificationsSession() {
         nativeButton
         aria-label={unread.length ? `Notifications, ${unread.length} unread` : "Notifications"}
         className={cn(
-          buttonVariants({ variant: "ghost", size: "sm" }),
-          "relative text-muted-foreground hover:text-foreground",
+          buttonVariants({ variant: "ghost", size: tone === "dark" ? "icon" : "sm" }),
+          tone === "dark"
+            ? "relative text-white/80 hover:bg-white/10 hover:text-white"
+            : "relative text-muted-foreground hover:text-foreground",
         )}
       >
         <Bell />
-        <span className="hidden md:inline">Notifications</span>
+        {tone === "light" ? <span className="hidden md:inline">Notifications</span> : null}
         {unread.length > 0 ? (
-          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E0302E] px-1 text-[10px] font-medium text-white">
+          <span
+            className={cn(
+              "inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E0302E] px-1 text-[10px] font-medium text-white",
+              tone === "dark" && "absolute -top-0.5 -right-0.5",
+            )}
+          >
             {countLabel}
           </span>
         ) : null}
