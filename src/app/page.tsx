@@ -23,9 +23,10 @@ import {
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
 import { amountForEstimate } from "@/lib/estimate-totals";
 import { marketForEstimate } from "@/lib/market";
-import { PIPELINE_STAGES, STAGE_LABELS, closingRate, isShelvedStage } from "@/lib/types";
+import { closingRate, isShelvedStage } from "@/lib/types";
 import { dedupeJobsByOpportunity, isDeletedJob } from "@/lib/job-record";
 import { workColumnFor } from "@/lib/work-board";
+import { pipelinePathTotals } from "@/lib/pipeline-path";
 import { cn } from "@/lib/utils";
 import { COURSE, overallProgress, staffProgress } from "@/lib/training/engine";
 import { qbQueue } from "@/lib/job-financials";
@@ -125,19 +126,12 @@ export default function HomePage() {
     const todayEvents = crm.events
       .filter((event) => localYmd(new Date(event.startsAt)) === todayKey)
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-    const byStage = PIPELINE_STAGES.filter(
-      (stage) => stage !== "awarded" && !isShelvedStage(stage) && stage !== "estimating",
-    ).map((stage) => ({
-      stage,
-      value: open
-        .filter((opportunity) =>
-          stage === "supplementing"
-            ? opportunity.stage === "supplementing" || opportunity.stage === "estimating"
-            : opportunity.stage === stage,
-        )
-        .reduce((sum, opportunity) => sum + opportunity.value, 0),
-    }));
-    const maxStage = Math.max(...byStage.map((item) => item.value), 1);
+    const byStage = pipelinePathTotals({
+      jobs: crm.jobs,
+      opportunities: crm.opportunities,
+      estimates: crm.estimates,
+      lines: crm.estimateLines,
+    });
     return {
       openCount: open.length,
       pipelineValue,
@@ -149,7 +143,6 @@ export default function HomePage() {
       awardedCount: awarded.length,
       closedCount: awarded.length + lost.length,
       byStage,
-      maxStage,
       proposals,
       proposalValue,
       ar,
@@ -636,25 +629,27 @@ export default function HomePage() {
             </ul>
           </RelatedList>
         );
-      case "pipelinePath":
+      case "pipelinePath": {
+        const peak = Math.max(0, ...stats.byStage.map((stage) => stage.value));
         return (
           <RelatedList
             title="Pipeline path"
-            description="Unweighted contract value by stage. Open the board to move records."
+            description="Unweighted contract value in each board stage. A blank contract uses the live proposal."
             action={<RelatedListLink href="/jobs">Open board</RelatedListLink>}
           >
             <div className="px-5 pb-5">
               <PipelinePath
                 stages={stats.byStage.map((item) => ({
-                  key: item.stage,
-                  label: STAGE_LABELS[item.stage],
-                  value: formatCurrency(item.value),
-                  active: item.value > 0 && item.value === Math.max(...stats.byStage.map((s) => s.value)),
+                  key: item.column,
+                  label: item.label,
+                  value: formatCurrencyFull(item.value),
+                  active: item.value > 0 && item.value === peak,
                 }))}
               />
             </div>
           </RelatedList>
         );
+      }
       case "proposalsDue":
         return (
           <RelatedList
