@@ -438,7 +438,7 @@ function MapPageInner() {
               <LocateFixed />
             </Button>
           </div>
-          <div className="pointer-events-none absolute bottom-20 left-14 z-10 hidden max-w-[calc(100%-22rem)] lg:block">
+          <div className="pointer-events-none absolute bottom-20 left-14 z-10 hidden lg:block">
             <Legend />
           </div>
           {selectedJob ? (
@@ -644,7 +644,7 @@ function Legend() {
   const items: WorkColumn[] = ["lead", "supplementing", "proposal_sent", "in_progress", "complete"];
   return (
     <div className="pointer-events-none rounded-full border bg-background/95 px-3 py-1.5 shadow-sm">
-      <ul className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-[#706e6b]">
+      <ul className="flex items-center gap-x-3 text-[11px] whitespace-nowrap text-[#706e6b]">
         {items.map((column) => (
           <li key={column} className="flex items-center gap-1.5">
             <span className="size-2.5 rounded-full" style={{ background: pinColor(column) }} />

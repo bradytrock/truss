@@ -260,7 +260,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div
       className={cn(
         "grid w-full flex-1 bg-sidebar md:grid-cols-[13.5rem_minmax(0,1fr)]",
-        fillLayout ? "h-dvh overflow-hidden" : "min-h-dvh",
+        fillLayout ? "h-dvh max-h-dvh min-h-0 overflow-hidden" : "min-h-dvh",
       )}
     >
       <aside

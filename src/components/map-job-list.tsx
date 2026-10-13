@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { Calendar, ChevronDown, CloudRain, Search, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Popover,
+  PopoverClose,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
@@ -74,6 +76,7 @@ export function MapSearchBar({
   variant?: "dock" | "overlay";
   className?: string;
 }) {
+  const [yearOpen, setYearOpen] = useState(false);
   const visibleStages = STAGE_FILTERS.filter(
     (column) => (stageCounts[column] ?? 0) > 0 || stages.includes(column),
   );
@@ -90,7 +93,7 @@ export function MapSearchBar({
         />
       </label>
       <div className="flex gap-2 overflow-x-auto pb-0.5">
-        <Popover>
+        <Popover open={yearOpen} onOpenChange={setYearOpen}>
           <PopoverTrigger
             type="button"
             className="border-input bg-background inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm shadow-sm"
@@ -101,7 +104,7 @@ export function MapSearchBar({
           </PopoverTrigger>
           <PopoverContent align="start" className="w-44 p-1">
             {years.map((item) => (
-              <button
+              <PopoverClose
                 key={item}
                 type="button"
                 className={cn(
@@ -111,9 +114,9 @@ export function MapSearchBar({
                 onClick={() => onYear(item)}
               >
                 {item}
-              </button>
+              </PopoverClose>
             ))}
-            <button
+            <PopoverClose
               type="button"
               className={cn(
                 "flex w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted",
@@ -122,7 +125,7 @@ export function MapSearchBar({
               onClick={() => onYear("all")}
             >
               All years
-            </button>
+            </PopoverClose>
           </PopoverContent>
         </Popover>
         <button
@@ -195,10 +198,11 @@ export function MapListToolbar({
   sort: MapListSort;
   onSort: (sort: MapListSort) => void;
 }) {
+  const [open, setOpen] = useState(false);
   return (
     <div className="flex items-center justify-between gap-2 px-1">
       <p className="text-xs text-muted-foreground">{count} {count === 1 ? "result" : "results"}</p>
-      <Popover>
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
           type="button"
           className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
@@ -207,8 +211,22 @@ export function MapListToolbar({
           <ChevronDown className="size-3.5 opacity-60" />
         </PopoverTrigger>
         <PopoverContent align="end" className="w-44 p-1">
-          <SortOption label="Recently updated" selected={sort === "recent"} onSelect={() => onSort("recent")} />
-          <SortOption label="Name" selected={sort === "name"} onSelect={() => onSort("name")} />
+          <SortOption
+            label="Recently updated"
+            selected={sort === "recent"}
+            onSelect={() => {
+              onSort("recent");
+              setOpen(false);
+            }}
+          />
+          <SortOption
+            label="Name"
+            selected={sort === "name"}
+            onSelect={() => {
+              onSort("name");
+              setOpen(false);
+            }}
+          />
         </PopoverContent>
       </Popover>
     </div>
@@ -225,7 +243,7 @@ function SortOption({
   onSelect: () => void;
 }) {
   return (
-    <button
+    <PopoverClose
       type="button"
       className={cn(
         "flex w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted",
@@ -234,7 +252,7 @@ function SortOption({
       onClick={onSelect}
     >
       {label}
-    </button>
+    </PopoverClose>
   );
 }
 
