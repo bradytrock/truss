@@ -1,4 +1,4 @@
-import { CLOSEOUT_PAYOUT_TASK, CLOSEOUT_REVIEW_TASK } from "@/lib/commission-closeout";
+import { CLOSEOUT_PAYOUT_TASK, CLOSEOUT_REVIEW_TASK, closeoutTaskTitle } from "@/lib/commission-closeout";
 import { amountForEstimate } from "@/lib/estimate-totals";
 import { marketForEstimate } from "@/lib/market";
 import {
@@ -33,9 +33,13 @@ export type DeskBucket = "calls" | "reviews" | "money";
 
 export type DeskBadge = "CALLBACK" | "OVERDUE" | "CLOSEOUT" | "APPROVE" | "PROPOSALS" | "REVIEW";
 
+/** Completed follow-up written when a proposal callback is cleared from the desk. */
+export const PROPOSAL_FOLLOW_UP_TASK = "Proposal follow-up";
+
 export type DeskAction =
   | { type: "link"; label: string; href: string; solid?: boolean }
   | { type: "done"; label: string; taskId: string }
+  | { type: "clear"; label: string; id: string; title: string; relatedId: string }
   | { type: "call"; label: string; phone: string }
   | { type: "returning"; label: string; noticeId: string; decision: "take" | "decline" | "dismiss" | "reassigned" | "kept"; solid?: boolean }
   | { type: "redo-code"; label: string; jobId: string; code: string }
@@ -327,6 +331,7 @@ function taskRow(
       status: dueLabel(task.dueAt, now),
       statusTone: late > 0 ? "late" : "today",
       actions: [
+        { type: "done", label: "Done", taskId: task.id },
         {
           type: "link",
           label: "Review",
@@ -405,11 +410,22 @@ function proposalCallbacks(
     const opportunity = job.opportunityId ? opportunities.get(job.opportunityId) : undefined;
     if (workColumnFor(job, opportunity) !== "proposal_sent") continue;
     if (covered.has(job.id) || (job.opportunityId && covered.has(job.opportunityId))) continue;
-    const waiting = waitingDays(job, input.estimates, now);
+    const sentAt = proposalSentAt(job, input.estimates);
+    if (!sentAt) continue;
+    const waiting = daysPast(sentAt, now);
     if (waiting < 1) continue;
+    if (callbackCleared(job, input.tasks, sentAt)) continue;
     const contact = job.primaryContactId ? contacts.get(job.primaryContactId) : undefined;
     const who = input.customerName(job) || contact?.name || job.name;
-    const actions: DeskAction[] = [];
+    const actions: DeskAction[] = [
+      {
+        type: "clear",
+        label: "Done",
+        id: `callback-${job.id}`,
+        title: PROPOSAL_FOLLOW_UP_TASK,
+        relatedId: job.id,
+      },
+    ];
     if (contact?.id || job.id) {
       actions.push({
         type: "link",
@@ -439,7 +455,7 @@ function proposalCallbacks(
 function closeoutRows(input: HomeDeskInput, jobs: Job[]): HomeDeskRow[] {
   const covered = new Set(
     input.tasks
-      .filter((task) => !task.completed && isCloseoutTask(task.title) && task.relatedId)
+      .filter((task) => isCloseoutTask(task.title) && task.relatedId)
       .map((task) => task.relatedId as string),
   );
   return input.closeouts
@@ -457,6 +473,13 @@ function closeoutRows(input: HomeDeskInput, jobs: Job[]): HomeDeskRow[] {
         status: "Due today",
         statusTone: "today" as const,
         actions: [
+          {
+            type: "clear" as const,
+            label: "Done",
+            id: `closeout-${closeout.jobId}`,
+            title: closeoutTaskTitle("review", job?.code ?? ""),
+            relatedId: closeout.jobId,
+          },
           {
             type: "link" as const,
             label: "Review",
@@ -841,7 +864,7 @@ function stageBit(
   return WORK_COLUMN_LABELS[column];
 }
 
-function waitingDays(job: Job, estimates: Estimate[], now: Date) {
+function proposalSentAt(job: Job, estimates: Estimate[]) {
   const stamps = estimates
     .filter(
       (estimate) =>
@@ -852,9 +875,22 @@ function waitingDays(job: Job, estimates: Estimate[], now: Date) {
     )
     .map((estimate) => estimate.sentAt as string)
     .sort();
-  const oldest = stamps[0];
-  if (!oldest) return 0;
-  return Math.max(0, daysPast(oldest, now));
+  return stamps[0] ?? null;
+}
+
+function callbackCleared(job: Job, tasks: Task[], sentAt: string) {
+  const sent = sentAt.slice(0, 10);
+  return tasks.some((task) => {
+    if (!task.completed || !clearsProposalCallback(task.title)) return false;
+    const touches =
+      task.relatedId === job.id || Boolean(job.opportunityId && task.relatedId === job.opportunityId);
+    if (!touches) return false;
+    return task.dueAt.slice(0, 10) >= sent;
+  });
+}
+
+function clearsProposalCallback(title: string) {
+  return isCallTask(title) || title === PROPOSAL_FOLLOW_UP_TASK || title.startsWith(`${PROPOSAL_FOLLOW_UP_TASK} `);
 }
 
 function dueLabel(dueAt: string, now: Date) {

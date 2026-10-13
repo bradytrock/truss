@@ -33,12 +33,14 @@ export function HomeDesk({
   desk,
   busyId,
   onCompleteTask,
+  onClearRow,
   onReturning,
   onJobCode,
 }: {
   desk: HomeDeskModel;
   busyId?: string | null;
   onCompleteTask: (taskId: string) => void;
+  onClearRow: (row: { id: string; title: string; relatedId: string }) => void;
   onReturning: (noticeId: string, decision: "take" | "decline" | "dismiss" | "reassigned" | "kept") => void;
   onJobCode: (jobId: string, decision: "redo" | "keep" | "change", code?: string) => void;
 }) {
@@ -128,6 +130,7 @@ export function HomeDesk({
                         row={row}
                         busyId={busyId}
                         onCompleteTask={onCompleteTask}
+                        onClearRow={onClearRow}
                         onReturning={onReturning}
                         onJobCode={onJobCode}
                         changingJobId={changingJobId}
@@ -515,6 +518,7 @@ function RowActions({
   row,
   busyId,
   onCompleteTask,
+  onClearRow,
   onReturning,
   onJobCode,
   changingJobId,
@@ -523,6 +527,7 @@ function RowActions({
   row: HomeDeskRow;
   busyId?: string | null;
   onCompleteTask: (taskId: string) => void;
+  onClearRow: (row: { id: string; title: string; relatedId: string }) => void;
   onReturning: (noticeId: string, decision: "take" | "decline" | "dismiss" | "reassigned" | "kept") => void;
   onJobCode: (jobId: string, decision: "redo" | "keep" | "change", code?: string) => void;
   changingJobId: string | null;
@@ -537,6 +542,7 @@ function RowActions({
           busy={busyId != null && actionBusy(action, busyId)}
           hidden={action.type === "change-code" && changingJobId === action.jobId}
           onCompleteTask={onCompleteTask}
+          onClearRow={onClearRow}
           onReturning={onReturning}
           onJobCode={onJobCode}
           onStartChange={onStartChange}
@@ -551,6 +557,7 @@ function DeskButton({
   busy,
   hidden,
   onCompleteTask,
+  onClearRow,
   onReturning,
   onJobCode,
   onStartChange,
@@ -559,6 +566,7 @@ function DeskButton({
   busy: boolean;
   hidden: boolean;
   onCompleteTask: (taskId: string) => void;
+  onClearRow: (row: { id: string; title: string; relatedId: string }) => void;
   onReturning: (noticeId: string, decision: "take" | "decline" | "dismiss" | "reassigned" | "kept") => void;
   onJobCode: (jobId: string, decision: "redo" | "keep" | "change", code?: string) => void;
   onStartChange: (jobId: string, suggested: string) => void;
@@ -582,6 +590,18 @@ function DeskButton({
   if (action.type === "done") {
     return (
       <button type="button" className={ghostButton} disabled={busy} onClick={() => onCompleteTask(action.taskId)}>
+        {busy ? "Saving…" : action.label}
+      </button>
+    );
+  }
+  if (action.type === "clear") {
+    return (
+      <button
+        type="button"
+        className={ghostButton}
+        disabled={busy}
+        onClick={() => onClearRow({ id: action.id, title: action.title, relatedId: action.relatedId })}
+      >
         {busy ? "Saving…" : action.label}
       </button>
     );
@@ -622,12 +642,14 @@ function DeskButton({
 function actionKey(action: DeskAction) {
   if (action.type === "link" || action.type === "call") return `${action.type}-${action.label}`;
   if (action.type === "done") return `done-${action.taskId}`;
+  if (action.type === "clear") return `clear-${action.id}`;
   if (action.type === "returning") return `ret-${action.noticeId}-${action.decision}`;
   return `${action.type}-${action.jobId}`;
 }
 
 function actionBusy(action: DeskAction, busyId: string) {
   if (action.type === "done") return action.taskId === busyId;
+  if (action.type === "clear") return action.id === busyId;
   if (action.type === "returning") return action.noticeId === busyId;
   if (action.type === "redo-code" || action.type === "keep-code" || action.type === "change-code") return action.jobId === busyId;
   return false;

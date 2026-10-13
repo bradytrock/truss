@@ -432,6 +432,8 @@ export type TaskDraft = {
   relatedId: string | null;
   assignee: string;
   notes?: string;
+  /** Write the task already finished. The desk uses this so a cleared reminder stays gone. */
+  completed?: boolean;
 };
 
 export const CATALOG_KINDS = [

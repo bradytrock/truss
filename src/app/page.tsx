@@ -10,6 +10,7 @@ import { isBusinessDevelopment } from "@/lib/bd";
 import { useCrm } from "@/lib/crm-store";
 import { closedWonThisMonth, homeGoalScope, homeQuota, wonDeals } from "@/lib/home-dashboard";
 import { buildHomeDesk } from "@/lib/home-desk";
+import { localYmd } from "@/lib/format";
 import { qbQueue } from "@/lib/job-financials";
 import { actionableJobCodeReviews } from "@/lib/job-code";
 import { jobRecordHref } from "@/lib/job-record";
@@ -21,6 +22,7 @@ export default function HomePage() {
   const crm = useCrm();
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [decidingCodeId, setDecidingCodeId] = useState<string | null>(null);
+  const [completingId, setCompletingId] = useState<string | null>(null);
 
   const reviewNotices = useMemo(() => {
     const staff = crm.effectiveStaff;
@@ -136,6 +138,32 @@ export default function HomePage() {
     }
   }
 
+  async function completeTask(taskId: string) {
+    setCompletingId(taskId);
+    try {
+      await crm.toggleTask(taskId);
+    } finally {
+      setCompletingId(null);
+    }
+  }
+
+  async function clearRow(row: { id: string; title: string; relatedId: string }) {
+    setCompletingId(row.id);
+    try {
+      await crm.addTask({
+        title: row.title,
+        dueAt: localYmd(new Date()),
+        relatedType: "job",
+        relatedId: row.relatedId,
+        assignee: crm.effectiveStaff?.name || crm.user.name,
+        notes: "Cleared from Needs you today.",
+        completed: true,
+      });
+    } finally {
+      setCompletingId(null);
+    }
+  }
+
   if (!crm.hydrated) return <LoadingScreen />;
 
   const hasLeads = crm.opportunities.length > 0;
@@ -148,8 +176,9 @@ export default function HomePage() {
       {!hasLeads ? <HomeOnboarding viewer={crm.effectiveStaff} /> : (
         <HomeDesk
           desk={desk}
-          busyId={decidingId || decidingCodeId}
-          onCompleteTask={(id) => void crm.toggleTask(id)}
+          busyId={completingId || decidingId || decidingCodeId}
+          onCompleteTask={(id) => void completeTask(id)}
+          onClearRow={(row) => void clearRow(row)}
           onReturning={(id, decision) => void decideReturning(id, decision)}
           onJobCode={(jobId, decision, code) => void decideJobCode(jobId, decision, code)}
         />

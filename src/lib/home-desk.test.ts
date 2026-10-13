@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { buildHomeDesk, customerMismatchIssue } from "./home-desk.ts";
+import { buildHomeDesk, customerMismatchIssue, PROPOSAL_FOLLOW_UP_TASK } from "./home-desk.ts";
 import type { Activity, Estimate, EstimateLine, Job, Opportunity, ScheduleEvent, Task } from "./types.ts";
 
 const now = new Date(2026, 9, 13, 13, 8, 0);
@@ -216,6 +216,9 @@ assert.equal(desk.rows[0]?.badge, "CALLBACK");
 assert.match(desk.rows[0]?.title ?? "", /Albert Johnston/);
 assert.match(desk.rows[0]?.status ?? "", /Waiting 7 days/);
 assert.equal(desk.rows[0]?.actions.some((action) => action.type === "call"), true);
+const albertDone = desk.rows[0]?.actions.find((action) => action.type === "clear");
+assert.equal(albertDone?.type === "clear" ? albertDone.title : "", PROPOSAL_FOLLOW_UP_TASK);
+assert.equal(albertDone?.type === "clear" ? albertDone.relatedId : "", "albert");
 
 const overdue = desk.rows.find((row) => row.id === "task-raynor");
 assert.equal(overdue?.badge, "OVERDUE");
@@ -264,5 +267,150 @@ const quiet = base({
 });
 assert.equal(quiet.pipelineWarning, null);
 assert.match(quiet.laterNote ?? "", /Nothing else on the calendar today\.$/);
+
+function sentEstimate(jobId: string, opportunityId: string, sentAt: string): Estimate {
+  return {
+    id: `est-${jobId}`,
+    jobId,
+    opportunityId,
+    status: "sent",
+    archivedAt: null,
+    sentAt,
+    acceptedAt: null,
+    taxRate: 0,
+  } as Estimate;
+}
+
+const waitingJob = job({
+  id: "sam",
+  opportunityId: "opp-sam",
+  status: "precon",
+  code: "SR100126-A",
+  name: "Sam Rogers",
+  primaryContactId: "c-sam",
+});
+const waitingOpp = opportunity({ id: "opp-sam", stage: "bid_submitted" });
+const waitingContact = [{ id: "c-sam", name: "Sam Rogers", phone: "2145550199" }];
+
+function callbackDesk(tasks: Task[]) {
+  return base({
+    jobs: [waitingJob],
+    opportunities: [waitingOpp],
+    estimates: [sentEstimate("sam", "opp-sam", "2026-09-09T15:00:00")],
+    tasks,
+    contacts: waitingContact,
+  });
+}
+
+const openCallback = callbackDesk([]);
+const sam = openCallback.rows.find((row) => row.id === "callback-sam");
+assert.equal(sam?.badge, "CALLBACK");
+assert.equal(sam?.actions.some((action) => action.type === "clear"), true);
+
+const clearedByFollowUp = callbackDesk([
+  task({
+    id: "follow",
+    title: PROPOSAL_FOLLOW_UP_TASK,
+    dueAt: "2026-10-13",
+    completed: true,
+    relatedType: "job",
+    relatedId: "sam",
+  }),
+]);
+assert.equal(clearedByFollowUp.rows.some((row) => row.id === "callback-sam"), false);
+
+const clearedByCall = callbackDesk([
+  task({
+    id: "called",
+    title: "Call Sam Rogers back",
+    dueAt: "2026-10-12",
+    completed: true,
+    relatedType: "job",
+    relatedId: "sam",
+  }),
+]);
+assert.equal(clearedByCall.rows.some((row) => row.id === "callback-sam"), false);
+
+const unrelatedDone = callbackDesk([
+  task({
+    id: "materials",
+    title: "Order materials",
+    dueAt: "2026-10-12",
+    completed: true,
+    relatedType: "job",
+    relatedId: "sam",
+  }),
+]);
+assert.equal(unrelatedDone.rows.some((row) => row.id === "callback-sam"), true);
+
+const oldCall = callbackDesk([
+  task({
+    id: "old-call",
+    title: "Call Sam Rogers back",
+    dueAt: "2026-09-01",
+    completed: true,
+    relatedType: "job",
+    relatedId: "sam",
+  }),
+]);
+assert.equal(oldCall.rows.some((row) => row.id === "callback-sam"), true);
+
+const closeoutJob = job({
+  id: "job-co",
+  opportunityId: "opp-co",
+  status: "in_progress",
+  code: "BJ100426-A",
+  name: "Closeout house",
+  location: "4020 Azure Lane",
+  street: "4020 Azure Lane",
+});
+
+const openCloseout = base({
+  jobs: [closeoutJob],
+  opportunities: [opportunity({ id: "opp-co", stage: "awarded" })],
+  tasks: [
+    task({
+      id: "co",
+      title: "Review closeout BJ100426-A",
+      dueAt: "2026-10-13",
+      relatedType: "job",
+      relatedId: "job-co",
+    }),
+  ],
+  closeouts: [{ jobId: "job-co", status: "submitted" }],
+});
+const closeoutTask = openCloseout.rows.find((row) => row.id === "task-co");
+assert.equal(closeoutTask?.badge, "CLOSEOUT");
+assert.equal(closeoutTask?.actions.some((action) => action.type === "done" && action.taskId === "co"), true);
+assert.equal(closeoutTask?.actions.some((action) => action.type === "link" && action.label === "Review"), true);
+assert.equal(openCloseout.rows.some((row) => row.id === "closeout-job-co"), false);
+
+const finishedCloseout = base({
+  jobs: [closeoutJob],
+  opportunities: [opportunity({ id: "opp-co", stage: "awarded" })],
+  tasks: [
+    task({
+      id: "co-done",
+      title: "Review closeout BJ100426-A",
+      dueAt: "2026-10-13",
+      completed: true,
+      relatedType: "job",
+      relatedId: "job-co",
+    }),
+  ],
+  closeouts: [{ jobId: "job-co", status: "submitted" }],
+});
+assert.equal(finishedCloseout.rows.some((row) => row.id === "task-co-done" || row.id === "closeout-job-co"), false);
+
+const syntheticCloseout = base({
+  jobs: [closeoutJob],
+  opportunities: [opportunity({ id: "opp-co", stage: "awarded" })],
+  closeouts: [{ jobId: "job-co", status: "submitted" }],
+});
+const synthetic = syntheticCloseout.rows.find((row) => row.id === "closeout-job-co");
+assert.equal(synthetic?.badge, "CLOSEOUT");
+const syntheticDone = synthetic?.actions.find((action) => action.type === "clear");
+assert.equal(syntheticDone?.type === "clear" ? syntheticDone.title : "", "Review closeout BJ100426-A");
+assert.equal(syntheticDone?.type === "clear" ? syntheticDone.relatedId : "", "job-co");
 
 console.log("home-desk tests passed");
