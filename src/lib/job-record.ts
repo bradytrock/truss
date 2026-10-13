@@ -209,6 +209,31 @@ export function primaryHomeownerPatch(
   };
 }
 
+/**
+ * Take a person off a job. Works for the primary homeowner, a related contact,
+ * and a subcontractor. Removing the primary leaves that seat empty.
+ */
+export function removeContactFromJob(
+  job: Pick<Job, "primaryContactId" | "relatedContactIds" | "subcontractorIds">,
+  contactId: string,
+): Partial<Job> | null {
+  const id = contactId.trim();
+  if (!id) return null;
+  const isPrimary = (job.primaryContactId ?? "").trim() === id;
+  const relatedBefore = uniqueIds(job.relatedContactIds);
+  const subsBefore = uniqueIds(job.subcontractorIds);
+  const related = relatedBefore.filter((item) => item !== id);
+  const subs = subsBefore.filter((item) => item !== id);
+  const relatedChanged = related.length !== relatedBefore.length;
+  const subsChanged = subs.length !== subsBefore.length;
+  if (!isPrimary && !relatedChanged && !subsChanged) return null;
+  const patch: Partial<Job> = {};
+  if (isPrimary) patch.primaryContactId = null;
+  if (relatedChanged) patch.relatedContactIds = related;
+  if (subsChanged) patch.subcontractorIds = subs;
+  return patch;
+}
+
 export function fillJobRecord(job: JobDraft, opportunity?: Opportunity | null): Job {
   const parsed = parseLocation(job.location || "");
   const assigned = uniqueNames(
