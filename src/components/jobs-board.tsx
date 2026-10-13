@@ -27,21 +27,38 @@ import { formatCurrency } from "@/lib/format";
 import { leadSourceLabel } from "@/lib/leads";
 import { phoneQueryMatches } from "@/lib/phone";
 import { parseMarket, workMarket } from "@/lib/market";
-import { acceptedAmountForJob, boardEstimateTags } from "@/lib/estimate-totals";
+import { boardEstimateTags } from "@/lib/estimate-totals";
+import { unweightedContractValue } from "@/lib/pipeline-path";
 import { estimatesForJob } from "@/lib/won";
 import {
   WORK_COLUMNS,
   WORK_COLUMN_LABELS,
   boardCardDetails,
-  boardValue,
   isWorkColumn,
   workColumnFor,
   type WorkColumn,
 } from "@/lib/work-board";
 import { canDeleteJobs, jobMatchesOwnerFilter } from "@/lib/visibility";
 import { dedupeJobsByOpportunity, isDeletedJob, jobRecordHref } from "@/lib/job-record";
-import type { Job } from "@/lib/types";
+import type { Estimate, EstimateLine, Job, Opportunity } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+function contractOnBoard(
+  crm: {
+    getOpportunity: (id: string) => Opportunity | undefined;
+    estimates?: Estimate[];
+    estimateLines?: EstimateLine[];
+  },
+  job: Job,
+) {
+  const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
+  return unweightedContractValue({
+    job,
+    opportunity,
+    estimates: crm.estimates ?? [],
+    lines: crm.estimateLines ?? [],
+  });
+}
 
 const columnAccent: Record<WorkColumn, string> = {
   lead: "bg-foreground/25",
@@ -187,16 +204,7 @@ export function JobsBoard({
         <div className="flex min-h-[32rem] gap-2 pb-3">
           {columns.map((column) => {
             const cards = filtered.filter((job) => columnOf(job) === column);
-            const total = cards.reduce((sum, job) => {
-              const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
-              const signed = acceptedAmountForJob(
-                job,
-                crm.estimates ?? [],
-                crm.estimateLines ?? [],
-                workMarket(job, opportunity),
-              );
-              return sum + boardValue(job, opportunity, signed);
-            }, 0);
+            const total = cards.reduce((sum, job) => sum + contractOnBoard(crm, job), 0);
             return (
               <JobColumn key={column} column={column} count={cards.length} total={total}>
                 {cards.map((job) => (
@@ -421,13 +429,7 @@ function JobCard({
           className="flex w-full flex-wrap items-center gap-1 text-left"
         >
           <span className="min-w-0 font-heading text-xs font-medium tabular-nums">
-            {formatCurrency(
-              boardValue(
-                job,
-                opportunity,
-                acceptedAmountForJob(job, crm.estimates ?? [], crm.estimateLines ?? [], market),
-              ),
-            )}
+            {formatCurrency(contractOnBoard(crm, job))}
           </span>
           <MarketBadge market={parseMarket(market)} />
         </JobOpenLink>
