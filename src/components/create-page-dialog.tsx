@@ -10,9 +10,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { PAGE_TEMPLATE_OPTIONS } from "@/lib/photo-report";
-import type { PageTemplateId } from "@/lib/types";
+import {
+  layoutCapacity,
+  PAGE_TEMPLATE_OPTIONS,
+  photoPageColumns,
+  photoPageRows,
+  templateIncludesPhotos,
+} from "@/lib/photo-report";
+import { PHOTO_PAGE_LAYOUT_LABELS, PHOTO_PAGE_LAYOUTS, type PageTemplateId, type PhotoPageLayout } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+const LAYOUT_HINTS: Record<PhotoPageLayout, string> = {
+  one: "One large photo",
+  two: "Two photos, stacked",
+  four: "Numbered 2×2 sheet",
+};
 
 export function CreatePageDialog({
   open,
@@ -23,9 +35,11 @@ export function CreatePageDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   pending?: boolean;
-  onCreate: (template: PageTemplateId) => void | Promise<void>;
+  onCreate: (template: PageTemplateId, photoLayout: PhotoPageLayout) => void | Promise<void>;
 }) {
   const [template, setTemplate] = useState<PageTemplateId>("photos");
+  const [photoLayout, setPhotoLayout] = useState<PhotoPageLayout>("four");
+  const showLayout = templateIncludesPhotos(template);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -33,9 +47,40 @@ export function CreatePageDialog({
         <DialogHeader>
           <DialogTitle>New page</DialogTitle>
           <DialogDescription>
-            Pick a template for this job. You can add photos, notes, and a cover after it opens.
+            Pick a template for this job. Photo pages can start as a numbered four-photo sheet.
           </DialogDescription>
         </DialogHeader>
+        {showLayout ? (
+          <fieldset className="grid gap-2">
+            <legend className="text-sm font-medium">Photos per page</legend>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Four photos keeps each sheet aligned: a number, a caption, and the same frame on every shot.
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {PHOTO_PAGE_LAYOUTS.map((layout) => {
+                const selected = photoLayout === layout;
+                return (
+                  <button
+                    key={layout}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => setPhotoLayout(layout)}
+                    className={cn(
+                      "rounded-md border px-2 py-2 text-left",
+                      selected ? "border-primary bg-primary/8" : "hover:bg-muted/60",
+                    )}
+                  >
+                    <LayoutGlyph layout={layout} selected={selected} />
+                    <span className="mt-1.5 block text-xs font-medium">{PHOTO_PAGE_LAYOUT_LABELS[layout]}</span>
+                    <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                      {LAYOUT_HINTS[layout]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+        ) : null}
         <ul className="grid gap-2">
           {PAGE_TEMPLATE_OPTIONS.map((option) => {
             const selected = template === option.id;
@@ -66,7 +111,7 @@ export function CreatePageDialog({
             type="button"
             disabled={pending}
             onClick={() => {
-              void onCreate(template);
+              void onCreate(template, photoLayout);
             }}
           >
             {pending ? "Creating…" : "Create page"}
@@ -74,5 +119,28 @@ export function CreatePageDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function LayoutGlyph({ layout, selected }: { layout: PhotoPageLayout; selected: boolean }) {
+  const count = layoutCapacity(layout);
+  const cols = photoPageColumns(layout);
+  const rows = photoPageRows(layout);
+  return (
+    <span
+      className={cn(
+        "grid h-14 w-full gap-1 rounded-sm border bg-background p-1.5",
+        selected ? "border-primary" : "border-border",
+      )}
+      style={{
+        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+        gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+      }}
+      aria-hidden
+    >
+      {Array.from({ length: count }, (_, index) => (
+        <span key={index} className={cn("rounded-[2px]", selected ? "bg-primary/30" : "bg-muted")} />
+      ))}
+    </span>
   );
 }
