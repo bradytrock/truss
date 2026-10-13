@@ -4,6 +4,7 @@ import {
   canSubmitProjectCloseout,
   closeoutReleaseBlock,
   compareJobExpenses,
+  closeoutPdfFilename,
   defaultCommissionSplits,
   isCommissionInYear,
   payoutRecipients,
@@ -205,6 +206,9 @@ assert.equal(
   }).map((line) => line.id).join(","),
   "pm",
 );
+assert.equal(closeoutPdfFilename("RK100126-1"), "RK100126-1 closeout.pdf");
+assert.equal(closeoutPdfFilename("Job/A:1"), "Job A 1 closeout.pdf");
+assert.equal(closeoutPdfFilename("   "), "Job closeout.pdf");
 assert.equal(isCommissionInYear("2026-03-01T00:00:00.000Z", 2026), true);
 assert.equal(isCommissionInYear("2025-12-31T00:00:00.000Z", 2026), false);
 assert.equal(isCommissionInYear(null, 2026), false);

@@ -1,8 +1,12 @@
 "use client";
 
+import { useState } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { downloadCloseoutPdf } from "@/lib/commission-closeout-pdf";
+import { useCrm } from "@/lib/crm-store";
 import {
   COMPARE_STATUS_LABELS,
   CLOSEOUT_STATUS_LABELS,
@@ -75,9 +79,12 @@ export function CommissionSheetView({
             {closeout?.submittedByName ? ` · submitted by ${closeout.submittedByName}` : ""}
           </p>
         </div>
-        {closeout?.submittedAt ? (
-          <p className="text-xs text-muted-foreground">{formatDate(closeout.submittedAt)}</p>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          {closeout?.submittedAt ? (
+            <p className="text-xs text-muted-foreground">{formatDate(closeout.submittedAt)}</p>
+          ) : null}
+          <CloseoutPdfButton sheet={sheet} closeout={closeout} />
+        </div>
       </div>
 
       <div className="grid gap-3 rounded-md border p-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -464,6 +471,34 @@ export function CommissionSheetView({
         ) : null}
       </section>
     </div>
+  );
+}
+
+function CloseoutPdfButton({
+  sheet,
+  closeout,
+}: {
+  sheet: CommissionSheet;
+  closeout?: CommissionCloseout | null;
+}) {
+  const crm = useCrm();
+  const [busy, setBusy] = useState(false);
+
+  async function download() {
+    setBusy(true);
+    try {
+      await downloadCloseoutPdf({ sheet, closeout, company: crm.company });
+    } catch {
+      toast.error("Could not build the closeout PDF.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void download()}>
+      {busy ? "Building PDF…" : "Closeout PDF"}
+    </Button>
   );
 }
 

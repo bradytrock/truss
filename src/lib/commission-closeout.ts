@@ -34,6 +34,11 @@ export const CLOSEOUT_STATUS_LABELS: Record<CloseoutStatus, string> = {
   payout: "Marked for payout",
 };
 
+export function closeoutPdfFilename(jobCode: string) {
+  const base = jobCode.trim().replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "Job";
+  return `${base} closeout.pdf`;
+}
+
 export const CLOSEOUT_REVIEW_TASK = "Review closeout";
 export const CLOSEOUT_PAYOUT_TASK = "Commission payout";
 
