@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar, ChevronDown, CloudRain, Search, Tags, Users } from "lucide-react";
+import { Calendar, ChevronDown, CloudRain, Search, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -8,17 +8,36 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { formatDate } from "@/lib/format";
+import { formatDateShort, initials } from "@/lib/format";
 import { jobAddress } from "@/lib/job-record";
 import { PROJECT_PIN_COLORS, workPinColor, workPinLabel } from "@/lib/project-map";
-import { primaryJobPhoto } from "@/lib/photo-trash";
-import { WORK_COLUMN_LABELS, WORK_COLUMNS, type WorkColumn } from "@/lib/work-board";
-import type { Job, JobPhoto, Opportunity } from "@/lib/types";
+import { WORK_COLUMN_LABELS, WORK_COLUMNS, workColumnFor, type WorkColumn } from "@/lib/work-board";
+import type { Job, Opportunity } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const STAGE_FILTERS: WorkColumn[] = WORK_COLUMNS.filter(
   (column) => column !== "on_hold" && column !== "unqualified" && column !== "lost" && column !== "deleted",
 );
+
+const AVATAR_TONES = [
+  "bg-[#efe6f6] text-[#5b3d73]",
+  "bg-[#eceae6] text-[#3f3d3a]",
+  "bg-[#f6ebe3] text-[#7a4b32]",
+  "bg-[#e7eef8] text-[#2f4d7a]",
+  "bg-[#e7f3ec] text-[#1f5c3a]",
+];
+
+export type MapListSort = "recent" | "name";
+
+export function sortMapJobs(jobs: Job[], sort: MapListSort) {
+  const next = [...jobs];
+  if (sort === "name") {
+    next.sort((left, right) => mapJobTitle(left).localeCompare(mapJobTitle(right), undefined, { sensitivity: "base" }));
+    return next;
+  }
+  next.sort((left, right) => mapJobUpdatedAt(right) - mapJobUpdatedAt(left));
+  return next;
+}
 
 export function MapSearchBar({
   query,
@@ -28,10 +47,14 @@ export function MapSearchBar({
   onYear,
   stages,
   onToggleStage,
+  onClearStages,
+  stageCounts,
+  totalCount,
   showCrew,
   onToggleCrew,
   showWeather,
   onToggleWeather,
+  variant = "dock",
   className,
 }: {
   query: string;
@@ -41,12 +64,20 @@ export function MapSearchBar({
   onYear: (value: number | "all") => void;
   stages: WorkColumn[];
   onToggleStage: (column: WorkColumn) => void;
+  onClearStages: () => void;
+  stageCounts: Partial<Record<WorkColumn, number>>;
+  totalCount: number;
   showCrew: boolean;
   onToggleCrew: () => void;
   showWeather: boolean;
   onToggleWeather: () => void;
+  variant?: "dock" | "overlay";
   className?: string;
 }) {
+  const visibleStages = STAGE_FILTERS.filter(
+    (column) => (stageCounts[column] ?? 0) > 0 || stages.includes(column),
+  );
+
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <label className="relative block">
@@ -54,18 +85,18 @@ export function MapSearchBar({
         <Input
           value={query}
           onChange={(event) => onQuery(event.target.value)}
-          placeholder="Search for an address"
-          className="h-10 rounded-full bg-background pl-8 shadow-sm"
+          placeholder="Search name, address or job code"
+          className="h-10 rounded-lg bg-background pl-8"
         />
       </label>
       <div className="flex gap-2 overflow-x-auto pb-0.5">
         <Popover>
           <PopoverTrigger
             type="button"
-            className="border-input bg-background inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm"
+            className="border-input bg-background inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm shadow-sm"
           >
             <Calendar className="size-3.5" />
-            {year === "all" ? "Date" : year}
+            {year === "all" ? "All years" : year}
             <ChevronDown className="size-3.5 opacity-60" />
           </PopoverTrigger>
           <PopoverContent align="start" className="w-44 p-1">
@@ -94,158 +125,238 @@ export function MapSearchBar({
             </button>
           </PopoverContent>
         </Popover>
-        <Button
+        <button
           type="button"
-          size="sm"
-          variant={showCrew ? "default" : "outline"}
-          className="shrink-0 rounded-full"
-          onClick={onToggleCrew}
+          aria-pressed={stages.length === 0}
+          onClick={onClearStages}
+          className={cn(
+            "inline-flex h-8 shrink-0 items-center rounded-full border px-3 text-sm shadow-sm",
+            stages.length === 0
+              ? "border-transparent bg-primary text-primary-foreground"
+              : "border-input bg-background",
+          )}
         >
-          <Users data-icon="inline-start" />
-          Crew
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant={showWeather ? "default" : "outline"}
-          className="shrink-0 rounded-full"
-          aria-pressed={showWeather}
-          onClick={onToggleWeather}
-        >
-          <CloudRain data-icon="inline-start" />
-          Weather
-        </Button>
-        <Popover>
-          <PopoverTrigger
-            type="button"
-            className={cn(
-              "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm",
-              stages.length
-                ? "bg-primary text-primary-foreground border-transparent"
-                : "border-input bg-background",
-            )}
-          >
-            <Tags className="size-3.5" />
-            {stages.length ? `${stages.length} stages` : "Stage"}
-            <ChevronDown className="size-3.5 opacity-60" />
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-52 p-1">
-            {STAGE_FILTERS.map((column) => {
-              const on = stages.includes(column);
-              return (
-                <button
-                  key={column}
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
-                  onClick={() => onToggleStage(column)}
-                >
-                  <span
-                    className="size-2.5 rounded-full"
-                    style={{ background: PROJECT_PIN_COLORS[column] }}
-                  />
-                  <span className="flex-1">{WORK_COLUMN_LABELS[column]}</span>
-                  {on ? <span className="text-xs text-muted-foreground">On</span> : null}
-                </button>
-              );
-            })}
-          </PopoverContent>
-        </Popover>
+          All {totalCount}
+        </button>
+        {visibleStages.map((column) => {
+          const on = stages.includes(column);
+          return (
+            <button
+              key={column}
+              type="button"
+              aria-pressed={on}
+              onClick={() => onToggleStage(column)}
+              className={cn(
+                "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-sm shadow-sm",
+                on ? "border-transparent bg-primary text-primary-foreground" : "border-input bg-background",
+              )}
+            >
+              <span className="size-2 rounded-full" style={{ background: PROJECT_PIN_COLORS[column] }} />
+              {WORK_COLUMN_LABELS[column]} {stageCounts[column] ?? 0}
+            </button>
+          );
+        })}
+        {variant === "overlay" ? (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant={showCrew ? "default" : "outline"}
+              className="shrink-0 rounded-full shadow-sm"
+              onClick={onToggleCrew}
+            >
+              <Users data-icon="inline-start" />
+              Crew
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={showWeather ? "default" : "outline"}
+              className="shrink-0 rounded-full shadow-sm"
+              aria-pressed={showWeather}
+              onClick={onToggleWeather}
+            >
+              <CloudRain data-icon="inline-start" />
+              Weather
+            </Button>
+          </>
+        ) : null}
       </div>
     </div>
   );
 }
 
+export function MapListToolbar({
+  count,
+  sort,
+  onSort,
+}: {
+  count: number;
+  sort: MapListSort;
+  onSort: (sort: MapListSort) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 px-1">
+      <p className="text-xs text-muted-foreground">{count} {count === 1 ? "result" : "results"}</p>
+      <Popover>
+        <PopoverTrigger
+          type="button"
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          {sort === "recent" ? "Recently updated" : "Name"}
+          <ChevronDown className="size-3.5 opacity-60" />
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-44 p-1">
+          <SortOption label="Recently updated" selected={sort === "recent"} onSelect={() => onSort("recent")} />
+          <SortOption label="Name" selected={sort === "name"} onSelect={() => onSort("name")} />
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+function SortOption({
+  label,
+  selected,
+  onSelect,
+}: {
+  label: string;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "flex w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted",
+        selected && "bg-muted font-medium",
+      )}
+      onClick={onSelect}
+    >
+      {label}
+    </button>
+  );
+}
+
 export function MapJobResultList({
   jobs,
-  photos,
   opportunities,
   selectedJobId,
   onSelect,
 }: {
   jobs: Job[];
-  photos: JobPhoto[];
   opportunities: Opportunity[];
   selectedJobId?: string | null;
   onSelect: (id: string) => void;
 }) {
+  if (jobs.length === 0) {
+    return <p className="px-1 text-sm text-muted-foreground">No jobs match that search.</p>;
+  }
+
   return (
-    <div>
-      <p className="px-1 pb-2 text-xs text-muted-foreground">{jobs.length} results</p>
-      {jobs.length === 0 ? (
-        <p className="px-1 text-sm text-muted-foreground">No jobs match that search.</p>
-      ) : (
-        <ul className="space-y-2">
-          {jobs.map((job) => {
-            const opportunity = job.opportunityId
-              ? opportunities.find((item) => item.id === job.opportunityId)
-              : undefined;
-            return (
-              <li key={job.id}>
-                <MapJobResultCard
-                  job={job}
-                  photoUrl={primaryJobPhoto(photos, job)?.imageUrl ?? ""}
-                  stage={workPinLabel(job, opportunity)}
-                  stageColor={workPinColor(job, opportunity)}
-                  selected={job.id === selectedJobId}
-                  onSelect={() => onSelect(job.id)}
-                />
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
+    <ul className="space-y-2">
+      {jobs.map((job) => {
+        const opportunity = job.opportunityId
+          ? opportunities.find((item) => item.id === job.opportunityId)
+          : undefined;
+        return (
+          <li key={job.id}>
+            <MapJobResultCard
+              job={job}
+              stage={workPinLabel(job, opportunity)}
+              stageColor={workPinColor(job, opportunity)}
+              selected={job.id === selectedJobId}
+              onSelect={() => onSelect(job.id)}
+            />
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
 function MapJobResultCard({
   job,
-  photoUrl,
   stage,
   stageColor,
   selected,
   onSelect,
 }: {
   job: Job;
-  photoUrl: string;
   stage: string;
   stageColor: string;
   selected: boolean;
   onSelect: () => void;
 }) {
   const address = jobAddress(job);
-  const updated = job.startDate || job.geocodedAt || "";
+  const title = mapJobTitle(job);
+  const dateLabel = mapJobDateLabel(job);
+  const mark = initials(title);
   return (
     <button
       type="button"
       onClick={onSelect}
+      aria-pressed={selected}
       className={cn(
-        "flex w-full items-start gap-3 rounded-xl border bg-background px-3 py-2.5 text-left shadow-sm",
-        selected ? "border-foreground/40" : "border-border",
+        "flex w-full items-start gap-3 rounded-xl bg-background px-3 py-3 text-left shadow-sm",
+        selected ? "border-2 border-primary" : "border border-border",
       )}
     >
-      {photoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={photoUrl} alt="" className="size-12 shrink-0 rounded-full object-cover" />
-      ) : (
-        <span className="flex size-12 shrink-0 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground">
-          {job.code.slice(-2) || "•"}
-        </span>
-      )}
+      <span
+        className={cn(
+          "flex size-10 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+          avatarTone(title),
+        )}
+      >
+        {mark || "•"}
+      </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">{job.name || address || "Untitled"}</span>
-        <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-          {address || "No site yet"}
+        <span className="flex items-baseline justify-between gap-2">
+          <span className="truncate text-sm font-semibold text-[#181818]">{title}</span>
+          {dateLabel ? <span className="shrink-0 text-xs text-muted-foreground">{dateLabel}</span> : null}
         </span>
-        <span className="mt-0.5 block text-[11px] text-muted-foreground">
-          {updated ? `Last updated ${formatDate(updated)}` : "No date yet"}
-        </span>
-        <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
-          <span className="size-1.5 rounded-full" style={{ background: stageColor }} />
-          {stage}
-          {job.code ? ` · ${job.code}` : ""}
+        <span className="mt-0.5 block truncate text-xs text-muted-foreground">{address || "No site yet"}</span>
+        <span className="mt-2 flex min-w-0 items-center gap-2">
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
+            <span className="size-1.5 rounded-full" style={{ background: stageColor }} />
+            {stage}
+          </span>
+          {job.code ? <span className="truncate font-mono text-[11px] text-muted-foreground">{job.code}</span> : null}
         </span>
       </span>
     </button>
   );
+}
+
+function mapJobTitle(job: Job) {
+  return job.name.trim() || jobAddress(job) || "Untitled";
+}
+
+function mapJobUpdatedAt(job: Job) {
+  const raw = job.startDate || job.geocodedAt || job.substantialCompletion || "";
+  const at = Date.parse(raw);
+  return Number.isFinite(at) ? at : 0;
+}
+
+function mapJobDateLabel(job: Job) {
+  const raw = job.startDate || job.geocodedAt || job.substantialCompletion || "";
+  if (!raw) return "";
+  const label = formatDateShort(raw);
+  return label === "—" ? "" : label;
+}
+
+function avatarTone(name: string) {
+  let hash = 0;
+  for (const char of name) hash = (hash + char.charCodeAt(0)) % AVATAR_TONES.length;
+  return AVATAR_TONES[hash] ?? AVATAR_TONES[0];
+}
+
+export function mapJobStage(
+  job: Job,
+  opportunities: Opportunity[],
+) {
+  const opportunity = job.opportunityId
+    ? opportunities.find((item) => item.id === job.opportunityId)
+    : undefined;
+  return workColumnFor(job, opportunity);
 }

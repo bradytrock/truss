@@ -386,6 +386,29 @@
   border: none;
 }
 
+.project-map-leaflet .leaflet-control-zoom {
+  border: none;
+  box-shadow: none;
+}
+
+.project-map-leaflet .leaflet-bar a,
+.project-map-leaflet .leaflet-bar a:hover,
+.project-map-leaflet .leaflet-bar a:first-child,
+.project-map-leaflet .leaflet-bar a:last-child {
+  width: 32px;
+  height: 32px;
+  line-height: 30px;
+  border: 1px solid #e4e4e7;
+  border-bottom: 1px solid #e4e4e7;
+  border-radius: 8px;
+  color: #181818;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.project-map-leaflet .leaflet-control-zoom a:first-child {
+  margin-bottom: 6px;
+}
+
 .project-map-leaflet {
   z-index: 0;
 }

@@ -228,6 +228,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const launcherApps = appLauncherItems();
   const inboxLayout = isInboxPath(pathname);
+  const mapLayout = pathname === "/map";
+  const fillLayout = inboxLayout || mapLayout;
 
   const createMenu =
     effectiveStaff && isBusinessDevelopment(effectiveStaff.role) ? (
@@ -258,13 +260,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div
       className={cn(
         "grid w-full flex-1 bg-sidebar md:grid-cols-[13.5rem_minmax(0,1fr)]",
-        inboxLayout ? "h-dvh overflow-hidden" : "min-h-dvh",
+        fillLayout ? "h-dvh overflow-hidden" : "min-h-dvh",
       )}
     >
       <aside
         className={cn(
           "hidden h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex",
-          inboxLayout ? "min-h-0" : "min-h-dvh",
+          fillLayout ? "min-h-0" : "min-h-dvh",
         )}
       >
         <div className="flex items-start gap-1 border-b border-sidebar-border px-3 py-3.5">
@@ -278,7 +280,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </span>
           </Link>
         </div>
-        <div className={cn("py-1", inboxLayout ? "min-h-0 flex-1 overflow-y-auto" : "flex-1")}>
+        <div className={cn("py-1", fillLayout ? "min-h-0 flex-1 overflow-y-auto" : "flex-1")}>
           <Nav pathname={pathname} />
         </div>
         <div className="mt-auto border-t border-sidebar-border px-4 py-3">
@@ -316,10 +318,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div
         className={cn(
           "flex min-w-0 flex-col bg-background",
-          inboxLayout ? "h-full min-h-0 overflow-hidden" : "min-h-dvh",
+          fillLayout ? "h-full min-h-0 overflow-hidden" : "min-h-dvh",
         )}
       >
-        <header className={cn("z-30 border-b bg-background", inboxLayout ? "shrink-0" : "sticky top-0")}>
+        <header className={cn("z-30 border-b bg-background", fillLayout ? "shrink-0" : "sticky top-0")}>
           <div className="flex h-12 items-center gap-2 px-3 sm:px-5">
             <Button
               variant="ghost"
@@ -360,7 +362,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main
           className={cn(
             "bg-background",
-            inboxLayout ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "flex-1 p-5 sm:p-7",
+            mapLayout
+              ? "flex min-h-0 flex-1 flex-col overflow-hidden p-0 lg:p-5 xl:p-7"
+              : inboxLayout
+                ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+                : "flex-1 p-5 sm:p-7",
           )}
         >
           {children}
