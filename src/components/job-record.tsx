@@ -110,6 +110,7 @@ import {
   type Job,
   type LeadSource,
   type PageTemplateId,
+  type PhotoPageLayout,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { PhotoReportBuilder } from "@/components/photo-report-builder";
@@ -519,7 +520,7 @@ export function JobRecord({
     toast.success(name ? `${name} is now the primary homeowner.` : "Primary homeowner updated.");
   }
 
-  async function startPage(template: PageTemplateId) {
+  async function startPage(template: PageTemplateId, photoLayout: PhotoPageLayout) {
     setPageCreating(true);
     try {
       const created = await crm.addPhotoReport(
@@ -529,6 +530,7 @@ export function JobRecord({
           photos,
           author: crm.user.name,
           template,
+          photoLayout,
           opportunity,
         }),
       );
@@ -1884,7 +1886,7 @@ export function JobRecord({
         open={pageCreateOpen}
         onOpenChange={setPageCreateOpen}
         pending={pageCreating}
-        onCreate={(template) => void startPage(template)}
+        onCreate={(template, photoLayout) => void startPage(template, photoLayout)}
       />
       <CreateInvoiceDialog
         open={invoiceOpen}

@@ -239,7 +239,9 @@ export function PhotoReportBuilder({
   }
 
   function addPage(type: "photos" | "cover") {
-    const page = type === "cover" ? emptyCoverPage({ title: job.name }) : emptyPhotosPage();
+    const layout =
+      [...draft.pages].reverse().find((page) => page.type === "photos")?.layout ?? "four";
+    const page = type === "cover" ? emptyCoverPage({ title: job.name }) : emptyPhotosPage(layout);
     commit([...draft.pages, page]);
     jumpToPage(page.id);
   }

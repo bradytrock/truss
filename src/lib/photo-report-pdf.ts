@@ -12,14 +12,16 @@ import type {
 import { formatDate, initials } from "@/lib/format";
 import { loadLogoForPdf, writePdfLetterhead } from "@/lib/letterhead-pdf";
 import { PHOTO_CATEGORY_LABELS } from "@/lib/types";
+import { jobAddress } from "@/lib/job-record";
 import { COVER_RED, photoReportCoverModel } from "@/lib/photo-report-cover";
-import { layoutCapacity, photoById, photoPageColumns, photoPageRows } from "@/lib/photo-report";
+import { layoutCapacity, photoById, photoPageColumns, photoPageRows, photoSheetMeta } from "@/lib/photo-report";
 import { downloadBlob } from "@/lib/share";
 import { workOrderFieldValue } from "@/lib/work-order";
 
 type Doc = {
   setFont: (face: string, style?: string) => void;
   setFontSize: (size: number) => void;
+  setLineWidth: (width: number) => void;
   setTextColor: (r: number, g?: number, b?: number) => void;
   setDrawColor: (r: number, g?: number, b?: number) => void;
   setFillColor: (r: number, g?: number, b?: number) => void;
@@ -144,7 +146,12 @@ async function drawPhotosPage(
   page: PhotoReportPhotosPage,
   photos: JobPhoto[],
   cache: Map<string, string | null>,
+  context: { startNumber: number; companyName: string; address: string },
 ) {
+  if (page.layout === "four") {
+    await drawQuadPhotosPage(doc, page, photos, cache, context);
+    return;
+  }
   const width = doc.internal.pageSize.getWidth();
   const height = doc.internal.pageSize.getHeight();
   const left = 48;
@@ -206,6 +213,128 @@ async function drawPhotosPage(
     doc.setTextColor(40, 40, 40);
     const wrapped = doc.splitTextToSize(notes, right - left);
     doc.text(wrapped.slice(0, 6), left, notesY);
+  }
+}
+
+async function drawQuadPhotosPage(
+  doc: Doc,
+  page: PhotoReportPhotosPage,
+  photos: JobPhoto[],
+  cache: Map<string, string | null>,
+  context: { startNumber: number; companyName: string; address: string },
+) {
+  const width = doc.internal.pageSize.getWidth();
+  const height = doc.internal.pageSize.getHeight();
+  const left = 36;
+  const right = width - 36;
+  let y = 28;
+  const half = (right - left) / 2 - 8;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(28, 28, 28);
+  doc.text(doc.splitTextToSize(context.companyName.trim() || "Report", half)[0] ?? "", left, y);
+  if (context.address.trim()) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(96, 96, 96);
+    doc.text(doc.splitTextToSize(context.address.trim(), half)[0] ?? "", right, y, { align: "right" });
+  }
+  y += 8;
+  doc.setDrawColor(220, 220, 220);
+  doc.setLineWidth(0.6);
+  doc.line(left, y, right, y);
+  y += 12;
+
+  if (page.heading.trim()) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(28, 28, 28);
+    doc.text(doc.splitTextToSize(page.heading.trim(), right - left)[0] ?? "", left, y);
+    y += 16;
+  }
+
+  const notes = page.notes.trim();
+  const notesH = notes ? 32 : 0;
+  const bottom = height - 48 - notesH;
+  const gapX = 14;
+  const gapY = 12;
+  const cellW = (right - left - gapX) / 2;
+  const cellH = (bottom - y - gapY) / 2;
+  const labelH = 30;
+  const metaH = page.showTakenAt || page.showCategory ? 14 : 0;
+  const imageH = Math.max(48, cellH - labelH - metaH);
+  const items = page.items.slice(0, 4);
+
+  for (let index = 0; index < 4; index++) {
+    const col = index % 2;
+    const row = Math.floor(index / 2);
+    const x = left + col * (cellW + gapX);
+    const top = y + row * (cellH + gapY);
+    const item = items[index];
+    const imageTop = top + labelH;
+
+    if (!item) {
+      doc.setFillColor(250, 250, 250);
+      doc.setDrawColor(230, 230, 230);
+      doc.setLineWidth(0.6);
+      doc.rect(x, imageTop, cellW, imageH, "FD");
+      continue;
+    }
+
+    const number = String(context.startNumber + index);
+    const badgeW = number.length > 2 ? 18 : number.length > 1 ? 15 : 12;
+    doc.setFillColor(28, 28, 28);
+    doc.rect(x, top, badgeW, 12, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(255, 255, 255);
+    doc.text(number, x + badgeW / 2, top + 8.5, { align: "center" });
+
+    if (page.showCaptions && item.caption.trim()) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(32, 32, 32);
+      const lines = doc.splitTextToSize(item.caption.trim(), cellW - badgeW - 6);
+      doc.text(lines.slice(0, 2), x + badgeW + 4, top + 8.5);
+    }
+
+    doc.setFillColor(245, 245, 245);
+    doc.rect(x, imageTop, cellW, imageH, "F");
+    const photo = photoById(photos, item.photoId);
+    if (photo) {
+      const cacheKey = `${photo.imageUrl}::quad:${Math.round(cellW)}x${Math.round(imageH)}`;
+      let data = cache.get(cacheKey);
+      if (data === undefined) {
+        data = await imageToCoverJpeg(photo.imageUrl, cellW * 2, imageH * 2);
+        cache.set(cacheKey, data);
+      }
+      if (data) {
+        try {
+          doc.addImage(data, "JPEG", x, imageTop, cellW, imageH);
+        } catch {
+          // Gray frame stays in place.
+        }
+      }
+    }
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.6);
+    doc.rect(x, imageTop, cellW, imageH);
+
+    const meta = photoSheetMeta(page, photo);
+    if (meta) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(110, 110, 110);
+      doc.text(doc.splitTextToSize(meta, cellW)[0] ?? "", x, imageTop + imageH + 11);
+    }
+  }
+
+  if (notes) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(40, 40, 40);
+    doc.text(doc.splitTextToSize(notes, right - left).slice(0, 2), left, y + cellH * 2 + gapY + 14);
   }
 }
 
@@ -524,6 +653,8 @@ export async function downloadPhotoReportPdf(input: {
   const doc = await createDoc();
   const cache = new Map<string, string | null>();
   const pages = input.report.pages.length ? input.report.pages : [emptyFallback()];
+  let photoNumber = 1;
+  const address = jobAddress(input.job);
   for (const [index, page] of pages.entries()) {
     if (index > 0) doc.addPage();
     if (page.type === "cover") {
@@ -533,7 +664,12 @@ export async function downloadPhotoReportPdf(input: {
     } else if (page.type === "work_order") {
       await drawWorkOrderPage(doc, page, input.job, input.company);
     } else {
-      await drawPhotosPage(doc, page, input.photos, cache);
+      await drawPhotosPage(doc, page, input.photos, cache, {
+        startNumber: photoNumber,
+        companyName: input.company.name,
+        address,
+      });
+      photoNumber += page.items.length;
     }
   }
   const title = input.report.title.trim() || "Page";

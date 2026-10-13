@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/format";
 import type {
   Job,
   JobPhoto,
@@ -9,7 +10,7 @@ import type {
   PhotoReportPage,
   PhotoReportPhotosPage,
 } from "@/lib/types";
-import { LETTERHEAD_KIND_LABELS, LETTERHEAD_KINDS } from "@/lib/types";
+import { LETTERHEAD_KIND_LABELS, LETTERHEAD_KINDS, PHOTO_CATEGORY_LABELS } from "@/lib/types";
 import { emptyWorkOrderPage, parseWorkOrderPage } from "@/lib/work-order";
 
 export const PHOTO_REPORTS_SQL = "supabase/migrations/20260821140000_photo_reports.sql";
@@ -157,6 +158,27 @@ export function photoPageRows(layout: PhotoPageLayout) {
   return 2;
 }
 
+export function templateIncludesPhotos(template: PageTemplateId) {
+  return template === "photos" || template === "inspection" || template === "completion" || template === "claim";
+}
+
+/** First photo number on a sheet, counting shots on earlier photo pages. */
+export function photoIndexStart(pages: PhotoReportPage[], pageId: string) {
+  let start = 1;
+  for (const page of pages) {
+    if (page.id === pageId) return start;
+    if (page.type === "photos") start += page.items.length;
+  }
+  return start;
+}
+
+export function photoSheetMeta(page: PhotoReportPhotosPage, photo: JobPhoto | undefined) {
+  const meta: string[] = [];
+  if (page.showCategory && photo) meta.push(PHOTO_CATEGORY_LABELS[photo.category]);
+  if (page.showTakenAt && photo?.takenAt) meta.push(formatDate(photo.takenAt));
+  return meta.join(" · ");
+}
+
 export function newPageId() {
   return crypto.randomUUID();
 }
@@ -260,10 +282,12 @@ export function createPhotoReport(input: {
   photos: JobPhoto[];
   author: string;
   template?: PageTemplateId;
+  photoLayout?: PhotoPageLayout;
   opportunity?: Pick<Opportunity, "street" | "city" | "state" | "postalCode" | "location"> | null;
 }): PhotoReport {
   const now = new Date().toISOString();
   const template = parsePageTemplate(input.template);
+  const photoLayout = parseLayout(input.photoLayout);
   const photos = photosForTemplate(template, input.photos);
   const preferred = input.job.primaryPhotoId
     ? photos.find((photo) => photo.id === input.job.primaryPhotoId)
@@ -273,18 +297,21 @@ export function createPhotoReport(input: {
     subtitle: input.customer,
     heroPhotoId: preferred?.id ?? photos[0]?.id ?? input.photos[0]?.id ?? null,
   });
+  const photoPages = templateIncludesPhotos(template)
+    ? photosPagesFromPhotos(photos, photoLayout)
+    : [];
   const pages: PhotoReportPage[] =
     template === "work_order"
       ? [emptyWorkOrderPage(input.job, { opportunity: input.opportunity })]
       : template === "blank"
         ? [cover, emptyTextPage({ kind: "blank" })]
         : template === "inspection"
-          ? [...[cover], ...photosPagesFromPhotos(photos), emptyTextPage({ kind: "findings" })]
+          ? [cover, ...photoPages, emptyTextPage({ kind: "findings" })]
           : template === "completion"
-            ? [...[cover], ...photosPagesFromPhotos(photos), emptyTextPage({ kind: "punch", heading: "Work completed" })]
+            ? [cover, ...photoPages, emptyTextPage({ kind: "punch", heading: "Work completed" })]
             : template === "claim"
-              ? [...[cover], ...photosPagesFromPhotos(photos), emptyTextPage({ kind: "scope", heading: "Scope of damage" })]
-              : [cover, ...photosPagesFromPhotos(photos)];
+              ? [cover, ...photoPages, emptyTextPage({ kind: "scope", heading: "Scope of damage" })]
+              : [cover, ...photoPages];
   return {
     id: crypto.randomUUID(),
     jobId: input.job.id,

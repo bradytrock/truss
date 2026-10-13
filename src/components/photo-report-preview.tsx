@@ -5,8 +5,16 @@ import { CompanyLetterhead } from "@/components/company-letterhead";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatDate } from "@/lib/format";
+import { jobAddress } from "@/lib/job-record";
 import { photoReportCoverModel } from "@/lib/photo-report-cover";
-import { layoutCapacity, photoById, photoPageColumns, photoPageRows } from "@/lib/photo-report";
+import {
+  layoutCapacity,
+  photoById,
+  photoIndexStart,
+  photoPageColumns,
+  photoPageRows,
+  photoSheetMeta,
+} from "@/lib/photo-report";
 import {
   PHOTO_CATEGORY_LABELS,
   PHOTO_PAGE_LAYOUT_LABELS,
@@ -72,7 +80,14 @@ export function PhotoReportPagePreview({
             {page.type === "text" ? (
               <TextPreview page={page} company={company} edit={edit} />
             ) : (
-              <PhotosPreview page={page} photos={photos} edit={edit} />
+              <PhotosPreview
+                page={page}
+                photos={photos}
+                edit={edit}
+                companyName={company.name}
+                address={jobAddress(job)}
+                startNumber={photoIndexStart(report.pages, page.id)}
+              />
             )}
             {page.type === "photos" ? (
               <p className="mt-auto pt-2 text-[10px] tracking-wide text-neutral-400 uppercase">{company.name}</p>
@@ -344,16 +359,36 @@ function PhotosPreview({
   page,
   photos,
   edit,
+  companyName,
+  address,
+  startNumber,
 }: {
   page: Extract<PhotoReportPage, { type: "photos" }>;
   photos: JobPhoto[];
   edit?: PageCanvasEdit;
+  companyName: string;
+  address: string;
+  startNumber: number;
 }) {
   const cap = layoutCapacity(page.layout);
   const cols = photoPageColumns(page.layout);
   const rows = photoPageRows(page.layout);
   const filled = page.items.slice(0, cap);
   const cells = Array.from({ length: cap }, (_, index) => filled[index] ?? null);
+
+  if (page.layout === "four") {
+    return (
+      <QuadPhotosPreview
+        page={page}
+        photos={photos}
+        edit={edit}
+        companyName={companyName}
+        address={address}
+        startNumber={startNumber}
+        cells={cells}
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -446,6 +481,136 @@ function PhotosPreview({
         />
       ) : page.notes.trim() ? (
         <p className="mt-2 line-clamp-4 shrink-0 whitespace-pre-wrap text-xs leading-relaxed text-neutral-700">{page.notes}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function QuadPhotosPreview({
+  page,
+  photos,
+  edit,
+  companyName,
+  address,
+  startNumber,
+  cells,
+}: {
+  page: Extract<PhotoReportPage, { type: "photos" }>;
+  photos: JobPhoto[];
+  edit?: PageCanvasEdit;
+  companyName: string;
+  address: string;
+  startNumber: number;
+  cells: Array<Extract<PhotoReportPage, { type: "photos" }>["items"][number] | null>;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="mb-2 flex shrink-0 items-baseline justify-between gap-3 border-b border-neutral-200 pb-1.5">
+        <p className="min-w-0 truncate text-[10px] font-semibold tracking-[0.14em] text-neutral-800 uppercase">
+          {companyName.trim() || "Report"}
+        </p>
+        {address ? <p className="min-w-0 truncate text-right text-[10px] text-neutral-500">{address}</p> : null}
+      </div>
+      {edit ? (
+        <input
+          value={page.heading}
+          onChange={(event) => edit.onChange({ heading: event.target.value })}
+          placeholder="Section — South slope, attic, before…"
+          className="mb-1.5 w-full shrink-0 border-0 bg-transparent text-[11px] font-semibold outline-none placeholder:text-neutral-300"
+        />
+      ) : page.heading.trim() ? (
+        <h2 className="mb-1.5 shrink-0 text-[11px] font-semibold">{page.heading}</h2>
+      ) : null}
+      <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-x-2 gap-y-1.5">
+        {cells.map((item, index) => {
+          const number = startNumber + index;
+          if (!item) {
+            if (!edit) {
+              return <div key={`empty-${index}`} className="h-full min-h-0 border border-neutral-200 bg-neutral-50" />;
+            }
+            return (
+              <button
+                key={`empty-${index}`}
+                type="button"
+                onClick={() => edit.onAddPhotos?.()}
+                className="flex h-full min-h-0 flex-col items-center justify-center gap-1 border border-dashed border-neutral-300 bg-neutral-50 text-[10px] text-neutral-400 hover:border-primary hover:text-primary"
+              >
+                <span className="flex size-4 items-center justify-center bg-neutral-200 text-[8px] font-semibold text-neutral-600">
+                  {number}
+                </span>
+                <Plus className="size-3.5" />
+                Add photo
+              </button>
+            );
+          }
+          const photo = photoById(photos, item.photoId);
+          const meta = photoSheetMeta(page, photo);
+          return (
+            <figure key={`${item.photoId}-${index}`} className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
+              <div className="flex h-4 items-center gap-1 overflow-hidden">
+                <span className="flex h-3.5 min-w-3.5 shrink-0 items-center justify-center bg-neutral-900 px-0.5 text-[8px] font-semibold text-white">
+                  {number}
+                </span>
+                {edit && page.showCaptions ? (
+                  <input
+                    value={item.caption}
+                    onChange={(event) => {
+                      const caption = event.target.value;
+                      edit.onChange({
+                        items: page.items.map((entry, entryIndex) =>
+                          entryIndex === index ? { ...entry, caption } : entry,
+                        ),
+                      });
+                    }}
+                    placeholder="Caption"
+                    className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[9px] leading-none text-neutral-800 outline-none placeholder:text-neutral-300"
+                  />
+                ) : (
+                  <figcaption className="min-w-0 flex-1 truncate text-[9px] leading-none text-neutral-800">
+                    {page.showCaptions ? item.caption.trim() : ""}
+                  </figcaption>
+                )}
+              </div>
+              <div className="relative min-h-0 overflow-hidden border border-neutral-200 bg-neutral-100">
+                {edit?.onRemovePhoto ? (
+                  <button
+                    type="button"
+                    className="absolute top-1 right-1 z-10 rounded-sm bg-white/90 p-0.5 text-neutral-500 shadow-sm hover:text-destructive"
+                    aria-label={`Remove photo ${number}`}
+                    onClick={() => edit.onRemovePhoto?.(index)}
+                  >
+                    <XIcon className="size-3" />
+                  </button>
+                ) : null}
+                {photo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={photo.imageUrl}
+                    alt={item.caption || `Photo ${number}`}
+                    className="absolute inset-0 size-full object-cover"
+                  />
+                ) : (
+                  <div className="flex size-full items-center justify-center text-[10px] text-neutral-400">Missing photo</div>
+                )}
+              </div>
+              {page.showTakenAt || page.showCategory ? (
+                <p className="h-3.5 truncate pt-0.5 text-[8px] leading-3 text-neutral-500">{meta}</p>
+              ) : (
+                <span className="h-3.5" />
+              )}
+            </figure>
+          );
+        })}
+      </div>
+      {edit ? (
+        <input
+          value={page.notes ?? ""}
+          onChange={(event) => edit.onChange({ notes: event.target.value })}
+          placeholder="Page note"
+          className="mt-1.5 w-full shrink-0 border-0 bg-transparent text-[10px] text-neutral-700 outline-none placeholder:text-neutral-300"
+        />
+      ) : page.notes.trim() ? (
+        <p className="mt-1.5 line-clamp-2 shrink-0 text-[10px] leading-snug text-neutral-700">{page.notes}</p>
       ) : null}
     </div>
   );
