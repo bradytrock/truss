@@ -13,9 +13,8 @@ import { CreateOpportunityDialog } from "@/components/create-records";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrency } from "@/lib/format";
 import { isBusinessDevelopment } from "@/lib/bd";
-import { acceptedAmountForJob } from "@/lib/estimate-totals";
-import { workMarket } from "@/lib/market";
-import { boardValue, workColumnFor } from "@/lib/work-board";
+import { unweightedContractValue } from "@/lib/pipeline-path";
+import { workColumnFor } from "@/lib/work-board";
 import { dedupeJobsByOpportunity, isDeletedJob } from "@/lib/job-record";
 import {
   JOBS_OWNERS_PARAM,
@@ -121,13 +120,15 @@ function JobsBoardPage() {
   });
   const bookValue = active.reduce((sum, job) => {
     const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
-    const signed = acceptedAmountForJob(
-      job,
-      crm.estimates ?? [],
-      crm.estimateLines ?? [],
-      workMarket(job, opportunity),
+    return (
+      sum +
+      unweightedContractValue({
+        job,
+        opportunity,
+        estimates: crm.estimates ?? [],
+        lines: crm.estimateLines ?? [],
+      })
     );
-    return sum + boardValue(job, opportunity, signed);
   }, 0);
 
   if (!crm.hydrated) return <LoadingScreen />;
