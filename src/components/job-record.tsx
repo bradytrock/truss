@@ -74,7 +74,7 @@ import { EstimateStatusBadge, InvoiceStatusBadge, QbStatusBadge } from "@/compon
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate, formatInboxTime, formatPhone } from "@/lib/format";
 import { mailHref } from "@/lib/job-emails";
-import { assignedCrewPatch, isDeletedJob, jobAddress, mapsUrl, primaryHomeownerPatch, uniqueIds, uniqueNames } from "@/lib/job-record";
+import { assignedCrewPatch, isDeletedJob, jobAddress, mapsUrl, primaryHomeownerPatch, removeContactFromJob, uniqueIds, uniqueNames } from "@/lib/job-record";
 import {
   canReviewJobCodes,
   isJobCodeReviewTask,
@@ -519,6 +519,18 @@ export function JobRecord({
     toast.success(name ? `${name} is now the primary homeowner.` : "Primary homeowner updated.");
   }
 
+  async function removeFromJob(contactId: string) {
+    const next = removeContactFromJob(job, contactId);
+    if (!next) return;
+    const ok = await crm.updateJob(job.id, next);
+    if (!ok) return;
+    if (next.primaryContactId === null && opportunity?.primaryContactId === contactId) {
+      await crm.updateOpportunity(opportunity.id, { primaryContactId: "" });
+    }
+    const name = crm.getContact(contactId)?.name?.trim();
+    toast.success(name ? `${name} was removed from this job.` : "Removed from this job.");
+  }
+
   async function startPage(template: PageTemplateId) {
     setPageCreating(true);
     try {
@@ -912,6 +924,17 @@ export function JobRecord({
                 </p>
               </div>
               <div className="flex shrink-0 items-center">
+                {primary ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => void removeFromJob(primary.id)}
+                    aria-label={`Remove ${primary.name} from this job`}
+                  >
+                    <XIcon />
+                  </Button>
+                ) : null}
                 {primary?.phone ? (
                   <Button
                     variant="ghost"
@@ -1301,35 +1324,32 @@ export function JobRecord({
                         ) : null}
                         <Badge variant="outline">{contactKind(contact, job)}</Badge>
                       </div>
-                      {contact.id !== job.primaryContactId ? (
-                        <div className="flex shrink-0 items-center gap-0.5">
-                          {!deleted && !contact.isReferralPartner && !job.subcontractorIds.includes(contact.id) ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs"
-                              onClick={() => setPrimaryHomeowner(contact.id)}
-                            >
-                              Make primary
-                            </Button>
-                          ) : null}
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        {!deleted &&
+                        contact.id !== job.primaryContactId &&
+                        !contact.isReferralPartner &&
+                        !job.subcontractorIds.includes(contact.id) ? (
                           <Button
+                            type="button"
                             variant="ghost"
-                            size="icon"
-                            className="size-7"
-                            onClick={() =>
-                              patch({
-                                relatedContactIds: job.relatedContactIds.filter((id) => id !== contact.id),
-                                subcontractorIds: job.subcontractorIds.filter((id) => id !== contact.id),
-                              })
-                            }
-                            aria-label={`Remove ${contact.name}`}
+                            size="sm"
+                            className="h-7 px-2 text-xs"
+                            onClick={() => setPrimaryHomeowner(contact.id)}
                           >
-                            <XIcon className="size-3.5" />
+                            Make primary
                           </Button>
-                        </div>
-                      ) : null}
+                        ) : null}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-7"
+                          onClick={() => void removeFromJob(contact.id)}
+                          aria-label={`Remove ${contact.name} from this job`}
+                        >
+                          <XIcon className="size-3.5" />
+                        </Button>
+                      </div>
                     </div>
                     <Link href={`/contacts?contact=${contact.id}`} className="flex items-center gap-2 text-sm font-medium hover:underline">
                       <User className="size-3.5 text-muted-foreground" />
