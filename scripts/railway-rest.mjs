@@ -131,6 +131,7 @@ export async function startRailwayRest(root) {
   const port = process.env.RAILWAY_REST_PORT?.trim() || "3210";
   if (await portOpen(port)) {
     process.env.TRUSS_RAILWAY_DATABASE = "1";
+    console.log(`[railway] Database API already listening on 127.0.0.1:${port}`);
     return null;
   }
 
