@@ -348,6 +348,7 @@ export function LineCard({
   line,
   editable,
   showTax,
+  showOptional = true,
   showPackage,
   showQuantityFormula,
   onPatch,
@@ -360,6 +361,8 @@ export function LineCard({
   line: PricedLine & { photoIds?: string[]; photos?: EstimateLine["photos"] };
   editable: boolean;
   showTax: boolean;
+  /** Invoices bill every line. Estimates can mark a line optional. */
+  showOptional?: boolean;
   showPackage?: boolean;
   /** Template editor: bind qty to EagleView measurements. */
   showQuantityFormula?: boolean;
@@ -500,7 +503,9 @@ export function LineCard({
         placeholder="What the homeowner sees under the title"
         onCommit={(value) => onPatch({ description: value })}
       />
+      {showOptional || showTax || showPackage ? (
       <div className="flex flex-wrap gap-4 text-sm">
+        {showOptional ? (
         <label className="flex items-center gap-2">
           <Checkbox
             checked={line.optional}
@@ -511,7 +516,8 @@ export function LineCard({
           />
           Optional
         </label>
-        {line.optional ? (
+        ) : null}
+        {showOptional && line.optional ? (
           <label className="flex items-center gap-2">
             <Checkbox
               checked={line.selected}
@@ -574,6 +580,7 @@ export function LineCard({
           </div>
         ) : null}
       </div>
+      ) : null}
 
       {showQuantityFormula ? (
         <div className="mt-3 space-y-2 border-t pt-3">
