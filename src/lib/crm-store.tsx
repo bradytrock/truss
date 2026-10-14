@@ -21,6 +21,7 @@ import {
   loadCompanyBook,
   TEXTS_UNAVAILABLE,
 } from "@/lib/supabase/load-book";
+import { browserUsesRailwayDatabase } from "@/lib/railway-rest";
 import { changedRowId, liveRefreshDecision } from "@/lib/supabase/local-writes";
 import {
   asAuditState,
@@ -1990,7 +1991,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           return;
         }
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          setLiveStatus("offline");
+          if (!browserUsesRailwayDatabase()) setLiveStatus("offline");
           return;
         }
         setLiveStatus("connecting");
@@ -2006,9 +2007,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     window.addEventListener("focus", onVisible);
     window.addEventListener("online", onOnline);
 
+    if (browserUsesRailwayDatabase()) setLiveStatus("live");
+    const railwayPoll = window.setInterval(() => {
+      if (browserUsesRailwayDatabase()) void liveRefresh();
+    }, 15000);
+
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
+      window.clearInterval(railwayPoll);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
       window.removeEventListener("online", onOnline);
