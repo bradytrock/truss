@@ -133,7 +133,10 @@ async function finishSession(
   return response;
 }
 
-export async function updateSession(request: NextRequest) {
+export async function updateSession(
+  request: NextRequest,
+  clerk: { getToken: () => Promise<string | null> } | null = null,
+) {
   const path = request.nextUrl.pathname;
 
   // Legal pages and homeowner links must not wait on a CRM session.
@@ -147,6 +150,42 @@ export async function updateSession(request: NextRequest) {
   if (!url || !key) {
     if (isPublicAppPath(path)) return NextResponse.next({ request });
     return redirectToLogin(request);
+  }
+
+  const clerkToken = clerk ? await clerk.getToken() : null;
+  if (clerkToken) {
+    const gateOpen = request.cookies.get(GATE_COOKIE)?.value === "1";
+    if (gateOpen) {
+      return await finishSession(request, path, true, true, NextResponse.next({ request }));
+    }
+
+    let supabaseResponse = NextResponse.next({ request });
+    const supabase = createServerClient(url, key, {
+      ...railwayClientOptions(),
+      accessToken: async () => clerkToken,
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet, headers) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          supabaseResponse = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options),
+          );
+          if (headers) {
+            Object.entries(headers).forEach(([header, value]) =>
+              supabaseResponse.headers.set(header, value),
+            );
+          }
+        },
+      },
+    });
+    const subscriptionActive = subscriptionActiveFromRpc(
+      await supabase.rpc("company_subscription_active"),
+    );
+    rememberGate(supabaseResponse, subscriptionActive);
+    return await finishSession(request, path, true, subscriptionActive, supabaseResponse);
   }
 
   const nowSec = Math.floor(Date.now() / 1000);

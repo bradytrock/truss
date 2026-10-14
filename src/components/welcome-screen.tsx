@@ -6,6 +6,7 @@ import { WelcomeScreen } from "@/components/auth-welcome-preview";
 import { cardHeaderLogo } from "@/lib/card";
 import { useCrmOptional } from "@/lib/crm-store";
 import { PRODUCT_NAME } from "@/lib/product";
+import { clerkBrowserSignedIn, readBrowserSessionUser } from "@/lib/clerk-browser";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import {
@@ -44,9 +45,9 @@ function FirstWelcomeGate() {
       if (isSupabaseConfigured()) {
         try {
           const supabase = createClient();
-          const { data } = await supabase.auth.getUser();
-          nextUserId = data.user?.id ?? nextUserId;
-          metadataPending = isWelcomePendingMetadata(data.user?.user_metadata);
+          const sessionUser = await readBrowserSessionUser(supabase);
+          nextUserId = sessionUser?.id ?? nextUserId;
+          metadataPending = isWelcomePendingMetadata(sessionUser?.user_metadata);
         } catch {
           metadataPending = false;
         }
@@ -78,8 +79,10 @@ function FirstWelcomeGate() {
     else clearWelcomePending();
     if (isSupabaseConfigured()) {
       try {
-        const supabase = createClient();
-        await supabase.auth.updateUser({ data: { welcome_pending: false } });
+        if (!clerkBrowserSignedIn()) {
+          const supabase = createClient();
+          await supabase.auth.updateUser({ data: { welcome_pending: false } });
+        }
       } catch {
         // Local or missing session — the seen flag is enough.
       }

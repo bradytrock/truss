@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { runRealtorListingBrowse } from "@/lib/realtor-listings-browse";
+import { readSessionUser } from "@/lib/session-user";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -18,9 +19,7 @@ function cronAuthorized(request: Request) {
 async function staffAuthorized() {
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await readSessionUser(supabase);
     return Boolean(user);
   } catch {
     return false;

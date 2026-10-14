@@ -11,6 +11,7 @@ import { formatDate } from "@/lib/format";
 import { firstName } from "@/lib/phone";
 import { formatResendFrom, isResendConfigured, sendResendEmail } from "@/lib/resend-mail";
 import { createAnonClient } from "@/lib/supabase/anon";
+import { readSessionUser } from "@/lib/session-user";
 import { createClient } from "@/lib/supabase/server";
 import {
   parseDueTaskReminder,
@@ -35,9 +36,7 @@ function cronAuthorized(request: Request) {
 async function staffAuthorized() {
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await readSessionUser(supabase);
     return Boolean(user);
   } catch {
     return false;

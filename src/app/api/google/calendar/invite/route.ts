@@ -7,6 +7,7 @@ import {
   updateGoogleCalendarEvent,
 } from "@/lib/google-calendar";
 import { accessTokenFor, credentialsForStaff } from "@/lib/google-calendar-server";
+import { readSessionUser } from "@/lib/session-user";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
@@ -60,9 +61,7 @@ export async function POST(request: Request) {
 
   if (isSupabaseConfigured()) {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await readSessionUser(supabase);
     if (!user) return NextResponse.json({ error: "Sign in." }, { status: 401 });
     const { data: profile } = await supabase
       .from("profiles")

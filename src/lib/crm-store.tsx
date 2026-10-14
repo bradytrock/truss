@@ -154,6 +154,14 @@ import {
   withoutJobFileId,
 } from "@/lib/job-files";
 import { patchForWorkColumn, workColumnFor, type WorkColumn } from "@/lib/work-board";
+import {
+  clerkBrowserEnabled,
+  clerkBrowserSignedIn,
+  readBrowserSessionUser,
+  signOutBrowserSession,
+  waitForClerkBrowser,
+} from "@/lib/clerk-browser";
+import { CLERK_UNLINKED_PROFILE } from "@/lib/clerk-profile";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { findStaffForProfile, isUnsignedDemo, namesMatch, staffMemberFromProfile } from "@/lib/seats";
@@ -1565,12 +1573,22 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return;
     }
     const epoch = ++bookEpoch.current;
+    await waitForClerkBrowser();
     const supabase = createClient();
-    const {
-      data: { user: authUser },
-      error: authError,
-    } = await supabase.auth.getUser();
-    if (authError || !authUser) {
+    const authUser = await readBrowserSessionUser(supabase);
+    if (!authUser) {
+      if (clerkBrowserSignedIn()) {
+        if (epoch !== bookEpoch.current) return;
+        setCompanySettings(NORTHLINE_COMPANY);
+        setState(emptyState);
+        setUser(guestUser);
+        setHydrateError(CLERK_UNLINKED_PROFILE);
+        setHydrated(true);
+        setMessagesReady(true);
+        setMessagesError(null);
+        setLiveStatus("offline");
+        return;
+      }
       if (epoch !== bookEpoch.current) return;
       setCompanySettings(NORTHLINE_COMPANY);
       setState(emptyState);
@@ -1638,7 +1656,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       .eq("id", profile.company_id)
       .maybeSingle();
     if (!companyError && !companySubscriptionActive(companyRow)) {
-      await supabase.auth.signOut();
+      await signOutBrowserSession();
       if (epoch !== bookEpoch.current) return;
       if (isPublicAppPath(window.location.pathname)) {
         setCompanySettings(NORTHLINE_COMPANY);
@@ -1708,7 +1726,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const matched = ensured.matched;
       const roster = ensured.roster;
       if (matched?.locked) {
-        await supabase.auth.signOut();
+        await signOutBrowserSession();
         setHydrateError(null);
         setHydrated(true);
         setMessagesReady(true);
@@ -1902,16 +1920,24 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!configured) return;
-    const supabase = createClient();
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
-        void load();
-      }
-    });
+    let cancelled = false;
+    let unsubscribe = () => {};
+    void (async () => {
+      await waitForClerkBrowser();
+      if (cancelled || clerkBrowserSignedIn()) return;
+      const supabase = createClient();
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((event) => {
+        if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
+          void load();
+        }
+      });
+      unsubscribe = () => subscription.unsubscribe();
+    })();
     return () => {
-      subscription.unsubscribe();
+      cancelled = true;
+      unsubscribe();
     };
   }, [configured, load]);
 
@@ -14293,9 +14319,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       label: user.name,
       detail: "Signed out",
     });
-    if (isSupabaseConfigured()) {
-      const supabase = createClient();
-      await supabase.auth.signOut();
+    if (isSupabaseConfigured() || clerkBrowserEnabled()) {
+      await signOutBrowserSession();
     }
     router.replace("/login");
     router.refresh();

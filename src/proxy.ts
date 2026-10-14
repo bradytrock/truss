@@ -3,7 +3,10 @@ import { clerkConfigured } from "@/lib/clerk-env";
 import { updateSession } from "@/lib/supabase/proxy";
 import type { NextRequest } from "next/server";
 
-const withClerk = clerkMiddleware(async (_auth, request) => updateSession(request));
+const withClerk = clerkMiddleware(async (auth, request) => {
+  const { userId, getToken } = await auth();
+  return updateSession(request, userId ? { getToken } : null);
+});
 
 export async function proxy(request: NextRequest) {
   if (!clerkConfigured()) return updateSession(request);

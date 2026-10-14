@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { resolveSeatStaffId } from "@/lib/project-map-logic";
+import { readSessionUser } from "@/lib/session-user";
 import { createClient } from "@/lib/supabase/server";
 import type { SeatRole } from "@/lib/types";
 
 export async function requireMapSeat() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await readSessionUser(supabase);
   if (!user) return { error: NextResponse.json({ error: "Sign in." }, { status: 401 }) };
   const { data: profile } = await supabase
     .from("profiles")

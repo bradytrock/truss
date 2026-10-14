@@ -6,6 +6,7 @@ import { runRemoteWorkflowSlice } from "@/lib/automations/remote-execute";
 import { parseWorkflowCursor } from "@/lib/automations/workflow";
 import { mapAutomation } from "@/lib/supabase/mappers";
 import { createAnonClient } from "@/lib/supabase/anon";
+import { readSessionUser } from "@/lib/session-user";
 import { createClient } from "@/lib/supabase/server";
 import type { Automation } from "@/lib/automations";
 import type { Job, Opportunity } from "@/lib/types";
@@ -26,9 +27,7 @@ function cronAuthorized(request: Request) {
 async function staffAuthorized() {
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await readSessionUser(supabase);
     return Boolean(user);
   } catch {
     return false;

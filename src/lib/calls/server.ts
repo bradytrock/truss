@@ -14,6 +14,7 @@ import {
 import type { CallRingTarget } from "@/lib/calls/types";
 import { toE164 } from "@/lib/phone";
 import { createAnonClient } from "@/lib/supabase/anon";
+import { readSessionUser } from "@/lib/session-user";
 import { createClient } from "@/lib/supabase/server";
 import type { Json } from "@/lib/supabase/database.types";
 
@@ -45,9 +46,7 @@ function asTargets(value: unknown): CallRingTarget[] {
 
 export async function requireCallingUser() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await readSessionUser(supabase);
   if (!user) return { error: "Sign in." as const };
   const { data: profile } = await supabase
     .from("profiles")

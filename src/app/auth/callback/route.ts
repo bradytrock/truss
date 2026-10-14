@@ -13,10 +13,16 @@ export async function GET(request: Request) {
     if (error) {
       return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(error.message)}`);
     }
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (isWelcomePendingMetadata(user?.user_metadata)) {
+    let metadata: Record<string, unknown> | undefined;
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      metadata = user?.user_metadata;
+    } catch {
+      metadata = undefined;
+    }
+    if (isWelcomePendingMetadata(metadata)) {
       const dest = new URL(next, origin);
       dest.searchParams.set("welcome", "1");
       return NextResponse.redirect(dest.toString());

@@ -4,6 +4,7 @@ import {
   isEagleviewProductId,
   type EagleviewProductId,
 } from "@/lib/eagleview";
+import { readSessionUser } from "@/lib/session-user";
 import { mapEagleviewConnection } from "@/lib/supabase/mappers";
 import { uploadToB2 } from "@/lib/storage/b2";
 import type { Database, Json } from "@/lib/supabase/database.types";
@@ -175,9 +176,7 @@ export function measurementsJson(value: Record<string, unknown>): Json {
 }
 
 export async function loadProfileCompany(supabase: Client) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await readSessionUser(supabase);
   if (!user) return { user: null, profile: null, error: "Sign in to continue." as const };
   const { data: profile, error } = await supabase
     .from("profiles")

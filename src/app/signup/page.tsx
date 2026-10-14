@@ -51,8 +51,13 @@ async function claimInviteIfNeeded(
   if (!error) return { ok: true as const };
   const missing = /missing or expired/i.test(error.message ?? "");
   if (missing) {
-    const { data: sessionData } = await supabase.auth.getUser();
-    const userId = sessionData.user?.id;
+    let userId: string | undefined;
+    try {
+      const { data: sessionData } = await supabase.auth.getUser();
+      userId = sessionData.user?.id;
+    } catch {
+      userId = undefined;
+    }
     if (userId && invitedCompanyId) {
       const { data: profile } = await supabase
         .from("profiles")
@@ -119,9 +124,11 @@ function SignupForm() {
       setEmail(row.email);
       setInviteLoading(false);
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData.session) {
-        setAlreadySignedIn(true);
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session) setAlreadySignedIn(true);
+      } catch {
+        // A Clerk session does not use the Supabase auth client.
       }
     })();
     return () => {

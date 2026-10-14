@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requestOrigin } from "@/lib/share-text";
 import { qbwcFile } from "@/lib/qbwc/soap";
 import { DEFAULT_QB_BANK, DEFAULT_QB_CC, DEFAULT_QB_ITEM } from "@/lib/qbwc/work";
+import { readSessionUser } from "@/lib/session-user";
 import { createClient } from "@/lib/supabase/server";
 import {
   isMissingQbwc,
@@ -21,9 +22,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 export async function GET(request: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await readSessionUser(supabase);
   if (!user) {
     return NextResponse.json({ error: "Sign in to set up the Web Connector." }, { status: 401 });
   }
@@ -140,9 +139,7 @@ async function connectorJson(
 
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await readSessionUser(supabase);
   if (!user) {
     return NextResponse.json({ error: "Sign in to set up the Web Connector." }, { status: 401 });
   }

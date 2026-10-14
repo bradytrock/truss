@@ -18,15 +18,14 @@ import { formatResendFrom, isResendConfigured, sendResendEmail } from "@/lib/res
 import { sendOfficeText } from "@/lib/photon-server";
 import { looksLikeEmail } from "@/lib/share-text";
 import { createAnonClient } from "@/lib/supabase/anon";
+import { readSessionUser } from "@/lib/session-user";
 import { createClient } from "@/lib/supabase/server";
 import { isMissingEstimateOpenedNotify } from "@/lib/supabase/schema-errors";
 
 export async function isSignedInOfficeSession() {
   try {
     const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await readSessionUser(supabase);
     return Boolean(user);
   } catch {
     return false;

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { suggestAddresses } from "@/lib/address-suggest-server";
+import { readSessionUser } from "@/lib/session-user";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
@@ -9,8 +10,7 @@ export const dynamic = "force-dynamic";
 async function requireUser() {
   if (!isSupabaseConfigured()) return true;
   const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  return data.user ?? null;
+  return readSessionUser(supabase);
 }
 
 export async function GET(request: Request) {

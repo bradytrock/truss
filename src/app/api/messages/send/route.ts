@@ -1,24 +1,21 @@
 import { NextResponse } from "next/server";
 import { looksLikePhone } from "@/lib/phone";
 import { officePhotonConfigured, sendOfficeText } from "@/lib/photon-server";
+import { readSessionUser } from "@/lib/session-user";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await readSessionUser(supabase);
   if (!user) return NextResponse.json({ configured: false });
   return NextResponse.json(await officePhotonConfigured());
 }
 
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await readSessionUser(supabase);
   if (!user) {
     return NextResponse.json({ error: "Sign in to send a text." }, { status: 401 });
   }

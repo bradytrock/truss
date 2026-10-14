@@ -11,6 +11,7 @@ import {
   tokenSuffix,
 } from "@/lib/estimate-signature-audit";
 import { requestAudit } from "@/lib/request-audit";
+import { readSessionUser } from "@/lib/session-user";
 import { createClient } from "@/lib/supabase/server";
 import { isMissingSignatureAudit, looksLikeUuid, missingSignatureAuditMessage } from "@/lib/supabase/schema-errors";
 import { fillEstimate, fillEstimateLine, linesForEstimate } from "@/lib/estimate-totals";
@@ -41,9 +42,7 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await readSessionUser(supabase);
   if (!user) {
     return NextResponse.json({ error: "Sign in to record that signature." }, { status: 401 });
   }

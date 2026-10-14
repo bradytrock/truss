@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { readSessionUser } from "@/lib/session-user";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { buildSystemPrompt, trimMessages } from "@/lib/assistant/prompt";
@@ -47,8 +48,7 @@ function viewerFromContext(context: AssistantContext): StaffMember | undefined {
 async function requireUser() {
   if (!isSupabaseConfigured()) return null;
   const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  return data.user ?? null;
+  return readSessionUser(supabase);
 }
 
 export async function GET() {

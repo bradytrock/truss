@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { mintVoiceWebhookToken } from "@/lib/voice-agent";
 import { storedPhone } from "@/lib/phone";
+import { readSessionUser } from "@/lib/session-user";
 import { createClient } from "@/lib/supabase/server";
 import { isMissingVoiceAgents, missingVoiceAgentsMessage } from "@/lib/supabase/schema-errors";
 import { canManageSettings } from "@/lib/visibility";
@@ -10,9 +11,7 @@ export const runtime = "nodejs";
 
 async function requireAdmin() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await readSessionUser(supabase);
   if (!user) return { error: NextResponse.json({ error: "Sign in." }, { status: 401 }) };
   const { data: profile } = await supabase
     .from("profiles")

@@ -4,6 +4,7 @@ import { groupMessagePhones } from "@/lib/automations/group-text";
 import { planWorkflowSlice, settleWorkflow, workflowOf } from "@/lib/automations/workflow";
 import { estimateTotalForContext, mergeForJob, runsAfterStageChange } from "@/lib/automations/queue";
 import { automationRunInsertPayload, mapAutomation, mapAutomationRun, mapCompany } from "@/lib/supabase/mappers";
+import { readSessionUser } from "@/lib/session-user";
 import { createClient } from "@/lib/supabase/server";
 import { fetchCompanyBook } from "@/lib/supabase/load-book";
 import { patchForWorkColumn, workColumnFor } from "@/lib/work-board";
@@ -12,9 +13,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await readSessionUser(supabase);
   if (!user) return NextResponse.json({ error: "Sign in first." }, { status: 401 });
 
   let body: Record<string, unknown> = {};

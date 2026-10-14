@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { fallbackChatReplies, parseSuggestedReplies, type WebsiteChatMessage } from "@/lib/website-chat";
+import { readSessionUser } from "@/lib/session-user";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await readSessionUser(supabase);
   if (!user) return NextResponse.json({ ok: false, error: "Sign in." }, { status: 401 });
 
   let body: Record<string, unknown> = {};
