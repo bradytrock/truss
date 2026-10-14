@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadProfileCompany } from "@/lib/eagleview-server";
+import { jobSiteQuery } from "@/lib/project-map-logic";
+import { parseVerifiedCoords } from "@/lib/roof-measure-satellite";
 import { resolveJobCoords, traceSatelliteRoof } from "@/lib/roof-measure-satellite-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -17,7 +19,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: authError || "Sign in to continue." }, { status: 401 });
   }
 
-  const body = (await request.json().catch(() => null)) as { jobId?: string } | null;
+  const body = (await request.json().catch(() => null)) as {
+    jobId?: string;
+    lat?: unknown;
+    lng?: unknown;
+  } | null;
   const jobId = body?.jobId?.trim() ?? "";
   if (!UUID_RE.test(jobId)) {
     return NextResponse.json({ error: "That job is not valid." }, { status: 400 });
@@ -32,12 +38,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "That job is not in this company." }, { status: 404 });
   }
 
-  const coords = await resolveJobCoords(job);
+  const verified = parseVerifiedCoords(body);
+  const coords = verified ?? (await resolveJobCoords(job));
   if (!coords) {
     return NextResponse.json(
       { error: "Add the property address on the job before measuring from satellite." },
       { status: 400 },
     );
+  }
+
+  if (verified) {
+    const queryText = jobSiteQuery({
+      street: job.street ?? "",
+      city: job.city ?? "",
+      state: job.state ?? "",
+      postalCode: job.postal_code ?? "",
+      location: job.location ?? "",
+    });
+    await supabase
+      .from("jobs")
+      .update({
+        lat: verified.lat,
+        lng: verified.lng,
+        geocoded_at: new Date().toISOString(),
+        ...(queryText ? { geocode_query: queryText } : {}),
+      })
+      .eq("id", jobId)
+      .eq("company_id", profile.company_id);
   }
 
   const traced = await traceSatelliteRoof({

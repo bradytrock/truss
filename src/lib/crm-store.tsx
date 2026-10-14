@@ -1070,7 +1070,7 @@ type CrmContextValue = CrmState & {
     decision: "redo" | "keep" | "change",
     code?: string,
   ) => Promise<boolean>;
-  updateJob: (id: string, patch: Partial<Job>) => Promise<boolean>;
+  updateJob: (id: string, patch: Partial<Job>, options?: { skipAudit?: boolean }) => Promise<boolean>;
   deleteJob: (id: string, reason: string) => Promise<boolean>;
   restoreJob: (id: string) => Promise<boolean>;
   addOpportunity: (

@@ -1,3 +1,4 @@
+import { isValidLatLng } from "./project-map-logic.ts";
 import {
   EDGE_KINDS,
   PITCH_RISES,
@@ -33,6 +34,17 @@ const EDGE_PRIORITY: Record<EdgeKind, number> = {
   hip: 6,
   valley: 7,
 };
+
+/** A pin the estimator placed. Rejects a missing or 0,0 guess so we do not measure the ocean. */
+export function parseVerifiedCoords(
+  input: { lat?: unknown; lng?: unknown } | null | undefined,
+): { lat: number; lng: number } | null {
+  if (!input) return null;
+  const lat = typeof input.lat === "number" ? input.lat : Number(input.lat);
+  const lng = typeof input.lng === "number" ? input.lng : Number(input.lng);
+  if (!isValidLatLng(lat, lng) || (lat === 0 && lng === 0)) return null;
+  return { lat, lng };
+}
 
 export function satelliteFeetPerPixel(
   lat: number,

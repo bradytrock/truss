@@ -13,6 +13,7 @@ import {
   Upload,
 } from "lucide-react";
 import { JobEagleviewPanel } from "@/components/job-eagleview";
+import { RoofMeasureVerifyDialog } from "@/components/roof-measure-verify";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +27,7 @@ import {
 } from "@/components/ui/sheet";
 import { useCrm } from "@/lib/crm-store";
 import { isDeletedJob, jobAddress, jobRecordHref } from "@/lib/job-record";
-import { isValidLatLng } from "@/lib/project-map-logic";
+import { isValidLatLng, jobSiteQuery } from "@/lib/project-map-logic";
 import { uploadViaApi } from "@/lib/storage/client-upload";
 import { formatCompanyAddress, formatDate } from "@/lib/format";
 import { loadLogoForPdf } from "@/lib/letterhead-pdf";
@@ -123,6 +124,7 @@ export function RoofMeasureEditor({ jobId }: { jobId: string }) {
   const selectionRef = useRef<RoofHit | null>(null);
   const dragOrigin = useRef<RoofDrawing | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const measureLock = useRef(false);
 
   const [tool, setTool] = useState<Tool>("facet");
   const [drawing, setDrawing] = useState<RoofDrawing>(emptyDrawing());
@@ -144,6 +146,8 @@ export function RoofMeasureEditor({ jobId }: { jobId: string }) {
   const [wasteInput, setWasteInput] = useState("15");
   const [dirty, setDirty] = useState(false);
   const [measuring, setMeasuring] = useState(false);
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifySession, setVerifySession] = useState(0);
 
   const totals = useMemo(() => measureRoof(drawing), [drawing]);
   const imageSrc = roofImageSrc(imagePath);
@@ -345,22 +349,38 @@ export function RoofMeasureEditor({ jobId }: { jobId: string }) {
     setFuture([]);
   }
 
-  async function measureFromSatellite() {
-    if (deleted || measuring) return;
+  function openSatelliteVerify() {
+    if (deleted || measuring || measureLock.current) return;
     if (!canMeasureFromSatellite) {
       toast.error("Add the property address on the job before measuring from satellite.");
       return;
     }
-    if (drawingRef.current.facets.length > 0) {
-      const ok = window.confirm("Replace the drawing with a satellite trace? You can still move the corners.");
-      if (!ok) return;
-    }
+    setVerifySession((value) => value + 1);
+    setVerifyOpen(true);
+  }
+
+  async function measureFromSatellite(coords: { lat: number; lng: number }) {
+    if (deleted || measureLock.current) return;
+    measureLock.current = true;
     setMeasuring(true);
+    if (job) {
+      const query = jobSiteQuery(job);
+      void crm.updateJob(
+        jobId,
+        {
+          lat: coords.lat,
+          lng: coords.lng,
+          geocodedAt: new Date().toISOString(),
+          ...(query ? { geocodeQuery: query } : {}),
+        },
+        { skipAudit: true },
+      );
+    }
     try {
       const response = await fetch("/api/roof-measure/auto", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId }),
+        body: JSON.stringify({ jobId, lat: coords.lat, lng: coords.lng }),
       });
       const data = (await response.json().catch(() => ({}))) as {
         error?: string;
@@ -407,6 +427,7 @@ export function RoofMeasureEditor({ jobId }: { jobId: string }) {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not measure from satellite.");
     } finally {
+      measureLock.current = false;
       setMeasuring(false);
     }
   }
@@ -725,14 +746,14 @@ export function RoofMeasureEditor({ jobId }: { jobId: string }) {
               type="button"
               className="w-full"
               disabled={deleted || measuring || !canMeasureFromSatellite}
-              title={canMeasureFromSatellite ? "Pull a satellite photo and trace the roof" : "Add an address on the job first"}
-              onClick={() => void measureFromSatellite()}
+              title={canMeasureFromSatellite ? "Verify the house, then pull a satellite photo" : "Add an address on the job first"}
+              onClick={openSatelliteVerify}
             >
               <Satellite data-icon="inline-start" />
               {measuring ? "Measuring…" : "Measure from satellite"}
             </Button>
             <p className="text-xs text-muted-foreground">
-              Google satellite photo for this address. Squares come from the traced planes, so drag a corner if a line is off.
+              Verify a pin on the house first. The address lookup can miss it. Squares come from the traced planes, so drag a corner if a line is off.
             </p>
             <Button type="button" variant="outline" className="w-full" onClick={() => setEagleviewOpen(true)}>
               EagleView
@@ -940,6 +961,22 @@ export function RoofMeasureEditor({ jobId }: { jobId: string }) {
           </div>
         </aside>
       </div>
+
+      <RoofMeasureVerifyDialog
+        key={verifySession}
+        open={verifyOpen}
+        jobId={jobId}
+        address={address}
+        onOpenChange={setVerifyOpen}
+        onConfirm={(pin) => {
+          if (drawingRef.current.facets.length > 0) {
+            const ok = window.confirm("Replace the drawing with a satellite trace? You can still move the corners.");
+            if (!ok) return;
+          }
+          setVerifyOpen(false);
+          void measureFromSatellite(pin);
+        }}
+      />
 
       <Sheet open={eagleviewOpen} onOpenChange={setEagleviewOpen}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-lg" side="right">

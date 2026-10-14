@@ -1,5 +1,17 @@
 import assert from "node:assert/strict";
-import { drawingFromRoofTrace, imagePixelSize, satelliteFeetPerPixel } from "./roof-measure-satellite.ts";
+import {
+  drawingFromRoofTrace,
+  imagePixelSize,
+  parseVerifiedCoords,
+  satelliteFeetPerPixel,
+} from "./roof-measure-satellite.ts";
+
+assert.deepEqual(parseVerifiedCoords({ lat: 32.9, lng: -97.1 }), { lat: 32.9, lng: -97.1 });
+assert.deepEqual(parseVerifiedCoords({ lat: "33.01", lng: "-97.2" }), { lat: 33.01, lng: -97.2 });
+assert.equal(parseVerifiedCoords(null), null);
+assert.equal(parseVerifiedCoords({ lat: 0, lng: 0 }), null);
+assert.equal(parseVerifiedCoords({ lat: 91, lng: -97 }), null);
+assert.equal(parseVerifiedCoords({ lat: "nope", lng: -97 }), null);
 
 const equator = satelliteFeetPerPixel(0, 0, 1);
 const published = ((2 * Math.PI * 6378137) / 256) * 3.280839895013123;
