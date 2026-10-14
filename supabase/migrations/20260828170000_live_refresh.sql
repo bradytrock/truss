@@ -18,7 +18,7 @@ begin
         'qbwc_connectors',
         'qbwc_sessions'
       )
-      and has_table_privilege('authenticated', format('public.%I', c.relname), 'select')
+      and has_table_privilege('authenticated', c.oid, 'select')
   loop
     execute format('alter table public.%I replica identity full', r.tbl);
     begin
