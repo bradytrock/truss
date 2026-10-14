@@ -34,6 +34,7 @@ import { CreatePageDialog } from "@/components/create-page-dialog";
 import { DeleteJobDialog } from "@/components/delete-job-dialog";
 import { JobFilesPanel } from "@/components/job-files";
 import { JobEagleviewPanel } from "@/components/job-eagleview";
+import { RoofMeasureEntry } from "@/components/roof-measure-entry";
 import { JobCompanyCamPanel } from "@/components/job-companycam";
 import { JobPhotosPanel } from "@/components/job-photos-panel";
 import { PhotoViewer } from "@/components/photo-viewer";
@@ -1479,6 +1480,7 @@ export function JobRecord({
               </ul>
             )}
           </section>
+          <RoofMeasureEntry jobId={job.id} disabled={deleted} />
           <JobEagleviewPanel jobId={job.id} disabled={deleted} />
           <JobFilesPanel jobId={job.id} disabled={deleted} />
           <section>

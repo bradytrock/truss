@@ -229,7 +229,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const launcherApps = appLauncherItems();
   const inboxLayout = isInboxPath(pathname);
   const mapLayout = pathname === "/map";
-  const fillLayout = inboxLayout || mapLayout;
+  const measureLayout = /^\/jobs\/[^/]+\/measure$/.test(pathname);
+  const fillLayout = inboxLayout || mapLayout || measureLayout;
 
   const createMenu =
     effectiveStaff && isBusinessDevelopment(effectiveStaff.role) ? (
@@ -364,6 +365,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             "bg-background",
             mapLayout
               ? "flex min-h-0 flex-1 flex-col overflow-hidden p-0 lg:p-5 xl:p-7"
+              : measureLayout
+                ? "flex min-h-0 flex-1 flex-col overflow-hidden p-0"
               : inboxLayout
                 ? "flex min-h-0 flex-1 flex-col overflow-hidden"
                 : "flex-1 p-5 sm:p-7",

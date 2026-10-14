@@ -1229,6 +1229,42 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["job_insurance"]["Insert"]>;
         Relationships: [];
       };
+      roof_reports: {
+        Row: {
+          id: string;
+          company_id: string;
+          job_id: string;
+          status: string;
+          image_path: string;
+          image_width: number;
+          image_height: number;
+          feet_per_pixel: number | null;
+          waste_percent: number;
+          points: Json;
+          edges: Json;
+          facets: Json;
+          updated_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          job_id: string;
+          status?: string;
+          image_path?: string;
+          image_width?: number;
+          image_height?: number;
+          feet_per_pixel?: number | null;
+          waste_percent?: number;
+          points?: Json;
+          edges?: Json;
+          facets?: Json;
+          updated_at?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["roof_reports"]["Insert"]>;
+        Relationships: [];
+      };
       qb_vendors: {
         Row: {
           id: string;
