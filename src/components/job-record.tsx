@@ -177,7 +177,7 @@ const quietSelect =
   "h-auto w-full justify-end border-0 bg-transparent p-0 shadow-none hover:bg-transparent dark:bg-transparent";
 
 const pillSelect =
-  "h-7 w-auto gap-1 rounded-full border bg-background px-2.5 text-xs font-medium shadow-none";
+  "h-7! w-auto gap-1 rounded-full border bg-background px-2.5 py-0 text-xs font-medium shadow-none [&_svg]:size-3.5";
 
 function DetailRow({
   label,
@@ -595,6 +595,7 @@ export function JobRecord({
           <Button
             type="button"
             size="sm"
+            className="rounded-full"
             disabled={estimatePending || materialPending}
             aria-label="Create on this job"
           />
@@ -619,137 +620,145 @@ export function JobRecord({
 
   return (
     <div className={cn("flex h-full min-h-0 flex-col bg-background", className)}>
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5 sm:px-5">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {job.code ? <RecordCode code={job.code} className="text-xs" /> : null}
-          {canEditCode && !deleted ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 rounded-full px-2 text-xs"
-              onClick={() => {
-                setCodeDraft(suggestedCode || job.code);
-                setCodeOpen(true);
-              }}
-            >
-              Change code
-            </Button>
-          ) : null}
-          <Select
-            value={pipelineColumn}
-            disabled={deleted}
-            onValueChange={(value) => {
-              if (!value || deleted) return;
-              const column = value as WorkColumn;
-              if (column === pipelineColumn || column === "deleted") return;
-              void crm.moveWork(job.id, column);
-              toast.success("Pipeline status updated.");
-            }}
-            items={WORK_COLUMNS.filter((column) => column !== "deleted" || pipelineColumn === "deleted").map((column) => ({
-              value: column,
-              label: WORK_COLUMN_LABELS[column],
-            }))}
-          >
-            <SelectTrigger className={pillSelect} aria-label="Pipeline status">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {WORK_COLUMNS.filter((column) => column !== "deleted" || pipelineColumn === "deleted").map((column) => (
-                <SelectItem key={column} value={column}>
-                  {WORK_COLUMN_LABELS[column]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={job.market || "residential"}
-            disabled={deleted}
-            onValueChange={(value) => {
-              const market = value as Job["market"];
-              if (market !== "residential" && market !== "commercial") return;
-              patch({ market });
-              if (opportunity && opportunity.market !== market) {
-                void crm.updateOpportunity(opportunity.id, { market });
-              }
-              if (market === "residential") {
-                for (const estimate of crm.estimates.filter(
-                  (item) =>
-                    item.taxRate !== 0 &&
-                    (item.jobId === job.id ||
-                      (job.opportunityId && item.opportunityId === job.opportunityId)),
-                )) {
-                  void crm.updateEstimate(estimate.id, { taxRate: 0 });
-                }
-              }
-            }}
-            items={[
-              { value: "residential", label: JOB_MARKET_LABELS.residential },
-              { value: "commercial", label: JOB_MARKET_LABELS.commercial },
-            ]}
-          >
-            <SelectTrigger className={pillSelect} aria-label="Residential">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="residential">{JOB_MARKET_LABELS.residential}</SelectItem>
-              <SelectItem value="commercial">{JOB_MARKET_LABELS.commercial}</SelectItem>
-            </SelectContent>
-          </Select>
-          <TradesMenu
-            value={job.trades}
-            disabled={deleted}
-            onChange={(trades) => patch({ trades })}
-          />
+      <header className="flex shrink-0 flex-col gap-2 border-b bg-background px-4 py-2.5 sm:px-5">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {job.code ? <RecordCode code={job.code} className="text-xs" /> : null}
+            {canEditCode && !deleted ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 rounded-full px-2 text-xs"
+                onClick={() => {
+                  setCodeDraft(suggestedCode || job.code);
+                  setCodeOpen(true);
+                }}
+              >
+                Change code
+              </Button>
+            ) : null}
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <p className="text-right text-sm leading-tight tabular-nums">
+              <span className="font-medium">{formatCurrencyFull(books.invoiced)}</span>
+              <span className="text-muted-foreground"> invoiced</span>
+              <span className="mx-1.5 text-muted-foreground">·</span>
+              <span className="text-muted-foreground">est. draft {formatCurrencyFull(draftEstimateTotal)}</span>
+            </p>
+            {onClose ? (
+              <Button type="button" variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close">
+                <XIcon />
+              </Button>
+            ) : null}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <p className="shrink-0 text-sm tabular-nums">
-            <span className="font-medium">{formatCurrencyFull(books.invoiced)}</span>
-            <span className="text-muted-foreground"> invoiced</span>
-            <span className="mx-1.5 text-muted-foreground">·</span>
-            <span className="text-muted-foreground">est. draft {formatCurrencyFull(draftEstimateTotal)}</span>
-          </p>
-          {primary?.phone ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={pipelineColumn}
+              disabled={deleted}
+              onValueChange={(value) => {
+                if (!value || deleted) return;
+                const column = value as WorkColumn;
+                if (column === pipelineColumn || column === "deleted") return;
+                void crm.moveWork(job.id, column);
+                toast.success("Pipeline status updated.");
+              }}
+              items={WORK_COLUMNS.filter((column) => column !== "deleted" || pipelineColumn === "deleted").map((column) => ({
+                value: column,
+                label: WORK_COLUMN_LABELS[column],
+              }))}
+            >
+              <SelectTrigger className={pillSelect} aria-label="Pipeline status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {WORK_COLUMNS.filter((column) => column !== "deleted" || pipelineColumn === "deleted").map((column) => (
+                  <SelectItem key={column} value={column}>
+                    {WORK_COLUMN_LABELS[column]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={job.market || "residential"}
+              disabled={deleted}
+              onValueChange={(value) => {
+                const market = value as Job["market"];
+                if (market !== "residential" && market !== "commercial") return;
+                patch({ market });
+                if (opportunity && opportunity.market !== market) {
+                  void crm.updateOpportunity(opportunity.id, { market });
+                }
+                if (market === "residential") {
+                  for (const estimate of crm.estimates.filter(
+                    (item) =>
+                      item.taxRate !== 0 &&
+                      (item.jobId === job.id ||
+                        (job.opportunityId && item.opportunityId === job.opportunityId)),
+                  )) {
+                    void crm.updateEstimate(estimate.id, { taxRate: 0 });
+                  }
+                }
+              }}
+              items={[
+                { value: "residential", label: JOB_MARKET_LABELS.residential },
+                { value: "commercial", label: JOB_MARKET_LABELS.commercial },
+              ]}
+            >
+              <SelectTrigger className={pillSelect} aria-label="Market">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="residential">{JOB_MARKET_LABELS.residential}</SelectItem>
+                <SelectItem value="commercial">{JOB_MARKET_LABELS.commercial}</SelectItem>
+              </SelectContent>
+            </Select>
+            <TradesMenu
+              value={job.trades}
+              disabled={deleted}
+              onChange={(trades) => patch({ trades })}
+            />
+          </div>
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            {primary?.phone ? (
+              <Button
+                nativeButton={false}
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                render={<Link href={`/messages?job=${job.id}&contact=${primary.id}`} />}
+              >
+                Text homeowner
+              </Button>
+            ) : null}
+            {canSendCloseout ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                disabled={closeoutBusy}
+                onClick={() => {
+                  setCloseoutBusy(true);
+                  void crm.submitCommissionCloseout(job.id).finally(() => setCloseoutBusy(false));
+                }}
+              >
+                {closeout?.status === "returned" ? "Send again for closeout" : "Send for closeout"}
+              </Button>
+            ) : null}
             <Button
               nativeButton={false}
               variant="outline"
               size="sm"
               className="rounded-full"
-              render={<Link href={`/messages?job=${job.id}&contact=${primary.id}`} />}
+              render={<Link href={mailHref({ job: job.id, contact: primary?.id })} />}
             >
-              Text homeowner
+              Mail
             </Button>
-          ) : null}
-          {canSendCloseout ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="rounded-full"
-              disabled={closeoutBusy}
-              onClick={() => {
-                setCloseoutBusy(true);
-                void crm.submitCommissionCloseout(job.id).finally(() => setCloseoutBusy(false));
-              }}
-            >
-              {closeout?.status === "returned" ? "Send again for closeout" : "Send for closeout"}
-            </Button>
-          ) : null}
-          <Button
-            nativeButton={false}
-            variant="outline"
-            size="sm"
-            className="rounded-full"
-            render={<Link href={mailHref({ job: job.id, contact: primary?.id })} />}
-          >
-            Mail
-          </Button>
-          {newMenu}
-          {onClose ? (
-            <Button type="button" variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close">
-              <XIcon />
-            </Button>
-          ) : null}
+            {newMenu}
+          </div>
         </div>
       </header>
 
