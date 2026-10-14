@@ -72,6 +72,17 @@ function isHeadingLine(line: string) {
   return NUMBERED_HEADING.test(trimmed) || CAPS_HEADING.test(trimmed);
 }
 
+/**
+ * Numbered clauses are often "1. Contract Price. The rest of the sentence…".
+ * Only the short title should be a heading. The sentence that follows stays body text.
+ */
+export function clauseTitleAndBody(heading: string) {
+  const trimmed = heading.trim();
+  const match = trimmed.match(/^(\d+\.\s+[^\n.]{1,80})\.\s+(\S[\s\S]*)$/);
+  if (!match?.[1] || !match[2]) return { title: trimmed, body: "" };
+  return { title: `${match[1]}.`, body: match[2].trim() };
+}
+
 export function isPaymentHeading(heading: string) {
   return PAYMENT_TITLE.test(heading.trim());
 }

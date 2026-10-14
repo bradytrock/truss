@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { formatPhone } from "@/lib/format";
 import type { ProjectManagerContact } from "@/lib/document-owner";
 import {
   PAPER_CARD_HEX,
@@ -9,6 +8,7 @@ import {
   paperCompanyLines,
   paperFooterLeft,
   paperKindLabel,
+  paperManagerLines,
   type PaperKind,
   type PaperMetaItem,
 } from "@/lib/document-paper";
@@ -32,12 +32,18 @@ export function PaperCoverHeader({
   company,
   kind,
   number,
+  phone,
 }: {
   company: CompanySettings;
   kind: PaperKind;
   number: string;
+  /** Direct line for the header. Estimates and invoices use the project manager. */
+  phone?: string | null;
 }) {
-  const lines = paperCompanyLines(company);
+  const lines = paperCompanyLines({
+    ...company,
+    phone: phone?.trim() || company.phone,
+  });
   const logoUrl = company.logoUrl?.trim();
   return (
     <div className="flex items-start justify-between gap-4 border-b pb-4">
@@ -132,13 +138,10 @@ export function PaperPartyCards({
 
 export function paperManagerCard(manager: ProjectManagerContact | null | undefined) {
   const name = manager?.name.trim() || "";
-  const phone = formatPhone(manager?.phone);
   return {
     label: "Project manager",
     name: name || "—",
-    lines: name
-      ? [manager?.title.trim() || "Project Manager", [phone !== "—" ? phone : "", manager?.email.trim() || ""].filter(Boolean).join(" · ")]
-      : [],
+    lines: name ? paperManagerLines(manager) : [],
   };
 }
 

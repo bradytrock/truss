@@ -422,6 +422,50 @@ async function main() {
   assert.match(pageText(longInvoice[invoiceContinued]!), /DESCRIPTION/);
   assertClearOfFooter(longInvoice);
 
+  const clause =
+    "1. Contract Price. In exchange for performance of the Work, Customer promises to pay the listed total.";
+  const clausePdf = await buildEstimatePdf({
+    estimate: { ...estimate, terms: clause, number: "EST-CLAUSE" },
+    lines,
+    company,
+    customer: "Rajh — 4608 Darlington Drive, Flower Mound, TX 75022",
+    primaryCustomer: "Avanna Rajh",
+    customerPhone: "7133969172",
+    customerEmail: "avanna.rajh@hotmail.com",
+    projectManager: {
+      name: "Brady Jones",
+      title: "Project Manager",
+      phone: "4697947701",
+      email: "bjones@trockcontracting.com",
+    },
+  });
+  const clauseText = await textFromPdf(clausePdf);
+  assert.match(clauseText, /Avanna Rajh/);
+  assert.doesNotMatch(clauseText, /Darlington/);
+  assert.match(clauseText, /\(469\) 794-7701/);
+  assert.doesNotMatch(clauseText, /794-7701 · bjones@trockcontracting.com/);
+  const clauseDoc = await getDocument({
+    data: new Uint8Array(await clausePdf.arrayBuffer()),
+    disableWorker: true,
+    isEvalSupported: false,
+  }).promise;
+  const clauseRuns: Array<{ str: string; fontName: string }> = [];
+  for (let pageNumber = 1; pageNumber <= clauseDoc.numPages; pageNumber += 1) {
+    const clausePage = await clauseDoc.getPage(pageNumber);
+    const clauseContent = await clausePage.getTextContent();
+    for (const item of clauseContent.items) {
+      if ("str" in item) clauseRuns.push({ str: item.str, fontName: item.fontName });
+    }
+  }
+  const titleItem = clauseRuns.find((item) => item.str.includes("Contract Price"));
+  const bodyItem = clauseRuns.find((item) => item.str.includes("In exchange"));
+  const knownBold = clauseRuns.find((item) => item.str === "TERMS");
+  assert.ok(titleItem, "clause title is printed");
+  assert.ok(bodyItem, "clause sentence is printed");
+  assert.ok(knownBold, "terms heading is printed");
+  assert.equal(titleItem.fontName, knownBold.fontName, "clause title stays bold");
+  assert.notEqual(bodyItem.fontName, titleItem.fontName, "clause sentence is not bold");
+
   console.log("document-pdf format tests passed");
 }
 

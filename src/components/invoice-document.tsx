@@ -90,7 +90,12 @@ export function InvoiceDocument({
 
   return (
     <PaperSheet className="space-y-6 p-5 sm:p-7">
-      <PaperCoverHeader company={letterhead} kind="invoice" number={invoice.number} />
+      <PaperCoverHeader
+        company={letterhead}
+        kind="invoice"
+        number={invoice.number}
+        phone={manager?.phone}
+      />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <PaperSiteTitle title={site.title} locality={site.locality} />
         {showStatus ? <InvoiceStatusBadge status={status} /> : null}

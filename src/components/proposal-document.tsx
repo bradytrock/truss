@@ -53,7 +53,9 @@ import {
   paperEstimateMeta,
   paperIssuedAt,
   paperOptionChoiceCopy,
+  paperManagerLines,
   paperPreparedForCard,
+  paperPreparedForName,
   paperQtyLabel,
   paperRescissionCopy,
   paperSiteTitle,
@@ -294,7 +296,11 @@ export function ProposalDocument({
       })
     : null;
   const preparedFor = paperPreparedForCard({
-    name: customer,
+    name: paperPreparedForName({
+      customer,
+      primary: primaryCustomer,
+      second: secondCustomer,
+    }),
     phone: customerPhone || fromBook?.phone,
     email: customerEmail || fromBook?.email,
     secondPhone: secondCustomerPhone || fromBook?.secondPhone,
@@ -322,7 +328,12 @@ export function ProposalDocument({
   });
   return (
     <PaperSheet className="space-y-6 p-5 sm:p-7">
-      <PaperCoverHeader company={letterhead} kind="estimate" number={estimate.number} />
+      <PaperCoverHeader
+        company={letterhead}
+        kind="estimate"
+        number={estimate.number}
+        phone={manager?.phone}
+      />
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <PaperSiteTitle title={site.title} locality={site.locality} />
         {showStatus ? <EstimateStatusBadge status={estimate.status} /> : null}
@@ -491,7 +502,13 @@ export function ProposalSignature({
       <div>
         <p className="text-[10px] font-semibold tracking-[0.14em] text-[#6e6e6e] uppercase">Project manager</p>
         <p className="mt-1 text-sm font-semibold">{manager?.name || contractor?.name || contractorName}</p>
-        {manager?.title ? <p className="text-xs text-muted-foreground">{manager.title}</p> : null}
+        {manager?.name.trim()
+          ? paperManagerLines(manager).map((line) => (
+              <p key={line} className="text-xs text-muted-foreground">
+                {line}
+              </p>
+            ))
+          : null}
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { formatCompanyAddressLines, formatDate, formatPhone } from "@/lib/format";
+import { joinCustomerNames } from "@/lib/estimate-signers";
 import { parseTermsSections } from "@/lib/document-terms";
 
 export const PAPER_RED = { r: 196, g: 18, b: 28 };
@@ -158,6 +159,21 @@ function paperPhone(value: string | null | undefined) {
   return formatted === "—" ? "" : formatted;
 }
 
+/**
+ * Name on a Prepared for card. Prefer the homeowner on the job. The client
+ * record is often the lead label ("Last — street"), which repeats the address
+ * already printed above the card.
+ */
+export function paperPreparedForName(input: {
+  customer?: string | null;
+  primary?: string | null;
+  second?: string | null;
+}) {
+  const primary = input.primary?.trim() ?? "";
+  if (primary) return joinCustomerNames(primary, input.second);
+  return input.customer?.trim() || "—";
+}
+
 /** Lines under the client name on a Prepared for card: phone, then email. */
 export function paperPreparedForLines(input: {
   phone?: string | null;
@@ -187,4 +203,19 @@ export function paperPreparedForCard(input: {
     name: input.name.trim() || "—",
     lines: paperPreparedForLines(input),
   };
+}
+
+/** Project manager card lines: title, then phone, then email, each on its own line. */
+export function paperManagerLines(
+  manager: {
+    title?: string | null;
+    phone?: string | null;
+    email?: string | null;
+  } | null | undefined,
+  companyPhone?: string | null,
+) {
+  const title = manager?.title?.trim() || "Project Manager";
+  const phone = paperPhone(manager?.phone) || paperPhone(companyPhone);
+  const email = manager?.email?.trim() ?? "";
+  return [title, phone, email].filter(Boolean);
 }

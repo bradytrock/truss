@@ -4,6 +4,7 @@ import {
   estimateFollowsCompanyTerms,
   invoiceFollowsCompanyTerms,
   isProductDefaultEstimateTerms,
+  clauseTitleAndBody,
   liveEstimateTerms,
   liveInvoiceTerms,
   mergePaymentTerms,
@@ -178,5 +179,19 @@ const skippedGeneric = applyCompanyTermsToOpenDocuments(
 );
 assert.equal(skippedGeneric.estimateCount, 0);
 assert.equal(skippedGeneric.estimates[0]?.terms, stored);
+
+assert.deepEqual(clauseTitleAndBody("1. Contract price"), {
+  title: "1. Contract price",
+  body: "",
+});
+assert.deepEqual(
+  clauseTitleAndBody(
+    "1. Contract Price. In exchange for T Rock's performance of the Work, Customer promises to pay.",
+  ),
+  {
+    title: "1. Contract Price.",
+    body: "In exchange for T Rock's performance of the Work, Customer promises to pay.",
+  },
+);
 
 console.log("document-terms.test.ts ok");

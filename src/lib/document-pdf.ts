@@ -20,6 +20,7 @@ import {
   signerRoleLabel,
 } from "@/lib/estimate-signature-audit";
 import {
+  clauseTitleAndBody,
   filledEstimateTerms,
   filledInvoiceTerms,
   liveEstimateTerms,
@@ -49,9 +50,11 @@ import {
   paperInvoiceMeta,
   paperIssuedAt,
   paperKindLabel,
+  paperManagerLines,
   paperOptionChoiceCopy,
   paperPreparedForCard,
   paperPreparedForLines,
+  paperPreparedForName,
   paperQtyLabel,
   paperRescissionCopy,
   paperSiteTitle,
@@ -460,10 +463,14 @@ async function writeCoverHeader(
   company: CompanySettings,
   kind: PaperKind,
   number: string,
+  contactPhone?: string | null,
 ) {
   writeRedRule(doc);
   const right = contentRight(doc);
-  const lines = paperCompanyLines(company);
+  const lines = paperCompanyLines({
+    ...company,
+    phone: contactPhone?.trim() || company.phone,
+  });
   const logo = company.logoUrl?.trim() ? await loadLogoForPdf(company.logoUrl) : null;
   let textX = PAPER_INSET;
   let logoBottom = 20;
@@ -733,12 +740,15 @@ function termPieces(doc: Doc, terms: string, colW: number): TermPiece[] {
     : [{ heading: "", body: terms, key: "all", payment: false, marked: false }];
   const pieces: TermPiece[] = [];
   for (const section of source) {
+    let body = section.body;
     if (section.heading.trim()) {
-      for (const headLine of wrapText(doc, section.heading.trim(), colW, 8.5, "bold")) {
+      const split = clauseTitleAndBody(section.heading);
+      for (const headLine of wrapText(doc, split.title, colW, 8.5, "bold")) {
         if (headLine) pieces.push({ kind: "heading", text: headLine });
       }
+      if (split.body) body = body.trim() ? `${split.body}\n${body}` : split.body;
     }
-    for (const line of wrapText(doc, section.body, colW, TERMS_BODY_SIZE)) {
+    for (const line of wrapText(doc, body, colW, TERMS_BODY_SIZE)) {
       pieces.push(line ? { kind: "line", text: line } : { kind: "gap", text: "" });
     }
     pieces.push({ kind: "gap", text: "" });
@@ -918,7 +928,8 @@ async function writePaperAuthorization(
     y = ensure(y, 90);
     y = drawHomeownerLine(doc, line, image, PAPER_INSET, y, right - PAPER_INSET);
   }
-  y = ensure(y, 36);
+  const pmLines = manager?.name.trim() ? paperManagerLines(manager) : [];
+  y = ensure(y, 36 + pmLines.length * 11);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
   ink(doc, PAPER_MUTED);
@@ -933,9 +944,11 @@ async function writePaperAuthorization(
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
   ink(doc, PAPER_MUTED);
-  const pmBits = [manager?.title.trim() || "Project Manager", manager?.phone?.trim() || "", manager?.email.trim() || ""].filter(Boolean);
-  if (pmBits.length) doc.text(pmBits.join(" · "), PAPER_INSET, y);
-  return { y: y + 16, page };
+  for (const line of pmLines) {
+    doc.text(line, PAPER_INSET, y);
+    y += 11;
+  }
+  return { y: y + 8, page };
 }
 
 function managerCard(manager: ProjectManagerContact | null | undefined, companyPhone?: string) {
@@ -950,7 +963,7 @@ function managerCard(manager: ProjectManagerContact | null | undefined, companyP
   return {
     label: "Project manager",
     name,
-    lines: [manager?.title.trim() || "Project Manager", [manager?.phone || companyPhone || "", manager?.email || ""].filter(Boolean).join(" · ")],
+    lines: paperManagerLines(manager, companyPhone),
   };
 }
 
@@ -991,7 +1004,13 @@ export async function buildEstimatePdf(raw: {
   const hidePrices = Boolean(input.estimate.hideLinePrices);
   const cols = tableCols(doc, hidePrices);
 
-  let y = await writeCoverHeader(doc, input.company, "estimate", input.estimate.number);
+  let y = await writeCoverHeader(
+    doc,
+    input.company,
+    "estimate",
+    input.estimate.number,
+    input.projectManager?.phone,
+  );
   y = writeSiteBlock(doc, site, y);
   y = writeMetaRow(
     doc,
@@ -1006,7 +1025,11 @@ export async function buildEstimatePdf(raw: {
   y = writePartyCards(
     doc,
     paperPreparedForCard({
-      name: input.customer,
+      name: paperPreparedForName({
+        customer: input.customer,
+        primary: input.primaryCustomer,
+        second: input.secondCustomer,
+      }),
       phone: input.customerPhone,
       email: input.customerEmail,
       secondPhone: input.secondCustomerPhone,
@@ -1354,7 +1377,13 @@ export async function buildInvoicePdf(input: {
   const balance = invoiceBalance(input.invoice.id, input.lines, input.payments);
   const cols = tableCols(doc, false);
 
-  let y = await writeCoverHeader(doc, input.company, "invoice", input.invoice.number);
+  let y = await writeCoverHeader(
+    doc,
+    input.company,
+    "invoice",
+    input.invoice.number,
+    input.projectManager?.phone,
+  );
   y = writeSiteBlock(doc, site, y);
   y = writeMetaRow(
     doc,

@@ -9,8 +9,10 @@ import {
   paperKindLabel,
   paperMetaBlank,
   paperOptionChoiceCopy,
+  paperManagerLines,
   paperPreparedForCard,
   paperPreparedForLines,
+  paperPreparedForName,
   paperQtyLabel,
   paperRescissionCopy,
   paperSiteTitle,
@@ -64,6 +66,30 @@ assert.equal(preparedFor.label, "Prepared for");
 assert.equal(preparedFor.name, "Shawn Gregory");
 assert.equal(preparedFor.lines[0], "(469) 555-0100");
 assert.equal(preparedFor.lines[1], "shawn@example.com");
+assert.equal(
+  paperPreparedForName({
+    customer: "Rajh — 4608 Darlington Drive, Flower Mound, TX 75022",
+    primary: "Avanna Rajh",
+  }),
+  "Avanna Rajh",
+);
+assert.equal(
+  paperPreparedForName({
+    customer: "Shawn Gregory",
+    primary: "Shawn Gregory",
+    second: "Jordan Gregory",
+  }),
+  "Shawn Gregory and Jordan Gregory",
+);
+assert.equal(paperPreparedForName({ customer: "Shawn Gregory" }), "Shawn Gregory");
+assert.deepEqual(
+  paperManagerLines({
+    title: "Project Manager",
+    phone: "4697947701",
+    email: "bjones@trockcontracting.com",
+  }),
+  ["Project Manager", "(469) 794-7701", "bjones@trockcontracting.com"],
+);
 
 const company = paperCompanyLines({
   name: "T Rock Roofing",
