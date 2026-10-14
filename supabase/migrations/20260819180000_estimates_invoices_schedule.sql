@@ -217,11 +217,13 @@ values (
 )
 on conflict (id) do nothing;
 
+drop policy if exists "public read job photos" on storage.objects;
 create policy "public read job photos"
 on storage.objects for select
 to public
 using (bucket_id = 'job-photos');
 
+drop policy if exists "company photo files" on storage.objects;
 create policy "company photo files"
 on storage.objects for all to authenticated
 using (
