@@ -16,6 +16,7 @@ const nextConfig = {
     "@spectrum-ts/imessage",
     "nice-grpc",
     "@photon-ai/advanced-imessage",
+    "pg",
   ],
   // Cloud Agent / Cursor preview proxies rewrite the browser host away from localhost.
   // Use ** so multi-label hosts like p-3847-pod-....agent.cvm.dev are allowed.

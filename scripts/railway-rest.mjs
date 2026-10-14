@@ -85,6 +85,20 @@ async function ensureBinary(root) {
   return bin;
 }
 
+function portOpen(port) {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host: "127.0.0.1", port: Number(port) });
+    socket.once("connect", () => {
+      socket.end();
+      resolve(true);
+    });
+    socket.once("error", () => {
+      socket.destroy();
+      resolve(false);
+    });
+  });
+}
+
 function waitForPort(port) {
   const started = Date.now();
   return new Promise((resolve, reject) => {
@@ -111,14 +125,17 @@ export async function startRailwayRest(root) {
   loadEnvFile(path.join(root, ".env.local"));
   loadEnvFile(path.join(root, ".env"));
   const databaseUrl = process.env.DATABASE_URL?.trim() || "";
-  if (process.env.NEXT_PUBLIC_USE_RAILWAY_DATABASE !== "1" || !databaseUrl) return null;
-  if (!railwayHost(databaseUrl)) {
-    throw new Error("DATABASE_URL is not a Railway Postgres host.");
+  if (process.env.NEXT_PUBLIC_USE_RAILWAY_DATABASE === "0" || !databaseUrl) return null;
+  if (!railwayHost(databaseUrl)) return null;
+
+  const port = process.env.RAILWAY_REST_PORT?.trim() || "3210";
+  if (await portOpen(port)) {
+    process.env.TRUSS_RAILWAY_DATABASE = "1";
+    return null;
   }
 
   await prepareDatabase(databaseUrl, root);
   const bin = await ensureBinary(root);
-  const port = process.env.RAILWAY_REST_PORT?.trim() || "3210";
   const jwksResponse = await fetch(JWKS_URL);
   if (!jwksResponse.ok) throw new Error("Could not load the login signing keys.");
   const jwks = await jwksResponse.text();
@@ -148,6 +165,7 @@ export async function startRailwayRest(root) {
     console.error(`[railway] database API exited ${code ?? 0}`);
   });
   await waitForPort(port);
+  process.env.TRUSS_RAILWAY_DATABASE = "1";
   console.log(`[railway] Database API on 127.0.0.1:${port}`);
   return child;
 }

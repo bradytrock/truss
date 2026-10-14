@@ -37,6 +37,7 @@ import {
 } from "@/lib/lead-alerts-api";
 import { NOTIFICATIONS_REFRESH } from "@/lib/notification-inbox";
 import { isUnsignedDemo } from "@/lib/seats";
+import { browserUsesRailwayDatabase } from "@/lib/railway-rest";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -275,7 +276,9 @@ function LeadAlertSession() {
           dropped = false;
           delay = 1500;
           if (reconnect) void catchUp();
-          else rememberCatchUpCursor(window.sessionStorage, user.id, new Date().toISOString());
+          else if (!browserUsesRailwayDatabase()) {
+            rememberCatchUpCursor(window.sessionStorage, user.id, new Date().toISOString());
+          }
           return;
         }
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
@@ -289,6 +292,13 @@ function LeadAlertSession() {
     };
 
     connect();
+    if (browserUsesRailwayDatabase() && !readCatchUpCursor(window.sessionStorage, user.id)) {
+      rememberCatchUpCursor(window.sessionStorage, user.id, new Date(Date.now() - 120000).toISOString());
+      void catchUp();
+    }
+    const railwayPoll = window.setInterval(() => {
+      if (browserUsesRailwayDatabase()) void catchUp();
+    }, 15000);
     const onOnline = () => {
       dropped = true;
       connect();
@@ -297,6 +307,7 @@ function LeadAlertSession() {
     return () => {
       stopped = true;
       generation += 1;
+      window.clearInterval(railwayPoll);
       window.clearTimeout(retry);
       window.removeEventListener("online", onOnline);
       if (channel) void supabase.removeChannel(channel);
