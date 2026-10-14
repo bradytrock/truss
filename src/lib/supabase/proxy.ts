@@ -4,7 +4,7 @@ import { isLegalPath } from "@/lib/legal";
 import { DEMO_SCHEDULE_URL, shouldForceDemo, subscriptionActiveFromRpc } from "@/lib/subscription";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
-import { railwayClientOptions } from "@/lib/railway-rest";
+import { railwayClientOptions, railwayDatabaseEnabled } from "@/lib/railway-rest";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   getSupabaseKey,
@@ -186,6 +186,10 @@ export async function updateSession(
     );
     rememberGate(supabaseResponse, subscriptionActive);
     return await finishSession(request, path, true, subscriptionActive, supabaseResponse);
+  }
+
+  if (railwayDatabaseEnabled()) {
+    return await finishSession(request, path, false, false, NextResponse.next({ request }));
   }
 
   const nowSec = Math.floor(Date.now() / 1000);

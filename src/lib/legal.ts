@@ -64,7 +64,7 @@ export const PRIVACY_SECTIONS: LegalSection[] = [
       "We do not sell your job book. We share information with the services that actually move the work, and only as needed:",
     ],
     bullets: [
-      "Supabase — sign-in, database, and realtime updates.",
+      "Clerk — sign-in. Railway — the job book database.",
       "Backblaze B2 — file and photo storage.",
       "Stripe — card checkout and deposits.",
       "Photon — outbound texts for each office's project.",

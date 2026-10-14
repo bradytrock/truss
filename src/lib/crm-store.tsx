@@ -162,6 +162,7 @@ import {
   waitForClerkBrowser,
 } from "@/lib/clerk-browser";
 import { CLERK_UNLINKED_PROFILE } from "@/lib/clerk-profile";
+import { railwayDatabaseEnabled } from "@/lib/railway-rest";
 import { createClient } from "@/lib/supabase/client";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { findStaffForProfile, isUnsignedDemo, namesMatch, staffMemberFromProfile } from "@/lib/seats";
@@ -2005,6 +2006,30 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => drain(0), 350);
     };
+
+    if (railwayDatabaseEnabled()) {
+      setLiveStatus("live");
+      const poll = window.setInterval(() => {
+        if (document.visibilityState === "visible") void liveRefresh();
+      }, 15000);
+      const onVisible = () => {
+        if (document.visibilityState === "visible") void liveRefresh();
+      };
+      const onOnline = () => {
+        void liveRefresh();
+      };
+      document.addEventListener("visibilitychange", onVisible);
+      window.addEventListener("focus", onVisible);
+      window.addEventListener("online", onOnline);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timer);
+        window.clearInterval(poll);
+        document.removeEventListener("visibilitychange", onVisible);
+        window.removeEventListener("focus", onVisible);
+        window.removeEventListener("online", onOnline);
+      };
+    }
 
     const channel = supabase
       .channel(`truss-live-${user.companyId}`)

@@ -1,5 +1,6 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { clerkConfigured } from "@/lib/clerk-env";
+import { railwayDatabaseEnabled } from "@/lib/railway-rest";
 import {
   claimString,
   CLERK_PROFILE_CLAIM,
@@ -69,8 +70,17 @@ async function clerkSessionUser(supabase: SessionClient): Promise<SessionUser | 
   };
 }
 
-/** Clerk session when it is linked to a profile, otherwise the Supabase auth user. */
+/** Clerk session when it is linked to a profile. Supabase Auth is only used when Railway is off. */
 export async function readSessionUser(supabase: SessionClient): Promise<SessionUser | null> {
+  if (railwayDatabaseEnabled()) {
+    if (!clerkConfigured()) return null;
+    try {
+      return await clerkSessionUser(supabase);
+    } catch {
+      return null;
+    }
+  }
+
   if (clerkConfigured()) {
     try {
       const clerkUser = await clerkSessionUser(supabase);

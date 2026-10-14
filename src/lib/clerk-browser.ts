@@ -1,4 +1,5 @@
 import { claimString, CLERK_PROFILE_CLAIM, decodeJwtPayload, profileIdFromJwt } from "@/lib/clerk-profile";
+import { railwayDatabaseEnabled } from "@/lib/railway-rest";
 
 type TokenGetter = () => Promise<string | null>;
 
@@ -107,6 +108,8 @@ export async function readBrowserSessionUser(supabase: SessionClient): Promise<B
       },
     };
   }
+
+  if (railwayDatabaseEnabled()) return null;
 
   try {
     const { data } = await supabase.auth.getUser();

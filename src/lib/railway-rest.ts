@@ -1,6 +1,7 @@
-/** When set, table and RPC calls use the Railway Postgres API. Login stays on Supabase. */
-export function useRailwayDatabase() {
-  return process.env.NEXT_PUBLIC_USE_RAILWAY_DATABASE === "1";
+/** Table and RPC calls use Railway Postgres. Set to 0 to send them to Supabase instead. */
+export function railwayDatabaseEnabled() {
+  const flag = process.env.NEXT_PUBLIC_USE_RAILWAY_DATABASE?.trim() ?? "";
+  return flag !== "0" && flag !== "false";
 }
 
 export function railwayRestPort() {
@@ -23,13 +24,35 @@ function withoutPublishableBearer(headers: Headers) {
   return headers;
 }
 
-/** Sends PostgREST calls to Railway. Auth, realtime, and storage keep their original URL. */
+function isSupabaseHost(url: string) {
+  return /supabase\.co\b/i.test(url);
+}
+
+/** Where a Supabase client request should go while Railway is the database. */
+export function railwayFetchPlan(url: string): "database" | "blocked" | "passthrough" {
+  if (!railwayDatabaseEnabled()) return "passthrough";
+  if (restSuffix(url)) return "database";
+  if (isSupabaseHost(url)) return "blocked";
+  return "passthrough";
+}
+
+function blockedSupabaseResponse() {
+  return new Response(
+    JSON.stringify({ message: "Truss reads and writes Railway. This request was not sent to Supabase." }),
+    { status: 410, headers: { "content-type": "application/json" } },
+  );
+}
+
+/** Sends PostgREST calls to Railway. Auth, realtime, and storage are not forwarded to Supabase. */
 export const railwayRestFetch: typeof fetch = (input, init) => {
-  if (!useRailwayDatabase()) return fetch(input, init);
+  if (!railwayDatabaseEnabled()) return fetch(input, init);
   const raw =
     typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   const suffix = restSuffix(raw);
-  if (!suffix) return fetch(input, init);
+  if (!suffix) {
+    if (isSupabaseHost(raw)) return Promise.resolve(blockedSupabaseResponse());
+    return fetch(input, init);
+  }
 
   const headers = new Headers(init?.headers);
   if (!init?.headers && input instanceof Request) {
@@ -45,6 +68,6 @@ export const railwayRestFetch: typeof fetch = (input, init) => {
 };
 
 export function railwayClientOptions(): { global?: { fetch: typeof fetch } } {
-  if (!useRailwayDatabase()) return {};
+  if (!railwayDatabaseEnabled()) return {};
   return { global: { fetch: railwayRestFetch } };
 }

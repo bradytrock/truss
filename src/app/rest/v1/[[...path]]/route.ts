@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { railwayRestPort, useRailwayDatabase } from "@/lib/railway-rest";
+import { railwayDatabaseEnabled, railwayRestPort } from "@/lib/railway-rest";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ function isJwt(value: string) {
 }
 
 async function proxy(request: Request, context: { params: Promise<{ path?: string[] }> }) {
-  if (!useRailwayDatabase()) return new NextResponse(null, { status: 404 });
+  if (!railwayDatabaseEnabled()) return new NextResponse(null, { status: 404 });
   const { path = [] } = await context.params;
   const url = new URL(request.url);
   const target = `http://127.0.0.1:${railwayRestPort()}/${path.filter(Boolean).join("/")}${url.search}`;

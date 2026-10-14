@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { railwayDatabaseEnabled } from "@/lib/railway-rest";
 import { SB_KEY_COOKIE, SB_URL_COOKIE, normalizeSupabaseUrl } from "@/lib/supabase/env";
 import { writeFile } from "fs/promises";
 import path from "path";
@@ -10,6 +11,12 @@ const cookieOptions = {
 };
 
 export async function POST(request: Request) {
+  if (railwayDatabaseEnabled()) {
+    return NextResponse.json(
+      { error: "The job book is on Railway. A Supabase project is not used." },
+      { status: 410 },
+    );
+  }
   const body = (await request.json()) as { url?: string; key?: string };
   const url = normalizeSupabaseUrl(body.url ?? "");
   const key = body.key?.trim() ?? "";

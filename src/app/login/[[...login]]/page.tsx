@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { clerkConfigured } from "@/lib/clerk-env";
+import { railwayDatabaseEnabled } from "@/lib/railway-rest";
 
 function safeNext(value: string | undefined) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) return "/";
@@ -12,6 +13,15 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string; error?: string }>;
 }) {
   if (!clerkConfigured()) {
+    if (railwayDatabaseEnabled()) {
+      return (
+        <div className="flex min-h-full flex-1 items-center justify-center bg-[#1a1a1a] px-6 text-center text-white">
+          <p className="max-w-sm text-sm text-white/80">
+            Sign-in uses Clerk. Add the Clerk keys on the host. Logins are not sent to Supabase.
+          </p>
+        </div>
+      );
+    }
     const { LoginForm } = await import("../login-form");
     return <LoginForm />;
   }

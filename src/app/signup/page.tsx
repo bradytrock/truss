@@ -16,6 +16,7 @@ import {
   normalizeSeatEmail,
 } from "@/lib/accounts";
 import { authErrorMessage } from "@/lib/auth-errors";
+import { railwayDatabaseEnabled } from "@/lib/railway-rest";
 import { createClient } from "@/lib/supabase/client";
 import type { SeatRole } from "@/lib/types";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
@@ -147,6 +148,12 @@ function SignupForm() {
     setFormError(null);
     if (invite && normalizeSeatEmail(email) !== normalizeSeatEmail(invite.email)) {
       const message = "Sign up with the email this invite was sent to.";
+      setFormError(message);
+      toast.error(message);
+      return;
+    }
+    if (railwayDatabaseEnabled()) {
+      const message = "New companies sign in with Clerk. Accounts are not created in Supabase.";
       setFormError(message);
       toast.error(message);
       return;

@@ -37,6 +37,7 @@ import {
 } from "@/lib/lead-alerts-api";
 import { NOTIFICATIONS_REFRESH } from "@/lib/notification-inbox";
 import { isUnsignedDemo } from "@/lib/seats";
+import { railwayDatabaseEnabled } from "@/lib/railway-rest";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -197,6 +198,17 @@ function LeadAlertSession() {
       }
       rememberCatchUpCursor(window.sessionStorage, user.id, nowIso);
     };
+
+    if (railwayDatabaseEnabled()) {
+      void catchUp();
+      const poll = window.setInterval(() => {
+        if (document.visibilityState === "visible") void catchUp();
+      }, 15000);
+      return () => {
+        stopped = true;
+        window.clearInterval(poll);
+      };
+    }
 
     const connect = () => {
       if (stopped) return;

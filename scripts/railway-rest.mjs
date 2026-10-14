@@ -10,9 +10,36 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 
 const VERSION = "16.4";
-const JWKS_URL =
-  process.env.SUPABASE_JWKS_URL ||
-  "https://cxrgdjvkmvnuztubxldh.supabase.co/auth/v1/.well-known/jwks.json";
+
+function railwayDatabaseEnabled() {
+  const flag = (process.env.NEXT_PUBLIC_USE_RAILWAY_DATABASE ?? "").trim();
+  return flag !== "0" && flag !== "false";
+}
+
+function clerkFrontendApi(publishableKey) {
+  const token = publishableKey?.trim() ?? "";
+  const encoded = token.replace(/^pk_(test|live)_/, "");
+  if (!encoded || encoded === token) return "";
+  try {
+    const decoded = Buffer.from(encoded, "base64url").toString("utf8").replace(/\$$/, "").trim();
+    if (!decoded || /[^a-z0-9.-]/i.test(decoded)) return "";
+    return decoded;
+  } catch {
+    return "";
+  }
+}
+
+function clerkJwksUrl() {
+  const explicit = process.env.CLERK_JWKS_URL?.trim() ?? "";
+  if (explicit) return explicit;
+  const host = clerkFrontendApi(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+  if (!host) {
+    throw new Error(
+      "Set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY so Railway can check Clerk sign-in tokens. Supabase signing keys are not used.",
+    );
+  }
+  return `https://${host}/.well-known/jwks.json`;
+}
 
 function loadEnvFile(file) {
   if (!existsSync(file)) return;
@@ -111,7 +138,11 @@ export async function startRailwayRest(root) {
   loadEnvFile(path.join(root, ".env.local"));
   loadEnvFile(path.join(root, ".env"));
   const databaseUrl = process.env.DATABASE_URL?.trim() || "";
-  if (process.env.NEXT_PUBLIC_USE_RAILWAY_DATABASE !== "1" || !databaseUrl) return null;
+  if (!railwayDatabaseEnabled()) return null;
+  if (!databaseUrl) {
+    console.error("[railway] DATABASE_URL is not set. Database calls are not sent to Supabase.");
+    return null;
+  }
   if (!railwayHost(databaseUrl)) {
     throw new Error("DATABASE_URL is not a Railway Postgres host.");
   }
@@ -119,8 +150,8 @@ export async function startRailwayRest(root) {
   await prepareDatabase(databaseUrl, root);
   const bin = await ensureBinary(root);
   const port = process.env.RAILWAY_REST_PORT?.trim() || "3210";
-  const jwksResponse = await fetch(JWKS_URL);
-  if (!jwksResponse.ok) throw new Error("Could not load the login signing keys.");
+  const jwksResponse = await fetch(clerkJwksUrl());
+  if (!jwksResponse.ok) throw new Error("Could not load the Clerk signing keys.");
   const jwks = await jwksResponse.text();
   const dir = await mkdtemp(path.join(tmpdir(), "truss-railway-"));
   const jwksPath = path.join(dir, "jwks.json");
