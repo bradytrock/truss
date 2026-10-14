@@ -85,6 +85,7 @@ import {
   clampMarginPercent,
   fillCatalogItem,
 } from "@/lib/catalog-margin";
+import { invoiceLineDescription } from "@/lib/line-format";
 import { nextLineSortOrders, selectedCatalogItems } from "@/lib/catalog-pick";
 import {
   catalogForList,
@@ -176,6 +177,7 @@ import {
   estimateTemplatePatch,
   estimateTemplateLinePatch,
   mapInvoice,
+  mapInvoiceLine,
   mapJob,
   mapJobPhoto,
   mapJobFile,
@@ -1365,6 +1367,21 @@ type CrmContextValue = CrmState & {
   updatePayment: (id: string, patch: Partial<Payment>) => Promise<boolean>;
   settlePendingPayment: (id: string, next: "posted" | "rejected") => Promise<boolean>;
   updateInvoiceLine: (id: string, patch: Partial<InvoiceLine>) => Promise<boolean>;
+  addInvoiceLineFromCatalog: (
+    invoiceId: string,
+    catalogItemId: string,
+    fields?: { sortOrder?: number },
+  ) => Promise<InvoiceLine | undefined>;
+  addInvoiceLinesFromCatalog: (invoiceId: string, catalogItemIds: string[]) => Promise<InvoiceLine[]>;
+  addCustomInvoiceLine: (
+    invoiceId: string,
+    fields?: Partial<Pick<InvoiceLine, "quantity" | "unit" | "unitCost">> & {
+      title?: string;
+      description?: string;
+    },
+  ) => Promise<InvoiceLine | undefined>;
+  removeInvoiceLine: (id: string) => Promise<void>;
+  reorderInvoiceLine: (id: string, direction: "up" | "down") => Promise<void>;
   setQbStatus: (
     kind: "invoice" | "payment" | "expense",
     id: string,
@@ -9731,6 +9748,186 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     return true;
   }, []);
 
+  const addInvoiceLineFromCatalog = useCallback(
+    async (invoiceId: string, catalogItemId: string, fields?: { sortOrder?: number }) => {
+      const item = state.catalog.find((entry) => entry.id === catalogItemId);
+      if (!item) return;
+      const sortOrder =
+        fields?.sortOrder ??
+        Math.max(
+          0,
+          ...state.invoiceLines
+            .filter((line) => line.invoiceId === invoiceId)
+            .map((line) => line.sortOrder),
+        ) + 1;
+      const line: InvoiceLine = {
+        id: crypto.randomUUID(),
+        invoiceId,
+        description: invoiceLineDescription({
+          title: item.name,
+          description: catalogItemDescription(item),
+        }),
+        quantity: 1,
+        unit: item.unit || "LS",
+        unitCost: catalogProposalUnitPrice(item, companySettings),
+        sortOrder,
+      };
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({ ...prev, invoiceLines: [...prev.invoiceLines, line] }));
+        return line;
+      }
+      const { data, error } = await supabase
+        .from("invoice_lines")
+        .insert({
+          id: line.id,
+          company_id: user.companyId,
+          invoice_id: invoiceId,
+          description: line.description,
+          quantity: line.quantity,
+          unit: line.unit,
+          unit_cost: line.unitCost,
+          sort_order: sortOrder,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        toast.error(error?.message ?? "Could not add the line.");
+        return;
+      }
+      const saved = mapInvoiceLine(data);
+      setState((prev) => ({
+        ...prev,
+        invoiceLines: [...prev.invoiceLines.filter((row) => row.id !== saved.id), saved],
+      }));
+      return saved;
+    },
+    [companySettings, state.catalog, state.invoiceLines, user.companyId],
+  );
+
+  const addInvoiceLinesFromCatalog = useCallback(
+    async (invoiceId: string, catalogItemIds: string[]) => {
+      const items = selectedCatalogItems(state.catalog, catalogItemIds);
+      if (items.length === 0) return [];
+      const currentMax = Math.max(
+        0,
+        ...state.invoiceLines
+          .filter((line) => line.invoiceId === invoiceId)
+          .map((line) => line.sortOrder),
+      );
+      const orders = nextLineSortOrders(currentMax, items.length);
+      const added: InvoiceLine[] = [];
+      for (const [index, item] of items.entries()) {
+        const line = await addInvoiceLineFromCatalog(invoiceId, item.id, { sortOrder: orders[index] });
+        if (line) added.push(line);
+      }
+      return added;
+    },
+    [addInvoiceLineFromCatalog, state.catalog, state.invoiceLines],
+  );
+
+  const addCustomInvoiceLine = useCallback(
+    async (
+      invoiceId: string,
+      fields?: Partial<Pick<InvoiceLine, "quantity" | "unit" | "unitCost">> & {
+        title?: string;
+        description?: string;
+      },
+    ) => {
+      const sortOrder =
+        Math.max(
+          0,
+          ...state.invoiceLines
+            .filter((line) => line.invoiceId === invoiceId)
+            .map((line) => line.sortOrder),
+        ) + 1;
+      const line: InvoiceLine = {
+        id: crypto.randomUUID(),
+        invoiceId,
+        description: invoiceLineDescription({
+          title: fields?.title?.trim() || "New item",
+          description: fields?.description ?? "",
+        }),
+        quantity: fields?.quantity ?? 1,
+        unit: fields?.unit || "LS",
+        unitCost: fields?.unitCost ?? 0,
+        sortOrder,
+      };
+      const supabase = maybeClient();
+      if (!supabase) {
+        setState((prev) => ({ ...prev, invoiceLines: [...prev.invoiceLines, line] }));
+        return line;
+      }
+      const { data, error } = await supabase
+        .from("invoice_lines")
+        .insert({
+          id: line.id,
+          company_id: user.companyId,
+          invoice_id: invoiceId,
+          description: line.description,
+          quantity: line.quantity,
+          unit: line.unit,
+          unit_cost: line.unitCost,
+          sort_order: sortOrder,
+        })
+        .select("*")
+        .single();
+      if (error || !data) {
+        toast.error(error?.message ?? "Could not add the line.");
+        return;
+      }
+      const saved = mapInvoiceLine(data);
+      setState((prev) => ({
+        ...prev,
+        invoiceLines: [...prev.invoiceLines.filter((row) => row.id !== saved.id), saved],
+      }));
+      return saved;
+    },
+    [state.invoiceLines, user.companyId],
+  );
+
+  const removeInvoiceLine = useCallback(async (id: string) => {
+    const apply = () =>
+      setState((prev) => ({
+        ...prev,
+        invoiceLines: prev.invoiceLines.filter((line) => line.id !== id),
+      }));
+    const supabase = maybeClient();
+    if (!supabase) {
+      apply();
+      return;
+    }
+    const { error } = await supabase.from("invoice_lines").delete().eq("id", id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    apply();
+  }, []);
+
+  const reorderInvoiceLine = useCallback(
+    async (id: string, direction: "up" | "down") => {
+      const current = state.invoiceLines.find((line) => line.id === id);
+      if (!current) return;
+      const siblings = state.invoiceLines
+        .filter((line) => line.invoiceId === current.invoiceId)
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+      const index = siblings.findIndex((line) => line.id === id);
+      const swap = direction === "up" ? siblings[index - 1] : siblings[index + 1];
+      if (!swap) return;
+      const currentOrder = current.sortOrder === swap.sortOrder ? index : current.sortOrder;
+      const swapOrder =
+        current.sortOrder === swap.sortOrder
+          ? direction === "up"
+            ? index - 1
+            : index + 1
+          : swap.sortOrder;
+      await updateInvoiceLine(current.id, { sortOrder: swapOrder });
+      await updateInvoiceLine(swap.id, { sortOrder: currentOrder });
+    },
+    [state.invoiceLines, updateInvoiceLine],
+  );
+
   const addQbReviewComment = useCallback(
     async (input: {
       kind: QbReviewKind;
@@ -14245,6 +14442,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updatePayment,
       settlePendingPayment,
       updateInvoiceLine,
+      addInvoiceLineFromCatalog,
+      addInvoiceLinesFromCatalog,
+      addCustomInvoiceLine,
+      removeInvoiceLine,
+      reorderInvoiceLine,
       setQbStatus,
       addQbReviewComment,
       ensureVendorProfile,
@@ -14448,6 +14650,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updatePayment,
       settlePendingPayment,
       updateInvoiceLine,
+      addInvoiceLineFromCatalog,
+      addInvoiceLinesFromCatalog,
+      addCustomInvoiceLine,
+      removeInvoiceLine,
+      reorderInvoiceLine,
       setQbStatus,
       addQbReviewComment,
       ensureVendorProfile,
