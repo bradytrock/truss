@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BackToJobButton } from "@/components/back-to-job";
 import { RecordPaymentDialog } from "@/components/create-ops-dialogs";
-import { CommitTextarea } from "@/components/estimate-writer";
+import { CommitInput, CommitTextarea } from "@/components/estimate-writer";
+import { InvoiceLinesEditor } from "@/components/invoice-lines-editor";
 import { RecordProperty } from "@/components/app-shell";
 import { InvoiceDocument } from "@/components/invoice-document";
 import { InvoiceFilesPanel } from "@/components/invoice-files";
@@ -18,6 +19,8 @@ import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { ShareLinkDialog } from "@/components/share-link-dialog";
 import { shareContactsForInvoice } from "@/lib/parties";
 import { InvoiceStatusBadge } from "@/components/status-badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { invoiceEditLock } from "@/lib/invoice-lines";
 import { PaperArchiveButton, PaperArchivedBanner } from "@/components/paper-archive-button";
 import { downloadInvoicePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
@@ -42,6 +45,7 @@ export default function InvoiceDetailPage() {
   const [payOpen, setPayOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [pending, setPending] = useState(false);
+  const [tab, setTab] = useState("write");
 
   if (!crm.hydrated) return <LoadingScreen />;
   if (!invoice) {
@@ -69,6 +73,7 @@ export default function InvoiceDetailPage() {
   const total = invoiceTotal(record.id, crm.invoiceLines);
   const paid = paidOnInvoice(record.id, crm.payments);
   const balance = invoiceBalance(record.id, crm.invoiceLines, crm.payments);
+  const editLock = invoiceEditLock({ status: record.status, qbStatus: record.qbStatus, paid });
   const customer = crm.customerName(record);
   const opportunityId = job?.opportunityId || estimate?.opportunityId;
   const opportunity = opportunityId ? crm.getOpportunity(opportunityId) : undefined;
@@ -137,6 +142,7 @@ export default function InvoiceDetailPage() {
     try {
       if (markSent) await crm.sendInvoice(record.id);
       else await crm.ensureInvoiceShareToken(record.id);
+      if (markSent) setTab("preview");
       setShareOpen(true);
     } finally {
       setPending(false);
@@ -152,21 +158,48 @@ export default function InvoiceDetailPage() {
           <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
             {record.number}
           </p>
-          <h1 className="font-heading text-[1.85rem] leading-[1.1] font-medium text-balance">
-            {record.name}
-          </h1>
+          {editLock.editable ? (
+            <CommitInput
+              className="font-heading h-auto border-0 bg-transparent px-0 text-[1.85rem] leading-[1.1] font-medium shadow-none focus-visible:ring-0"
+              value={record.name}
+              aria-label="Invoice name"
+              onCommit={(value) => {
+                if (value.trim()) void crm.updateInvoice(record.id, { name: value.trim() });
+              }}
+            />
+          ) : (
+            <h1 className="font-heading text-[1.85rem] leading-[1.1] font-medium text-balance">
+              {record.name}
+            </h1>
+          )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <InvoiceStatusBadge status={status} />
             <span className="text-sm text-muted-foreground">{customer}</span>
           </div>
+          {editLock.reason ? (
+            <p className="mt-2 max-w-xl text-sm text-muted-foreground">{editLock.reason}</p>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
+          {editLock.canReturnToDraft ? (
+            <Button
+              variant="outline"
+              disabled={pending}
+              onClick={() => {
+                void crm.updateInvoice(record.id, { status: "draft" });
+                setTab("write");
+                toast.message(`${record.number} is a draft again. Change the lines, then send it.`);
+              }}
+            >
+              Edit lines
+            </Button>
+          ) : null}
           <Button variant="outline" disabled={pending || lines.length === 0} onClick={() => void downloadPdf()}>
             <Download />
             PDF
           </Button>
           {record.status === "draft" ? (
-            <Button disabled={pending} onClick={() => void openShare(true)}>
+            <Button disabled={pending || lines.length === 0} onClick={() => void openShare(true)}>
               Send
             </Button>
           ) : (
@@ -224,25 +257,58 @@ export default function InvoiceDetailPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="space-y-4">
-          <InvoiceDocument
-            invoice={record}
-            lines={lines}
-            payments={payments}
-            customer={customer}
-            company={crm.company}
-            status={status}
-            onTermsChange={
-              status === "void" ? undefined : (terms) => void crm.updateInvoice(record.id, { terms })
-            }
-          />
-          <InvoicePayPanel
-            invoice={record}
-            lines={lines}
-            payments={payments}
-            company={crm.company}
-            token={record.shareToken}
-            payable={status !== "void" && status !== "draft"}
-          />
+          {editLock.editable ? (
+            <Tabs value={tab} onValueChange={setTab}>
+              <TabsList>
+                <TabsTrigger value="write">Write</TabsTrigger>
+                <TabsTrigger value="preview">Preview</TabsTrigger>
+              </TabsList>
+              <TabsContent value="write" className="mt-4">
+                <InvoiceLinesEditor invoiceId={record.id} />
+              </TabsContent>
+              <TabsContent value="preview" className="mt-4 space-y-4">
+                <InvoiceDocument
+                  invoice={record}
+                  lines={lines}
+                  payments={payments}
+                  customer={customer}
+                  company={crm.company}
+                  status={status}
+                  onTermsChange={(terms) => void crm.updateInvoice(record.id, { terms })}
+                />
+                <InvoicePayPanel
+                  invoice={record}
+                  lines={lines}
+                  payments={payments}
+                  company={crm.company}
+                  token={record.shareToken}
+                  payable={false}
+                />
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <>
+              <InvoiceDocument
+                invoice={record}
+                lines={lines}
+                payments={payments}
+                customer={customer}
+                company={crm.company}
+                status={status}
+                onTermsChange={
+                  status === "void" ? undefined : (terms) => void crm.updateInvoice(record.id, { terms })
+                }
+              />
+              <InvoicePayPanel
+                invoice={record}
+                lines={lines}
+                payments={payments}
+                company={crm.company}
+                token={record.shareToken}
+                payable={status !== "void" && status !== "draft"}
+              />
+            </>
+          )}
 
           <Card>
             <CardHeader className="border-b">
@@ -306,8 +372,32 @@ export default function InvoiceDetailPage() {
               <CardTitle>Billing</CardTitle>
             </CardHeader>
             <CardContent>
-              <RecordProperty label="Issued">{formatDate(record.issuedAt)}</RecordProperty>
-              <RecordProperty label="Due">{formatDate(record.dueAt)}</RecordProperty>
+              <RecordProperty label="Issued">
+                {editLock.editable ? (
+                  <CommitInput
+                    type="date"
+                    aria-label="Issued date"
+                    value={record.issuedAt.slice(0, 10)}
+                    onCommit={(value) => {
+                      if (value) void crm.updateInvoice(record.id, { issuedAt: value });
+                    }}
+                  />
+                ) : (
+                  formatDate(record.issuedAt)
+                )}
+              </RecordProperty>
+              <RecordProperty label="Due">
+                {editLock.editable ? (
+                  <CommitInput
+                    type="date"
+                    aria-label="Due date"
+                    value={record.dueAt?.slice(0, 10) ?? ""}
+                    onCommit={(value) => void crm.updateInvoice(record.id, { dueAt: value || null })}
+                  />
+                ) : (
+                  formatDate(record.dueAt)
+                )}
+              </RecordProperty>
               <RecordProperty label="Job">
                 {job ? (
                   <Link href={jobPaperHref(job.id)} className="hover:underline">
