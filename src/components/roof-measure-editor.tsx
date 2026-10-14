@@ -28,6 +28,8 @@ import { useCrm } from "@/lib/crm-store";
 import { isDeletedJob, jobAddress, jobRecordHref } from "@/lib/job-record";
 import { isValidLatLng } from "@/lib/project-map-logic";
 import { uploadViaApi } from "@/lib/storage/client-upload";
+import { formatCompanyAddress, formatDate } from "@/lib/format";
+import { loadLogoForPdf } from "@/lib/letterhead-pdf";
 import { downloadRoofMeasurePdf } from "@/lib/roof-measure-pdf";
 import {
   loadRemoteRoofReport,
@@ -460,6 +462,7 @@ export function RoofMeasureEditor({ jobId }: { jobId: string }) {
   }
 
   async function download() {
+    if (!job) return;
     let imageDataUrl: string | null = null;
     if (imageSrc) {
       try {
@@ -468,14 +471,33 @@ export function RoofMeasureEditor({ jobId }: { jobId: string }) {
         imageDataUrl = null;
       }
     }
+    const claim = (crm.jobInsurance ?? []).find((item) => item.jobId === jobId);
+    const rep =
+      crm.staff.find((member) => member.id === job.ownerStaffId) ??
+      crm.staff.find((member) => member.name === job.salesRep);
+    const logo = await loadLogoForPdf(crm.company.logoUrl || crm.company.cardLogoUrl || "");
+    const loss = claim?.dateOfLoss ? formatDate(claim.dateOfLoss) : "";
     await downloadRoofMeasurePdf({
-      jobLabel: job?.code || job?.name || "Roof",
-      address,
       companyName: crm.company.name,
+      companyPhone: crm.company.phone,
+      companyWebsite: crm.company.website,
+      companyAddress: formatCompanyAddress(crm.company),
+      jobCode: job.code || job.name || "Roof",
+      street: job.street,
+      cityLine: [job.city, job.state, job.postalCode].filter(Boolean).join(" "),
+      fullAddress: address,
+      repName: job.salesRep || rep?.name || crm.user.name,
+      repPhone: rep?.phone || crm.company.phone,
+      carrier: claim?.carrier ?? "",
+      claimNumber: claim?.claimNumber ?? "",
+      dateOfLoss: loss === "—" ? "" : loss,
+      lat: typeof job.lat === "number" ? job.lat : null,
+      lng: typeof job.lng === "number" ? job.lng : null,
       drawing: drawingRef.current,
       imageWidth: imageSize.w,
       imageHeight: imageSize.h,
       imageDataUrl,
+      logo: logo ? { dataUrl: logo.data, width: logo.width, height: logo.height } : null,
     });
   }
 

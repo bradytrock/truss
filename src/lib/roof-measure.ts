@@ -354,6 +354,10 @@ export function hitTest(drawing: RoofDrawing, x: number, y: number, tolerance: n
   return bestFacet ? { kind: "facet", id: bestFacet.id } : null;
 }
 
+export function edgeLengthFeet(drawing: RoofDrawing, edge: RoofEdge) {
+  return planLengthFeet(drawing, edge);
+}
+
 function planLengthFeet(drawing: RoofDrawing, edge: RoofEdge) {
   const scale = drawing.feetPerPixel;
   if (scale == null || scale <= 0) return 0;
