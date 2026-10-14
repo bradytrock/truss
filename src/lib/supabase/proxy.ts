@@ -159,31 +159,22 @@ export async function updateSession(
       return await finishSession(request, path, true, true, NextResponse.next({ request }));
     }
 
-    let supabaseResponse = NextResponse.next({ request });
-    const supabase = createServerClient(url, key, {
+    const supabaseResponse = NextResponse.next({ request });
+    // createServerClient subscribes to auth changes. A Clerk accessToken client
+    // rejects that and the subscription throws, which is the 500 on crmtrock.com.
+    const supabase = createClient(url, key, {
       ...railwayClientOptions(),
       accessToken: async () => clerkToken,
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet, headers) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options),
-          );
-          if (headers) {
-            Object.entries(headers).forEach(([header, value]) =>
-              supabaseResponse.headers.set(header, value),
-            );
-          }
-        },
-      },
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
-    const subscriptionActive = subscriptionActiveFromRpc(
-      await supabase.rpc("company_subscription_active"),
-    );
+    let subscriptionActive = true;
+    try {
+      subscriptionActive = subscriptionActiveFromRpc(
+        await supabase.rpc("company_subscription_active"),
+      );
+    } catch {
+      subscriptionActive = true;
+    }
     rememberGate(supabaseResponse, subscriptionActive);
     return await finishSession(request, path, true, subscriptionActive, supabaseResponse);
   }

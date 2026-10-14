@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { createServerClient } from "@supabase/ssr";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { clerkConfigured } from "@/lib/clerk-env";
 import { railwayClientOptions } from "@/lib/railway-rest";
@@ -27,10 +28,16 @@ export async function createClient() {
   const url = getSupabaseUrl() || cookieStore.get(SB_URL_COOKIE)?.value || "";
   const key = getSupabaseKey() || cookieStore.get(SB_KEY_COOKIE)?.value || "";
   const accessToken = await clerkAccessToken();
+  if (accessToken) {
+    return createSupabaseClient<Database>(url, key, {
+      ...railwayClientOptions(),
+      accessToken: async () => accessToken,
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+  }
 
   return createServerClient<Database>(url, key, {
     ...railwayClientOptions(),
-    ...(accessToken ? { accessToken: async () => accessToken } : {}),
     cookies: {
       getAll() {
         return cookieStore.getAll();
