@@ -99,3 +99,25 @@ export function readAuthCookieSession(
     expiresAt,
   };
 }
+
+/** Session cookie or one of its chunks. Ignores the PKCE code-verifier cookie. */
+export function hasSupabaseAuthCookie(cookies: CookieLike[]) {
+  return cookies.some((cookie) => /^sb-.+-auth-token(?:\.\d+)?$/.test(cookie.name));
+}
+
+export type SessionGate = "anonymous" | "allow" | "verify";
+
+/**
+ * A fresh access token plus a recent subscription check can skip Auth.
+ * Any other auth cookie still has to be confirmed with the Auth server.
+ * A local parse of the cookie is not enough to treat the request as signed in.
+ */
+export function sessionGate(
+  session: AuthCookieSession,
+  gateOpen: boolean,
+  authCookie: boolean,
+): SessionGate {
+  if (!session.present && !authCookie) return "anonymous";
+  if (session.fresh && gateOpen) return "allow";
+  return "verify";
+}

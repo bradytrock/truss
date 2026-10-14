@@ -15,8 +15,10 @@ import {
 import {
   GATE_COOKIE,
   GATE_COOKIE_MAX_AGE,
+  hasSupabaseAuthCookie,
   projectRefFromSupabaseUrl,
   readAuthCookieSession,
+  sessionGate,
 } from "@/lib/supabase/session-cookie";
 
 function redirectToDemo() {
@@ -62,6 +64,19 @@ function rememberGate(response: NextResponse, open: boolean) {
   });
 }
 
+/** Redirects are new responses. Copy the session cookies the auth client just wrote. */
+function carryCookies(target: NextResponse, source: NextResponse) {
+  const listed = typeof source.headers.getSetCookie === "function" ? source.headers.getSetCookie() : [];
+  if (listed.length > 0) {
+    for (const cookie of listed) target.headers.append("set-cookie", cookie);
+    return target;
+  }
+  for (const cookie of source.cookies.getAll()) {
+    target.cookies.set(cookie.name, cookie.value);
+  }
+  return target;
+}
+
 /** Sent proposals open with no CRM login. Drafts and unknown ids still go to the office login. */
 async function redirectGuestEstimate(request: NextRequest) {
   const estimateId = estimateIdFromStaffPath(request.nextUrl.pathname);
@@ -93,14 +108,18 @@ async function finishSession(
   subscriptionActive: boolean,
   response: NextResponse,
 ) {
+  const send = (next: NextResponse) => (next === response ? next : carryCookies(next, response));
+
   if (signedIn && shouldForceDemo({ signedIn, pathname: path, subscriptionActive })) {
     if (path.startsWith("/api/")) {
-      return NextResponse.json(
-        { error: "This company needs an active subscription. Schedule a demo at TheRoofingCRM.com." },
-        { status: 402 },
+      return send(
+        NextResponse.json(
+          { error: "This company needs an active subscription. Schedule a demo at TheRoofingCRM.com." },
+          { status: 402 },
+        ),
       );
     }
-    return redirectToDemo();
+    return send(redirectToDemo());
   }
 
   if (signedIn && path.startsWith("/login")) {
@@ -114,20 +133,20 @@ async function finishSession(
       dest.pathname = "/";
       dest.search = "";
     }
-    return NextResponse.redirect(dest);
+    return send(NextResponse.redirect(dest));
   }
 
   if (signedIn && path.startsWith("/signup") && !request.nextUrl.searchParams.get("invite")) {
     const home = request.nextUrl.clone();
     home.pathname = "/";
     home.search = "";
-    return NextResponse.redirect(home);
+    return send(NextResponse.redirect(home));
   }
 
   if (!signedIn && !isPublicAppPath(path)) {
     const guestEstimate = await redirectGuestEstimate(request);
     if (guestEstimate) return guestEstimate;
-    return redirectToLogin(request);
+    return send(redirectToLogin(request));
   }
 
   return response;
@@ -150,18 +169,17 @@ export async function updateSession(request: NextRequest) {
   }
 
   const nowSec = Math.floor(Date.now() / 1000);
-  const session = readAuthCookieSession(
-    request.cookies.getAll(),
-    projectRefFromSupabaseUrl(url),
-    nowSec,
-  );
+  const cookies = request.cookies.getAll();
+  const session = readAuthCookieSession(cookies, projectRefFromSupabaseUrl(url), nowSec);
   const gateOpen = request.cookies.get(GATE_COOKIE)?.value === "1";
+  const gate = sessionGate(session, gateOpen, hasSupabaseAuthCookie(cookies));
 
-  // A live access token plus a recent subscription check can skip Auth and Postgres.
-  if (!session.present) {
+  // No auth cookie at all. Do not call Auth.
+  if (gate === "anonymous") {
     return await finishSession(request, path, false, false, NextResponse.next({ request }));
   }
-  if (session.fresh && gateOpen) {
+  // A live access token plus a recent subscription check can skip Auth and Postgres.
+  if (gate === "allow") {
     return await finishSession(request, path, true, true, NextResponse.next({ request }));
   }
 
@@ -187,11 +205,8 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  let signedIn = session.fresh;
-  if (!session.fresh) {
-    const { data } = await supabase.auth.getUser();
-    signedIn = Boolean(data.user);
-  }
+  const { data } = await supabase.auth.getUser();
+  const signedIn = Boolean(data.user);
   const subscriptionActive = signedIn
     ? subscriptionActiveFromRpc(await supabase.rpc("company_subscription_active"))
     : false;
