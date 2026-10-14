@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import {
   GATE_COOKIE,
+  hasSupabaseAuthCookie,
   readAuthCookieSession,
   projectRefFromSupabaseUrl,
+  sessionGate,
   TOKEN_REFRESH_LEEWAY_SEC,
 } from "./session-cookie.ts";
 
@@ -65,5 +67,19 @@ const junk = readAuthCookieSession(
 );
 assert.equal(junk.present, true);
 assert.equal(junk.fresh, false);
+
+assert.equal(
+  hasSupabaseAuthCookie([{ name: "sb-cxrgdjvkmvnuztubxldh-auth-token.0", value: "a" }]),
+  true,
+);
+assert.equal(
+  hasSupabaseAuthCookie([{ name: "sb-cxrgdjvkmvnuztubxldh-auth-token-code-verifier", value: "a" }]),
+  false,
+);
+assert.equal(sessionGate({ present: false, fresh: false, expiresAt: null }, false, false), "anonymous");
+assert.equal(sessionGate({ present: false, fresh: false, expiresAt: null }, false, true), "verify");
+assert.equal(sessionGate({ present: true, fresh: true, expiresAt: now + 3600 }, false, true), "verify");
+assert.equal(sessionGate({ present: true, fresh: true, expiresAt: now + 3600 }, true, true), "allow");
+assert.equal(sessionGate({ present: true, fresh: false, expiresAt: now }, true, true), "verify");
 
 console.log("session-cookie.test.ts ok");

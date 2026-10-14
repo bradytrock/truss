@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
@@ -15,11 +15,11 @@ import {
   missingAccountManagementMessage,
   normalizeSeatEmail,
 } from "@/lib/accounts";
-import { authErrorMessage } from "@/lib/auth-errors";
 import { createClient } from "@/lib/supabase/client";
 import type { SeatRole } from "@/lib/types";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
-import { queueFirstWelcome, signupUserMetadata } from "@/lib/welcome";
+import { queueFirstWelcome } from "@/lib/welcome";
+import { registerAccount } from "./actions";
 
 type InvitePreview = {
   company_id?: string;
@@ -36,43 +36,7 @@ function firstInviteRow(data: InvitePreview[] | InvitePreview | null) {
   return Array.isArray(data) ? data[0] ?? null : data;
 }
 
-function claimErrorMessage(error: { message?: string; code?: string }) {
-  return isMissingAccountManagement(error)
-    ? missingAccountManagementMessage()
-    : error.message || "Could not join that company.";
-}
-
-async function claimInviteIfNeeded(
-  supabase: ReturnType<typeof createClient>,
-  token: string,
-  invitedCompanyId?: string,
-) {
-  const { error } = await supabase.rpc("claim_invite", { p_token: token });
-  if (!error) return { ok: true as const };
-  const missing = /missing or expired/i.test(error.message ?? "");
-  if (missing) {
-    const { data: sessionData } = await supabase.auth.getUser();
-    const userId = sessionData.user?.id;
-    if (userId && invitedCompanyId) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("company_id")
-        .eq("id", userId)
-        .maybeSingle();
-      if (profile?.company_id === invitedCompanyId) {
-        return { ok: true as const };
-      }
-    }
-    if (userId && !invitedCompanyId) {
-      // Older invite_preview did not return company_id; the auth trigger likely consumed the row.
-      return { ok: true as const };
-    }
-  }
-  return { ok: false as const, message: claimErrorMessage(error) };
-}
-
 function SignupForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get("invite")?.trim() ?? "";
   const [pending, setPending] = useState(false);
@@ -89,10 +53,7 @@ function SignupForm() {
   const [alreadySignedIn, setAlreadySignedIn] = useState(false);
 
   useEffect(() => {
-    if (!inviteToken) {
-      setInviteLoading(false);
-      return;
-    }
+    if (!inviteToken) return;
     let cancelled = false;
     const supabase = createClient();
     void (async () => {
@@ -127,13 +88,7 @@ function SignupForm() {
     return () => {
       cancelled = true;
     };
-  }, [inviteToken, router]);
-
-  function goHomeWithWelcome() {
-    queueFirstWelcome();
-    router.replace("/?welcome=1");
-    router.refresh();
-  }
+  }, [inviteToken]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -145,88 +100,41 @@ function SignupForm() {
       return;
     }
     setPending(true);
+    let leaving = false;
     try {
-      const supabase = createClient();
-      if (alreadySignedIn && inviteToken) {
-        const claimed = await claimInviteIfNeeded(supabase, inviteToken, invite?.company_id);
-        if (!claimed.ok) {
-          setFormError(claimed.message);
-          toast.error(claimed.message);
-          return;
-        }
-        toast.success(invite ? `Joined ${invite.company_name}` : "Joined company");
-        goHomeWithWelcome();
-        return;
-      }
-      const origin = window.location.origin;
-      const { data, error } = await supabase.auth.signUp({
+      const result = await registerAccount({
         email,
         password,
-        options: {
-          emailRedirectTo: `${origin}/auth/callback`,
-          data: signupUserMetadata({
-            fullName,
-            company: invite ? invite.company_name : company,
-            title,
-            inviteToken: inviteToken || undefined,
-          }),
-        },
+        fullName,
+        company: invite ? invite.company_name : company,
+        title,
+        inviteToken,
+        invitedCompanyId: invite?.company_id,
+        invitedEmail: invite?.email,
       });
-      if (error) {
-        const already =
-          /already registered|already exists|user already/i.test(error.message) && Boolean(inviteToken);
-        if (already) {
-          const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-          if (signInError) {
-            const message = authErrorMessage(signInError);
-            setFormError(
-              `${message} This email already has a login. Sign in, then open the invite link again.`,
-            );
-            toast.error(message);
-            return;
-          }
-          const claimed = await claimInviteIfNeeded(supabase, inviteToken, invite?.company_id);
-          if (!claimed.ok) {
-            setFormError(claimed.message);
-            toast.error(claimed.message);
-            return;
-          }
-          toast.success(invite ? `Joined ${invite.company_name}` : "Signed in");
-          goHomeWithWelcome();
-          return;
-        }
-        const message = authErrorMessage(error);
-        setFormError(message);
-        toast.error(message);
+      if ("error" in result) {
+        setFormError(result.error);
+        toast.error(result.error);
         return;
       }
-      if (data.session) {
-        if (inviteToken) {
-          const claimed = await claimInviteIfNeeded(supabase, inviteToken, invite?.company_id);
-          if (!claimed.ok) {
-            setFormError(claimed.message);
-            toast.error(claimed.message);
-            return;
-          }
-          toast.success(invite ? `Joined ${invite.company_name}` : "Account created");
-        }
-        goHomeWithWelcome();
+      if ("confirmation" in result) {
+        setFormError(result.confirmation);
+        toast.message(result.confirmation);
         return;
       }
-      const message = invite
-        ? "Account created, but this project requires email confirmation. Confirm the email, then sign in to join the company."
-        : "Account created, but this project requires email confirmation, so you cannot sign in yet. In Supabase: Authentication → Providers → Email → turn off Confirm email. Then sign in.";
-      setFormError(message);
-      toast.message(message);
+      queueFirstWelcome();
+      leaving = true;
+      window.location.assign(result.redirectTo);
     } catch (error) {
-      const message = authErrorMessage(error instanceof Error ? error.message : "Could not create the account.");
+      const message = error instanceof Error ? error.message : "Could not create the account.";
       setFormError(message);
       toast.error(message);
     } finally {
-      setPending(false);
+      if (!leaving) setPending(false);
     }
   }
 
+  const invitePending = Boolean(inviteToken) && inviteLoading;
   const joining = Boolean(invite);
   const titleText = joining ? `Join ${invite?.company_name}` : "Create your workspace";
   const description = joining
@@ -243,7 +151,7 @@ function SignupForm() {
       />
       <AuthFrame title={titleText} description={description}>
         <form onSubmit={onSubmit} className="grid gap-3">
-          {inviteLoading ? (
+          {invitePending ? (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <span className="size-2 animate-pulse rounded-full bg-primary" />
               Looking up the invite…
@@ -356,7 +264,7 @@ function SignupForm() {
             nativeButton
             className="auth-rise mt-1"
             style={{ animationDelay: "360ms" }}
-            disabled={pending || inviteLoading || Boolean(inviteToken && !invite)}
+            disabled={pending || invitePending || Boolean(inviteToken && !invite)}
           >
             {pending ? "Working…" : joining ? "Join company" : "Create account"}
           </Button>

@@ -2,23 +2,16 @@
 
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
-import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { TheRoofingCrmMark } from "@/components/brand";
-import { authErrorMessage } from "@/lib/auth-errors";
+import { safeNextPath } from "@/lib/auth-next";
 import { PRODUCT_NAME } from "@/lib/product";
-import { isWelcomePendingMetadata, queueFirstWelcome } from "@/lib/welcome";
 
 const AuthWelcomePreview = dynamic(
   () => import("@/components/auth-welcome-preview").then((mod) => mod.AuthWelcomePreview),
   { ssr: false },
 );
-
-function warmSignIn() {
-  void import("@/lib/supabase/client");
-  void import("sonner");
-}
 
 async function notify(kind: "error" | "success" | "message", message: string) {
   const { toast } = await import("sonner");
@@ -34,66 +27,16 @@ function loginSearch() {
   return window.location.search;
 }
 
-function loginQuery() {
-  const params = new URLSearchParams(window.location.search);
-  return {
-    nextPath: params.get("next") ?? "/",
-  };
-}
-
 export function LoginForm() {
-  const router = useRouter();
   const search = useSyncExternalStore(subscribeToLocation, loginSearch, () => "");
   const params = new URLSearchParams(search);
   const queryError = params.get("error");
   const showWelcome = params.get("welcome") === "1";
+  const nextPath = safeNextPath(params.get("next"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null | undefined>(undefined);
-  const formError = submitError === undefined ? queryError : submitError;
-
-  useEffect(() => {
-    const timer = window.setTimeout(warmSignIn, 250);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    const { nextPath } = loginQuery();
-    setSubmitError(null);
-    setPending(true);
-    void import("@/lib/crm-store");
-    void import("@/components/app-shell");
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        const message = authErrorMessage(error);
-        setSubmitError(message);
-        void notify("error", message);
-        return;
-      }
-      if (isWelcomePendingMetadata(data.user?.user_metadata)) {
-        queueFirstWelcome();
-        const dest = nextPath.startsWith("/") ? nextPath : "/";
-        const url = new URL(dest, window.location.origin);
-        url.searchParams.set("welcome", "1");
-        router.replace(`${url.pathname}${url.search}`);
-      } else {
-        router.replace(nextPath);
-      }
-      router.refresh();
-    } catch (error) {
-      const message = authErrorMessage(error instanceof Error ? error.message : "Could not sign in.");
-      setSubmitError(message);
-      void notify("error", message);
-    } finally {
-      setPending(false);
-    }
-  }
 
   async function onForgotPassword() {
     if (!email.trim()) {
@@ -101,19 +44,19 @@ export function LoginForm() {
       return;
     }
     try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const origin = window.location.origin;
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${origin}/login`,
+      const response = await fetch("/api/auth/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
       });
-      if (error) {
-        void notify("error", authErrorMessage(error));
+      const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (!response.ok) {
+        void notify("error", payload?.error || "Could not send reset email.");
         return;
       }
       void notify("success", "Check your email for a reset link.");
     } catch (error) {
-      void notify("error", authErrorMessage(error instanceof Error ? error.message : "Could not send reset email."));
+      void notify("error", error instanceof Error ? error.message : "Could not send reset email.");
     }
   }
 
@@ -145,28 +88,34 @@ export function LoginForm() {
           </p>
           <h1 className="mt-7 text-[1.35rem] font-normal tracking-wide">Sign In</h1>
 
-          <form onSubmit={onSubmit} className="mt-5 w-full space-y-3.5">
-            {formError ? <p className="text-center text-sm text-red-300">{formError}</p> : null}
+          <form
+            action="/api/auth/login"
+            method="post"
+            onSubmit={() => setPending(true)}
+            className="mt-5 w-full space-y-3.5"
+          >
+            {queryError ? <p className="text-center text-sm text-red-300">{queryError}</p> : null}
+            <input type="hidden" name="next" value={nextPath} />
             <input
               id="email"
+              name="email"
               type="email"
               autoComplete="email"
               placeholder="User Name"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              onFocus={warmSignIn}
               required
               className="h-12 w-full rounded-lg border-0 bg-white px-4 text-base text-neutral-900 outline-none placeholder:text-neutral-400"
             />
             <div className="relative">
               <input
                 id="password"
+                name="password"
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
                 placeholder="Password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                onFocus={warmSignIn}
                 required
                 className="h-12 w-full rounded-lg border-0 bg-white px-4 pr-11 text-base text-neutral-900 outline-none placeholder:text-neutral-400"
               />
