@@ -413,4 +413,24 @@ const syntheticDone = synthetic?.actions.find((action) => action.type === "clear
 assert.equal(syntheticDone?.type === "clear" ? syntheticDone.title : "", "Review closeout BJ100426-A");
 assert.equal(syntheticDone?.type === "clear" ? syntheticDone.relatedId : "", "job-co");
 
+const payoutReview = base({
+  jobs: [closeoutJob],
+  opportunities: [opportunity({ id: "opp-co", stage: "awarded" })],
+  tasks: [
+    task({
+      id: "co-ready",
+      title: "Ready for review BJ100426-A",
+      dueAt: "2026-10-13",
+      relatedType: "job",
+      relatedId: "job-co",
+    }),
+  ],
+});
+const readyRow = payoutReview.rows.find((row) => row.id === "task-co-ready");
+assert.equal(readyRow?.badge, "CLOSEOUT");
+assert.equal(readyRow?.titleHref, "/commissions");
+assert.match(readyRow?.detail ?? "", /Ready for review on Commissions/);
+const readyLink = readyRow?.actions.find((action) => action.type === "link");
+assert.equal(readyLink?.type === "link" ? readyLink.href : "", "/commissions");
+
 console.log("home-desk tests passed");

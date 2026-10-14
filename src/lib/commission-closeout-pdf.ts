@@ -227,6 +227,12 @@ export async function buildCloseoutPdf(input: {
       align: "left",
     }]);
   }
+  for (const line of sheet.refundLines) {
+    y = row(y, [
+      { text: line.label, x: INSET, width: 280, align: "left" },
+      { text: money(line.amount), x: 560, width: right - 560, align: "right" },
+    ]);
+  }
   for (const total of [
     ["Payments received", sheet.paymentsReceived],
     ["Merchant fees 4%", sheet.merchantFees],
@@ -281,8 +287,15 @@ export async function buildCloseoutPdf(input: {
     y = row(y, [{ text: "No expenses on this job yet.", x: INSET, width: right - INSET, align: "left" }]);
   }
   for (const line of sheet.expenseLines) {
+    const tag = line.forecasted
+      ? " (Forecast)"
+      : line.disposition === "customer_refund"
+        ? " (Customer refund)"
+        : line.disposition === "pm_deduction"
+          ? " (Commission deduction)"
+          : "";
     y = row(y, [
-      { text: line.forecasted ? `${line.vendor} (Forecast)` : line.vendor, x: INSET, width: 520, align: "left" },
+      { text: `${line.vendor}${tag}`, x: INSET, width: 520, align: "left" },
       { text: money(line.amount), x: 560, width: right - 560, align: "right" },
     ]);
   }
@@ -329,6 +342,12 @@ export async function buildCloseoutPdf(input: {
   ], true);
   y += 4;
   y = paragraph(y, "Payee checks come out of the project manager's check. Warranty, trades, and draws stay on their own lines.");
+  if (sheet.pmDeductions.length) {
+    y = paragraph(
+      y,
+      `Commission deductions: ${sheet.pmDeductions.map((line) => `${line.vendor} ${money(line.amount)}`).join(", ")}. These come out of the project manager's check and are not job expenses.`,
+    );
+  }
   if (sheet.validationOnly) {
     y = paragraph(y, "These numbers are for validation only until accounting accepts the costs.");
   }

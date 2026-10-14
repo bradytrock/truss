@@ -232,6 +232,7 @@ import {
   canSubmitProjectCloseout,
   CLOSEOUT_PAYOUT_TASK,
   CLOSEOUT_REVIEW_TASK,
+  LEGACY_CLOSEOUT_PAYOUT_TASK,
   closeoutReleaseBlock,
   closeoutTaskTitle,
   commissionCloseoutPayload,
@@ -239,6 +240,7 @@ import {
   type CommissionCloseout,
   type CommissionQbLine,
   type CommissionSplitLine,
+  type ExpenseAdjustment,
 } from "@/lib/commission-closeout";
 import {
   NORTHLINE_COMPANY,
@@ -1326,6 +1328,7 @@ type CrmContextValue = CrmState & {
       varianceAck: boolean;
       accountingNote: string;
       notes: string;
+      expenseAdjustments: ExpenseAdjustment[];
     },
   ) => Promise<CommissionCloseout | null>;
   returnCommissionCloseout: (id: string, note: string) => Promise<CommissionCloseout | null>;
@@ -1338,6 +1341,7 @@ type CrmContextValue = CrmState & {
       varianceAck: boolean;
       accountingNote: string;
       notes: string;
+      expenseAdjustments: ExpenseAdjustment[];
     },
   ) => Promise<CommissionCloseout | null>;
   markCommissionPayout: (id: string) => Promise<CommissionCloseout | null>;
@@ -8514,6 +8518,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ...commissionCloseoutPayload(next, user.companyId),
         qb_lines: next.qbLines as unknown as Json,
         splits: next.splits as unknown as Json,
+        expense_adjustments: next.expenseAdjustments as unknown as Json,
       };
       const saved = await supabase
         .from("commission_closeouts")
@@ -8593,8 +8598,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
   const finishCloseoutTasks = useCallback(
     async (jobId: string, prefix: string) => {
+      const prefixes = prefix === CLOSEOUT_PAYOUT_TASK ? [CLOSEOUT_PAYOUT_TASK, LEGACY_CLOSEOUT_PAYOUT_TASK] : [prefix];
       const open = state.tasks.filter(
-        (task) => !task.completed && task.relatedId === jobId && task.title.startsWith(prefix),
+        (task) => !task.completed && task.relatedId === jobId && prefixes.some((item) => task.title.startsWith(item)),
       );
       if (!isSupabaseConfigured()) {
         if (!open.length) return;
@@ -8627,6 +8633,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         forecasts: forecastedExpensesForJob(job.id, state.forecastedExpenses ?? []),
         qbLines: closeout.qbLines,
         splits: closeout.splits,
+        expenseAdjustments: closeout.expenseAdjustments,
         closingDate: job.substantialCompletion ?? closeout.submittedAt,
       });
     },
@@ -8700,6 +8707,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         varianceAck: boolean;
         accountingNote: string;
         notes: string;
+        expenseAdjustments: ExpenseAdjustment[];
       },
     ) => {
       const actor = effectiveStaff;
@@ -8716,6 +8724,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         varianceAck: patch.varianceAck,
         accountingNote: patch.accountingNote.trim(),
         notes: patch.notes,
+        expenseAdjustments: patch.expenseAdjustments,
         updatedAt: new Date().toISOString(),
       };
       return persistCloseout(next, current);
@@ -8778,6 +8787,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         varianceAck: boolean;
         accountingNote: string;
         notes: string;
+        expenseAdjustments: ExpenseAdjustment[];
       },
     ) => {
       const actor = effectiveStaff;
@@ -8800,6 +8810,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             varianceAck: review.varianceAck,
             accountingNote: review.accountingNote.trim(),
             notes: review.notes,
+            expenseAdjustments: review.expenseAdjustments,
           }
         : current;
       const sheet = sheetForCloseout(draft);
@@ -8825,12 +8836,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       await fileCloseoutNotice({
         job,
         title: closeoutTaskTitle("payout", job.code),
-        notes: `${actor.name} released ${job.code || job.name} to ${recipient.name} for commission payout.`,
+        notes: `${actor.name} released ${job.code || job.name} for payout. Review it on Commissions before the check is marked.`,
         audience: [recipient],
-        sms: `${job.code || job.name} is ready for commission payout.`,
-        activity: `${actor.name} finished the closeout review and sent it to ${recipient.name} for commission payout.`,
+        sms: `${job.code || job.name} is ready for review. Open Commissions to review your closeout.`,
+        activity: `${actor.name} released the closeout. ${recipient.name} can review it on Commissions.`,
       });
-      toast.success(`Sent to ${recipient.name} for commission payout.`);
+      toast.success(`Sent to ${recipient.name}. It is ready for review on Commissions.`);
       return saved;
     },
     [effectiveStaff, fileCloseoutNotice, finishCloseoutTasks, persistCloseout, sheetForCloseout, state.commissionCloseouts, state.jobs, state.staff],

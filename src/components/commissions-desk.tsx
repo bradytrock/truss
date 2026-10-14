@@ -7,8 +7,8 @@ import { EmptyState, ErrorBanner, LoadingScreen, Metric, MetricStrip, PageHeader
 import { useCrm } from "@/lib/crm-store";
 import {
   buildCommissionSheet,
-  CLOSEOUT_STATUS_LABELS,
   isCommissionInYear,
+  pmCloseoutStatusLabel,
   splitsForViewer,
   type CommissionCloseout,
   type CommissionSheet,
@@ -53,6 +53,7 @@ export function CommissionsDesk() {
         forecasts: forecastedExpensesForJob(job.id, crm.forecastedExpenses ?? []),
         qbLines: closeout.qbLines,
         splits: closeout.splits,
+        expenseAdjustments: closeout.expenseAdjustments,
         closingDate: job.substantialCompletion ?? closeout.submittedAt,
       });
       const lines = splitsForViewer({
@@ -95,7 +96,7 @@ export function CommissionsDesk() {
       />
       <MetricStrip className="sm:grid-cols-3">
         <Metric label={`Paid ${year}`} value={formatMoney(paid)} hint="Marked for payout this year" />
-        <Metric label="Ready" value={formatMoney(ready)} hint="Released, not marked yet" />
+        <Metric label="Ready" value={formatMoney(ready)} hint="Ready for review, not marked yet" />
         <Metric label="Closeouts" value={String(rows.length)} hint="Jobs with a check in your name" />
       </MetricStrip>
       {rows.length === 0 ? (
@@ -122,7 +123,7 @@ export function CommissionsDesk() {
                     <span className="mt-0.5 block text-xs text-muted-foreground">
                       {row.customer}
                       {" · "}
-                      {CLOSEOUT_STATUS_LABELS[row.closeout.status]}
+                      {pmCloseoutStatusLabel(row.closeout.status)}
                       {row.when ? ` · ${formatDate(row.when)}` : ""}
                     </span>
                   </button>

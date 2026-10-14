@@ -40,7 +40,20 @@ export function closeoutPdfFilename(jobCode: string) {
 }
 
 export const CLOSEOUT_REVIEW_TASK = "Review closeout";
-export const CLOSEOUT_PAYOUT_TASK = "Commission payout";
+/** Task assigned to the project manager when accounting releases a closeout. */
+export const CLOSEOUT_PAYOUT_TASK = "Ready for review";
+/** Earlier payout tasks used this title. Still closed when the check is marked. */
+export const LEGACY_CLOSEOUT_PAYOUT_TASK = "Commission payout";
+
+export type ExpenseDisposition = "job" | "pm_deduction" | "customer_refund";
+
+/** An expense accounting pulled off the job cost: a project-manager deduction, or a customer refund. */
+export interface ExpenseAdjustment {
+  expenseId: string;
+  disposition: Exclude<ExpenseDisposition, "job">;
+  /** Deduction taken off the project manager’s check. Null uses the expense amount. */
+  amount: number | null;
+}
 
 export interface CommissionQbLine {
   id: string;
@@ -83,6 +96,7 @@ export interface CommissionCloseout {
   splits: CommissionSplitLine[];
   varianceAck: boolean;
   notes: string;
+  expenseAdjustments: ExpenseAdjustment[];
   updatedAt: string;
 }
 
@@ -144,6 +158,8 @@ export interface CommissionSheet {
   paymentsReceived: number;
   merchantFees: number;
   customerRefund: number;
+  /** Payment refunds and expenses accounting flipped into the income section. */
+  refundLines: Array<{ id: string; label: string; amount: number }>;
   totalPayments: number;
   jobSold: number;
   scopes: CommissionScopeRow[];
@@ -156,8 +172,16 @@ export interface CommissionSheet {
   estProfit: number | null;
   actualProfit: number;
   profitDifference: number | null;
-  expenseLines: Array<{ id: string; vendor: string; amount: number; forecasted: boolean }>;
+  expenseLines: Array<{
+    id: string;
+    vendor: string;
+    amount: number;
+    forecasted: boolean;
+    disposition: ExpenseDisposition;
+  }>;
   totalExpenses: number;
+  /** Job expenses moved onto the project manager’s check. */
+  pmDeductions: Array<{ expenseId: string; vendor: string; amount: number }>;
   profit: number;
   /** Profit / job sold. Null when the job sold amount is zero. */
   margin: number | null;
@@ -255,6 +279,70 @@ export function parseSplits(value: unknown): CommissionSplitLine[] {
       },
     ];
   });
+}
+
+export function parseExpenseAdjustments(value: unknown): ExpenseAdjustment[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as Record<string, unknown>;
+    const expenseId = text(row.expenseId).trim();
+    const disposition = row.disposition === "pm_deduction" || row.disposition === "customer_refund" ? row.disposition : null;
+    if (!expenseId || !disposition) return [];
+    const amountRaw = row.amount;
+    const amount =
+      amountRaw == null || amountRaw === ""
+        ? null
+        : Number.isFinite(Number(amountRaw))
+          ? cents(Math.max(0, num(amountRaw)))
+          : null;
+    return [{ expenseId, disposition, amount }];
+  });
+}
+
+/**
+ * Money typed into a commission deduction. A trailing decimal stays valid so "12."
+ * can continue into "12.50". Returns null when the draft is not a money amount.
+ */
+export function parseMoneyDraft(raw: string): number | null {
+  const value = raw.trim();
+  if (value === "") return 0;
+  if (!/^\d*\.?\d{0,2}$/.test(value)) return null;
+  if (value === ".") return 0;
+  const amount = Number(value.endsWith(".") ? value.slice(0, -1) : value);
+  return Number.isFinite(amount) ? cents(Math.max(0, amount)) : null;
+}
+
+export function applyExpenseDisposition(
+  current: ExpenseAdjustment[],
+  expenseId: string,
+  disposition: ExpenseDisposition,
+  expenseAmount: number,
+): ExpenseAdjustment[] {
+  const rest = current.filter((item) => item.expenseId !== expenseId);
+  if (disposition === "job") return rest;
+  const previous = current.find((item) => item.expenseId === expenseId);
+  return [
+    ...rest,
+    {
+      expenseId,
+      disposition,
+      amount:
+        disposition === "pm_deduction"
+          ? previous?.disposition === "pm_deduction" && previous.amount != null
+            ? cents(previous.amount)
+            : cents(Math.max(0, expenseAmount))
+          : null,
+    },
+  ];
+}
+
+export function setDeductionAmount(current: ExpenseAdjustment[], expenseId: string, amount: number): ExpenseAdjustment[] {
+  return current.map((item) =>
+    item.expenseId === expenseId && item.disposition === "pm_deduction"
+      ? { ...item, amount: cents(Math.max(0, amount)) }
+      : item,
+  );
 }
 
 export function seedQuickbooksLines(expenses: Expense[]): CommissionQbLine[] {
@@ -371,7 +459,7 @@ export function compareJobExpenses(expenses: Expense[], qbLines: CommissionQbLin
   return rows;
 }
 
-function computeSplits(lines: CommissionSplitLine[], profit: number): CommissionSplitComputed[] {
+function computeSplits(lines: CommissionSplitLine[], profit: number, pmDeductions = 0): CommissionSplitComputed[] {
   const computed = lines.map((line) => {
     const comm = line.percent == null ? cents(line.flat) : cents(profit * (line.percent / 100));
     return {
@@ -391,7 +479,7 @@ function computeSplits(lines: CommissionSplitLine[], profit: number): Commission
   }, 0);
   const pm = computed[pmIndex];
   const next = computed.slice();
-  next[pmIndex] = { ...pm, check: cents(pm.check - taken) };
+  next[pmIndex] = { ...pm, check: cents(pm.check - taken - Math.max(0, pmDeductions)) };
   return next;
 }
 
@@ -406,8 +494,12 @@ export function buildCommissionSheet(input: {
   forecasts: ForecastedExpense[];
   qbLines?: CommissionQbLine[] | null;
   splits?: CommissionSplitLine[] | null;
+  expenseAdjustments?: ExpenseAdjustment[] | null;
   closingDate?: string | null;
 }): CommissionSheet {
+  const adjustments = input.expenseAdjustments ?? [];
+  const dispositionOf = (id: string): ExpenseDisposition =>
+    adjustments.find((item) => item.expenseId === id)?.disposition ?? "job";
   const posted = input.payments.filter(isPostedPayment);
   const refunds = posted.filter(isRefund);
   const receipts = posted.filter((payment) => !isRefund(payment)).sort((a, b) => a.paidAt.localeCompare(b.paidAt));
@@ -415,7 +507,31 @@ export function buildCommissionSheet(input: {
   const merchantFees = cents(
     receipts.reduce((sum, payment) => sum + (isCardMethod(payment.method) ? payment.amount * MERCHANT_FEE_RATE : 0), 0),
   );
-  const customerRefund = cents(refunds.reduce((sum, payment) => sum + Math.abs(payment.amount), 0));
+  const refundExpenses = input.expenses.filter((expense) => dispositionOf(expense.id) === "customer_refund");
+  const refundLines = [
+    ...refunds.map((payment) => ({
+      id: payment.id,
+      label: payment.reference.trim() || "Refund",
+      amount: cents(Math.abs(payment.amount)),
+    })),
+    ...refundExpenses.map((expense) => ({
+      id: expense.id,
+      label: expense.vendor.trim() || "Customer refund",
+      amount: cents(Math.abs(expense.amount)),
+    })),
+  ];
+  const customerRefund = cents(refundLines.reduce((sum, line) => sum + line.amount, 0));
+  const deductionExpenses = input.expenses.filter((expense) => dispositionOf(expense.id) === "pm_deduction");
+  const pmDeductions = deductionExpenses.map((expense) => {
+    const adjustment = adjustments.find((item) => item.expenseId === expense.id);
+    const amount = adjustment?.amount != null ? adjustment.amount : Math.abs(expense.amount);
+    return {
+      expenseId: expense.id,
+      vendor: expense.vendor.trim() || "Expense",
+      amount: cents(Math.max(0, amount)),
+    };
+  });
+  const pmDeductionTotal = cents(pmDeductions.reduce((sum, line) => sum + line.amount, 0));
   const totalPayments = cents(paymentsReceived - merchantFees - customerRefund);
   const jobSold = cents(Math.max(0, input.job.contractValue));
 
@@ -462,25 +578,33 @@ export function buildCommissionSheet(input: {
     vendor: expense.vendor || "Vendor",
     amount: cents(expense.amount),
     forecasted: false,
+    disposition: dispositionOf(expense.id),
   }));
   const forecastLines = input.forecasts.map((forecast) => ({
     id: forecast.id,
     vendor: forecast.vendor || "Forecast",
     amount: cents(forecast.amount),
     forecasted: true,
+    disposition: "job" as const,
   }));
-  const actualTotal = cents(actualLines.reduce((sum, line) => sum + line.amount, 0));
+  const countedActual = actualLines.filter((line) => line.disposition === "job");
+  const reclassified = actualLines.filter((line) => line.disposition !== "job");
+  const actualTotal = cents(countedActual.reduce((sum, line) => sum + line.amount, 0));
   const forecastTotal = cents(forecastLines.reduce((sum, line) => sum + line.amount, 0));
   const costBasis: CommissionSheet["costBasis"] =
-    actualLines.length && forecastLines.length
+    countedActual.length && forecastLines.length
       ? "mixed"
-      : actualLines.length
+      : countedActual.length
         ? "actual"
         : forecastLines.length
           ? "forecasted"
           : "none";
   const expenseLines =
-    costBasis === "forecasted" ? forecastLines : costBasis === "mixed" ? [...actualLines, ...forecastLines] : actualLines;
+    costBasis === "forecasted"
+      ? [...reclassified, ...forecastLines]
+      : costBasis === "mixed"
+        ? [...actualLines, ...forecastLines]
+        : actualLines;
   const totalExpenses = costBasis === "forecasted" ? forecastTotal : actualTotal;
   const profit = cents(totalPayments - totalExpenses);
   const margin = jobSold > 0 ? profit / jobSold : null;
@@ -488,13 +612,16 @@ export function buildCommissionSheet(input: {
   const actualProfit = cents(totalPayments - actualTotal);
   const profitDifference = estProfit == null ? null : cents(actualProfit - estProfit);
 
-  const qbLines = input.qbLines ?? seedQuickbooksLines(input.expenses);
-  const compare = compareJobExpenses(input.expenses, qbLines);
+  const jobExpenses = input.expenses.filter((expense) => dispositionOf(expense.id) === "job");
+  const qbLines = (input.qbLines ?? seedQuickbooksLines(jobExpenses)).filter(
+    (line) => !line.expenseId || dispositionOf(line.expenseId) === "job",
+  );
+  const compare = compareJobExpenses(jobExpenses, qbLines);
   const openVariance = compare.some((row) => row.status !== "match");
   const expensesAreForecasted = costBasis === "forecasted";
   const needsAck = costBasis !== "actual" || openVariance;
   const validationOnly = needsAck;
-  const splits = computeSplits(input.splits?.length ? input.splits : defaultCommissionSplits(), profit);
+  const splits = computeSplits(input.splits?.length ? input.splits : defaultCommissionSplits(), profit, pmDeductionTotal);
   const pmSplit = splits.find((line) => line.id === "pm");
   const percentLines = splits.filter((line) => line.percent != null);
   const shown = receipts.slice(0, 6);
@@ -518,6 +645,7 @@ export function buildCommissionSheet(input: {
     paymentsReceived,
     merchantFees,
     customerRefund,
+    refundLines,
     totalPayments,
     jobSold,
     scopes: [dwelling, other, contents, deductibleRow],
@@ -537,6 +665,7 @@ export function buildCommissionSheet(input: {
     profitDifference,
     expenseLines,
     totalExpenses,
+    pmDeductions,
     profit,
     margin,
     costBasis,
@@ -561,6 +690,7 @@ export function buildCommissionSheet(input: {
 
 export function closeoutReleaseBlock(sheet: CommissionSheet, acknowledged: boolean) {
   if (!sheet.needsAck || acknowledged) return null;
+  const reclassified = sheet.expenseLines.some((line) => !line.forecasted && line.disposition !== "job");
   if (sheet.costBasis === "forecasted") {
     return "Every cost on this job is still a forecast. Acknowledge that before releasing payout.";
   }
@@ -568,6 +698,7 @@ export function closeoutReleaseBlock(sheet: CommissionSheet, acknowledged: boole
     return "Some costs are still forecasted. Acknowledge that before releasing payout.";
   }
   if (sheet.costBasis === "none") {
+    if (reclassified && sheet.compare.every((row) => row.status === "match")) return null;
     return "This job has no expenses yet. Acknowledge that before releasing payout.";
   }
   return "QuickBooks and the CRM expenses still differ. Match them, or acknowledge the difference, before releasing payout.";
@@ -669,6 +800,20 @@ export function closeoutTaskTitle(kind: "review" | "payout", jobCode: string) {
   return kind === "review" ? `${CLOSEOUT_REVIEW_TASK} ${code}` : `${CLOSEOUT_PAYOUT_TASK} ${code}`;
 }
 
+export function isPayoutReviewTask(title: string) {
+  return title.startsWith(CLOSEOUT_PAYOUT_TASK) || title.startsWith(LEGACY_CLOSEOUT_PAYOUT_TASK);
+}
+
+export function isCloseoutTaskTitle(title: string) {
+  return title.startsWith(CLOSEOUT_REVIEW_TASK) || isPayoutReviewTask(title);
+}
+
+/** Status the project manager sees on Commissions. A released closeout is waiting on their review. */
+export function pmCloseoutStatusLabel(status: CloseoutStatus) {
+  if (status === "released") return "Ready for Review";
+  return CLOSEOUT_STATUS_LABELS[status];
+}
+
 export function newCommissionCloseout(input: {
   id: string;
   jobId: string;
@@ -700,6 +845,7 @@ export function newCommissionCloseout(input: {
     splits: previous?.splits?.length ? previous.splits : defaultCommissionSplits(),
     varianceAck: false,
     notes: input.notes.trim(),
+    expenseAdjustments: previous?.expenseAdjustments ?? [],
     updatedAt: input.now,
   };
 }
@@ -726,6 +872,7 @@ export function commissionCloseoutPayload(row: CommissionCloseout, companyId: st
     splits: row.splits,
     variance_ack: row.varianceAck,
     notes: row.notes,
+    expense_adjustments: row.expenseAdjustments,
     updated_at: row.updatedAt,
   };
 }

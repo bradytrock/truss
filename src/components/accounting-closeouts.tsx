@@ -14,12 +14,14 @@ import {
 } from "@/components/ui/select";
 import { useCrm } from "@/lib/crm-store";
 import {
+  applyExpenseDisposition,
   blankQbLine,
   blankSplitLine,
   buildCommissionSheet,
   CLOSEOUT_STATUS_LABELS,
   mergePostedBills,
   payoutRecipients,
+  setDeductionAmount,
   type CommissionCloseout,
 } from "@/lib/commission-closeout";
 import { expensesForJob, forecastedExpensesForJob, paymentsForJob } from "@/lib/job-financials";
@@ -88,6 +90,7 @@ function CloseoutReview({ closeout }: { closeout: CommissionCloseout }) {
   const job = crm.getJob(closeout.jobId);
   const [qbLines, setQbLines] = useState(closeout.qbLines);
   const [splits, setSplits] = useState(closeout.splits);
+  const [adjustments, setAdjustments] = useState(closeout.expenseAdjustments ?? []);
   const [ack, setAck] = useState(closeout.varianceAck);
   const [note, setNote] = useState(closeout.accountingNote);
   const [returnNote, setReturnNote] = useState("");
@@ -118,6 +121,7 @@ function CloseoutReview({ closeout }: { closeout: CommissionCloseout }) {
         forecasts: forecastedExpensesForJob(job.id, crm.forecastedExpenses ?? []),
         qbLines: editing ? qbLines : closeout.qbLines,
         splits: editing ? splits : closeout.splits,
+        expenseAdjustments: editing ? adjustments : closeout.expenseAdjustments,
         closingDate: job.substantialCompletion ?? closeout.submittedAt,
       })
     : null;
@@ -132,6 +136,7 @@ function CloseoutReview({ closeout }: { closeout: CommissionCloseout }) {
     varianceAck: ack,
     accountingNote: note,
     notes: closeout.notes,
+    expenseAdjustments: adjustments,
   };
 
   async function save() {
@@ -194,6 +199,11 @@ function CloseoutReview({ closeout }: { closeout: CommissionCloseout }) {
         onAddQb={() => setQbLines((current) => [...current, blankQbLine(crypto.randomUUID())])}
         onRemoveQb={(id) => setQbLines((current) => current.filter((line) => line.id !== id))}
         onPullPosted={() => setQbLines((current) => mergePostedBills(current, expensesForJob(job.id, crm.expenses)))}
+        onExpenseDisposition={(expenseId, disposition) => {
+          const expense = expensesForJob(job.id, crm.expenses).find((item) => item.id === expenseId);
+          setAdjustments((current) => applyExpenseDisposition(current, expenseId, disposition, expense?.amount ?? 0));
+        }}
+        onDeductionAmount={(expenseId, amount) => setAdjustments((current) => setDeductionAmount(current, expenseId, amount))}
       />
 
       {editing ? (

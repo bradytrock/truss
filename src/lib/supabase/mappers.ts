@@ -36,6 +36,7 @@ import {
 } from "@/lib/insurance";
 import {
   parseCloseoutStatus,
+  parseExpenseAdjustments,
   parseQbLines,
   parseSplits,
   type CommissionCloseout,
@@ -1024,6 +1025,7 @@ export function mapCommissionCloseout(
     splits: parseSplits(row.splits),
     varianceAck: row.variance_ack,
     notes: row.notes,
+    expenseAdjustments: parseExpenseAdjustments(row.expense_adjustments),
     updatedAt: row.updated_at,
   };
 }

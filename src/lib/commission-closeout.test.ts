@@ -7,8 +7,13 @@ import {
   closeoutPdfFilename,
   defaultCommissionSplits,
   isCommissionInYear,
+  applyExpenseDisposition,
+  closeoutTaskTitle,
+  parseMoneyDraft,
   payoutRecipients,
+  pmCloseoutStatusLabel,
   seedQuickbooksLines,
+  setDeductionAmount,
   splitsForViewer,
   viewerCommissionCheck,
 } from "./commission-closeout.ts";
@@ -398,5 +403,57 @@ assert.deepEqual(
   recipients.map((member) => member.id),
   ["pm", "bd"],
 );
+
+const bills = [
+  expense({ id: "e1", amount: 4000, vendor: "ABC Supply", qbStatus: "entered", qbTxnId: "TXN-1" }),
+  expense({ id: "e2", amount: 125.5, vendor: "Dumpster", qbStatus: "entered", qbTxnId: "TXN-2" }),
+  expense({ id: "e3", amount: 80, vendor: "Homeowner", qbStatus: "entered", qbTxnId: "TXN-3" }),
+];
+const reclassified = buildCommissionSheet({
+  job: job(),
+  payments: [payment({ id: "p1", amount: 10000, method: "check" })],
+  expenses: bills,
+  forecasts: [],
+  qbLines: seedQuickbooksLines(bills),
+  expenseAdjustments: setDeductionAmount(
+    applyExpenseDisposition(
+      applyExpenseDisposition([], "e2", "pm_deduction", 125.5),
+      "e3",
+      "customer_refund",
+      80,
+    ),
+    "e2",
+    125.5,
+  ),
+});
+assert.equal(reclassified.totalExpenses, 4000);
+assert.equal(reclassified.customerRefund, 80);
+assert.equal(reclassified.refundLines.some((line) => line.id === "e3" && line.amount === 80), true);
+assert.equal(reclassified.pmDeductions[0]?.vendor, "Dumpster");
+assert.equal(reclassified.pmDeductions[0]?.amount, 125.5);
+assert.equal(reclassified.profit, 10000 - 80 - 4000);
+assert.equal(reclassified.splits.find((line) => line.id === "pm")?.check, 2834.5);
+assert.equal(reclassified.compare.some((row) => row.key === "e2" || row.key === "e3"), false);
+assert.equal(reclassified.expenseLines.find((line) => line.id === "e3")?.disposition, "customer_refund");
+assert.equal(parseMoneyDraft("12."), 12);
+assert.equal(parseMoneyDraft("12.5"), 12.5);
+assert.equal(parseMoneyDraft("12.50"), 12.5);
+assert.equal(parseMoneyDraft(".5"), 0.5);
+assert.equal(parseMoneyDraft(""), 0);
+assert.equal(parseMoneyDraft("12.555"), null);
+assert.equal(parseMoneyDraft("abc"), null);
+assert.equal(pmCloseoutStatusLabel("released"), "Ready for Review");
+assert.equal(pmCloseoutStatusLabel("submitted"), "With accounting");
+assert.equal(closeoutTaskTitle("payout", "RK100126-1"), "Ready for review RK100126-1");
+const onlyRefund = buildCommissionSheet({
+  job: job(),
+  payments: [payment({ id: "p1", amount: 500, method: "check" })],
+  expenses: [expense({ id: "e9", amount: 40, vendor: "Refunded", qbStatus: "not_in_qb" })],
+  forecasts: [],
+  expenseAdjustments: applyExpenseDisposition([], "e9", "customer_refund", 40),
+});
+assert.equal(onlyRefund.costBasis, "none");
+assert.equal(onlyRefund.customerRefund, 40);
+assert.equal(closeoutReleaseBlock(onlyRefund, false), null);
 
 console.log("commission-closeout tests passed");

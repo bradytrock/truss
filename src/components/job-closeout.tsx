@@ -9,7 +9,6 @@ import {
   buildCommissionSheet,
   canMarkCommissionPayout,
   canSubmitProjectCloseout,
-  CLOSEOUT_STATUS_LABELS,
 } from "@/lib/commission-closeout";
 import { expensesForJob, forecastedExpensesForJob, paymentsForJob } from "@/lib/job-financials";
 import type { Job } from "@/lib/types";
@@ -38,6 +37,7 @@ export function JobCloseout({ job }: { job: Job }) {
         forecasts: forecastedExpensesForJob(job.id, crm.forecastedExpenses ?? []),
         qbLines: closeout?.qbLines,
         splits: closeout?.splits,
+        expenseAdjustments: closeout?.expenseAdjustments,
         closingDate: job.substantialCompletion ?? closeout?.submittedAt ?? null,
       }),
     [
@@ -45,6 +45,7 @@ export function JobCloseout({ job }: { job: Job }) {
       client,
       closeout?.qbLines,
       closeout?.splits,
+      closeout?.expenseAdjustments,
       closeout?.submittedAt,
       contact,
       crm.expenses,
@@ -118,10 +119,10 @@ export function JobCloseout({ job }: { job: Job }) {
           Accounting has this sheet. They compare QuickBooks with the expenses, then send it on for payout.
         </p>
       ) : null}
-      {closeout?.status === "released" && !canPayout ? (
+      {closeout?.status === "released" ? (
         <p className="text-sm text-muted-foreground">
-          {CLOSEOUT_STATUS_LABELS.released}
-          {closeout.releasedToName ? ` — waiting on ${closeout.releasedToName}.` : "."}
+          Ready for Review
+          {closeout.releasedToName ? ` — ${closeout.releasedToName} reviews this on Commissions.` : "."}
         </p>
       ) : null}
       {canPayout ? (

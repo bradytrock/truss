@@ -1145,6 +1145,7 @@ export type Database = {
           splits: Json;
           variance_ack: boolean;
           notes: string;
+          expense_adjustments: Json;
           updated_at: string;
         };
         Insert: {
@@ -1168,6 +1169,7 @@ export type Database = {
           splits?: Json;
           variance_ack?: boolean;
           notes?: string;
+          expense_adjustments?: Json;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["commission_closeouts"]["Insert"]>;

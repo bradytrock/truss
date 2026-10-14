@@ -1,4 +1,4 @@
-import { CLOSEOUT_PAYOUT_TASK, CLOSEOUT_REVIEW_TASK, closeoutTaskTitle } from "@/lib/commission-closeout";
+import { closeoutTaskTitle, isCloseoutTaskTitle, isPayoutReviewTask } from "@/lib/commission-closeout";
 import { amountForEstimate } from "@/lib/estimate-totals";
 import { marketForEstimate } from "@/lib/market";
 import {
@@ -321,13 +321,17 @@ function taskRow(
         : null;
 
   if (closeout) {
+    const payoutReview = isPayoutReviewTask(task.title);
+    const href = payoutReview ? "/commissions" : related ? jobRecordHref(related.id) : "/commissions";
     return {
       id: `task-${task.id}`,
       badge: "CLOSEOUT",
       buckets: ["reviews", "money"],
       title: task.title,
-      titleHref: related ? jobRecordHref(related.id) : "/commissions",
-      detail: detail || "Compare QuickBooks to job expenses, then release commission.",
+      titleHref: href,
+      detail: payoutReview
+        ? [related?.code, "Ready for review on Commissions"].filter(Boolean).join(" · ")
+        : detail || "Compare QuickBooks to job expenses, then release commission.",
       status: dueLabel(task.dueAt, now),
       statusTone: late > 0 ? "late" : "today",
       actions: [
@@ -335,7 +339,7 @@ function taskRow(
         {
           type: "link",
           label: "Review",
-          href: related ? jobRecordHref(related.id) : "/commissions",
+          href,
           solid: true,
         },
       ],
@@ -929,7 +933,7 @@ function isCallTask(title: string) {
 }
 
 function isCloseoutTask(title: string) {
-  return title.startsWith(CLOSEOUT_REVIEW_TASK) || title.startsWith(CLOSEOUT_PAYOUT_TASK);
+  return isCloseoutTaskTitle(title);
 }
 
 function sourceMix(opportunities: Opportunity[]) {

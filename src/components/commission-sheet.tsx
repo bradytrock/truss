@@ -1,19 +1,28 @@
 "use client";
 
 import { useState } from "react";
+import { MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { downloadCloseoutPdf } from "@/lib/commission-closeout-pdf";
 import { useCrm } from "@/lib/crm-store";
 import {
   COMPARE_STATUS_LABELS,
   CLOSEOUT_STATUS_LABELS,
+  parseMoneyDraft,
   type CommissionCloseout,
   type CommissionQbLine,
   type CommissionSheet,
   type CommissionSplitLine,
+  type ExpenseDisposition,
 } from "@/lib/commission-closeout";
 import { formatDate, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -54,6 +63,8 @@ export function CommissionSheetView({
   onPullPosted,
   varianceAck = false,
   onVarianceAck,
+  onExpenseDisposition,
+  onDeductionAmount,
 }: {
   sheet: CommissionSheet;
   closeout?: CommissionCloseout | null;
@@ -68,6 +79,8 @@ export function CommissionSheetView({
   onPullPosted?: () => void;
   varianceAck?: boolean;
   onVarianceAck?: (checked: boolean) => void;
+  onExpenseDisposition?: (expenseId: string, disposition: ExpenseDisposition) => void;
+  onDeductionAmount?: (expenseId: string, amount: number) => void;
 }) {
   return (
     <div className="space-y-4">
@@ -140,6 +153,14 @@ export function CommissionSheetView({
             <tbody className="border-t">
               <Total label="Payments received" value={sheet.paymentsReceived} labelSpan={3} />
               <Total label="Merchant fees 4%" value={sheet.merchantFees} labelSpan={3} />
+              {sheet.refundLines.map((line) => (
+                <tr key={line.id} className="border-t">
+                  <td className="px-3 py-1.5" colSpan={3}>
+                    {line.label}
+                  </td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{money(line.amount)}</td>
+                </tr>
+              ))}
               <Total label="Customer refund" value={sheet.customerRefund} labelSpan={3} />
               <Total label="Total payments" value={sheet.totalPayments} labelSpan={3} strong />
               <Total label="Job sold amount" value={sheet.jobSold} labelSpan={3} strong />
@@ -231,12 +252,36 @@ export function CommissionSheetView({
                     <td className="px-3 py-1.5">
                       {line.vendor}
                       {line.forecasted ? <span className="ml-2 text-xs text-muted-foreground">Forecast</span> : null}
+                      {line.disposition === "customer_refund" ? (
+                        <span className="ml-2 text-xs text-muted-foreground">Customer refund</span>
+                      ) : null}
+                      {line.disposition === "pm_deduction" ? (
+                        <span className="ml-2 text-xs text-muted-foreground">Commission deduction</span>
+                      ) : null}
                     </td>
                     <td className="px-3 py-1.5 text-right tabular-nums">{money(line.amount)}</td>
+                    {editing && onExpenseDisposition ? (
+                      <td className="w-10 px-2 py-1 text-right">
+                        {line.forecasted ? null : (
+                          <ExpenseMenu
+                            vendor={line.vendor}
+                            disposition={line.disposition}
+                            onDisposition={(disposition) => onExpenseDisposition(line.id, disposition)}
+                          />
+                        )}
+                      </td>
+                    ) : null}
                   </tr>
                 ))
               )}
               <Total label="Total expenses" value={sheet.totalExpenses} strong />
+              {sheet.expenseLines.some((line) => line.disposition !== "job") ? (
+                <tr>
+                  <td className="px-3 pb-2 text-xs text-muted-foreground" colSpan={editing ? 3 : 2}>
+                    Customer refunds and commission deductions stay on this list and are left out of the job expense total.
+                  </td>
+                </tr>
+              ) : null}
               <tr className="border-t">
                 <td className="px-3 py-1.5">Profit margin</td>
                 <td className="px-3 py-1.5 text-right tabular-nums">{ratio(sheet.margin)}</td>
@@ -298,12 +343,10 @@ export function CommissionSheetView({
                   </td>
                   <td className="px-2 py-1 text-right">
                     {editing && line.percent == null ? (
-                      <Input
+                      <MoneyField
                         value={line.flat}
-                        inputMode="decimal"
-                        aria-label={`${line.label} amount`}
-                        onChange={(event) => onSplit?.(line.id, { flat: Number(event.target.value) || 0 })}
-                        className="h-7 text-right"
+                        label={`${line.label} amount`}
+                        onCommit={(amount) => onSplit?.(line.id, { flat: amount })}
                       />
                     ) : (
                       <span className="tabular-nums">{money(line.comm)}</span>
@@ -311,12 +354,10 @@ export function CommissionSheetView({
                   </td>
                   <td className="px-2 py-1 text-right">
                     {editing ? (
-                      <Input
+                      <MoneyField
                         value={line.trades}
-                        inputMode="decimal"
-                        aria-label={`${line.label} trades`}
-                        onChange={(event) => onSplit?.(line.id, { trades: Number(event.target.value) || 0 })}
-                        className="h-7 text-right"
+                        label={`${line.label} trades`}
+                        onCommit={(amount) => onSplit?.(line.id, { trades: amount })}
                       />
                     ) : (
                       <span className="tabular-nums">{money(line.trades)}</span>
@@ -324,12 +365,10 @@ export function CommissionSheetView({
                   </td>
                   <td className="px-2 py-1 text-right">
                     {editing ? (
-                      <Input
+                      <MoneyField
                         value={line.draw}
-                        inputMode="decimal"
-                        aria-label={`${line.label} draw`}
-                        onChange={(event) => onSplit?.(line.id, { draw: Number(event.target.value) || 0 })}
-                        className="h-7 text-right"
+                        label={`${line.label} draw`}
+                        onCommit={(amount) => onSplit?.(line.id, { draw: amount })}
                       />
                     ) : (
                       <span className="tabular-nums">{money(line.draw)}</span>
@@ -364,6 +403,29 @@ export function CommissionSheetView({
               </tr>
             </tbody>
           </table>
+          {sheet.pmDeductions.length > 0 ? (
+            <div className="space-y-2 border-t px-3 py-2">
+              <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Commission deductions</p>
+              {sheet.pmDeductions.map((line) => (
+                <div key={line.expenseId} className="flex items-center justify-between gap-3">
+                  <span>{line.vendor}</span>
+                  {editing && onDeductionAmount ? (
+                    <MoneyField
+                      value={line.amount}
+                      label={`${line.vendor} commission deduction`}
+                      onCommit={(amount) => onDeductionAmount(line.expenseId, amount)}
+                      className="w-28 shrink-0"
+                    />
+                  ) : (
+                    <span className="tabular-nums">{money(line.amount)}</span>
+                  )}
+                </div>
+              ))}
+              <p className="text-xs text-muted-foreground">
+                These come out of the project manager’s check. They are not job expenses.
+              </p>
+            </div>
+          ) : null}
           {editing ? (
             <div className="border-t px-3 py-2">
               <Button type="button" size="sm" variant="outline" onClick={onAddSplit}>
@@ -471,6 +533,71 @@ export function CommissionSheetView({
         ) : null}
       </section>
     </div>
+  );
+}
+
+function MoneyField({
+  value,
+  label,
+  onCommit,
+  className,
+}: {
+  value: number;
+  label: string;
+  onCommit: (amount: number) => void;
+  className?: string;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? (Number.isFinite(value) ? String(value) : "");
+  return (
+    <Input
+      value={shown}
+      inputMode="decimal"
+      aria-label={label}
+      className={cn("h-7 text-right", className)}
+      onFocus={() => setDraft(Number.isFinite(value) ? String(value) : "")}
+      onBlur={() => setDraft(null)}
+      onChange={(event) => {
+        const next = parseMoneyDraft(event.target.value);
+        if (next == null) return;
+        setDraft(event.target.value);
+        onCommit(next);
+      }}
+    />
+  );
+}
+
+function ExpenseMenu({
+  vendor,
+  disposition,
+  onDisposition,
+}: {
+  vendor: string;
+  disposition: ExpenseDisposition;
+  onDisposition: (disposition: ExpenseDisposition) => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button type="button" variant="ghost" size="icon-xs" aria-label={`Actions for ${vendor || "expense"}`} />
+        }
+      >
+        <MoreHorizontal />
+        <span className="sr-only">Actions for {vendor || "expense"}</span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-56">
+        <DropdownMenuItem disabled={disposition === "pm_deduction"} onClick={() => onDisposition("pm_deduction")}>
+          Move to commission deduction
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={disposition === "customer_refund"} onClick={() => onDisposition("customer_refund")}>
+          Set as Customer Refund
+        </DropdownMenuItem>
+        {disposition === "job" ? null : (
+          <DropdownMenuItem onClick={() => onDisposition("job")}>Keep as job expense</DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
