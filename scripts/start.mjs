@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { prepareStandalone } from "./prepare-standalone.mjs";
+import { startRailwayRest } from "./railway-rest.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -32,6 +33,8 @@ function run(command, args, cwd) {
 const rootServer = path.join(root, "server.js");
 const standaloneServer = path.join(root, ".next", "standalone", "server.js");
 const nextBin = path.join(root, "node_modules", "next", "dist", "bin", "next");
+
+await startRailwayRest(root);
 
 console.log(
   `[start] Listening on ${process.env.HOSTNAME}:${port} (process.env.PORT=${process.env.PORT})`,

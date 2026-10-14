@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { startRailwayRest } from "./railway-rest.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -31,13 +32,17 @@ function run(command, args) {
 
 await run(process.execPath, [allowOrigins]);
 
+const railway = await startRailwayRest(root);
+
 console.log(`[dev] Listening on port ${port} (process.env.PORT)`);
 
-spawn(process.execPath, [nextBin, "dev", "--hostname", "0.0.0.0", "--port", port], {
+const next = spawn(process.execPath, [nextBin, "dev", "--hostname", "0.0.0.0", "--port", port], {
   cwd: root,
   env: process.env,
   stdio: "inherit",
-}).on("exit", (code, signal) => {
+});
+next.on("exit", (code, signal) => {
+  railway?.kill();
   if (signal) process.kill(process.pid, signal);
   process.exit(code ?? 1);
 });

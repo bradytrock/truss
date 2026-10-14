@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { railwayClientOptions } from "@/lib/railway-rest";
 import {
   getSupabaseKey,
   getSupabaseUrl,
@@ -14,6 +15,7 @@ export async function createClient() {
   const key = getSupabaseKey() || cookieStore.get(SB_KEY_COOKIE)?.value || "";
 
   return createServerClient<Database>(url, key, {
+    ...railwayClientOptions(),
     cookies: {
       getAll() {
         return cookieStore.getAll();

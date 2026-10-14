@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { resolveAutomationReplies } from "@/lib/automations/replies";
 import { inboundMessages, inboundSkipReason } from "@/lib/inbound-text";
+import { railwayClientOptions } from "@/lib/railway-rest";
 import { getSupabaseKey, getSupabaseUrl } from "@/lib/supabase/env";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -22,7 +23,7 @@ export async function ingestCompanyMessages(raw: Record<string, unknown>, compan
     return { status: 200, body: { ok: true, skipped: true, reason: "empty" } };
   }
 
-  const supabase = createClient<Database>(getSupabaseUrl(), getSupabaseKey());
+  const supabase = createClient<Database>(getSupabaseUrl(), getSupabaseKey(), railwayClientOptions());
   const saved: unknown[] = [];
   for (const fields of messages) {
     if ((fields.action === "edit" || fields.action === "unsend") && fields.targetHandle) {

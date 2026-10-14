@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { companyCamSignatureMatches, parseCompanyCamWebhook } from "@/lib/companycam";
+import { railwayClientOptions } from "@/lib/railway-rest";
 import { getSupabaseKey, getSupabaseUrl } from "@/lib/supabase/env";
 import type { Database } from "@/lib/supabase/database.types";
 import { isMissingCompanyCam } from "@/lib/supabase/schema-errors";
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, skipped: true, reason: event.eventType || "ignored" });
   }
 
-  const supabase = createClient<Database>(getSupabaseUrl(), getSupabaseKey());
+  const supabase = createClient<Database>(getSupabaseUrl(), getSupabaseKey(), railwayClientOptions());
   if (event.eventType === "photo.deleted") {
     const removed = await supabase.rpc("companycam_remove_photo", {
       p_token: token,

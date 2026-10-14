@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ingestCompanyMessages } from "@/lib/inbound-ingest";
 import { createClient } from "@supabase/supabase-js";
+import { railwayClientOptions } from "@/lib/railway-rest";
 import { getSupabaseKey, getSupabaseUrl } from "@/lib/supabase/env";
 import type { Database } from "@/lib/supabase/database.types";
 
@@ -20,7 +21,7 @@ export async function GET() {
 
 export async function POST(request: Request, context: { params: Promise<{ token: string }> }) {
   const { token } = await context.params;
-  const supabase = createClient<Database>(getSupabaseUrl(), getSupabaseKey());
+  const supabase = createClient<Database>(getSupabaseUrl(), getSupabaseKey(), railwayClientOptions());
   const { data, error } = await supabase.rpc("photon_inbound_company", { p_token: token });
   const row = asRecord(data);
   const companyId = row?.ok === true && typeof row.companyId === "string" ? row.companyId : "";

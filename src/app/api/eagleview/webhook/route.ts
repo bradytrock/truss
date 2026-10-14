@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { railwayClientOptions } from "@/lib/railway-rest";
 import { getSupabaseKey, getSupabaseUrl } from "@/lib/supabase/env";
 import type { Database } from "@/lib/supabase/database.types";
 import { isMissingEagleview } from "@/lib/supabase/schema-errors";
@@ -27,7 +28,7 @@ async function ingest(params: {
   statusId: number | null;
   statusDetail: string;
 }) {
-  const supabase = createClient<Database>(getSupabaseUrl(), getSupabaseKey());
+  const supabase = createClient<Database>(getSupabaseUrl(), getSupabaseKey(), railwayClientOptions());
   const { data, error } = await supabase.rpc("eagleview_ingest_webhook", {
     p_token: params.token,
     p_reference_id: params.referenceId,

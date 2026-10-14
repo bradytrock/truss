@@ -4,6 +4,7 @@ import { isLegalPath } from "@/lib/legal";
 import { DEMO_SCHEDULE_URL, shouldForceDemo, subscriptionActiveFromRpc } from "@/lib/subscription";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
+import { railwayClientOptions } from "@/lib/railway-rest";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   getSupabaseKey,
@@ -70,6 +71,7 @@ async function redirectGuestEstimate(request: NextRequest) {
   if (!url || !key) return null;
   try {
     const supabase = createClient(url, key, {
+      ...railwayClientOptions(),
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     });
     const { data, error } = await supabase.rpc("estimate_guest_share_path", { p_id: estimateId });
@@ -165,6 +167,7 @@ export async function updateSession(request: NextRequest) {
 
   let supabaseResponse = NextResponse.next({ request });
   const supabase = createServerClient(url, key, {
+    ...railwayClientOptions(),
     cookies: {
       getAll() {
         return request.cookies.getAll();
