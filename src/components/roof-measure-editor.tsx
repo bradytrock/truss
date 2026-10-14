@@ -8,6 +8,7 @@ import {
   Pentagon,
   Redo2,
   Ruler,
+  Satellite,
   Undo2,
   Upload,
 } from "lucide-react";
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/sheet";
 import { useCrm } from "@/lib/crm-store";
 import { isDeletedJob, jobAddress, jobRecordHref } from "@/lib/job-record";
+import { isValidLatLng } from "@/lib/project-map-logic";
 import { uploadViaApi } from "@/lib/storage/client-upload";
 import { downloadRoofMeasurePdf } from "@/lib/roof-measure-pdf";
 import {
@@ -45,6 +47,7 @@ import {
   PITCH_RISES,
   commitFacet,
   emptyDrawing,
+  parseRoofDrawing,
   facetPoints,
   formatFeet,
   formatSquares,
@@ -138,10 +141,15 @@ export function RoofMeasureEditor({ jobId }: { jobId: string }) {
   const [eagleviewOpen, setEagleviewOpen] = useState(false);
   const [wasteInput, setWasteInput] = useState("15");
   const [dirty, setDirty] = useState(false);
+  const [measuring, setMeasuring] = useState(false);
 
   const totals = useMemo(() => measureRoof(drawing), [drawing]);
   const imageSrc = roofImageSrc(imagePath);
   const address = job ? jobAddress(job) : "";
+  const lat = Number(job?.lat);
+  const lng = Number(job?.lng);
+  const canMeasureFromSatellite =
+    Boolean(address) || (isValidLatLng(lat, lng) && !(lat === 0 && lng === 0));
   const selectedFacet = selection?.kind === "facet" ? drawing.facets.find((facet) => facet.id === selection.id) : null;
   const selectedEdge = selection?.kind === "edge" ? drawing.edges.find((edge) => edge.id === selection.id) : null;
 
@@ -335,6 +343,72 @@ export function RoofMeasureEditor({ jobId }: { jobId: string }) {
     setFuture([]);
   }
 
+  async function measureFromSatellite() {
+    if (deleted || measuring) return;
+    if (!canMeasureFromSatellite) {
+      toast.error("Add the property address on the job before measuring from satellite.");
+      return;
+    }
+    if (drawingRef.current.facets.length > 0) {
+      const ok = window.confirm("Replace the drawing with a satellite trace? You can still move the corners.");
+      if (!ok) return;
+    }
+    setMeasuring(true);
+    try {
+      const response = await fetch("/api/roof-measure/auto", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        imagePath?: string;
+        imageDataUrl?: string;
+        imageWidth?: number;
+        imageHeight?: number;
+        contentType?: string;
+        drawing?: unknown;
+        warning?: string;
+      };
+      if (!response.ok) {
+        toast.error(data.error || "Could not measure from satellite.");
+        return;
+      }
+      let path = data.imagePath?.trim() ?? "";
+      if (!path && data.imageDataUrl) {
+        const blob = await (await fetch(data.imageDataUrl)).blob();
+        const ext = data.contentType === "image/png" ? "png" : "jpg";
+        const uploaded = await uploadViaApi("job-files", blob, `roof/${jobId}/satellite.${ext}`, `satellite.${ext}`);
+        path = uploaded.path;
+      }
+      if (!path) {
+        toast.error("The satellite photo did not save. Try again in a moment.");
+        return;
+      }
+      const next = parseRoofDrawing(data.drawing);
+      setImagePath(path);
+      if (data.imageWidth && data.imageHeight) {
+        setImageSize({ w: data.imageWidth, h: data.imageHeight });
+      }
+      commit(next);
+      setDraft([]);
+      setScaleClicks([]);
+      setSelection(null);
+      setWasteInput(String(next.wastePercent));
+      if (next.facets.length > 0) setTool("select");
+      if (data.warning) toast.message(data.warning);
+      else {
+        toast.success(
+          `Traced ${next.facets.length} facet${next.facets.length === 1 ? "" : "s"}. Drag a corner if a line is off.`,
+        );
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not measure from satellite.");
+    } finally {
+      setMeasuring(false);
+    }
+  }
+
   function applyScale() {
     if (scaleClicks.length < 2) return;
     const feet = Number(scaleFeet);
@@ -509,7 +583,7 @@ export function RoofMeasureEditor({ jobId }: { jobId: string }) {
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-white/70">
-              Add an aerial or a job photo, then trace each roof plane.
+              Measure from satellite, or add an aerial, then trace each roof plane.
             </div>
           )}
           <svg
@@ -625,6 +699,19 @@ export function RoofMeasureEditor({ jobId }: { jobId: string }) {
 
         <aside className="min-h-0 space-y-4 overflow-y-auto border-t p-4 lg:border-t-0 lg:border-l">
           <div className="space-y-2">
+            <Button
+              type="button"
+              className="w-full"
+              disabled={deleted || measuring || !canMeasureFromSatellite}
+              title={canMeasureFromSatellite ? "Pull a satellite photo and trace the roof" : "Add an address on the job first"}
+              onClick={() => void measureFromSatellite()}
+            >
+              <Satellite data-icon="inline-start" />
+              {measuring ? "Measuring…" : "Measure from satellite"}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Google satellite photo for this address. Squares come from the traced planes, so drag a corner if a line is off.
+            </p>
             <Button type="button" variant="outline" className="w-full" onClick={() => setEagleviewOpen(true)}>
               EagleView
             </Button>
