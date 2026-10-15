@@ -9,7 +9,8 @@ const withClerk = clerkMiddleware(async (auth, request) => {
   if (userId) {
     const person = await currentUser();
     const email = person?.primaryEmailAddress?.emailAddress ?? "";
-    if (email) await linkClerkProfile(userId, email);
+    const token = await getToken();
+    await linkClerkProfile(userId, email, token);
   }
   return updateSession(request, userId ? { getToken } : null);
 });

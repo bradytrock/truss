@@ -51,7 +51,11 @@ begin
     rewritten := replace(src, 'auth.uid()', 'public.current_profile_id()');
     rewritten := replace(rewritten, '"auth"."uid"()', 'public.current_profile_id()');
     if rewritten <> src then
-      execute rewritten;
+      begin
+        execute rewritten;
+      exception when others then
+        raise notice 'left % on auth.uid(): %', fn.proname, sqlerrm;
+      end;
     end if;
   end loop;
 
@@ -66,23 +70,31 @@ begin
   loop
     if coalesce(pol.qual, '') like '%auth.uid()%' then
       new_using := replace(pol.qual, 'auth.uid()', 'public.current_profile_id()');
-      execute format(
-        'alter policy %I on %I.%I using (%s)',
-        pol.policyname,
-        pol.schemaname,
-        pol.tablename,
-        new_using
-      );
+      begin
+        execute format(
+          'alter policy %I on %I.%I using (%s)',
+          pol.policyname,
+          pol.schemaname,
+          pol.tablename,
+          new_using
+        );
+      exception when others then
+        raise notice 'left policy % on %: %', pol.policyname, pol.tablename, sqlerrm;
+      end;
     end if;
     if coalesce(pol.with_check, '') like '%auth.uid()%' then
       new_check := replace(pol.with_check, 'auth.uid()', 'public.current_profile_id()');
-      execute format(
-        'alter policy %I on %I.%I with check (%s)',
-        pol.policyname,
-        pol.schemaname,
-        pol.tablename,
-        new_check
-      );
+      begin
+        execute format(
+          'alter policy %I on %I.%I with check (%s)',
+          pol.policyname,
+          pol.schemaname,
+          pol.tablename,
+          new_check
+        );
+      exception when others then
+        raise notice 'left policy % on %: %', pol.policyname, pol.tablename, sqlerrm;
+      end;
     end if;
   end loop;
 end $$;

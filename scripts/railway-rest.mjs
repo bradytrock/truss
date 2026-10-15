@@ -12,8 +12,8 @@ import pg from "pg";
 const VERSION = "16.4";
 
 function railwayDatabaseEnabled() {
-  const flag = (process.env.NEXT_PUBLIC_USE_RAILWAY_DATABASE ?? "").trim();
-  return flag !== "0" && flag !== "false";
+  const flag = (process.env.NEXT_PUBLIC_USE_RAILWAY_DATABASE ?? "").trim().toLowerCase();
+  return flag === "railway";
 }
 
 function clerkFrontendApi(publishableKey) {

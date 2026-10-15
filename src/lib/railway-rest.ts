@@ -1,7 +1,7 @@
-/** Table and RPC calls use Railway Postgres. Set to 0 to send them to Supabase instead. */
+/** Table and RPC calls use Supabase. Set this to "railway" to use Railway Postgres instead. */
 export function railwayDatabaseEnabled() {
-  const flag = process.env.NEXT_PUBLIC_USE_RAILWAY_DATABASE?.trim() ?? "";
-  return flag !== "0" && flag !== "false";
+  const flag = process.env.NEXT_PUBLIC_USE_RAILWAY_DATABASE?.trim().toLowerCase() ?? "";
+  return flag === "railway";
 }
 
 export function railwayRestPort() {
