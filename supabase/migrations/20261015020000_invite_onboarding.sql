@@ -3,6 +3,7 @@
 -- can still reach the person who sent it.
 
 alter table public.account_invites
+  add column if not exists used_at timestamptz,
   add column if not exists accepted_at timestamptz,
   add column if not exists declined_at timestamptz,
   add column if not exists reinvite_requested_at timestamptz;
