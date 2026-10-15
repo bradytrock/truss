@@ -15,11 +15,7 @@ assert.equal(clerkFailureMessage(new Error("nope")), "nope");
 
 const calls: string[] = [];
 const deps = {
-  loadInvite: async () => ({ status: "used" as const, email: "Jake@Demo.test" }),
-  passwordMatchesAccount: async () => {
-    calls.push("password");
-    return true;
-  },
+  loadInvite: async () => ({ status: "accepted" as const, email: "Jake@Demo.test" }),
   findClerkUserId: async () => {
     calls.push("find");
     return null;
@@ -32,13 +28,12 @@ const deps = {
     calls.push("verify");
     return false;
   },
+  claimSeat: async () => {
+    calls.push("claim");
+  },
   createTicket: async (userId: string) => {
     calls.push(`ticket:${userId}`);
     return "ticket_1";
-  },
-  linkProfile: async () => {
-    calls.push("link");
-    return true;
   },
   deleteClerkUser: async () => {
     calls.push("delete");
@@ -53,7 +48,7 @@ const created = await issueInviteClerkTicket({
   ...deps,
 });
 assert.deepEqual(created, { ok: true, ticket: "ticket_1" });
-assert.deepEqual(calls, ["password", "find", "create", "link", "ticket:user_1"]);
+assert.deepEqual(calls, ["find", "create", "claim", "ticket:user_1"]);
 
 const skipped = await issueInviteClerkTicket({
   configured: false,
@@ -61,7 +56,7 @@ const skipped = await issueInviteClerkTicket({
   password: "long-password",
   fullName: "Ada",
   ...deps,
-  passwordMatchesAccount: async () => {
+  claimSeat: async () => {
     throw new Error("should not run");
   },
 });
@@ -74,26 +69,12 @@ const open = await issueInviteClerkTicket({
   fullName: "Ada",
   ...deps,
   loadInvite: async () => ({ status: "open", email: "ada@demo.test" }),
-  passwordMatchesAccount: async () => {
+  claimSeat: async () => {
     throw new Error("should not run");
   },
 });
 assert.equal(open.ok, false);
 if (!open.ok) assert.equal(open.error, "Accept the invitation before creating the account.");
-
-const wrongPassword = await issueInviteClerkTicket({
-  configured: true,
-  token: "tok",
-  password: "long-password",
-  fullName: "Ada",
-  ...deps,
-  passwordMatchesAccount: async () => false,
-  createClerkUser: async () => {
-    throw new Error("should not create");
-  },
-});
-assert.equal(wrongPassword.ok, false);
-if (!wrongPassword.ok) assert.equal(wrongPassword.status, 401);
 
 const mismatch = await issueInviteClerkTicket({
   configured: true,
@@ -148,7 +129,9 @@ const unlinked = await issueInviteClerkTicket({
   password: "long-password",
   fullName: "Ada",
   ...deps,
-  linkProfile: async () => false,
+  claimSeat: async () => {
+    throw new Error("Could not attach this login to your profile.");
+  },
   deleteClerkUser: async (userId) => {
     deleted.push(userId);
   },

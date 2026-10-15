@@ -269,6 +269,24 @@ function InviteSignupForm({ token, signIn }: { token: string; signIn: ClerkSignI
     event.preventDefault();
     if (!gate) return;
     setFormError(null);
+    if (signIn) {
+      setPending(true);
+      try {
+        const opened = await openClerkLogin();
+        if (opened === "skipped" || opened === "continue") {
+          const message = "Sign-in is not configured for this invite.";
+          setFormError(message);
+          toast.error(message);
+        }
+      } catch (error) {
+        const message = authErrorMessage(error instanceof Error ? error.message : "Could not create the account.");
+        setFormError(message);
+        toast.error(message);
+      } finally {
+        setPending(false);
+      }
+      return;
+    }
     if (railwayDatabaseEnabled()) {
       const message = "New companies sign in with Clerk. Accounts are not created in Supabase.";
       setFormError(message);

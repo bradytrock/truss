@@ -13,7 +13,6 @@ export type InviteClerkClientResult =
 
 type InviteClerkDeps = {
   loadInvite: (token: string) => Promise<{ status: InviteGateStatus; email: string } | null>;
-  passwordMatchesAccount: (email: string, password: string) => Promise<boolean>;
   findClerkUserId: (email: string) => Promise<string | null>;
   createClerkUser: (input: {
     email: string;
@@ -22,8 +21,8 @@ type InviteClerkDeps = {
     lastName?: string;
   }) => Promise<string>;
   passwordMatchesClerk: (userId: string, password: string) => Promise<boolean>;
+  claimSeat: (token: string, userId: string, fullName: string) => Promise<void>;
   createTicket: (userId: string) => Promise<string>;
-  linkProfile: (userId: string, email: string) => Promise<boolean>;
   deleteClerkUser: (userId: string) => Promise<void>;
 };
 
@@ -62,8 +61,8 @@ function identifierExists(error: unknown) {
 
 /**
  * Creates the Clerk user for an invited seat and returns a one-time sign-in ticket.
- * The Supabase account must already accept this password. An existing Clerk user is
- * reused only when that same password matches; it is never overwritten.
+ * The seat is claimed in the database without a Supabase Auth user. An existing Clerk
+ * user is reused only when that same password matches; it is never overwritten.
  */
 export async function issueInviteClerkTicket(
   input: {
@@ -95,20 +94,6 @@ export async function issueInviteClerkTicket(
   }
 
   const email = normalizeSeatEmail(invite.email);
-  let passwordAccepted = false;
-  try {
-    passwordAccepted = await input.passwordMatchesAccount(email, input.password);
-  } catch {
-    passwordAccepted = false;
-  }
-  if (!passwordAccepted) {
-    return {
-      ok: false,
-      status: 401,
-      error: "That email and password were not accepted. Create the account first, then try again.",
-    };
-  }
-
   const name = splitPersonName(input.fullName);
   let userId: string | null = null;
   let createdNow = false;
@@ -157,24 +142,20 @@ export async function issueInviteClerkTicket(
     }
   }
 
-  let linked = false;
   try {
-    linked = await input.linkProfile(userId, email);
-  } catch {
-    linked = false;
-  }
-  if (!linked) {
+    await input.claimSeat(token, userId, input.fullName);
+  } catch (error) {
     if (createdNow) {
       try {
         await input.deleteClerkUser(userId);
       } catch {
-        // The next attempt verifies the password and links the user that was left behind.
+        // The next attempt verifies the password and claims the seat for the user left behind.
       }
     }
     return {
       ok: false,
       status: 409,
-      error: "Could not attach this login to your profile. Try again in a moment.",
+      error: clerkFailureMessage(error) || "Could not attach this login to your profile. Try again in a moment.",
     };
   }
 

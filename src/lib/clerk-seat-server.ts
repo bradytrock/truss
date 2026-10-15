@@ -1,9 +1,10 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { createClient } from "@supabase/supabase-js";
+import pg from "pg";
 import { clerkConfigured } from "@/lib/clerk-env";
-import { linkClerkProfile } from "@/lib/clerk-profile-link";
 import { issueInviteClerkTicket } from "@/lib/clerk-seat";
 import { parseInviteGate } from "@/lib/invite-onboarding";
+import { railwayDatabaseEnabled } from "@/lib/railway-rest";
 import { getSupabaseKey, getSupabaseUrl } from "@/lib/supabase/env";
 
 const TICKET_SECONDS = 120;
@@ -12,6 +13,56 @@ function anonClient() {
   return createClient(getSupabaseUrl(), getSupabaseKey(), {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
+}
+
+let pool: pg.Pool | null = null;
+
+function databasePool() {
+  const connectionString = process.env.DATABASE_URL?.trim() ?? "";
+  if (!connectionString) return null;
+  if (!pool) {
+    pool = new pg.Pool({
+      connectionString,
+      ssl: connectionString.includes("localhost") ? undefined : { rejectUnauthorized: false },
+      max: 2,
+    });
+  }
+  return pool;
+}
+
+function claimFailure(error: { message?: string; code?: string }) {
+  const message = error.message ?? "";
+  if (error.code === "PGRST202" || /claim_clerk_invite/i.test(message)) {
+    return "This invite cannot be finished yet. Ask the person who invited you to try again later.";
+  }
+  return message || "Could not attach this login to your profile.";
+}
+
+async function claimSeat(token: string, clerkUserId: string, fullName: string) {
+  if (railwayDatabaseEnabled()) {
+    const db = databasePool();
+    if (!db) throw new Error("This invite cannot be finished yet. Ask the person who invited you to try again later.");
+    try {
+      await db.query("select public.claim_clerk_invite($1, $2, $3)", [token, clerkUserId, fullName]);
+    } catch (error) {
+      throw new Error(claimFailure(error instanceof Error ? error : { message: "" }));
+    }
+    return;
+  }
+
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
+  if (!serviceKey) {
+    throw new Error("This invite cannot be finished yet. Ask the person who invited you to try again later.");
+  }
+  const supabase = createClient(getSupabaseUrl(), serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  const { error } = await supabase.rpc("claim_clerk_invite", {
+    p_token: token,
+    p_clerk_sub: clerkUserId,
+    p_full_name: fullName,
+  });
+  if (error) throw new Error(claimFailure(error));
 }
 
 /** Clerk login for someone who just created an invited account with this password. */
@@ -28,11 +79,6 @@ export async function openInviteClerkLogin(input: { token: string; password: str
       const gate = parseInviteGate(data);
       return { status: gate.status, email: gate.email };
     },
-    passwordMatchesAccount: async (email, password) => {
-      const supabase = anonClient();
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      return !error && Boolean(data.user);
-    },
     findClerkUserId: async (email) => {
       const clerk = await clerkClient();
       const list = await clerk.users.getUserList({ emailAddress: [email], limit: 1 });
@@ -46,7 +92,6 @@ export async function openInviteClerkLogin(input: { token: string; password: str
         firstName: person.firstName,
         ...(person.lastName ? { lastName: person.lastName } : {}),
         legalAcceptedAt: new Date(),
-        skipPasswordChecks: true,
       });
       return user.id;
     },
@@ -64,7 +109,7 @@ export async function openInviteClerkLogin(input: { token: string; password: str
       const ticket = await clerk.signInTokens.createSignInToken({ userId, expiresInSeconds: TICKET_SECONDS });
       return ticket.token;
     },
-    linkProfile: (userId, email) => linkClerkProfile(userId, email),
+    claimSeat,
     deleteClerkUser: async (userId) => {
       const clerk = await clerkClient();
       await clerk.users.deleteUser(userId);
