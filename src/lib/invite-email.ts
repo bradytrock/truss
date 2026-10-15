@@ -7,6 +7,7 @@ export type InviteEmailInput = {
   seatTitle: string;
   inviterName: string;
   signupUrl: string;
+  email?: string;
 };
 
 export type InviteEmailSendResult = {
@@ -28,7 +29,7 @@ function escapeHtml(value: string) {
 
 export function inviteEmailSubject(company: string) {
   const name = company.trim() || "your company";
-  return `Set up your ${name} account`;
+  return `Join ${name}`;
 }
 
 export function inviteEmailText(input: InviteEmailInput) {
@@ -37,15 +38,17 @@ export function inviteEmailText(input: InviteEmailInput) {
   const title = input.seatTitle.trim();
   const inviter = input.inviterName.trim() || "A teammate";
   const seat = title ? ` as ${title}` : "";
+  const email = input.email?.trim();
+  const only = email ? `This invite is only for ${email}. ` : "This invite is only for you. ";
   return [
     `Hi ${who},`,
     "",
-    `${inviter} invited you to join ${company}${seat}.`,
-    "This link is only for you, and it works once. After you set a password, it cannot be reused.",
+    `${inviter} added you to ${company}${seat}.`,
+    "Accept the invite to create your account.",
     "",
     input.signupUrl,
     "",
-    `The invite expires in ${INVITE_DAYS} days. If you were not expecting this, ignore the email.`,
+    `${only}It expires in ${INVITE_DAYS} days. If you were not expecting this, ignore the email.`,
   ].join("\n");
 }
 
@@ -56,6 +59,10 @@ export function inviteEmailHtml(input: InviteEmailInput) {
   const inviter = escapeHtml(input.inviterName.trim() || "A teammate");
   const url = escapeHtml(input.signupUrl);
   const seat = title ? ` as ${escapeHtml(title)}` : "";
+  const email = input.email?.trim();
+  const only = email
+    ? `This invite is only for ${escapeHtml(email)}. `
+    : "This invite is only for you. ";
   const subject = escapeHtml(inviteEmailSubject(input.company));
   return `<!DOCTYPE html>
 <html>
@@ -76,15 +83,15 @@ export function inviteEmailHtml(input: InviteEmailInput) {
               <td style="padding:32px 40px 8px;font-size:16px;line-height:1.6;color:#171717;">Hi ${who},</td>
             </tr>
             <tr>
-              <td style="padding:0 40px 16px;font-size:16px;line-height:1.6;color:#404040;">${inviter} invited you to join ${company}${seat}. This link is only for you, and it works once.</td>
+              <td style="padding:0 40px 16px;font-size:16px;line-height:1.6;color:#404040;">${inviter} added you to ${company}${seat}. Accept the invite to create your account.</td>
             </tr>
             <tr>
               <td style="padding:8px 40px 28px;">
-                <a href="${url}" style="display:block;background:#0a0a0a;color:#ffffff;text-decoration:none;padding:16px 24px;font-size:15px;font-weight:700;text-align:center;">Set up your account</a>
+                <a href="${url}" style="display:block;background:#0a0a0a;color:#ffffff;text-decoration:none;padding:16px 24px;font-size:15px;font-weight:700;text-align:center;">Accept invitation</a>
               </td>
             </tr>
             <tr>
-              <td style="padding:0 40px 32px;font-size:13px;line-height:1.5;color:#737373;">Expires in ${INVITE_DAYS} days. After you set a password, this link cannot be reused.</td>
+              <td style="padding:0 40px 32px;font-size:13px;line-height:1.5;color:#737373;">${only}Expires in ${INVITE_DAYS} days.</td>
             </tr>
           </table>
         </td>

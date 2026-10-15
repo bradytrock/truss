@@ -44,6 +44,7 @@ function Shell({ children }: { children: ReactNode }) {
     const isAuth =
       pathname.startsWith("/login") ||
       pathname.startsWith("/signup") ||
+      pathname.startsWith("/welcome") ||
       pathname.startsWith("/auth") ||
       isLegalPath(pathname);
     if (isAuth) return children;

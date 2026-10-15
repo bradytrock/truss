@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { BdRoiPanel } from "@/components/bd-roi";
 import { HomeDesk } from "@/components/home-desk";
 import { AutomationConfirmations } from "@/components/automation-confirmations";
+import { FirstWeek } from "@/components/first-week";
 import { HomeOnboarding } from "@/components/home-onboarding";
 import { ErrorBanner, LoadingScreen } from "@/components/page-chrome";
 import { isBusinessDevelopment } from "@/lib/bd";
@@ -173,6 +174,7 @@ export default function HomePage() {
     <div className="space-y-4">
       {crm.hydrateError ? <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} /> : null}
       <AutomationConfirmations />
+      <FirstWeek />
       {!hasLeads ? <HomeOnboarding viewer={crm.effectiveStaff} /> : (
         <HomeDesk
           desk={desk}

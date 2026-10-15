@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthFrame } from "@/components/auth-frame";
 import { AuthWelcomePreview } from "@/components/auth-welcome-preview";
+import { InviteSignup } from "@/components/invite-signup";
 import {
   isMissingAccountManagement,
   missingAccountManagementMessage,
@@ -389,10 +390,17 @@ function SignupForm() {
   );
 }
 
+function SignupGate() {
+  const searchParams = useSearchParams();
+  const inviteToken = searchParams.get("invite")?.trim() ?? "";
+  if (inviteToken) return <InviteSignup token={inviteToken} />;
+  return <SignupForm />;
+}
+
 export default function SignupPage() {
   return (
     <Suspense>
-      <SignupForm />
+      <SignupGate />
     </Suspense>
   );
 }

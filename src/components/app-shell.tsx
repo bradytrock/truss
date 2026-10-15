@@ -6,6 +6,8 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { LayoutGrid, Menu, Plus, Search } from "lucide-react";
 import { useCrm } from "@/lib/crm-store";
+import { onboardingStep } from "@/lib/invite-onboarding";
+import { createClient } from "@/lib/supabase/client";
 import { jobRecordHref } from "@/lib/job-record";
 import { phoneSearchText } from "@/lib/phone";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -192,6 +194,25 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [create, setCreate] = useState<
     "opportunity" | "client" | "invoice" | "event" | "expense" | "forecast" | "payment" | "task" | null
   >(null);
+
+  useEffect(() => {
+    if (!user.id) return;
+    let cancelled = false;
+    const supabase = createClient();
+    void supabase
+      .from("profiles")
+      .select("onboarding_step")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        const step = onboardingStep(data?.onboarding_step);
+        if (step === "profile" || step === "tools") router.replace("/welcome");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [router, user.id]);
 
   useEffect(() => {
     const hrefs = [

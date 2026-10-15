@@ -8,6 +8,7 @@ import {
 } from "@/lib/google-gmail";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { oauthFinishUrl } from "@/lib/invite-onboarding";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -15,12 +16,14 @@ export async function GET(request: Request) {
   const code = url.searchParams.get("code");
   const stateRaw = url.searchParams.get("state");
   const err = url.searchParams.get("error");
-  const mailUrl = new URL("/mail", origin);
+  let nextPath = "";
+  const mailUrl = () => oauthFinishUrl(origin, nextPath, "/mail");
 
   if (err || !code || !stateRaw) {
-    mailUrl.searchParams.set("gmail", "error");
-    mailUrl.searchParams.set("reason", err || "missing_code");
-    return NextResponse.redirect(mailUrl);
+    const dest = mailUrl();
+    dest.searchParams.set("gmail", "error");
+    dest.searchParams.set("reason", err || "missing_code");
+    return NextResponse.redirect(dest);
   }
 
   let staffId = "";
@@ -28,6 +31,7 @@ export async function GET(request: Request) {
     const state = JSON.parse(Buffer.from(stateRaw, "base64url").toString()) as {
       nonce?: string;
       staffId?: string;
+      next?: string;
     };
     const store = await cookies();
     const nonce = store.get(GMAIL_OAUTH_STATE)?.value;
@@ -36,10 +40,12 @@ export async function GET(request: Request) {
       throw new Error("OAuth state mismatch.");
     }
     staffId = state.staffId;
+    nextPath = state.next ?? "";
   } catch {
-    mailUrl.searchParams.set("gmail", "error");
-    mailUrl.searchParams.set("reason", "state");
-    return NextResponse.redirect(mailUrl);
+    const dest = mailUrl();
+    dest.searchParams.set("gmail", "error");
+    dest.searchParams.set("reason", "state");
+    return NextResponse.redirect(dest);
   }
 
   try {
@@ -78,16 +84,18 @@ export async function GET(request: Request) {
       maxAge: 60 * 60 * 24 * 30,
     });
 
-    mailUrl.searchParams.set("gmail", "connected");
-    mailUrl.searchParams.set("email", email);
-    mailUrl.searchParams.set("staffId", staffId);
-    return NextResponse.redirect(mailUrl);
+    const dest = mailUrl();
+    dest.searchParams.set("gmail", "connected");
+    dest.searchParams.set("email", email);
+    dest.searchParams.set("staffId", staffId);
+    return NextResponse.redirect(dest);
   } catch (error) {
-    mailUrl.searchParams.set("gmail", "error");
-    mailUrl.searchParams.set(
+    const dest = mailUrl();
+    dest.searchParams.set("gmail", "error");
+    dest.searchParams.set(
       "reason",
       error instanceof Error ? error.message : "token_exchange",
     );
-    return NextResponse.redirect(mailUrl);
+    return NextResponse.redirect(dest);
   }
 }

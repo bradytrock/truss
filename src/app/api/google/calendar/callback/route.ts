@@ -8,6 +8,7 @@ import {
 } from "@/lib/google-calendar";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { oauthFinishUrl } from "@/lib/invite-onboarding";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -15,12 +16,17 @@ export async function GET(request: Request) {
   const code = url.searchParams.get("code");
   const stateRaw = url.searchParams.get("state");
   const err = url.searchParams.get("error");
-  const calendarUrl = new URL("/calendar", origin);
+  let nextPath = "";
+  const calendarUrl = () => {
+    const dest = oauthFinishUrl(origin, nextPath, "/calendar");
+    return dest;
+  };
 
   if (err || !code || !stateRaw) {
-    calendarUrl.searchParams.set("google", "error");
-    calendarUrl.searchParams.set("reason", err || "missing_code");
-    return NextResponse.redirect(calendarUrl);
+    const dest = calendarUrl();
+    dest.searchParams.set("google", "error");
+    dest.searchParams.set("reason", err || "missing_code");
+    return NextResponse.redirect(dest);
   }
 
   let staffId = "";
@@ -28,6 +34,7 @@ export async function GET(request: Request) {
     const state = JSON.parse(Buffer.from(stateRaw, "base64url").toString()) as {
       nonce?: string;
       staffId?: string;
+      next?: string;
     };
     const store = await cookies();
     const nonce = store.get(GCAL_OAUTH_STATE)?.value;
@@ -36,10 +43,12 @@ export async function GET(request: Request) {
       throw new Error("OAuth state mismatch.");
     }
     staffId = state.staffId;
+    nextPath = state.next ?? "";
   } catch {
-    calendarUrl.searchParams.set("google", "error");
-    calendarUrl.searchParams.set("reason", "state");
-    return NextResponse.redirect(calendarUrl);
+    const dest = calendarUrl();
+    dest.searchParams.set("google", "error");
+    dest.searchParams.set("reason", "state");
+    return NextResponse.redirect(dest);
   }
 
   try {
@@ -77,16 +86,18 @@ export async function GET(request: Request) {
       });
     }
 
-    calendarUrl.searchParams.set("google", "connected");
-    calendarUrl.searchParams.set("email", email);
-    calendarUrl.searchParams.set("staffId", staffId);
-    return NextResponse.redirect(calendarUrl);
+    const dest = calendarUrl();
+    dest.searchParams.set("google", "connected");
+    dest.searchParams.set("email", email);
+    dest.searchParams.set("staffId", staffId);
+    return NextResponse.redirect(dest);
   } catch (error) {
-    calendarUrl.searchParams.set("google", "error");
-    calendarUrl.searchParams.set(
+    const dest = calendarUrl();
+    dest.searchParams.set("google", "error");
+    dest.searchParams.set(
       "reason",
       error instanceof Error ? error.message : "token_exchange",
     );
-    return NextResponse.redirect(calendarUrl);
+    return NextResponse.redirect(dest);
   }
 }

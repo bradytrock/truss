@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { GMAIL_OAUTH_STATE, gmailAuthUrl, isGoogleOAuthConfigured } from "@/lib/google-gmail";
+import { oauthReturnPath } from "@/lib/invite-onboarding";
 
 export async function GET(request: Request) {
   if (!isGoogleOAuthConfigured()) {
@@ -16,7 +17,8 @@ export async function GET(request: Request) {
   }
   const origin = url.origin;
   const nonce = crypto.randomUUID();
-  const state = Buffer.from(JSON.stringify({ nonce, staffId })).toString("base64url");
+  const next = oauthReturnPath(url.searchParams.get("next")) ?? "";
+  const state = Buffer.from(JSON.stringify({ nonce, staffId, next })).toString("base64url");
   const store = await cookies();
   store.set(GMAIL_OAUTH_STATE, nonce, {
     httpOnly: true,

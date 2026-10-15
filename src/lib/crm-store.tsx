@@ -11443,6 +11443,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         photos: [photo, ...prev.photos],
       }));
       mirrorCompanyCamPhoto(photo.id, "push");
+      void supabase.rpc("mark_onboarding_task", { p_task: "photo" });
       const job = state.jobs.find((item) => item.id === input.jobId);
       if (job && !job.primaryPhotoId) {
         await updateJob(input.jobId, { primaryPhotoId: photo.id }, { skipAudit: true });

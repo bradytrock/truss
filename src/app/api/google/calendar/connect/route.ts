@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { GCAL_OAUTH_STATE, googleAuthUrl, isGoogleOAuthConfigured } from "@/lib/google-calendar";
+import { oauthReturnPath } from "@/lib/invite-onboarding";
 
 export async function GET(request: Request) {
   if (!isGoogleOAuthConfigured()) {
@@ -16,7 +17,8 @@ export async function GET(request: Request) {
   }
   const origin = url.origin;
   const nonce = crypto.randomUUID();
-  const state = Buffer.from(JSON.stringify({ nonce, staffId })).toString("base64url");
+  const next = oauthReturnPath(url.searchParams.get("next")) ?? "";
+  const state = Buffer.from(JSON.stringify({ nonce, staffId, next })).toString("base64url");
   const store = await cookies();
   store.set(GCAL_OAUTH_STATE, nonce, {
     httpOnly: true,

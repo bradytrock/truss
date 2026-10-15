@@ -31,6 +31,13 @@ import { cn } from "@/lib/utils";
 
 const READ_EVENT = "notifications:read";
 
+type StaffNotice = {
+  id: string;
+  body: string;
+  created_at: string;
+  read_at: string | null;
+};
+
 type InboxSnapshot = {
   items: InboxItem[];
   error: string;
@@ -73,6 +80,7 @@ function NotificationsSession() {
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(0);
   const [assigning, setAssigning] = useState<InboxItem | null>(null);
+  const [notices, setNotices] = useState<StaffNotice[]>([]);
   const inboxKey = `${user.id}:${isAdmin ? "admin" : "rep"}`;
   const inbox = useSyncExternalStore(
     (listener) => subscribeInbox(inboxKey, listener),
@@ -119,17 +127,40 @@ function NotificationsSession() {
           if (!cancelled) publishInbox(inboxKey, { items: inboxSnapshot(inboxKey).items, error: "failed", loading: false });
         });
     };
+    const loadNotices = () => {
+      void createClient()
+        .from("staff_notices")
+        .select("id, body, created_at, read_at")
+        .eq("profile_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(20)
+        .then(({ data }) => {
+          if (!cancelled) setNotices(data ?? []);
+        });
+    };
     run();
+    loadNotices();
     window.addEventListener(NOTIFICATIONS_REFRESH, run);
+    window.addEventListener(NOTIFICATIONS_REFRESH, loadNotices);
     window.addEventListener("focus", run);
     return () => {
       cancelled = true;
       window.removeEventListener(NOTIFICATIONS_REFRESH, run);
+      window.removeEventListener(NOTIFICATIONS_REFRESH, loadNotices);
       window.removeEventListener("focus", run);
     };
   }, [inboxKey, isAdmin, user.companyId, user.id]);
 
   const unread = unreadInbox(inbox.items, readStamps);
+  const unreadNotices = notices.filter((notice) => !notice.read_at);
+  const unreadCount = unread.length + unreadNotices.length;
+
+  async function readNotices(ids: string[]) {
+    if (!ids.length) return;
+    const readAt = new Date().toISOString();
+    await createClient().from("staff_notices").update({ read_at: readAt }).in("id", ids);
+    setNotices((current) => current.map((notice) => (ids.includes(notice.id) ? { ...notice, read_at: notice.read_at || readAt } : notice)));
+  }
 
   function saveRead(stamps: string[]) {
     const next = markInboxStampsRead(readStamps, stamps);
@@ -148,7 +179,7 @@ function NotificationsSession() {
     if (href) router.push(href);
   }
 
-  const countLabel = unread.length > 9 ? "9+" : String(unread.length);
+  const countLabel = unreadCount > 9 ? "9+" : String(unreadCount);
 
   return (
     <>
@@ -161,7 +192,7 @@ function NotificationsSession() {
     >
       <PopoverTrigger
         nativeButton
-        aria-label={unread.length ? `Notifications, ${unread.length} unread` : "Notifications"}
+        aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"}
         className={cn(
           buttonVariants({ variant: "ghost", size: "sm" }),
           "relative text-muted-foreground hover:text-foreground",
@@ -169,7 +200,7 @@ function NotificationsSession() {
       >
         <Bell />
         <span className="hidden md:inline">Notifications</span>
-        {unread.length > 0 ? (
+        {unreadCount > 0 ? (
           <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#E0302E] px-1 text-[10px] font-medium text-white">
             {countLabel}
           </span>
@@ -178,22 +209,51 @@ function NotificationsSession() {
       <PopoverContent align="end" sideOffset={8} className="w-[min(22rem,calc(100vw-1.5rem))] gap-0 p-0">
         <div className="flex items-center justify-between gap-3 border-b px-3 py-2">
           <p className="text-sm font-medium">Notifications</p>
-          {unread.length > 0 ? (
+          {unreadCount > 0 ? (
             <button
               type="button"
               className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-              onClick={() => saveRead(unread.map((item) => item.stamp))}
+              onClick={() => {
+                saveRead(unread.map((item) => item.stamp));
+                void readNotices(unreadNotices.map((notice) => notice.id));
+              }}
             >
               Mark all read
             </button>
           ) : null}
         </div>
         <div className="max-h-96 overflow-y-auto">
-          {inbox.loading ? (
+          {notices.length > 0 ? (
+            <ul>
+              {notices.map((notice) => (
+                <li key={notice.id} className="border-b last:border-b-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void readNotices([notice.id]);
+                      setOpen(false);
+                      router.push("/settings/people");
+                    }}
+                    className="flex w-full gap-2 px-3 py-2.5 text-left hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none"
+                  >
+                    <span
+                      className={cn(
+                        "mt-1.5 size-1.5 shrink-0 rounded-full",
+                        notice.read_at ? "bg-transparent" : "bg-[#E0302E]",
+                      )}
+                      aria-hidden
+                    />
+                    <span className={cn("text-sm", !notice.read_at && "font-medium")}>{notice.body}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {inbox.loading && notices.length === 0 ? (
             <p className="px-3 py-6 text-sm text-muted-foreground">Loading notifications…</p>
           ) : inbox.error && inbox.items.length === 0 ? (
             <p className="px-3 py-6 text-sm text-muted-foreground">Could not load notifications.</p>
-          ) : inbox.items.length === 0 ? (
+          ) : inbox.items.length === 0 && notices.length === 0 ? (
             <p className="px-3 py-6 text-sm text-muted-foreground">No notifications yet.</p>
           ) : (
             <ul>

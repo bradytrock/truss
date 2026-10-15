@@ -116,11 +116,11 @@ export const SYSTEM_EMAIL_DEFAULTS: Record<SystemEmailKind, SystemEmailDraft> = 
     button: "Open document",
   },
   invite: {
-    subject: "Set up your {{company}} account",
+    subject: "Join {{company}}",
     headline: "Hi {{name}},",
     message:
-      "{{inviter}} invited you to join {{company}}{{seat}}. This link is only for you, and it works once. After you set a password, it cannot be reused.\n\nThe invite expires in {{days}} days. If you were not expecting this, ignore the email.",
-    button: "Set up your account",
+      "{{inviter}} added you to {{company}}{{seat}}. Accept the invite to create your account.\n\nThis invite is only for you. It expires in {{days}} days. If you were not expecting this, ignore the email.",
+    button: "Accept invitation",
   },
   lead_assign: {
     subject: "{{roleSubject}}",

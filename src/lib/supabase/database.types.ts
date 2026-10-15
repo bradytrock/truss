@@ -130,6 +130,8 @@ export type Database = {
           role: Database["public"]["Enums"]["seat_role"];
           staff_id: string | null;
           clerk_user_id: string | null;
+          onboarding_step: string | null;
+          onboarding_tasks: Json;
           created_at: string;
         };
         Insert: {
@@ -141,6 +143,8 @@ export type Database = {
           role?: Database["public"]["Enums"]["seat_role"];
           staff_id?: string | null;
           clerk_user_id?: string | null;
+          onboarding_step?: string | null;
+          onboarding_tasks?: Json;
           created_at?: string;
         };
         Update: {
@@ -152,6 +156,8 @@ export type Database = {
           role?: Database["public"]["Enums"]["seat_role"];
           staff_id?: string | null;
           clerk_user_id?: string | null;
+          onboarding_step?: string | null;
+          onboarding_tasks?: Json;
         };
         Relationships: [];
       };
@@ -215,6 +221,8 @@ export type Database = {
           restricted: boolean;
           manage_automations: boolean;
           invite_expires_at: string | null;
+          job_radius_miles: number | null;
+          time_zone: string;
           created_at: string;
         };
         Insert: {
@@ -238,6 +246,8 @@ export type Database = {
           restricted?: boolean;
           manage_automations?: boolean;
           invite_expires_at?: string | null;
+          job_radius_miles?: number | null;
+          time_zone?: string;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["team_members"]["Insert"]>;
@@ -254,6 +264,9 @@ export type Database = {
           created_at: string;
           created_by: string | null;
           used_at: string | null;
+          accepted_at: string | null;
+          declined_at: string | null;
+          reinvite_requested_at: string | null;
         };
         Insert: {
           id?: string;
@@ -265,8 +278,33 @@ export type Database = {
           created_at?: string;
           created_by?: string | null;
           used_at?: string | null;
+          accepted_at?: string | null;
+          declined_at?: string | null;
+          reinvite_requested_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["account_invites"]["Insert"]>;
+        Relationships: [];
+      };
+      staff_notices: {
+        Row: {
+          id: string;
+          company_id: string;
+          profile_id: string;
+          kind: string;
+          body: string;
+          created_at: string;
+          read_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          profile_id: string;
+          kind: string;
+          body: string;
+          created_at?: string;
+          read_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["staff_notices"]["Insert"]>;
         Relationships: [];
       };
       clients: {
@@ -3938,6 +3976,34 @@ export type Database = {
       claim_invite: {
         Args: { p_token: string };
         Returns: string;
+      };
+      invite_gate: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      accept_invite: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      decline_invite: {
+        Args: { p_token: string };
+        Returns: Json;
+      };
+      request_invite_renewal: {
+        Args: { p_token: string };
+        Returns: string;
+      };
+      save_invite_profile: {
+        Args: { p_phone: string; p_radius: number; p_time_zone: string };
+        Returns: undefined;
+      };
+      finish_invite_tools: {
+        Args: Record<string, never>;
+        Returns: undefined;
+      };
+      mark_onboarding_task: {
+        Args: { p_task: string };
+        Returns: undefined;
       };
       ingest_inbound_text: {
         Args: {

@@ -17,7 +17,7 @@ assert.match(urlA, /invite=token_alex/);
 assert.match(urlB, /invite=token_jordan/);
 
 const subject = inviteEmailSubject("T-Rock Roofing");
-assert.equal(subject, "Set up your T-Rock Roofing account");
+assert.equal(subject, "Join T-Rock Roofing");
 
 const text = inviteEmailText({
   company: "T-Rock Roofing",
@@ -27,7 +27,7 @@ const text = inviteEmailText({
   signupUrl: urlA,
 });
 assert.match(text, /Alex Rivera/);
-assert.match(text, /works once/);
+assert.match(text, /added you/);
 assert.match(text, /token_alex/);
 assert.doesNotMatch(text, /token_jordan/);
 
@@ -38,10 +38,10 @@ const html = inviteEmailHtml({
   inviterName: "Brady",
   signupUrl: urlA,
 });
-assert.match(html, /Set up your account/);
+assert.match(html, /Accept invitation/);
 assert.match(html, /token_alex/);
 assert.doesNotMatch(html, /token_jordan/);
-assert.match(html, /cannot be reused/);
+assert.match(html, /added you/);
 
 assert.equal(inviteEmailAllowed(urlA, "https://app.truss.test"), true);
 assert.equal(inviteEmailAllowed(urlB, "https://other.test"), false);

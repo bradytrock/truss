@@ -38,6 +38,7 @@ import {
   type JobMarket,
   type PipelineStage,
 } from "@/lib/types";
+import { OnboardingMark } from "@/components/onboarding-mark";
 import { originatorStaffId } from "@/lib/bd";
 import { companyLeadAssignees } from "@/lib/visibility";
 
@@ -94,6 +95,7 @@ export default function OpportunityDetailPage() {
 
   return (
     <div className="space-y-5">
+      <OnboardingMark task="lead" />
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           {opportunity.code ? (

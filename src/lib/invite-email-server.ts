@@ -164,6 +164,7 @@ export async function sendStaffInviteEmails(body: Record<string, unknown>) {
       seatTitle: seat.title,
       inviterName: String(inviterName),
       signupUrl,
+      email: to,
     };
     const custom = emailTemplateHasOverride(emailTemplates, "invite")
       ? resolveSystemEmail("invite", emailTemplates, {
