@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
-import { createWriteStream, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { chmod, mkdtemp, writeFile } from "node:fs/promises";
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createConnection } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -104,12 +104,25 @@ async function ensureBinary(root) {
   if (!response.ok) throw new Error(`Could not download the Railway API binary (${response.status}).`);
   const archive = path.join(binDir, assetName());
   await pipeline(Readable.fromWeb(response.body), createWriteStream(archive));
-  const { execFile } = await import("node:child_process");
-  await new Promise((resolve, reject) => {
-    execFile("tar", ["-xJf", archive, "-C", binDir], (error) => (error ? reject(error) : resolve()));
-  });
+  await extractArchive(archive, binDir);
   await chmod(bin, 0o755);
   return bin;
+}
+
+async function extractArchive(archive, binDir) {
+  const { execFile } = await import("node:child_process");
+  const xz = await import("xz-decompress");
+  const XzReadableStream = xz.XzReadableStream ?? xz.default?.XzReadableStream;
+  const tarPath = archive.replace(/\.xz$/, "");
+  await pipeline(
+    Readable.fromWeb(new XzReadableStream(Readable.toWeb(createReadStream(archive)))),
+    createWriteStream(tarPath),
+  );
+  await new Promise((resolve, reject) => {
+    execFile("tar", ["-xf", tarPath, "-C", binDir], (error) => (error ? reject(error) : resolve()));
+  });
+  await rm(archive, { force: true });
+  await rm(tarPath, { force: true });
 }
 
 function waitForPort(port) {
