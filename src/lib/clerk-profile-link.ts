@@ -67,7 +67,8 @@ async function linkOnSupabase(clerkUserId: string, email: string, accessToken: s
 export async function linkClerkProfile(clerkUserId: string, email: string, accessToken?: string | null) {
   const sub = clerkUserId.trim();
   const address = email.trim().toLowerCase();
-  if (!sub || linked.has(sub)) return;
+  if (!sub) return false;
+  if (linked.has(sub)) return true;
   try {
     const ok = railwayDatabaseEnabled()
       ? address
@@ -75,10 +76,12 @@ export async function linkClerkProfile(clerkUserId: string, email: string, acces
         : false
       : await linkOnSupabase(sub, address, accessToken ?? null);
     if (ok) linked.add(sub);
+    return ok;
   } catch (error) {
     console.error(
       "[clerk] Could not link this sign-in to a profile.",
       error instanceof Error ? error.message : "",
     );
+    return false;
   }
 }
