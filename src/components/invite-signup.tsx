@@ -1,5 +1,6 @@
 "use client";
 
+import { useSignIn } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
@@ -15,6 +16,8 @@ import {
   normalizeSeatEmail,
 } from "@/lib/accounts";
 import { authErrorMessage } from "@/lib/auth-errors";
+import { clerkBrowserEnabled } from "@/lib/clerk-browser";
+import { readInviteClerkResponse } from "@/lib/clerk-seat";
 import {
   inviteBlockReason,
   inviteCanRenew,
@@ -61,7 +64,9 @@ async function claimInviteIfNeeded(
   return { ok: false as const, message: claimErrorMessage(error) };
 }
 
-export function InviteSignup({ token }: { token: string }) {
+type ClerkSignIn = ReturnType<typeof useSignIn>["signIn"];
+
+function InviteSignupForm({ token, signIn }: { token: string; signIn: ClerkSignIn | null }) {
   const router = useRouter();
   const [gate, setGate] = useState<InviteGate | null>(null);
   const [loading, setLoading] = useState(true);
@@ -121,7 +126,7 @@ export function InviteSignup({ token }: { token: string }) {
         setFormError(inviteBlockReason(next.status));
         return;
       }
-      if (sessionEmail) {
+      if (sessionEmail && !signIn) {
         await joinSignedIn(next);
       }
     } finally {
@@ -190,6 +195,55 @@ export function InviteSignup({ token }: { token: string }) {
     }
   }
 
+  async function finishJoined(companyName: string) {
+    if (signIn) {
+      const response = await fetch("/api/auth/invite-clerk", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, password, fullName }),
+      });
+      const body = (await response.json().catch(() => null)) as unknown;
+      const parsed = readInviteClerkResponse(response.status, body);
+      if (parsed.kind === "error") {
+        setFormError(parsed.message);
+        toast.error(parsed.message);
+        return;
+      }
+      if (parsed.kind === "ticket") {
+        const { error } = await signIn.ticket({ ticket: parsed.ticket });
+        if (error) {
+          const message = error.longMessage || error.message || "Could not sign in.";
+          setFormError(message);
+          toast.error(message);
+          return;
+        }
+        if (signIn.status !== "complete") {
+          const message = "Your login is ready. Sign in with the password you just chose.";
+          setFormError(message);
+          toast.message(message);
+          return;
+        }
+        toast.success(`Joined ${companyName}`);
+        const finalized = await signIn.finalize({
+          navigate: ({ decorateUrl }) => {
+            const url = decorateUrl("/welcome");
+            if (url.startsWith("http")) window.location.assign(url);
+            else router.replace(url);
+          },
+        });
+        if (finalized.error) {
+          const message = finalized.error.longMessage || finalized.error.message || "Could not sign in.";
+          setFormError(message);
+          toast.error(message);
+        }
+        return;
+      }
+    }
+    toast.success(`Joined ${companyName}`);
+    router.replace("/welcome");
+    router.refresh();
+  }
+
   async function onCreate(event: FormEvent) {
     event.preventDefault();
     if (!gate) return;
@@ -233,8 +287,7 @@ export function InviteSignup({ token }: { token: string }) {
             toast.error(claimed.message);
             return;
           }
-          router.replace("/welcome");
-          router.refresh();
+          await finishJoined(gate.companyName);
           return;
         }
         const message = authErrorMessage(error);
@@ -249,13 +302,12 @@ export function InviteSignup({ token }: { token: string }) {
           toast.error(claimed.message);
           return;
         }
-        toast.success(`Joined ${gate.companyName}`);
-        router.replace("/welcome");
-        router.refresh();
+        await finishJoined(gate.companyName);
         return;
       }
-      const message =
-        "Account created, but this project requires email confirmation. Confirm the email, then sign in. Setup continues from where you left off.";
+      const message = signIn
+        ? "Account created, but this project requires email confirmation. Confirm the email, then open this invite again and use the same password."
+        : "Account created, but this project requires email confirmation. Confirm the email, then sign in. Setup continues from where you left off.";
       setFormError(message);
       toast.message(message);
     } catch (error) {
@@ -341,7 +393,7 @@ export function InviteSignup({ token }: { token: string }) {
     );
   }
 
-  const signedIn = Boolean(sessionEmail);
+  const signedIn = !signIn && Boolean(sessionEmail);
   return (
     <AuthFrame
       title="Create your account"
@@ -425,6 +477,16 @@ export function InviteSignup({ token }: { token: string }) {
       </p>
     </AuthFrame>
   );
+}
+
+function ClerkInviteSignup({ token }: { token: string }) {
+  const { signIn } = useSignIn();
+  return <InviteSignupForm token={token} signIn={signIn} />;
+}
+
+export function InviteSignup({ token }: { token: string }) {
+  if (clerkBrowserEnabled()) return <ClerkInviteSignup token={token} />;
+  return <InviteSignupForm token={token} signIn={null} />;
 }
 
 function Fact({ label, value }: { label: string; value: string }) {
