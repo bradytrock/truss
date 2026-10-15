@@ -1656,7 +1656,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       .select("*")
       .eq("id", profile.company_id)
       .maybeSingle();
-    if (!companyError && !companySubscriptionActive(companyRow)) {
+    if (!companyError && companyRow && !companySubscriptionActive(companyRow)) {
       await signOutBrowserSession();
       if (epoch !== bookEpoch.current) return;
       if (isPublicAppPath(window.location.pathname)) {

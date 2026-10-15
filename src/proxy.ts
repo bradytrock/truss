@@ -1,10 +1,16 @@
-import { clerkMiddleware } from "@clerk/nextjs/server";
+import { clerkMiddleware, currentUser } from "@clerk/nextjs/server";
+import { linkClerkProfile } from "@/lib/clerk-profile-link";
 import { clerkConfigured } from "@/lib/clerk-env";
 import { updateSession } from "@/lib/supabase/proxy";
 import type { NextRequest } from "next/server";
 
 const withClerk = clerkMiddleware(async (auth, request) => {
   const { userId, getToken } = await auth();
+  if (userId) {
+    const person = await currentUser();
+    const email = person?.primaryEmailAddress?.emailAddress ?? "";
+    if (email) await linkClerkProfile(userId, email);
+  }
   return updateSession(request, userId ? { getToken } : null);
 });
 

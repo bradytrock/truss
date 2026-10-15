@@ -29,24 +29,6 @@ $$;
 
 grant usage on schema auth, public, storage, extensions to anon, authenticated, service_role;
 
-create or replace function auth.uid()
-returns uuid
-language sql
-stable
-set search_path = public, auth
-as $$
-  select case
-    when coalesce(current_setting('request.jwt.claim.sub', true), '')
-      ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-      then current_setting('request.jwt.claim.sub', true)::uuid
-    when coalesce(current_setting('request.jwt.claims', true), '') ~ '^\{'
-      and coalesce(current_setting('request.jwt.claims', true)::json->>'sub', '')
-        ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-      then (current_setting('request.jwt.claims', true)::json->>'sub')::uuid
-    else null
-  end
-$$;
-
 create or replace function public.reject_superuser_api()
 returns void
 language plpgsql
@@ -121,3 +103,39 @@ $$;
 
 revoke all on function public.current_profile_id() from public;
 grant execute on function public.current_profile_id() to anon, authenticated;
+
+-- Policies still call auth.uid(). Clerk subjects are not uuids, so this
+-- follows current_profile_id() instead of reading the subject as a uuid.
+create or replace function auth.uid()
+returns uuid
+language sql
+stable
+set search_path = public
+as $$
+  select public.current_profile_id()
+$$;
+
+grant execute on function auth.uid() to anon, authenticated, service_role;
+
+-- A missing profile is not an unpaid company. Only a found company with
+-- subscription_active = false is sent to the marketing site.
+create or replace function public.company_subscription_active()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (
+      select c.subscription_active
+      from public.profiles p
+      join public.companies c on c.id = p.company_id
+      where p.id = public.current_profile_id()
+      limit 1
+    ),
+    true
+  );
+$$;
+
+grant execute on function public.company_subscription_active() to anon, authenticated;
