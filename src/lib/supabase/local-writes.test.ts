@@ -5,10 +5,14 @@ import {
   liveRefreshDecision,
   markRestWrite,
   noteLocalRow,
+  idsFromWriteTarget,
   observeRestWrite,
+  protectedRowIds,
+  protectLocalRows,
   resetLocalWriteEchoes,
   restWriteTarget,
   shouldSkipLiveRefresh,
+  unprotectLocalRows,
 } from "./local-writes.ts";
 
 resetLocalWriteEchoes();
@@ -60,6 +64,20 @@ markRestWrite();
 assert.equal(liveRefreshDecision(["remote-1"], 0), "wait");
 assert.equal(liveRefreshDecision(["remote-1"], 1), "refresh");
 assert.equal(liveRefreshDecision([""], 0), "refresh");
+
+protectLocalRows(["line-1"], 1_000);
+assert.deepEqual(protectedRowIds(1_000), ["line-1"]);
+assert.deepEqual(protectedRowIds(1_000 + 20_000), []);
+protectLocalRows(["line-1"], 2_000);
+unprotectLocalRows(["line-1"]);
+assert.deepEqual(protectedRowIds(2_000), []);
+assert.deepEqual(
+  idsFromWriteTarget({
+    url: "https://db.example/rest/v1/estimate_lines?id=eq.line-9",
+    body: JSON.stringify({ id: "line-9", quantity: 4 }),
+  }),
+  ["line-9"],
+);
 
 assert.equal(changedRowId({ new: { id: "n" }, old: { id: "o" } }), "n");
 assert.equal(changedRowId({ new: {}, old: { id: "o" } }), "o");
