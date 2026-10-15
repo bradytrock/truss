@@ -195,53 +195,74 @@ function InviteSignupForm({ token, signIn }: { token: string; signIn: ClerkSignI
     }
   }
 
-  async function finishJoined(companyName: string) {
-    if (signIn) {
-      const response = await fetch("/api/auth/invite-clerk", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token, password, fullName }),
-      });
-      const body = (await response.json().catch(() => null)) as unknown;
-      const parsed = readInviteClerkResponse(response.status, body);
-      if (parsed.kind === "error") {
-        setFormError(parsed.message);
-        toast.error(parsed.message);
-        return;
-      }
-      if (parsed.kind === "ticket") {
-        const { error } = await signIn.ticket({ ticket: parsed.ticket });
-        if (error) {
-          const message = error.longMessage || error.message || "Could not sign in.";
-          setFormError(message);
-          toast.error(message);
-          return;
-        }
-        if (signIn.status !== "complete") {
-          const message = "Your login is ready. Sign in with the password you just chose.";
-          setFormError(message);
-          toast.message(message);
-          return;
-        }
-        toast.success(`Joined ${companyName}`);
-        const finalized = await signIn.finalize({
-          navigate: ({ decorateUrl }) => {
-            const url = decorateUrl("/welcome");
-            if (url.startsWith("http")) window.location.assign(url);
-            else router.replace(url);
-          },
-        });
-        if (finalized.error) {
-          const message = finalized.error.longMessage || finalized.error.message || "Could not sign in.";
-          setFormError(message);
-          toast.error(message);
-        }
-        return;
-      }
+  async function openClerkLogin() {
+    if (!signIn) return "continue" as const;
+    const response = await fetch("/api/auth/invite-clerk", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token, password, fullName }),
+    });
+    const body = (await response.json().catch(() => null)) as unknown;
+    const parsed = readInviteClerkResponse(response.status, body);
+    if (parsed.kind === "error") {
+      setFormError(parsed.message);
+      toast.error(parsed.message);
+      return "error" as const;
     }
+    if (parsed.kind !== "ticket") return "skipped" as const;
+    const { error } = await signIn.ticket({ ticket: parsed.ticket });
+    if (error) {
+      const message = error.longMessage || error.message || "Could not sign in.";
+      setFormError(message);
+      toast.error(message);
+      return "error" as const;
+    }
+    if (signIn.status !== "complete") {
+      const message = "Your login is ready. Sign in with the password you just chose.";
+      setFormError(message);
+      toast.message(message);
+      return "error" as const;
+    }
+    const finalized = await signIn.finalize({
+      navigate: ({ decorateUrl }) => {
+        const url = decorateUrl("/welcome");
+        if (url.startsWith("http")) window.location.assign(url);
+        else router.replace(url);
+      },
+    });
+    if (finalized.error) {
+      const message = finalized.error.longMessage || finalized.error.message || "Could not sign in.";
+      setFormError(message);
+      toast.error(message);
+      return "error" as const;
+    }
+    return "handoff" as const;
+  }
+
+  async function finishJoined(companyName: string) {
+    const opened = await openClerkLogin();
+    if (opened === "error" || opened === "handoff") return;
     toast.success(`Joined ${companyName}`);
     router.replace("/welcome");
     router.refresh();
+  }
+
+  async function onClerkSignIn(event: FormEvent) {
+    event.preventDefault();
+    setFormError(null);
+    setPending(true);
+    try {
+      const opened = await openClerkLogin();
+      if (opened === "skipped" || opened === "continue") {
+        router.replace(`/login?next=${encodeURIComponent("/welcome")}`);
+      }
+    } catch (error) {
+      const message = authErrorMessage(error instanceof Error ? error.message : "Could not sign in.");
+      setFormError(message);
+      toast.error(message);
+    } finally {
+      setPending(false);
+    }
   }
 
   async function onCreate(event: FormEvent) {
@@ -338,6 +359,52 @@ function InviteSignupForm({ token, signIn }: { token: string; signIn: ClerkSignI
             Sign in
           </Link>
         </p>
+      </AuthFrame>
+    );
+  }
+
+  if (gate?.status === "used" && signIn) {
+    return (
+      <AuthFrame
+        title="Sign in"
+        description={`Use the password you chose for ${gate.email}. That signs you in, and creates the login if it is missing.`}
+      >
+        <form onSubmit={(event) => void onClerkSignIn(event)} className="grid gap-3">
+          {formError ? <ErrorNote message={formError} /> : null}
+          <div className="grid gap-1.5">
+            <Label htmlFor="email">Work email</Label>
+            <Input id="email" type="email" value={gate.email} readOnly />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="password">Password</Label>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                minLength={8}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                className="pr-11"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+          </div>
+          <Button type="submit" nativeButton disabled={pending}>
+            {pending ? "Working…" : "Sign in"}
+          </Button>
+          <Button type="button" nativeButton variant="outline" disabled={pending || renewed} onClick={() => void onRenew()}>
+            {renewed ? "Request sent" : pending ? "Sending…" : "Request a new invite"}
+          </Button>
+        </form>
       </AuthFrame>
     );
   }
