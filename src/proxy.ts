@@ -1,23 +1,43 @@
-import { clerkMiddleware, currentUser } from "@clerk/nextjs/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
+import { claimString } from "@/lib/clerk-profile";
 import { linkClerkProfile } from "@/lib/clerk-profile-link";
 import { clerkConfigured } from "@/lib/clerk-env";
 import { updateSession } from "@/lib/supabase/proxy";
 import type { NextRequest } from "next/server";
 
 const withClerk = clerkMiddleware(async (auth, request) => {
-  const { userId, getToken } = await auth();
-  if (userId) {
-    const person = await currentUser();
-    const email = person?.primaryEmailAddress?.emailAddress ?? "";
-    const token = await getToken();
-    await linkClerkProfile(userId, email, token);
+  const { userId, getToken, sessionClaims } = await auth();
+  if (!userId) return updateSession(request, null);
+
+  // currentUser() calls auth() through next/headers. Those headers are not
+  // on the request until this proxy returns, so the call throws and every
+  // signed-in page is an Internal Server Error.
+  let token: string | null = null;
+  try {
+    token = (await getToken()) ?? null;
+  } catch (error) {
+    console.error(
+      "[clerk] Could not read the session token.",
+      error instanceof Error ? error.message : "",
+    );
   }
-  return updateSession(request, userId ? { getToken } : null);
+  const claims = sessionClaims as Record<string, unknown> | null;
+  const email = claimString(claims, "email") ?? claimString(claims, "email_address") ?? "";
+  await linkClerkProfile(userId, email, token);
+  return updateSession(request, { getToken: async () => token });
 });
 
 export async function proxy(request: NextRequest) {
   if (!clerkConfigured()) return updateSession(request);
-  return withClerk(request, {} as Parameters<typeof withClerk>[1]);
+  try {
+    return await withClerk(request, {} as Parameters<typeof withClerk>[1]);
+  } catch (error) {
+    console.error(
+      "[clerk] Sign-in check failed.",
+      error instanceof Error ? error.message : "",
+    );
+    return updateSession(request);
+  }
 }
 
 export const config = {

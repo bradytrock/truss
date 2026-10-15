@@ -152,7 +152,14 @@ export async function updateSession(
     return redirectToLogin(request);
   }
 
-  const clerkToken = clerk ? await clerk.getToken() : null;
+  let clerkToken: string | null = null;
+  if (clerk) {
+    try {
+      clerkToken = await clerk.getToken();
+    } catch {
+      clerkToken = null;
+    }
+  }
   if (clerkToken) {
     const gateOpen = request.cookies.get(GATE_COOKIE)?.value === "1";
     if (gateOpen) {
