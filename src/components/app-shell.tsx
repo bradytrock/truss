@@ -51,9 +51,8 @@ import { isBusinessDevelopment } from "@/lib/bd";
 import { COURSE } from "@/lib/training/engine";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { BrandMark } from "@/components/brand";
+import { BrandMark, ProductWordmark } from "@/components/brand";
 import { NotificationsMenu } from "@/components/notifications-menu";
-import { PRODUCT_NAME } from "@/lib/product";
 import { SettingsMobileBar } from "@/components/settings-nav";
 import { useStartEstimate } from "@/lib/start-estimate";
 
@@ -294,9 +293,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="flex items-start gap-1 border-b border-sidebar-border px-3 py-3.5">
           <AppLauncher apps={launcherApps} pathname={pathname} />
           <Link href="/" prefetch className="min-w-0 flex-1 rounded-sm px-1.5 py-0.5 hover:bg-white/6">
-            <span className="font-heading block truncate text-[0.95rem] font-medium tracking-tight">
-              {PRODUCT_NAME}
-            </span>
+            <ProductWordmark className="font-heading block truncate text-[0.95rem] font-medium tracking-tight" />
             <span className="mt-0.5 block truncate text-[10px] text-sidebar-foreground/50">
               {user.company}
             </span>
@@ -1035,7 +1032,7 @@ function UserMenu() {
       >
         <Avatar size="sm">
           {seatPhoto ? <AvatarImage src={seatPhoto} alt="" /> : null}
-          <AvatarFallback className="bg-primary text-primary-foreground">
+          <AvatarFallback className="bg-sidebar text-sidebar-foreground">
             {user.initials}
           </AvatarFallback>
         </Avatar>

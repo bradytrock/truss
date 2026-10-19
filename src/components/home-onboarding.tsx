@@ -61,7 +61,7 @@ export function HomeOnboarding({ viewer }: { viewer: StaffMember | undefined }) 
   return (
     <>
       <section className="flex flex-col items-start gap-4 rounded-sm border border-[#c9c9c9] bg-white px-5 py-8 shadow-[0_2px_2px_rgba(0,0,0,0.05)] sm:flex-row sm:items-center sm:px-6">
-        <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-[#eef4ff] text-[#0176d3]">
+        <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
           <UserPlus className="size-6" aria-hidden />
         </div>
         <div className="min-w-0 flex-1 space-y-1">
@@ -71,7 +71,7 @@ export function HomeOnboarding({ viewer }: { viewer: StaffMember | undefined }) 
         {copy.action ? (
           <Button
             type="button"
-            className="h-9 shrink-0 rounded-sm bg-[#0176d3] px-4 text-sm font-semibold text-white hover:bg-[#014486]"
+            className="h-9 shrink-0 rounded-sm bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
             onClick={() => setCreateOpen(true)}
           >
             {copy.action}

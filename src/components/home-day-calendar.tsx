@@ -39,7 +39,7 @@ export function HomeDayCalendar({
       {items.length === 0 ? (
         <p className="mt-4 text-sm text-[#706e6b]">
           Nothing on the calendar today.{" "}
-          <Link href="/calendar" className="font-semibold text-[#0176d3] hover:underline">
+          <Link href="/calendar" className="font-semibold text-primary hover:underline">
             Open the day
           </Link>
         </p>

@@ -508,7 +508,7 @@ export function CommissionSheetView({
                     {row.qb ? money(row.qb.amount) : "—"}
                     {row.qb?.txnId ? <span className="ml-2 text-xs text-muted-foreground">{row.qb.txnId}</span> : null}
                   </td>
-                  <td className={cn("px-3 py-1.5", row.status === "match" ? "" : "text-[#9a3412]")}>
+                  <td className={cn("px-3 py-1.5", row.status === "match" ? "" : "text-primary")}>
                     {COMPARE_STATUS_LABELS[row.status]}
                   </td>
                 </tr>

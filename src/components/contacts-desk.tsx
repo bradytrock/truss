@@ -621,7 +621,7 @@ function emptyFilterCopy(filter: ContactFilter) {
 }
 
 function vendorStatusChip(label: VendorBookRow["statusLabel"]) {
-  if (label === "Inactive") return { label, chip: "bg-[#f7ebe8] text-[#8a2f22]" };
+  if (label === "Inactive") return { label, chip: "bg-primary/10 text-primary" };
   if (label === "On file") return { label, chip: "bg-[#eef3fb] text-[#1c4a8a]" };
   return { label: "Active", chip: "bg-[#e6f3ea] text-[#1f7a3f]" };
 }
@@ -762,7 +762,7 @@ function VendorPanel({
         </div>
 
         {!row.isActive ? (
-          <p className="mb-4 rounded-xl bg-[#f7ebe8] px-3.5 py-3 text-sm text-[#8a2f22]">
+          <p className="mb-4 rounded-xl bg-primary/10 px-3.5 py-3 text-sm text-primary">
             This vendor is inactive in QuickBooks. It stays on the book so you can still see the
             payee, but it is hidden from new expense dropdowns.
           </p>
@@ -771,23 +771,23 @@ function VendorPanel({
         <div className="mb-5 grid grid-cols-3 gap-2">
           {tel ? (
             <a href={`tel:${tel}`} className={quickClass}>
-              <Phone className="size-5 text-[#13295b]" />
+              <Phone className="size-5 text-primary" />
               Call
             </a>
           ) : (
             <button type="button" className={quickClass} onClick={() => toast.message("No phone on file")}>
-              <Phone className="size-5 text-[#13295b]" />
+              <Phone className="size-5 text-primary" />
               Call
             </button>
           )}
           {row.email ? (
             <a href={`mailto:${row.email}`} className={quickClass}>
-              <Mail className="size-5 text-[#13295b]" />
+              <Mail className="size-5 text-primary" />
               Email
             </a>
           ) : (
             <button type="button" className={quickClass} onClick={() => toast.message("No email on file")}>
-              <Mail className="size-5 text-[#13295b]" />
+              <Mail className="size-5 text-primary" />
               Email
             </button>
           )}
@@ -857,7 +857,7 @@ function ContactRow({
           <div className="truncate text-[12.5px] text-[#6e6e73]">
             {row.typeLine}
             {row.overdueCallback ? (
-              <span className="text-[#8a2f22]"> · Callback overdue</span>
+              <span className="text-primary"> · Callback overdue</span>
             ) : null}
           </div>
         </div>
@@ -965,23 +965,23 @@ function ContactPanel({
         <div className="mb-5 grid grid-cols-4 gap-2">
           {tel ? (
             <a href={`tel:${tel}`} className={quickClass}>
-              <Phone className="size-5 text-[#13295b]" />
+              <Phone className="size-5 text-primary" />
               Call
             </a>
           ) : (
             <button type="button" className={quickClass} onClick={() => toast.message("No phone on file")}>
-              <Phone className="size-5 text-[#13295b]" />
+              <Phone className="size-5 text-primary" />
               Call
             </button>
           )}
           {tel ? (
             <Link href={`/messages?contact=${row.id}`} className={quickClass}>
-              <MessageSquare className="size-5 text-[#13295b]" />
+              <MessageSquare className="size-5 text-primary" />
               Text
             </Link>
           ) : (
             <button type="button" className={quickClass} onClick={() => toast.message("No phone on file")}>
-              <MessageSquare className="size-5 text-[#13295b]" />
+              <MessageSquare className="size-5 text-primary" />
               Text
             </button>
           )}
@@ -990,17 +990,17 @@ function ContactPanel({
               href={mailHref({ compose: true, email: row.email, contact: row.id })}
               className={quickClass}
             >
-              <Mail className="size-5 text-[#13295b]" />
+              <Mail className="size-5 text-primary" />
               Email
             </Link>
           ) : (
             <button type="button" className={quickClass} onClick={() => toast.message("No email on file")}>
-              <Mail className="size-5 text-[#13295b]" />
+              <Mail className="size-5 text-primary" />
               Email
             </button>
           )}
           <button type="button" className={quickClass} onClick={onEstimate}>
-            <FilePlus className="size-5 text-[#13295b]" />
+            <FilePlus className="size-5 text-primary" />
             Estimate
           </button>
         </div>
@@ -1035,7 +1035,7 @@ function ContactPanel({
                 href={`/jobs?job=${job.id}`}
                 className="mb-2 flex items-center gap-3 rounded-xl px-3.5 py-3 shadow-[0_0_0_1px_rgba(28,25,22,0.08)] last:mb-0 hover:bg-[#fafaf8]"
               >
-                <span className="grid size-[34px] shrink-0 place-items-center rounded-[9px] bg-[#f0efec] text-[#13295b]">
+                <span className="grid size-[34px] shrink-0 place-items-center rounded-[9px] bg-[#f0efec] text-primary">
                   <Home className="size-4" />
                 </span>
                 <span className="min-w-0 flex-1">
@@ -1087,7 +1087,7 @@ function ContactPanel({
                   <span
                     className={cn(
                       "rounded-full px-2.5 py-0.5 text-xs font-medium",
-                      task.late ? "bg-[#f7ebe8] text-[#8a2f22]" : "bg-[#f0efec] text-[#6e6e73]",
+                      task.late ? "bg-primary/10 text-primary" : "bg-[#f0efec] text-[#6e6e73]",
                     )}
                   >
                     Due {formatDateShort(task.dueAt)}
@@ -1123,7 +1123,7 @@ function ContactPanel({
                   <span
                     className={cn(
                       "absolute top-1.5 -left-5 size-2.5 rounded-full border-2 bg-white",
-                      item.kind === "note" ? "border-[#8a2f22]" : "border-[#a1a1a6]",
+                      item.kind === "note" ? "border-primary" : "border-[#a1a1a6]",
                     )}
                   />
                   <p className="font-medium">{item.title}</p>

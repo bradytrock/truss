@@ -72,7 +72,7 @@ export function LegalDoc({
         </div>
         <p className="mt-12 text-sm text-[#706e6b]">
           Questions:{" "}
-          <a href={`mailto:${LEGAL_EMAIL}`} className="font-medium text-[#0176d3] hover:underline">
+          <a href={`mailto:${LEGAL_EMAIL}`} className="font-medium text-primary hover:underline">
             {LEGAL_EMAIL}
           </a>
         </p>

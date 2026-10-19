@@ -14,7 +14,7 @@ export default function LoginLoading() {
       />
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-black/55" />
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-16">
-        <TheRoofingCrmMark className="size-7 text-[#c8102e]" />
+        <TheRoofingCrmMark className="size-7 text-primary" />
         <p className="font-heading mt-4 text-center text-[1.15rem] font-medium tracking-tight text-white">
           {PRODUCT_NAME}
         </p>

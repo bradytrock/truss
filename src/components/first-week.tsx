@@ -97,7 +97,7 @@ export function FirstWeek() {
               <span
                 className={cn(
                   "flex size-5 shrink-0 items-center justify-center rounded-full border",
-                  done ? "border-[#0176d3] bg-[#0176d3] text-white" : "border-[#c9c9c9] text-transparent",
+                  done ? "border-primary bg-primary text-primary-foreground" : "border-[#c9c9c9] text-transparent",
                 )}
                 aria-hidden
               >
@@ -108,7 +108,7 @@ export function FirstWeek() {
                   {ONBOARDING_TASK_LABELS[task]}
                 </span>
               ) : (
-                <a href={href} className="font-medium text-[#0176d3] hover:underline">
+                <a href={href} className="font-medium text-primary hover:underline">
                   {ONBOARDING_TASK_LABELS[task]}
                 </a>
               )}

@@ -204,7 +204,7 @@ function SortableHomeModule({
             <Popover>
               <PopoverTrigger
                 type="button"
-                className="hover:bg-muted inline-flex size-6 items-center justify-center rounded-[min(var(--radius-md),10px)] text-xs font-semibold text-[#0176d3]"
+                className="hover:bg-muted inline-flex size-6 items-center justify-center rounded-[min(var(--radius-md),10px)] text-xs font-semibold text-primary"
                 aria-label={`Resize ${HOME_MODULE_LABELS[item.id]}`}
               >
                 {HOME_SPAN_OPTIONS.find((option) => option.span === item.span)?.label ?? "Size"}

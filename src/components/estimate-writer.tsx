@@ -1260,7 +1260,7 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
                     }}
                   />
                   {packageForGroup(group.name) ? (
-                    <span className="rounded-full bg-[#e7effb] px-2.5 py-0.5 text-xs font-medium text-[#13295b]">
+                    <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary">
                       Option
                     </span>
                   ) : null}

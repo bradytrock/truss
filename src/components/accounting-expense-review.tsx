@@ -31,7 +31,7 @@ const STATUS_CLASS: Record<InvoiceReviewStatus, string> = {
   ready: "bg-[#e3f1e6] text-[#2f7a45]",
   needs_review: "bg-[#fbefd9] text-[#9a5b0c]",
   held: "bg-[#ecebe8] text-[#55524d]",
-  queued: "bg-[#e4edfb] text-[#13295b]",
+  queued: "bg-[#ececec] text-[#3a3a3a]",
 };
 
 export function AccountingExpenseReview({
@@ -162,7 +162,7 @@ export function AccountingExpenseReview({
                   className={cn(
                     "rounded-full border px-2.5 py-1 text-xs font-medium",
                     filter === item
-                      ? "border-[#13295b] bg-[#13295b] text-white"
+                      ? "border-primary bg-primary text-primary-foreground"
                       : "border-[#dad7d1] bg-white text-[#55524d]",
                   )}
                 >
@@ -220,7 +220,7 @@ export function AccountingExpenseReview({
                       key={row.expense.id}
                       className={cn(
                         "cursor-pointer hover:bg-[#faf9f7]",
-                        open?.expense.id === row.expense.id && "bg-[#e4edfb]",
+                        open?.expense.id === row.expense.id && "bg-primary/10",
                       )}
                       onClick={() => onSelect(row.expense.id)}
                     >
@@ -390,7 +390,7 @@ function ReceiptPane({ url, title }: { url: string; title: string }) {
     <div className="flex min-h-[32rem] flex-col bg-[#faf9f7] lg:max-h-[80vh]">
       <div className="flex items-center justify-between border-b border-[#e8e5df] px-3 py-2">
         <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">Receipt</p>
-        <a href={url} target="_blank" rel="noreferrer" className="text-xs font-medium text-[#0176d3] hover:underline">
+        <a href={url} target="_blank" rel="noreferrer" className="text-xs font-medium text-primary hover:underline">
           Open original
         </a>
       </div>

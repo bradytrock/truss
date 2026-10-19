@@ -171,7 +171,7 @@ export function GoalHeader() {
           <div
             className={cn(
               "h-full rounded-sm transition-[width] duration-500",
-              pace.hit ? "bg-[#45c65a]" : "bg-[#0176d3]",
+              pace.hit ? "bg-[#45c65a]" : "bg-primary",
             )}
             style={{ width: `${quota > 0 ? pct : 0}%` }}
           />

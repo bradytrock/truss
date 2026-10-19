@@ -1,7 +1,7 @@
 import type { CalendarAccount, CalendarShare, StaffMember, Team } from "@/lib/types";
 
 const CALENDAR_COLORS = [
-  "#9a3412",
+  "#d71c27",
   "#1e3a5f",
   "#3f6212",
   "#854d0e",

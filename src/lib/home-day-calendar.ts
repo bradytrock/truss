@@ -53,10 +53,10 @@ export function eventBlockOnDay(event: Pick<ScheduleEvent, "startsAt" | "endsAt"
 }
 
 export const HOME_EVENT_COLORS: Record<EventKind, string> = {
-  site_walk: "#0176d3",
+  site_walk: "#d71c27",
   pre_bid: "#e8a317",
   inspection: "#2e844a",
-  production: "#032d60",
-  meeting: "#1b96ff",
+  production: "#2d2d2d",
+  meeting: "#737373",
   punch: "#7c3aed",
 };

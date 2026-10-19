@@ -30,7 +30,7 @@ const STATUS_CLASS: Record<InvoiceReviewStatus, string> = {
   ready: "bg-[#e3f1e6] text-[#2f7a45]",
   needs_review: "bg-[#fbefd9] text-[#9a5b0c]",
   held: "bg-[#ecebe8] text-[#55524d]",
-  queued: "bg-[#e4edfb] text-[#13295b]",
+  queued: "bg-[#ececec] text-[#3a3a3a]",
 };
 
 export function AccountingInvoiceReview({
@@ -138,7 +138,7 @@ export function AccountingInvoiceReview({
                   className={cn(
                     "rounded-full border px-2.5 py-1 text-xs font-medium",
                     filter === item
-                      ? "border-[#13295b] bg-[#13295b] text-white"
+                      ? "border-primary bg-primary text-primary-foreground"
                       : "border-[#dad7d1] bg-white text-[#55524d]",
                   )}
                 >
@@ -195,7 +195,7 @@ export function AccountingInvoiceReview({
                       key={row.invoice.id}
                       className={cn(
                         "cursor-pointer hover:bg-[#faf9f7]",
-                        open?.invoice.id === row.invoice.id && "bg-[#e4edfb]",
+                        open?.invoice.id === row.invoice.id && "bg-primary/10",
                       )}
                       onClick={() => onSelect(row.invoice.id)}
                     >
@@ -253,7 +253,7 @@ export function AccountingInvoiceReview({
                   <dt className="text-[#706e6b]">Job</dt>
                   <dd className="text-right">
                     {open.job ? (
-                      <Link href={`/jobs?job=${open.job.id}`} className="text-[#0176d3] hover:underline">
+                      <Link href={`/jobs?job=${open.job.id}`} className="text-primary hover:underline">
                         {open.job.code || open.job.name}
                       </Link>
                     ) : (

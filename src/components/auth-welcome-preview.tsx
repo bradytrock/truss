@@ -38,7 +38,7 @@ export function WelcomeScreen({
               className="max-h-24 w-auto max-w-[16rem] object-contain drop-shadow-lg"
             />
           ) : (
-            <TheRoofingCrmMark className="size-14 text-[#c8102e]" />
+            <TheRoofingCrmMark className="size-14 text-primary" />
           )}
         </div>
         <p className="font-script mt-6 text-[3.1rem] leading-none text-white">{greeting}</p>
@@ -51,7 +51,7 @@ export function WelcomeScreen({
         <button
           type="button"
           onClick={onContinue}
-          className="mt-8 h-12 w-full max-w-xs rounded-full bg-gradient-to-r from-[#3d5a7a] to-[#2a4058] text-base font-medium text-white transition-opacity hover:opacity-95"
+          className="mt-8 h-12 w-full max-w-xs rounded-full bg-primary text-base font-medium text-primary-foreground transition-opacity hover:bg-primary/90"
         >
           Enter workspace
         </button>

@@ -67,7 +67,7 @@ export function RelatedListLink({ href, children }: { href: string; children: Re
   return (
     <Link
       href={href}
-      className="text-xs font-semibold text-[#0176d3] hover:text-[#014486] hover:underline"
+      className="text-xs font-semibold text-primary hover:text-primary/80 hover:underline"
     >
       {children}
     </Link>
@@ -178,12 +178,12 @@ export function HomeGauge({
             y1={cy}
             x2={cx}
             y2={cy - (r - 8)}
-            stroke="#032d60"
+            stroke="#2d2d2d"
             strokeWidth="3"
             strokeLinecap="round"
           />
         </g>
-        <circle cx={cx} cy={cy} r="5" fill="#032d60" />
+        <circle cx={cx} cy={cy} r="5" fill="#2d2d2d" />
         <text
           x={cx}
           y={cy - 18}
@@ -266,8 +266,8 @@ export function HomeAreaChart({
       >
         <defs>
           <linearGradient id="homeAreaFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#1b96ff" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="#1b96ff" stopOpacity="0.02" />
+            <stop offset="0%" stopColor="#d71c27" stopOpacity="0.28" />
+            <stop offset="100%" stopColor="#d71c27" stopOpacity="0.02" />
           </linearGradient>
         </defs>
         {[0.25, 0.5, 0.75, 1].map((tick) => {
@@ -289,7 +289,7 @@ export function HomeAreaChart({
           className="home-chart-line"
           d={line}
           fill="none"
-          stroke="#0176d3"
+          stroke="#d71c27"
           strokeWidth="2.5"
           strokeLinejoin="round"
           pathLength={1}
@@ -302,7 +302,7 @@ export function HomeAreaChart({
             cy={point.y}
             r={hover === index ? 5.5 : 3.5}
             fill="#fff"
-            stroke={hover === index ? "#0176d3" : "#e8a317"}
+            stroke={hover === index ? "#d71c27" : "#e8a317"}
             strokeWidth="2"
             style={{ animationDelay: `${120 + index * 35}ms` }}
           />
@@ -314,7 +314,7 @@ export function HomeAreaChart({
               x2={active.x}
               y1={padTop}
               y2={padTop + innerH}
-              stroke="#0176d3"
+              stroke="#d71c27"
               strokeWidth="1"
               strokeDasharray="3 3"
             />
@@ -323,7 +323,7 @@ export function HomeAreaChart({
               x2={width - padX}
               y1={active.y}
               y2={active.y}
-              stroke="#0176d3"
+              stroke="#d71c27"
               strokeWidth="1"
               strokeDasharray="3 3"
             />
@@ -356,7 +356,7 @@ export function HomeAreaChart({
   );
 }
 
-const DONUT_COLORS = ["#032d60", "#0176d3", "#1b96ff", "#90d0fe", "#2e844a", "#706e6b"];
+const DONUT_COLORS = ["#d71c27", "#2d2d2d", "#737373", "#d4d4d4", "#2e844a", "#e8a317"];
 
 /** Donut chart for amount closed by lead source. */
 export function HomeDonut({
@@ -457,7 +457,7 @@ export function HomeDonut({
           x={cx}
           y={cy + 5}
           textAnchor="middle"
-          fill="#032d60"
+          fill="#2d2d2d"
           style={{ fontSize: "16px", fontWeight: 700 }}
         >
           {format(active?.value ?? total)}

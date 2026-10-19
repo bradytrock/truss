@@ -5,9 +5,8 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore, type FormEvent } from "react";
-import { TheRoofingCrmMark } from "@/components/brand";
+import { ProductWordmark, TheRoofingCrmMark } from "@/components/brand";
 import { authErrorMessage } from "@/lib/auth-errors";
-import { PRODUCT_NAME } from "@/lib/product";
 import { isWelcomePendingMetadata, queueFirstWelcome } from "@/lib/welcome";
 
 const AuthWelcomePreview = dynamic(
@@ -131,15 +130,13 @@ export function LoginForm() {
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-black/55" />
       <div
         aria-hidden
-        className="pointer-events-none absolute top-[-6rem] left-1/2 size-80 -translate-x-1/2 rounded-full bg-[#c8102e]/25 blur-3xl"
+        className="pointer-events-none absolute top-[-6rem] left-1/2 size-80 -translate-x-1/2 rounded-full bg-primary/25 blur-3xl"
       />
 
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 py-16">
         <div className="flex w-full max-w-[22rem] flex-col items-center">
-          <TheRoofingCrmMark className="size-7 text-[#c8102e]" />
-          <p className="font-heading mt-4 text-center text-[1.15rem] font-medium tracking-tight text-white">
-            {PRODUCT_NAME}
-          </p>
+          <TheRoofingCrmMark className="size-7 text-primary" />
+          <ProductWordmark className="font-heading mt-4 text-center text-[1.15rem] font-medium tracking-tight text-white" />
           <p className="font-script mt-3 text-center text-[2.35rem] leading-none text-white">
             Where Legacy Gets Built
           </p>
@@ -182,7 +179,7 @@ export function LoginForm() {
             <button
               type="submit"
               disabled={pending}
-              className="h-12 w-full rounded-full bg-gradient-to-r from-[#3d5a7a] to-[#2a4058] text-base font-medium text-white transition-opacity hover:opacity-95 disabled:opacity-60"
+              className="h-12 w-full rounded-full bg-primary text-base font-medium text-primary-foreground transition-opacity hover:bg-primary/90 disabled:opacity-60"
             >
               {pending ? "Signing in…" : "Sign In"}
             </button>

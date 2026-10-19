@@ -20,6 +20,17 @@ export function TheRoofingCrmMark({ className }: { className?: string }) {
   );
 }
 
+export function ProductWordmark({ className }: { className?: string }) {
+  const lead = "TheRoofing";
+  const rest = PRODUCT_NAME.startsWith(lead) ? PRODUCT_NAME.slice(lead.length) : "";
+  return (
+    <span className={className}>
+      <span className="text-primary">{rest ? lead : PRODUCT_NAME}</span>
+      {rest}
+    </span>
+  );
+}
+
 export function BrandMark({
   className,
   markClassName,
@@ -30,9 +41,7 @@ export function BrandMark({
   return (
     <span className={className ?? "inline-flex items-center gap-2 text-foreground"}>
       <TheRoofingCrmMark className={markClassName ?? "size-[18px] text-primary"} />
-      <span className="font-heading text-[1.05rem] leading-none font-medium tracking-tight">
-        {PRODUCT_NAME}
-      </span>
+      <ProductWordmark className="font-heading text-[1.05rem] leading-none font-medium tracking-tight" />
     </span>
   );
 }

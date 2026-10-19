@@ -50,7 +50,7 @@ export function avatarTone(name: string) {
 export const CONTACT_STAGE_META: Record<ContactStage, { label: string; chip: string }> = {
   lead: { label: "Lead", chip: "bg-[#f0efec] text-[#6e6e73]" },
   prop: { label: "Proposal out", chip: "bg-[#fbf1e1] text-[#9a5b0c]" },
-  cust: { label: "Customer", chip: "bg-[#e7effb] text-[#13295b]" },
+  cust: { label: "Customer", chip: "bg-primary/10 text-primary" },
   past: { label: "Past customer", chip: "bg-[#e6f3ea] text-[#1f7a3f]" },
 };
 

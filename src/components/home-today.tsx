@@ -151,7 +151,7 @@ export function HomeToday({
               ),
             )}
             <span className="ml-auto flex items-center gap-1.5 text-[12.5px] text-[#a1a1a6]">
-              <Sparkles className="size-3.5 text-[#8a2f22]" />
+              <Sparkles className="size-3.5 text-primary" />
               Cassio · this morning
             </span>
           </div>
@@ -165,7 +165,7 @@ export function HomeToday({
             </h1>
             <button
               type="button"
-              className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#8a2f22]"
+              className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-medium text-primary"
               onClick={() => setOpen(true)}
             >
               <Sparkles className="size-3.5" />
@@ -202,7 +202,7 @@ export function HomeToday({
         <TodayStat label="Signed this month" value={formatCurrency(signed.amount)} hint={`${signed.count} contract${signed.count === 1 ? "" : "s"}${signed.count ? ` · avg ${formatCurrency(signed.avg)}` : ""}`}>
           {spark ? (
             <svg viewBox="0 0 140 36" className="h-9 w-full" preserveAspectRatio="none" aria-hidden="true">
-              <path d={spark} fill="none" stroke="#13295b" strokeWidth="1.6" />
+              <path d={spark} fill="none" stroke="#1a1a1a" strokeWidth="1.6" />
             </svg>
           ) : null}
         </TodayStat>
@@ -276,7 +276,7 @@ export function HomeToday({
                     <span
                       className={cn(
                         "rounded-full px-2.5 py-0.5 text-xs font-medium",
-                        row.daysLate >= 7 ? "bg-[#f7ebe8] text-[#8a2f22]" : "bg-[#fbf1e1] text-[#9a5b0c]",
+                        row.daysLate >= 7 ? "bg-primary/10 text-primary" : "bg-[#fbf1e1] text-[#9a5b0c]",
                       )}
                     >
                       {row.daysLate}d late
@@ -342,7 +342,7 @@ export function HomeToday({
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-[#f0efec]">
                     <div
-                      className="h-full rounded-full bg-[#13295b]"
+                      className="h-full rounded-full bg-foreground"
                       style={{ width: `${Math.max(4, Math.round((stage.count / maxStage) * 100))}%` }}
                     />
                   </div>
@@ -364,7 +364,7 @@ export function HomeToday({
                         className="h-full"
                         style={{
                           flex: Math.max(source.pct, 2),
-                          background: index === 0 ? "#13295b" : index === 1 ? "#7fa3d9" : "#c5d4ea",
+                          background: index === 0 ? "#d71c27" : index === 1 ? "#2d2d2d" : "#d4d4d4",
                         }}
                       />
                     ))}
@@ -374,7 +374,7 @@ export function HomeToday({
                       <span key={source.label}>
                         <i
                           className="mr-1.5 inline-block size-2 rounded-[2px]"
-                          style={{ background: index === 0 ? "#13295b" : index === 1 ? "#7fa3d9" : "#c5d4ea" }}
+                          style={{ background: index === 0 ? "#d71c27" : index === 1 ? "#2d2d2d" : "#d4d4d4" }}
                         />
                         {source.label} {source.pct}%
                       </span>

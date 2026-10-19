@@ -14,7 +14,7 @@ type Piece = {
   color: string;
 };
 
-const COLORS = ["#c8102e", "#e23a4a", "#f3d27a", "#f7f1e6", "#3d5a7a", "#ffffff", "#ff6b6b"];
+const COLORS = ["#d71c27", "#ff4d57", "#1a1a1a", "#f1f1f1", "#2d2d2d", "#ffffff", "#ff8a90"];
 
 const CSS_PIECES = Array.from({ length: 48 }, (_, index) => ({
   left: `${(index * 17 + 3) % 100}%`,

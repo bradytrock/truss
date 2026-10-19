@@ -51,11 +51,11 @@ import { cn } from "@/lib/utils";
 
 const AGING_KEYS: AgingKey[] = ["current", "d1", "d31", "d61", "d90"];
 const AGING_BAR: Record<AgingKey, string> = {
-  current: "bg-[#13295b]",
-  d1: "bg-[#13295b]",
+  current: "bg-foreground",
+  d1: "bg-foreground",
   d31: "bg-[#f0994f]",
-  d61: "bg-[#b3261e]",
-  d90: "bg-[#b3261e]",
+  d61: "bg-primary",
+  d90: "bg-primary",
 };
 
 export function AccountingPortal() {
@@ -296,7 +296,7 @@ export function AccountingPortal() {
               </p>
               <p className="text-sm text-[#706e6b]">Receivables and sync health for {monthLabel}</p>
             </div>
-            <Button type="button" variant="link" className="h-auto p-0 text-[#0176d3]" onClick={() => setTab("reports")}>
+            <Button type="button" variant="link" className="h-auto p-0 text-primary" onClick={() => setTab("reports")}>
               Open reports
             </Button>
           </div>
@@ -370,7 +370,7 @@ export function AccountingPortal() {
                   <h3 className="text-sm font-semibold text-[#181818]">Receivables aging</h3>
                   <p className="mt-0.5 text-xs text-[#706e6b]">Open balance by days past due</p>
                 </div>
-                <Button type="button" variant="link" className="h-auto p-0 text-[#0176d3]" onClick={() => setTab("reports")}>
+                <Button type="button" variant="link" className="h-auto p-0 text-primary" onClick={() => setTab("reports")}>
                   AR aging
                 </Button>
               </div>
@@ -531,37 +531,37 @@ export function AccountingPortal() {
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <ReportCard
-              icon={<Hourglass className="size-5 text-[#13295b]" />}
+              icon={<Hourglass className="size-5 text-primary" />}
               title="AR aging"
               description="Open balances by invoice and days past due."
               onRun={() => setReport("aging")}
             />
             <ReportCard
-              icon={<PieChart className="size-5 text-[#13295b]" />}
+              icon={<PieChart className="size-5 text-primary" />}
               title="Job profitability"
               description="Contract vs. actual cost for billed jobs, with margin."
               onRun={() => setReport("profit")}
             />
             <ReportCard
-              icon={<Users className="size-5 text-[#13295b]" />}
+              icon={<Users className="size-5 text-primary" />}
               title="Commission report"
               description="10% of gross profit by sales rep on billed jobs."
               onRun={() => setReport("commission")}
             />
             <ReportCard
-              icon={<Receipt className="size-5 text-[#13295b]" />}
+              icon={<Receipt className="size-5 text-primary" />}
               title="Deposits and payments"
               description="Every posted payment, newest first."
               onRun={() => setReport("payments")}
             />
             <ReportCard
-              icon={<CreditCard className="size-5 text-[#13295b]" />}
+              icon={<CreditCard className="size-5 text-primary" />}
               title="Pending card payments"
               description="Match Stripe charges before they post as a job deposit."
               onRun={() => setReport("pending")}
             />
             <ReportCard
-              icon={<PieChart className="size-5 text-[#13295b]" />}
+              icon={<PieChart className="size-5 text-primary" />}
               title="Profit and loss"
               description="Year-to-date books in QuickBooks form."
               onRun={() => setReport("pnl")}
@@ -581,7 +581,7 @@ export function AccountingPortal() {
                   {agingRows.slice(0, 12).map((row) => (
                     <tr key={row.id} className="border-b border-[#e5e5e5] last:border-0">
                       <td className="px-4 py-2.5">
-                        <button type="button" className="text-[#0176d3] hover:underline" onClick={() => setInvoice(row.id)}>
+                        <button type="button" className="text-primary hover:underline" onClick={() => setInvoice(row.id)}>
                           {row.number}
                         </button>
                         <p className="text-xs text-[#86827b]">{row.name}</p>
@@ -722,13 +722,13 @@ export function AccountingPortal() {
                             {invoice ? (
                               <button
                                 type="button"
-                                className="text-[#0176d3] hover:underline"
+                                className="text-primary hover:underline"
                                 onClick={() => setInvoice(invoice.id)}
                               >
                                 {label}
                               </button>
                             ) : job ? (
-                              <Link href={`/jobs?job=${job.id}`} className="text-[#0176d3] hover:underline">
+                              <Link href={`/jobs?job=${job.id}`} className="text-primary hover:underline">
                                 {label}
                               </Link>
                             ) : (
@@ -818,7 +818,7 @@ export function AccountingPortal() {
                 </div>
                 <div className="rounded-sm border border-[#dad7d1] bg-[#f3f3f3] px-3 py-3">
                   <p className="text-xs text-[#706e6b]">Rep payout</p>
-                  <p className="mt-1 text-2xl font-semibold tabular-nums text-[#13295b]">
+                  <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
                     {formatCurrencyFull(payout.payout)}
                   </p>
                   <p className="mt-1 text-xs text-[#706e6b]">
@@ -897,7 +897,7 @@ function Kpi({
   return (
     <div className="rounded-sm border border-[#c9c9c9] bg-white px-4 py-4 shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
       <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">{label}</p>
-      <p className={cn("mt-2 text-[1.85rem] leading-none font-semibold tabular-nums", warn ? "text-[#b3261e]" : "text-[#13295b]")}>
+      <p className={cn("mt-2 text-[1.85rem] leading-none font-semibold tabular-nums", warn ? "text-primary" : "text-foreground")}>
         {value}
       </p>
       <p className="mt-2 text-sm text-[#706e6b]">{hint}</p>

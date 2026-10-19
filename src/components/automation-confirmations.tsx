@@ -43,7 +43,7 @@ export function AutomationConfirmations() {
             return (
               <li key={run.id} className="py-3 first:pt-1">
                 {job ? (
-                  <Link href={`/jobs?job=${job.id}`} className="text-sm font-semibold text-[#0176d3] hover:underline">
+                  <Link href={`/jobs?job=${job.id}`} className="text-sm font-semibold text-primary hover:underline">
                     {job.code} · {job.name}
                   </Link>
                 ) : (

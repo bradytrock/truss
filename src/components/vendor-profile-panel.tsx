@@ -136,7 +136,7 @@ export function VendorProfilePanel({ row }: { row: VendorBookRow }) {
                   </p>
                   <button
                     type="button"
-                    className="text-[#a1a1a6] hover:text-[#8a2f22]"
+                    className="text-[#a1a1a6] hover:text-primary"
                     aria-label="Remove feedback"
                     onClick={() => void crm.removeVendorFeedback(item.id)}
                   >
@@ -174,7 +174,7 @@ export function VendorProfilePanel({ row }: { row: VendorBookRow }) {
                 </p>
                 <button
                   type="button"
-                  className="text-[#a1a1a6] hover:text-[#8a2f22]"
+                  className="text-[#a1a1a6] hover:text-primary"
                   aria-label={`Remove ${item.name}`}
                   onClick={() => void crm.removeVendorPrice(item.id)}
                 >
