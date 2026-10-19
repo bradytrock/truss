@@ -1,5 +1,6 @@
 "use client";
 
+import { useSignIn } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff } from "lucide-react";
@@ -15,6 +16,8 @@ import {
   normalizeSeatEmail,
 } from "@/lib/accounts";
 import { authErrorMessage } from "@/lib/auth-errors";
+import { clerkBrowserEnabled } from "@/lib/clerk-browser";
+import { readInviteClerkResponse } from "@/lib/clerk-seat";
 import {
   inviteBlockReason,
   inviteCanRenew,
@@ -61,7 +64,9 @@ async function claimInviteIfNeeded(
   return { ok: false as const, message: claimErrorMessage(error) };
 }
 
-export function InviteSignup({ token }: { token: string }) {
+type ClerkSignIn = ReturnType<typeof useSignIn>["signIn"];
+
+function InviteSignupForm({ token, signIn }: { token: string; signIn: ClerkSignIn | null }) {
   const router = useRouter();
   const [gate, setGate] = useState<InviteGate | null>(null);
   const [loading, setLoading] = useState(true);
@@ -121,7 +126,7 @@ export function InviteSignup({ token }: { token: string }) {
         setFormError(inviteBlockReason(next.status));
         return;
       }
-      if (sessionEmail) {
+      if (sessionEmail && !signIn) {
         await joinSignedIn(next);
       }
     } finally {
@@ -190,10 +195,98 @@ export function InviteSignup({ token }: { token: string }) {
     }
   }
 
+  async function openClerkLogin() {
+    if (!signIn) return "continue" as const;
+    const response = await fetch("/api/auth/invite-clerk", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token, password, fullName }),
+    });
+    const body = (await response.json().catch(() => null)) as unknown;
+    const parsed = readInviteClerkResponse(response.status, body);
+    if (parsed.kind === "error") {
+      setFormError(parsed.message);
+      toast.error(parsed.message);
+      return "error" as const;
+    }
+    if (parsed.kind !== "ticket") return "skipped" as const;
+    const { error } = await signIn.ticket({ ticket: parsed.ticket });
+    if (error) {
+      const message = error.longMessage || error.message || "Could not sign in.";
+      setFormError(message);
+      toast.error(message);
+      return "error" as const;
+    }
+    if (signIn.status !== "complete") {
+      const message = "Your login is ready. Sign in with the password you just chose.";
+      setFormError(message);
+      toast.message(message);
+      return "error" as const;
+    }
+    const finalized = await signIn.finalize({
+      navigate: ({ decorateUrl }) => {
+        const url = decorateUrl("/welcome");
+        if (url.startsWith("http")) window.location.assign(url);
+        else router.replace(url);
+      },
+    });
+    if (finalized.error) {
+      const message = finalized.error.longMessage || finalized.error.message || "Could not sign in.";
+      setFormError(message);
+      toast.error(message);
+      return "error" as const;
+    }
+    return "handoff" as const;
+  }
+
+  async function finishJoined(companyName: string) {
+    const opened = await openClerkLogin();
+    if (opened === "error" || opened === "handoff") return;
+    toast.success(`Joined ${companyName}`);
+    router.replace("/welcome");
+    router.refresh();
+  }
+
+  async function onClerkSignIn(event: FormEvent) {
+    event.preventDefault();
+    setFormError(null);
+    setPending(true);
+    try {
+      const opened = await openClerkLogin();
+      if (opened === "skipped" || opened === "continue") {
+        router.replace(`/login?next=${encodeURIComponent("/welcome")}`);
+      }
+    } catch (error) {
+      const message = authErrorMessage(error instanceof Error ? error.message : "Could not sign in.");
+      setFormError(message);
+      toast.error(message);
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function onCreate(event: FormEvent) {
     event.preventDefault();
     if (!gate) return;
     setFormError(null);
+    if (signIn) {
+      setPending(true);
+      try {
+        const opened = await openClerkLogin();
+        if (opened === "skipped" || opened === "continue") {
+          const message = "Sign-in is not configured for this invite.";
+          setFormError(message);
+          toast.error(message);
+        }
+      } catch (error) {
+        const message = authErrorMessage(error instanceof Error ? error.message : "Could not create the account.");
+        setFormError(message);
+        toast.error(message);
+      } finally {
+        setPending(false);
+      }
+      return;
+    }
     if (railwayDatabaseEnabled()) {
       const message = "New companies sign in with Clerk. Accounts are not created in Supabase.";
       setFormError(message);
@@ -233,8 +326,7 @@ export function InviteSignup({ token }: { token: string }) {
             toast.error(claimed.message);
             return;
           }
-          router.replace("/welcome");
-          router.refresh();
+          await finishJoined(gate.companyName);
           return;
         }
         const message = authErrorMessage(error);
@@ -249,13 +341,12 @@ export function InviteSignup({ token }: { token: string }) {
           toast.error(claimed.message);
           return;
         }
-        toast.success(`Joined ${gate.companyName}`);
-        router.replace("/welcome");
-        router.refresh();
+        await finishJoined(gate.companyName);
         return;
       }
-      const message =
-        "Account created, but this project requires email confirmation. Confirm the email, then sign in. Setup continues from where you left off.";
+      const message = signIn
+        ? "Account created, but this project requires email confirmation. Confirm the email, then open this invite again and use the same password."
+        : "Account created, but this project requires email confirmation. Confirm the email, then sign in. Setup continues from where you left off.";
       setFormError(message);
       toast.message(message);
     } catch (error) {
@@ -286,6 +377,52 @@ export function InviteSignup({ token }: { token: string }) {
             Sign in
           </Link>
         </p>
+      </AuthFrame>
+    );
+  }
+
+  if (gate?.status === "used" && signIn) {
+    return (
+      <AuthFrame
+        title="Sign in"
+        description={`Use the password you chose for ${gate.email}. That signs you in, and creates the login if it is missing.`}
+      >
+        <form onSubmit={(event) => void onClerkSignIn(event)} className="grid gap-3">
+          {formError ? <ErrorNote message={formError} /> : null}
+          <div className="grid gap-1.5">
+            <Label htmlFor="email">Work email</Label>
+            <Input id="email" type="email" value={gate.email} readOnly />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="password">Password</Label>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                minLength={8}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+                className="pr-11"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
+            </div>
+          </div>
+          <Button type="submit" nativeButton disabled={pending}>
+            {pending ? "Working…" : "Sign in"}
+          </Button>
+          <Button type="button" nativeButton variant="outline" disabled={pending || renewed} onClick={() => void onRenew()}>
+            {renewed ? "Request sent" : pending ? "Sending…" : "Request a new invite"}
+          </Button>
+        </form>
       </AuthFrame>
     );
   }
@@ -341,7 +478,7 @@ export function InviteSignup({ token }: { token: string }) {
     );
   }
 
-  const signedIn = Boolean(sessionEmail);
+  const signedIn = !signIn && Boolean(sessionEmail);
   return (
     <AuthFrame
       title="Create your account"
@@ -425,6 +562,16 @@ export function InviteSignup({ token }: { token: string }) {
       </p>
     </AuthFrame>
   );
+}
+
+function ClerkInviteSignup({ token }: { token: string }) {
+  const { signIn } = useSignIn();
+  return <InviteSignupForm token={token} signIn={signIn} />;
+}
+
+export function InviteSignup({ token }: { token: string }) {
+  if (clerkBrowserEnabled()) return <ClerkInviteSignup token={token} />;
+  return <InviteSignupForm token={token} signIn={null} />;
 }
 
 function Fact({ label, value }: { label: string; value: string }) {
