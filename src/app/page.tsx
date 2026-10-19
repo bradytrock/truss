@@ -17,7 +17,7 @@ import { actionableJobCodeReviews } from "@/lib/job-code";
 import { jobRecordHref } from "@/lib/job-record";
 import { itemTitle, jobDocumentHref, pmReviewNotices } from "@/lib/qb-review";
 import { actionableReturningClientNotices } from "@/lib/returning-client";
-import { canViewAccounting } from "@/lib/visibility";
+import { canViewAccounting, canViewProjectFinancials } from "@/lib/visibility";
 
 export default function HomePage() {
   const crm = useCrm();
@@ -98,12 +98,14 @@ export default function HomePage() {
             paymentCount: qb.paymentCount,
           }
         : null,
-      accounting: reviewNotices.map((notice) => ({
-        id: `${notice.item.kind}-${notice.item.id}`,
-        title: itemTitle(notice.item),
-        detail: `${notice.reason === "tagged" ? "You were tagged." : "Sent back for a change."} ${notice.preview}`,
-        href: jobDocumentHref(notice.jobId, notice.item.kind, notice.item.id),
-      })),
+      accounting: canViewProjectFinancials(viewer?.role)
+        ? reviewNotices.map((notice) => ({
+            id: `${notice.item.kind}-${notice.item.id}`,
+            title: itemTitle(notice.item),
+            detail: `${notice.reason === "tagged" ? "You were tagged." : "Sent back for a change."} ${notice.preview}`,
+            href: jobDocumentHref(notice.jobId, notice.item.kind, notice.item.id),
+          }))
+        : [],
       returning: returningNotices.map((notice) => {
         const opportunity = crm.getOpportunity(notice.opportunityId);
         const job = notice.jobId ? crm.getJob(notice.jobId) : undefined;

@@ -23,6 +23,7 @@ import {
   reviewItemStatus,
   type QbReviewItem,
 } from "@/lib/qb-review";
+import { canViewProjectFinancials } from "@/lib/visibility";
 import type { Job } from "@/lib/types";
 
 export function JobDocumentReview({ job }: { job: Job }) {
@@ -39,6 +40,22 @@ export function JobDocumentReview({ job }: { job: Job }) {
 
   function backToJob() {
     router.replace(jobFilesHref(job.id), { scroll: false });
+  }
+
+  if (!canViewProjectFinancials(crm.effectiveStaff?.role)) {
+    return (
+      <div className="flex min-h-80 flex-col items-center justify-center p-6">
+        <EmptyState
+          title="Project financials stay with the office"
+          description="The sold amount is on the job. Invoices, receipts, and payments are not on this seat."
+          action={
+            <Button type="button" variant="outline" onClick={backToJob}>
+              Back to the job
+            </Button>
+          }
+        />
+      </div>
+    );
   }
 
   if (!parsed || !item || reviewItemJobId(item) !== job.id) {

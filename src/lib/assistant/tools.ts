@@ -51,7 +51,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   },
   {
     name: "get_job",
-    description: "Get a job summary: site, status, homeowner, AR, and related estimates.",
+    description: "Get a job summary: site, status, homeowner, what it sold for, and related estimates.",
     status: "Opening the job…",
     gate: "any",
     parameters: object({ job: str("Job id or job code such as BJ081926-A") }, ["job"]),
@@ -74,7 +74,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
     name: "get_invoice",
     description: "Get an invoice: status, total, balance, and job.",
     status: "Opening the invoice…",
-    gate: "any",
+    gate: "ops",
     parameters: object({ invoice: str("Invoice id or number") }, ["invoice"]),
   },
   {
@@ -306,7 +306,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
     description:
       "Log a job cost onto a job so QuickBooks assigns it to Customer:Job, not company overhead. Office and insurance may omit the job. If the user attached a photo, it will be read and stored on the expense. Amount is dollars.",
     status: "Logging the expense…",
-    gate: "any",
+    gate: "ops",
     parameters: object(
       {
         job: str("Job id or code. Required for job costs (materials, labor, subs, and similar)."),
@@ -343,7 +343,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
     description:
       "Log a forecasted estimate of a job cost that has not been incurred yet. It shows under Forecasted expenses on the job financials and rolls into the projected column. No receipt. It does not post to QuickBooks. Amount is dollars. The job is required.",
     status: "Logging the forecasted expense…",
-    gate: "any",
+    gate: "ops",
     parameters: object(
       {
         job: str("Job id or code. Required."),

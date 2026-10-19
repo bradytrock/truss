@@ -20,7 +20,7 @@ import { EmptyState, LoadingScreen, RecordCode } from "@/components/page-chrome"
 import { EstimateStatusBadge, MarketBadge, StageBadge, TypeBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { daysUntil, formatCurrencyFull, formatDate } from "@/lib/format";
-import { amountForEstimate } from "@/lib/estimate-totals";
+import { amountForEstimate, jobSoldAmount } from "@/lib/estimate-totals";
 import { StartEstimateButton } from "@/components/start-estimate-button";
 import { formatJobSite, leadSourceLabel } from "@/lib/leads";
 import { parseMarket } from "@/lib/market";
@@ -40,7 +40,7 @@ import {
 } from "@/lib/types";
 import { OnboardingMark } from "@/components/onboarding-mark";
 import { originatorStaffId } from "@/lib/bd";
-import { companyLeadAssignees } from "@/lib/visibility";
+import { canViewProjectFinancials, companyLeadAssignees } from "@/lib/visibility";
 
 export default function OpportunityDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -79,6 +79,8 @@ export default function OpportunityDetailPage() {
   const assignees = companyLeadAssignees(crm.viewer, crm.book.staff, opportunity.ownerStaffId);
   const canReassign =
     assignees.length > 1 || assignees.some((member) => member.id !== opportunity.ownerStaffId);
+  const soldFor = job ? jobSoldAmount(job, crm.estimates, crm.estimateLines) : 0;
+  const showFinancials = canViewProjectFinancials(crm.effectiveStaff?.role);
 
   function handleStage(stage: PipelineStage) {
     void (async () => {
@@ -196,7 +198,7 @@ export default function OpportunityDetailPage() {
             </CardContent>
           </Card>
 
-          {job ? (
+          {job && showFinancials ? (
             <Card>
               <CardHeader className="border-b">
                 <CardTitle>Job books</CardTitle>
@@ -208,6 +210,22 @@ export default function OpportunityDetailPage() {
                     {job.code ? `${job.code} · ${job.name}` : job.name}
                   </Link>
                   . Log expenses and payments against it like any other job.
+                </p>
+              </CardContent>
+            </Card>
+          ) : null}
+          {job && !showFinancials ? (
+            <Card>
+              <CardHeader className="border-b">
+                <CardTitle>Sold for</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm">
+                  <Link href={`/jobs?job=${job.id}`} className="font-medium text-primary hover:underline">
+                    {job.code ? `${job.code} · ${job.name}` : job.name}
+                  </Link>
+                  {" · "}
+                  <span className="tabular-nums">{soldFor > 0 ? formatCurrencyFull(soldFor) : "Not sold"}</span>
                 </p>
               </CardContent>
             </Card>

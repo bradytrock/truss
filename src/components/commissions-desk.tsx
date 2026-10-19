@@ -14,8 +14,10 @@ import {
   type CommissionSheet,
 } from "@/lib/commission-closeout";
 import { expensesForJob, forecastedExpensesForJob, paymentsForJob } from "@/lib/job-financials";
+import { jobSoldAmount } from "@/lib/estimate-totals";
 import { jobRecordHref } from "@/lib/job-record";
 import { formatDate, formatMoney } from "@/lib/format";
+import { canViewProjectFinancials } from "@/lib/visibility";
 import type { Job } from "@/lib/types";
 
 type CommissionRow = {
@@ -30,6 +32,7 @@ type CommissionRow = {
 export function CommissionsDesk() {
   const crm = useCrm();
   const actor = crm.effectiveStaff;
+  const showFinancials = canViewProjectFinancials(actor?.role);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const year = new Date().getFullYear();
 
@@ -138,13 +141,24 @@ export function CommissionsDesk() {
                   Your check on this job is <span className="font-medium text-foreground tabular-nums">{formatMoney(selected.check)}</span>.
                 </p>
                 <Link
-                  href={jobRecordHref(selected.job.id, { tab: "financials" })}
+                  href={jobRecordHref(selected.job.id, showFinancials ? { tab: "financials" } : undefined)}
                   className="text-sm text-primary hover:underline"
                 >
                   Open job
                 </Link>
               </div>
-              <CommissionSheetView sheet={selected.sheet} closeout={selected.closeout} />
+              {showFinancials ? (
+                <CommissionSheetView sheet={selected.sheet} closeout={selected.closeout} />
+              ) : (
+                <div className="rounded-md border p-4">
+                  <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Sold for</p>
+                  <p className="mt-1 text-2xl font-medium tabular-nums">
+                    {formatMoney(
+                      jobSoldAmount(selected.job, crm.estimates, crm.estimateLines) || selected.sheet.jobSold,
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
           ) : null}
         </div>

@@ -1,7 +1,7 @@
 import { defaultDeliveryForSource, formatJobSite, leadName, leadNeedsReferrer, leadStateOrDefault } from "@/lib/leads";
 import { localYmd } from "@/lib/format";
 import { isDeletedJob } from "@/lib/job-record";
-import { estimateTotals, allPackageTotals } from "@/lib/estimate-totals";
+import { estimateTotals, allPackageTotals, jobSoldAmount } from "@/lib/estimate-totals";
 import { isGbbEstimate, parseEstimatePackage, parseEstimatePackageMode, parseLinePackage } from "@/lib/estimate-packages";
 import { invoiceBalance, invoiceTotal } from "@/lib/money";
 import { compressReceipt, guessExpenseAccount, isExpenseAccount, isExpenseMethod, jobProfitAndLoss } from "@/lib/job-financials";
@@ -24,7 +24,7 @@ import {
   type LeadSource,
   type PhotoCategory,
 } from "@/lib/types";
-import { canDeleteJobs } from "@/lib/visibility";
+import { canDeleteJobs, canViewProjectFinancials } from "@/lib/visibility";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { catalogProposalUnitPrice } from "@/lib/catalog-margin";
 import { currentCatalog } from "@/lib/price-lists";
@@ -235,8 +235,10 @@ async function runTool(
 ): Promise<AssistantToolResult> {
   const def = toolByName(call.name);
   if (!def) return fail(`Unknown tool ${call.name}.`);
-  const bd = isBusinessDevelopment(crm.viewer?.role);
-  if (def.gate === "ops" && bd) return fail("This seat does not write estimates, invoices, or the calendar. Open a lead, a contact, or log an expense.");
+  const seatRole = crm.effectiveStaff?.role ?? crm.viewer?.role;
+  const bd = isBusinessDevelopment(seatRole);
+  const showFinancials = canViewProjectFinancials(seatRole);
+  if (def.gate === "ops" && bd) return fail("This seat does not see project financials or write estimates, invoices, and expenses. Open a lead or a contact.");
   if (def.gate === "admin" && !canDeleteJobs(crm.viewer)) return fail("Only a company admin can delete a job.");
 
   const args = call.arguments;
@@ -274,8 +276,11 @@ async function runTool(
               .slice(0, 8)
               .map((estimate) => ({ kind: "estimate", id: estimate.id, number: estimate.number, name: estimate.name, status: estimate.status }))
           : [];
+      if (!showFinancials && kind === "invoice") {
+        return fail("This seat does not see invoices. The sold amount is on the job.");
+      }
       const invoices =
-        kind === "all" || kind === "invoice"
+        showFinancials && (kind === "all" || kind === "invoice")
           ? crm.invoices
               .filter((invoice) => matches(haystack(invoice.number, invoice.name), query))
               .slice(0, 8)
@@ -310,17 +315,20 @@ async function runTool(
       if (!job) return fail("No job in this book matches that.");
       const contact = crm.getContact(job.primaryContactId);
       const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
-      const books = jobProfitAndLoss({
-        job,
-        invoices: crm.invoices,
-        invoiceLines: crm.invoiceLines,
-        payments: crm.payments,
-        expenses: crm.expenses,
-        basis: "accrual",
-      });
+      const books = showFinancials
+        ? jobProfitAndLoss({
+            job,
+            invoices: crm.invoices,
+            invoiceLines: crm.invoiceLines,
+            payments: crm.payments,
+            expenses: crm.expenses,
+            basis: "accrual",
+          })
+        : null;
       const estimates = crm.estimates
         .filter((estimate) => estimate.jobId === job.id && !estimate.archivedAt)
         .map((estimate) => ({ id: estimate.id, number: estimate.number, name: estimate.name, status: estimate.status }));
+      const soldFor = jobSoldAmount(job, crm.estimates, crm.estimateLines);
       return ok({
         id: job.id,
         code: job.code,
@@ -336,11 +344,16 @@ async function runTool(
         phone: contact?.phone,
         projectManager: job.projectManager,
         superintendent: job.superintendent,
-        contractValue: job.contractValue,
-        invoiced: books.invoiced,
-        collected: books.collected,
-        ar: books.ar,
-        expenses: books.expenses,
+        soldFor,
+        ...(showFinancials && books
+          ? {
+              contractValue: job.contractValue,
+              invoiced: books.invoiced,
+              collected: books.collected,
+              ar: books.ar,
+              expenses: books.expenses,
+            }
+          : {}),
         estimates,
       });
     }

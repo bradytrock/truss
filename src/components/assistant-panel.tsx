@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/sheet";
 import { useCrm } from "@/lib/crm-store";
 import { compressReceipt } from "@/lib/job-financials";
+import { canViewProjectFinancials } from "@/lib/visibility";
 import { isReceiptUpload } from "@/lib/receipt-extract";
 import { buildAssistantContext } from "@/lib/assistant/context";
 import { ASSISTANT_ASK_LABEL, ASSISTANT_NAME } from "@/lib/product";
@@ -75,13 +76,13 @@ export function AssistantPanel() {
     return buildAssistantContext({
       companyName: crm.company.name || crm.user.company,
       seatName: crm.effectiveStaff?.name || crm.user.name,
-      seatRole: crm.viewer?.role || crm.user.role,
+      seatRole: crm.effectiveStaff?.role || crm.viewer?.role || crm.user.role,
       path: pathname,
       hasAttachment: Boolean(attachment),
       jobs: crm.jobs,
       contacts: crm.contacts,
       estimates: crm.estimates,
-      invoices: crm.invoices,
+      invoices: canViewProjectFinancials(crm.effectiveStaff?.role ?? crm.viewer?.role) ? crm.invoices : [],
     });
   }, [attachment, crm, pathname]);
 

@@ -97,7 +97,7 @@ import { livePhotos, primaryJobPhoto } from "@/lib/photo-trash";
 import { shareUrl } from "@/lib/share";
 import { leadSourceChoices, leadSourceLabel } from "@/lib/leads";
 import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
-import { amountForEstimate, featuredEstimateForJob } from "@/lib/estimate-totals";
+import { amountForEstimate, featuredEstimateForJob, jobSoldAmount } from "@/lib/estimate-totals";
 import { jobProfitAndLoss } from "@/lib/job-financials";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
 import { workMarket } from "@/lib/market";
@@ -116,7 +116,7 @@ import {
 import { cn } from "@/lib/utils";
 import { PhotoReportBuilder } from "@/components/photo-report-builder";
 import { canSubmitProjectCloseout } from "@/lib/commission-closeout";
-import { canDeleteJobs } from "@/lib/visibility";
+import { canDeleteJobs, canViewProjectFinancials } from "@/lib/visibility";
 import { useStartEstimate } from "@/lib/start-estimate";
 import { useStartMaterialOrder } from "@/lib/start-material-order";
 import { materialOrderLinesFor, materialOrderTotal } from "@/lib/material-orders";
@@ -309,7 +309,9 @@ export function JobRecord({
   const startEstimateFlow = useStartEstimate();
   const { prompt: startEstimate, pending: estimatePending } = startEstimateFlow;
   const { start: startMaterialOrder, pending: materialPending } = useStartMaterialOrder();
-  const tab = parseJobTab(searchParams.get("tab"));
+  const showFinancials = canViewProjectFinancials(crm.effectiveStaff?.role);
+  const requestedTab = parseJobTab(searchParams.get("tab"));
+  const tab = requestedTab === "financials" && !showFinancials ? "overview" : requestedTab;
   const [photoOffset, setPhotoOffset] = useState(0);
   const [addressOpen, setAddressOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
@@ -367,11 +369,13 @@ export function JobRecord({
       return;
     }
     if (kind === "invoice") {
+      if (!showFinancials) return;
       setJobTab("paper");
       setInvoiceOpen(true);
       return;
     }
     if (kind === "expense") {
+      if (!showFinancials) return;
       setJobTab("financials");
       setExpenseOpen(true);
       return;
@@ -454,14 +458,17 @@ export function JobRecord({
       ? [{ id: `pm-${job.id}`, name: job.projectManager, locked: false }]
       : []),
   ];
-  const books = jobProfitAndLoss({
-    job,
-    invoices: crm.invoices,
-    invoiceLines: crm.invoiceLines,
-    payments: crm.payments,
-    expenses: crm.expenses,
-    basis: "accrual",
-  });
+  const books = showFinancials
+    ? jobProfitAndLoss({
+        job,
+        invoices: crm.invoices,
+        invoiceLines: crm.invoiceLines,
+        payments: crm.payments,
+        expenses: crm.expenses,
+        basis: "accrual",
+      })
+    : null;
+  const soldFor = jobSoldAmount(job, crm.estimates, crm.estimateLines);
   const draftEstimateTotal = estimates
     .filter((estimate) => estimate.status === "draft")
     .reduce(
@@ -606,13 +613,17 @@ export function JobRecord({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-44">
         <DropdownMenuItem onClick={() => openNew("estimate")}>New estimate</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => openNew("invoice")}>New invoice</DropdownMenuItem>
+        {showFinancials ? (
+          <DropdownMenuItem onClick={() => openNew("invoice")}>New invoice</DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem onClick={() => openNew("materials")}>New material order</DropdownMenuItem>
         <DropdownMenuItem onClick={() => setMaterialTemplateOpen(true)}>
           New material order from template
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => openNew("interaction")}>New interaction</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => openNew("expense")}>New expense</DropdownMenuItem>
+        {showFinancials ? (
+          <DropdownMenuItem onClick={() => openNew("expense")}>New expense</DropdownMenuItem>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   ) : null;
@@ -704,10 +715,19 @@ export function JobRecord({
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <p className="shrink-0 text-sm tabular-nums">
-            <span className="font-medium">{formatCurrencyFull(books.invoiced)}</span>
-            <span className="text-muted-foreground"> invoiced</span>
-            <span className="mx-1.5 text-muted-foreground">·</span>
-            <span className="text-muted-foreground">est. draft {formatCurrencyFull(draftEstimateTotal)}</span>
+            {showFinancials && books ? (
+              <>
+                <span className="font-medium">{formatCurrencyFull(books.invoiced)}</span>
+                <span className="text-muted-foreground"> invoiced</span>
+                <span className="mx-1.5 text-muted-foreground">·</span>
+                <span className="text-muted-foreground">est. draft {formatCurrencyFull(draftEstimateTotal)}</span>
+              </>
+            ) : (
+              <>
+                <span className="font-medium">{soldFor > 0 ? formatCurrencyFull(soldFor) : "Not sold"}</span>
+                <span className="text-muted-foreground">{soldFor > 0 ? " sold" : ""}</span>
+              </>
+            )}
           </p>
           {primary?.phone ? (
             <Button
@@ -1104,7 +1124,7 @@ export function JobRecord({
         </div>
       ) : null}
 
-      {returnedDocs.length > 0 ? (
+      {showFinancials && returnedDocs.length > 0 ? (
         <div className="border border-b-0 bg-primary/8 px-4 py-3">
           <p className="text-sm font-medium">
             Accounting sent {returnedDocs.length} file{returnedDocs.length === 1 ? "" : "s"} back.
@@ -1158,7 +1178,9 @@ export function JobRecord({
               <span className="ml-1 text-muted-foreground">{claimMath.openCount}</span>
             ) : null}
           </TabsTrigger>
-          <TabsTrigger value="financials" className="flex-none">Financials</TabsTrigger>
+          {showFinancials ? (
+            <TabsTrigger value="financials" className="flex-none">Financials</TabsTrigger>
+          ) : null}
         </TabsList>
 
         <TabsContent value="overview" className="mt-0">
@@ -1229,7 +1251,9 @@ export function JobRecord({
                     {claim.adjusterName ? ` · ${claim.adjusterName}` : ""}
                     {claimMath.openCount ? ` · ${claimMath.openCount} supplement${claimMath.openCount === 1 ? "" : "s"} open` : ""}
                   </p>
-                  <p className="mt-1">{formatCurrencyFull(claimMath.outstanding)} still to collect</p>
+                  {showFinancials ? (
+                    <p className="mt-1">{formatCurrencyFull(claimMath.outstanding)} still to collect</p>
+                  ) : null}
                 </>
               ) : (
                 <p>Carrier, supplements, and insurance checks.</p>
@@ -1441,6 +1465,7 @@ export function JobRecord({
         </TabsContent>
 
         <TabsContent value="files" className="mt-0 space-y-8">
+          {showFinancials ? (
           <section>
             <div className="mb-3">
               <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Invoices, receipts, and payments</p>
@@ -1480,6 +1505,7 @@ export function JobRecord({
               </ul>
             )}
           </section>
+          ) : null}
           <RoofMeasureEntry jobId={job.id} disabled={deleted} />
           <JobEagleviewPanel jobId={job.id} disabled={deleted} />
           <JobFilesPanel jobId={job.id} disabled={deleted} />
@@ -1550,9 +1576,11 @@ export function JobRecord({
           <JobInsurancePanel job={job} readOnly={deleted} />
         </TabsContent>
 
-        <TabsContent value="financials" className="mt-0">
-          <JobFinancials job={job} />
-        </TabsContent>
+        {showFinancials ? (
+          <TabsContent value="financials" className="mt-0">
+            <JobFinancials job={job} />
+          </TabsContent>
+        ) : null}
 
         <TabsContent value="paper" className="mt-0 space-y-4">
           <AutomationRuns jobId={job.id} />
@@ -1646,6 +1674,7 @@ export function JobRecord({
               </ul>
             )}
           </div>
+          {showFinancials ? (
           <div>
             <div className="mb-2 flex items-center justify-between">
               <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Invoices</p>
@@ -1697,6 +1726,7 @@ export function JobRecord({
               </ul>
             )}
           </div>
+          ) : null}
           <div>
             <div className="mb-2 flex items-center justify-between">
               <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Material orders</p>
@@ -1755,9 +1785,11 @@ export function JobRecord({
                         <span className="text-xs text-muted-foreground">
                           {order.vendor.trim() || "No supplier yet"}
                         </span>
-                        <span className="text-xs tabular-nums text-muted-foreground">
-                          {formatCurrencyFull(materialOrderTotal(lines))} est.
-                        </span>
+                        {showFinancials ? (
+                          <span className="text-xs tabular-nums text-muted-foreground">
+                            {formatCurrencyFull(materialOrderTotal(lines))} est.
+                          </span>
+                        ) : null}
                       </div>
                     </li>
                   );
