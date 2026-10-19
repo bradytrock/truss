@@ -154,6 +154,14 @@ export function canViewAccounting(role: SeatRole) {
   return role === "company_admin" || role === "accountant";
 }
 
+/**
+ * Job books: invoices, expenses, payments, profit, and the Financials tab.
+ * Business development only sees what the job sold for.
+ */
+export function canViewProjectFinancials(role: SeatRole | undefined) {
+  return Boolean(role) && role !== "business_development";
+}
+
 export function canManageSettings(role: SeatRole, member?: StaffMember) {
   if (member?.restricted || member?.locked) return false;
   return role === "company_admin";

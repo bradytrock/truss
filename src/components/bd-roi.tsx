@@ -13,6 +13,7 @@ import {
 import { Metric, MetricStrip } from "@/components/page-chrome";
 import { formatCurrency, formatCurrencyFull } from "@/lib/format";
 import { buildBdRoi, roiMultiple, type BdPersonStats } from "@/lib/bd";
+import { canViewProjectFinancials } from "@/lib/visibility";
 import type { CrmState, StaffMember } from "@/lib/types";
 
 function multipleLabel(cash: number, spend: number) {
@@ -21,7 +22,7 @@ function multipleLabel(cash: number, spend: number) {
   return `${multiple.toFixed(1)}×`;
 }
 
-function PersonRow({ row, href }: { row: BdPersonStats; href?: string }) {
+function PersonRow({ row, href, books }: { row: BdPersonStats; href?: string; books: boolean }) {
   return (
     <TableRow>
       <TableCell>
@@ -38,9 +39,13 @@ function PersonRow({ row, href }: { row: BdPersonStats; href?: string }) {
       <TableCell className="text-right tabular-nums">{row.leads}</TableCell>
       <TableCell className="text-right tabular-nums">{formatCurrencyFull(row.openValue)}</TableCell>
       <TableCell className="text-right tabular-nums">{formatCurrencyFull(row.wonValue)}</TableCell>
-      <TableCell className="text-right tabular-nums">{formatCurrencyFull(row.cash)}</TableCell>
-      <TableCell className="text-right tabular-nums">{formatCurrencyFull(row.spend)}</TableCell>
-      <TableCell className="text-right tabular-nums">{multipleLabel(row.cash, row.spend)}</TableCell>
+      {books ? (
+        <>
+          <TableCell className="text-right tabular-nums">{formatCurrencyFull(row.cash)}</TableCell>
+          <TableCell className="text-right tabular-nums">{formatCurrencyFull(row.spend)}</TableCell>
+          <TableCell className="text-right tabular-nums">{multipleLabel(row.cash, row.spend)}</TableCell>
+        </>
+      ) : null}
     </TableRow>
   );
 }
@@ -54,11 +59,12 @@ export function BdRoiPanel({
 }) {
   const report = buildBdRoi(state);
   const mine = report.people.find((row) => row.staff.id === viewer.id);
+  const books = canViewProjectFinancials(viewer.role);
 
   return (
     <div className="space-y-5">
       {mine ? (
-        <MetricStrip className="sm:grid-cols-2 xl:grid-cols-4">
+        <MetricStrip className={books ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-2"}>
           <Metric
             label="Your open pipeline"
             value={formatCurrency(mine.openValue)}
@@ -69,24 +75,28 @@ export function BdRoiPanel({
             value={formatCurrency(mine.wonValue)}
             hint={`${mine.won} signed · ${mine.lost} lost`}
           />
-          <Metric
-            label="Cash on your jobs"
-            value={formatCurrency(mine.cash)}
-            hint="Payments this year on work you sourced"
-          />
-          <Metric
-            label="Your ROI"
-            value={multipleLabel(mine.cash, mine.spend)}
-            hint={
-              mine.spend
-                ? `${formatCurrency(mine.spend)} BD spend (office) this year`
-                : "Log office expenses to see a multiple"
-            }
-          />
+          {books ? (
+            <>
+              <Metric
+                label="Cash on your jobs"
+                value={formatCurrency(mine.cash)}
+                hint="Payments this year on work you sourced"
+              />
+              <Metric
+                label="Your ROI"
+                value={multipleLabel(mine.cash, mine.spend)}
+                hint={
+                  mine.spend
+                    ? `${formatCurrency(mine.spend)} BD spend (office) this year`
+                    : "Log office expenses to see a multiple"
+                }
+              />
+            </>
+          ) : null}
         </MetricStrip>
       ) : null}
 
-      <MetricStrip className="sm:grid-cols-2 xl:grid-cols-4">
+      <MetricStrip className={books ? "sm:grid-cols-2 xl:grid-cols-4" : "sm:grid-cols-2"}>
         <Metric
           label="Company BD pipeline"
           value={formatCurrency(report.company.openValue)}
@@ -97,33 +107,39 @@ export function BdRoiPanel({
           value={formatCurrency(report.company.wonValue)}
           hint={`${report.company.won} awarded`}
         />
-        <Metric
-          label="Cash from BD-sourced jobs"
-          value={formatCurrency(report.company.cash)}
-          hint={
-            report.companyCash
-              ? `${Math.round(report.bdShare * 100)}% of company cash this year`
-              : "No payments this year yet"
-          }
-        />
-        <Metric
-          label="Company BD ROI"
-          value={multipleLabel(report.company.cash, report.company.spend)}
-          hint={
-            report.company.spend
-              ? `${formatCurrency(report.company.spend)} team spend vs cash in`
-              : "Add BD office expenses to complete the multiple"
-          }
-        />
+        {books ? (
+          <>
+            <Metric
+              label="Cash from BD-sourced jobs"
+              value={formatCurrency(report.company.cash)}
+              hint={
+                report.companyCash
+                  ? `${Math.round(report.bdShare * 100)}% of company cash this year`
+                  : "No payments this year yet"
+              }
+            />
+            <Metric
+              label="Company BD ROI"
+              value={multipleLabel(report.company.cash, report.company.spend)}
+              hint={
+                report.company.spend
+                  ? `${formatCurrency(report.company.spend)} team spend vs cash in`
+                  : "Add BD office expenses to complete the multiple"
+              }
+            />
+          </>
+        ) : null}
       </MetricStrip>
 
       <Card>
         <CardHeader className="border-b">
-          <CardTitle>ROI by business development</CardTitle>
+          <CardTitle>{books ? "ROI by business development" : "Business development"}</CardTitle>
           <CardDescription>
             Credit stays with whoever opened the lead, even after it is assigned to a PM or estimator.
-            Agents are referral partners in that person’s book. Spend is office expenses they logged.
-            ROI is cash collected on their sourced jobs this year ÷ that spend.
+            Agents are referral partners in that person’s book.
+            {books
+              ? " Spend is office expenses they logged. ROI is cash collected on their sourced jobs this year ÷ that spend."
+              : " Sold is the signed contract on jobs they sourced."}
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-0">
@@ -135,20 +151,24 @@ export function BdRoiPanel({
                 <TableHead className="text-right">Leads</TableHead>
                 <TableHead className="text-right">Open $</TableHead>
                 <TableHead className="text-right">Sold $</TableHead>
-                <TableHead className="text-right">Cash in</TableHead>
-                <TableHead className="text-right">Spend</TableHead>
-                <TableHead className="text-right">ROI</TableHead>
+                {books ? (
+                  <>
+                    <TableHead className="text-right">Cash in</TableHead>
+                    <TableHead className="text-right">Spend</TableHead>
+                    <TableHead className="text-right">ROI</TableHead>
+                  </>
+                ) : null}
               </TableRow>
             </TableHeader>
             <TableBody>
               {report.people.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-muted-foreground">
+                  <TableCell colSpan={books ? 8 : 5} className="text-muted-foreground">
                     No business development seats yet.
                   </TableCell>
                 </TableRow>
               ) : (
-                report.people.map((row) => <PersonRow key={row.staff.id} row={row} />)
+                report.people.map((row) => <PersonRow key={row.staff.id} row={row} books={books} />)
               )}
               {report.people.length > 1 ? (
                 <TableRow>
@@ -161,15 +181,19 @@ export function BdRoiPanel({
                   <TableCell className="text-right tabular-nums">
                     {formatCurrencyFull(report.company.wonValue)}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatCurrencyFull(report.company.cash)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatCurrencyFull(report.company.spend)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {multipleLabel(report.company.cash, report.company.spend)}
-                  </TableCell>
+                  {books ? (
+                    <>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCurrencyFull(report.company.cash)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatCurrencyFull(report.company.spend)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {multipleLabel(report.company.cash, report.company.spend)}
+                      </TableCell>
+                    </>
+                  ) : null}
                 </TableRow>
               ) : null}
             </TableBody>

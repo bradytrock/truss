@@ -28,7 +28,8 @@ import { documentProjectManager, letterheadCompanyForRecord, shareEmailOwnerFrom
 import { cardHeaderLogo } from "@/lib/card";
 import { formatJobSite } from "@/lib/leads";
 import { formatCurrencyFull, formatDate, formatMoney } from "@/lib/format";
-import { jobPaperHref } from "@/lib/job-record";
+import { jobPaperHref, jobRecordHref } from "@/lib/job-record";
+import { canViewProjectFinancials } from "@/lib/visibility";
 import { shareUrl } from "@/lib/share";
 import type { Invoice } from "@/lib/types";
 import {
@@ -48,6 +49,20 @@ export default function InvoiceDetailPage() {
   const [tab, setTab] = useState("write");
 
   if (!crm.hydrated) return <LoadingScreen />;
+  if (!canViewProjectFinancials(crm.effectiveStaff?.role)) {
+    const jobId = invoice?.jobId;
+    return (
+      <EmptyState
+        title="Invoices stay with the office"
+        description="Business development sees the amount a job sold for on that job."
+        action={
+          <Button nativeButton={false} render={<Link href={jobId ? jobRecordHref(jobId) : "/jobs"} />}>
+            {jobId ? "Back to the job" : "Back to jobs"}
+          </Button>
+        }
+      />
+    );
+  }
   if (!invoice) {
     return (
       <EmptyState

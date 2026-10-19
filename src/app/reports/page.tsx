@@ -38,7 +38,7 @@ import {
 import { BdRoiPanel } from "@/components/bd-roi";
 import { CardAnalyticsReport } from "@/components/card-analytics-report";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
-import { accessScope, canSeeTeamPerformance, canViewReports } from "@/lib/visibility";
+import { accessScope, canSeeTeamPerformance, canViewProjectFinancials, canViewReports } from "@/lib/visibility";
 import { isBusinessDevelopment } from "@/lib/bd";
 
 const SCOPE_COPY = {
@@ -185,10 +185,10 @@ function ReportsPageInner() {
 
       <PageHeader
         eyebrow="Reports"
-        title={isBd ? "Business development ROI" : "Performance"}
+        title={isBd ? "Business development" : "Performance"}
         description={
           isBd
-            ? "Your numbers and the company BD book. Credit stays with the person who opened the lead."
+            ? "Your pipeline and the jobs you sold. Credit stays with the person who opened the lead."
             : SCOPE_COPY[scope]
         }
         actions={
@@ -239,7 +239,7 @@ function ReportsPageInner() {
             <Metric label="Jobs lost" value={String(report.kpis.lostCount)} hint="Lost leads in this range" />
             <Metric label="Job lost average" value={compact(report.kpis.lostAvg)} hint="Avg. value of lost work" />
           </MetricStrip>
-          <div className="grid gap-4 xl:grid-cols-3">
+          <div className={`grid gap-4 ${canViewProjectFinancials(viewer.role) ? "xl:grid-cols-3" : "xl:grid-cols-2"}`}>
             <ChartCard title="Jobs opened" hint="Leads and jobs created, by the month they entered the book">
               <VerticalBars
                 items={report.monthlyOpened.map((row) => ({
@@ -260,16 +260,18 @@ function ReportsPageInner() {
                 format={compact}
               />
             </ChartCard>
-            <ChartCard title="Cash collected" hint="Payments logged, by the date on the receipt">
-              <VerticalBars
-                items={report.monthlyCash.map((row) => ({
-                  key: row.key,
-                  label: row.label,
-                  value: row.value,
-                }))}
-                format={compact}
-              />
-            </ChartCard>
+            {canViewProjectFinancials(viewer.role) ? (
+              <ChartCard title="Cash collected" hint="Payments logged, by the date on the receipt">
+                <VerticalBars
+                  items={report.monthlyCash.map((row) => ({
+                    key: row.key,
+                    label: row.label,
+                    value: row.value,
+                  }))}
+                  format={compact}
+                />
+              </ChartCard>
+            ) : null}
           </div>
           <Panel title="Overall metrics by project type" description="Won is a signed contract in this range. Pending is unsigned work opened in this range.">
             <ProjectTypeTable rows={report.byProjectType} money={money} />
@@ -470,8 +472,15 @@ function ReportsPageInner() {
         </TabsContent>
 
         <TabsContent value="overview" className="mt-5 space-y-5">
-          <Panel title="Job metrics" description="Signed contracts, cash collected, and jobs opened in this range.">
-            <div className="grid gap-4 lg:grid-cols-2">
+          <Panel
+            title="Job metrics"
+            description={
+              canViewProjectFinancials(viewer.role)
+                ? "Signed contracts, cash collected, and jobs opened in this range."
+                : "Signed contracts and jobs opened in this range."
+            }
+          >
+            <div className={`grid gap-4 ${canViewProjectFinancials(viewer.role) ? "lg:grid-cols-2" : ""}`}>
               <div>
                 <p className="mb-2 text-xs font-medium text-muted-foreground">Signed contract value</p>
                 <VerticalBars
@@ -483,17 +492,19 @@ function ReportsPageInner() {
                   format={compact}
                 />
               </div>
-              <div>
-                <p className="mb-2 text-xs font-medium text-muted-foreground">Cash collected</p>
-                <VerticalBars
-                  items={report.monthlyCash.map((row) => ({
-                    key: row.key,
-                    label: row.label,
-                    value: row.value,
-                  }))}
-                  format={compact}
-                />
-              </div>
+              {canViewProjectFinancials(viewer.role) ? (
+                <div>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">Cash collected</p>
+                  <VerticalBars
+                    items={report.monthlyCash.map((row) => ({
+                      key: row.key,
+                      label: row.label,
+                      value: row.value,
+                    }))}
+                    format={compact}
+                  />
+                </div>
+              ) : null}
             </div>
             <div className="grid gap-px border-t bg-border sm:grid-cols-3 xl:grid-cols-6">
               <Metric label="Value of won jobs" value={compact(report.kpis.wonValue)} hint="Signed contracts in this range" />

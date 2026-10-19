@@ -25,6 +25,7 @@ import { InvoiceStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { formatCurrencyFull, formatDate } from "@/lib/format";
 import { derivedInvoiceStatus, invoiceBalance, invoiceTotal, paidOnInvoice } from "@/lib/money";
+import { canViewProjectFinancials } from "@/lib/visibility";
 import { INVOICE_STATUS_LABELS, INVOICE_STATUSES, type InvoiceStatus } from "@/lib/types";
 
 export default function InvoicesPage() {
@@ -58,6 +59,19 @@ export default function InvoicesPage() {
   }, [crm, query, status]);
 
   if (!crm.hydrated) return <LoadingScreen />;
+  if (!canViewProjectFinancials(crm.effectiveStaff?.role)) {
+    return (
+      <EmptyState
+        title="Invoices stay with the office"
+        description="Business development sees the amount a job sold for on that job."
+        action={
+          <Link href="/jobs" className="text-sm font-medium text-primary hover:underline">
+            Back to jobs
+          </Link>
+        }
+      />
+    );
+  }
 
   return (
     <div className="space-y-5">

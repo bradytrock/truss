@@ -41,7 +41,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { canViewReports, canManageSettings, canManageAutomations, canViewAccounting } from "@/lib/visibility";
+import { canViewReports, canManageSettings, canManageAutomations, canViewAccounting, canViewProjectFinancials } from "@/lib/visibility";
 import { groupLoginAsTargets, readLoginAsRecent, recentLoginAsTargets, rememberLoginAsRecent } from "@/lib/login-as";
 import { isInboxPath } from "@/lib/inbox";
 import { openDialerPopup } from "@/lib/calls/popup";
@@ -161,12 +161,11 @@ function adminNavItems(options: {
   showReports: boolean;
   showAccounting: boolean;
   showSettings: boolean;
-  bdOnly: boolean;
 }) {
   return [
     ...(options.showAccounting ? [{ href: "/accounting", label: "Accounting" }] : []),
     ...(options.showReports
-      ? [{ href: "/reports", label: options.bdOnly ? "ROI" : "Reports" }]
+      ? [{ href: "/reports", label: "Reports" }]
       : []),
     ...(options.showSettings ? [{ href: "/settings", label: "Settings" }] : []),
   ];
@@ -258,9 +257,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         <DropdownMenuItem onClick={() => setCreate("opportunity")}>New lead</DropdownMenuItem>
         <DropdownMenuItem onClick={() => setCreate("client")}>New contact</DropdownMenuItem>
         <DropdownMenuItem onClick={() => setCreate("task")}>New task</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => setCreate("expense")}>Log expense</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("forecast")}>Log forecasted expense</DropdownMenuItem>
       </>
     ) : (
       <>
@@ -613,7 +609,8 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
 function SearchTrigger() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
-  const { opportunities, jobs, contacts, estimates, invoices, materialOrders, materialOrderTemplates, viewer, tasks, jobInsurance } = useCrm();
+  const { opportunities, jobs, contacts, estimates, invoices, materialOrders, materialOrderTemplates, viewer, effectiveStaff, tasks, jobInsurance } = useCrm();
+  const showFinancials = canViewProjectFinancials(effectiveStaff?.role ?? viewer?.role);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -836,6 +833,7 @@ function SearchTrigger() {
                 </CommandItem>
               ))}
             </CommandGroup>
+            {showFinancials ? (
             <CommandGroup heading="Invoices">
               {invoices.map((invoice) => (
                 <CommandItem
@@ -850,6 +848,7 @@ function SearchTrigger() {
                 </CommandItem>
               ))}
             </CommandGroup>
+            ) : null}
             <CommandGroup heading="Material orders">
               <CommandItem
                 value="material order templates company hail roof"

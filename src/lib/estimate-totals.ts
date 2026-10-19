@@ -168,6 +168,18 @@ export function acceptedAmountForJob(
   return amountForEstimate(preferred, lines, market);
 }
 
+/** What the job sold for: the signed proposal, otherwise the saved contract. Open pipeline value is not included. */
+export function jobSoldAmount(
+  job: { id: string; opportunityId?: string | null; contractValue?: number | null; market?: JobMarket | "" | null },
+  estimates: Estimate[],
+  lines: EstimateLine[],
+) {
+  const signed = acceptedAmountForJob(job, estimates, lines, job.market);
+  if (signed > 0) return signed;
+  const contract = Number(job.contractValue) || 0;
+  return contract > 0 ? contract : 0;
+}
+
 export function isSignedEstimate(
   estimate: Pick<Estimate, "status" | "acceptedAt" | "secondAcceptedAt" | "secondContactId"> &
     Partial<Pick<Estimate, "signatureImage" | "secondSignatureImage">>,
