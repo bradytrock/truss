@@ -1,6 +1,7 @@
+import { localYmd } from "@/lib/format";
 import { leadSourceLabel } from "@/lib/leads";
 import { formatPhoneInput, toE164 } from "@/lib/phone";
-import { PROJECT_TYPE_LABELS, type ProjectType } from "@/lib/types";
+import { EVENT_KIND_LABELS, PROJECT_TYPES, PROJECT_TYPE_LABELS, type EventKind, type ProjectType } from "@/lib/types";
 
 export const MAX_VISIBLE_ALERTS = 3;
 
@@ -17,10 +18,49 @@ export const PASS_ALONG_HELP = "This lead goes back to your company admin, who'l
 export const NOTE_TITLE = "Note to admin";
 export const NOTE_HELP = "Your company admin gets this note. The lead stays with you.";
 export const ASSIGN_TITLE = "Assign rep";
+export const BOOK_TITLE = "Book appointment";
+export const BOOK_HELP = "This goes on your calendar for this lead.";
+export const UPDATE_TITLE = "Update lead";
+export const UPDATE_HELP = "Correct the homeowner and the site, and set the next step. The lead stays with you.";
 
 export const PASSBACK_ERROR = "Couldn't send this back to your admin. The lead is still yours; try again.";
 export const NOTE_ERROR = "Couldn't send your note. Check your connection and try again.";
 export const ASSIGN_ERROR = "Couldn't assign this lead. Try again.";
+export const BOOK_ERROR = "Couldn't book this appointment. Try again.";
+export const UPDATE_ERROR = "Couldn't update this lead. Try again.";
+export const BOOK_TITLE_ERROR = "Give the appointment a title.";
+export const BOOK_DATE_ERROR = "Pick a date and a start and end time.";
+export const BOOK_TIME_ERROR = "The end time has to be after the start.";
+
+export const LEAD_ALERT_SUPPRESS = "lead-alerts:suppress";
+
+export const LEAD_APPOINTMENT_KINDS = ["site_walk", "meeting", "inspection", "pre_bid"] as const;
+export type LeadAppointmentKind = (typeof LEAD_APPOINTMENT_KINDS)[number];
+
+export type BookAppointmentInput = {
+  title: string;
+  kind: LeadAppointmentKind;
+  date: string;
+  startTime: string;
+  endTime: string;
+  location: string;
+  notes: string;
+};
+
+export type UpdateLeadInput = {
+  homeownerName: string;
+  phone: string;
+  email: string;
+  street: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  serviceType: string;
+  nextStep: string;
+  notes: string;
+};
+
+export type LeadEditSeed = UpdateLeadInput;
 
 export type AlertKind = "new_lead" | "assigned_to_you" | "needs_rep" | "passed_back" | "rep_note";
 
@@ -300,19 +340,131 @@ export function alertFromCatchUp(row: LeadSnapshot, me: string, isAdmin: boolean
   return buildAlert("needs_rep", row, { arrivedAt });
 }
 
-export type AlertAction = "call" | "pass" | "note" | "assign" | "got_it" | "reassign";
+export type AlertAction = "call" | "book" | "update" | "pass" | "note" | "assign" | "got_it" | "reassign";
 
 export function alertActions(kind: AlertKind): AlertAction[] {
-  if (kind === "new_lead" || kind === "assigned_to_you") return ["call", "pass", "note"];
+  if (kind === "new_lead" || kind === "assigned_to_you") return ["call", "book", "update", "pass", "note"];
   if (kind === "rep_note") return ["got_it", "reassign"];
   return ["call", "assign"];
 }
 
 export function actionsForViewer(kind: AlertKind, isAdmin: boolean): AlertAction[] {
-  if (kind === "new_lead" || kind === "assigned_to_you") return ["call", "pass", "note"];
+  if (kind === "new_lead" || kind === "assigned_to_you") return ["call", "book", "update", "pass", "note"];
   if (!isAdmin) return [];
   if (kind === "rep_note") return ["got_it", "reassign"];
   return ["call", "assign"];
+}
+
+export function leadServiceChoices(current: string) {
+  const value = current.trim();
+  if (value && !(PROJECT_TYPES as readonly string[]).includes(value)) return [value, ...PROJECT_TYPES];
+  return [...PROJECT_TYPES];
+}
+
+export function defaultAppointmentTitle(homeowner: string, kind: LeadAppointmentKind = "site_walk") {
+  const who = homeowner.trim() || "Homeowner";
+  return `${EVENT_KIND_LABELS[kind]} · ${who}`;
+}
+
+export function defaultBookAppointment(
+  lead: Pick<LeadSnapshot, "homeowner_name" | "street" | "city">,
+  now = new Date(),
+): BookAppointmentInput {
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return {
+    title: defaultAppointmentTitle(lead.homeowner_name, "site_walk"),
+    kind: "site_walk",
+    date: localYmd(tomorrow),
+    startTime: "09:00",
+    endTime: "10:00",
+    location: [lead.street, lead.city].filter(Boolean).join(", "),
+    notes: "",
+  };
+}
+
+export function appointmentRangeError(date: string, startTime: string, endTime: string) {
+  if (!date || !startTime || !endTime) return BOOK_DATE_ERROR;
+  const starts = new Date(`${date}T${startTime}:00`).getTime();
+  const ends = new Date(`${date}T${endTime}:00`).getTime();
+  if (!Number.isFinite(starts) || !Number.isFinite(ends) || ends <= starts) return BOOK_TIME_ERROR;
+  return "";
+}
+
+export function appointmentInstants(input: Pick<BookAppointmentInput, "date" | "startTime" | "endTime">) {
+  if (appointmentRangeError(input.date, input.startTime, input.endTime)) return null;
+  return {
+    startsAt: new Date(`${input.date}T${input.startTime}:00`).toISOString(),
+    endsAt: new Date(`${input.date}T${input.endTime}:00`).toISOString(),
+  };
+}
+
+export function leadEditSeed(
+  lead: Pick<LeadSnapshot, "homeowner_name" | "phone" | "street" | "city" | "service_type">,
+  records?: {
+    contact?: { name?: string; phone?: string; email?: string } | null;
+    opportunity?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      postalCode?: string;
+      projectType?: string;
+      nextStep?: string;
+      notes?: string;
+    } | null;
+    job?: {
+      street?: string;
+      city?: string;
+      state?: string;
+      postalCode?: string;
+      projectType?: string;
+      description?: string;
+    } | null;
+  },
+): LeadEditSeed {
+  const contact = records?.contact;
+  const opportunity = records?.opportunity;
+  const job = records?.job;
+  return {
+    homeownerName: contact?.name?.trim() || lead.homeowner_name,
+    phone: formatPhoneInput(contact?.phone || lead.phone),
+    email: contact?.email?.trim() ?? "",
+    street: firstText(opportunity?.street, job?.street, lead.street),
+    city: firstText(opportunity?.city, job?.city, lead.city),
+    state: firstText(opportunity?.state, job?.state),
+    postalCode: firstText(opportunity?.postalCode, job?.postalCode),
+    serviceType: firstText(opportunity?.projectType, job?.projectType, lead.service_type),
+    nextStep: opportunity?.nextStep?.trim() ?? "",
+    notes: firstText(opportunity?.notes, job?.description),
+  };
+}
+
+function firstText(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const next = value?.trim() ?? "";
+    if (next) return next;
+  }
+  return "";
+}
+
+/** A lead this person just edited should not pop again because its clock moved. */
+export function suppressLeadAlerts(memory: AlertMemory, lead: LeadSnapshot): AlertMemory {
+  const stampsToAdd = (["new_lead", "assigned_to_you"] as const)
+    .map((kind) => alertStamp({ id: alertKey(kind, lead.id), kind, lead, noteId: "" }))
+    .filter((stamp) => !memory.stamps.includes(stamp));
+  const ids = new Set([alertKey("new_lead", lead.id), alertKey("assigned_to_you", lead.id)]);
+  const queue = memory.queue.some((item) => ids.has(item.id))
+    ? memory.queue.filter((item) => !ids.has(item.id))
+    : memory.queue;
+  if (!stampsToAdd.length && queue === memory.queue) return memory;
+  return {
+    queue,
+    stamps: [...memory.stamps, ...stampsToAdd].slice(-200),
+  };
+}
+
+export function appointmentKindLabel(kind: EventKind) {
+  return EVENT_KIND_LABELS[kind];
 }
 
 export function serviceTypeLabel(value: string) {

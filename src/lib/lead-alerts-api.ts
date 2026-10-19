@@ -3,6 +3,7 @@ import {
   ASSIGN_ERROR,
   NOTE_ERROR,
   PASSBACK_ERROR,
+  UPDATE_ERROR,
   snapshotFromRow,
   type LeadActivitySnapshot,
   type LeadSnapshot,
@@ -90,6 +91,33 @@ export async function listLeadAssignees(supabase: LeadClient, companyId: string)
       fullName: row.full_name,
       initials: row.initials,
     }));
+}
+
+export async function updateLeadDetails(
+  supabase: LeadClient,
+  input: {
+    leadId: string;
+    homeownerName: string;
+    street: string;
+    city: string;
+    serviceType: string;
+    phone: string;
+  },
+): Promise<LeadSnapshot> {
+  const { data, error } = await supabase
+    .from("leads")
+    .update({
+      homeowner_name: input.homeownerName.trim(),
+      street: input.street.trim(),
+      city: input.city.trim(),
+      service_type: input.serviceType.trim(),
+      phone: input.phone.trim(),
+    })
+    .eq("id", input.leadId)
+    .select("*")
+    .single();
+  if (error || !data) throw new Error(UPDATE_ERROR);
+  return snapshotFromRow(data);
 }
 
 export async function fetchLead(supabase: LeadClient, leadId: string): Promise<LeadSnapshot | null> {

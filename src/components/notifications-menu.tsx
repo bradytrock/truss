@@ -1,17 +1,23 @@
 "use client";
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { AssignRepDialog } from "@/components/lead-alerts/lead-alert-dialogs";
+import { toast } from "sonner";
+import { AssignRepDialog, BookAppointmentDialog, UpdateLeadDialog } from "@/components/lead-alerts/lead-alert-dialogs";
 import { useRouter } from "next/navigation";
 import { Bell } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { buttonVariants } from "@/components/ui/button";
 import { useCrm } from "@/lib/crm-store";
+import { bookLeadAppointment, editSeedForLead, saveLeadUpdate } from "@/lib/lead-follow-up";
+import { updateLeadDetails } from "@/lib/lead-alerts-api";
 import {
+  LEAD_ALERT_SUPPRESS,
+  actionsForViewer,
   alertTimeLabel,
   leadRecordHref,
   notificationBody,
   passbackSummary,
+  type LeadAlert,
 } from "@/lib/lead-alerts";
 import {
   inboxReadKey,
@@ -74,12 +80,14 @@ export function NotificationsMenu() {
 }
 
 function NotificationsSession() {
-  const { user } = useCrm();
+  const crm = useCrm();
+  const { user } = crm;
   const router = useRouter();
   const isAdmin = user.role === "company_admin";
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(0);
   const [assigning, setAssigning] = useState<InboxItem | null>(null);
+  const [followUp, setFollowUp] = useState<{ type: "book" | "update"; alert: LeadAlert } | null>(null);
   const [notices, setNotices] = useState<StaffNotice[]>([]);
   const inboxKey = `${user.id}:${isAdmin ? "admin" : "rep"}`;
   const inbox = useSyncExternalStore(
@@ -266,6 +274,7 @@ function NotificationsSession() {
                       ? item.alert.noteBody
                       : notificationBody(item.alert);
                 const when = Date.parse(item.at);
+                const canWork = actionsForViewer(item.alert.kind, isAdmin).includes("book");
                 return (
                   <li key={item.alert.id} className="border-b last:border-b-0">
                     <button
@@ -292,6 +301,32 @@ function NotificationsSession() {
                         ) : null}
                       </span>
                     </button>
+                    {canWork ? (
+                      <div className="flex gap-3 px-3 pb-2.5 pl-6">
+                        <button
+                          type="button"
+                          className="text-xs font-medium underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+                          onClick={() => {
+                            saveRead([item.stamp]);
+                            setOpen(false);
+                            setFollowUp({ type: "book", alert: item.alert });
+                          }}
+                        >
+                          Book appointment
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs font-medium underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+                          onClick={() => {
+                            saveRead([item.stamp]);
+                            setOpen(false);
+                            setFollowUp({ type: "update", alert: item.alert });
+                          }}
+                        >
+                          Update lead
+                        </button>
+                      </div>
+                    ) : null}
                   </li>
                 );
               })}
@@ -313,6 +348,31 @@ function NotificationsSession() {
         }}
       />
     ) : null}
+    <BookAppointmentDialog
+      alert={followUp?.type === "book" ? followUp.alert : null}
+      onClose={() => setFollowUp(null)}
+      onSubmit={async (input) => {
+        if (followUp?.type !== "book") return;
+        await bookLeadAppointment(crm, followUp.alert, input, user.name);
+        setFollowUp(null);
+        window.dispatchEvent(new Event(NOTIFICATIONS_REFRESH));
+      }}
+    />
+    <UpdateLeadDialog
+      alert={followUp?.type === "update" ? followUp.alert : null}
+      seed={followUp?.type === "update" ? editSeedForLead(crm, followUp.alert.lead) : null}
+      onClose={() => setFollowUp(null)}
+      onSubmit={async (input) => {
+        if (followUp?.type !== "update") return;
+        const saved = await saveLeadUpdate(crm, followUp.alert, input, (leadId, details) =>
+          updateLeadDetails(createClient(), { leadId, ...details }),
+        );
+        window.dispatchEvent(new CustomEvent(LEAD_ALERT_SUPPRESS, { detail: saved }));
+        setFollowUp(null);
+        toast.success("Lead updated.");
+        window.dispatchEvent(new Event(NOTIFICATIONS_REFRESH));
+      }}
+    />
     </>
   );
 }

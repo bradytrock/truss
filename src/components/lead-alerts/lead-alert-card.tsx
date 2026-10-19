@@ -29,6 +29,8 @@ export function LeadAlertCard({
   onPass,
   onNote,
   onAssign,
+  onBook,
+  onUpdate,
 }: {
   alert: LeadAlert;
   now: number;
@@ -39,6 +41,8 @@ export function LeadAlertCard({
   onPass: () => void;
   onNote: () => void;
   onAssign: () => void;
+  onBook: () => void;
+  onUpdate: () => void;
 }) {
   const actions = actionsForViewer(alert.kind, isAdmin);
   const place = leadPlaceLine(alert.lead);
@@ -113,6 +117,16 @@ export function LeadAlertCard({
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {actions.includes("call") ? (
           <CallNow coarse={coarse} phone={phone} tel={tel} onCalled={onCalled} />
+        ) : null}
+        {actions.includes("book") ? (
+          <button type="button" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "text-foreground")} onClick={onBook}>
+            Book appointment
+          </button>
+        ) : null}
+        {actions.includes("update") ? (
+          <button type="button" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "text-foreground")} onClick={onUpdate}>
+            Update lead
+          </button>
         ) : null}
         {actions.includes("pass") ? (
           <button type="button" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "text-foreground")} onClick={onPass}>
