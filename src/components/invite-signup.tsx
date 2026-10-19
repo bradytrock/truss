@@ -14,7 +14,10 @@ import {
   missingAccountManagementMessage,
   normalizeSeatEmail,
 } from "@/lib/accounts";
+import { useSignIn, useUser } from "@clerk/nextjs";
 import { authErrorMessage } from "@/lib/auth-errors";
+import { clerkBrowserEnabled } from "@/lib/clerk-browser";
+import { postClerkAuth, runClerkSignup, type ClerkSignInClient } from "@/lib/clerk-signup-client";
 import {
   inviteBlockReason,
   inviteCanRenew,
@@ -61,7 +64,15 @@ async function claimInviteIfNeeded(
   return { ok: false as const, message: claimErrorMessage(error) };
 }
 
-export function InviteSignup({ token }: { token: string }) {
+function InviteSignupForm({
+  token,
+  clerkSignIn = null,
+  clerkEmail,
+}: {
+  token: string;
+  clerkSignIn?: ClerkSignInClient | null;
+  clerkEmail?: string | null;
+}) {
   const router = useRouter();
   const [gate, setGate] = useState<InviteGate | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,18 +103,22 @@ export function InviteSignup({ token }: { token: string }) {
       setGate(next);
       setFullName(next.seatName);
       setRenewed(next.reinviteRequested);
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        setSessionEmail(sessionData.session?.user.email ?? null);
-      } catch {
-        setSessionEmail(null);
+      if (clerkSignIn) {
+        setSessionEmail(clerkEmail ?? null);
+      } else {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          setSessionEmail(sessionData.session?.user.email ?? null);
+        } catch {
+          setSessionEmail(null);
+        }
       }
       setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [clerkEmail, clerkSignIn, token]);
 
   async function onAccept() {
     setFormError(null);
@@ -136,6 +151,22 @@ export function InviteSignup({ token }: { token: string }) {
         const message = `Sign in as ${current.email} to join ${current.companyName}.`;
         setFormError(message);
         toast.error(message);
+        return;
+      }
+      if (clerkBrowserEnabled()) {
+        const claimed = await postClerkAuth("/api/auth/claim-invite", { token });
+        if (!claimed.ok) {
+          const message =
+            claimed.body && typeof claimed.body === "object" && "error" in claimed.body
+              ? String((claimed.body as { error?: string }).error || "Could not join that company.")
+              : "Could not join that company.";
+          setFormError(message);
+          toast.error(message);
+          return;
+        }
+        toast.success(`Joined ${current.companyName}`);
+        router.replace("/welcome");
+        router.refresh();
         return;
       }
       const supabase = createClient();
@@ -194,6 +225,44 @@ export function InviteSignup({ token }: { token: string }) {
     event.preventDefault();
     if (!gate) return;
     setFormError(null);
+    if (clerkBrowserEnabled()) {
+      if (!clerkSignIn) {
+        const message = "Sign-in is still loading. Try again.";
+        setFormError(message);
+        toast.error(message);
+        return;
+      }
+      setPending(true);
+      try {
+        const result = await runClerkSignup({
+          post: postClerkAuth,
+          signIn: clerkSignIn,
+          account: {
+            email: gate.email,
+            password,
+            fullName,
+            company: gate.companyName,
+            title: gate.seatTitle || SEAT_ROLE_LABELS[(gate.seatRole || "project_manager") as SeatRole],
+            inviteToken: token,
+          },
+          destination: "/welcome",
+          inviteToken: token,
+        });
+        if (!result.ok) {
+          setFormError(result.message);
+          toast.error(result.message);
+          return;
+        }
+        toast.success(`Joined ${gate.companyName}`);
+      } catch (error) {
+        const message = authErrorMessage(error instanceof Error ? error.message : "Could not create the account.");
+        setFormError(message);
+        toast.error(message);
+      } finally {
+        setPending(false);
+      }
+      return;
+    }
     if (railwayDatabaseEnabled()) {
       const message = "New companies sign in with Clerk. Accounts are not created in Supabase.";
       setFormError(message);
@@ -425,6 +494,23 @@ export function InviteSignup({ token }: { token: string }) {
       </p>
     </AuthFrame>
   );
+}
+
+function ClerkInviteSignup({ token }: { token: string }) {
+  const { signIn } = useSignIn();
+  const { isLoaded, user } = useUser();
+  return (
+    <InviteSignupForm
+      token={token}
+      clerkSignIn={signIn as ClerkSignInClient | null}
+      clerkEmail={isLoaded ? (user?.primaryEmailAddress?.emailAddress ?? null) : null}
+    />
+  );
+}
+
+export function InviteSignup({ token }: { token: string }) {
+  if (clerkBrowserEnabled()) return <ClerkInviteSignup token={token} />;
+  return <InviteSignupForm token={token} />;
 }
 
 function Fact({ label, value }: { label: string; value: string }) {

@@ -24,10 +24,19 @@ async function linkOnRailway(clerkUserId: string, email: string) {
   const result = await db.query(
     `update public.profiles p
         set clerk_user_id = $1
-       from auth.users u
-      where u.id = p.id
-        and lower(u.email) = $2
-        and (p.clerk_user_id is null or p.clerk_user_id = $1)`,
+      where p.id = (
+        select profile.id
+        from public.profiles profile
+        left join public.team_members seat on seat.id = profile.staff_id
+        left join auth.users account on account.id = profile.id
+        where (profile.clerk_user_id is null or profile.clerk_user_id = $1)
+          and (
+            lower(coalesce(seat.email, '')) = $2
+            or lower(coalesce(account.email, '')) = $2
+          )
+        order by case when profile.clerk_user_id = $1 then 0 else 1 end, profile.created_at
+        limit 1
+      )`,
     [clerkUserId, email],
   );
   return (result.rowCount ?? 0) > 0;

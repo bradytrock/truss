@@ -16,12 +16,15 @@ import {
   missingAccountManagementMessage,
   normalizeSeatEmail,
 } from "@/lib/accounts";
+import { useSignIn } from "@clerk/nextjs";
 import { authErrorMessage } from "@/lib/auth-errors";
+import { clerkBrowserEnabled } from "@/lib/clerk-browser";
+import { postClerkAuth, runClerkSignup, type ClerkSignInClient } from "@/lib/clerk-signup-client";
 import { railwayDatabaseEnabled } from "@/lib/railway-rest";
 import { createClient } from "@/lib/supabase/client";
 import type { SeatRole } from "@/lib/types";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
-import { queueFirstWelcome, signupUserMetadata } from "@/lib/welcome";
+import { clearWelcomePending, queueFirstWelcome, signupUserMetadata } from "@/lib/welcome";
 
 type InvitePreview = {
   company_id?: string;
@@ -78,7 +81,7 @@ async function claimInviteIfNeeded(
   return { ok: false as const, message: claimErrorMessage(error) };
 }
 
-function SignupForm() {
+function SignupForm({ clerkSignIn }: { clerkSignIn?: ClerkSignInClient | null }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get("invite")?.trim() ?? "";
@@ -151,6 +154,47 @@ function SignupForm() {
       const message = "Sign up with the email this invite was sent to.";
       setFormError(message);
       toast.error(message);
+      return;
+    }
+    if (clerkBrowserEnabled()) {
+      if (!clerkSignIn) {
+        const message = "Sign-in is still loading. Try again.";
+        setFormError(message);
+        toast.error(message);
+        return;
+      }
+      setPending(true);
+      try {
+        if (!invite) queueFirstWelcome();
+        const result = await runClerkSignup({
+          post: postClerkAuth,
+          signIn: clerkSignIn,
+          account: {
+            email,
+            password,
+            fullName,
+            company: invite ? invite.company_name : company,
+            title,
+            inviteToken: inviteToken || undefined,
+          },
+          destination: invite ? "/welcome" : "/?welcome=1",
+          inviteToken: inviteToken || undefined,
+        });
+        if (!result.ok) {
+          if (!invite) clearWelcomePending();
+          setFormError(result.message);
+          toast.error(result.message);
+          return;
+        }
+        toast.success(invite ? `Joined ${invite.company_name}` : "Account created");
+      } catch (error) {
+        if (!invite) clearWelcomePending();
+        const message = authErrorMessage(error instanceof Error ? error.message : "Could not create the account.");
+        setFormError(message);
+        toast.error(message);
+      } finally {
+        setPending(false);
+      }
       return;
     }
     if (railwayDatabaseEnabled()) {
@@ -390,10 +434,16 @@ function SignupForm() {
   );
 }
 
+function ClerkSignupForm() {
+  const { signIn } = useSignIn();
+  return <SignupForm clerkSignIn={signIn as ClerkSignInClient | null} />;
+}
+
 function SignupGate() {
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get("invite")?.trim() ?? "";
   if (inviteToken) return <InviteSignup token={inviteToken} />;
+  if (clerkBrowserEnabled()) return <ClerkSignupForm />;
   return <SignupForm />;
 }
 
