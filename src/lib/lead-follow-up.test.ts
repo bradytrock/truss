@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { alertForMyAssignmentInsert, snapshotFromRow, type LeadSnapshot } from "./lead-alerts.ts";
-import { bookLeadAppointment, saveLeadUpdate, type LeadFollowUpCrm } from "./lead-follow-up.ts";
+import { appointmentBookingContext, bookLeadAppointment, saveLeadUpdate, type LeadFollowUpCrm } from "./lead-follow-up.ts";
 
 function lead(overrides: Partial<LeadSnapshot> = {}): LeadSnapshot {
   return snapshotFromRow({
@@ -88,6 +88,49 @@ await bookLeadAppointment(
 );
 assert.equal(booked[0], "event:job-1:opp-1:site_walk:Alex Rivera:client-1:100 Main, Plano");
 assert.match(booked[1] ?? "", /activity:job:site_walk:Booked Site walk · Dana Alvarez on 2026-10-05 at 09:00 · 100 Main, Plano/);
+
+const invited: string[] = [];
+const inviteCrm = crm(invited);
+const originalAdd = inviteCrm.addScheduleEvent;
+inviteCrm.addScheduleEvent = async (input) => {
+  invited.push(`guests:${(input.guestEmails ?? []).join(",")}`);
+  return originalAdd(input);
+};
+await bookLeadAppointment(
+  inviteCrm,
+  alert,
+  {
+    title: "Site walk · Dana Alvarez",
+    kind: "site_walk",
+    date: "2026-10-05",
+    startTime: "09:00",
+    endTime: "10:00",
+    location: "100 Main, Plano",
+    notes: "",
+    notifyEmail: "dana@example.com",
+    assignee: "Priya Shah",
+  },
+  "Alex Rivera",
+);
+assert.match(invited[0] ?? "", /guests:dana@example.com/);
+assert.match(invited[1] ?? "", /event:job-1:opp-1:site_walk:Priya Shah/);
+
+const facts = appointmentBookingContext(
+  {
+    ...crm([]),
+    userName: "Brady Jones",
+    staff: [
+      { name: "Brady Jones" },
+      { name: "Priya Shah" },
+      { name: "Locked Rep", locked: true },
+    ],
+    events: [],
+  },
+  lead(),
+);
+assert.equal(facts.assigneeName, "Brady Jones");
+assert.deepEqual(facts.teammates, ["Priya Shah"]);
+assert.equal(facts.homeownerEmail, "dana@example.com");
 
 const saved: string[] = [];
 let wrote = false;

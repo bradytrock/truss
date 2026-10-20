@@ -1,4 +1,4 @@
-import { siteForContact, siteLabelFromRecord } from "@/lib/contacts";
+import { contactAddressSource, type ContactAddressSource } from "@/lib/contacts";
 import { formatDateShort, formatPhone, localYmd } from "@/lib/format";
 import { leadSourceLabel } from "@/lib/leads";
 import { jobsForContact, opportunitiesForContact } from "@/lib/parties";
@@ -274,6 +274,18 @@ export function relatedTarget(
   return null;
 }
 
+export function contactSiteAddress(
+  contact: Contact,
+  jobs: Job[],
+  opportunities: Opportunity[],
+): ContactAddressSource {
+  return contactAddressSource(
+    contact.id,
+    sortJobs(jobsForContact(contact, jobs)),
+    opportunitiesForContact(contact, opportunities),
+  );
+}
+
 export function buildContactBookRow(
   contact: Contact,
   book: Omit<ContactBookInput, "contacts">,
@@ -288,7 +300,7 @@ export function buildContactBookRow(
   const tasks = sortTasks(tasksForContact(contact, book.tasks, jobs, opportunities), now);
   const activities = activitiesForContact(contact, book.activities, jobs, opportunities);
   const mailAt = latestMailAt(contact, book.gmailMessages);
-  const address = siteLabelFromRecord(siteForContact(contact.id, [...jobs, ...opportunities]));
+  const address = contactAddressSource(contact.id, jobs, opportunities).label;
   const at = lastContactAt([
     ...activities.map((item) => item.createdAt),
     ...estimates.map((item) => item.sentAt || item.acceptedAt || item.createdAt),
