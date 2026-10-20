@@ -246,6 +246,11 @@ export function canViewTraining(role: SeatRole | undefined) {
   return Boolean(role) && role !== "business_development";
 }
 
+/** Add, trash, restore, or set primary job photos. BD can view the gallery only. */
+export function canManageJobPhotos(role: SeatRole | undefined) {
+  return Boolean(role) && role !== "business_development";
+}
+
 export function canViewTeamTraining(role: SeatRole) {
   return isCompanyLeader(role) || role === "team_lead" || role === "team_admin";
 }

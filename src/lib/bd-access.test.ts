@@ -7,6 +7,7 @@ import {
   canCreatePages,
   canEditPages,
   canManageCompanyCamMapping,
+  canManageJobPhotos,
   canViewInsurance,
   canViewJobPaper,
   canViewProjectFinancials,
@@ -35,6 +36,7 @@ for (const role of roles) {
   assert.equal(canViewJobPaper(role), !bd, `paper · ${role}`);
   assert.equal(canViewInsurance(role), !bd, `insurance · ${role}`);
   assert.equal(canViewTraining(role), !bd, `training · ${role}`);
+  assert.equal(canManageJobPhotos(role), !bd, `job photos · ${role}`);
   assert.equal(canViewProjectFinancials(role), !bd, `financials · ${role}`);
 }
 
@@ -45,6 +47,7 @@ assert.equal(canManageCompanyCamMapping(undefined), false);
 assert.equal(canViewJobPaper(undefined), false);
 assert.equal(canViewInsurance(undefined), false);
 assert.equal(canViewTraining(undefined), false);
+assert.equal(canManageJobPhotos(undefined), false);
 
 assert.equal(
   canSubmitProjectCloseout({

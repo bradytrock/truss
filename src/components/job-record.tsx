@@ -122,6 +122,7 @@ import {
   canDeleteJobs,
   canEditPages,
   canManageCompanyCamMapping,
+  canManageJobPhotos,
   canViewInsurance,
   canViewJobPaper,
   canViewProjectFinancials,

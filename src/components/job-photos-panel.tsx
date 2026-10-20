@@ -18,6 +18,7 @@ import { formatDate, formatDateTimeUtc } from "@/lib/format";
 import { livePhotos, primaryJobPhoto, trashedPhotos } from "@/lib/photo-trash";
 import { groupJobPhotos, PHOTO_SORT_LABELS, PHOTO_TAG_FILTERS, type PhotoSort } from "@/lib/photos-feed";
 import type { JobPhoto, PhotoAuditEvent, PhotoCategory } from "@/lib/types";
+import { canManageJobPhotos } from "@/lib/visibility";
 
 export function JobPhotosPanel({
   jobId,
@@ -34,6 +35,8 @@ export function JobPhotosPanel({
   const [openId, setOpenId] = useState<string | null>(null);
   const [tag, setTag] = useState<"all" | PhotoCategory>("all");
   const [sort, setSort] = useState<PhotoSort>("newest");
+  const canManage = canManageJobPhotos(crm.effectiveStaff?.role ?? crm.viewer?.role);
+  const manageDisabled = Boolean(disabled || !canManage);
 
   const job = crm.getJob(jobId);
   const photos = useMemo(() => livePhotos(crm.photos, jobId), [crm.photos, jobId]);
@@ -54,7 +57,7 @@ export function JobPhotosPanel({
   );
 
   async function trash(photo: JobPhoto) {
-    if (disabled) return;
+    if (manageDisabled) return;
     if (
       !window.confirm(
         `Move “${photo.caption.trim() || "Untitled"}” to the Project Trashcan?\n\nIt will leave the gallery, but the file stays in storage and can be restored.`,
@@ -75,7 +78,7 @@ export function JobPhotosPanel({
   }
 
   async function restore(photo: JobPhoto) {
-    if (disabled) return;
+    if (manageDisabled) return;
     setBusyId(photo.id);
     try {
       const ok = await crm.restoreJobPhoto(photo.id);
@@ -86,7 +89,7 @@ export function JobPhotosPanel({
   }
 
   async function setPrimary(photo: JobPhoto) {
-    if (disabled || !job) return;
+    if (manageDisabled || !job) return;
     if (job.primaryPhotoId === photo.id) return;
     setBusyId(photo.id);
     try {
@@ -106,21 +109,23 @@ export function JobPhotosPanel({
               ? "No photos on this job."
               : `${photos.length} photos · primary shows on the job header`}
           </p>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={disabled}
-              onClick={() => setTrashOpen((open) => !open)}
-            >
-              <Trash2 data-icon="inline-start" />
-              Trashcan{trashed.length > 0 ? ` (${trashed.length})` : ""}
-            </Button>
-            <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={onAddPhoto}>
-              Add photo
-            </Button>
-          </div>
+          {canManage ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={disabled}
+                onClick={() => setTrashOpen((open) => !open)}
+              >
+                <Trash2 data-icon="inline-start" />
+                Trashcan{trashed.length > 0 ? ` (${trashed.length})` : ""}
+              </Button>
+              <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={onAddPhoto}>
+                Add photo
+              </Button>
+            </div>
+          ) : null}
         </div>
         {photos.length > 0 ? (
           <div className="mb-4 flex flex-wrap gap-2">
@@ -207,36 +212,38 @@ export function JobPhotosPanel({
                                   : formatDate(photo.takenAt)}
                               </p>
                             </div>
-                            <div className="flex shrink-0 gap-0.5">
-                              <Button
-                                type="button"
-                                size="icon-sm"
-                                variant="ghost"
-                                disabled={disabled || busyId === photo.id || isPrimary}
-                                aria-label={
-                                  isPrimary
-                                    ? `${photo.caption || "Photo"} is the primary project photo`
-                                    : `Set ${photo.caption || "photo"} as primary`
-                                }
-                                title={isPrimary ? "Primary project photo" : "Set as primary"}
-                                onClick={() => void setPrimary(photo)}
-                              >
-                                <Star
-                                  className={`size-3.5 ${isPrimary ? "fill-current text-foreground" : ""}`}
-                                />
-                              </Button>
-                              <Button
-                                type="button"
-                                size="icon-sm"
-                                variant="ghost"
-                                disabled={disabled || busyId === photo.id}
-                                aria-label={`Move ${photo.caption || "photo"} to trashcan`}
-                                title="Move to Project Trashcan"
-                                onClick={() => void trash(photo)}
-                              >
-                                <Trash2 className="size-3.5" />
-                              </Button>
-                            </div>
+                            {canManage ? (
+                              <div className="flex shrink-0 gap-0.5">
+                                <Button
+                                  type="button"
+                                  size="icon-sm"
+                                  variant="ghost"
+                                  disabled={disabled || busyId === photo.id || isPrimary}
+                                  aria-label={
+                                    isPrimary
+                                      ? `${photo.caption || "Photo"} is the primary project photo`
+                                      : `Set ${photo.caption || "photo"} as primary`
+                                  }
+                                  title={isPrimary ? "Primary project photo" : "Set as primary"}
+                                  onClick={() => void setPrimary(photo)}
+                                >
+                                  <Star
+                                    className={`size-3.5 ${isPrimary ? "fill-current text-foreground" : ""}`}
+                                  />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="icon-sm"
+                                  variant="ghost"
+                                  disabled={disabled || busyId === photo.id}
+                                  aria-label={`Move ${photo.caption || "photo"} to trashcan`}
+                                  title="Move to Project Trashcan"
+                                  onClick={() => void trash(photo)}
+                                >
+                                  <Trash2 className="size-3.5" />
+                                </Button>
+                              </div>
+                            ) : null}
                           </div>
                         </figcaption>
                       </figure>
@@ -249,7 +256,7 @@ export function JobPhotosPanel({
         ) : null}
       </section>
 
-      {trashOpen ? (
+      {canManage && trashOpen ? (
         <section className="space-y-4 border-t pt-6">
           <div>
             <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Project Trashcan</p>
