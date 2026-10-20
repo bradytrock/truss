@@ -4,32 +4,17 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, use
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  ChevronDown,
   ChevronLeft,
-  ChevronsUpDown,
   Mail,
   MapPin,
   Pencil,
   Phone,
   Search,
-  Send,
-  Smartphone,
-  UserPlus,
   X,
 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { PhoneInput } from "@/components/phone-input";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, ErrorBanner, LoadingScreen } from "@/components/page-chrome";
 import { RecordErrorBoundary } from "@/components/record-error-boundary";
@@ -62,8 +47,9 @@ import {
   viewerFromStaff,
   visibleInboxThreads,
 } from "@/lib/message-threads";
-import { formatCurrency, formatInboxTime, formatPhone, formatTime, initials } from "@/lib/format";
-import { formatPhoneInput, looksLikePhone } from "@/lib/phone";
+import { formatCurrency, formatInboxTime, formatPhone, formatTime, initials, localYmd } from "@/lib/format";
+import { ASSISTANT_NAME } from "@/lib/product";
+import { firstName, formatPhoneInput, looksLikePhone } from "@/lib/phone";
 import { mailHref } from "@/lib/job-emails";
 import { jobPaperHref, jobRecordHref, mapsUrl } from "@/lib/job-record";
 import { estimateTotals } from "@/lib/estimate-totals";
@@ -72,7 +58,10 @@ import { fallbackChatReplies, type WebsiteChatThread } from "@/lib/website-chat"
 import { IMESSAGE_EFFECTS, IMESSAGE_TAPBACKS } from "@/lib/imessage";
 import {
   appointmentLabel,
+  avatarTone,
   buildInboxTimeline,
+  cassioTextDraft,
+  daysSinceLabel,
   firstHttpUrl,
   formatCallDuration,
   formatInboxDay,
@@ -83,11 +72,15 @@ import {
   inboxRoleLabel,
   inboxStage,
   isAutomatedText,
+  jobProgress,
   jobsForPeople,
   nextAppointment,
   onMyWayText,
+  QUICK_REPLIES,
+  quickReplyBody,
   reviewRequestDraft,
   shortStaffName,
+  smsSegmentLabel,
   textStatusLabel,
   textStatusTone,
   threadIsAutomated,
@@ -190,6 +183,18 @@ type InboxListRow = {
   estimateNumber: string;
   owner: string;
   unassigned: boolean;
+  place: string;
+};
+
+type ComposePerson = {
+  key: string;
+  name: string;
+  detail: string;
+  meta: string;
+  contactId: string;
+  phone: string;
+  jobId: string;
+  threadKey: string;
 };
 
 const CHANNELS: { id: InboxChannel; label: string }[] = [
@@ -315,7 +320,6 @@ export function MessagesInbox() {
   const [effect, setEffect] = useState("");
   const [replyTo, setReplyTo] = useState<{ handle: string; preview: string } | null>(null);
   const [sending, setSending] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
   const [webChats, setWebChats] = useState<WebsiteChatThread[]>([]);
   const [webBody, setWebBody] = useState("");
@@ -324,7 +328,7 @@ export function MessagesInbox() {
   const [suggesting, setSuggesting] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [peopleQuery, setPeopleQuery] = useState("");
-  const [scopeChoice, setScopeChoice] = useState<InboxScope>("mine");
+  const [scopeChoice, setScopeChoice] = useState<InboxScope>("all");
   const [scopeTouched, setScopeTouched] = useState(false);
   const [automatedOnly, setAutomatedOnly] = useState(false);
   const closed = useSyncExternalStore(subscribeClosed, getClosedSnapshot, () => EMPTY_CLOSED);
@@ -361,7 +365,7 @@ export function MessagesInbox() {
       console.error(error);
     }
   }
-  const jobHint = queryJob?.id ?? selected?.jobId ?? attachedJobId;
+  const jobHintBase = queryJob?.id ?? selected?.jobId ?? attachedJobId;
   const contactHint = queryContact?.id ?? selected?.contactId ?? composeContact?.id ?? "";
   const conversationOpen = showCompose || Boolean(selected) || Boolean(webChatId);
   const threadSeed = selected?.key ?? (webChatId ? `web:${webChatId}` : "");
@@ -383,6 +387,7 @@ export function MessagesInbox() {
     !scopeTouched && scopeChoice === "mine" && threads.length > 0 && !mineAvailable ? "all" : scopeChoice;
 
   const focusJobId = jobFocus && jobFocus !== "all" ? jobFocus : null;
+  const jobHint = focusJobId || jobHintBase;
   const contactIds = selected?.contactIds?.length
     ? selected.contactIds
     : selected?.contactId
@@ -448,6 +453,7 @@ export function MessagesInbox() {
   }, [query, webChats]);
 
   const estimates = Array.isArray(book?.estimates) ? book.estimates : [];
+  const scheduleEvents = Array.isArray(book?.events) ? book.events : [];
 
   const rows = useMemo(() => {
     const textRows: InboxListRow[] = visibleThreads.map((thread) => {
@@ -478,6 +484,12 @@ export function MessagesInbox() {
           shortStaffName(thread.job?.salesRep) ||
           shortStaffName(thread.opportunity?.estimator),
         unassigned: threadIsUnassigned(thread),
+        place:
+          textOf(thread.job?.street) ||
+          textOf(thread.opportunity?.street) ||
+          textOf(thread.job?.name) ||
+          textOf(thread.job?.code) ||
+          textOf(thread.opportunity?.code),
       };
     });
     const webRows: InboxListRow[] = visibleWebChats.map((chat) => {
@@ -498,6 +510,7 @@ export function MessagesInbox() {
         estimateNumber: "",
         owner: "",
         unassigned: true,
+        place: textOf(job?.street) || textOf(job?.name) || textOf(job?.code),
       };
     });
     return [...textRows, ...webRows];
@@ -543,7 +556,7 @@ export function MessagesInbox() {
   const ordered = useMemo(() => {
     const needs = listRows.filter((row) => row.queue === "needs_reply").sort((a, b) => b.at.localeCompare(a.at));
     const waiting = listRows.filter((row) => row.queue === "waiting").sort((a, b) => b.at.localeCompare(a.at));
-    return { needs, waiting, all: [...needs, ...waiting] };
+    return { needs, waiting, all: [...listRows].sort((a, b) => b.at.localeCompare(a.at)) };
   }, [listRows]);
 
   const unreadTotal = decorated.filter((row) => row.unread).length + visibleWebChats.filter((chat) => {
@@ -610,10 +623,220 @@ export function MessagesInbox() {
   const activeKey = webChatId ? `web:${webChatId}` : showCompose ? "" : selected?.key ?? "";
   const doneKey = selected?.key || (webChatId ? `web:${webChatId}` : "");
 
+  const personFromThread = useCallback(
+    (threadKey: string): ComposePerson | null => {
+      const thread = threads.find((item) => item.key === threadKey);
+      if (!thread) return null;
+      const place =
+        textOf(thread.job?.street) ||
+        textOf(thread.opportunity?.street) ||
+        textOf(thread.job?.name) ||
+        textOf(thread.preview);
+      return {
+        key: thread.key,
+        name: textOf(thread.title) || "Unknown",
+        detail: place,
+        meta: formatInboxTime(thread.lastAt),
+        contactId: thread.contactId || "",
+        phone: thread.phone || "",
+        jobId: thread.jobId || "",
+        threadKey: thread.key,
+      };
+    },
+    [threads],
+  );
+
+  const waitingPicks = useMemo(() => {
+    return rows
+      .filter((row) => row.kind === "text" && row.queue === "needs_reply")
+      .slice(0, 4)
+      .map((row) => personFromThread(row.key))
+      .filter((person): person is ComposePerson => Boolean(person));
+  }, [personFromThread, rows]);
+
+  const schedulePicks = useMemo(() => {
+    const today = localYmd(new Date(PAGE_OPENED_AT));
+    const picks: ComposePerson[] = [];
+    const seen = new Set<string>();
+    for (const event of [...scheduleEvents].sort((a, b) => (a.startsAt || "").localeCompare(b.startsAt || ""))) {
+      if (!event?.startsAt || localYmd(new Date(event.startsAt)) !== today) continue;
+      const job = event.jobId ? jobs.find((item) => item.id === event.jobId) : undefined;
+      const contact =
+        (job?.primaryContactId ? contacts.find((item) => item.id === job.primaryContactId) : undefined) ||
+        (event.clientId ? contacts.find((item) => item.clientId === event.clientId) : undefined);
+      if (!contact?.id || seen.has(contact.id)) continue;
+      seen.add(contact.id);
+      const thread = threads.find(
+        (item) => item.contactId === contact.id || (item.contactIds || []).includes(contact.id),
+      );
+      picks.push({
+        key: `event:${event.id}`,
+        name: contact.name || "Appointment",
+        detail: textOf(job?.street) || textOf(event.location) || textOf(event.title),
+        meta: formatTime(event.startsAt),
+        contactId: contact.id,
+        phone: contact.phone || "",
+        jobId: job?.id || "",
+        threadKey: thread?.key || "",
+      });
+      if (picks.length >= 4) break;
+    }
+    return picks;
+  }, [contacts, jobs, scheduleEvents, threads]);
+
+  const estimatePicks = useMemo(() => {
+    const picks: ComposePerson[] = [];
+    const seen = new Set<string>();
+    const sent = estimates
+      .filter((estimate) => estimate && !estimate.archivedAt && (estimate.status === "sent" || estimate.status === "viewed"))
+      .sort((a, b) => (a.sentAt || a.createdAt || "").localeCompare(b.sentAt || b.createdAt || ""));
+    for (const estimate of sent) {
+      const job = estimate.jobId ? jobs.find((item) => item.id === estimate.jobId) : undefined;
+      const contact =
+        (estimate.contactId ? contacts.find((item) => item.id === estimate.contactId) : undefined) ||
+        (job?.primaryContactId ? contacts.find((item) => item.id === job.primaryContactId) : undefined);
+      if (!contact?.id || seen.has(contact.id)) continue;
+      const thread = threads.find(
+        (item) => item.contactId === contact.id || (item.contactIds || []).includes(contact.id),
+      );
+      const sentAt = estimate.sentAt || estimate.createdAt;
+      const replied = thread?.messages.some(
+        (message) => message.direction === "inbound" && sentAt && (message.createdAt || "") > sentAt,
+      );
+      if (replied) continue;
+      seen.add(contact.id);
+      picks.push({
+        key: `estimate:${estimate.id}`,
+        name: contact.name || "Estimate",
+        detail: textOf(job?.street) || textOf(estimate.name) || textOf(estimate.number),
+        meta: daysSinceLabel(sentAt, new Date(PAGE_OPENED_AT)),
+        contactId: contact.id,
+        phone: contact.phone || "",
+        jobId: job?.id || estimate.jobId || "",
+        threadKey: thread?.key || "",
+      });
+      if (picks.length >= 4) break;
+    }
+    return picks;
+  }, [contacts, estimates, jobs, threads]);
+
+  const toHits = useMemo(() => {
+    const needle = pickerQuery.trim().toLowerCase();
+    if (!needle) return [] as ComposePerson[];
+    const digits = needle.replace(/\D/g, "");
+    const hits: ComposePerson[] = [];
+    for (const contact of textable) {
+      if (!contact?.id) continue;
+      const related = jobsForPeople(jobs, opportunities, [contact.id]);
+      const street = textOf(related[0]?.street);
+      const code = textOf(related[0]?.code);
+      const blob = `${contact.name || ""} ${contact.phone || ""} ${contact.email || ""} ${street} ${code}`.toLowerCase();
+      const phoneHit = digits.length >= 3 && phoneKey(contact.phone).includes(digits);
+      if (!blob.includes(needle) && !phoneHit) continue;
+      const thread = threads.find(
+        (item) =>
+          item.contactId === contact.id ||
+          (item.contactIds || []).includes(contact.id) ||
+          phoneKey(item.phone) === phoneKey(contact.phone),
+      );
+      hits.push({
+        key: `to:${contact.id}`,
+        name: contact.name || formatPhone(contact.phone) || "Contact",
+        detail: [formatPhone(contact.phone), street || code].filter(Boolean).join(" · "),
+        meta: "",
+        contactId: contact.id,
+        phone: contact.phone || "",
+        jobId: thread?.jobId || related[0]?.id || "",
+        threadKey: thread?.key || "",
+      });
+      if (hits.length >= 6) break;
+    }
+    if (hits.length === 0 && looksLikePhone(pickerQuery)) {
+      hits.push({
+        key: `phone:${digits}`,
+        name: formatPhone(pickerQuery) || pickerQuery,
+        detail: "New number. A contact is created when they reply.",
+        meta: "",
+        contactId: "",
+        phone: pickerQuery,
+        jobId: "",
+        threadKey: "",
+      });
+    }
+    return hits;
+  }, [jobs, opportunities, pickerQuery, textable, threads]);
+
+  const composePicks = useMemo(
+    () => [...waitingPicks, ...schedulePicks, ...estimatePicks],
+    [estimatePicks, schedulePicks, waitingPicks],
+  );
+  const [pickIndex, setPickIndex] = useState(0);
+
+  const openCompose = useCallback(() => {
+    setDraftPhone("");
+    setDraftContactId("");
+    setPickerQuery("");
+    setBody("");
+    setReplyTo(null);
+    router.replace(messagesHref({ compose: true }), { scroll: false });
+  }, [router]);
+
+  const closeCompose = useCallback(() => {
+    setDraftPhone("");
+    setDraftContactId("");
+    setPickerQuery("");
+    setBody("");
+    setReplyTo(null);
+    router.replace("/messages", { scroll: false });
+  }, [router]);
+
+  const choosePerson = useCallback(
+    (person: ComposePerson) => {
+      if (person.threadKey) {
+        const thread = threads.find((item) => item.key === person.threadKey) ?? allThreads.find((item) => item.key === person.threadKey);
+        void crm.markThreadOpened(person.threadKey);
+        router.replace(
+          messagesHref({ thread: person.threadKey, contact: person.contactId || thread?.contactId, job: person.jobId || thread?.jobId }),
+          { scroll: false },
+        );
+        return;
+      }
+      setDraftContactId(person.contactId);
+      setDraftPhone(person.phone ? formatPhoneInput(person.phone) : person.phone);
+      setPickerQuery("");
+      setBody("");
+      router.replace(messagesHref({ compose: true, contact: person.contactId, job: person.jobId }), { scroll: false });
+    },
+    [allThreads, crm, router, threads],
+  );
+
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
-      if (isTypingTarget(event.target) || peopleOpen) return;
+      const typing = isTypingTarget(event.target);
+      const blankCompose = showCompose && !composeContact && !selected && !selectedWeb;
+      if (blankCompose && !peopleOpen) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeCompose();
+          return;
+        }
+        if (!typing && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+          event.preventDefault();
+          setPickIndex((index) => {
+            if (composePicks.length === 0) return 0;
+            const delta = event.key === "ArrowDown" ? 1 : -1;
+            return (index + delta + composePicks.length) % composePicks.length;
+          });
+          return;
+        }
+        if (!typing && event.key === "Enter" && composePicks[pickIndex]) {
+          event.preventDefault();
+          choosePerson(composePicks[pickIndex]);
+          return;
+        }
+      }
+      if (typing || peopleOpen) return;
       const key = event.key.toLowerCase();
       if (key !== "j" && key !== "k" && key !== "r" && key !== "e") return;
       event.preventDefault();
@@ -636,14 +859,22 @@ export function MessagesInbox() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [activeKey, doneKey, markDone, openRow, ordered.all, peopleOpen]);
-
-  const openCompose = useCallback(() => {
-    setDraftPhone(formatPhoneInput(queryContact?.phone ?? ""));
-    setDraftContactId(queryContact?.id ?? "");
-    setBody("");
-    router.replace(messagesHref({ compose: true, contact: queryContact?.id, job: queryJob?.id }), { scroll: false });
-  }, [queryContact?.id, queryContact?.phone, queryJob?.id, router]);
+  }, [
+    activeKey,
+    choosePerson,
+    closeCompose,
+    composeContact,
+    composePicks,
+    doneKey,
+    markDone,
+    openRow,
+    ordered.all,
+    peopleOpen,
+    pickIndex,
+    selected,
+    selectedWeb,
+    showCompose,
+  ]);
 
   const send = useCallback(async () => {
     const text = body.trim();
@@ -809,39 +1040,16 @@ export function MessagesInbox() {
     if (selected?.key) void crm.markThreadOpened(selected.key);
   }, [crm, selected?.key]);
 
-  const pickerPeople = useMemo(() => {
-    const needle = pickerQuery.trim().toLowerCase();
-    const digits = pickerQuery.replace(/\D/g, "");
-    return textable.filter((contact) => {
-      if (!needle) return true;
-      if ((contact.name || "").toLowerCase().includes(needle)) return true;
-      if ((contact.title || "").toLowerCase().includes(needle)) return true;
-      if (digits.length >= 3 && phoneKey(contact.phone).includes(digits)) return true;
-      return false;
-    });
-  }, [pickerQuery, textable]);
-
   function chooseScope(next: InboxScope) {
     setScopeTouched(true);
     setScopeChoice(next);
   }
 
-  const ownerId = selected ? threadOwnerId(selected) : activeContact?.ownerStaffId || "";
-  const ownerStaff = staff.find((member) => member.id === ownerId);
-  const ownerLabel = shortStaffName(ownerStaff?.name) || (selected && !threadIsUnassigned(selected) ? "Owner" : "Unassigned");
   const roleLabel = inboxRoleLabel({
     title: activeContact?.title,
     clientType: activeClient?.type,
     market: panelJob?.market || panelOpportunity?.market,
   });
-  const jobCountLabel =
-    relatedJobs.length === 0
-      ? panelOpportunity
-        ? "New lead"
-        : "No jobs"
-      : relatedJobs.length === 1
-        ? "1 job"
-        : `${relatedJobs.length} jobs`;
   const noteTarget = Boolean(panelJob || selected?.opportunityId || activeContact?.clientId);
   const mailboxHref = mailHref({
     contact: contactHint,
@@ -850,6 +1058,15 @@ export function MessagesInbox() {
     compose: Boolean(activeContact?.email),
   });
 
+  const blankCompose = showCompose && !composeContact && !selected && !selectedWeb;
+  const showRail = !blankCompose && Boolean(selected || composeContact || selectedWeb);
+  const draftLabel = composeContact
+    ? textOf(jobsForPeople(jobs, opportunities, [composeContact.id])[0]?.street) || formatPhone(composeContact.phone) || "no recipient yet"
+    : "no recipient yet";
+  const recipientName = textOf(selected?.title) || textOf(composeContact?.name) || "";
+  const recipientPhone = selected?.phone || composeContact?.phone || draftPhone;
+  const lastInbound = [...(selected?.messages ?? [])].reverse().find((message) => message.direction === "inbound")?.body || "";
+
   if (!crm.hydrated) return <LoadingScreen />;
 
   const jobContext = (
@@ -857,6 +1074,11 @@ export function MessagesInbox() {
       job={panelJob}
       opportunity={panelOpportunity}
       contactName={activeContact?.name || selected?.title}
+      phone={recipientPhone}
+      email={activeContact?.email}
+      role={roleLabel}
+      since={panelOpportunity?.createdAt || selected?.messages?.[0]?.createdAt}
+      mailboxHref={mailboxHref}
       onReview={requestReview}
       canReview={looksLikePhone(sendTo) && !selectedWeb}
     />
@@ -874,7 +1096,10 @@ export function MessagesInbox() {
           <ErrorBanner message={crm.messagesError} onRetry={() => void crm.reload()} />
         </div>
       ) : null}
-      <div className="grid h-full min-h-0 flex-1 lg:grid-cols-[minmax(16.5rem,20rem)_minmax(0,1fr)] xl:grid-cols-[minmax(16.5rem,20rem)_minmax(0,1fr)_18.5rem]">
+      <div className={cn(
+        "grid h-full min-h-0 flex-1 lg:grid-cols-[minmax(16.5rem,20rem)_minmax(0,1fr)]",
+        showRail && "xl:grid-cols-[minmax(16.5rem,20rem)_minmax(0,1fr)_20rem]",
+      )}>
         <aside
           className={cn(
             "flex min-h-0 flex-col overflow-hidden border-b bg-background lg:border-r lg:border-b-0",
@@ -886,50 +1111,57 @@ export function MessagesInbox() {
               <h1 className="font-heading text-xl font-medium">Inbox</h1>
               <Button
                 type="button"
-                variant="outline"
                 size="sm"
-                className="border-primary text-primary hover:bg-primary/5 hover:text-primary"
+                className="rounded-full bg-rose-100 text-rose-700 shadow-none hover:bg-rose-200"
                 onClick={openCompose}
               >
-                <Pencil data-icon="inline-start" />
-                New
+                New message
               </Button>
             </div>
-            <div className="relative mt-3">
-              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search contacts, jobs, messages"
-                aria-label="Search conversations"
-                className="pl-8"
-              />
-            </div>
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Filter conversations"
+              aria-label="Filter conversations"
+              className="mt-3 bg-muted/40"
+            />
             <div className="mt-3 flex flex-wrap gap-1.5" role="tablist" aria-label="Inbox filters">
-              <Pill active={scope === "mine"} onClick={() => chooseScope("mine")}>
-                Mine
-              </Pill>
               <Pill active={scope === "all"} onClick={() => chooseScope("all")}>
                 All
               </Pill>
+              <Pill active={scope === "mine"} onClick={() => chooseScope("mine")}>
+                Mine
+              </Pill>
               <Pill active={scope === "unread"} onClick={() => chooseScope("unread")}>
-                Unread · {unreadTotal}
+                Unread {unreadTotal}
               </Pill>
               <Pill active={scope === "unassigned"} onClick={() => chooseScope("unassigned")}>
-                Unassigned · {unassignedTotal}
+                Unassigned {unassignedTotal}
               </Pill>
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-2">
               <Pill active={automatedOnly} onClick={() => setAutomatedOnly((value) => !value)}>
                 Automated
               </Pill>
-              <Link href={mailHref()} className="text-xs text-muted-foreground hover:text-foreground">
-                Mailbox
-              </Link>
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            {ordered.all.length === 0 ? (
+            {showCompose ? (
+              <button
+                type="button"
+                className="flex w-full items-start gap-2.5 bg-rose-50 px-3 py-2.5 text-left"
+                onClick={openCompose}
+              >
+                <span className="mt-0.5 flex size-8 items-center justify-center rounded-full bg-rose-100 text-rose-700">
+                  <Pencil className="size-3.5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">New message</span>
+                  <span className="mt-0.5 block truncate text-xs text-rose-700">
+                    Draft · {draftLabel}
+                  </span>
+                </span>
+              </button>
+            ) : null}
+            {ordered.all.length === 0 && !showCompose ? (
               <p className="px-4 py-8 text-sm text-muted-foreground">
                 {threads.length === 0 && visibleWebChats.length === 0
                   ? crm.messagesError
@@ -946,14 +1178,12 @@ export function MessagesInbox() {
                 fallbackTitle="The thread list could not open"
                 fallbackDescription="The conversation is still on the right."
               >
-                <Queue title="Needs reply" rows={ordered.needs} activeKey={activeKey} onOpen={openRow} />
-                <Queue title="Waiting on customer" rows={ordered.waiting} activeKey={activeKey} onOpen={openRow} />
+                {ordered.all.map((row) => (
+                  <ThreadRow key={row.key} row={row} active={row.key === activeKey && !showCompose} onOpen={openRow} />
+                ))}
               </RecordErrorBoundary>
             )}
           </div>
-          <p className="border-t px-4 py-2 text-[11px] text-muted-foreground">
-            J / K to move · R to reply · E to close
-          </p>
         </aside>
 
         <section
@@ -962,6 +1192,23 @@ export function MessagesInbox() {
             !conversationOpen && "hidden lg:flex",
           )}
         >
+          {blankCompose ? (
+            <NewMessageDesk
+              query={pickerQuery}
+              onQuery={setPickerQuery}
+              hits={toHits}
+              waiting={waitingPicks}
+              schedule={schedulePicks}
+              estimates={estimatePicks}
+              activeIndex={pickIndex}
+              onChoose={(person) => {
+                setPickIndex(composePicks.findIndex((item) => item.key === person.key));
+                choosePerson(person);
+              }}
+              onClose={closeCompose}
+            />
+          ) : (
+          <>
           <header className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b px-3 py-3">
             <Button
               type="button"
@@ -987,93 +1234,79 @@ export function MessagesInbox() {
                 <p className="text-sm font-semibold">Website chat</p>
                 <p className="text-xs text-muted-foreground">Loading this conversation.</p>
               </div>
-            ) : showCompose ? (
+            ) : showCompose || selected ? (
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">New message</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {composeContact
-                    ? `${composeContact.name} · ${formatPhone(composeContact.phone)}`
-                    : "Pick someone in the book, or type a mobile number"}
-                </p>
-              </div>
-            ) : selected ? (
-              <>
-                <div className="flex min-w-0 flex-[1_1_12rem] items-center gap-2">
-                  <Avatar>
-                    <AvatarFallback className="bg-rose-100 text-rose-800">
-                      {initials(textOf(selected.title)) || "#"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{textOf(selected.title) || "Unknown number"}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {formatPhone(selected.phone)} · {roleLabel} · {jobCountLabel}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
-                  {selected.phone ? (
-                    <Button nativeButton={false} variant="outline" size="sm" render={<a href={`tel:${selected.phone}`} />}>
-                      <Phone data-icon="inline-start" />
-                      Call
-                    </Button>
-                  ) : null}
-                  <Button nativeButton={false} variant="outline" size="sm" render={<Link href={mailboxHref} />}>
-                    <Mail data-icon="inline-start" />
-                    Email
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      render={<Button type="button" variant="outline" size="sm" disabled={!activeContact} />}
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-background px-3 py-2">
+                  <span className="text-sm text-muted-foreground">To</span>
+                  <span className="inline-flex max-w-full items-center gap-2 rounded-full bg-muted py-1 pr-1 pl-1">
+                    <Avatar className="size-6">
+                      <AvatarFallback className={cn("text-[10px]", avatarTone(recipientName))}>
+                        {initials(recipientName) || "#"}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="truncate text-sm font-medium">{recipientName || "New number"}</span>
+                    {recipientPhone ? (
+                      <span className="truncate text-sm text-muted-foreground">{formatPhone(recipientPhone)}</span>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="rounded-full p-1 text-muted-foreground hover:bg-background"
+                      aria-label="Remove recipient"
+                      onClick={openCompose}
                     >
-                      Owner: {ownerLabel}
-                      <ChevronDown data-icon="inline-end" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="max-h-72 min-w-44 overflow-y-auto">
-                      {staff
-                        .filter((member) => member.name?.trim())
-                        .sort((a, b) => a.name.localeCompare(b.name))
-                        .map((member) => (
-                          <DropdownMenuItem
-                            key={member.id}
-                            onClick={() => {
-                              if (!activeContact) return;
-                              void crm.updateContact(activeContact.id, { ownerStaffId: member.id });
-                            }}
-                          >
-                            {member.name}
-                          </DropdownMenuItem>
-                        ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon-sm"
-                    aria-label="People on this conversation"
-                    onClick={() => setPeopleOpen(true)}
-                  >
-                    <UserPlus />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="bg-neutral-950 text-white hover:bg-neutral-800"
-                    onClick={() => markDone(selected.key)}
-                  >
-                    Mark done
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="xl:hidden"
-                    onClick={() => setDetailsOpen(true)}
-                  >
-                    Job
-                  </Button>
+                      <X className="size-3.5" />
+                    </button>
+                  </span>
+                  {selected ? (
+                    <button
+                      type="button"
+                      className="text-sm text-muted-foreground hover:text-foreground"
+                      onClick={() => setPeopleOpen(true)}
+                    >
+                      Add
+                    </button>
+                  ) : null}
+                  <span className="ml-auto flex items-center gap-1.5">
+                    {selected ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => markDone(selected.key)}
+                      >
+                        Mark done
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="xl:hidden"
+                      onClick={() => setDetailsOpen(true)}
+                    >
+                      Job
+                    </Button>
+                  </span>
                 </div>
-              </>
+                {relatedJobs.length > 0 ? (
+                  <label className="mt-3 block text-xs text-muted-foreground">
+                    Attach to job
+                    <select
+                      className="mt-1 h-10 w-full rounded-lg border bg-background px-3 text-sm text-foreground"
+                      value={focusJobId || panelJob?.id || relatedJobs[0]?.id || ""}
+                      onChange={(event) => setJobFocus(event.target.value)}
+                    >
+                      {relatedJobs.map((job) => (
+                        <option key={job.id} value={job.id}>
+                          {[job.street || job.name || "Job", job.name, inboxStage({ job, opportunity: opportunities.find((item) => item.id === job.opportunityId) }).current]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+              </div>
             ) : (
               <div className="min-w-0">
                 <p className="text-sm font-semibold">Inbox</p>
@@ -1084,19 +1317,6 @@ export function MessagesInbox() {
 
           {selected && !selectedWeb ? (
             <>
-              <div className="flex gap-1.5 overflow-x-auto border-b px-3 py-2">
-                <Pill active={focusJobId == null} onClick={() => setJobFocus("all")}>
-                  All jobs
-                </Pill>
-                {relatedJobs.map((job) => (
-                  <Pill key={job.id} active={focusJobId === job.id} onClick={() => setJobFocus(job.id)}>
-                    <span className="max-w-[16rem] truncate">
-                      {job.code ? `${job.code} · ` : ""}
-                      {job.street || job.name || "Job"}
-                    </span>
-                  </Pill>
-                ))}
-              </div>
               <div className="flex gap-1.5 overflow-x-auto border-b px-3 py-2" role="tablist" aria-label="Conversation channel">
                 {CHANNELS.map((item) => (
                   <Pill key={item.id} active={channel === item.id} onClick={() => setChannel(item.id)}>
@@ -1146,6 +1366,13 @@ export function MessagesInbox() {
                 fallbackTitle="This conversation could not open"
                 fallbackDescription="The other threads are still in the list."
               >
+                {selected.messages.length > 0 ? (
+                  <p className="px-4 pt-3 text-center">
+                    <span className="rounded-full bg-background px-3 py-1 text-[11px] text-muted-foreground shadow-sm">
+                      Continuing your existing thread with {firstName(textOf(selected.title)) || "them"}
+                    </span>
+                  </p>
+                ) : null}
                 <DeskTimeline
                   entries={timeline}
                   channel={channel}
@@ -1228,88 +1455,36 @@ export function MessagesInbox() {
                 </Button>
               ) : null}
             </div>
-          ) : (
+          ) : selected || composeContact ? (
             <form
-              className="space-y-2 border-t bg-background p-3"
+              className="border-t bg-background p-3"
               onSubmit={(event) => {
                 event.preventDefault();
                 if (channel === "notes") void saveNote();
                 else void send();
               }}
             >
-              {showCompose || !selected ? (
-                <div className="space-y-2">
-                  <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-                    <PopoverTrigger
-                      className={cn(buttonVariants({ variant: "outline" }), "h-8 w-full justify-between font-normal")}
+              {channel !== "notes" && selected ? (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {QUICK_REPLIES.map((reply) => (
+                    <button
+                      key={reply.id}
+                      type="button"
+                      className="rounded-full border bg-background px-3 py-1 text-xs hover:bg-muted"
+                      onClick={() => setBody(quickReplyBody(reply.id, recipientName))}
                     >
-                      <span className={cn("truncate", !composeContact && "text-muted-foreground")}>
-                        {composeContact ? textOf(composeContact.name) || "Contact" : "Choose a contact"}
-                      </span>
-                      <ChevronsUpDown className="opacity-50" />
-                    </PopoverTrigger>
-                    <PopoverContent align="start" className="w-[var(--anchor-width)] p-0" side="bottom">
-                      <Command shouldFilter={false}>
-                        <CommandInput placeholder="Search the book" value={pickerQuery} onValueChange={setPickerQuery} />
-                        <CommandList>
-                          <CommandEmpty>No one with a mobile number matches.</CommandEmpty>
-                          <CommandGroup>
-                            {pickerPeople.map((contact) => (
-                              <CommandItem
-                                key={contact.id}
-                                value={`${contact.id} ${contact.name} ${contact.phone}`}
-                                onSelect={() => {
-                                  setDraftContactId(contact.id);
-                                  setDraftPhone(formatPhoneInput(contact.phone));
-                                  setPickerOpen(false);
-                                  setPickerQuery("");
-                                }}
-                              >
-                                <span className="min-w-0 truncate">{contact.name}</span>
-                                <span className="ml-auto text-xs text-muted-foreground">{formatPhone(contact.phone)}</span>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  <PhoneInput
-                    value={draftPhone}
-                    onValueChange={(value) => {
-                      setDraftPhone(value);
-                      const match = contactForPhone(contacts, value);
-                      setDraftContactId(match?.id ?? "");
-                    }}
-                    placeholder="Mobile number"
-                  />
+                      {reply.label}
+                    </button>
+                  ))}
                 </div>
               ) : null}
               {replyTo && channel !== "notes" ? (
-                <div className="flex items-center justify-between gap-2 rounded-md bg-muted px-2 py-1 text-xs">
+                <div className="mb-2 flex items-center justify-between gap-2 rounded-md bg-muted px-2 py-1 text-xs">
                   <span className="min-w-0 truncate">Reply to “{replyTo.preview || "message"}”</span>
                   <button type="button" className="shrink-0 text-muted-foreground" onClick={() => setReplyTo(null)}>
                     Cancel
                   </button>
                 </div>
-              ) : null}
-              {channel !== "notes" ? (
-                <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                  Effect
-                  <select
-                    value={effect}
-                    onChange={(event) => setEffect(event.target.value)}
-                    aria-label="Message effect"
-                    className="h-8 min-w-0 flex-1 rounded-md border bg-background px-2 text-xs text-foreground"
-                  >
-                    <option value="">None</option>
-                    {IMESSAGE_EFFECTS.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
               ) : null}
               <div className="rounded-xl border bg-background px-3 py-2">
                 <Textarea
@@ -1328,42 +1503,66 @@ export function MessagesInbox() {
                       ? "Internal note — the customer will not see this"
                       : "Write a text…"
                   }
-                  rows={2}
-                  className="min-h-[44px] resize-none border-0 px-0 shadow-none focus-visible:ring-0"
+                  rows={3}
+                  className="min-h-[72px] resize-none border-0 px-0 shadow-none focus-visible:ring-0"
                 />
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <Smartphone className="size-3" />
-                  {channel === "notes"
-                    ? noteTarget
-                      ? "Saved on the job. Hidden from the customer."
-                      : "Open a job or contact before saving a note."
-                    : looksLikePhone(sendTo)
-                      ? "Enter to send. Shift+Enter for a new line."
-                      : "Choose a contact or enter a valid mobile number."}
-                </p>
-                <Button
-                  type="submit"
-                  disabled={
-                    sending ||
-                    !body.trim() ||
-                    (channel === "notes" ? !noteTarget : !looksLikePhone(sendTo))
-                  }
-                >
-                  {sending ? "Saving…" : channel === "notes" ? "Save note" : (
-                    <>
-                      <Send data-icon="inline-start" />
-                      Send
-                    </>
-                  )}
-                </Button>
+                <div className="mt-1 flex items-center gap-2">
+                  {channel !== "notes" ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="rounded-full bg-rose-50 text-rose-700 hover:bg-rose-100"
+                      onClick={() => setBody(cassioTextDraft(recipientName, lastInbound))}
+                    >
+                      Draft with {ASSISTANT_NAME}
+                    </Button>
+                  ) : null}
+                  {channel !== "notes" ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={<Button type="button" variant="ghost" size="sm" aria-label="Message effect" />}
+                      >
+                        ···
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuItem onClick={() => setEffect("")}>No effect</DropdownMenuItem>
+                        {IMESSAGE_EFFECTS.map((item) => (
+                          <DropdownMenuItem key={item.id} onClick={() => setEffect(item.id)}>
+                            {item.label}
+                            {effect === item.id ? " · on" : ""}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
+                  <span className="ml-auto text-[11px] text-muted-foreground">
+                    {channel === "notes"
+                      ? noteTarget
+                        ? "Hidden from the customer."
+                        : "Open a job before saving a note."
+                      : smsSegmentLabel(body)}
+                  </span>
+                  <Button
+                    type="submit"
+                    className="rounded-full bg-primary px-4 text-primary-foreground hover:bg-primary/90"
+                    disabled={
+                      sending ||
+                      !body.trim() ||
+                      (channel === "notes" ? !noteTarget : !looksLikePhone(sendTo))
+                    }
+                  >
+                    {sending ? "Saving…" : channel === "notes" ? "Save note" : "Send"}
+                  </Button>
+                </div>
               </div>
             </form>
+          ) : null}
+          </>
           )}
         </section>
 
-        <aside className="hidden min-h-0 flex-col overflow-y-auto border-l bg-background xl:flex">
+        <aside className={cn("min-h-0 flex-col overflow-y-auto border-l bg-background", showRail ? "hidden xl:flex" : "hidden")}>
           {jobContext}
         </aside>
       </div>
@@ -1422,28 +1621,133 @@ function Pill({
   );
 }
 
-function Queue({
-  title,
-  rows,
-  activeKey,
-  onOpen,
+function NewMessageDesk({
+  query,
+  onQuery,
+  hits,
+  waiting,
+  schedule,
+  estimates,
+  activeIndex,
+  onChoose,
+  onClose,
 }: {
-  title: string;
-  rows: InboxListRow[];
-  activeKey: string;
-  onOpen: (row: InboxListRow) => void;
+  query: string;
+  onQuery: (value: string) => void;
+  hits: ComposePerson[];
+  waiting: ComposePerson[];
+  schedule: ComposePerson[];
+  estimates: ComposePerson[];
+  activeIndex: number;
+  onChoose: (person: ComposePerson) => void;
+  onClose: () => void;
 }) {
-  if (rows.length === 0) return null;
+  const cards = [
+    { title: "Waiting on your reply", hint: "They texted last", people: waiting },
+    { title: "On today's schedule", hint: "Appointments on your calendar", people: schedule },
+    { title: "Estimates with no answer", hint: "Sent, no reply yet", people: estimates },
+  ];
+  let cursor = 0;
   return (
-    <section>
-      <div className="flex items-center justify-between px-4 pt-4 pb-1">
-        <p className="text-[10px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">{title}</p>
-        <span className="text-xs text-muted-foreground">{rows.length}</span>
+    <div className="flex min-h-0 flex-1 flex-col bg-muted/20">
+      <div className="flex items-center justify-between border-b bg-background px-5 py-4">
+        <h2 className="font-heading text-lg font-medium">New message</h2>
+        <button
+          type="button"
+          aria-label="Close new message"
+          className="rounded-md p-1 text-muted-foreground hover:bg-muted"
+          onClick={onClose}
+        >
+          <X className="size-4" />
+        </button>
       </div>
-      {rows.map((row) => (
-        <ThreadRow key={row.key} row={row} active={row.key === activeKey} onOpen={onOpen} />
-      ))}
-    </section>
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+        <div className="relative">
+          <label className="flex items-center gap-3 rounded-xl border-2 border-primary bg-background px-3">
+            <span className="text-sm text-muted-foreground">To</span>
+            <input
+              value={query}
+              onChange={(event) => onQuery(event.target.value)}
+              placeholder="Name, street address, job #, or phone number"
+              aria-label="To"
+              className="h-12 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+          </label>
+          {hits.length > 0 ? (
+            <div className="absolute z-20 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border bg-background shadow-md">
+              {hits.map((person) => (
+                <button
+                  key={person.key}
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted"
+                  onClick={() => onChoose(person)}
+                >
+                  <Avatar className="size-7">
+                    <AvatarFallback className={cn("text-[10px]", avatarTone(person.name))}>
+                      {initials(person.name) || "#"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium">{person.name}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{person.detail}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Not in the CRM yet? Type their number. A contact is created when they reply.
+        </p>
+        <div className="mt-5 grid gap-3 xl:grid-cols-3">
+          {cards.map((card) => {
+            const start = cursor;
+            cursor += card.people.length;
+            return (
+              <section key={card.title} className="rounded-xl border bg-background p-3">
+                <h3 className="text-sm font-semibold">{card.title}</h3>
+                <p className="text-xs text-muted-foreground">{card.hint}</p>
+                <div className="mt-3 space-y-1">
+                  {card.people.length === 0 ? (
+                    <p className="py-4 text-xs text-muted-foreground">Nothing here right now.</p>
+                  ) : (
+                    card.people.map((person, index) => (
+                      <button
+                        key={person.key}
+                        type="button"
+                        className={cn(
+                          "flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left",
+                          activeIndex === start + index && "bg-rose-50",
+                        )}
+                        onClick={() => onChoose(person)}
+                      >
+                        <Avatar className="size-8">
+                          <AvatarFallback className={cn("text-[10px]", avatarTone(person.name))}>
+                            {initials(person.name) || "#"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">{person.name}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{person.detail}</span>
+                        </span>
+                        {person.meta ? (
+                          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                            {person.meta}
+                          </span>
+                        ) : null}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </div>
+      <p className="border-t bg-background px-5 py-2 text-center text-[11px] text-muted-foreground">
+        ↑ ↓ to move · ↵ to pick · Esc to discard
+      </p>
+    </div>
   );
 }
 
@@ -1456,53 +1760,33 @@ function ThreadRow({
   active: boolean;
   onOpen: (row: InboxListRow) => void;
 }) {
-  const needs = row.queue === "needs_reply";
   return (
     <button
       type="button"
       onClick={() => onOpen(row)}
       className={cn(
-        "flex w-full items-start gap-2.5 border-l-2 px-3 py-2.5 text-left",
-        active && needs && "border-rose-400 bg-rose-50",
-        active && !needs && "border-neutral-900 bg-muted/70",
-        !active && "border-transparent hover:bg-muted/40",
+        "flex w-full items-start gap-2.5 px-3 py-2.5 text-left",
+        active ? "bg-rose-50" : "hover:bg-muted/40",
       )}
     >
-      <span className="relative mt-0.5">
-        <Avatar>
-          <AvatarFallback className={cn(needs ? "bg-rose-100 text-rose-800" : "bg-muted text-foreground")}>
-            {initials(row.title) || "#"}
-          </AvatarFallback>
-        </Avatar>
-        {row.unread ? (
-          <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-rose-500 ring-2 ring-background" />
-        ) : null}
-      </span>
+      <Avatar className="mt-0.5">
+        <AvatarFallback className={cn("text-xs", avatarTone(row.title))}>
+          {initials(row.title) || "#"}
+        </AvatarFallback>
+      </Avatar>
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline justify-between gap-2">
           <span className={cn("truncate text-sm", row.unread ? "font-semibold" : "font-medium")}>{row.title}</span>
-          <span className="shrink-0 text-[10px] text-muted-foreground">{formatInboxTime(row.at)}</span>
+          <span className="shrink-0 text-[11px] text-muted-foreground">{formatInboxTime(row.at)}</span>
         </span>
-        <span className={cn("mt-0.5 line-clamp-1 text-xs", row.unread ? "text-foreground" : "text-muted-foreground")}>
-          {row.preview}
-        </span>
-        <span className="mt-1 flex items-center gap-1.5">
-          <span className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-            {row.code ? <span className="text-[11px] text-muted-foreground">{row.code}</span> : null}
-            {row.unreadCount > 0 ? (
-              <span className="inline-flex min-w-4 items-center justify-center rounded bg-neutral-950 px-1 text-[10px] font-semibold text-white">
-                {row.unreadCount > 99 ? "99+" : row.unreadCount}
-              </span>
-            ) : null}
-            {row.estimateNumber ? <MetaChip>{row.estimateNumber}</MetaChip> : null}
-            {row.chips.map((chip) => (
-              <MetaChip key={chip}>{chip}</MetaChip>
-            ))}
+        <span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{row.preview}</span>
+        {row.place ? (
+          <span className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            {row.unread ? <span className="size-1.5 shrink-0 rounded-full bg-rose-500" /> : null}
+            <span className="truncate">{row.place}</span>
+            {row.chips.includes("Automated") ? <MetaChip>Automated</MetaChip> : null}
           </span>
-          <span className="shrink-0 text-[11px] text-muted-foreground">
-            {row.owner || (row.unassigned ? "Unassigned" : "")}
-          </span>
-        </span>
+        ) : null}
       </span>
     </button>
   );
@@ -1563,9 +1847,7 @@ function DeskTimeline({
           return (
             <div key={entry.id}>
               {showDay ? (
-                <p className="py-2 text-center text-[10px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
-                  {day}
-                </p>
+                <p className="py-2 text-center text-xs text-muted-foreground">{day}</p>
               ) : null}
               <TimelineEntry
                 entry={entry}
@@ -1679,7 +1961,7 @@ function TextBubble({
       <div
         className={cn(
           "rounded-2xl px-3 py-2.5 text-sm",
-          outbound ? "bg-rose-50" : "border bg-background shadow-sm",
+          outbound ? "bg-neutral-950 text-white" : "border bg-background text-foreground shadow-sm",
         )}
       >
         {message.mediaUrl ? (
@@ -1697,7 +1979,7 @@ function TextBubble({
             href={tracker}
             target="_blank"
             rel="noreferrer"
-            className="mt-2 flex items-start gap-2 rounded-xl bg-background px-3 py-2 shadow-sm"
+            className="mt-2 flex items-start gap-2 rounded-xl bg-background px-3 py-2 text-foreground shadow-sm"
           >
             <MapPin className="mt-0.5 size-4 text-rose-600" />
             <span>
@@ -1707,7 +1989,7 @@ function TextBubble({
           </a>
         ) : null}
         {message.handle && message.status !== "unsent" && message.kind !== "reaction" ? (
-          <div className="mt-1 flex flex-wrap items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+          <div className={cn("mt-1 flex flex-wrap items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100", outbound && "text-white/80")}>
             {IMESSAGE_TAPBACKS.map((tap) => (
               <button
                 key={tap.emoji}
@@ -1767,9 +2049,7 @@ function WebsiteConversation({ messages }: { messages: WebsiteChatThread["messag
           return (
             <div key={message.id || index}>
               {showDay ? (
-                <p className="py-2 text-center text-[10px] font-medium tracking-[0.14em] text-muted-foreground uppercase">
-                  {day}
-                </p>
+                <p className="py-2 text-center text-xs text-muted-foreground">{day}</p>
               ) : null}
               <div className={cn("max-w-[36rem] rounded-2xl px-3 py-2.5 text-sm", outbound ? "ml-auto bg-rose-50" : "mr-auto border bg-background shadow-sm")}>
                 <p className="whitespace-pre-wrap">{messageText(message.body)}</p>
@@ -1789,12 +2069,22 @@ function JobContext({
   job,
   opportunity,
   contactName,
+  phone,
+  email,
+  role,
+  since,
+  mailboxHref,
   onReview,
   canReview,
 }: {
   job: Job | null;
   opportunity: Opportunity | undefined;
   contactName?: string;
+  phone?: string;
+  email?: string;
+  role?: string;
+  since?: string;
+  mailboxHref: string;
   onReview: () => void;
   canReview: boolean;
 }) {
@@ -1805,7 +2095,6 @@ function JobContext({
   const events = Array.isArray(book?.events) ? book.events : [];
   const photos = Array.isArray(book?.photos) ? book.photos : [];
   const insurance = Array.isArray(book?.jobInsurance) ? book.jobInsurance : [];
-  const signatureEvents = Array.isArray(book?.estimateSignatureEvents) ? book.estimateSignatureEvents : [];
   const address = inboxAddress(job, opportunity);
   const claim = job ? insurance.find((row) => row.jobId === job.id) : undefined;
   const jobEstimates = estimates
@@ -1834,10 +2123,10 @@ function JobContext({
     hasSentEstimate: Boolean(sent),
   });
   const upcoming = nextAppointment(events, job?.id);
-  const recentPhotos = photos
+  const jobPhotos = photos
     .filter((photo) => job && photo.jobId === job.id && !photo.deletedAt && photo.imageUrl)
-    .sort((a, b) => (b.takenAt || "").localeCompare(a.takenAt || ""))
-    .slice(0, 3);
+    .sort((a, b) => (b.takenAt || "").localeCompare(a.takenAt || ""));
+  const recentPhotos = jobPhotos.slice(0, 3);
   const rep = job?.salesRep || opportunity?.estimator || "";
   const money = (estimate: Estimate | undefined) => {
     if (!estimate) return "";
@@ -1852,115 +2141,151 @@ function JobContext({
     }
   };
   const sentMoney = money(sent) || (job && job.contractValue > 0 ? formatCurrency(job.contractValue) : "");
-  const draftMoney = money(draft);
-  const views = sent ? signatureEvents.filter((event) => event.estimateId === sent.id && event.kind === "opened").length : 0;
   const mapQuery = [address.street, address.line2].filter((part) => part && part !== "No address yet").join(", ");
-  const facts = [
-    { label: "Claim #", value: claim?.claimNumber?.trim() || "—" },
-    { label: "Carrier", value: claim?.carrier?.trim() || "—" },
-    {
-      label: "Estimate",
-      value: sentMoney ? (views > 0 ? `${sentMoney} · viewed` : sentMoney) : "—",
-    },
-    { label: "Rep", value: rep || "—" },
-    { label: "Draft", value: draftMoney || "—" },
-    { label: "Next appointment", value: appointmentLabel(upcoming) || "—" },
-  ];
   const estimateHref = (sent || draft) ? `/estimates/${(draft || sent)!.id}` : job ? jobPaperHref(job.id) : "/estimates";
 
-  if (!job && !opportunity) {
-    return (
-      <div className="px-4 py-6 text-sm text-muted-foreground">
-        No job is attached to this conversation yet. Replies still land on the contact when a number matches.
-      </div>
-    );
-  }
+  const who = contactName || "This contact";
+  const sinceText = sinceLabel(since);
+  const progress = jobProgress(job?.status);
+  const photoLabel = jobPhotos.length
+    ? `${jobPhotos.length} from ${inspected ? "inspection" : "the job"}`
+    : "None yet";
 
   return (
-    <div className="px-4 py-4">
-      <p className="text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-        {job ? "Job" : "Lead"}
-        {(job?.code || opportunity?.code) ? ` · ${job?.code || opportunity?.code}` : ""}
-      </p>
-      <h2 className="mt-1 font-heading text-xl leading-tight font-medium">{address.street}</h2>
-      {address.line2 ? <p className="mt-0.5 text-sm text-muted-foreground">{address.line2}</p> : null}
-      <p className="mt-3 text-sm">
-        <span className="font-medium text-emerald-700">{stage.current}</span>
-        {stage.next ? <span className="text-muted-foreground"> → {stage.next}</span> : null}
-      </p>
-      {stage.detail ? <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{stage.detail}</p> : null}
-      {mapQuery ? (
-        <a
-          href={mapsUrl(mapQuery)}
-          target="_blank"
-          rel="noreferrer"
-          className="relative mt-4 flex h-28 items-center justify-center rounded-lg bg-stone-200"
-        >
-          <MapPin className="size-6 text-rose-600 drop-shadow" />
-          <span className="sr-only">Open map</span>
-        </a>
-      ) : (
-        <div className="relative mt-4 flex h-28 items-center justify-center rounded-lg bg-stone-200">
-          <MapPin className="size-6 text-stone-400" />
+    <div className="px-4 py-5">
+      <div className="flex items-start gap-3">
+        <Avatar className="size-11">
+          <AvatarFallback className={cn("text-sm", avatarTone(who))}>{initials(who) || "#"}</AvatarFallback>
+        </Avatar>
+        <div className="min-w-0">
+          <h2 className="truncate font-heading text-lg font-medium">{who}</h2>
+          <p className="text-xs text-muted-foreground">
+            {[role || "Homeowner", sinceText ? `since ${sinceText}` : ""].filter(Boolean).join(" · ")}
+          </p>
         </div>
-      )}
-      <dl className="mt-4 grid grid-cols-2 gap-x-3 gap-y-3">
-        {facts.map((fact) => (
-          <div key={fact.label}>
-            <dt className="text-[10px] tracking-wide text-muted-foreground uppercase">{fact.label}</dt>
-            <dd className="mt-0.5 text-sm">{fact.value}</dd>
-          </div>
-        ))}
-      </dl>
-      <div className="mt-5 flex items-center justify-between">
-        <p className="text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">Photos</p>
-        {job ? (
-          <Link href={jobRecordHref(job.id, { tab: "photos" })} className="text-xs text-primary">
-            View all
-          </Link>
-        ) : null}
       </div>
-      {recentPhotos.length === 0 ? (
-        <p className="mt-2 text-xs text-muted-foreground">No photos on this job yet.</p>
-      ) : (
-        <div className="mt-2 grid grid-cols-3 gap-2">
-          {recentPhotos.map((photo) => (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img key={photo.id} src={photo.imageUrl} alt={photo.caption || ""} className="h-16 w-full rounded-md bg-muted object-cover" />
-          ))}
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {phone ? (
+          <Button nativeButton={false} variant="outline" size="sm" render={<a href={`tel:${phone}`} />}>
+            Call
+          </Button>
+        ) : (
+          <Button type="button" variant="outline" size="sm" disabled>
+            Call
+          </Button>
+        )}
+        <Button nativeButton={false} variant="outline" size="sm" render={<Link href={mailboxHref} />}>
+          Email
+        </Button>
+        <Button nativeButton={false} variant="outline" size="sm" render={<Link href="/calendar" />}>
+          Schedule
+        </Button>
+      </div>
+      <dl className="mt-5 space-y-2 text-sm">
+        <div className="flex justify-between gap-3">
+          <dt className="text-muted-foreground">Mobile</dt>
+          <dd>{phone ? formatPhone(phone) : "—"}</dd>
         </div>
-      )}
-      <div className="mt-5">
-        <p className="text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">Quick actions</p>
-        <div className="mt-2 flex flex-col gap-2">
-          <Button nativeButton={false} variant="outline" className="w-full" render={<Link href={estimateHref} />}>
-            Send estimate
-          </Button>
-          <Button nativeButton={false} variant="outline" className="w-full" render={<Link href="/calendar" />}>
-            Book appointment
-          </Button>
-          <Button type="button" variant="outline" className="w-full" disabled={!canReview} onClick={onReview}>
-            Request review
-          </Button>
-          {job ? (
-            <Button nativeButton={false} variant="outline" className="w-full" render={<Link href={jobRecordHref(job.id)} />}>
-              Open job
-            </Button>
-          ) : opportunity ? (
-            <Button
-              nativeButton={false}
-              variant="outline"
-              className="w-full"
-              render={<Link href={`/opportunities/${opportunity.id}`} />}
-            >
-              Open lead
-            </Button>
+        <div className="flex justify-between gap-3">
+          <dt className="text-muted-foreground">Email</dt>
+          <dd className="truncate">{email || "—"}</dd>
+        </div>
+      </dl>
+      {job || opportunity ? (
+        <div className="mt-5 rounded-xl border p-3">
+          <div className="flex items-start justify-between gap-2">
+            <p className="font-medium">{address.street}</p>
+            {job ? (
+              <Link href={jobRecordHref(job.id)} className="shrink-0 text-xs text-primary">
+                Open job
+              </Link>
+            ) : opportunity ? (
+              <Link href={`/opportunities/${opportunity.id}`} className="shrink-0 text-xs text-primary">
+                Open lead
+              </Link>
+            ) : null}
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {[address.line2 || job?.city, job?.name || opportunity?.name, rep ? `Rep: ${rep}` : ""]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          <div className="mt-3 flex h-1.5 overflow-hidden rounded-full bg-stone-200">
+            <div className="bg-neutral-900" style={{ width: `${Math.max(8, progress - 12)}%` }} />
+            <div className="bg-primary" style={{ width: "12%" }} />
+          </div>
+          <dl className="mt-3 space-y-2 text-sm">
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Stage</dt>
+              <dd className="text-right">{stage.current}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Next</dt>
+              <dd className="text-right">{appointmentLabel(upcoming) || stage.next || "—"}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Claim</dt>
+              <dd>{claim?.claimNumber?.trim() || "—"}</dd>
+            </div>
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Photos</dt>
+              <dd>
+                {job ? (
+                  <Link href={jobRecordHref(job.id, { tab: "photos" })} className="text-primary">
+                    {photoLabel}
+                  </Link>
+                ) : (
+                  photoLabel
+                )}
+              </dd>
+            </div>
+            {sentMoney ? (
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">Estimate</dt>
+                <dd>
+                  <Link href={estimateHref} className="text-primary">
+                    {sentMoney}
+                  </Link>
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+          {recentPhotos.length > 0 ? (
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {recentPhotos.map((photo) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img key={photo.id} src={photo.imageUrl} alt={photo.caption || ""} className="h-14 w-full rounded-md bg-muted object-cover" />
+              ))}
+            </div>
+          ) : null}
+          {mapQuery ? (
+            <a href={mapsUrl(mapQuery)} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+              <MapPin className="size-3.5" />
+              Map
+            </a>
           ) : null}
         </div>
-        {contactName ? <p className="sr-only">Conversation with {contactName}</p> : null}
-      </div>
+      ) : (
+        <p className="mt-5 text-sm text-muted-foreground">No job is attached yet. Replies still land on the contact when a number matches.</p>
+      )}
+      {canReview ? (
+        <button type="button" className="mt-4 text-sm text-primary" onClick={onReview}>
+          Request a review
+        </button>
+      ) : null}
+      {stage.detail ? <p className="mt-3 line-clamp-3 text-xs text-muted-foreground">{stage.detail}</p> : null}
+      <p className="mt-4 text-xs text-muted-foreground">
+        {firstName(who) || who}&apos;s replies land on this job&apos;s activity feed.
+      </p>
     </div>
   );
+}
+
+function sinceLabel(iso: string | null | undefined) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
 }
 
 function messageText(body: unknown) {
