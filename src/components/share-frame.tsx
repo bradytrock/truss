@@ -2,32 +2,82 @@
 
 import type { ReactNode } from "react";
 import { Download, Mail, MessageSquare, Phone } from "lucide-react";
+import { RoofTileMark, SIGN_IN_ACCENT } from "@/components/sign-in-screen";
 import { Button } from "@/components/ui/button";
 import { formatPhone } from "@/lib/format";
 import { digitsOnly, toE164 } from "@/lib/phone";
+import { PRODUCT_NAME } from "@/lib/product";
 import type { ShareSender } from "@/lib/share";
 import { cn } from "@/lib/utils";
+
+export type ShareDocumentChrome = {
+  kind: "estimate" | "invoice";
+  number: string;
+  statusLabel: string;
+  tone: "ready" | "done" | "alert";
+};
+
+const TONE_CLASS = {
+  ready: "bg-amber-100 text-amber-900",
+  done: "bg-green-100 text-green-800",
+  alert: "bg-red-100 text-red-800",
+} as const;
+
+const KIND_TITLE = {
+  estimate: "Estimate",
+  invoice: "Invoice",
+} as const;
 
 export function ShareFrame({
   children,
   actions,
   wide,
+  document,
 }: {
   children: ReactNode;
   actions?: ReactNode;
   /** Use the browser width. Good / Better / Best cards need the screen, not a centered letter column. */
   wide?: boolean;
+  /** Public estimate and invoice pages. Other share links keep the plain column. */
+  document?: ShareDocumentChrome;
 }) {
+  if (!document) {
+    return (
+      <div className="min-h-full bg-muted/40">
+        <div
+          className={cn(
+            "mx-auto flex w-full flex-col gap-4 px-4 py-6 sm:px-6 sm:py-10",
+            wide ? "max-w-[100rem] lg:px-10 xl:px-14" : "max-w-3xl",
+          )}
+        >
+          {actions ? <div className="flex flex-wrap justify-end gap-2">{actions}</div> : null}
+          {children}
+        </div>
+      </div>
+    );
+  }
+
+  const width = wide ? "max-w-[100rem]" : "max-w-[860px]";
+  const pad = wide ? "px-4 lg:px-10 xl:px-14" : "px-4";
+
   return (
-    <div className="min-h-full bg-muted/40">
-      <div
-        className={cn(
-          "mx-auto flex w-full flex-col gap-4 px-4 py-6 sm:px-6 sm:py-10",
-          wide ? "max-w-[100rem] lg:px-10 xl:px-14" : "max-w-3xl",
-        )}
-      >
-        {actions ? <div className="flex flex-wrap justify-end gap-2">{actions}</div> : null}
+    <div className="min-h-full bg-[#F4F4F5] text-[#18181B]">
+      <header className="border-b border-[#E4E4E7] bg-white">
+        <div className={cn("mx-auto flex flex-wrap items-center justify-between gap-3 py-3", width, pad)}>
+          <div className="flex items-center gap-2.5 text-sm font-semibold">
+            <span>
+              {KIND_TITLE[document.kind]} {document.number}
+            </span>
+            <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-semibold", TONE_CLASS[document.tone])}>
+              {document.statusLabel}
+            </span>
+          </div>
+          {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+        </div>
+      </header>
+      <div className={cn("mx-auto flex w-full flex-col gap-4 py-6 sm:py-8", width, pad)}>
         {children}
+        <p className="pt-2 text-center text-xs text-zinc-500">Powered by {PRODUCT_NAME}</p>
       </div>
     </div>
   );
@@ -162,12 +212,88 @@ export function ShareMissing({
   );
 }
 
-export function ShareLoading() {
+const LOADING_COPY = {
+  estimate: {
+    title: "Loading estimate",
+    subtitle: "Opening this estimate. This only takes a moment.",
+  },
+  invoice: {
+    title: "Loading invoice",
+    subtitle: "Opening this invoice. This only takes a moment.",
+  },
+} as const;
+
+function SkeletonBar({ className }: { className: string }) {
+  return <div className={cn("animate-pulse rounded bg-zinc-200", className)} />;
+}
+
+export function ShareLoading({ kind }: { kind?: "estimate" | "invoice" } = {}) {
+  if (kind !== "estimate" && kind !== "invoice") {
+    return (
+      <ShareFrame>
+        <div className="h-24 animate-pulse border bg-muted" />
+        <div className="h-[32rem] animate-pulse border bg-muted" />
+      </ShareFrame>
+    );
+  }
+
+  const copy = LOADING_COPY[kind];
   return (
-    <ShareFrame>
-      <div className="h-24 animate-pulse border bg-muted" />
-      <div className="h-[32rem] animate-pulse border bg-muted" />
-    </ShareFrame>
+    <div className="flex min-h-full flex-col items-center gap-10 overflow-hidden bg-[#F4F4F5] px-4 pt-16 text-[#18181B]">
+      <div role="status" aria-live="polite" className="flex flex-col items-center gap-5 text-center">
+        <div className="relative flex size-[76px] items-center justify-center">
+          <svg className="absolute inset-0 size-full animate-spin" viewBox="0 0 76 76" aria-hidden>
+            <circle cx="38" cy="38" r="34" fill="none" stroke="#E4E4E7" strokeWidth="3" />
+            <path
+              d="M38 4 A34 34 0 0 1 72 38"
+              fill="none"
+              stroke={SIGN_IN_ACCENT}
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
+          </svg>
+          <RoofTileMark className="size-[42px]" />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <h1 className="text-xl font-bold tracking-tight">{copy.title}</h1>
+          <p className="text-sm text-zinc-600">{copy.subtitle}</p>
+        </div>
+      </div>
+      <div
+        aria-hidden
+        className="w-full max-w-[860px] rounded-[14px] border border-[#E4E4E7] bg-white p-8 shadow-[0_12px_40px_rgba(24,24,27,0.06)] sm:p-11"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-6">
+          <div className="flex flex-col gap-3">
+            <SkeletonBar className="size-14 rounded-xl" />
+            <SkeletonBar className="h-4 w-40" />
+            <SkeletonBar className="h-3 w-56" />
+          </div>
+          <div className="flex flex-col items-end gap-2">
+            <SkeletonBar className="h-6 w-28" />
+            <SkeletonBar className="h-3 w-36" />
+            <SkeletonBar className="h-3 w-32" />
+          </div>
+        </div>
+        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="flex flex-col gap-2 rounded-lg bg-zinc-50 p-4">
+              <SkeletonBar className="h-2.5 w-20" />
+              <SkeletonBar className="h-4 w-32" />
+              <SkeletonBar className="h-3 w-24" />
+            </div>
+          ))}
+        </div>
+        <div className="mt-8 flex flex-col gap-3">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div key={index} className="flex items-center justify-between border-b border-zinc-100 py-3">
+              <SkeletonBar className="h-3 w-52" />
+              <SkeletonBar className="h-3 w-16" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

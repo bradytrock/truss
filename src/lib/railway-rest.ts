@@ -28,10 +28,16 @@ function isSupabaseHost(url: string) {
   return /supabase\.co\b/i.test(url);
 }
 
+/** Supabase Auth stays on Supabase. Table calls still go to Railway. */
+function isSupabaseAuth(url: string) {
+  return /\/auth\/v1(?:\/|\?|$)/.test(url);
+}
+
 /** Where a Supabase client request should go while Railway is the database. */
 export function railwayFetchPlan(url: string): "database" | "blocked" | "passthrough" {
   if (!railwayDatabaseEnabled()) return "passthrough";
   if (restSuffix(url)) return "database";
+  if (isSupabaseAuth(url)) return "passthrough";
   if (isSupabaseHost(url)) return "blocked";
   return "passthrough";
 }
@@ -43,13 +49,14 @@ function blockedSupabaseResponse() {
   );
 }
 
-/** Sends PostgREST calls to Railway. Auth, realtime, and storage are not forwarded to Supabase. */
+/** Sends PostgREST calls to Railway. Supabase Auth still reaches Supabase. Realtime and storage do not. */
 export const railwayRestFetch: typeof fetch = (input, init) => {
   if (!railwayDatabaseEnabled()) return fetch(input, init);
   const raw =
     typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
   const suffix = restSuffix(raw);
   if (!suffix) {
+    if (isSupabaseAuth(raw)) return fetch(input, init);
     if (isSupabaseHost(raw)) return Promise.resolve(blockedSupabaseResponse());
     return fetch(input, init);
   }

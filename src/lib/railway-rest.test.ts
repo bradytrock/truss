@@ -20,7 +20,11 @@ assert.equal(
   railwayFetchPlan("https://cxrgdjvkmvnuztubxldh.supabase.co/rest/v1/jobs"),
   "database",
 );
-assert.equal(railwayFetchPlan("https://cxrgdjvkmvnuztubxldh.supabase.co/auth/v1/user"), "blocked");
+assert.equal(railwayFetchPlan("https://cxrgdjvkmvnuztubxldh.supabase.co/auth/v1/user"), "passthrough");
+assert.equal(
+  railwayFetchPlan("https://cxrgdjvkmvnuztubxldh.supabase.co/auth/v1/token?grant_type=password"),
+  "passthrough",
+);
 assert.equal(
   railwayFetchPlan("https://cxrgdjvkmvnuztubxldh.supabase.co/realtime/v1/websocket"),
   "blocked",

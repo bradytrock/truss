@@ -20,7 +20,6 @@ import { useSignIn } from "@clerk/nextjs";
 import { authErrorMessage } from "@/lib/auth-errors";
 import { clerkBrowserEnabled } from "@/lib/clerk-browser";
 import { postClerkAuth, runClerkSignup, type ClerkSignInClient } from "@/lib/clerk-signup-client";
-import { railwayDatabaseEnabled } from "@/lib/railway-rest";
 import { createClient } from "@/lib/supabase/client";
 import type { SeatRole } from "@/lib/types";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
@@ -195,12 +194,6 @@ function SignupForm({ clerkSignIn }: { clerkSignIn?: ClerkSignInClient | null })
       } finally {
         setPending(false);
       }
-      return;
-    }
-    if (railwayDatabaseEnabled()) {
-      const message = "New companies sign in with Clerk. Accounts are not created in Supabase.";
-      setFormError(message);
-      toast.error(message);
       return;
     }
     setPending(true);

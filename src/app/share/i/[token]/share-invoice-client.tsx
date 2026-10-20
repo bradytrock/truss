@@ -4,13 +4,27 @@ import { useMemo } from "react";
 import { toast } from "sonner";
 import { InvoiceDocument } from "@/components/invoice-document";
 import { InvoicePayPanel } from "@/components/document-pay-panel";
-import { ShareFrame, ShareLoading, ShareMissing, SharePdfButton } from "@/components/share-frame";
+import {
+  ShareFrame,
+  ShareLoading,
+  ShareMissing,
+  SharePdfButton,
+  type ShareDocumentChrome,
+} from "@/components/share-frame";
 import { downloadInvoicePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
 import { derivedInvoiceStatus } from "@/lib/money";
+import type { InvoiceStatus } from "@/lib/types";
 import { parseSharedInvoice, type ShareSender, type SharedInvoicePayload } from "@/lib/share";
 import { useRemoteShare } from "@/lib/use-remote-share";
+
+function invoiceChrome(number: string, status: InvoiceStatus): ShareDocumentChrome {
+  if (status === "paid") return { kind: "invoice", number, statusLabel: "Paid in full", tone: "done" };
+  if (status === "overdue") return { kind: "invoice", number, statusLabel: "Overdue", tone: "alert" };
+  if (status === "void") return { kind: "invoice", number, statusLabel: "Void", tone: "alert" };
+  return { kind: "invoice", number, statusLabel: "Balance due", tone: "ready" };
+}
 
 export function ShareInvoiceClient({
   token,
@@ -68,6 +82,7 @@ export function ShareInvoiceClient({
     });
     return (
       <ShareFrame
+        document={invoiceChrome(fromStore.number, status)}
         actions={
           <SharePdfButton
             disabled={lines.length === 0}
@@ -116,13 +131,14 @@ export function ShareInvoiceClient({
 
   if (!remote) {
     if (!crm.hydrated || remoteState !== "missing") {
-      return <ShareLoading />;
+      return <ShareLoading kind="invoice" />;
     }
     return <ShareMissing kind="invoice" sender={sender} />;
   }
 
   return (
     <ShareFrame
+      document={invoiceChrome(remote.invoice.number, remote.invoice.status)}
       actions={
         <SharePdfButton
           disabled={remote.lines.length === 0}

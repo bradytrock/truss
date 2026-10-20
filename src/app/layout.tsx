@@ -1,7 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import { ClerkProvider } from "@clerk/nextjs";
-import { ClerkSessionBridge } from "@/components/clerk-session-bridge";
 import { Great_Vibes, IBM_Plex_Mono, IBM_Plex_Sans, Newsreader } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { clarityHeadScript, clarityRecordingEnabled } from "@/lib/clarity";
@@ -50,7 +48,7 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
-  const tree = (
+  return (
     <html
       lang="en"
       suppressHydrationWarning
@@ -68,12 +66,5 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <Providers>{children}</Providers>
       </body>
     </html>
-  );
-  if (!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim()) return tree;
-  return (
-    <ClerkProvider>
-      <ClerkSessionBridge />
-      {tree}
-    </ClerkProvider>
   );
 }

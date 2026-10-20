@@ -24,7 +24,6 @@ import {
   parseInviteGate,
   type InviteGate,
 } from "@/lib/invite-onboarding";
-import { railwayDatabaseEnabled } from "@/lib/railway-rest";
 import { createClient } from "@/lib/supabase/client";
 import type { SeatRole } from "@/lib/types";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
@@ -261,12 +260,6 @@ function InviteSignupForm({
       } finally {
         setPending(false);
       }
-      return;
-    }
-    if (railwayDatabaseEnabled()) {
-      const message = "New companies sign in with Clerk. Accounts are not created in Supabase.";
-      setFormError(message);
-      toast.error(message);
       return;
     }
     setPending(true);
