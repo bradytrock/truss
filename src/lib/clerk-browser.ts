@@ -1,5 +1,4 @@
 import { claimString, CLERK_PROFILE_CLAIM, decodeJwtPayload, profileIdFromJwt } from "@/lib/clerk-profile";
-import { railwayDatabaseEnabled } from "@/lib/railway-rest";
 
 type TokenGetter = () => Promise<string | null>;
 
@@ -38,8 +37,9 @@ function clerkPublishableKey() {
   return Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim());
 }
 
+/** Clerk is not the session. Sign-in, signup, and invites use Supabase Auth. */
 export function clerkBrowserEnabled() {
-  return clerkPublishableKey();
+  return false;
 }
 
 export function clerkBrowserSignedIn() {
@@ -61,7 +61,7 @@ export function publishClerkBrowser(next: { loaded: boolean; identity: ClerkIden
 }
 
 export function waitForClerkBrowser() {
-  if (!clerkPublishableKey() || loaded) return Promise.resolve();
+  if (!clerkBrowserEnabled() || loaded) return Promise.resolve();
   return new Promise<void>((resolve) => {
     const timer = setTimeout(() => {
       waiters.delete(done);
@@ -108,8 +108,6 @@ export async function readBrowserSessionUser(supabase: SessionClient): Promise<B
       },
     };
   }
-
-  if (railwayDatabaseEnabled()) return null;
 
   try {
     const { data } = await supabase.auth.getUser();
