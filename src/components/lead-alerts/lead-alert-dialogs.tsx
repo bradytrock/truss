@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Undo2 } from "lucide-react";
+import { Check, MapPin, Phone, Undo2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -10,8 +10,9 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   ASSIGN_ERROR,
   ASSIGN_TITLE,
+  APPOINTMENT_DURATION_MINUTES,
+  APPOINTMENT_START_TIMES,
   BOOK_DATE_ERROR,
-  BOOK_HELP,
   BOOK_TIME_ERROR,
   BOOK_TITLE,
   BOOK_TITLE_ERROR,
@@ -24,15 +25,24 @@ import {
   QUICK_REP_NOTES,
   UPDATE_HELP,
   UPDATE_TITLE,
+  appointmentConflicts,
   appointmentKindLabel,
+  appointmentWhenLabel,
+  conflictSummary,
   defaultAppointmentTitle,
   defaultBookAppointment,
+  durationLabel,
+  endTimeFromDuration,
+  formatClock,
   leadEditSeed,
+  leadPhoneHref,
   leadPlaceLine,
   leadServiceChoices,
+  minutesBetween,
   passbackSummary,
   serviceTypeLabel,
   type BookAppointmentInput,
+  type CalendarConflictEvent,
   type LeadAppointmentKind,
   type LeadAlert,
   type LeadEditSeed,
@@ -407,46 +417,98 @@ export function AssignRepPanel({
 const fieldClass =
   "mt-2 h-8 w-full rounded-md border border-input bg-card px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30";
 
+const choiceClass =
+  "h-9 w-full rounded-lg border border-input bg-background px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30";
+
 export function BookAppointmentDialog({
   alert,
   onClose,
   onSubmit,
+  assigneeName = "",
+  teammates = [],
+  events = [],
+  homeownerEmail = "",
 }: {
   alert: LeadAlert | null;
   onClose: () => void;
   onSubmit: (input: BookAppointmentInput) => Promise<void>;
+  assigneeName?: string;
+  teammates?: string[];
+  events?: CalendarConflictEvent[];
+  homeownerEmail?: string;
 }) {
   return (
     <Dialog open={Boolean(alert)} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent aria-labelledby="book-appointment-title" className="sm:max-w-md">
+      <DialogContent aria-labelledby="book-appointment-title" className="gap-0 p-0 sm:max-w-md">
         {alert ? (
-          <BookAppointmentPanel key={alert.id} alert={alert} onClose={onClose} onSubmit={onSubmit} />
+          <BookAppointmentPanel
+            key={alert.id}
+            alert={alert}
+            onClose={onClose}
+            onSubmit={onSubmit}
+            assigneeName={assigneeName}
+            teammates={teammates}
+            events={events}
+            homeownerEmail={homeownerEmail}
+          />
         ) : null}
       </DialogContent>
     </Dialog>
   );
 }
 
+function personInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] ?? ""}${parts[parts.length - 1][0] ?? ""}`.toUpperCase();
+}
+
 export function BookAppointmentPanel({
   alert,
   onClose,
   onSubmit,
+  assigneeName = "",
+  teammates = [],
+  events = [],
+  homeownerEmail = "",
 }: {
   alert: LeadAlert;
   onClose: () => void;
   onSubmit: (input: BookAppointmentInput) => Promise<void>;
+  assigneeName?: string;
+  teammates?: string[];
+  events?: CalendarConflictEvent[];
+  homeownerEmail?: string;
 }) {
   const seed = defaultBookAppointment(alert.lead);
   const [title, setTitle] = useState(seed.title);
   const [kind, setKind] = useState<LeadAppointmentKind>(seed.kind);
   const [date, setDate] = useState(seed.date);
   const [startTime, setStartTime] = useState(seed.startTime);
-  const [endTime, setEndTime] = useState(seed.endTime);
+  const [duration, setDuration] = useState(() => minutesBetween(seed.startTime, seed.endTime) || 60);
+  const [assignee, setAssignee] = useState(assigneeName);
   const [location, setLocation] = useState(seed.location);
   const [notes, setNotes] = useState(seed.notes);
+  const [notify, setNotify] = useState(true);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [editingLocation, setEditingLocation] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const place = leadPlaceLine(alert.lead);
+  const homeowner = alert.lead.homeowner_name || "Homeowner";
+  const tel = leadPhoneHref(alert.lead.phone);
+  const email = homeownerEmail.trim();
+  const endTime = endTimeFromDuration(startTime, duration);
+  const starts = APPOINTMENT_START_TIMES.includes(startTime)
+    ? APPOINTMENT_START_TIMES
+    : [startTime, ...APPOINTMENT_START_TIMES];
+  const conflicts = appointmentConflicts(events, { date, startTime, endTime, assignee });
+  const conflict = conflictSummary(conflicts);
+  const kindLabel = appointmentKindLabel(kind);
+  const when = appointmentWhenLabel(date, startTime, endTime);
+  const locationIsLead = location.trim() === seed.location.trim();
 
   function chooseKind(next: LeadAppointmentKind) {
     setTitle((current) => {
@@ -459,6 +521,7 @@ export function BookAppointmentPanel({
 
   return (
     <form
+      className="flex flex-col"
       onSubmit={async (event) => {
         event.preventDefault();
         if (!title.trim()) {
@@ -476,87 +539,245 @@ export function BookAppointmentPanel({
         setPending(true);
         setError("");
         try {
-          await onSubmit({ title, kind, date, startTime, endTime, location, notes });
+          await onSubmit({
+            title,
+            kind,
+            date,
+            startTime,
+            endTime,
+            location,
+            notes,
+            assignee,
+            notifyEmail: notify && email ? email : "",
+          });
         } catch (caught) {
           setError(caught instanceof Error ? caught.message : BOOK_DATE_ERROR);
           setPending(false);
         }
       }}
     >
-      <h2 id="book-appointment-title" className="font-heading text-base leading-none font-medium">
-        {BOOK_TITLE}
-      </h2>
-      <p className="mt-2 text-sm font-medium">{alert.lead.homeowner_name || "Homeowner"}</p>
-      {place ? <p className="text-sm text-muted-foreground">{place}</p> : null}
-      <p className="mt-3 text-sm text-muted-foreground">{BOOK_HELP}</p>
-      <label className="mt-4 block text-sm font-medium" htmlFor="book-appointment-title-field">
-        Title
-      </label>
-      <Input
-        id="book-appointment-title-field"
-        value={title}
-        onChange={(event) => setTitle(event.target.value)}
-        className="mt-2"
-      />
-      <fieldset className="mt-4">
-        <legend className="text-sm font-medium">Type</legend>
-        <div role="radiogroup" aria-label="Appointment type" className="mt-2 flex flex-col gap-1.5">
-          {LEAD_APPOINTMENT_KINDS.map((item) => (
-            <button
-              key={item}
-              type="button"
-              role="radio"
-              aria-checked={kind === item}
-              className={cn(
-                "rounded-md border px-2.5 py-1.5 text-left text-sm focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
-                kind === item ? "border-foreground bg-muted" : "border-border",
-              )}
-              onClick={() => chooseKind(item)}
+      <div className="sticky top-0 z-10 bg-popover px-5 pt-5 pr-12 pb-4">
+        <h2 id="book-appointment-title" className="font-heading text-base leading-none font-medium">
+          {BOOK_TITLE}
+        </h2>
+        <div className="mt-4 flex items-center gap-3 rounded-xl bg-muted/70 px-3 py-2.5">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-medium text-background">
+            {personInitials(homeowner)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{homeowner}</p>
+            {place ? <p className="truncate text-sm text-muted-foreground">{place}</p> : null}
+          </div>
+          {tel ? (
+            <a
+              href={tel}
+              className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
             >
-              {appointmentKindLabel(item)}
-            </button>
-          ))}
-        </div>
-      </fieldset>
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div>
-          <label className="block text-sm font-medium" htmlFor="book-appointment-date">Date</label>
-          <Input id="book-appointment-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} className="mt-2" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium" htmlFor="book-appointment-start">Start</label>
-          <Input id="book-appointment-start" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} className="mt-2" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium" htmlFor="book-appointment-end">End</label>
-          <Input id="book-appointment-end" type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} className="mt-2" />
+              <Phone className="size-3.5" aria-hidden />
+              Call
+            </a>
+          ) : null}
         </div>
       </div>
-      <label className="mt-4 block text-sm font-medium" htmlFor="book-appointment-location">
-        Location
-      </label>
-      <Input
-        id="book-appointment-location"
-        value={location}
-        onChange={(event) => setLocation(event.target.value)}
-        className="mt-2"
-      />
-      <label className="mt-4 block text-sm font-medium" htmlFor="book-appointment-notes">
-        Notes
-      </label>
-      <Textarea
-        id="book-appointment-notes"
-        value={notes}
-        onChange={(event) => setNotes(event.target.value)}
-        className="mt-2"
-      />
-      {error ? <p className="mt-3 text-sm text-destructive" role="alert">{error}</p> : null}
-      <div className="mt-4 flex justify-end gap-2">
+      <div className="px-5 pb-4">
+        <fieldset>
+          <legend className="text-sm font-medium">Type</legend>
+          <div role="radiogroup" aria-label="Appointment type" className="mt-2 flex flex-wrap gap-1.5">
+            {LEAD_APPOINTMENT_KINDS.map((item) => (
+              <button
+                key={item}
+                type="button"
+                role="radio"
+                aria-checked={kind === item}
+                className={cn(
+                  "rounded-full border bg-background px-3 py-1 text-sm focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
+                  kind === item ? "border-primary text-primary" : "border-border text-foreground hover:bg-muted",
+                )}
+                onClick={() => chooseKind(item)}
+              >
+                {appointmentKindLabel(item)}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium" htmlFor="book-appointment-date">Date</label>
+            <Input
+              id="book-appointment-date"
+              type="date"
+              value={date}
+              onChange={(event) => setDate(event.target.value)}
+              className={cn(choiceClass, "mt-2")}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium" htmlFor="book-appointment-start">Start</label>
+            <select
+              id="book-appointment-start"
+              value={startTime}
+              onChange={(event) => setStartTime(event.target.value)}
+              className={cn(choiceClass, "mt-2")}
+            >
+              {starts.map((item) => (
+                <option key={item} value={item}>{formatClock(item)}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <fieldset className="mt-4">
+          <legend className="text-sm font-medium">Duration</legend>
+          <div role="radiogroup" aria-label="Duration" className="mt-2 flex flex-wrap gap-1.5">
+            {APPOINTMENT_DURATION_MINUTES.map((minutes) => (
+              <button
+                key={minutes}
+                type="button"
+                role="radio"
+                aria-checked={duration === minutes}
+                className={cn(
+                  "rounded-full border bg-background px-2.5 py-1 text-sm focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
+                  duration === minutes ? "border-primary text-primary" : "border-border text-foreground hover:bg-muted",
+                )}
+                onClick={() => setDuration(minutes)}
+              >
+                {durationLabel(minutes)}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+          <p className="text-sm text-muted-foreground">{when}</p>
+          {conflict ? (
+            <p className="text-sm text-destructive" role="status">{conflict}</p>
+          ) : (
+            <p className="flex items-center gap-1 text-sm text-emerald-600" role="status">
+              <Check className="size-3.5" aria-hidden />
+              No conflicts on your calendar
+            </p>
+          )}
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="block text-sm font-medium" htmlFor="book-appointment-assignee">Assigned to</label>
+            <select
+              id="book-appointment-assignee"
+              value={assignee || assigneeName}
+              onChange={(event) => setAssignee(event.target.value)}
+              className={cn(choiceClass, "mt-2")}
+            >
+              <option value={assigneeName}>{assigneeName ? `${assigneeName} (you)` : "You"}</option>
+              {teammates.filter((name) => name !== assigneeName).map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <span className="block text-sm font-medium">Location</span>
+            {editingLocation ? (
+              <Input
+                id="book-appointment-location"
+                value={location}
+                onChange={(event) => setLocation(event.target.value)}
+                className="mt-2"
+                aria-label="Location"
+              />
+            ) : (
+              <p className="mt-2 flex items-center gap-1.5 text-sm">
+                <MapPin className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                <span className="min-w-0 truncate">{locationIsLead ? "Lead address" : location}</span>
+                <button
+                  type="button"
+                  className="shrink-0 font-medium text-primary underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+                  onClick={() => setEditingLocation(true)}
+                >
+                  Change
+                </button>
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="mt-4 flex items-center justify-between gap-3 border-t pt-4">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">Notify homeowner</p>
+            <p className="text-sm text-muted-foreground">
+              Text + email confirmation, reminder the day before
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={notify}
+            aria-label="Notify homeowner"
+            disabled={pending}
+            className={cn(
+              "relative h-6 w-11 shrink-0 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none disabled:opacity-40",
+              notify ? "bg-primary" : "bg-muted",
+            )}
+            onClick={() => setNotify((current) => !current)}
+          >
+            <span
+              className={cn(
+                "absolute top-0.5 size-5 rounded-full bg-white shadow-sm transition-[left]",
+                notify ? "left-5" : "left-0.5",
+              )}
+            />
+          </button>
+        </div>
+        <div className="mt-4">
+          {editingTitle ? (
+            <div>
+              <label className="block text-sm font-medium" htmlFor="book-appointment-title-field">
+                Shows on calendar as
+              </label>
+              <Input
+                id="book-appointment-title-field"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                className="mt-2"
+              />
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Shows on calendar as <span className="font-medium text-primary">{title}</span>{" "}
+              <button
+                type="button"
+                className="font-medium text-primary underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+                onClick={() => setEditingTitle(true)}
+              >
+                Edit
+              </button>
+            </p>
+          )}
+        </div>
+        <div className="mt-3">
+          {editingNotes ? (
+            <div>
+              <label className="block text-sm font-medium" htmlFor="book-appointment-notes">Notes</label>
+              <Textarea
+                id="book-appointment-notes"
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                className="mt-2"
+              />
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="text-sm font-medium text-primary underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+              onClick={() => setEditingNotes(true)}
+            >
+              + Add note
+            </button>
+          )}
+        </div>
+      </div>
+      {error ? <p className="px-5 pb-2 text-sm text-destructive" role="alert">{error}</p> : null}
+      <div className="sticky bottom-0 z-10 flex justify-end gap-2 border-t bg-popover px-5 py-3">
         <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
           Cancel
         </Button>
         <Button type="submit" disabled={pending}>
-          Book
+          Book {kindLabel.toLowerCase()}
         </Button>
       </div>
     </form>
