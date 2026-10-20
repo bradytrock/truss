@@ -1,5 +1,7 @@
 import { googleCalendarInviteBody } from "@/lib/calendar-invite";
 
+export { googleRequestOrigin } from "@/lib/google-origin";
+
 /** Read and write events, so an outside guest can be emailed a calendar invite. */
 export const GOOGLE_CALENDAR_EVENTS_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 
