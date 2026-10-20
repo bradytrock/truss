@@ -70,14 +70,15 @@ export function inviteEmailText(input: InviteEmailInput) {
   return [copy.headline, "", copy.message.trim(), "", input.signupUrl.trim()].join("\n");
 }
 
-function messageHtml(message: string) {
+function messageRows(message: string) {
   return message
     .split(/\n{2,}/)
     .map((block) => block.trim())
     .filter(Boolean)
     .map(
-      (block) =>
-        `<p style="margin:0 0 16px;font-family:${INVITE_FONT};font-size:16px;line-height:26px;color:#111827;">${escapeHtml(block).replaceAll("\n", "<br>")}</p>`,
+      (block) => `<tr>
+              <td class="px" style="padding:16px 40px 0;font-family:${INVITE_FONT};font-size:16px;line-height:24px;color:#1a1a1a;">${escapeHtml(block).replaceAll("\n", "<br>")}</td>
+            </tr>`,
     )
     .join("");
 }
@@ -92,16 +93,21 @@ export function inviteEmailHtml(input: InviteEmailInput) {
   const logo = inviteEmailLogoUrl(input.logoUrl);
   const year = new Date().getFullYear();
   const logoBlock = logo
-    ? `<img src="${escapeHtml(logo)}" width="140" alt="${company}" style="display:block;width:140px;max-width:140px;height:auto;border:0;outline:none;text-decoration:none;">`
-    : `<div style="font-family:${INVITE_FONT};font-size:20px;line-height:26px;font-weight:700;color:#111827;">${company}</div>`;
+    ? `<img src="${escapeHtml(logo)}" width="132" alt="${company}" style="display:block;width:132px;max-width:132px;height:auto;border:0;outline:none;text-decoration:none;">`
+    : `<div style="font-family:${INVITE_FONT};font-size:13px;line-height:16px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:#111111;">${company}</div>`;
   const buttonBlock = button
     ? `<tr>
-              <td style="padding:8px 0 22px;">
-                <a href="${url}" style="display:inline-block;background:#111111;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-family:${INVITE_FONT};font-size:15px;line-height:20px;font-weight:600;">${button}</a>
+              <td class="px" style="padding:22px 40px 0;" align="left">
+                <a href="${url}" style="display:inline-block;background:#111111;border:1px solid #111111;border-radius:8px;color:#ffffff;font-family:${INVITE_FONT};font-size:14px;font-weight:600;line-height:20px;padding:9px 16px;text-align:center;text-decoration:none;">${button}</a>
               </td>
             </tr>`
     : "";
-  const preheader = escapeHtml(copy.message.split(/\n{2,}/).map((block) => block.trim()).find(Boolean) || copy.headline);
+  const preheader = escapeHtml(
+    copy.message
+      .split(/\n{2,}/)
+      .map((block) => block.trim())
+      .find(Boolean) || copy.headline,
+  );
   return `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -110,30 +116,41 @@ export function inviteEmailHtml(input: InviteEmailInput) {
     <meta name="color-scheme" content="light" />
     <meta name="supported-color-schemes" content="light" />
     <title>${subject}</title>
+    <style>
+      @media only screen and (max-width: 620px) {
+        .shell { width: 100% !important; }
+        .px { padding-left: 24px !important; padding-right: 24px !important; }
+      }
+    </style>
   </head>
-  <body style="margin:0;padding:0;background:#ffffff;font-family:${INVITE_FONT};color:#111827;">
+  <body style="margin:0;padding:0;background:#ffffff;color:#1a1a1a;-webkit-font-smoothing:antialiased;">
     <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;font-size:1px;line-height:1px;color:#ffffff;">${preheader}</div>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#ffffff;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#ffffff;border-collapse:collapse;">
       <tr>
-        <td align="left" style="padding:40px 24px 48px;">
-          <table role="presentation" width="560" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:560px;">
+        <td align="center" style="padding:48px 16px 64px;">
+          <table role="presentation" class="shell" width="600" cellspacing="0" cellpadding="0" border="0" style="width:600px;max-width:600px;border-collapse:collapse;">
             <tr>
-              <td style="padding:0 0 32px;" align="left">${logoBlock}</td>
+              <td class="px" style="padding:0 40px;" align="left">${logoBlock}</td>
             </tr>
             <tr>
-              <td style="padding:0 0 16px;font-family:${INVITE_FONT};font-size:24px;line-height:32px;font-weight:700;letter-spacing:-0.02em;color:#1e293b;">${headline}</td>
+              <td class="px" style="padding:36px 40px 0;font-family:${INVITE_FONT};font-size:22px;line-height:28px;font-weight:700;letter-spacing:-0.02em;color:#111111;">${headline}</td>
             </tr>
-            <tr>
-              <td style="padding:0;">${messageHtml(copy.message)}</td>
-            </tr>
+            ${messageRows(copy.message)}
             ${buttonBlock}
             <tr>
-              <td style="padding:0 0 8px;font-family:${INVITE_FONT};font-size:16px;line-height:26px;color:#111827;">If you're having trouble with the above button, <a href="${url}" style="color:#111827;text-decoration:underline;">click here</a>.</td>
+              <td class="px" style="padding:20px 40px 0;font-family:${INVITE_FONT};font-size:16px;line-height:24px;color:#1a1a1a;">If you're having trouble with the above button, <a href="${url}" style="color:#1a1a1a;text-decoration:underline;">click here</a>.</td>
             </tr>
             <tr>
-              <td style="padding:36px 0 0;">
-                <div style="border-top:1px dotted #d4d4d8;padding-top:18px;font-family:${INVITE_FONT};font-size:14px;line-height:20px;color:#6b7280;">© ${year} ${company}</div>
+              <td class="px" style="padding:48px 40px 0;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;">
+                  <tr>
+                    <td style="border-top:1px dotted #d0d0d6;font-size:0;line-height:0;mso-line-height-rule:exactly;">&nbsp;</td>
+                  </tr>
+                </table>
               </td>
+            </tr>
+            <tr>
+              <td class="px" style="padding:16px 40px 0;font-family:${INVITE_FONT};font-size:14px;line-height:20px;color:#8d8d97;">© ${year} ${company}</td>
             </tr>
           </table>
         </td>
