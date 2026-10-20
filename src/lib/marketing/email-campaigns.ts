@@ -4,13 +4,14 @@ import { looksLikeEmail } from "@/lib/share-text";
 import type { Contact, Job, StaffMember } from "@/lib/types";
 
 export const EMAIL_CAMPAIGN_AUDIENCES = ["realtors", "clients", "past_clients", "storm"] as const;
-export type EmailCampaignAudience = (typeof EMAIL_CAMPAIGN_AUDIENCES)[number];
+export type EmailCampaignAudience = (typeof EMAIL_CAMPAIGN_AUDIENCES)[number] | "list";
 
 export const EMAIL_CAMPAIGN_AUDIENCE_LABELS: Record<EmailCampaignAudience, string> = {
   realtors: "Realtors",
   clients: "Current clients",
   past_clients: "Past clients",
   storm: "Storm / ZIP",
+  list: "List",
 };
 
 export const EMAIL_CAMPAIGN_SEND_CAP = 200;
@@ -54,10 +55,11 @@ export type EmailCampaignRecord = {
   skippedCount: number;
   createdAt: string;
   sentAt: string | null;
+  audienceListId: string;
 };
 
 export function isEmailCampaignAudience(value: string): value is EmailCampaignAudience {
-  return (EMAIL_CAMPAIGN_AUDIENCES as readonly string[]).includes(value);
+  return value === "list" || (EMAIL_CAMPAIGN_AUDIENCES as readonly string[]).includes(value);
 }
 
 export function normalizeCampaignEmail(value: string) {
@@ -121,6 +123,8 @@ export function resolveEmailCampaignAudience(
   const byEmail = new Map<string, EmailCampaignRecipient>();
   const book = liveJobs(jobs);
 
+  if (kind === "list") return [];
+
   if (kind === "realtors") {
     for (const contact of contacts) {
       if (contact.isReferralPartner) pushRecipient(byEmail, contact);
@@ -141,6 +145,16 @@ export function resolveEmailCampaignAudience(
     for (const contact of contactsOnJob(job, contacts, true)) {
       pushRecipient(byEmail, contact, job);
     }
+  }
+  return [...byEmail.values()];
+}
+
+export function resolveListAudience(contactIds: string[], contacts: Contact[]): EmailCampaignRecipient[] {
+  const wanted = new Set(contactIds);
+  const byEmail = new Map<string, EmailCampaignRecipient>();
+  for (const contact of contacts) {
+    if (!wanted.has(contact.id)) continue;
+    pushRecipient(byEmail, contact);
   }
   return [...byEmail.values()];
 }
@@ -352,6 +366,12 @@ export function defaultEmailCampaignCopy(kind: EmailCampaignAudience): { subject
       body: "Hi {{first}},\n\nIt has been a while since we were at {{job.address}}. If a leak, insurance question, or a neighbor needs a name, I am still your person.\n\n{{staff.card}}\n\n{{staff.name}}\n{{staff.phone}}",
     };
   }
+  if (kind === "list") {
+    return {
+      subject: "Good to meet you — {{company}}",
+      body: "Hi {{first}},\n\nGood to meet you. I wanted you to have a direct line for the next inspection, claim, or listing.\n\n{{staff.name}}\n{{staff.phone}}",
+    };
+  }
   return {
     subject: "Storm check-in from {{company}}",
     body: "Hi {{first}},\n\nWe are checking roofs in {{job.city}} after the storm. If {{job.address}} took hail or wind, reply here and I will come look — no pressure.\n\n{{staff.card}}\n\n{{staff.name}}\n{{staff.phone}}",
@@ -374,6 +394,7 @@ export function mapEmailCampaignRow(row: {
   skipped_count: number;
   created_at: string;
   sent_at: string | null;
+  audience_list_id?: string | null;
 }): EmailCampaignRecord {
   return {
     id: row.id,
@@ -391,5 +412,6 @@ export function mapEmailCampaignRow(row: {
     skippedCount: row.skipped_count,
     createdAt: row.created_at,
     sentAt: row.sent_at,
+    audienceListId: row.audience_list_id || "",
   };
 }

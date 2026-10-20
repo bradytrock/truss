@@ -2786,6 +2786,44 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["portal_referrals"]["Insert"]>;
         Relationships: [];
       };
+      marketing_lists: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          role: string;
+          created_by_staff_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          role?: string;
+          created_by_staff_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["marketing_lists"]["Insert"]>;
+        Relationships: [];
+      };
+      marketing_list_members: {
+        Row: {
+          list_id: string;
+          company_id: string;
+          contact_id: string;
+          created_at: string;
+        };
+        Insert: {
+          list_id: string;
+          company_id: string;
+          contact_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["marketing_list_members"]["Insert"]>;
+        Relationships: [];
+      };
       marketing_materials: {
         Row: {
           id: string;
@@ -2930,6 +2968,7 @@ export type Database = {
           company_id: string;
           name: string;
           audience_kind: string;
+          audience_list_id: string | null;
           audience_city: string;
           audience_zip: string;
           include_punch: boolean;
@@ -2949,6 +2988,7 @@ export type Database = {
           company_id: string;
           name?: string;
           audience_kind: string;
+          audience_list_id?: string | null;
           audience_city?: string;
           audience_zip?: string;
           include_punch?: boolean;
