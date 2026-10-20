@@ -282,6 +282,9 @@ export function filterMessageThreads(threads: MessageThread[], query: string) {
     if (asText(thread?.preview).toLowerCase().includes(needle)) return true;
     if (asText(thread?.job?.name).toLowerCase().includes(needle)) return true;
     if (asText(thread?.job?.code).toLowerCase().includes(needle)) return true;
+    if (asText(thread?.job?.street).toLowerCase().includes(needle)) return true;
+    if (asText(thread?.opportunity?.street).toLowerCase().includes(needle)) return true;
+    if (thread.messages.some((message) => asText(message?.body).toLowerCase().includes(needle))) return true;
     if (digits.length >= 3 && phoneKey(thread.phone).includes(digits)) return true;
     return false;
   });
