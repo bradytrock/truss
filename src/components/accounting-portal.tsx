@@ -41,7 +41,7 @@ import {
 import { paymentMethodLabel } from "@/lib/payment-posting";
 import { formatCurrency, formatCurrencyFull, formatDate, localYmd } from "@/lib/format";
 import { jobAddress } from "@/lib/job-record";
-import { qbQueue, type JobBooksBasis } from "@/lib/job-financials";
+import type { JobBooksBasis } from "@/lib/job-financials";
 import { buildProfitAndLoss, formatPnlPeriod, yearToDateBounds } from "@/lib/profit-and-loss";
 import { canViewAccounting } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
@@ -73,16 +73,26 @@ export function AccountingPortal() {
   const [payMethod, setPayMethod] = useState("check");
   const ytd = useMemo(() => yearToDateBounds(), []);
 
-  const queue = useMemo(
-    () =>
-      qbQueue({
-        invoices: crm.invoices,
-        invoiceLines: crm.invoiceLines,
-        payments: crm.payments,
-        expenses: crm.expenses,
-      }),
-    [crm.expenses, crm.invoiceLines, crm.invoices, crm.payments],
-  );
+  const connectorQueue = useMemo(() => {
+    const invoices = crm.invoices.filter((invoice) => {
+      if (invoice.archivedAt || invoice.qbStatus === "entered" || invoice.status === "void") return false;
+      const job = invoice.jobId ? crm.getJob(invoice.jobId) : undefined;
+      const lines = crm.invoiceLines.filter((line) => line.invoiceId === invoice.id);
+      const blocked = invoiceBlockedReason({ invoice, job, lines });
+      return invoice.qbStatus === "queued" || invoice.qbStatus === "error" || invoice.qbStatus === "returned" || Boolean(blocked);
+    }).length;
+    const expenses = crm.expenses.filter((expense) => {
+      if (expense.qbStatus === "entered") return false;
+      const job = expense.jobId ? crm.getJob(expense.jobId) : undefined;
+      const blocked = expenseBlockedReason({ expense, job });
+      return expense.qbStatus === "queued" || expense.qbStatus === "error" || expense.qbStatus === "returned" || Boolean(blocked);
+    }).length;
+    const payments = crm.payments.filter((payment) => {
+      if (payment.qbStatus === "entered") return false;
+      return payment.qbStatus === "queued" || payment.qbStatus === "error" || payment.qbStatus === "returned";
+    }).length;
+    return { invoices, expenses, payments };
+  }, [crm]);
   const aging = useMemo(
     () => arAging({ invoices: crm.invoices, invoiceLines: crm.invoiceLines, payments: crm.payments }),
     [crm.invoiceLines, crm.invoices, crm.payments],
@@ -500,10 +510,10 @@ export function AccountingPortal() {
 
             <div className="space-y-4">
               <QbDeskCard
-                queueCount={queue.invoiceCount + queue.expenseCount + queue.paymentCount}
-                invoices={queue.invoiceCount}
-                expenses={queue.expenseCount}
-                payments={queue.paymentCount}
+                queueCount={connectorQueue.invoices + connectorQueue.expenses + connectorQueue.payments}
+                invoices={connectorQueue.invoices}
+                expenses={connectorQueue.expenses}
+                payments={connectorQueue.payments}
                 onViewQueue={() => setTab("sync")}
                 onSync={() => setTab("sync")}
               />
