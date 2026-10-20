@@ -70,7 +70,9 @@ const freshHtml = text(card(fresh));
 assert.match(freshHtml, /New lead/);
 assert.match(freshHtml, /Dana Alvarez/);
 assert.match(freshHtml, /100 Main · Plano/);
-assert.match(freshHtml, /Roofing · Website/);
+assert.match(freshHtml, /Roofing/);
+assert.match(freshHtml, /Website/);
+assert.match(freshHtml, /More actions/);
 assert.match(freshHtml, /href="\/jobs\?job=job-1"/);
 assert.match(freshHtml, /href="tel:\+12145550100"/);
 assert.match(freshHtml, />\(214\) 555-0100</);
@@ -228,14 +230,18 @@ const bookModal = text(renderToStaticMarkup(
   <BookAppointmentPanel alert={fresh} onClose={noop} onSubmit={async () => {}} />,
 ));
 assert.match(bookModal, /Book appointment/);
-assert.match(bookModal, /This goes on your calendar for this lead/);
 assert.match(bookModal, /Site walk · Dana Alvarez/);
-assert.match(bookModal, /100 Main, Plano/);
+assert.match(bookModal, /100 Main · Plano/);
+assert.match(bookModal, /Lead address/);
 assert.match(bookModal, /Site walk/);
 assert.match(bookModal, /Meeting/);
 assert.match(bookModal, /Inspection/);
-assert.match(bookModal, />Book</);
+assert.match(bookModal, /Pre-bid/);
+assert.match(bookModal, />1h</);
+assert.match(bookModal, /No email on file/);
+assert.match(bookModal, /Book site walk/);
 assert.match(bookModal, /Dana Alvarez/);
+assert.doesNotMatch(bookModal, /No conflicts on your calendar/);
 
 const updateModal = text(renderToStaticMarkup(
   <UpdateLeadPanel

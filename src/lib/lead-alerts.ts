@@ -45,6 +45,10 @@ export type BookAppointmentInput = {
   endTime: string;
   location: string;
   notes: string;
+  /** Set when the rep chooses to email the homeowner a calendar invite. */
+  notifyEmail?: string;
+  /** Calendar owner. The host falls back to the signed-in rep when this is blank. */
+  assignee?: string;
 };
 
 export type UpdateLeadInput = {
@@ -397,6 +401,130 @@ export function appointmentInstants(input: Pick<BookAppointmentInput, "date" | "
     startsAt: new Date(`${input.date}T${input.startTime}:00`).toISOString(),
     endsAt: new Date(`${input.date}T${input.endTime}:00`).toISOString(),
   };
+}
+
+export const APPOINTMENT_DURATION_MINUTES = [30, 60, 90, 120] as const;
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
+
+/** 7:00 AM through 7:00 PM, every half hour. */
+export const APPOINTMENT_START_TIMES = Array.from({ length: 25 }, (_, index) => {
+  const total = 7 * 60 + index * 30;
+  return minutesToClock(total);
+});
+
+export function clockMinutes(value: string) {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}
+
+function minutesToClock(total: number) {
+  const clamped = Math.max(0, Math.min(total, 23 * 60 + 59));
+  const hours = Math.floor(clamped / 60);
+  const minutes = clamped % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+export function formatClock(hhmm: string) {
+  const total = clockMinutes(hhmm);
+  if (total == null) return hhmm;
+  const hours24 = Math.floor(total / 60);
+  const minutes = total % 60;
+  const suffix = hours24 >= 12 ? "PM" : "AM";
+  const hours12 = hours24 % 12 || 12;
+  return `${hours12}:${String(minutes).padStart(2, "0")} ${suffix}`;
+}
+
+export function formatClockFromDate(date: Date) {
+  return formatClock(minutesToClock(date.getHours() * 60 + date.getMinutes()));
+}
+
+export function minutesBetween(startTime: string, endTime: string) {
+  const start = clockMinutes(startTime);
+  const end = clockMinutes(endTime);
+  if (start == null || end == null || end <= start) return 0;
+  return end - start;
+}
+
+export function endTimeFromDuration(startTime: string, durationMinutes: number) {
+  const start = clockMinutes(startTime);
+  if (start == null) return "";
+  return minutesToClock(start + durationMinutes);
+}
+
+export function durationLabel(minutes: number) {
+  if (minutes === 30) return "30m";
+  if (minutes === 60) return "1h";
+  if (minutes === 90) return "1.5h";
+  if (minutes === 120) return "2h";
+  if (minutes > 0 && minutes < 60) return `${minutes}m`;
+  if (minutes > 0 && minutes % 60 === 0) return `${minutes / 60}h`;
+  return "";
+}
+
+export function appointmentDateLabel(ymd: string) {
+  const [year, month, day] = ymd.split("-").map(Number);
+  if (!year || !month || !day) return ymd;
+  const date = new Date(year, month - 1, day);
+  return `${WEEKDAYS[date.getDay()]}, ${MONTHS[month - 1]} ${day}`;
+}
+
+export function appointmentDayChoices(now = new Date(), count = 21) {
+  const today = localYmd(now);
+  const tomorrowDate = new Date(now);
+  tomorrowDate.setDate(now.getDate() + 1);
+  const tomorrow = localYmd(tomorrowDate);
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(now);
+    date.setDate(now.getDate() + index);
+    const value = localYmd(date);
+    const label = value === today ? "Today" : value === tomorrow ? "Tomorrow" : appointmentDateLabel(value);
+    return { value, label };
+  });
+}
+
+export function appointmentWhenLabel(date: string, startTime: string, endTime: string) {
+  if (!date || !startTime || !endTime) return "";
+  return `${appointmentDateLabel(date)} · ${formatClock(startTime)} – ${formatClock(endTime)}`;
+}
+
+export type CalendarConflictEvent = {
+  title: string;
+  assignee: string;
+  startsAt: string;
+  endsAt: string;
+};
+
+export function appointmentConflicts(
+  events: CalendarConflictEvent[],
+  input: { date: string; startTime: string; endTime: string; assignee: string },
+) {
+  const starts = new Date(`${input.date}T${input.startTime}:00`).getTime();
+  const ends = new Date(`${input.date}T${input.endTime}:00`).getTime();
+  const who = input.assignee.trim().toLowerCase();
+  if (!who || !Number.isFinite(starts) || !Number.isFinite(ends) || ends <= starts) return [];
+  return events.filter((event) => {
+    if (event.assignee.trim().toLowerCase() !== who) return false;
+    const eventStart = Date.parse(event.startsAt);
+    const eventEnd = Date.parse(event.endsAt);
+    if (!Number.isFinite(eventStart) || !Number.isFinite(eventEnd)) return false;
+    return eventStart < ends && eventEnd > starts;
+  });
+}
+
+export function conflictSummary(events: CalendarConflictEvent[]) {
+  const first = events[0];
+  if (!first) return "";
+  const start = formatClockFromDate(new Date(first.startsAt));
+  const end = formatClockFromDate(new Date(first.endsAt));
+  const title = first.title.trim() || "Another appointment";
+  const extra = events.length > 1 ? ` +${events.length - 1} more` : "";
+  return `Overlaps ${title}, ${start} – ${end}${extra}.`;
 }
 
 export function leadEditSeed(
