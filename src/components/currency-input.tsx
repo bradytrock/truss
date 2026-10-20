@@ -37,9 +37,15 @@ export function CurrencyInput({
   const stored = moneyDraftFromValue(value);
   const [focused, setFocused] = useState(false);
   const [draft, setDraft] = useState(stored);
+  const [holding, setHolding] = useState(false);
+  const [tracked, setTracked] = useState(stored);
+  if (stored !== tracked) {
+    setTracked(stored);
+    setHolding(false);
+  }
   const caretRef = useRef<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const editing = focused ? draft : stored;
+  const editing = focused || holding ? draft : stored;
   const display = focused ? formatMoneyDraft(editing) : editing ? formatMoneyField(editing) : "";
 
   useLayoutEffect(() => {
@@ -62,6 +68,7 @@ export function CurrencyInput({
       className={cn("tabular-nums", className)}
       value={display}
       onFocus={(event) => {
+        setHolding(false);
         setDraft(completeMoneyDraft(stored) || stored);
         setFocused(true);
         onFocus?.(event);
@@ -77,6 +84,7 @@ export function CurrencyInput({
       }}
       onBlur={(event) => {
         const next = completeMoneyDraft(draft);
+        setHolding(next !== stored);
         setFocused(false);
         setDraft(next);
         if (next !== stored) {

@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { isPendingPayment } from "@/lib/payment-posting";
+import { preferRows } from "@/lib/supabase/book-merge";
 import {
   applyDeferredBook,
   fetchCompanyBook,
@@ -21,7 +22,8 @@ import {
   loadCompanyBook,
   TEXTS_UNAVAILABLE,
 } from "@/lib/supabase/load-book";
-import { changedRowId, liveRefreshDecision } from "@/lib/supabase/local-writes";
+import { applyLiveChanges, liveCompanyRecord, type LiveChange } from "@/lib/supabase/live-book";
+import { protectLocalRows, protectedRowIds, unprotectLocalRows } from "@/lib/supabase/local-writes";
 import {
   asAuditState,
   canRevertCompanyAudit,
@@ -1542,6 +1544,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const bookEpoch = useRef(0);
   const bookRef = useRef(state);
   bookRef.current = state;
+  const paintLocal = useCallback((ids: readonly string[], apply: () => void) => {
+    const rowIds = [...new Set(ids.filter((id) => id.length > 0))];
+    const snapshot = bookRef.current;
+    protectLocalRows(rowIds);
+    apply();
+    return () => {
+      unprotectLocalRows(rowIds);
+      setState((current) => preferRows(current, snapshot, rowIds));
+    };
+  }, []);
   const guestInviteColumnWarned = useRef(false);
   const enqueueAutomationEventRef = useRef<(event: AutomationEvent) => void>(() => undefined);
   const syncMaterialOrderDeliveryRef = useRef<(order: MaterialOrder) => void>(() => undefined);
@@ -1963,9 +1975,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         );
       }
       setState((current) => {
-        const next = uiBook(book.state);
-        if (book.messagesError) next.messages = current.messages;
-        return next;
+        const next = preferRows(uiBook(book.state), current, protectedRowIds());
+        if (!book.messagesError) return next;
+        return { ...next, messages: current.messages };
       });
       setMessagesError(
         book.messagesError && bookRef.current.messages.length === 0 ? TEXTS_UNAVAILABLE : null,
@@ -1982,30 +1994,26 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return;
     }
     const supabase = createClient();
-    let timer: number | undefined;
+    const companyId = user.companyId;
     let cancelled = false;
-    const pendingIds: string[] = [];
+    let frame = 0;
+    const queued: LiveChange[] = [];
     setLiveStatus("connecting");
 
-    const drain = (grace: number) => {
-      if (cancelled) return;
-      const decision = liveRefreshDecision(pendingIds, grace);
-      if (decision === "skip") {
-        pendingIds.length = 0;
-        return;
+    const flush = () => {
+      frame = 0;
+      if (cancelled || queued.length === 0) return;
+      const batch = queued.splice(0, queued.length);
+      setState((current) => applyLiveChanges(current, batch, companyId));
+      for (const change of batch) {
+        const row = liveCompanyRecord(change, companyId);
+        if (!row) continue;
+        const settings = mapCompany(row as Parameters<typeof mapCompany>[0]);
+        setCompanySettings(settings);
+        setUser((current) =>
+          current.companyId === companyId ? { ...current, company: settings.name } : current,
+        );
       }
-      if (decision === "wait") {
-        timer = window.setTimeout(() => drain(grace + 1), 700);
-        return;
-      }
-      pendingIds.length = 0;
-      void liveRefresh();
-    };
-
-    const kick = (payload: { new?: unknown; old?: unknown }) => {
-      pendingIds.push(changedRowId(payload));
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => drain(0), 350);
     };
 
     if (railwayDatabaseEnabled()) {
@@ -2033,8 +2041,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
 
     const channel = supabase
-      .channel(`truss-live-${user.companyId}`)
-      .on("postgres_changes", { event: "*", schema: "public" }, kick)
+      .channel(`truss-live-${companyId}`)
+      .on("postgres_changes", { event: "*", schema: "public" }, (payload) => {
+        queued.push({
+          eventType: payload.eventType,
+          table: payload.table,
+          new: payload.new,
+          old: payload.old,
+        });
+        if (!frame) frame = window.requestAnimationFrame(flush);
+      })
       .subscribe((status) => {
         if (cancelled) return;
         if (status === "SUBSCRIBED") {
@@ -2049,9 +2065,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
 
     const onVisible = () => {
-      if (document.visibilityState === "visible") void liveRefresh();
+      if (document.visibilityState !== "visible") return;
+      if (protectedRowIds().length > 0) return;
+      void liveRefresh();
     };
     const onOnline = () => {
+      if (protectedRowIds().length > 0) return;
       void liveRefresh();
     };
     document.addEventListener("visibilitychange", onVisible);
@@ -2060,7 +2079,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
 
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
+      if (frame) window.cancelAnimationFrame(frame);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
       window.removeEventListener("online", onOnline);
@@ -3287,9 +3306,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
                 )
               : prev.jobs,
         }));
+      const revert = paintLocal([id, linked?.id ?? ""], apply);
       const supabase = requireClient();
       if (!supabase) {
-        apply();
         if (
           linked &&
           jobUpdates.projectManager !== undefined &&
@@ -3322,6 +3341,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           toast.message(missingMarketMessage());
           return true;
         }
+        revert();
         toast.error(error.message);
         return false;
       }
@@ -3367,6 +3387,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ...prev,
         jobs: prev.jobs.map((job) => (job.id === id ? fillJobRecord({ ...job, ...patch }) : job)),
       }));
+    const revert = paintLocal([id], apply);
     const finish = async (ok: boolean) => {
       if (ok && before && patch.projectManager !== undefined && isJobReassigned(before.projectManager, patch.projectManager)) {
         fileJobCodeReviewRef.current(
@@ -3391,7 +3412,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     };
     const supabase = requireClient();
     if (!supabase) {
-      apply();
       return finish(true);
     }
     let { error } = await supabase.from("jobs").update(jobPatch(patch)).eq("id", id);
@@ -3439,6 +3459,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.message(missingJobOverviewMessage());
         return finish(true);
       }
+      revert();
       toast.error(error.message);
       return false;
     }
@@ -4101,13 +4122,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
         return ok;
       };
+      const revert = paintLocal([id], apply);
       const supabase = requireClient();
-      if (!supabase) {
-        apply();
-        return finish(true);
-      }
+      if (!supabase) return finish(true);
       const { error } = await supabase.from("contacts").update(contactPatch(nextPatch)).eq("id", id);
       if (error) {
+        revert();
         toast.error(
           isRequiredClientId(error) ? requiredClientIdMessage() : error.message || "Could not save the contact."
         );
@@ -4253,14 +4273,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     const current = state.tasks.find((task) => task.id === id);
     if (!current) return;
     const after = { ...current, completed: !current.completed };
-    const supabase = requireClient();
-    if (!supabase) {
+    const apply = () =>
       setState((prev) => ({
         ...prev,
-        tasks: prev.tasks.map((task) =>
-          task.id === id ? after : task
-        ),
+        tasks: prev.tasks.map((task) => (task.id === id ? after : task)),
       }));
+    const revert = paintLocal([id], apply);
+    const supabase = requireClient();
+    if (!supabase) {
       void recordCompanyAudit({
         entityType: "task",
         entityId: id,
@@ -4274,15 +4294,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     const { error } = await supabase.from("tasks").update({ completed: !current.completed }).eq("id", id);
     if (error) {
+      revert();
       toast.error(error.message);
       return;
     }
-    setState((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((task) =>
-        task.id === id ? after : task
-      ),
-    }));
     void recordCompanyAudit({
       entityType: "task",
       entityId: id,
@@ -4427,12 +4442,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         notes: patch.notes !== undefined ? patch.notes : current.notes,
         remindedAt: patch.dueAt !== undefined && patch.dueAt !== current.dueAt ? null : (patch.remindedAt ?? current.remindedAt),
       };
-      const supabase = requireClient();
-      if (!supabase) {
+      const apply = () =>
         setState((prev) => ({
           ...prev,
           tasks: prev.tasks.map((task) => (task.id === id ? after : task)),
         }));
+      const revert = paintLocal([id], apply);
+      const supabase = requireClient();
+      if (!supabase) {
         void recordCompanyAudit({
           entityType: "task",
           entityId: id,
@@ -4452,13 +4469,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ({ error } = await supabase.from("tasks").update(nextPatch).eq("id", id));
       }
       if (error) {
+        revert();
         toast.error(error.message);
         return;
       }
-      setState((prev) => ({
-        ...prev,
-        tasks: prev.tasks.map((task) => (task.id === id ? after : task)),
-      }));
       void recordCompanyAudit({
         entityType: "task",
         entityId: id,
@@ -5419,6 +5433,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         bookRef.current = next;
         return next;
       });
+    const revert = paintLocal([id], apply);
     const finish = async () => {
       if (!options?.skipAudit && current) {
         const action = patch.status !== undefined && patch.status !== current.status ? "status_changed" : "updated";
@@ -5437,13 +5452,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     };
     const supabase = maybeClient();
     if (!supabase) {
-      apply();
       await finish();
       return;
     }
     const { error } = await supabase.from("estimates").update(estimatePatch(patch)).eq("id", id);
     if (error) {
       if (isRestrictedEstimatePackage(error)) {
+        revert();
         toast.error(restrictedEstimatePackageMessage());
         return;
       }
@@ -5495,6 +5510,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         await finish();
         return;
       }
+      revert();
       toast.error(error.message);
       return;
     }
@@ -6329,11 +6345,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           template.id === id ? fillEstimateTemplate({ ...template, ...next }) : template,
         ),
       }));
+    const revert = paintLocal([id], apply);
     const supabase = maybeClient();
-    if (!supabase) {
-      apply();
-      return;
-    }
+    if (!supabase) return;
     const { error } = await supabase.from("estimate_templates").update(estimateTemplatePatch(next)).eq("id", id);
     if (error) {
       if (isMissingEstimateTemplatePackages(error)) {
@@ -6346,6 +6360,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.message(missingEstimateTemplatesMessage());
         return;
       }
+      revert();
       toast.error(error.message);
       return;
     }
@@ -6624,11 +6639,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           ? { ...touchTemplate(templateId)(prev), estimateTemplateLines: lines }
           : { ...prev, estimateTemplateLines: lines };
       });
+    const revert = paintLocal([id], apply);
     const supabase = maybeClient();
-    if (!supabase) {
-      apply();
-      return;
-    }
+    if (!supabase) return;
     const { error } = await supabase.from("estimate_template_lines").update(estimateTemplateLinePatch(patch)).eq("id", id);
     if (error) {
       if (isMissingEstimateTemplatePackages(error)) {
@@ -6641,6 +6654,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.message(missingEstimateTemplatesMessage());
         return;
       }
+      revert();
       toast.error(error.message);
       return;
     }
@@ -6773,11 +6787,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ...prev,
         catalog: prev.catalog.map((item) => (item.id === id ? { ...item, ...next } : item)),
       }));
+    const revert = paintLocal([id], apply);
     const supabase = maybeClient();
-    if (!supabase) {
-      apply();
-      return;
-    }
+    if (!supabase) return;
     const { error } = await supabase.from("catalog_items").update(catalogPatch(next)).eq("id", id);
     if (error && isMissingCatalogDescription(error)) {
       const { description: _description, ...rest } = catalogPatch(next);
@@ -6787,6 +6799,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         apply();
         return;
       }
+      revert();
       toast.error(retry.error.message);
       return;
     }
@@ -6798,10 +6811,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         apply();
         return;
       }
+      revert();
       toast.error(retry.error.message);
       return;
     }
     if (error) {
+      revert();
       toast.error(error.message);
       return;
     }
@@ -7409,11 +7424,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           line.id === id ? fillEstimateLine({ ...line, ...patch }) : line
         ),
       }));
+    const revert = paintLocal([id], apply);
     const supabase = maybeClient();
-    if (!supabase) {
-      apply();
-      return;
-    }
+    if (!supabase) return;
     const { error } = await supabase.from("estimate_lines").update(estimateLinePatch(patch)).eq("id", id);
     if (error) {
       if (isMissingEstimatePackages(error)) {
@@ -7431,6 +7444,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.message(missingEstimateWriterMessage());
         return;
       }
+      revert();
       toast.error(error.message);
       return;
     }
@@ -7443,13 +7457,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ...prev,
         estimateLines: prev.estimateLines.filter((line) => line.id !== id),
       }));
+    const revert = paintLocal([id], apply);
     const supabase = maybeClient();
-    if (!supabase) {
-      apply();
-      return;
-    }
+    if (!supabase) return;
     const { error } = await supabase.from("estimate_lines").delete().eq("id", id);
     if (error) {
+      revert();
       toast.error(error.message);
       return;
     }
@@ -7701,9 +7714,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         });
       }
     };
+    const revert = paintLocal([id], apply);
     const supabase = maybeClient();
     if (!supabase) {
-      apply();
       await finish();
       return;
     }
@@ -7721,6 +7734,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         await finish();
         return;
       }
+      revert();
       toast.error(error.message);
       return;
     }
@@ -9087,9 +9101,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           order.id === id ? fillMaterialOrder({ ...order, ...patch }) : order,
         ),
       }));
+    const revert = paintLocal([id], apply);
     const supabase = maybeClient();
     if (!supabase) {
-      apply();
       if (next) syncMaterialOrderDeliveryRef.current(next);
       return true;
     }
@@ -9106,6 +9120,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         apply();
         return true;
       }
+      revert();
       toast.error(error.message);
       return false;
     }
@@ -9236,11 +9251,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           line.id === id ? fillMaterialOrderLine({ ...line, ...patch }) : line,
         ),
       }));
+    const revert = paintLocal([id], apply);
     const supabase = maybeClient();
-    if (!supabase) {
-      apply();
-      return;
-    }
+    if (!supabase) return;
     const { error } = await supabase.from("material_order_lines").update(materialOrderLinePatch(patch)).eq("id", id);
     if (error) {
       if (isMissingMaterialOrders(error)) {
@@ -9248,6 +9261,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         apply();
         return;
       }
+      revert();
       toast.error(error.message);
       return;
     }
@@ -9718,11 +9732,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ...prev,
         expenses: prev.expenses.map((item) => (item.id === id ? { ...item, ...patch } : item)),
       }));
+    const revert = paintLocal([id], apply);
     const supabase = maybeClient();
-    if (!supabase) {
-      apply();
-      return true;
-    }
+    if (!supabase) return true;
     const { error } = await supabase.from("expenses").update(expensePatch(patch)).eq("id", id);
     if (error && isMissingFinancials(error)) {
       toast.message(missingFinancialsMessage());
@@ -9730,6 +9742,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return true;
     }
     if (error) {
+      revert();
       toast.error(error.message);
       return false;
     }
@@ -9743,11 +9756,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ...prev,
         payments: prev.payments.map((item) => (item.id === id ? { ...item, ...patch } : item)),
       }));
+    const revert = paintLocal([id], apply);
     const supabase = maybeClient();
-    if (!supabase) {
-      apply();
-      return true;
-    }
+    if (!supabase) return true;
     const { error } = await supabase.from("payments").update(paymentPatch(patch)).eq("id", id);
     if (error && isMissingFinancials(error)) {
       toast.message(missingFinancialsMessage());
@@ -9755,6 +9766,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return true;
     }
     if (error) {
+      revert();
       toast.error(error.message);
       return false;
     }
@@ -9809,13 +9821,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ...prev,
         invoiceLines: prev.invoiceLines.map((item) => (item.id === id ? { ...item, ...patch } : item)),
       }));
+    const revert = paintLocal([id], apply);
     const supabase = maybeClient();
-    if (!supabase) {
-      apply();
-      return true;
-    }
+    if (!supabase) return true;
     const { error } = await supabase.from("invoice_lines").update(invoiceLinePatch(patch)).eq("id", id);
     if (error) {
+      revert();
       toast.error(error.message);
       return false;
     }
@@ -10607,12 +10618,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         state.events.find((event) => event.id === id);
       if (!current) throw new Error("Event not found.");
       const next: ScheduleEvent = { ...current, ...patch, id };
-      const supabase = requireClient();
-      if (!supabase) {
+      const revert = paintLocal([id], () =>
         setState((prev) => ({
           ...prev,
           events: prev.events.map((event) => (event.id === id ? next : event)),
-        }));
+        })),
+      );
+      const supabase = requireClient();
+      if (!supabase) {
         void recordCompanyAudit({
           entityType: "schedule_event",
           entityId: id,
@@ -10645,6 +10658,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         error = retry.error;
       }
       if (error || !data) {
+        revert();
         toast.error(error?.message ?? "Could not update the event.");
         throw error ?? new Error("Could not update the event.");
       }
