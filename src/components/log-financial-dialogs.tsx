@@ -447,11 +447,13 @@ export function LogPaymentDialog({
   onOpenChange,
   defaultJobId,
   defaultInvoiceId,
+  defaultMethod,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultJobId?: string | null;
   defaultInvoiceId?: string | null;
+  defaultMethod?: string | null;
 }) {
   const crm = useCrm();
   const [file, setFile] = useState<File | undefined>();
@@ -480,7 +482,7 @@ export function LogPaymentDialog({
     setJobId(defaultJobId ?? "");
     setInvoiceId(defaultInvoiceId ?? "");
     setAmount("");
-    setMethod("check");
+    setMethod(defaultMethod || "check");
     setPaidAt(localYmd(new Date()));
     setReference("");
     void fetch("/api/receipts/extract", { cache: "no-store" })
@@ -489,7 +491,7 @@ export function LogPaymentDialog({
         setAiReady(Boolean(body.openai || body.anthropic));
       })
       .catch(() => setAiReady(null));
-  }, [open, defaultJobId, defaultInvoiceId]);
+  }, [open, defaultJobId, defaultInvoiceId, defaultMethod]);
 
   useEffect(() => {
     const invoice = crm.invoices.find((item) => item.id === invoiceId);
@@ -664,6 +666,7 @@ export function LogPaymentDialog({
                   { value: "ACH", label: "ACH" },
                   { value: "wire", label: "Wire" },
                   { value: "card", label: "Card" },
+                  { value: "insurance", label: "Insurance draw" },
                 ]}
               >
                 <SelectTrigger className="w-full">
@@ -674,6 +677,7 @@ export function LogPaymentDialog({
                   <SelectItem value="ACH">ACH</SelectItem>
                   <SelectItem value="wire">Wire</SelectItem>
                   <SelectItem value="card">Card</SelectItem>
+                  <SelectItem value="insurance">Insurance draw</SelectItem>
                 </SelectContent>
               </Select>
             </div>

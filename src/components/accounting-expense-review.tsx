@@ -1,37 +1,52 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, CircleAlert, CirclePause, FileText, Send } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, CircleAlert } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
+import { VendorPicker } from "@/components/vendor-picker";
+import { CurrencyInput } from "@/components/currency-input";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ExpenseFields } from "@/components/qb-review-fields";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { accCard, accRed, CountPill } from "@/components/accounting-chrome";
 import { useCrm } from "@/lib/crm-store";
 import {
-  INVOICE_REVIEW_FILTERS,
-  INVOICE_REVIEW_LABELS,
   crmExpenseActors,
   expenseBlockedReason,
   expenseLoggedByLabel,
-  expenseQbPreview,
+  expenseQbPayWith,
   expenseReviewStatus,
-  parseInvoiceReviewFilter,
   reviewableExpenses,
-  type InvoiceReviewFilter,
   type InvoiceReviewStatus,
 } from "@/lib/accounting-books";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatMoney } from "@/lib/format";
+import { moneyAmount } from "@/lib/money-input";
 import { isReceiptPdf } from "@/lib/qb-review";
+import { matchVendorName, vendorChoices } from "@/lib/qb-vendors";
+import { qbChartAccount } from "@/lib/qbwc/accounts";
 import { cn } from "@/lib/utils";
-import type { Expense } from "@/lib/types";
+import {
+  EXPENSE_ACCOUNTS,
+  EXPENSE_METHOD_LABELS,
+  EXPENSE_METHODS,
+  type Expense,
+  type ExpenseAccount,
+  type ExpenseMethod,
+  type Job,
+} from "@/lib/types";
 
-const STATUS_CLASS: Record<InvoiceReviewStatus, string> = {
-  ready: "bg-[#e3f1e6] text-[#2f7a45]",
-  needs_review: "bg-[#fbefd9] text-[#9a5b0c]",
-  held: "bg-[#ecebe8] text-[#55524d]",
-  queued: "bg-[#ececec] text-[#3a3a3a]",
+const STATUS_PILL: Record<InvoiceReviewStatus, string> = {
+  ready: "bg-[#e7f6ea] text-[#217a45]",
+  needs_review: "bg-[#f8ead3] text-[#9a6230]",
+  held: "bg-[#eceae6] text-[#5c5854]",
+  queued: "bg-[#eceae6] text-[#5c5854]",
 };
 
 export function AccountingExpenseReview({
@@ -42,27 +57,9 @@ export function AccountingExpenseReview({
   onSelect: (expenseId: string | null) => void;
 }) {
   const crm = useCrm();
-  const [filter, setFilter] = useState<InvoiceReviewFilter>("all");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pending, setPending] = useState(false);
-  const [accounts, setAccounts] = useState<{ bankAccount?: string; ccAccount?: string }>({});
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetch("/api/qbwc/setup")
-      .then((response) => response.json())
-      .then((data: { bankAccount?: string; ccAccount?: string }) => {
-        if (!cancelled) setAccounts({ bankAccount: data.bankAccount, ccAccount: data.ccAccount });
-      })
-      .catch(() => {
-        if (!cancelled) setAccounts({});
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const actors = useMemo(() => crmExpenseActors(crm), [crm]);
+
   const rows = useMemo(() => {
     return reviewableExpenses(crm.expenses).map((expense) => {
       const job = expense.jobId ? crm.getJob(expense.jobId) : undefined;
@@ -83,56 +80,44 @@ export function AccountingExpenseReview({
         status,
         customer,
         loggedBy: expenseLoggedByLabel(expense.createdBy, actors),
-        preview: expenseQbPreview(expense, job, customer, accounts),
+        dateDiffers: datesDiffer(expense.createdAt, expense.incurredAt),
       };
     });
-  }, [accounts, actors, crm]);
+  }, [actors, crm]);
 
-  const visible = rows.filter((row) =>
-    filter === "all" ? row.status !== "queued" : row.status === filter,
-  );
-  const pendingRows = rows.filter((row) => row.status !== "queued");
-  const open =
-    rows.find((row) => row.expense.id === selectedId) ??
-    visible[0] ??
-    rows[0] ??
-    null;
+  const visible = rows.filter((row) => row.status !== "queued");
+  const open = rows.find((row) => row.expense.id === selectedId) ?? visible[0] ?? rows[0] ?? null;
+  const groups = groupByJob(visible);
 
-  function toggle(id: string, on: boolean) {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (on) next.add(id);
-      else next.delete(id);
-      return next;
-    });
-  }
-
-  async function approve(ids: string[]) {
-    const ok: string[] = [];
-    const skip: string[] = [];
+  async function approve(id: string) {
+    const row = rows.find((item) => item.expense.id === id);
+    if (!row || row.status === "held" || row.status === "needs_review") {
+      toast.error(row?.blocked || "Fix this expense before it can go to QuickBooks.");
+      return false;
+    }
     setPending(true);
     try {
-      for (const id of ids) {
-        const row = rows.find((item) => item.expense.id === id);
-        if (!row || row.status === "held" || row.status === "needs_review") {
-          skip.push(id);
-          continue;
-        }
-        const done = await crm.setQbStatus("expense", id, "queued");
-        if (done) ok.push(id);
-        else skip.push(id);
-      }
-      setSelected(new Set());
-      if (ok.length) {
-        toast.success(
-          `${ok.length} sent to the Web Connector queue${skip.length ? ` — ${skip.length} skipped` : ""}.`,
-        );
-      } else {
-        toast.error("Nothing sent. Fix or release the selected expenses first.");
-      }
+      const done = await crm.setQbStatus("expense", id, "queued");
+      if (done) toast.success(`${row.expense.number} is in the Web Connector queue.`);
+      return Boolean(done);
     } finally {
       setPending(false);
     }
+  }
+
+  async function approveAndNext() {
+    if (!open) return;
+    const index = visible.findIndex((row) => row.expense.id === open.expense.id);
+    const next = visible[index + 1] ?? visible[index - 1];
+    const ok = await approve(open.expense.id);
+    if (ok) onSelect(next && next.expense.id !== open.expense.id ? next.expense.id : null);
+  }
+
+  function skip() {
+    if (!open) return;
+    const index = visible.findIndex((row) => row.expense.id === open.expense.id);
+    const next = visible[index + 1] ?? visible[0];
+    if (next && next.expense.id !== open.expense.id) onSelect(next.expense.id);
   }
 
   async function hold(expense: Expense) {
@@ -142,292 +127,447 @@ export function AccountingExpenseReview({
   }
 
   return (
-    <div className="space-y-3">
-      <div>
-        <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">Expense review</p>
-        <p className="text-sm text-[#706e6b]">
-          Compare the receipt to the fields QuickBooks will get, then approve the bill, check, or credit card charge.
-        </p>
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(20rem,0.95fr)_minmax(0,1.7fr)]">
-        <section className="overflow-hidden rounded-sm border border-[#c9c9c9] bg-white shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
-          <div className="flex flex-wrap items-center gap-2 border-b border-[#c9c9c9] bg-white px-3 py-2">
-            <div className="flex flex-wrap gap-1">
-              {INVOICE_REVIEW_FILTERS.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setFilter(parseInvoiceReviewFilter(item))}
-                  className={cn(
-                    "rounded-full border px-2.5 py-1 text-xs font-medium",
-                    filter === item
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-[#dad7d1] bg-white text-[#55524d]",
-                  )}
-                >
-                  {item === "all" ? "All" : INVOICE_REVIEW_LABELS[item]}
-                </button>
-              ))}
-            </div>
-            <span className="ml-auto text-xs text-[#86827b]">{selected.size} selected</span>
-            <Button
-              size="sm"
-              disabled={pending || selected.size === 0}
-              onClick={() => void approve([...selected])}
-            >
-              <Send data-icon="inline-start" />
-              Approve and send
-            </Button>
-          </div>
-
-          {visible.length === 0 ? (
-            <div className="px-4 py-12 text-center text-sm text-[#706e6b]">
-              <CheckCircle2 className="mx-auto mb-2 size-7 text-[#2f7a45]" />
-              Every expense in this view is approved and queued.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[34rem] text-left text-sm">
-                <thead className="border-b border-[#c9c9c9] bg-[#f3f3f3] text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
-                  <tr>
-                    <th className="w-10 px-3 py-2">
-                      <Checkbox
-                        checked={visible.length > 0 && visible.every((row) => selected.has(row.expense.id))}
-                        onCheckedChange={(value) => {
-                          setSelected((current) => {
-                            const next = new Set(current);
-                            for (const row of visible) {
-                              if (value) next.add(row.expense.id);
-                              else next.delete(row.expense.id);
-                            }
-                            return next;
-                          });
-                        }}
-                        aria-label="Select all"
-                      />
-                    </th>
-                    <th className="px-3 py-2">Receipt</th>
-                    <th className="px-3 py-2">Vendor and job</th>
-                    <th className="px-3 py-2">Logged by</th>
-                    <th className="px-3 py-2 text-right">Amount</th>
-                    <th className="px-3 py-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#e5e5e5]">
-                  {visible.map((row) => (
-                    <tr
-                      key={row.expense.id}
-                      className={cn(
-                        "cursor-pointer hover:bg-[#faf9f7]",
-                        open?.expense.id === row.expense.id && "bg-primary/10",
-                      )}
-                      onClick={() => onSelect(row.expense.id)}
-                    >
-                      <td className="px-3 py-2.5" onClick={(event) => event.stopPropagation()}>
-                        <Checkbox
-                          checked={selected.has(row.expense.id)}
-                          onCheckedChange={(value) => toggle(row.expense.id, Boolean(value))}
-                          aria-label={`Select ${row.expense.number}`}
-                        />
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <p className="font-medium text-[#181818]">{row.expense.number}</p>
-                        <p className="text-xs text-[#86827b]">
-                          {row.expense.invoiceNumber.trim()
-                            ? `Invoice ${row.expense.invoiceNumber.trim()} · `
-                            : ""}
-                          {formatDate(row.expense.incurredAt)}
-                        </p>
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <p>{row.expense.vendor || "No vendor"}</p>
-                        <p className="text-xs text-[#86827b]">{row.job?.name || "Overhead"}</p>
-                      </td>
-                      <td className="px-3 py-2.5">{row.loggedBy}</td>
-                      <td className="px-3 py-2.5 text-right tabular-nums">{formatMoney(row.expense.amount)}</td>
-                      <td className="px-3 py-2.5">
-                        <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-medium", STATUS_CLASS[row.status])}>
-                          {INVOICE_REVIEW_LABELS[row.status]}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-          <p className="border-t border-[#e8e5df] px-3 py-2 text-xs text-[#86827b]">
-            {pendingRows.length} awaiting approval ·{" "}
-            {formatMoney(pendingRows.reduce((sum, row) => sum + row.expense.amount, 0))}
-          </p>
-        </section>
-
-        <aside className="overflow-hidden rounded-sm border border-[#c9c9c9] bg-white shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
-          {!open ? (
-            <p className="px-4 py-12 text-center text-sm text-[#706e6b]">Select an expense to review it.</p>
-          ) : (
-            <>
-              <div className="flex items-start justify-between gap-3 border-b border-[#c9c9c9] bg-[#f3f3f3] px-4 py-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-[#181818]">{open.expense.number}</h3>
-                  <p className="mt-0.5 text-xs text-[#706e6b]">
-                    {open.expense.vendor || "No vendor"}
-                    {open.job ? ` — ${open.job.name}` : ""}
-                  </p>
-                  <p className="mt-0.5 text-xs text-[#706e6b]">Logged by {open.loggedBy}</p>
-                </div>
-                <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-medium", STATUS_CLASS[open.status])}>
-                  {INVOICE_REVIEW_LABELS[open.status]}
-                </span>
+    <div className="grid items-start gap-4 xl:grid-cols-[18rem_minmax(0,1fr)_22rem]">
+      <section className={cn(accCard, "max-h-[calc(100vh-11rem)] overflow-y-auto")}>
+        <div className="flex items-baseline justify-between px-4 pt-4 pb-2">
+          <p className="text-sm font-semibold">{visible.length} to review</p>
+          <p className="text-xs text-[#8a847c]">Grouped by job</p>
+        </div>
+        {groups.length === 0 ? (
+          <p className="px-4 py-10 text-sm text-[#8a847c]">Every expense in this view is approved and queued.</p>
+        ) : (
+          groups.map((group) => (
+            <div key={group.key} className="pb-2">
+              <div className="flex items-baseline justify-between px-4 py-2">
+                <p className="text-sm font-medium">{group.label}</p>
+                <p className="text-xs text-[#8a847c] tabular-nums">{formatMoney(group.total)}</p>
               </div>
-
-              <div className="grid min-h-[32rem] lg:grid-cols-2">
-                <div className="space-y-4 overflow-y-auto border-[#c9c9c9] px-4 py-4 lg:max-h-[80vh] lg:border-r">
-                  <div>
-                    <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
-                      Going to QuickBooks
-                    </p>
-                    <p className="mt-1 text-xs text-[#706e6b]">
-                      {open.preview.txnType} · paid from {open.preview.payAccount}
-                    </p>
-                  </div>
-                  <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-sm">
-                    <dt className="text-[#706e6b]">Payee</dt>
-                    <dd className="text-right">{open.preview.vendor}</dd>
-                    <dt className="text-[#706e6b]">Amount</dt>
-                    <dd className="text-right tabular-nums">{formatMoney(open.preview.amount)}</dd>
-                    <dt className="text-[#706e6b]">Date</dt>
-                    <dd className="text-right">{formatDate(open.preview.txnDate)}</dd>
-                    <dt className="text-[#706e6b]">Expense account</dt>
-                    <dd className="text-right">{open.preview.accountName}</dd>
-                    <dt className="text-[#706e6b]">Paid with</dt>
-                    <dd className="text-right">{open.preview.paidWith}</dd>
-                    <dt className="text-[#706e6b]">Customer:Job</dt>
-                    <dd className="text-right font-mono text-xs">{open.preview.customerJob}</dd>
-                    <dt className="text-[#706e6b]">Invoice number</dt>
-                    <dd className="text-right">{open.expense.invoiceNumber.trim() || "Not logged"}</dd>
-                    <dt className="text-[#706e6b]">Memo</dt>
-                    <dd className="text-right">{open.preview.memo}</dd>
-                    <dt className="text-[#706e6b]">Logged by</dt>
-                    <dd className="text-right">{open.loggedBy}</dd>
-                  </dl>
-
-                  <ExpenseFields expenseId={open.expense.id} locked={open.status === "queued"} />
-
-                  <div className="space-y-2">
-                    <CheckRow ok={Boolean(open.expense.vendor.trim())} label={open.expense.vendor.trim() ? "Vendor is the QuickBooks payee" : "Add a vendor"} />
-                    <CheckRow ok={open.expense.amount > 0} label={open.expense.amount > 0 ? "Amount is on the receipt" : "Enter the amount from the receipt"} />
-                    <CheckRow
-                      ok={Boolean(open.expense.invoiceNumber.trim())}
-                      warn={!open.expense.invoiceNumber.trim()}
-                      label={
-                        open.expense.invoiceNumber.trim()
-                          ? `Invoice ${open.expense.invoiceNumber.trim()} is the QuickBooks reference`
-                          : "No invoice number — QuickBooks will use the expense number"
-                      }
-                    />
-                    <CheckRow
-                      ok={!open.blocked}
-                      warn={open.status === "held"}
-                      label={
-                        open.status === "held"
-                          ? "Held — release before sending"
-                          : open.blocked || "Ready to send to QuickBooks"
-                      }
-                    />
-                  </div>
-
-                  {open.status === "queued" ? (
-                    <p className="text-sm text-[#706e6b]">Queued for the next Web Connector poll.</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        disabled={pending || open.status === "held" || open.status === "needs_review"}
-                        onClick={() => void approve([open.expense.id])}
+              <ul>
+                {group.rows.map((row) => {
+                  const active = open?.expense.id === row.expense.id;
+                  return (
+                    <li key={row.expense.id}>
+                      <button
+                        type="button"
+                        onClick={() => onSelect(row.expense.id)}
+                        className={cn(
+                          "flex w-full items-start justify-between gap-3 border-l-2 px-4 py-2.5 text-left",
+                          active ? "border-l-[#c43832] bg-[#fbf6ee]" : "border-l-transparent hover:bg-[#faf9f7]",
+                        )}
                       >
-                        Approve and send
-                      </Button>
-                      <Button variant="outline" onClick={() => void hold(open.expense)}>
-                        {open.status === "held" ? "Release hold" : "Hold"}
-                      </Button>
-                      {open.job ? (
-                        <Button
-                          nativeButton={false}
-                          variant="outline"
-                          render={<Link href={`/jobs?job=${open.job.id}&tab=financials`} />}
-                        >
-                          Open job
-                        </Button>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium">{row.expense.vendor || "No vendor"}</span>
+                          <span className="mt-0.5 block text-xs text-[#8a847c]">
+                            {row.expense.number} · {shortDate(row.expense.incurredAt)}
+                            {row.dateDiffers ? <span className="ml-2 font-medium text-[#c43832]">Date differs</span> : null}
+                            {row.status === "held" ? <span className="ml-2">Held</span> : null}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-sm font-medium tabular-nums">{formatMoney(row.expense.amount)}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))
+        )}
+      </section>
 
-                <ReceiptPane
-                  url={open.expense.receiptUrl}
-                  title={`Receipt · ${open.expense.vendor || open.expense.number}`}
-                />
-              </div>
-            </>
-          )}
-        </aside>
-      </div>
+      <ReceiptStage
+        url={open?.expense.receiptUrl ?? ""}
+        title={
+          open
+            ? `Receipt · ${open.expense.invoiceNumber.trim() ? `Invoice ${open.expense.invoiceNumber.trim()}` : open.expense.number}`
+            : "Receipt"
+        }
+      />
+
+      <ExpenseDetail
+        row={open}
+        pending={pending}
+        onApprove={() => void approveAndNext()}
+        onHold={() => open && void hold(open.expense)}
+        onSkip={skip}
+      />
     </div>
   );
 }
 
-function ReceiptPane({ url, title }: { url: string; title: string }) {
-  if (!url) {
-    return (
-      <div className="flex min-h-80 flex-col items-center justify-center bg-[#faf9f7] px-4 text-center text-sm text-[#706e6b]">
-        <FileText className="mb-2 size-7" />
-        No PDF or photo on this expense.
-      </div>
-    );
+type ExpenseRow = {
+  expense: Expense;
+  job: Job | undefined;
+  blocked: string | null;
+  status: InvoiceReviewStatus;
+  customer: string;
+  loggedBy: string;
+  dateDiffers: boolean;
+};
+
+function groupByJob(rows: ExpenseRow[]) {
+  const order: string[] = [];
+  const groups = new Map<string, { key: string; label: string; total: number; rows: ExpenseRow[] }>();
+  for (const row of rows) {
+    const key = row.job?.id ?? "none";
+    let group = groups.get(key);
+    if (!group) {
+      const label = row.job
+        ? `${row.customer || row.job.name}${row.job.code ? ` · ${row.job.code}` : ""}`
+        : "No job";
+      group = { key, label, total: 0, rows: [] };
+      groups.set(key, group);
+      order.push(key);
+    }
+    group.rows.push(row);
+    group.total += row.expense.amount;
   }
+  return order.map((key) => groups.get(key)!);
+}
+
+function ExpenseDetail({
+  row,
+  pending,
+  onApprove,
+  onHold,
+  onSkip,
+}: {
+  row: ExpenseRow | null;
+  pending: boolean;
+  onApprove: () => void;
+  onHold: () => void;
+  onSkip: () => void;
+}) {
+  const crm = useCrm();
+  if (!row) {
+    return <aside className={cn(accCard, "px-5 py-16 text-center text-sm text-[#8a847c]")}>Select an expense to review it.</aside>;
+  }
+  const { expense, job, customer, status } = row;
+  const locked = status === "queued";
+  const vendors = vendorChoices(crm.qbVendors ?? [], crm.expenses);
+  const chart = qbChartAccount(expense.account);
+  const jobs = crm.jobs.filter((item) => !item.deletedAt);
+  const payNoun = expenseQbPayWith(expense.method) === "credit_card" ? "a credit card charge" : "a vendor bill";
+  const where = job
+    ? `${customer || job.name}${job.code ? ` · ${job.code}` : ""}`
+    : "company overhead";
+  const blocked = status === "needs_review" || status === "held";
+
   return (
-    <div className="flex min-h-[32rem] flex-col bg-[#faf9f7] lg:max-h-[80vh]">
-      <div className="flex items-center justify-between border-b border-[#e8e5df] px-3 py-2">
-        <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">Receipt</p>
-        <a href={url} target="_blank" rel="noreferrer" className="text-xs font-medium text-primary hover:underline">
-          Open original
-        </a>
+    <aside className={cn(accCard, "max-h-[calc(100vh-11rem)] overflow-y-auto p-5")}>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm text-[#6f6a64]">
+          {expense.number} · logged by {row.loggedBy}
+        </p>
+        <span className={cn("rounded-full px-2.5 py-1 text-xs font-medium", STATUS_PILL[status])}>
+          {status === "needs_review" ? "Needs review" : status === "held" ? "Held" : status === "queued" ? "Queued" : "Ready"}
+        </span>
       </div>
-      {isReceiptPdf(url) ? (
-        <iframe title={title} src={url} className="min-h-[32rem] flex-1 bg-white" />
+      <h2 className="mt-2 text-2xl font-semibold tracking-tight">
+        {expense.vendor || "No vendor"} · {formatMoney(expense.amount)}
+      </h2>
+      <p className="mt-3 rounded-xl bg-[#f6f4f0] px-3 py-2.5 text-sm leading-relaxed text-[#3c3a37]">
+        Posts {payNoun} to {expense.vendor || "the vendor"} for {formatMoney(expense.amount)} on {where} under{" "}
+        {chart.number} · {chart.name}, paid by {EXPENSE_METHOD_LABELS[expense.method]}.
+      </p>
+
+      <ul className="mt-4 space-y-2 text-sm">
+        <li className="flex items-start gap-2">
+          <Check className="mt-0.5 size-4 text-[#217a45]" />
+          <span>{expense.amount > 0 ? "Amount matches receipt total" : "Enter the amount from the receipt"}</span>
+        </li>
+        <li className="flex items-start gap-2">
+          {expense.invoiceNumber.trim() ? (
+            <Check className="mt-0.5 size-4 text-[#217a45]" />
+          ) : (
+            <CircleAlert className="mt-0.5 size-4 text-[#c4842a]" />
+          )}
+          <span>
+            {expense.invoiceNumber.trim()
+              ? `Invoice # ${expense.invoiceNumber.trim()} matches receipt`
+              : "No invoice number — QuickBooks will use the expense number"}
+          </span>
+        </li>
+        {row.dateDiffers ? (
+          <li className="flex items-start gap-2 text-[#9a6230]">
+            <CircleAlert className="mt-0.5 size-4" />
+            <span>
+              Logged {slashDate(expense.createdAt)}, entered as {slashDate(expense.incurredAt)}
+            </span>
+          </li>
+        ) : null}
+        {row.blocked && status !== "ready" ? (
+          <li className="flex items-start gap-2 text-[#9a6230]">
+            <CircleAlert className="mt-0.5 size-4" />
+            <span>{row.blocked}</span>
+          </li>
+        ) : null}
+      </ul>
+
+      <div className="mt-4 space-y-3">
+        <Field label="Vendor">
+          <VendorPicker
+            value={expense.vendor}
+            names={vendors.fromQb.map((item) => item.name)}
+            extraNames={vendors.extras}
+            onChange={(vendor) => {
+              const next = matchVendorName(vendor, [...vendors.fromQb.map((item) => item.name), ...vendors.extras]);
+              if (!locked) void crm.updateExpense(expense.id, { vendor: next || vendor });
+            }}
+          />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Amount">
+            <CurrencyInput
+              value={expense.amount}
+              disabled={locked}
+              onCommit={(text) => {
+                const amount = moneyAmount(text);
+                if (amount != null && amount !== expense.amount) void crm.updateExpense(expense.id, { amount });
+              }}
+            />
+          </Field>
+          <Field label="Date">
+            <Input
+              type="date"
+              key={`${expense.id}:${expense.incurredAt}`}
+              defaultValue={expense.incurredAt.slice(0, 10)}
+              disabled={locked}
+              className={cn(row.dateDiffers && "border-[#e0a15a] bg-[#fff8ef]")}
+              onBlur={(event) => {
+                if (event.target.value && event.target.value !== expense.incurredAt.slice(0, 10)) {
+                  void crm.updateExpense(expense.id, { incurredAt: event.target.value });
+                }
+              }}
+            />
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Invoice #">
+            <Input
+              key={`${expense.id}:${expense.invoiceNumber}`}
+              defaultValue={expense.invoiceNumber}
+              disabled={locked}
+              onBlur={(event) => {
+                const invoiceNumber = event.target.value.trim();
+                if (invoiceNumber !== expense.invoiceNumber) void crm.updateExpense(expense.id, { invoiceNumber });
+              }}
+            />
+          </Field>
+          <Field label="Paid with">
+            <Select
+              value={expense.method}
+              disabled={locked}
+              onValueChange={(value) => {
+                if (value) void crm.updateExpense(expense.id, { method: value as ExpenseMethod });
+              }}
+              items={EXPENSE_METHODS.map((item) => ({ value: item, label: EXPENSE_METHOD_LABELS[item] }))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EXPENSE_METHODS.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {EXPENSE_METHOD_LABELS[item]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+        <Field label="Expense account">
+          <Select
+            value={expense.account}
+            disabled={locked}
+            onValueChange={(value) => {
+              if (value) void crm.updateExpense(expense.id, { account: value as ExpenseAccount });
+            }}
+            items={EXPENSE_ACCOUNTS.map((item) => ({ value: item, label: chartLabel(item) }))}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {EXPENSE_ACCOUNTS.map((item) => (
+                <SelectItem key={item} value={item}>
+                  {chartLabel(item)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Field label="Customer · Job">
+          <Select
+            value={expense.jobId ?? "none"}
+            disabled={locked}
+            onValueChange={(value) => {
+              if (!value) return;
+              void crm.updateExpense(expense.id, { jobId: value === "none" ? null : value });
+            }}
+            items={[
+              { value: "none", label: "No job" },
+              ...jobs.map((item) => ({
+                value: item.id,
+                label: jobOption(item, crm),
+              })),
+            ]}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No job</SelectItem>
+              {jobs.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {jobOption(item, crm)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </Field>
+      </div>
+
+      {locked ? (
+        <p className="mt-4 text-sm text-[#6f6a64]">Queued for the next Web Connector poll.</p>
       ) : (
-        <a href={url} target="_blank" rel="noreferrer" className="flex flex-1 items-start justify-center p-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={url} alt={title} className="max-h-[70vh] w-full object-contain" />
-        </a>
+        <div className="mt-4 flex gap-2">
+          <Button className={cn("h-11 flex-1 rounded-xl", accRed)} disabled={pending || blocked} onClick={onApprove}>
+            Approve and next
+          </Button>
+          <Button variant="outline" className="h-11 rounded-xl px-4" onClick={onHold}>
+            {status === "held" ? "Release" : "Hold"}
+          </Button>
+          <Button variant="outline" className="h-11 rounded-xl px-4" onClick={onSkip}>
+            Skip
+          </Button>
+        </div>
       )}
+      {job ? (
+        <Link href={`/jobs?job=${job.id}&tab=financials`} className="mt-3 block text-center text-xs text-[#c43832] hover:underline">
+          Open job
+        </Link>
+      ) : null}
+    </aside>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs text-[#8a847c]">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function ReceiptStage({ url, title }: { url: string; title: string }) {
+  return (
+    <section className="flex min-h-[36rem] flex-col overflow-hidden rounded-3xl bg-[#1c1c1c] text-white">
+      <div className="flex items-center justify-between px-4 py-3 text-sm">
+        <p className="truncate font-medium">{title}</p>
+        {url ? (
+          <a href={url} target="_blank" rel="noreferrer" className="shrink-0 text-sm underline-offset-2 hover:underline">
+            Open original
+          </a>
+        ) : null}
+      </div>
+      <div className="relative flex flex-1 items-center justify-center px-6">
+        {url ? <Zoomable key={url} url={url} title={title} /> : <p className="text-sm text-white/70">[Receipt photo, zoomable]</p>}
+      </div>
+      <p className="px-4 py-3 text-center text-xs text-white/60">Scroll to zoom · Drag to pan</p>
+    </section>
+  );
+}
+
+function Zoomable({ url, title }: { url: string; title: string }) {
+  const frame = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [origin, setOrigin] = useState({ x: 0, y: 0 });
+  const drag = useRef<{ x: number; y: number; ox: number; oy: number } | null>(null);
+
+  useEffect(() => {
+    const node = frame.current;
+    if (!node || isReceiptPdf(url)) return;
+    function onWheel(event: WheelEvent) {
+      event.preventDefault();
+      setScale((current) => Math.min(4, Math.max(1, current + (event.deltaY < 0 ? 0.15 : -0.15))));
+    }
+    node.addEventListener("wheel", onWheel, { passive: false });
+    return () => node.removeEventListener("wheel", onWheel);
+  }, [url]);
+
+  if (isReceiptPdf(url)) {
+    return <iframe title={title} src={url} className="h-full min-h-[32rem] w-full bg-[#f6f4f0]" />;
+  }
+
+  return (
+    <div
+      ref={frame}
+      className="flex h-full min-h-[28rem] w-full cursor-grab items-center justify-center overflow-hidden active:cursor-grabbing"
+      onPointerDown={(event) => {
+        drag.current = { x: event.clientX, y: event.clientY, ox: origin.x, oy: origin.y };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        if (!drag.current) return;
+        setOrigin({
+          x: drag.current.ox + event.clientX - drag.current.x,
+          y: drag.current.oy + event.clientY - drag.current.y,
+        });
+      }}
+      onPointerUp={() => {
+        drag.current = null;
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt={title}
+        draggable={false}
+        className="max-h-[70vh] max-w-full object-contain"
+        style={{ transform: `translate(${origin.x}px, ${origin.y}px) scale(${scale})` }}
+      />
     </div>
   );
 }
 
-function CheckRow({ ok, warn, label }: { ok: boolean; warn?: boolean; label: string }) {
-  return (
-    <div className="flex items-start gap-2 text-sm">
-      {warn ? (
-        <CirclePause className="mt-0.5 size-4 text-[#9a5b0c]" />
-      ) : ok ? (
-        <CheckCircle2 className="mt-0.5 size-4 text-[#2f7a45]" />
-      ) : (
-        <CircleAlert className="mt-0.5 size-4 text-[#b3261e]" />
-      )}
-      <span>{label}</span>
-    </div>
-  );
+function jobOption(job: Job, crm: ReturnType<typeof useCrm>) {
+  const customer = crm.customerName({
+    jobId: job.id,
+    clientId: job.clientId,
+    primaryContactId: job.primaryContactId,
+    opportunityId: job.opportunityId,
+  });
+  return `${customer || job.name}${job.code ? ` · ${job.code}` : ""}`;
+}
+
+function chartLabel(account: ExpenseAccount) {
+  const chart = qbChartAccount(account);
+  return `${chart.number} · ${chart.name}`;
+}
+
+function datesDiffer(createdAt: string, incurredAt: string) {
+  const logged = createdAt.slice(0, 10);
+  const entered = incurredAt.slice(0, 10);
+  return Boolean(logged && entered && logged !== entered);
+}
+
+function shortDate(iso: string) {
+  const [year, month, day] = iso.slice(0, 10).split("-");
+  if (!year || !month || !day) return iso;
+  const stamp = new Date(Number(year), Number(month) - 1, Number(day));
+  return stamp.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function slashDate(iso: string) {
+  const [year, month, day] = iso.slice(0, 10).split("-");
+  if (!year || !month || !day) return iso;
+  return `${month}/${day}/${year}`;
 }
 
 export function ExpenseReviewCountBadge({ className }: { className?: string }) {
   const crm = useCrm();
   const count = reviewableExpenses(crm.expenses).filter((expense) => expense.qbStatus !== "queued").length;
   if (!count) return null;
-  return (
-    <Badge variant="secondary" className={cn("ml-1 h-5 min-w-5 px-1.5 text-[11px]", className)}>
-      {count}
-    </Badge>
-  );
+  return <CountPill className={className}>{count}</CountPill>;
 }

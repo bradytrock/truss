@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -50,8 +50,7 @@ function randomPassword() {
     .slice(0, 20);
 }
 
-export function QbwcPanel() {
-  const crm = useCrm();
+export function QbwcPanel({ compact = false }: { compact?: boolean } = {}) {
   const [info, setInfo] = useState<ConnectorInfo | null>(null);
   const [itemName, setItemName] = useState(DEFAULT_QB_ITEM);
   const [bankAccount, setBankAccount] = useState(DEFAULT_QB_BANK);
@@ -175,6 +174,53 @@ export function QbwcPanel() {
     link.download = "truss-quickbooks.qwc";
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  if (compact) {
+    return (
+      <section className="rounded-2xl border border-[#ece7e1] bg-white p-5 shadow-[0_1px_2px_rgba(28,25,23,0.04)]">
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="text-base font-semibold">Connection settings</h3>
+          <p className="max-w-36 text-right text-xs text-[#8a847c]">Names must match QuickBooks exactly</p>
+        </div>
+        {info?.sql ? <p className="mt-3 rounded-xl bg-[#f6f4f0] px-3 py-2 text-sm">{info.sql}</p> : null}
+        {info?.lastError ? <p className="mt-3 text-sm text-[#c43832]">{info.lastError}</p> : null}
+        <div className="mt-4 space-y-3">
+          <CompactField label="Income item · used on every invoice line">
+            <Input id="qb-item" value={itemName} onChange={(event) => setItemName(event.target.value)} placeholder={DEFAULT_QB_ITEM} />
+          </CompactField>
+          <CompactField label="Bank account · deposits and payments">
+            <Input id="qb-bank" value={bankAccount} onChange={(event) => setBankAccount(event.target.value)} placeholder={DEFAULT_QB_BANK} />
+          </CompactField>
+          <CompactField label="Credit card account · card expenses">
+            <Input id="qb-cc" value={ccAccount} onChange={(event) => setCcAccount(event.target.value)} placeholder={DEFAULT_QB_CC} />
+          </CompactField>
+          <CompactField label="Connector URL · must be https, reachable from the office PC">
+            <Input id="qb-url" value={appUrl} onChange={(event) => setAppUrl(event.target.value)} placeholder="https://your-host/api/qbwc" />
+          </CompactField>
+        </div>
+        <div className="mt-4 flex gap-2">
+          <Button type="button" className="h-10 rounded-xl bg-[#1c1c1c] text-white hover:bg-[#333]" onClick={() => void handleSaveItem()} disabled={pending}>
+            Save
+          </Button>
+          <Button type="button" variant="outline" className="h-10 rounded-xl" disabled={!info?.configured || pending} onClick={() => void handlePullVendors()}>
+            Pull vendors
+          </Button>
+        </div>
+        <Button type="button" variant="outline" className="mt-2 h-10 w-full rounded-xl" onClick={() => void handleCreate()} disabled={pending}>
+          Reset password
+        </Button>
+        {password ? <p className="mt-2 font-mono text-xs">Password, shown once: {password}</p> : null}
+        <details className="mt-3 text-sm">
+          <summary className="cursor-pointer text-[#6f6a64]">How posting works</summary>
+          <p className="mt-2 text-xs leading-relaxed text-[#6f6a64]">
+            Approved invoices land on Customer:Job. Expenses post as a vendor bill or a credit card charge on that
+            same job. Payments receive against an invoice that is already in QuickBooks. The Web Connector on the
+            office PC picks up the queue on its next update.
+          </p>
+        </details>
+      </section>
+    );
   }
 
   return (
@@ -330,6 +376,15 @@ export function QbwcPanel() {
       </CardContent>
       <QbPreviewDialog invoice={preview} itemName={itemName} onClose={() => setPreview(null)} />
     </Card>
+  );
+}
+
+function CompactField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs text-[#8a847c]">{label}</span>
+      {children}
+    </label>
   );
 }
 
