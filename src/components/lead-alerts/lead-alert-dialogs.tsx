@@ -10,16 +10,35 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   ASSIGN_ERROR,
   ASSIGN_TITLE,
+  BOOK_DATE_ERROR,
+  BOOK_HELP,
+  BOOK_TIME_ERROR,
+  BOOK_TITLE,
+  BOOK_TITLE_ERROR,
+  LEAD_APPOINTMENT_KINDS,
   NOTE_HELP,
   NOTE_TITLE,
   PASS_ALONG_HELP,
   PASS_ALONG_TITLE,
   PASSBACK_REASONS,
   QUICK_REP_NOTES,
+  UPDATE_HELP,
+  UPDATE_TITLE,
+  appointmentKindLabel,
+  defaultAppointmentTitle,
+  defaultBookAppointment,
+  leadEditSeed,
   leadPlaceLine,
+  leadServiceChoices,
   passbackSummary,
+  serviceTypeLabel,
+  type BookAppointmentInput,
+  type LeadAppointmentKind,
   type LeadAlert,
+  type LeadEditSeed,
+  type UpdateLeadInput,
 } from "@/lib/lead-alerts";
+import { PhoneInput } from "@/components/phone-input";
 import { listLeadAssignees, type RepOption } from "@/lib/lead-alerts-api";
 import { createClient } from "@/lib/supabase/client";
 import { initialsFromName } from "@/lib/types";
@@ -379,6 +398,353 @@ export function AssignRepPanel({
         </Button>
         <Button type="submit" disabled={pending || !repId}>
           Assign
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+const fieldClass =
+  "mt-2 h-8 w-full rounded-md border border-input bg-card px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30";
+
+export function BookAppointmentDialog({
+  alert,
+  onClose,
+  onSubmit,
+}: {
+  alert: LeadAlert | null;
+  onClose: () => void;
+  onSubmit: (input: BookAppointmentInput) => Promise<void>;
+}) {
+  return (
+    <Dialog open={Boolean(alert)} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent aria-labelledby="book-appointment-title" className="sm:max-w-md">
+        {alert ? (
+          <BookAppointmentPanel key={alert.id} alert={alert} onClose={onClose} onSubmit={onSubmit} />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function BookAppointmentPanel({
+  alert,
+  onClose,
+  onSubmit,
+}: {
+  alert: LeadAlert;
+  onClose: () => void;
+  onSubmit: (input: BookAppointmentInput) => Promise<void>;
+}) {
+  const seed = defaultBookAppointment(alert.lead);
+  const [title, setTitle] = useState(seed.title);
+  const [kind, setKind] = useState<LeadAppointmentKind>(seed.kind);
+  const [date, setDate] = useState(seed.date);
+  const [startTime, setStartTime] = useState(seed.startTime);
+  const [endTime, setEndTime] = useState(seed.endTime);
+  const [location, setLocation] = useState(seed.location);
+  const [notes, setNotes] = useState(seed.notes);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  const place = leadPlaceLine(alert.lead);
+
+  function chooseKind(next: LeadAppointmentKind) {
+    setTitle((current) => {
+      const previous = defaultAppointmentTitle(alert.lead.homeowner_name, kind);
+      if (!current.trim() || current === previous) return defaultAppointmentTitle(alert.lead.homeowner_name, next);
+      return current;
+    });
+    setKind(next);
+  }
+
+  return (
+    <form
+      onSubmit={async (event) => {
+        event.preventDefault();
+        if (!title.trim()) {
+          setError(BOOK_TITLE_ERROR);
+          return;
+        }
+        if (!date || !startTime || !endTime) {
+          setError(BOOK_DATE_ERROR);
+          return;
+        }
+        if (new Date(`${date}T${endTime}:00`).getTime() <= new Date(`${date}T${startTime}:00`).getTime()) {
+          setError(BOOK_TIME_ERROR);
+          return;
+        }
+        setPending(true);
+        setError("");
+        try {
+          await onSubmit({ title, kind, date, startTime, endTime, location, notes });
+        } catch (caught) {
+          setError(caught instanceof Error ? caught.message : BOOK_DATE_ERROR);
+          setPending(false);
+        }
+      }}
+    >
+      <h2 id="book-appointment-title" className="font-heading text-base leading-none font-medium">
+        {BOOK_TITLE}
+      </h2>
+      <p className="mt-2 text-sm font-medium">{alert.lead.homeowner_name || "Homeowner"}</p>
+      {place ? <p className="text-sm text-muted-foreground">{place}</p> : null}
+      <p className="mt-3 text-sm text-muted-foreground">{BOOK_HELP}</p>
+      <label className="mt-4 block text-sm font-medium" htmlFor="book-appointment-title-field">
+        Title
+      </label>
+      <Input
+        id="book-appointment-title-field"
+        value={title}
+        onChange={(event) => setTitle(event.target.value)}
+        className="mt-2"
+      />
+      <fieldset className="mt-4">
+        <legend className="text-sm font-medium">Type</legend>
+        <div role="radiogroup" aria-label="Appointment type" className="mt-2 flex flex-col gap-1.5">
+          {LEAD_APPOINTMENT_KINDS.map((item) => (
+            <button
+              key={item}
+              type="button"
+              role="radio"
+              aria-checked={kind === item}
+              className={cn(
+                "rounded-md border px-2.5 py-1.5 text-left text-sm focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
+                kind === item ? "border-foreground bg-muted" : "border-border",
+              )}
+              onClick={() => chooseKind(item)}
+            >
+              {appointmentKindLabel(item)}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div>
+          <label className="block text-sm font-medium" htmlFor="book-appointment-date">Date</label>
+          <Input id="book-appointment-date" type="date" value={date} onChange={(event) => setDate(event.target.value)} className="mt-2" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium" htmlFor="book-appointment-start">Start</label>
+          <Input id="book-appointment-start" type="time" value={startTime} onChange={(event) => setStartTime(event.target.value)} className="mt-2" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium" htmlFor="book-appointment-end">End</label>
+          <Input id="book-appointment-end" type="time" value={endTime} onChange={(event) => setEndTime(event.target.value)} className="mt-2" />
+        </div>
+      </div>
+      <label className="mt-4 block text-sm font-medium" htmlFor="book-appointment-location">
+        Location
+      </label>
+      <Input
+        id="book-appointment-location"
+        value={location}
+        onChange={(event) => setLocation(event.target.value)}
+        className="mt-2"
+      />
+      <label className="mt-4 block text-sm font-medium" htmlFor="book-appointment-notes">
+        Notes
+      </label>
+      <Textarea
+        id="book-appointment-notes"
+        value={notes}
+        onChange={(event) => setNotes(event.target.value)}
+        className="mt-2"
+      />
+      {error ? <p className="mt-3 text-sm text-destructive" role="alert">{error}</p> : null}
+      <div className="mt-4 flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={pending}>
+          Book
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+export function UpdateLeadDialog({
+  alert,
+  seed,
+  onClose,
+  onSubmit,
+}: {
+  alert: LeadAlert | null;
+  seed?: LeadEditSeed | null;
+  onClose: () => void;
+  onSubmit: (input: UpdateLeadInput) => Promise<void>;
+}) {
+  return (
+    <Dialog open={Boolean(alert)} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent aria-labelledby="update-lead-title" className="sm:max-w-md">
+        {alert ? (
+          <UpdateLeadPanel key={alert.id} alert={alert} seed={seed} onClose={onClose} onSubmit={onSubmit} />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function UpdateLeadPanel({
+  alert,
+  seed,
+  onClose,
+  onSubmit,
+}: {
+  alert: LeadAlert;
+  seed?: LeadEditSeed | null;
+  onClose: () => void;
+  onSubmit: (input: UpdateLeadInput) => Promise<void>;
+}) {
+  const initial = seed ?? leadEditSeed(alert.lead);
+  const [homeownerName, setHomeownerName] = useState(initial.homeownerName);
+  const [phone, setPhone] = useState(initial.phone);
+  const [email, setEmail] = useState(initial.email);
+  const [street, setStreet] = useState(initial.street);
+  const [city, setCity] = useState(initial.city);
+  const [state, setRegion] = useState(initial.state);
+  const [postalCode, setPostalCode] = useState(initial.postalCode);
+  const [serviceType, setServiceType] = useState(initial.serviceType);
+  const [nextStep, setNextStep] = useState(initial.nextStep);
+  const [notes, setNotes] = useState(initial.notes);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  const services = leadServiceChoices(serviceType);
+
+  return (
+    <form
+      onSubmit={async (event) => {
+        event.preventDefault();
+        setPending(true);
+        setError("");
+        try {
+          await onSubmit({
+            homeownerName,
+            phone,
+            email,
+            street,
+            city,
+            state,
+            postalCode,
+            serviceType,
+            nextStep,
+            notes,
+          });
+        } catch (caught) {
+          setError(caught instanceof Error ? caught.message : "");
+          setPending(false);
+        }
+      }}
+    >
+      <h2 id="update-lead-title" className="font-heading text-base leading-none font-medium">
+        {UPDATE_TITLE}
+      </h2>
+      <p className="mt-2 text-sm text-muted-foreground">{UPDATE_HELP}</p>
+      <label className="mt-4 block text-sm font-medium" htmlFor="update-lead-name">
+        Homeowner
+      </label>
+      <Input
+        id="update-lead-name"
+        value={homeownerName}
+        onChange={(event) => setHomeownerName(event.target.value)}
+        className="mt-2"
+        autoComplete="name"
+      />
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="block text-sm font-medium" htmlFor="update-lead-phone">Phone</label>
+          <PhoneInput id="update-lead-phone" value={phone} onValueChange={setPhone} className="mt-2" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium" htmlFor="update-lead-email">Email</label>
+          <Input
+            id="update-lead-email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            className="mt-2"
+            autoComplete="email"
+          />
+        </div>
+      </div>
+      <label className="mt-4 block text-sm font-medium" htmlFor="update-lead-street">
+        Street
+      </label>
+      <Input
+        id="update-lead-street"
+        value={street}
+        onChange={(event) => setStreet(event.target.value)}
+        className="mt-2"
+        autoComplete="street-address"
+      />
+      <div className="mt-4 grid grid-cols-[1fr_4.5rem_6rem] gap-3">
+        <div>
+          <label className="block text-sm font-medium" htmlFor="update-lead-city">City</label>
+          <Input id="update-lead-city" value={city} onChange={(event) => setCity(event.target.value)} className="mt-2" autoComplete="address-level2" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium" htmlFor="update-lead-state">State</label>
+          <Input
+            id="update-lead-state"
+            value={state}
+            onChange={(event) => setRegion(event.target.value.toUpperCase().slice(0, 2))}
+            className="mt-2"
+            autoComplete="address-level1"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium" htmlFor="update-lead-zip">ZIP</label>
+          <Input
+            id="update-lead-zip"
+            value={postalCode}
+            onChange={(event) => setPostalCode(event.target.value)}
+            className="mt-2"
+            autoComplete="postal-code"
+          />
+        </div>
+      </div>
+      <label className="mt-4 block text-sm font-medium" htmlFor="update-lead-service">
+        Service
+      </label>
+      <select
+        id="update-lead-service"
+        value={serviceType}
+        onChange={(event) => setServiceType(event.target.value)}
+        className={fieldClass}
+      >
+        <option value="">Select service</option>
+        {services.map((item) => (
+          <option key={item} value={item}>
+            {serviceTypeLabel(item)}
+          </option>
+        ))}
+      </select>
+      <label className="mt-4 block text-sm font-medium" htmlFor="update-lead-next">
+        Next step
+      </label>
+      <Input
+        id="update-lead-next"
+        value={nextStep}
+        onChange={(event) => setNextStep(event.target.value)}
+        className="mt-2"
+        placeholder="Site walk Thursday at 9"
+      />
+      <label className="mt-4 block text-sm font-medium" htmlFor="update-lead-notes">
+        Notes
+      </label>
+      <Textarea
+        id="update-lead-notes"
+        value={notes}
+        onChange={(event) => setNotes(event.target.value)}
+        className="mt-2"
+      />
+      {error ? <p className="mt-3 text-sm text-destructive" role="alert">{error}</p> : null}
+      <div className="mt-4 flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={pending}>
+          Save
         </Button>
       </div>
     </form>

@@ -9,17 +9,23 @@ import {
   alertForUnassignedUpdate,
   alertFromCatchUp,
   alertKey,
+  appointmentInstants,
+  appointmentRangeError,
   assignmentAlertSuppressed,
+  defaultBookAppointment,
   dismissAlert,
+  leadEditSeed,
   staleAssignmentAlertIds,
   emptyAlertMemory,
   leadDetailLine,
   leadPhoneHref,
   leadPlaceLine,
+  leadServiceChoices,
   notificationBody,
   passbackSummary,
   snapshotFromRow,
   stackAlerts,
+  suppressLeadAlerts,
   type LeadActivitySnapshot,
   type LeadSnapshot,
 } from "./lead-alerts.ts";
@@ -169,9 +175,43 @@ const caught = alertFromCatchUp(
   true,
 );
 assert.equal(caught?.kind, "passed_back");
-assert.deepEqual(actionsForViewer("new_lead", false), ["call", "pass", "note"]);
+assert.deepEqual(actionsForViewer("new_lead", false), ["call", "book", "update", "pass", "note"]);
 assert.deepEqual(actionsForViewer("needs_rep", true), ["call", "assign"]);
 assert.deepEqual(actionsForViewer("rep_note", true), ["got_it", "reassign"]);
-assert.deepEqual(actionsForViewer("new_lead", true), ["call", "pass", "note"]);
-assert.deepEqual(actionsForViewer("assigned_to_you", true), ["call", "pass", "note"]);
+assert.deepEqual(actionsForViewer("new_lead", true), ["call", "book", "update", "pass", "note"]);
+assert.deepEqual(actionsForViewer("assigned_to_you", true), ["call", "book", "update", "pass", "note"]);
 assert.deepEqual(actionsForViewer("needs_rep", false), []);
+
+const draft = defaultBookAppointment(lead(), new Date(2026, 9, 4, 17, 0, 0));
+assert.equal(draft.date, "2026-10-05");
+assert.equal(draft.startTime, "09:00");
+assert.equal(draft.endTime, "10:00");
+assert.equal(draft.kind, "site_walk");
+assert.equal(draft.title, "Site walk · Dana Alvarez");
+assert.equal(draft.location, "100 Main, Plano");
+assert.equal(appointmentRangeError("2026-10-05", "09:00", "10:00"), "");
+assert.match(appointmentRangeError("2026-10-05", "10:00", "09:00"), /after the start/);
+assert.match(appointmentRangeError("", "09:00", "10:00"), /date/);
+const range = appointmentInstants({ date: "2026-10-05", startTime: "09:00", endTime: "10:00" });
+assert.ok(range);
+assert.equal(Date.parse(range.endsAt) - Date.parse(range.startsAt), 3_600_000);
+assert.equal(leadServiceChoices("roofing").filter((item) => item === "roofing").length, 1);
+assert.equal(leadServiceChoices("storm")[0], "storm");
+
+const edited = leadEditSeed(lead(), {
+  contact: { name: "Dana Alvarez", phone: "2145550100", email: "dana@example.com" },
+  opportunity: { street: "100 Main", city: "Plano", state: "TX", postalCode: "75024", projectType: "roofing", nextStep: "Walk Thursday", notes: "Hail on the south slope" },
+});
+assert.equal(edited.email, "dana@example.com");
+assert.equal(edited.state, "TX");
+assert.equal(edited.nextStep, "Walk Thursday");
+assert.equal(edited.notes, "Hail on the south slope");
+
+const revised = lead({ updated_at: "2026-10-04T18:00:00.000Z" });
+const quiet = suppressLeadAlerts(dismissAlert(first, inserted.id), revised);
+assert.equal(quiet.queue.length, 0);
+assert.equal(acceptAlert(quiet, alertForMyAssignmentInsert(revised, "pm-1", 400)!), quiet);
+assert.equal(
+  acceptAlert(quiet, alertForMyAssignmentUpdate(revised, { assigned_to: null }, "pm-1", 400)!).queue.length,
+  0,
+);

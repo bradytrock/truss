@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AssignRepPanel, NoteToAdminPanel, PassAlongPanel } from "./lead-alert-dialogs.tsx";
+import { AssignRepPanel, BookAppointmentPanel, NoteToAdminPanel, PassAlongPanel, UpdateLeadPanel } from "./lead-alert-dialogs.tsx";
 import { LeadAlertCard } from "./lead-alert-card.tsx";
 import {
   QUICK_REP_NOTES,
@@ -59,6 +59,8 @@ function card(alert: NonNullable<ReturnType<typeof alertForMyAssignmentInsert>>,
       onPass={noop}
       onNote={noop}
       onAssign={noop}
+      onBook={noop}
+      onUpdate={noop}
     />,
   );
 }
@@ -73,6 +75,8 @@ assert.match(freshHtml, /href="\/jobs\?job=job-1"/);
 assert.match(freshHtml, /href="tel:\+12145550100"/);
 assert.match(freshHtml, />\(214\) 555-0100</);
 assert.match(freshHtml, />Copy</);
+assert.match(freshHtml, /Book appointment/);
+assert.match(freshHtml, /Update lead/);
 assert.match(freshHtml, /Pass it along/);
 assert.match(freshHtml, /Respond with note/);
 assert.doesNotMatch(freshHtml, /Assign rep/);
@@ -88,9 +92,13 @@ const adminFresh = text(
       onPass={noop}
       onNote={noop}
       onAssign={noop}
+      onBook={noop}
+      onUpdate={noop}
     />,
   ),
 );
+assert.match(adminFresh, /Book appointment/);
+assert.match(adminFresh, /Update lead/);
 assert.match(adminFresh, /Pass it along/);
 assert.doesNotMatch(adminFresh, /Assign rep/);
 assert.match(freshHtml, /just now/);
@@ -123,6 +131,8 @@ const needsRep = alertForUnassignedInsert(
 const needsHtml = text(card(needsRep));
 assert.match(needsHtml, /New lead needs a rep/);
 assert.match(needsHtml, /Assign rep/);
+assert.doesNotMatch(needsHtml, /Book appointment/);
+assert.doesNotMatch(needsHtml, /Update lead/);
 assert.doesNotMatch(needsHtml, /Respond with note/);
 assert.doesNotMatch(needsHtml, /Pass it along/);
 
@@ -213,3 +223,45 @@ const once = acceptAlert(emptyAlertMemory(), fresh);
 const twice = acceptAlert(once, fresh);
 assert.equal(twice.queue.length, 1);
 assert.equal(twice, once);
+
+const bookModal = text(renderToStaticMarkup(
+  <BookAppointmentPanel alert={fresh} onClose={noop} onSubmit={async () => {}} />,
+));
+assert.match(bookModal, /Book appointment/);
+assert.match(bookModal, /This goes on your calendar for this lead/);
+assert.match(bookModal, /Site walk · Dana Alvarez/);
+assert.match(bookModal, /100 Main, Plano/);
+assert.match(bookModal, /Site walk/);
+assert.match(bookModal, /Meeting/);
+assert.match(bookModal, /Inspection/);
+assert.match(bookModal, />Book</);
+assert.match(bookModal, /Dana Alvarez/);
+
+const updateModal = text(renderToStaticMarkup(
+  <UpdateLeadPanel
+    alert={fresh}
+    seed={{
+      homeownerName: "Dana Alvarez",
+      phone: "(214) 555-0100",
+      email: "dana@example.com",
+      street: "100 Main",
+      city: "Plano",
+      state: "TX",
+      postalCode: "75024",
+      serviceType: "roofing",
+      nextStep: "Walk Thursday",
+      notes: "Hail on the south slope",
+    }}
+    onClose={noop}
+    onSubmit={async () => {}}
+  />,
+));
+assert.match(updateModal, /Update lead/);
+assert.match(updateModal, /The lead stays with you/);
+assert.match(updateModal, /value="Dana Alvarez"/);
+assert.match(updateModal, /dana@example.com/);
+assert.match(updateModal, /100 Main/);
+assert.match(updateModal, /Walk Thursday/);
+assert.match(updateModal, /Hail on the south slope/);
+assert.match(updateModal, /Roofing/);
+assert.match(updateModal, />Save</);

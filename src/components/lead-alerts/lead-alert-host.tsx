@@ -2,10 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { toast } from "sonner";
 import { LeadAlertCard } from "@/components/lead-alerts/lead-alert-card";
-import { AssignRepDialog, NoteToAdminDialog, PassAlongDialog } from "@/components/lead-alerts/lead-alert-dialogs";
-import { useCrm } from "@/lib/crm-store";
 import {
+  AssignRepDialog,
+  BookAppointmentDialog,
+  NoteToAdminDialog,
+  PassAlongDialog,
+  UpdateLeadDialog,
+} from "@/components/lead-alerts/lead-alert-dialogs";
+import { useCrm } from "@/lib/crm-store";
+import { bookLeadAppointment, editSeedForLead, saveLeadUpdate } from "@/lib/lead-follow-up";
+import {
+  LEAD_ALERT_SUPPRESS,
   acceptAlert,
   alertForMyAssignmentInsert,
   staleAssignmentAlertIds,
@@ -22,9 +31,11 @@ import {
   snapshotFromPayload,
   stackAlerts,
   stampStorageKey,
+  suppressLeadAlerts,
   type AlertMemory,
   type LeadActivitySnapshot,
   type LeadAlert,
+  type LeadSnapshot,
 } from "@/lib/lead-alerts";
 import {
   assignLead,
@@ -34,6 +45,7 @@ import {
   fetchUnassignedSince,
   passLeadBack,
   sendRepNote,
+  updateLeadDetails,
 } from "@/lib/lead-alerts-api";
 import { NOTIFICATIONS_REFRESH } from "@/lib/notification-inbox";
 import { isUnsignedDemo } from "@/lib/seats";
@@ -92,7 +104,8 @@ export function LeadAlertHost() {
 }
 
 function LeadAlertSession() {
-  const { user } = useCrm();
+  const crm = useCrm();
+  const { user } = crm;
   const isAdmin = user.role === "company_admin";
   const coarse = useCoarsePointer();
   const livePermission = useNotificationPermission();
@@ -102,7 +115,7 @@ function LeadAlertSession() {
   const memoryRef = useRef(memory);
   const [announcement, setAnnouncement] = useState("");
   const [now, setNow] = useState(() => Date.now());
-  const [modal, setModal] = useState<{ type: "pass" | "note" | "assign"; alert: LeadAlert } | null>(null);
+  const [modal, setModal] = useState<{ type: "pass" | "note" | "assign" | "book" | "update"; alert: LeadAlert } | null>(null);
 
   const persist = useCallback(
     (next: AlertMemory) => {
@@ -155,6 +168,18 @@ function LeadAlertSession() {
     const timer = window.setInterval(() => setNow(Date.now()), 30000);
     return () => window.clearInterval(timer);
   }, [memory.queue.length]);
+
+  useEffect(() => {
+    function onSuppress(event: Event) {
+      const lead = (event as CustomEvent<LeadSnapshot>).detail;
+      if (!lead?.id || !lead.updated_at) return;
+      const next = suppressLeadAlerts(memoryRef.current, lead);
+      if (next === memoryRef.current) return;
+      persist(next);
+    }
+    window.addEventListener(LEAD_ALERT_SUPPRESS, onSuppress);
+    return () => window.removeEventListener(LEAD_ALERT_SUPPRESS, onSuppress);
+  }, [persist]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -354,6 +379,8 @@ function LeadAlertSession() {
             onPass={() => setModal({ type: "pass", alert })}
             onNote={() => setModal({ type: "note", alert })}
             onAssign={() => setModal({ type: "assign", alert })}
+            onBook={() => setModal({ type: "book", alert })}
+            onUpdate={() => setModal({ type: "update", alert })}
           />
         ))}
         {hiddenCount > 0 ? (
@@ -406,6 +433,34 @@ function LeadAlertSession() {
           }}
         />
       ) : null}
+      <BookAppointmentDialog
+        alert={modal?.type === "book" ? modal.alert : null}
+        onClose={() => setModal(null)}
+        onSubmit={async (input) => {
+          if (modal?.type !== "book") return;
+          await bookLeadAppointment(crm, modal.alert, input, user.name);
+          dismiss(modal.alert.id);
+          setModal(null);
+          window.dispatchEvent(new Event(NOTIFICATIONS_REFRESH));
+        }}
+      />
+      <UpdateLeadDialog
+        alert={modal?.type === "update" ? modal.alert : null}
+        seed={modal?.type === "update" ? editSeedForLead(crm, modal.alert.lead) : null}
+        onClose={() => setModal(null)}
+        onSubmit={async (input) => {
+          if (modal?.type !== "update") return;
+          const saved = await saveLeadUpdate(crm, modal.alert, input, (leadId, details) =>
+            updateLeadDetails(createClient(), { leadId, ...details }),
+          );
+          const quiet = suppressLeadAlerts(dismissAlert(memoryRef.current, modal.alert.id), saved);
+          persist(quiet);
+          window.dispatchEvent(new CustomEvent(LEAD_ALERT_SUPPRESS, { detail: saved }));
+          setModal(null);
+          toast.success("Lead updated.");
+          window.dispatchEvent(new Event(NOTIFICATIONS_REFRESH));
+        }}
+      />
     </>
   );
 }
