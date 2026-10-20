@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MapPin, Phone, Undo2 } from "lucide-react";
+import { Check, MapPin, Phone, Undo2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -26,8 +26,6 @@ import {
   UPDATE_HELP,
   UPDATE_TITLE,
   appointmentConflicts,
-  appointmentDateLabel,
-  appointmentDayChoices,
   appointmentKindLabel,
   appointmentWhenLabel,
   conflictSummary,
@@ -492,7 +490,7 @@ export function BookAppointmentPanel({
   const [assignee, setAssignee] = useState(assigneeName);
   const [location, setLocation] = useState(seed.location);
   const [notes, setNotes] = useState(seed.notes);
-  const [notify, setNotify] = useState(false);
+  const [notify, setNotify] = useState(true);
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingLocation, setEditingLocation] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
@@ -503,10 +501,6 @@ export function BookAppointmentPanel({
   const tel = leadPhoneHref(alert.lead.phone);
   const email = homeownerEmail.trim();
   const endTime = endTimeFromDuration(startTime, duration);
-  const dayChoices = appointmentDayChoices();
-  const days = dayChoices.some((item) => item.value === date)
-    ? dayChoices
-    : [{ value: date, label: appointmentDateLabel(date) }, ...dayChoices];
   const starts = APPOINTMENT_START_TIMES.includes(startTime)
     ? APPOINTMENT_START_TIMES
     : [startTime, ...APPOINTMENT_START_TIMES];
@@ -596,10 +590,8 @@ export function BookAppointmentPanel({
                 role="radio"
                 aria-checked={kind === item}
                 className={cn(
-                  "rounded-full border px-3 py-1 text-sm focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
-                  kind === item
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-background hover:bg-muted",
+                  "rounded-full border bg-background px-3 py-1 text-sm focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
+                  kind === item ? "border-primary text-primary" : "border-border text-foreground hover:bg-muted",
                 )}
                 onClick={() => chooseKind(item)}
               >
@@ -611,16 +603,13 @@ export function BookAppointmentPanel({
         <div className="mt-4 grid grid-cols-2 gap-3">
           <div>
             <label className="block text-sm font-medium" htmlFor="book-appointment-date">Date</label>
-            <select
+            <Input
               id="book-appointment-date"
+              type="date"
               value={date}
               onChange={(event) => setDate(event.target.value)}
               className={cn(choiceClass, "mt-2")}
-            >
-              {days.map((item) => (
-                <option key={item.value} value={item.value}>{item.label}</option>
-              ))}
-            </select>
+            />
           </div>
           <div>
             <label className="block text-sm font-medium" htmlFor="book-appointment-start">Start</label>
@@ -646,10 +635,8 @@ export function BookAppointmentPanel({
                 role="radio"
                 aria-checked={duration === minutes}
                 className={cn(
-                  "rounded-full border px-2.5 py-1 text-sm focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
-                  duration === minutes
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-background hover:bg-muted",
+                  "rounded-full border bg-background px-2.5 py-1 text-sm focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
+                  duration === minutes ? "border-primary text-primary" : "border-border text-foreground hover:bg-muted",
                 )}
                 onClick={() => setDuration(minutes)}
               >
@@ -658,28 +645,31 @@ export function BookAppointmentPanel({
             ))}
           </div>
         </fieldset>
-        <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <p className="text-sm text-muted-foreground">{when}</p>
-          {conflict ? <p className="text-sm text-destructive" role="status">{conflict}</p> : null}
+          {conflict ? (
+            <p className="text-sm text-destructive" role="status">{conflict}</p>
+          ) : (
+            <p className="flex items-center gap-1 text-sm text-emerald-600" role="status">
+              <Check className="size-3.5" aria-hidden />
+              No conflicts on your calendar
+            </p>
+          )}
         </div>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div>
-            <span className="block text-sm font-medium">Assigned to</span>
-            {teammates.length ? (
-              <select
-                aria-label="Assigned to"
-                value={assignee}
-                onChange={(event) => setAssignee(event.target.value)}
-                className={cn(choiceClass, "mt-2")}
-              >
-                {assigneeName ? <option value={assigneeName}>{assigneeName} (you)</option> : null}
-                {teammates.map((name) => (
-                  <option key={name} value={name}>{name}</option>
-                ))}
-              </select>
-            ) : (
-              <p className="mt-2 text-sm text-muted-foreground">{assigneeName ? `${assigneeName} (you)` : "You"}</p>
-            )}
+            <label className="block text-sm font-medium" htmlFor="book-appointment-assignee">Assigned to</label>
+            <select
+              id="book-appointment-assignee"
+              value={assignee || assigneeName}
+              onChange={(event) => setAssignee(event.target.value)}
+              className={cn(choiceClass, "mt-2")}
+            >
+              <option value={assigneeName}>{assigneeName ? `${assigneeName} (you)` : "You"}</option>
+              {teammates.filter((name) => name !== assigneeName).map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
           </div>
           <div>
             <span className="block text-sm font-medium">Location</span>
@@ -697,7 +687,7 @@ export function BookAppointmentPanel({
                 <span className="min-w-0 truncate">{locationIsLead ? "Lead address" : location}</span>
                 <button
                   type="button"
-                  className="shrink-0 font-medium underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+                  className="shrink-0 font-medium text-primary underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
                   onClick={() => setEditingLocation(true)}
                 >
                   Change
@@ -710,7 +700,7 @@ export function BookAppointmentPanel({
           <div className="min-w-0">
             <p className="text-sm font-medium">Notify homeowner</p>
             <p className="text-sm text-muted-foreground">
-              {email ? `Email ${email} a calendar invite.` : "No email on file."}
+              Text + email confirmation, reminder the day before
             </p>
           </div>
           <button
@@ -718,7 +708,7 @@ export function BookAppointmentPanel({
             role="switch"
             aria-checked={notify}
             aria-label="Notify homeowner"
-            disabled={!email || pending}
+            disabled={pending}
             className={cn(
               "relative h-6 w-11 shrink-0 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none disabled:opacity-40",
               notify ? "bg-primary" : "bg-muted",
@@ -748,10 +738,10 @@ export function BookAppointmentPanel({
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Shows on calendar as <span className="text-foreground">{title}</span>{" "}
+              Shows on calendar as <span className="font-medium text-primary">{title}</span>{" "}
               <button
                 type="button"
-                className="font-medium text-foreground underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+                className="font-medium text-primary underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
                 onClick={() => setEditingTitle(true)}
               >
                 Edit
@@ -773,7 +763,7 @@ export function BookAppointmentPanel({
           ) : (
             <button
               type="button"
-              className="text-sm font-medium underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
+              className="text-sm font-medium text-primary underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none"
               onClick={() => setEditingNotes(true)}
             >
               + Add note

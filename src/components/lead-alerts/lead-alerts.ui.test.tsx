@@ -238,10 +238,11 @@ assert.match(bookModal, /Meeting/);
 assert.match(bookModal, /Inspection/);
 assert.match(bookModal, /Pre-bid/);
 assert.match(bookModal, />1h</);
-assert.match(bookModal, /No email on file/);
+assert.match(bookModal, /Text \+ email confirmation, reminder the day before/);
+assert.match(bookModal, /No conflicts on your calendar/);
+assert.match(bookModal, /type="date"/);
 assert.match(bookModal, /Book site walk/);
 assert.match(bookModal, /Dana Alvarez/);
-assert.doesNotMatch(bookModal, /No conflicts on your calendar/);
 
 const updateModal = text(renderToStaticMarkup(
   <UpdateLeadPanel
