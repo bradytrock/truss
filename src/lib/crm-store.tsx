@@ -1544,6 +1544,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const bookEpoch = useRef(0);
   const bookRef = useRef(state);
   bookRef.current = state;
+  const threadOpenWrites = useRef(new Map<string, number>());
   const guestInviteColumnWarned = useRef(false);
   const enqueueAutomationEventRef = useRef<(event: AutomationEvent) => void>(() => undefined);
   const syncMaterialOrderDeliveryRef = useRef<(order: MaterialOrder) => void>(() => undefined);
@@ -2004,7 +2005,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       void liveRefresh();
     };
 
-    const kick = (payload: { new?: unknown; old?: unknown }) => {
+    const kick = (payload: { table?: string; new?: unknown; old?: unknown }) => {
+      // A read receipt is already applied locally. Reloading the book here
+      // turned one inbox click into a full company fetch.
+      if (payload.table === "message_thread_opens") return;
       pendingIds.push(changedRowId(payload));
       window.clearTimeout(timer);
       timer = window.setTimeout(() => drain(0), 350);
@@ -2842,7 +2846,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     async (threadKey: string) => {
       const key = threadKey.trim();
       if (!key || !looksLikeUuid(user.id) || !user.companyId) return;
-      const openedAt = new Date().toISOString();
+      const writeKey = `${user.id}:${key}`;
+      const nowMs = Date.now();
+      const lastWrite = threadOpenWrites.current.get(writeKey) ?? 0;
+      // The inbox effect used to call this on every book update. One write per open is enough.
+      if (nowMs - lastWrite < 2000) return;
+      threadOpenWrites.current.set(writeKey, nowMs);
+      const openedAt = new Date(nowMs).toISOString();
       setState((prev) => {
         const opens = Array.isArray(prev.messageThreadOpens) ? prev.messageThreadOpens : [];
         const existing = opens.find(

@@ -807,7 +807,9 @@ export function MessagesInbox() {
 
   useEffect(() => {
     if (selected?.key) void crm.markThreadOpened(selected.key);
-  }, [crm, selected?.key]);
+    // `crm` is a new object whenever the book changes. Depending on it rewrote
+    // this read receipt on every render, and that write storm pinned the database.
+  }, [crm.markThreadOpened, selected?.key]);
 
   const pickerPeople = useMemo(() => {
     const needle = pickerQuery.trim().toLowerCase();
