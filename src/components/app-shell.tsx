@@ -104,7 +104,6 @@ function navSections(options: { bdOnly: boolean }): NavSection[] {
           { href: "/messages", label: "Inbox" },
           { href: "/calls", label: "Calls" },
           { href: "/jobs", label: "Jobs" },
-          { href: "/commissions", label: "Commissions" },
           { href: "/insurance", label: "Insurance" },
           { href: "/map", label: "Map" },
           { href: "/contacts", label: "Agents & contacts" },

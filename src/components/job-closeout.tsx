@@ -10,6 +10,7 @@ import {
   canMarkCommissionPayout,
   canSubmitProjectCloseout,
 } from "@/lib/commission-closeout";
+import { isBusinessDevelopment } from "@/lib/bd";
 import { expensesForJob, forecastedExpensesForJob, paymentsForJob } from "@/lib/job-financials";
 import type { Job } from "@/lib/types";
 
@@ -122,7 +123,11 @@ export function JobCloseout({ job }: { job: Job }) {
       {closeout?.status === "released" ? (
         <p className="text-sm text-muted-foreground">
           Ready for Review
-          {closeout.releasedToName ? ` — ${closeout.releasedToName} reviews this on Commissions.` : "."}
+          {closeout.releasedToName
+            ? ` — ${closeout.releasedToName} reviews this ${
+                isBusinessDevelopment(actor?.role) ? "on the job" : "on Commissions"
+              }.`
+            : "."}
         </p>
       ) : null}
       {canPayout ? (

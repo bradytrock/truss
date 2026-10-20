@@ -253,6 +253,7 @@ import {
   type CommissionSplitLine,
   type ExpenseAdjustment,
 } from "@/lib/commission-closeout";
+import { isBusinessDevelopment } from "@/lib/bd";
 import {
   NORTHLINE_COMPANY,
   STAGE_LABELS,
@@ -8901,15 +8902,27 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const saved = await persistCloseout(next, current);
       if (!saved) return null;
       await finishCloseoutTasks(job.id, CLOSEOUT_REVIEW_TASK);
+      const reviewOnCommissions = !isBusinessDevelopment(recipient.role);
+      const jobLabel = job.code || job.name;
       await fileCloseoutNotice({
         job,
         title: closeoutTaskTitle("payout", job.code),
-        notes: `${actor.name} released ${job.code || job.name} for payout. Review it on Commissions before the check is marked.`,
+        notes: reviewOnCommissions
+          ? `${actor.name} released ${jobLabel} for payout. Review it on Commissions before the check is marked.`
+          : `${actor.name} released ${jobLabel} for payout. Review it on the job before the check is marked.`,
         audience: [recipient],
-        sms: `${job.code || job.name} is ready for review. Open Commissions to review your closeout.`,
-        activity: `${actor.name} released the closeout. ${recipient.name} can review it on Commissions.`,
+        sms: reviewOnCommissions
+          ? `${jobLabel} is ready for review. Open Commissions to review your closeout.`
+          : `${jobLabel} is ready for review. Open the job to review your closeout.`,
+        activity: reviewOnCommissions
+          ? `${actor.name} released the closeout. ${recipient.name} can review it on Commissions.`
+          : `${actor.name} released the closeout. ${recipient.name} can review it on the job.`,
       });
-      toast.success(`Sent to ${recipient.name}. It is ready for review on Commissions.`);
+      toast.success(
+        reviewOnCommissions
+          ? `Sent to ${recipient.name}. It is ready for review on Commissions.`
+          : `Sent to ${recipient.name}. It is ready for review on the job.`,
+      );
       return saved;
     },
     [effectiveStaff, fileCloseoutNotice, finishCloseoutTasks, persistCloseout, sheetForCloseout, state.commissionCloseouts, state.jobs, state.staff],

@@ -433,4 +433,24 @@ assert.match(readyRow?.detail ?? "", /Ready for review on Commissions/);
 const readyLink = readyRow?.actions.find((action) => action.type === "link");
 assert.equal(readyLink?.type === "link" ? readyLink.href : "", "/commissions");
 
+const bdPayoutReview = base({
+  jobs: [closeoutJob],
+  opportunities: [opportunity({ id: "opp-co", stage: "awarded" })],
+  tasks: [
+    task({
+      id: "co-ready",
+      title: "Ready for review BJ100426-A",
+      dueAt: "2026-10-13",
+      relatedType: "job",
+      relatedId: "job-co",
+    }),
+  ],
+  showCommissions: false,
+});
+const bdReady = bdPayoutReview.rows.find((row) => row.id === "task-co-ready");
+assert.equal(bdReady?.titleHref, "/jobs?job=job-co");
+assert.equal(bdReady?.detail.includes("Commissions"), false);
+const bdReadyLink = bdReady?.actions.find((action) => action.type === "link");
+assert.equal(bdReadyLink?.type === "link" ? bdReadyLink.href : "", "/jobs?job=job-co");
+
 console.log("home-desk tests passed");

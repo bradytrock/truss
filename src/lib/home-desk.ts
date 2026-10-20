@@ -145,6 +145,8 @@ export type HomeDeskInput = {
   accounting: Array<{ id: string; title: string; detail: string; href: string }>;
   returning: Array<{ notice: ReturningClientLead; title: string; href: string }>;
   jobCodes: JobCodeReviewNotice[];
+  /** Business development seats do not use the Commissions desk. */
+  showCommissions?: boolean;
 };
 
 const STAGE_TONE: Record<string, HomeDeskStage["tone"]> = {
@@ -294,6 +296,12 @@ function taskRows(
     .filter((row): row is HomeDeskRow => Boolean(row));
 }
 
+function closeoutHref(input: HomeDeskInput, job: Job | undefined, payoutReview: boolean) {
+  if (input.showCommissions !== false && (payoutReview || !job)) return "/commissions";
+  if (job) return jobRecordHref(job.id);
+  return "/";
+}
+
 function taskRow(
   task: Task,
   input: HomeDeskInput,
@@ -322,7 +330,7 @@ function taskRow(
 
   if (closeout) {
     const payoutReview = isPayoutReviewTask(task.title);
-    const href = payoutReview ? "/commissions" : related ? jobRecordHref(related.id) : "/commissions";
+    const href = closeoutHref(input, related, payoutReview);
     return {
       id: `task-${task.id}`,
       badge: "CLOSEOUT",
@@ -330,7 +338,9 @@ function taskRow(
       title: task.title,
       titleHref: href,
       detail: payoutReview
-        ? [related?.code, "Ready for review on Commissions"].filter(Boolean).join(" · ")
+        ? [related?.code, input.showCommissions === false ? "Ready for review" : "Ready for review on Commissions"]
+            .filter(Boolean)
+            .join(" · ")
         : detail || "Compare QuickBooks to job expenses, then release commission.",
       status: dueLabel(task.dueAt, now),
       statusTone: late > 0 ? "late" : "today",
@@ -472,7 +482,7 @@ function closeoutRows(input: HomeDeskInput, jobs: Job[]): HomeDeskRow[] {
         badge: "CLOSEOUT" as const,
         buckets: ["reviews", "money"] as DeskBucket[],
         title: `Review closeout — ${name}`,
-        titleHref: job ? jobRecordHref(job.id) : "/commissions",
+        titleHref: closeoutHref(input, job, false),
         detail: [job?.code, "Compare QuickBooks to job expenses, then release commission"].filter(Boolean).join(" · "),
         status: "Due today",
         statusTone: "today" as const,
@@ -487,7 +497,7 @@ function closeoutRows(input: HomeDeskInput, jobs: Job[]): HomeDeskRow[] {
           {
             type: "link" as const,
             label: "Review",
-            href: job ? jobRecordHref(job.id) : "/commissions",
+            href: closeoutHref(input, job, false),
             solid: true,
           },
         ],

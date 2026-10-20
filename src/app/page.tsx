@@ -117,6 +117,7 @@ export default function HomePage() {
         };
       }),
       jobCodes: jobCodeReviews,
+      showCommissions: !viewer || !isBusinessDevelopment(viewer.role),
     });
   }, [crm, jobCodeReviews, returningNotices, reviewNotices]);
 
