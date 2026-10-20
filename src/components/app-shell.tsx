@@ -281,8 +281,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     >
       <aside
         className={cn(
-          "hidden h-full flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex",
-          fillLayout ? "min-h-0" : "min-h-dvh",
+          "hidden flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex",
+          fillLayout ? "h-full min-h-0" : "sticky top-0 h-dvh self-start",
         )}
       >
         <div className="flex items-start gap-1 border-b border-sidebar-border px-3 py-3.5">
@@ -294,7 +294,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </span>
           </Link>
         </div>
-        <div className={cn("py-1", fillLayout ? "min-h-0 flex-1 overflow-y-auto" : "flex-1")}>
+        <div className="min-h-0 flex-1 overflow-y-auto py-1">
           <Nav pathname={pathname} />
         </div>
         <div className="mt-auto border-t border-sidebar-border px-4 py-3">
