@@ -8,7 +8,7 @@ import { Bell } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { buttonVariants } from "@/components/ui/button";
 import { useCrm } from "@/lib/crm-store";
-import { bookLeadAppointment, editSeedForLead, saveLeadUpdate } from "@/lib/lead-follow-up";
+import { appointmentBookingContext, bookLeadAppointment, editSeedForLead, saveLeadUpdate } from "@/lib/lead-follow-up";
 import { updateLeadDetails } from "@/lib/lead-alerts-api";
 import {
   LEAD_ALERT_SUPPRESS,
@@ -350,10 +350,23 @@ function NotificationsSession() {
     ) : null}
     <BookAppointmentDialog
       alert={followUp?.type === "book" ? followUp.alert : null}
+      {...(followUp?.type === "book"
+        ? appointmentBookingContext(
+            {
+              getOpportunity: crm.getOpportunity,
+              getJob: crm.getJob,
+              getContact: crm.getContact,
+              userName: user.name,
+              staff: crm.staff,
+              events: crm.events,
+            },
+            followUp.alert.lead,
+          )
+        : {})}
       onClose={() => setFollowUp(null)}
       onSubmit={async (input) => {
         if (followUp?.type !== "book") return;
-        await bookLeadAppointment(crm, followUp.alert, input, user.name);
+        await bookLeadAppointment(crm, followUp.alert, input, input.assignee || user.name);
         setFollowUp(null);
         window.dispatchEvent(new Event(NOTIFICATIONS_REFRESH));
       }}
