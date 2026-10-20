@@ -329,6 +329,7 @@ export function JobRecord({
   const editPages = canEditPages(seatRole);
   const allowCompanyCamMap = canManageCompanyCamMapping(seatRole);
   const showTraining = canViewTraining(seatRole);
+  const managePhotos = canManageJobPhotos(seatRole);
   const requestedTab = parseJobTab(searchParams.get("tab"));
   const tab =
     (requestedTab === "financials" && !showFinancials) ||
@@ -836,7 +837,7 @@ export function JobRecord({
                   className="aspect-[16/10] w-full object-cover"
                 />
               </button>
-            ) : (
+            ) : managePhotos && !deleted ? (
               <button
                 type="button"
                 onClick={() => setPhotoOpen(true)}
@@ -845,6 +846,11 @@ export function JobRecord({
                 <ImageIcon className="size-8" />
                 <span className="text-sm">Add a job-site photo</span>
               </button>
+            ) : (
+              <div className="flex aspect-[16/10] w-full flex-col items-center justify-center gap-2 text-muted-foreground">
+                <ImageIcon className="size-8" />
+                <span className="text-sm">No job-site photo yet</span>
+              </div>
             )}
             {shownPhoto && job.primaryPhotoId === shownPhoto.id ? (
               <span className="absolute bottom-3 left-3 rounded-sm bg-background/90 px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase">
@@ -1512,8 +1518,10 @@ export function JobRecord({
           />
           <JobPhotosPanel
             jobId={job.id}
-            disabled={deleted}
-            onAddPhoto={() => setPhotoOpen(true)}
+            disabled={deleted || !managePhotos}
+            onAddPhoto={() => {
+              if (managePhotos) setPhotoOpen(true);
+            }}
           />
         </TabsContent>
 
