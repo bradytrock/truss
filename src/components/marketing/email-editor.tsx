@@ -30,6 +30,7 @@ import {
   Star,
   Type,
   UserRound,
+  X,
   RectangleHorizontal,
   Images,
   Hash,
@@ -47,7 +48,9 @@ import {
   EMAIL_CAMPAIGN_AUDIENCE_LABELS,
   EMAIL_CAMPAIGN_SEND_CAP,
   resolveEmailCampaignAudience,
+  splitCampaignRecipients,
   type EmailCampaignAudience,
+  type EmailCampaignRecipient,
 } from "@/lib/marketing/email-campaigns";
 import {
   EMAIL_BLOCK_LABELS,
@@ -121,14 +124,16 @@ export function EmailStudio({ documentId }: { documentId?: string }) {
     document.querySelector(`[data-block-id="${selectedId}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [selectedId, step]);
   const selected = doc?.blocks.find((block) => block.id === activeBlockId) ?? null;
-  const recipients = useMemo(() => {
-    if (!doc) return [];
-    return resolveEmailCampaignAudience(doc.audienceKind, crm.contacts, crm.jobs, {
+  const audience = useMemo(() => {
+    if (!doc) return { sending: [] as EmailCampaignRecipient[], removed: [] as EmailCampaignRecipient[] };
+    const resolved = resolveEmailCampaignAudience(doc.audienceKind, crm.contacts, crm.jobs, {
       city: doc.city,
       zip: doc.zip,
       includePunch: doc.includePunch,
     });
+    return splitCampaignRecipients(resolved, doc.excludedContactIds ?? []);
   }, [crm.contacts, crm.jobs, doc]);
+  const recipients = audience.sending;
 
   function withDoc(update: (current: EmailDocument) => EmailDocument) {
     setDraft((current) => {
@@ -140,6 +145,26 @@ export function EmailStudio({ documentId }: { documentId?: string }) {
 
   function patch(partial: Partial<EmailDocument>) {
     withDoc((current) => ({ ...current, ...partial, updatedAt: new Date().toISOString() }));
+  }
+
+  function removeRecipient(contactId: string) {
+    withDoc((current) => {
+      const excluded = current.excludedContactIds ?? [];
+      if (excluded.includes(contactId)) return current;
+      return {
+        ...current,
+        excludedContactIds: [...excluded, contactId],
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  }
+
+  function restoreRecipient(contactId: string) {
+    withDoc((current) => ({
+      ...current,
+      excludedContactIds: (current.excludedContactIds ?? []).filter((id) => id !== contactId),
+      updatedAt: new Date().toISOString(),
+    }));
   }
 
   function patchBlock(id: string, partial: Partial<EmailBlock>) {
@@ -482,14 +507,17 @@ export function EmailStudio({ documentId }: { documentId?: string }) {
       ) : null}
 
       {step === "audience" ? (
-        <div className="mx-auto w-full max-w-xl space-y-4 overflow-y-auto p-6">
+        <div className="mx-auto min-h-0 w-full max-w-xl flex-1 space-y-4 overflow-y-auto p-6">
           <h2 className="font-heading text-2xl">Who gets this</h2>
           {(Object.keys(EMAIL_CAMPAIGN_AUDIENCE_LABELS) as EmailCampaignAudience[]).map((kind) => {
-            const count = resolveEmailCampaignAudience(kind, crm.contacts, crm.jobs, {
-              city: doc.city,
-              zip: doc.zip,
-              includePunch: doc.includePunch,
-            }).length;
+            const count = splitCampaignRecipients(
+              resolveEmailCampaignAudience(kind, crm.contacts, crm.jobs, {
+                city: doc.city,
+                zip: doc.zip,
+                includePunch: doc.includePunch,
+              }),
+              doc.excludedContactIds ?? [],
+            ).sending.length;
             return (
               <label key={kind} className="flex cursor-pointer items-center gap-3 rounded-lg border border-[#e7e4df] bg-white px-3 py-3">
                 <input type="radio" checked={doc.audienceKind === kind} onChange={() => patch({ audienceKind: kind })} />
@@ -508,17 +536,36 @@ export function EmailStudio({ documentId }: { documentId?: string }) {
             <p className="font-heading text-3xl">{Math.min(recipients.length, EMAIL_CAMPAIGN_SEND_CAP)}</p>
             <p className="text-sm text-white/70">
               recipients this send{recipients.length > EMAIL_CAMPAIGN_SEND_CAP ? ` · ${recipients.length} on the list` : ""}
+              {audience.removed.length > 0 ? ` · ${audience.removed.length} removed` : ""}
             </p>
           </div>
+          <RecipientRoster
+            sending={recipients}
+            removed={audience.removed}
+            emptyHint={
+              doc.audienceKind === "storm" && !doc.city.trim() && !doc.zip.trim()
+                ? "Add a city or ZIP to see who is on this list."
+                : "Nobody with an email is on this send."
+            }
+            onRemove={removeRecipient}
+            onRestore={restoreRecipient}
+          />
         </div>
       ) : null}
 
       {step === "review" ? (
-        <div className="mx-auto grid w-full max-w-3xl gap-4 overflow-y-auto p-6">
+        <div className="mx-auto grid min-h-0 w-full max-w-3xl flex-1 gap-4 overflow-y-auto p-6">
           <h2 className="font-heading text-2xl">Review and send</h2>
           <p className="text-sm text-[#6f6a64]">
             From {RESEND_FROM_ADDRESS}. Replies go to {crm.effectiveStaff?.email || "the email on your profile"}. Merge fields fill in for each person.
           </p>
+          <RecipientRoster
+            sending={recipients}
+            removed={audience.removed}
+            emptyHint="Nobody with an email is on this send."
+            onRemove={removeRecipient}
+            onRestore={restoreRecipient}
+          />
           <div className="overflow-hidden rounded-xl border border-[#e7e4df] bg-white">
             <Canvas
               doc={doc}
@@ -535,6 +582,89 @@ export function EmailStudio({ documentId }: { documentId?: string }) {
               locked
             />
           </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  const letters = parts.slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("");
+  return letters || "?";
+}
+
+function RecipientRoster({
+  sending,
+  removed,
+  emptyHint,
+  onRemove,
+  onRestore,
+}: {
+  sending: EmailCampaignRecipient[];
+  removed: EmailCampaignRecipient[];
+  emptyHint: string;
+  onRemove: (contactId: string) => void;
+  onRestore: (contactId: string) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="text-sm font-medium">Who is on this send</h3>
+        <p className="text-xs text-[#8a8680]">
+          {sending.length === 0 ? "No one yet" : `${sending.length} ${sending.length === 1 ? "person" : "people"}`}
+        </p>
+      </div>
+      {sending.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-[#e7e4df] bg-white px-3 py-4 text-sm text-[#6f6a64]">{emptyHint}</p>
+      ) : (
+        <ul className="space-y-2">
+          {sending.map((row, index) => {
+            const pastCap = index >= EMAIL_CAMPAIGN_SEND_CAP;
+            return (
+              <li key={row.contactId} className="flex items-center gap-3 rounded-lg border border-[#e7e4df] bg-white px-3 py-2.5">
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-[#f4f1ea] text-[11px] font-medium text-[#3f3c38]">
+                  {initials(row.name)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium">{row.name}</span>
+                    {pastCap ? <span className="shrink-0 text-[11px] text-[#8a8680]">Past the {EMAIL_CAMPAIGN_SEND_CAP} limit</span> : null}
+                  </span>
+                  <span className="block truncate text-xs text-[#6f6a64]">
+                    {row.email}
+                    {row.jobCity ? ` · ${row.jobCity}` : ""}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-[#6f6a64] hover:bg-[#f6f3ee] hover:text-[#1c1b1a]"
+                  onClick={() => onRemove(row.contactId)}
+                >
+                  <X className="size-3.5" />
+                  Remove
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {removed.length > 0 ? (
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium text-[#6f6a64]">Removed from this send</h3>
+          <ul className="space-y-2">
+            {removed.map((row) => (
+              <li key={row.contactId} className="flex items-center gap-3 rounded-lg border border-dashed border-[#e7e4df] bg-white/70 px-3 py-2">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-[#6f6a64] line-through">{row.name}</span>
+                  <span className="block truncate text-xs text-[#8a8680]">{row.email}</span>
+                </span>
+                <button type="button" className="shrink-0 text-xs font-medium text-primary" onClick={() => onRestore(row.contactId)}>
+                  Add back
+                </button>
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
     </div>

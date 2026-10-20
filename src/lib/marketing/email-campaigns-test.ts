@@ -1,6 +1,7 @@
 import {
   applyEmailCampaignMerge,
   resolveEmailCampaignAudience,
+  splitCampaignRecipients,
   type EmailCampaignRecipient,
 } from "./email-campaigns";
 import type { Contact, Job } from "../types";
@@ -103,6 +104,11 @@ assert(
   "storm zip",
 );
 assert(resolveEmailCampaignAudience("storm", contacts, jobs, {}).length === 0, "storm needs a place");
+
+const stormList = resolveEmailCampaignAudience("storm", contacts, jobs, { city: "Plano" });
+const split = splitCampaignRecipients(stormList, ["c2", "missing"]);
+assert(split.sending.length === 0 && split.removed.map((row) => row.contactId).join() === "c2", "exclude contact");
+assert(splitCampaignRecipients(stormList, []).sending.length === stormList.length, "empty exclusions keep the list");
 
 const recipient: EmailCampaignRecipient = {
   contactId: "c2",
