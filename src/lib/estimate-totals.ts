@@ -251,6 +251,24 @@ export function contractValueForOpportunity(
   return amountForEstimate(preferred, lines, market);
 }
 
+/**
+ * Dollars to write onto the lead/job once a PM has a priced estimate.
+ * Returns 0 when there is nothing to push yet (keep the BD estimated value).
+ */
+export function pricedEstimatePipelineValue(
+  estimateId: string,
+  estimates: Estimate[],
+  lines: EstimateLine[],
+  market?: JobMarket | "" | null,
+) {
+  const estimate = estimates.find((item) => item.id === estimateId && !item.archivedAt);
+  if (!estimate || estimate.status === "declined") return 0;
+  if (estimate.opportunityId) {
+    return contractValueForOpportunity(estimate.opportunityId, estimates, lines, 0, market);
+  }
+  return amountForEstimate(estimate, lines, market);
+}
+
 export function lineLabel(line: Pick<EstimateLine, "title" | "description">) {
   const title = line.title.trim();
   const description = line.description.trim();

@@ -5,6 +5,7 @@ import {
   featuredEstimateForJob,
   estimateTotals,
   invoiceLinesFromEstimate,
+  pricedEstimatePipelineValue,
   toClientFacingProposal,
 } from "./estimate-totals.ts";
 import type { Estimate, EstimateLine } from "./types.ts";
@@ -177,5 +178,38 @@ assert.deepEqual(
 assert.equal(BOARD_ESTIMATE_TAG_LABELS.signed, "Estimate Signed");
 assert.equal(BOARD_ESTIMATE_TAG_LABELS.sent, "Estimate Sent");
 assert.equal(BOARD_ESTIMATE_TAG_LABELS.viewed, "Estimate Viewed");
+
+const pricedDraft = estimateRow({
+  id: "priced",
+  status: "draft",
+  opportunityId: "opp_1",
+});
+const pricedLine: EstimateLine = {
+  id: "line_priced",
+  estimateId: "priced",
+  catalogItemId: null,
+  title: "Roof",
+  description: "",
+  quantity: 1,
+  unitCost: 12500,
+  unit: "ea",
+  optional: false,
+  selected: true,
+  taxable: false,
+  sortOrder: 0,
+  package: "",
+  photoIds: [],
+  groupName: "",
+};
+assert.equal(pricedEstimatePipelineValue("priced", [pricedDraft], [pricedLine]), 12500);
+assert.equal(pricedEstimatePipelineValue("priced", [pricedDraft], []), 0);
+assert.equal(
+  pricedEstimatePipelineValue(
+    "priced",
+    [{ ...pricedDraft, status: "declined" }],
+    [pricedLine],
+  ),
+  0,
+);
 
 console.log("estimate-totals.test.ts ok");

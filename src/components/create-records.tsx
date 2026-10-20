@@ -25,7 +25,9 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { AddressStreetField } from "@/components/address-street-field";
+import { CurrencyInput } from "@/components/currency-input";
 import { PhoneInput } from "@/components/phone-input";
+import { moneyAmount } from "@/lib/money-input";
 import {
   QuickFooter,
   QuickHeader,
@@ -98,6 +100,7 @@ export function CreateOpportunityDialog({
   const [region, setRegion] = useState(DEFAULT_LEAD_STATE);
   const [postalCode, setPostalCode] = useState("");
   const [source, setSource] = useState<LeadSource | "">("");
+  const [estimatedValue, setEstimatedValue] = useState("");
   const [market, setMarket] = useState<JobMarket>("residential");
   const [trades, setTrades] = useState<Trade[]>([]);
   const [referralId, setReferralId] = useState("");
@@ -148,6 +151,7 @@ export function CreateOpportunityDialog({
     setRegion(DEFAULT_LEAD_STATE);
     setPostalCode("");
     setSource("");
+    setEstimatedValue("");
     setMarket("residential");
     setTrades([]);
     setReferralId("");
@@ -202,12 +206,13 @@ export function CreateOpportunityDialog({
           ownerStaffId: owner?.id || contact.ownerStaffId,
         });
       }
+      const pipelineValue = Math.max(0, moneyAmount(estimatedValue) ?? 0);
       const opportunity = await crm.addOpportunity({
         name: leadName(first, last, site || city.trim()),
         clientId: null,
         primaryContactId: contact.id,
         stage: "pursuing",
-        value: 0,
+        value: pipelineValue,
         bidDueAt: null,
         preBidWalkAt: null,
         location: site || city.trim() || "Address TBD",
@@ -490,6 +495,23 @@ export function CreateOpportunityDialog({
                 </SelectContent>
               </Select>
             </div>
+
+            {bdSeat && source ? (
+              <div>
+                <QuickLabel htmlFor="lead-estimated-value">Estimated value</QuickLabel>
+                <CurrencyInput
+                  id="lead-estimated-value"
+                  className={quickFieldClass}
+                  value={estimatedValue}
+                  onValueChange={setEstimatedValue}
+                  placeholder="$0.00"
+                />
+                <QuickHint>
+                  Pipeline value for this lead. When a project manager prices an estimate, the job
+                  value updates from that proposal.
+                </QuickHint>
+              </div>
+            ) : null}
 
             {leadNeedsReferrer(source) ? (
               <div>

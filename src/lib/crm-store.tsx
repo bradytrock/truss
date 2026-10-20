@@ -62,6 +62,7 @@ import {
   fillEstimate,
   fillEstimateLine,
   invoiceLinesFromEstimate,
+  pricedEstimatePipelineValue,
 } from "@/lib/estimate-totals";
 import {
   applyCompanyTermsToOpenDocuments,
@@ -3458,6 +3459,43 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     return finish(true);
   }, [recordCompanyAudit, state.jobs]);
 
+  /** Push a priced estimate onto the lead/job. Leaves BD estimated value alone until there is a total. */
+  const syncPipelineValueFromEstimate = useCallback(
+    async (
+      estimateId: string,
+      book?: {
+        estimates?: typeof state.estimates;
+        estimateLines?: typeof state.estimateLines;
+        jobs?: typeof state.jobs;
+        opportunities?: typeof state.opportunities;
+      },
+    ) => {
+      const estimates = book?.estimates ?? state.estimates;
+      const estimateLines = book?.estimateLines ?? state.estimateLines;
+      const jobs = book?.jobs ?? state.jobs;
+      const opportunities = book?.opportunities ?? state.opportunities;
+      const estimate = estimates.find((item) => item.id === estimateId);
+      if (!estimate) return;
+      const market = marketForEstimate(estimate, jobs, opportunities);
+      const total = pricedEstimatePipelineValue(estimateId, estimates, estimateLines, market);
+      if (total <= 0) return;
+      if (estimate.opportunityId) {
+        const opportunity = opportunities.find((item) => item.id === estimate.opportunityId);
+        if (opportunity && opportunity.value !== total) {
+          await updateOpportunity(estimate.opportunityId, { value: total }, { skipAudit: true });
+        }
+        return;
+      }
+      if (estimate.jobId) {
+        const job = jobs.find((item) => item.id === estimate.jobId);
+        if (job && job.contractValue !== total) {
+          await updateJob(estimate.jobId, { contractValue: total }, { skipAudit: true });
+        }
+      }
+    },
+    [state.estimateLines, state.estimates, state.jobs, state.opportunities, updateJob, updateOpportunity],
+  );
+
   const deleteJob = useCallback(
     async (id: string, reason: string) => {
       const trimmed = reason.trim();
@@ -5236,6 +5274,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           relatedJobId: estimate.jobId,
           relatedOpportunityId: estimate.opportunityId,
         });
+        if (copiedLines.length) {
+          void syncPipelineValueFromEstimate(estimate.id, {
+            estimates: [estimate, ...state.estimates],
+            estimateLines: [...state.estimateLines, ...copiedLines],
+          });
+        }
         return estimate;
       }
       const payload = {
@@ -5388,6 +5432,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         relatedJobId: mapped.jobId,
         relatedOpportunityId: mapped.opportunityId,
       });
+      if (lines.length) {
+        void syncPipelineValueFromEstimate(mapped.id, {
+          estimates: [mapped, ...state.estimates],
+          estimateLines: [...state.estimateLines, ...lines],
+        });
+      }
       return mapped;
     },
     [
@@ -5397,8 +5447,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       state.estimateTemplateLines,
       state.estimateTemplates,
       state.estimates,
+      state.estimateLines,
       state.jobs,
       state.opportunities,
+      syncPipelineValueFromEstimate,
       user.companyId,
       companySettings.defaultEstimateTerms,
     ]
@@ -5453,10 +5505,30 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         });
       }
     };
+    const touchesValue =
+      patch.taxRate !== undefined ||
+      patch.discountKind !== undefined ||
+      patch.discountValue !== undefined ||
+      patch.depositKind !== undefined ||
+      patch.depositValue !== undefined ||
+      patch.subtotalOverride !== undefined ||
+      patch.marginPercent !== undefined ||
+      patch.packageMode !== undefined ||
+      patch.selectedPackage !== undefined ||
+      patch.hideLinePrices !== undefined;
+    const pushPipelineValue = () => {
+      if (!touchesValue) return;
+      void syncPipelineValueFromEstimate(id, {
+        estimates: state.estimates.map((estimate) =>
+          estimate.id === id ? fillEstimate({ ...estimate, ...patch }) : estimate,
+        ),
+      });
+    };
     const supabase = maybeClient();
     if (!supabase) {
       apply();
       await finish();
+      pushPipelineValue();
       return;
     }
     const { error } = await supabase.from("estimates").update(estimatePatch(patch)).eq("id", id);
@@ -5469,18 +5541,21 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         apply();
         toast.message(missingEstimatePackagesMessage());
         await finish();
+        pushPipelineValue();
         return;
       }
       if (isMissingEstimateMargin(error)) {
         apply();
         toast.message(missingEstimateMarginMessage());
         await finish();
+        pushPipelineValue();
         return;
       }
       if (isMissingEstimateLumpSum(error)) {
         apply();
         toast.message(missingEstimateLumpSumMessage());
         await finish();
+        pushPipelineValue();
         return;
       }
       if (isMissingSignerLinks(error)) {
@@ -5499,6 +5574,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         apply();
         toast.message(missingEstimateWriterMessage());
         await finish();
+        pushPipelineValue();
         return;
       }
       if (isMissingEstimateContractType(error) && patch.contractTypeId !== undefined) {
@@ -5518,7 +5594,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     apply();
     await finish();
-  }, [companySettings, recordCompanyAudit, state.estimates]);
+    pushPipelineValue();
+  }, [companySettings, recordCompanyAudit, state.estimates, syncPipelineValueFromEstimate]);
 
   const sendEstimate = useCallback(
     async (id: string) => {
@@ -5620,6 +5697,26 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       }
       apply();
+      void syncPipelineValueFromEstimate(id, {
+        estimates: book.estimates.map((estimate) =>
+          estimate.id === id
+            ? {
+                ...estimate,
+                status: "sent" as const,
+                sentAt,
+                secondContactId: signing.secondContactId,
+                shareToken: tokens.shareToken,
+                secondShareToken: tokens.secondShareToken,
+                ownerSignedAt,
+                ownerSignedName,
+                terms,
+              }
+            : estimate,
+        ),
+        estimateLines: book.estimateLines,
+        jobs: book.jobs,
+        opportunities: book.opportunities,
+      });
       void recordCompanyAudit({
         entityType: "estimate",
         entityId: id,
@@ -5692,6 +5789,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       ensureLeadForEstimate,
       moveOpportunity,
       recordCompanyAudit,
+      syncPipelineValueFromEstimate,
       updateEstimate,
       user,
       recordEstimateSignatureEvent,
@@ -7211,7 +7309,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       const supabase = maybeClient();
       if (!supabase) {
-        setState((prev) => ({ ...prev, estimateLines: [...prev.estimateLines, line] }));
+        const nextLines = [...state.estimateLines, line];
+        setState((prev) => ({ ...prev, estimateLines: nextLines }));
+        void syncPipelineValueFromEstimate(estimateId, { estimateLines: nextLines });
         return line;
       }
       const payload = {
@@ -7270,13 +7370,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         return;
       }
       const saved = fillEstimateLine({ ...line, ...mapEstimateLine(data), id: data.id });
+      const nextLines = [...state.estimateLines, saved];
       setState((prev) => ({
         ...prev,
-        estimateLines: [...prev.estimateLines, saved],
+        estimateLines: nextLines,
       }));
+      void syncPipelineValueFromEstimate(estimateId, { estimateLines: nextLines });
       return saved;
     },
-    [companySettings, state.catalog, state.estimateLines, user.companyId]
+    [companySettings, state.catalog, state.estimateLines, syncPipelineValueFromEstimate, user.companyId]
   );
 
   const addEstimateLinesFromCatalog = useCallback(
@@ -7420,16 +7522,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const updateEstimateLine = useCallback(async (id: string, patch: Partial<EstimateLine>) => {
-    const apply = () =>
-      setState((prev) => ({
-        ...prev,
-        estimateLines: prev.estimateLines.map((line) =>
-          line.id === id ? fillEstimateLine({ ...line, ...patch }) : line
-        ),
-      }));
+    const current = state.estimateLines.find((line) => line.id === id);
+    const nextLines = state.estimateLines.map((line) =>
+      line.id === id ? fillEstimateLine({ ...line, ...patch }) : line,
+    );
+    const apply = () => setState((prev) => ({ ...prev, estimateLines: nextLines }));
     const supabase = maybeClient();
     if (!supabase) {
       apply();
+      if (current) void syncPipelineValueFromEstimate(current.estimateId, { estimateLines: nextLines });
       return;
     }
     const { error } = await supabase.from("estimate_lines").update(estimateLinePatch(patch)).eq("id", id);
@@ -7437,33 +7538,36 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (isMissingEstimatePackages(error)) {
         apply();
         toast.message(missingEstimatePackagesMessage());
+        if (current) void syncPipelineValueFromEstimate(current.estimateId, { estimateLines: nextLines });
         return;
       }
       if (isMissingEstimateLinePhotos(error)) {
         apply();
         toast.message(missingEstimateLinePhotosMessage());
+        if (current) void syncPipelineValueFromEstimate(current.estimateId, { estimateLines: nextLines });
         return;
       }
       if (isMissingEstimateWriter(error)) {
         apply();
         toast.message(missingEstimateWriterMessage());
+        if (current) void syncPipelineValueFromEstimate(current.estimateId, { estimateLines: nextLines });
         return;
       }
       toast.error(error.message);
       return;
     }
     apply();
-  }, []);
+    if (current) void syncPipelineValueFromEstimate(current.estimateId, { estimateLines: nextLines });
+  }, [state.estimateLines, syncPipelineValueFromEstimate]);
 
   const removeEstimateLine = useCallback(async (id: string) => {
-    const apply = () =>
-      setState((prev) => ({
-        ...prev,
-        estimateLines: prev.estimateLines.filter((line) => line.id !== id),
-      }));
+    const current = state.estimateLines.find((line) => line.id === id);
+    const nextLines = state.estimateLines.filter((line) => line.id !== id);
+    const apply = () => setState((prev) => ({ ...prev, estimateLines: nextLines }));
     const supabase = maybeClient();
     if (!supabase) {
       apply();
+      if (current) void syncPipelineValueFromEstimate(current.estimateId, { estimateLines: nextLines });
       return;
     }
     const { error } = await supabase.from("estimate_lines").delete().eq("id", id);
@@ -7472,7 +7576,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return;
     }
     apply();
-  }, []);
+    if (current) void syncPipelineValueFromEstimate(current.estimateId, { estimateLines: nextLines });
+  }, [state.estimateLines, syncPipelineValueFromEstimate]);
 
   const reorderEstimateLine = useCallback(
     async (id: string, direction: "up" | "down") => {
