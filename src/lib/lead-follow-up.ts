@@ -4,11 +4,13 @@ import {
   appointmentRangeError,
   leadEditSeed,
   type BookAppointmentInput,
+  type CalendarConflictEvent,
   type LeadAlert,
   type LeadEditSeed,
   type LeadSnapshot,
   type UpdateLeadInput,
 } from "@/lib/lead-alerts";
+import { parseGuestEmails } from "@/lib/calendar-invite";
 import { storedPhone } from "@/lib/phone";
 import {
   PROJECT_TYPES,
@@ -96,6 +98,31 @@ function projectTypeOrUndefined(serviceType: string): ProjectType | undefined {
   return (PROJECT_TYPES as readonly string[]).includes(serviceType) ? (serviceType as ProjectType) : undefined;
 }
 
+export function appointmentBookingContext(
+  crm: Pick<LeadFollowUpCrm, "getOpportunity" | "getJob" | "getContact"> & {
+    userName: string;
+    staff: Array<{ name: string; locked?: boolean }>;
+    events: CalendarConflictEvent[];
+  },
+  lead: LeadSnapshot,
+) {
+  const opportunity = lead.opportunity_id ? crm.getOpportunity(lead.opportunity_id) : undefined;
+  const job = lead.job_id ? crm.getJob(lead.job_id) : undefined;
+  const contactId = opportunity?.primaryContactId || job?.primaryContactId || "";
+  const contact = contactId ? crm.getContact(contactId) : undefined;
+  const assigneeName = crm.userName.trim();
+  const teammates = crm.staff
+    .filter((member) => member.name.trim() && !member.locked && member.name.trim() !== assigneeName)
+    .map((member) => member.name.trim())
+    .filter((name, index, all) => all.indexOf(name) === index);
+  return {
+    assigneeName,
+    teammates,
+    events: crm.events,
+    homeownerEmail: contact?.email?.trim() ?? "",
+  };
+}
+
 export async function bookLeadAppointment(
   crm: Pick<LeadFollowUpCrm, "getOpportunity" | "getJob" | "addScheduleEvent" | "addActivity">,
   alert: LeadAlert,
@@ -111,18 +138,19 @@ export async function bookLeadAppointment(
   const lead = alert.lead;
   const opportunity = lead.opportunity_id ? crm.getOpportunity(lead.opportunity_id) : undefined;
   const job = lead.job_id ? crm.getJob(lead.job_id) : undefined;
+  const chosenAssignee = input.assignee?.trim() || assignee.trim() || "You";
   await crm.addScheduleEvent({
     title,
     kind: input.kind,
     startsAt,
     endsAt,
     location: input.location.trim(),
-    assignee: assignee.trim() || "You",
+    assignee: chosenAssignee,
     opportunityId: lead.opportunity_id,
     jobId: lead.job_id,
     clientId: job?.clientId ?? opportunity?.clientId ?? null,
     notes: input.notes.trim(),
-    guestEmails: [],
+    guestEmails: parseGuestEmails(input.notifyEmail ?? ""),
   });
   const entityId = lead.job_id || lead.opportunity_id;
   if (!entityId) return;

@@ -1097,6 +1097,8 @@ type CrmContextValue = CrmState & {
     input: Omit<Client, "id"> & {
       contactName?: string;
       contactTitle?: string;
+      email?: string;
+      phone?: string;
       isReferralPartner?: boolean;
     }
   ) => Promise<Client>;
@@ -3952,9 +3954,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     async (input: Omit<Client, "id"> & {
       contactName?: string;
       contactTitle?: string;
+      email?: string;
+      phone?: string;
       isReferralPartner?: boolean;
     }) => {
-      const { contactName, contactTitle, isReferralPartner, ...clientInput } = input;
+      const { contactName, contactTitle, email, phone, isReferralPartner, ...clientInput } = input;
+      const contactEmail = email?.trim() ?? "";
+      const contactPhone = storedPhone(phone ?? "");
       const supabase = requireClient();
       if (!supabase) {
         const client: Client = { ...clientInput, id: crypto.randomUUID() };
@@ -3965,8 +3971,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
                 clientId: client.id,
                 name: contactName,
                 title: contactTitle || "Primary contact",
-                email: "",
-                phone: "",
+                email: contactEmail,
+                phone: contactPhone,
                 ownerStaffId: user.staffId,
                 isReferralPartner: Boolean(isReferralPartner),
                 listingWatchUrl: "",
@@ -4003,6 +4009,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             client_id: client.id,
             name: contactName,
             title: contactTitle || "Primary contact",
+            email: contactEmail,
+            phone: contactPhone,
             owner_staff_id: user.staffId || null,
             is_referral_partner: Boolean(isReferralPartner),
           })
@@ -8346,10 +8354,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error("Enter an amount.");
         return null;
       }
-      if (!input.vendor.trim()) {
-        toast.error("Enter the vendor.");
-        return null;
-      }
       const forecast: ForecastedExpense = {
         id: crypto.randomUUID(),
         number: nextNumber("FEST", (state.forecastedExpenses ?? []).map((item) => item.number)),
@@ -8363,7 +8367,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         createdBy: user.name,
       };
       const money = forecast.amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
-      const note = `Forecasted estimate ${forecast.number} · ${forecast.vendor} · ${money}.`;
+      const note = [
+        `Forecasted estimate ${forecast.number}`,
+        forecast.vendor,
+        money,
+      ]
+        .filter(Boolean)
+        .join(" · ") + ".";
       const supabase = maybeClient();
       if (!supabase) {
         setState((prev) => ({
@@ -8430,7 +8440,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           entityType: "job",
           entityId: saved.jobId,
           type: "note",
-          body: `Forecasted estimate ${saved.number} · ${saved.vendor} · ${saved.amount.toLocaleString("en-US", { style: "currency", currency: "USD" })}.`,
+          body: note,
         });
       }
       toast.success(`${saved.number} saved as a forecasted estimate.`);

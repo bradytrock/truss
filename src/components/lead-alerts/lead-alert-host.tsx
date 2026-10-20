@@ -12,7 +12,8 @@ import {
   UpdateLeadDialog,
 } from "@/components/lead-alerts/lead-alert-dialogs";
 import { useCrm } from "@/lib/crm-store";
-import { bookLeadAppointment, editSeedForLead, saveLeadUpdate } from "@/lib/lead-follow-up";
+import { appointmentBookingContext, bookLeadAppointment, editSeedForLead, saveLeadUpdate } from "@/lib/lead-follow-up";
+import { findReturningClient } from "@/lib/returning-client";
 import {
   LEAD_ALERT_SUPPRESS,
   acceptAlert,
@@ -90,6 +91,27 @@ function loadStamps(userId: string) {
   } catch {
     return [];
   }
+}
+
+function isPastClient(
+  crm: {
+    contacts: Parameters<typeof findReturningClient>[0]["contacts"];
+    jobs: Parameters<typeof findReturningClient>[0]["jobs"];
+    opportunities: Parameters<typeof findReturningClient>[0]["opportunities"];
+    staff: Parameters<typeof findReturningClient>[0]["staff"];
+  },
+  lead: LeadSnapshot,
+) {
+  const match = findReturningClient({
+    phone: lead.phone,
+    contacts: crm.contacts,
+    jobs: crm.jobs,
+    opportunities: crm.opportunities,
+    staff: crm.staff,
+  });
+  if (!match?.job) return false;
+  if (match.completedAt) return true;
+  return match.job.id !== lead.job_id;
 }
 
 function focusAlert(id: string) {
@@ -374,6 +396,7 @@ function LeadAlertSession() {
             now={now}
             coarse={coarse}
             isAdmin={isAdmin}
+            pastClient={isPastClient(crm, alert.lead)}
             onDismiss={() => dismiss(alert.id)}
             onCalled={() => dismiss(alert.id)}
             onPass={() => setModal({ type: "pass", alert })}
@@ -435,10 +458,23 @@ function LeadAlertSession() {
       ) : null}
       <BookAppointmentDialog
         alert={modal?.type === "book" ? modal.alert : null}
+        {...(modal?.type === "book"
+          ? appointmentBookingContext(
+              {
+                getOpportunity: crm.getOpportunity,
+                getJob: crm.getJob,
+                getContact: crm.getContact,
+                userName: user.name,
+                staff: crm.staff,
+                events: crm.events,
+              },
+              modal.alert.lead,
+            )
+          : {})}
         onClose={() => setModal(null)}
         onSubmit={async (input) => {
           if (modal?.type !== "book") return;
-          await bookLeadAppointment(crm, modal.alert, input, user.name);
+          await bookLeadAppointment(crm, modal.alert, input, input.assignee || user.name);
           dismiss(modal.alert.id);
           setModal(null);
           window.dispatchEvent(new Event(NOTIFICATIONS_REFRESH));
