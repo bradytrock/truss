@@ -241,6 +241,11 @@ export function canDeleteJobs(viewer: StaffMember | undefined) {
   return isCompanyLeader(viewer.role);
 }
 
+/** Field school / training resources. Business development does not use this library. */
+export function canViewTraining(role: SeatRole | undefined) {
+  return Boolean(role) && role !== "business_development";
+}
+
 export function canViewTeamTraining(role: SeatRole) {
   return isCompanyLeader(role) || role === "team_lead" || role === "team_admin";
 }
@@ -577,7 +582,7 @@ export function scopeDescription(
     return "Company admin — every job, contact, and report in the company.";
   }
   if (scope === "bd") {
-    return "Business development — pipeline you sourced, jobs from the agents you brought in, and company BD ROI. Assign the work; estimates, invoices, Paper, insurance, and closeout stay with ops.";
+    return "Business development — pipeline you sourced, jobs from the agents you brought in, and company BD ROI. Assign the work; estimates, invoices, Paper, insurance, closeout, and training stay with ops.";
   }
   if (scope === "team") {
     return `${team?.name ?? "Your team"} — every job and contact owned by people on this team. Login As a teammate to inspect their book.`;

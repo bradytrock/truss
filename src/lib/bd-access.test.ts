@@ -10,6 +10,7 @@ import {
   canViewInsurance,
   canViewJobPaper,
   canViewProjectFinancials,
+  canViewTraining,
 } from "./visibility.ts";
 
 const roles: SeatRole[] = [
@@ -33,6 +34,7 @@ for (const role of roles) {
   assert.equal(canManageCompanyCamMapping(role), !bd, `companycam · ${role}`);
   assert.equal(canViewJobPaper(role), !bd, `paper · ${role}`);
   assert.equal(canViewInsurance(role), !bd, `insurance · ${role}`);
+  assert.equal(canViewTraining(role), !bd, `training · ${role}`);
   assert.equal(canViewProjectFinancials(role), !bd, `financials · ${role}`);
 }
 
@@ -42,6 +44,7 @@ assert.equal(canCreatePages(undefined), false);
 assert.equal(canManageCompanyCamMapping(undefined), false);
 assert.equal(canViewJobPaper(undefined), false);
 assert.equal(canViewInsurance(undefined), false);
+assert.equal(canViewTraining(undefined), false);
 
 assert.equal(
   canSubmitProjectCloseout({

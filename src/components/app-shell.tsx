@@ -49,6 +49,7 @@ import {
   canViewAccounting,
   canViewInsurance,
   canViewProjectFinancials,
+  canViewTraining,
   canCreateEstimates,
 } from "@/lib/visibility";
 import { groupLoginAsTargets, readLoginAsRecent, recentLoginAsTargets, rememberLoginAsRecent } from "@/lib/login-as";
@@ -678,6 +679,7 @@ export function SearchTrigger() {
   const showFinancials = canViewProjectFinancials(seatRole);
   const showInsurance = canViewInsurance(seatRole);
   const showEstimates = canCreateEstimates(seatRole);
+  const showTraining = canViewTraining(seatRole);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -968,6 +970,7 @@ export function SearchTrigger() {
                 </CommandItem>
               ))}
             </CommandGroup>
+            {showTraining ? (
             <CommandGroup heading="Training">
               {COURSE.chapters.map((chapter) => (
                 <CommandItem
@@ -982,6 +985,7 @@ export function SearchTrigger() {
                 </CommandItem>
               ))}
             </CommandGroup>
+            ) : null}
           </CommandList>
         </Command>
       </CommandDialog>

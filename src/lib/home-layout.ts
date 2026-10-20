@@ -150,6 +150,7 @@ export function availableHomeModules(input: {
   return HOME_MODULE_IDS.filter((id) => {
     if (SALES_HOME_MODULE_IDS.includes(id)) return !input.isAccountant;
     if (id === "bdRoi") return input.isBd;
+    if (id === "training") return !input.isBd;
     if (id === "qbApprove") return input.canViewAccounting;
     if (id === "accountingNotices") return input.hasAccountingNotices;
     if (id === "returningClients") return input.hasReturningClients;

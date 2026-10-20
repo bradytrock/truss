@@ -125,6 +125,7 @@ import {
   canViewInsurance,
   canViewJobPaper,
   canViewProjectFinancials,
+  canViewTraining,
 } from "@/lib/visibility";
 import { useStartEstimate } from "@/lib/start-estimate";
 import { useStartMaterialOrder } from "@/lib/start-material-order";
@@ -326,6 +327,7 @@ export function JobRecord({
   const allowPages = canCreatePages(seatRole);
   const editPages = canEditPages(seatRole);
   const allowCompanyCamMap = canManageCompanyCamMapping(seatRole);
+  const showTraining = canViewTraining(seatRole);
   const requestedTab = parseJobTab(searchParams.get("tab"));
   const tab =
     (requestedTab === "financials" && !showFinancials) ||
@@ -1440,22 +1442,24 @@ export function JobRecord({
             )}
           </JobSection>
 
-          <JobSection title="Training for this job" defaultOpen={false}>
-            <ul className="space-y-2">
-              {recommendedChapterIds(job.projectType || opportunity?.projectType).map((chapterId) => {
-                const chapter = COURSE.chapters.find((item) => item.id === chapterId);
-                if (!chapter) return null;
-                return (
-                  <li key={chapterId}>
-                    <Link href={`/training/${chapter.id}`} className="text-sm font-medium hover:underline">
-                      {chapter.title}
-                    </Link>
-                    <p className="text-xs text-muted-foreground">{chapter.tagline}</p>
-                  </li>
-                );
-              })}
-            </ul>
-          </JobSection>
+          {showTraining ? (
+            <JobSection title="Training for this job" defaultOpen={false}>
+              <ul className="space-y-2">
+                {recommendedChapterIds(job.projectType || opportunity?.projectType).map((chapterId) => {
+                  const chapter = COURSE.chapters.find((item) => item.id === chapterId);
+                  if (!chapter) return null;
+                  return (
+                    <li key={chapterId}>
+                      <Link href={`/training/${chapter.id}`} className="text-sm font-medium hover:underline">
+                        {chapter.title}
+                      </Link>
+                      <p className="text-xs text-muted-foreground">{chapter.tagline}</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            </JobSection>
+          ) : null}
 
           <section className="pt-2" id="job-activity">
             <p className="mb-3 text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
