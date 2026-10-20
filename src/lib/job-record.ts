@@ -491,6 +491,7 @@ export function assignedCrewPatch(assigned: string[], staff: { name: string; rol
       (item) =>
         item.role === "project_manager" ||
         item.role === "company_admin" ||
+        item.role === "director" ||
         item.role === "team_lead" ||
         item.role === "team_admin"
     ) ?? members[0];

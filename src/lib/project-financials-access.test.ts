@@ -5,6 +5,7 @@ import type { Estimate, EstimateLine, SeatRole } from "./types.ts";
 
 const roles: SeatRole[] = [
   "company_admin",
+  "director",
   "business_development",
   "team_lead",
   "team_admin",

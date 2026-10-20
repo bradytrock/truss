@@ -130,12 +130,12 @@ export function goalPace(sold: number, quota: number, daysLeft: number) {
 }
 
 export function canViewTeamGoal(role: SeatRole | undefined) {
-  return role === "company_admin" || role === "team_lead" || role === "team_admin";
+  return role === "company_admin" || role === "director" || role === "team_lead" || role === "team_admin";
 }
 
 export function goalRoster(viewer: StaffMember, staff: StaffMember[]): StaffMember[] {
   const pool = staff.filter(staffCountsTowardQuota);
-  if (viewer.role === "company_admin") return pool;
+  if (viewer.role === "company_admin" || viewer.role === "director") return pool;
   if ((viewer.role === "team_lead" || viewer.role === "team_admin") && viewer.teamId) {
     return pool.filter(
       (member) => member.teamId === viewer.teamId || member.id === viewer.id,

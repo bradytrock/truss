@@ -27,6 +27,7 @@ import { useCrm } from "@/lib/crm-store";
 import { formatDate, localYmd, startOfWeek } from "@/lib/format";
 import { demoGoogleEvents, type GoogleOverlayEvent } from "@/lib/google-calendar-demo";
 import type { EventKind, ScheduleEvent } from "@/lib/types";
+import { isCompanyLeader } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
 
 type CreateDraft = {
@@ -188,7 +189,7 @@ export default function CalendarPage() {
 
   if (!crm.hydrated) return <LoadingScreen />;
 
-  const isAdmin = crm.viewer?.role === "company_admin" && !crm.impersonatedStaff;
+  const isAdmin = isCompanyLeader(crm.viewer?.role) && !crm.impersonatedStaff;
   const myTeam = crm.book.teams.find((team) => team.id === viewer?.teamId);
   const shareCandidates = crm.book.staff.filter((member) => member.id !== viewer?.id);
 

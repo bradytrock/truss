@@ -54,7 +54,7 @@ export default function TeamTrainingPage() {
     return (
       <EmptyState
         title="Team training is restricted"
-        description="Company admin, business development, and team leads can see crew progress. Everyone still has their own Training seat."
+        description="Company admin, directors, team leads, and team administrators can see crew progress. Everyone still has their own Training seat."
         action={
           <Button nativeButton={false} render={<Link href="/training" />}>
             Back to training

@@ -239,7 +239,7 @@ async function runTool(
   const bd = isBusinessDevelopment(seatRole);
   const showFinancials = canViewProjectFinancials(seatRole);
   if (def.gate === "ops" && bd) return fail("This seat does not see project financials or write estimates, invoices, and expenses. Open a lead or a contact.");
-  if (def.gate === "admin" && !canDeleteJobs(crm.viewer)) return fail("Only a company admin can delete a job.");
+  if (def.gate === "admin" && !canDeleteJobs(crm.viewer)) return fail("Only a company admin or director can delete a job.");
 
   const args = call.arguments;
 

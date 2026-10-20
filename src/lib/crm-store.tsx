@@ -390,7 +390,7 @@ import { imessageEffectId, imessageEffectLabel, imessageReactionText } from "@/l
 import { looksLikePhone, storedPhone, toE164 } from "@/lib/phone";
 import { resolveCustomerName, applyCoOwnerToEstimate, coOwnerContact, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage, missingPageShareMessage, isMissingPageShare, parsePageTemplate } from "@/lib/photo-report";
-import { canDeleteJobs, canLoginAs, canManageAutomations, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
+import { canDeleteJobs, canLeadCompany, canLoginAs, canManageAutomations, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 import { teamsAfterLeavingLead } from "@/lib/teams";
 
 export type LiveStatus = "offline" | "connecting" | "live";
@@ -3466,7 +3466,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         return false;
       }
       if (!canDeleteJobs(viewer) || impersonatedStaff) {
-        toast.error("Only a company admin can delete a job.");
+        toast.error("Only a company admin or director can delete a job.");
         return false;
       }
       const job = state.jobs.find((item) => item.id === id);
@@ -3516,7 +3516,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const restoreJob = useCallback(
     async (id: string, options?: { skipAudit?: boolean }) => {
       if (!canDeleteJobs(viewer) || impersonatedStaff) {
-        toast.error("Only a company admin can restore a job.");
+        toast.error("Only a company admin or director can restore a job.");
         return false;
       }
       const job = state.jobs.find((item) => item.id === id);
@@ -4421,9 +4421,9 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           entityType: "job",
           entityId: job.id,
           type: "note",
-          body: `${fromName} handed this job to ${toName}. Company admins and accounting can redo ${job.code} as ${suggested} or keep it.`,
+          body: `${fromName} handed this job to ${toName}. Company admins, directors, and accounting can redo ${job.code} as ${suggested} or keep it.`,
         });
-        toast.message("Company admins and accounting can redo or change the job code.");
+        toast.message("Company admins, directors, and accounting can redo or change the job code.");
       } catch {
         filingJobCodeReviews.current.delete(job.id);
       }
@@ -4614,7 +4614,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const saveAutomation = useCallback(
     async (input: Partial<Automation> & Pick<Automation, "name" | "triggerKind" | "actions">) => {
       if (!canManageAutomations(viewer?.role ?? "project_manager", viewer)) {
-        toast.error("Only a company admin, or a seat granted manage automations, can save these.");
+        toast.error("Only a company admin, a director, or a seat granted manage automations, can save these.");
         return null;
       }
       const current = input.id ? state.automations.find((item) => item.id === input.id) : undefined;
@@ -4688,7 +4688,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const setAutomationEnabled = useCallback(
     async (id: string, enabled: boolean) => {
       if (!canManageAutomations(viewer?.role ?? "project_manager", viewer)) {
-        toast.error("Only a company admin, or a seat granted manage automations, can pause these.");
+        toast.error("Only a company admin, a director, or a seat granted manage automations, can pause these.");
         return false;
       }
       const current = state.automations.find((item) => item.id === id);
@@ -4896,11 +4896,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const job = input.previous.job?.code || "the last job";
       const toastByKind: Record<ReturningClientNoticeKind, string> = {
         assigned: `We told ${pm} their past client called back.`,
-        offered: `We asked ${pm} to take this lead. Company admins decide only if they decline.`,
+        offered: `We asked ${pm} to take this lead. Company admins and directors decide only if they decline.`,
         pending: input.previous.assignable
-          ? `Company admins will confirm this assignment. ${pm} ran ${job}.`
-          : `${pm} no longer has an unlocked seat. Company admins were notified.`,
-        notified: `Company admins were notified. ${returningClientBookNotice({
+          ? `Company admins and directors will confirm this assignment. ${pm} ran ${job}.`
+          : `${pm} no longer has an unlocked seat. Company admins and directors were notified.`,
+        notified: `Company admins and directors were notified. ${returningClientBookNotice({
           openerName,
           previousStaffName: pm,
           jobCode: input.previous.job?.code,
@@ -4910,7 +4910,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const activityByKind: Record<ReturningClientNoticeKind, string> = {
         assigned: `${openerName} assigned this returning-client lead to ${pm}, who ran ${job}. ${returningClientWhen(input.previous)}`,
         offered: `${openerName} opened this returning-client lead and kept another assignee. ${pm} was asked to take it. ${returningClientWhen(input.previous)}`,
-        pending: `${openerName} opened this returning-client lead without assigning ${pm}. Company admins decide. ${returningClientWhen(input.previous)}`,
+        pending: `${openerName} opened this returning-client lead without assigning ${pm}. Company admins and directors decide. ${returningClientWhen(input.previous)}`,
         notified: `${returningClientBookNotice({
           openerName,
           previousStaffName: pm,
@@ -4984,7 +4984,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const actor = effectiveStaff ?? viewer;
       if (!actor) return;
       const isPm = Boolean(notice.previousStaffId && notice.previousStaffId === actor.id);
-      const isAdmin = canManageSettings(actor.role, actor);
+      const isAdmin = canLeadCompany(actor.role, actor);
 
       if (decision === "take" || decision === "decline") {
         if (notice.status !== "offered" || !isPm) {
@@ -4994,7 +4994,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       } else if (decision === "dismiss") {
         if (notice.status === "notified") {
           if (!isAdmin) {
-            toast.error("Only a company admin can dismiss this notice.");
+            toast.error("Only a company admin or director can dismiss this notice.");
             return;
           }
         } else if (notice.status !== "assigned" || !isPm) {
@@ -5003,7 +5003,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
       } else if (decision === "reassigned" || decision === "kept") {
         if (notice.status !== "pending" || !isAdmin) {
-          toast.error("Only a company admin can decide this.");
+          toast.error("Only a company admin or director can decide this.");
           return;
         }
       }
@@ -5068,7 +5068,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         decision === "take"
           ? `${actor.name} took this returning-client lead.`
           : decision === "decline"
-            ? `${actor.name} declined this returning-client lead. Company admins decide next.`
+            ? `${actor.name} declined this returning-client lead. Company admins and directors decide next.`
             : decision === "dismiss"
               ? `${actor.name} dismissed the returning-client notice.`
               : decision === "reassigned"
@@ -5084,7 +5084,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         decision === "take"
           ? "This lead is yours."
           : decision === "decline"
-            ? "Company admins will decide."
+            ? "Company admins and directors will decide."
             : decision === "dismiss"
               ? "Notice dismissed."
               : decision === "reassigned"

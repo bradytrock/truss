@@ -138,7 +138,7 @@ export const TERMS_SECTIONS: LegalSection[] = [
     heading: "Accounts and seats",
     paragraphs: [
       "You must be able to form a contract. One company workspace is created on first signup. Invite links join that company; they do not open a second one. You are responsible for who you invite and for what they do in the book.",
-      "Keep passwords to yourselves. Company admins may use Login As on a teammate seat inside the same company.",
+      "Keep passwords to yourselves. Company admins and directors may use Login As on a teammate seat inside the same company.",
     ],
   },
   {

@@ -8,6 +8,7 @@ import { Bell } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { buttonVariants } from "@/components/ui/button";
 import { useCrm } from "@/lib/crm-store";
+import { isCompanyLeader } from "@/lib/visibility";
 import { appointmentBookingContext, bookLeadAppointment, editSeedForLead, saveLeadUpdate } from "@/lib/lead-follow-up";
 import { updateLeadDetails } from "@/lib/lead-alerts-api";
 import {
@@ -83,7 +84,7 @@ function NotificationsSession() {
   const crm = useCrm();
   const { user } = crm;
   const router = useRouter();
-  const isAdmin = user.role === "company_admin";
+  const isAdmin = isCompanyLeader(user.role);
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(0);
   const [assigning, setAssigning] = useState<InboxItem | null>(null);

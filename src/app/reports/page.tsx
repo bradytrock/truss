@@ -107,7 +107,7 @@ function ReportsPageInner() {
     return (
       <EmptyState
         title="Reports are restricted"
-        description="Project managers and field seats work from their own jobs. Company admin, business development, team leads, and accounting run reports — each only on the book their seat can see."
+        description="Project managers and field seats work from their own jobs. Company admin, directors, business development, team leads, and accounting run reports — each only on the book their seat can see."
         action={
           <Link href="/" className="text-sm font-medium text-primary hover:underline">
             Back to home

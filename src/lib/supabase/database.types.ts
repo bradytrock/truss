@@ -4139,6 +4139,7 @@ export type Database = {
       entity_kind: "opportunity" | "job" | "client";
       seat_role:
         | "company_admin"
+        | "director"
         | "business_development"
         | "team_lead"
         | "team_admin"

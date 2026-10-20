@@ -47,6 +47,7 @@ assert.equal(isJobReassigned("Blake Jones", "blake jones"), false);
 assert.equal(isJobReassigned("", "Blake Jones"), false);
 
 assert.equal(canReviewJobCodes("company_admin"), true);
+assert.equal(canReviewJobCodes("director"), true);
 assert.equal(canReviewJobCodes("accountant"), true);
 assert.equal(canReviewJobCodes("project_manager"), false);
 assert.deepEqual(

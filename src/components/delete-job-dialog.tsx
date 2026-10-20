@@ -62,7 +62,7 @@ export function DeleteJobDialog({
           <DialogDescription>
             Delete is for a card that should not be on the books, such as a duplicate. A lead that never qualified
             belongs in Unqualified. That stays on the board and does not count against close rate. A deleted card sits
-            in Deleted so a company admin can restore it.
+            in Deleted so a company admin or director can restore it.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-2">

@@ -135,6 +135,7 @@ export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 
 export const SEAT_ROLES = [
   "company_admin",
+  "director",
   "business_development",
   "team_lead",
   "team_admin",
@@ -148,6 +149,7 @@ export type SeatRole = (typeof SEAT_ROLES)[number];
 
 export const SEAT_ROLE_LABELS: Record<SeatRole, string> = {
   company_admin: "Company admin",
+  director: "Director",
   business_development: "Business development",
   team_lead: "Team lead",
   team_admin: "Team administrator",

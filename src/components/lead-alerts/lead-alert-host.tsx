@@ -12,6 +12,7 @@ import {
   UpdateLeadDialog,
 } from "@/components/lead-alerts/lead-alert-dialogs";
 import { useCrm } from "@/lib/crm-store";
+import { isCompanyLeader } from "@/lib/visibility";
 import { appointmentBookingContext, bookLeadAppointment, editSeedForLead, saveLeadUpdate } from "@/lib/lead-follow-up";
 import { findReturningClient } from "@/lib/returning-client";
 import {
@@ -128,7 +129,7 @@ export function LeadAlertHost() {
 function LeadAlertSession() {
   const crm = useCrm();
   const { user } = crm;
-  const isAdmin = user.role === "company_admin";
+  const isAdmin = isCompanyLeader(user.role);
   const coarse = useCoarsePointer();
   const livePermission = useNotificationPermission();
   const [permissionOverride, setPermissionOverride] = useState<NotificationPermission | "unsupported" | null>(null);

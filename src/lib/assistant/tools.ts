@@ -100,7 +100,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   {
     name: "create_lead",
     description:
-      "Open a new lead: homeowner, job site, seed, and residential vs commercial. Creates the costing job. Reuse an existing contact when the phone, email, or unique partial phone already matches. If that person is a returning client, create the job anyway. Company admins are notified that it came from the previous project manager's book. Set assignToPreviousPm true only when the user explicitly wants that project manager to own it.",
+      "Open a new lead: homeowner, job site, seed, and residential vs commercial. Creates the costing job. Reuse an existing contact when the phone, email, or unique partial phone already matches. If that person is a returning client, create the job anyway. Company admins and directors are notified that it came from the previous project manager's book. Set assignToPreviousPm true only when the user explicitly wants that project manager to own it.",
     status: "Opening a lead…",
     gate: "any",
     parameters: object(
@@ -470,7 +470,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
   },
   {
     name: "delete_job",
-    description: "Soft-delete a job into the Deleted column. Company admin only. Always confirm first.",
+    description: "Soft-delete a job into the Deleted column. Company admin or director only. Always confirm first.",
     status: "Deleting the job…",
     gate: "admin",
     confirm: true,

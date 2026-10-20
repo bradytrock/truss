@@ -12,9 +12,23 @@ import { documentOwnerStaff } from "@/lib/document-owner";
 
 export type AccessScope = "company" | "bd" | "team" | "own";
 
+/** Company-wide seat. Directors match a company admin on the book, not on settings or accounting. */
+export function isCompanyLeader(role: SeatRole | undefined) {
+  return role === "company_admin" || role === "director";
+}
+
+/** Unlocked company admin or director. Operational leadership, not business settings. */
+export function canLeadCompany(
+  role: SeatRole,
+  member?: Pick<StaffMember, "locked" | "restricted">,
+) {
+  if (member?.restricted || member?.locked) return false;
+  return isCompanyLeader(role);
+}
+
 export function accessScope(role: SeatRole, restricted = false): AccessScope {
   if (restricted) return "own";
-  if (role === "company_admin" || role === "accountant") return "company";
+  if (isCompanyLeader(role) || role === "accountant") return "company";
   if (role === "business_development") return "bd";
   if (role === "team_lead" || role === "team_admin") return "team";
   return "own";
@@ -22,7 +36,7 @@ export function accessScope(role: SeatRole, restricted = false): AccessScope {
 
 export function canViewReports(role: SeatRole) {
   return (
-    role === "company_admin" ||
+    isCompanyLeader(role) ||
     role === "business_development" ||
     role === "team_lead" ||
     role === "team_admin" ||
@@ -150,6 +164,7 @@ export function jobMatchesOwnerFilter(
   return selected.has(jobPipelineOwnerId(job, opportunity, staff));
 }
 
+/** Accounting Suite: review desk, QuickBooks queue, and closeout review. Directors do not get this. */
 export function canViewAccounting(role: SeatRole) {
   return role === "company_admin" || role === "accountant";
 }
@@ -162,6 +177,7 @@ export function canViewProjectFinancials(role: SeatRole | undefined) {
   return Boolean(role) && role !== "business_development";
 }
 
+/** Company name, people, payments, integrations, and other business settings. Directors do not get this. */
 export function canManageSettings(role: SeatRole, member?: StaffMember) {
   if (member?.restricted || member?.locked) return false;
   return role === "company_admin";
@@ -169,7 +185,7 @@ export function canManageSettings(role: SeatRole, member?: StaffMember) {
 
 export function canManageAutomations(role: SeatRole, member?: StaffMember) {
   if (member?.restricted || member?.locked) return false;
-  if (role === "company_admin") return true;
+  if (isCompanyLeader(role)) return true;
   return Boolean(member?.manageAutomations);
 }
 
@@ -180,20 +196,20 @@ export function canEditDocumentTerms(role: SeatRole, member?: StaffMember) {
 
 export function canGenerateSignatureCertificate(viewer: StaffMember | undefined) {
   if (!viewer || viewer.restricted || viewer.locked) return false;
-  return viewer.role === "company_admin";
+  return isCompanyLeader(viewer.role);
 }
 
 export function canDeleteJobs(viewer: StaffMember | undefined) {
   if (!viewer || viewer.restricted || viewer.locked) return false;
-  return viewer.role === "company_admin";
+  return isCompanyLeader(viewer.role);
 }
 
 export function canViewTeamTraining(role: SeatRole) {
-  return role === "company_admin" || role === "team_lead" || role === "team_admin";
+  return isCompanyLeader(role) || role === "team_lead" || role === "team_admin";
 }
 
 export function canPostTrainingBulletin(role: SeatRole) {
-  return role === "company_admin" || role === "team_lead" || role === "team_admin";
+  return isCompanyLeader(role) || role === "team_lead" || role === "team_admin";
 }
 
 export function canAssignLeadsToAnyone(
@@ -274,7 +290,7 @@ export function staffAssignmentLabel(member: StaffMember) {
 export function canLoginAs(viewer: StaffMember) {
   if (viewer.restricted || viewer.locked) return false;
   return (
-    viewer.role === "company_admin" ||
+    isCompanyLeader(viewer.role) ||
     viewer.role === "team_lead" ||
     viewer.role === "team_admin"
   );
@@ -284,7 +300,7 @@ export function loginAsTargets(viewer: StaffMember, staff: StaffMember[]) {
   const real = staff.filter(
     (member) => !isNorthlineDemoName(member.name) && !member.locked,
   );
-  if (viewer.role === "company_admin") {
+  if (isCompanyLeader(viewer.role)) {
     return real.filter((member) => member.id !== viewer.id);
   }
   if (!canLoginAs(viewer) || !viewer.teamId) return [];
@@ -488,7 +504,7 @@ export function scopeBook(
       return false;
     }),
     returningClientLeads: (state.returningClientLeads ?? []).filter((notice) => {
-      if (canManageSettings(effective.role, effective)) return true;
+      if (canLeadCompany(effective.role, effective)) return true;
       if (notice.previousStaffId && notice.previousStaffId === effective.id) return true;
       return notice.openedByStaffId === effective.id;
     }),
@@ -518,6 +534,9 @@ export function scopeDescription(
     if (effective.role === "accountant") {
       return "Accounting — every job’s books, receipts, and the QuickBooks entry queue.";
     }
+    if (effective.role === "director") {
+      return "Director — every job, contact, and report in the company. Business settings and the Accounting Suite stay with a company admin.";
+    }
     return "Company admin — every job, contact, and report in the company.";
   }
   if (scope === "bd") {
@@ -531,6 +550,7 @@ export function scopeDescription(
 
 const SEAT_SHORT: Record<SeatRole, string> = {
   company_admin: "company admin",
+  director: "director",
   business_development: "business development",
   team_lead: "team lead",
   team_admin: "team administrator",

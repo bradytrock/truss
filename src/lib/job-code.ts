@@ -71,7 +71,7 @@ export function isJobReassigned(previousName: string, nextName: string) {
 }
 
 export function canReviewJobCodes(role: string | undefined) {
-  return role === "company_admin" || role === "accountant";
+  return role === "company_admin" || role === "director" || role === "accountant";
 }
 
 export function codeReviewAudience<T extends { role: string; locked?: boolean }>(staff: T[]) {

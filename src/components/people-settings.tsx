@@ -65,6 +65,7 @@ import { mintPersonCardSlug } from "@/lib/card-slug";
 import { NO_TEAM, parseTeamSelect } from "@/lib/teams";
 import type { GoogleLocation, SeatRole, StaffMember, Team } from "@/lib/types";
 import { SEAT_ROLE_LABELS, SEAT_ROLES } from "@/lib/types";
+import { isCompanyLeader } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
 
 const ROLE_ITEMS = SEAT_ROLES.map((role) => ({
@@ -627,7 +628,7 @@ function SeatMenu({
         >
           {member.locked ? "Unlock login" : "Lock login"}
         </DropdownMenuItem>
-        {member.role === "company_admin" ? null : (
+        {isCompanyLeader(member.role) ? null : (
           <DropdownMenuItem
             onClick={() => void onUpdate(member.id, { manageAutomations: !member.manageAutomations })}
           >

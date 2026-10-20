@@ -755,6 +755,7 @@ export function canSubmitProjectCloseout(input: {
   if (
     input.role === "project_manager" ||
     input.role === "company_admin" ||
+    input.role === "director" ||
     input.role === "team_lead" ||
     input.role === "superintendent" ||
     /project manager/i.test(input.title ?? "")
@@ -787,7 +788,12 @@ export function payoutRecipients(staff: StaffMember[], projectManager: string, o
   const named = projectManager.trim();
   return staff.filter((member) => {
     if (member.locked || member.restricted) return false;
-    if (member.role === "project_manager" || member.role === "team_lead" || member.role === "company_admin") {
+    if (
+      member.role === "project_manager" ||
+      member.role === "team_lead" ||
+      member.role === "company_admin" ||
+      member.role === "director"
+    ) {
       return true;
     }
     if (ownerStaffId && member.id === ownerStaffId) return true;

@@ -12,7 +12,7 @@ import {
   type StaffMember,
 } from "@/lib/types";
 import { WORK_COLUMN_LABELS, workColumnFor } from "@/lib/work-board";
-import { canManageSettings } from "@/lib/visibility";
+import { canLeadCompany, isCompanyLeader } from "@/lib/visibility";
 
 export type { ReturningClientLead, ReturningClientLeadStatus } from "@/lib/types";
 
@@ -215,7 +215,7 @@ export function actionableReturningClientNotices(
   actor: StaffMember | undefined,
 ) {
   if (!actor) return [];
-  const isAdmin = canManageSettings(actor.role, actor);
+  const isAdmin = canLeadCompany(actor.role, actor);
   return (notices ?? []).filter((notice) => {
     if (notice.status === "offered" || notice.status === "assigned") {
       return notice.previousStaffId === actor.id;
@@ -226,7 +226,7 @@ export function actionableReturningClientNotices(
 }
 
 export function companyAdminsForNotice(staff: StaffMember[], exceptIds: string[] = []) {
-  const unlocked = staff.filter((member) => member.role === "company_admin" && !member.locked && !member.restricted);
+  const unlocked = staff.filter((member) => isCompanyLeader(member.role) && !member.locked && !member.restricted);
   const filtered = unlocked.filter((member) => !exceptIds.includes(member.id));
   return filtered.length ? filtered : unlocked;
 }
@@ -319,7 +319,7 @@ export function askTrussReturningClientPrompt(match: ReturningClientMatch) {
     `This person is already in the book (${match.contact.name}).`,
     `${pm} was the project manager${job}.`,
     `${returningClientWhen(match)}.`,
-    "Create the job. Company admins are notified that it came from that book.",
+    "Create the job. Company admins and directors are notified that it came from that book.",
     `Assign it to ${pm} only if the user explicitly asks.`,
   ].join(" ");
 }

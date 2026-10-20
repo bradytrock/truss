@@ -70,6 +70,7 @@ function inferRole(title: string): SeatRole {
   if (lower.includes("admin") && lower.includes("team")) return "team_admin";
   if (lower.includes("lead")) return "team_lead";
   if (lower.includes("business")) return "business_development";
+  if (lower.includes("director")) return "director";
   if (lower.includes("super")) return "superintendent";
   if (lower.includes("estimat")) return "estimator";
   if (lower.includes("account") || lower.includes("controller") || lower.includes("bookkeep") || lower.includes("cpa")) {

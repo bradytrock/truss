@@ -1,4 +1,5 @@
 import type { CalendarAccount, CalendarShare, StaffMember, Team } from "@/lib/types";
+import { isCompanyLeader } from "@/lib/visibility";
 
 const CALENDAR_COLORS = [
   "#d71c27",
@@ -35,7 +36,7 @@ export function canSeeStaffCalendar(
   shares: CalendarShare[],
 ) {
   if (viewer.id === owner.id) return true;
-  if (viewer.role === "company_admin") return true;
+  if (isCompanyLeader(viewer.role)) return true;
   if (!account?.linked) return false;
   if (
     account.shareWithTeam &&
@@ -80,7 +81,7 @@ export function calendarShareSummary(
     const member = staff.find((item) => item.id === share.viewerStaffId);
     if (member) names.push(member.name);
   }
-  if (names.length === 0) return "Private · company admin can still see it";
+  if (names.length === 0) return "Private · a company admin or director can still see it";
   return `Shared with ${names.join(", ")}`;
 }
 

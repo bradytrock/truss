@@ -8,6 +8,7 @@ import {
   type MessageThread,
 } from "@/lib/job-messages";
 import { namesMatch } from "@/lib/seats";
+import { isCompanyLeader } from "@/lib/visibility";
 import type {
   CompanyProfile,
   Contact,
@@ -22,7 +23,7 @@ import type {
 } from "@/lib/types";
 
 export function isMessageCompanyAdmin(viewer: ThreadViewer) {
-  return viewer.role === "company_admin" || viewer.profileRole === "company_admin";
+  return isCompanyLeader(viewer.role) || isCompanyLeader(viewer.profileRole ?? undefined);
 }
 
 export function isMessageTeamLead(viewer: ThreadViewer) {

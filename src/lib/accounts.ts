@@ -65,6 +65,7 @@ export function staffStatusLabel(member: StaffMember) {
 
 export function defaultTitleForRole(role: SeatRole) {
   if (role === "company_admin") return "Company admin";
+  if (role === "director") return "Director";
   if (role === "business_development") return "Business development";
   if (role === "team_lead") return "Team lead";
   if (role === "team_admin") return "Team administrator";

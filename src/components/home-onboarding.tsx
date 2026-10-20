@@ -9,6 +9,7 @@ import type { SeatRole, StaffMember } from "@/lib/types";
 function onboardingCopy(role: SeatRole | undefined) {
   switch (role) {
     case "company_admin":
+    case "director":
       return {
         title: "Get started with your first leads",
         description:

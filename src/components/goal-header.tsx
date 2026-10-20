@@ -21,7 +21,7 @@ import {
   soldThisMonth,
   teamQuota,
 } from "@/lib/sales-goal";
-import { canManageSettings } from "@/lib/visibility";
+import { canManageSettings, isCompanyLeader } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
 
 const TEAM_KEY = "team";
@@ -85,10 +85,10 @@ export function GoalHeader() {
     year: "numeric",
   });
   const admin = canManageSettings(viewer.role, viewer);
-  const wholeLabel = viewer.role === "company_admin" ? "Entire company" : "Entire team";
+  const wholeLabel = isCompanyLeader(viewer.role) ? "Entire company" : "Entire team";
   const title =
     teamMode && selectedId === TEAM_KEY
-      ? viewer.role === "company_admin"
+      ? isCompanyLeader(viewer.role)
         ? "Company quota"
         : "Team quota"
       : `${(selectedMember ?? viewer).name.split(" ")[0] || "Rep"} quota`;

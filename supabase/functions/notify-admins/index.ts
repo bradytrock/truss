@@ -167,7 +167,7 @@ Deno.serve(async (req) => {
   }
 
   const admins = (await rest(
-    `profiles?select=id&company_id=eq.${push.company_id}&role=eq.company_admin`,
+    `profiles?select=id&company_id=eq.${push.company_id}&role=in.(company_admin,director)`,
   )) as Array<{ id: string }> | null;
   const recipients = (admins ?? [])
     .map((row) => row.id)
