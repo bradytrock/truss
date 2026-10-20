@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { googleRequestOrigin } from "@/lib/google-calendar";
 import {
   GMAIL_COOKIE,
   GMAIL_OAUTH_STATE,
@@ -12,7 +13,7 @@ import { oauthFinishUrl } from "@/lib/invite-onboarding";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const origin = url.origin;
+  const origin = googleRequestOrigin(request);
   const code = url.searchParams.get("code");
   const stateRaw = url.searchParams.get("state");
   const err = url.searchParams.get("error");

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { googleRequestOrigin } from "@/lib/google-calendar";
 import { GMAIL_OAUTH_STATE, gmailAuthUrl, isGoogleOAuthConfigured } from "@/lib/google-gmail";
 import { oauthReturnPath } from "@/lib/invite-onboarding";
 
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
   if (!staffId) {
     return NextResponse.json({ error: "Missing staffId." }, { status: 400 });
   }
-  const origin = url.origin;
+  const origin = googleRequestOrigin(request);
   const nonce = crypto.randomUUID();
   const next = oauthReturnPath(url.searchParams.get("next")) ?? "";
   const state = Buffer.from(JSON.stringify({ nonce, staffId, next })).toString("base64url");

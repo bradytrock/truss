@@ -1,6 +1,11 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { GCAL_OAUTH_STATE, googleAuthUrl, isGoogleOAuthConfigured } from "@/lib/google-calendar";
+import {
+  GCAL_OAUTH_STATE,
+  googleAuthUrl,
+  googleRequestOrigin,
+  isGoogleOAuthConfigured,
+} from "@/lib/google-calendar";
 import { oauthReturnPath } from "@/lib/invite-onboarding";
 
 export async function GET(request: Request) {
@@ -15,7 +20,7 @@ export async function GET(request: Request) {
   if (!staffId) {
     return NextResponse.json({ error: "Missing staffId." }, { status: 400 });
   }
-  const origin = url.origin;
+  const origin = googleRequestOrigin(request);
   const nonce = crypto.randomUUID();
   const next = oauthReturnPath(url.searchParams.get("next")) ?? "";
   const state = Buffer.from(JSON.stringify({ nonce, staffId, next })).toString("base64url");
