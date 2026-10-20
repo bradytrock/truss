@@ -159,6 +159,7 @@ export async function sendEmailCampaign(input: {
   filter: EmailCampaignFilter;
   subject: string;
   bodyText: string;
+  htmlTemplate?: string;
   contactIds?: string[];
 }) {
   const auth = await marketingCampaignAuth();
@@ -274,18 +275,23 @@ export async function sendEmailCampaign(input: {
     const body = applyEmailCampaignMerge(bodyTemplate, merge);
     const token = await ensureUnsubscribeToken(supabase, profile.company_id, recipient.email);
     const unsubscribeUrl = `${origin}/unsubscribe/${token}`;
-    const html = emailCampaignHtml({
-      company: company.name,
-      subject,
-      body,
-      staffName: senderName,
-      staffTitle: staff?.title,
-      staffPhone: staff?.phone || company.phone,
-      staffEmail: replyTo,
-      cardUrl: staffCardUrl,
-      unsubscribeUrl,
-      logoUrl,
-    });
+    const designed = input.htmlTemplate?.trim() ?? "";
+    const html = designed
+      ? applyEmailCampaignMerge(designed, merge, { html: true })
+          .replaceAll("{{unsubscribeUrl}}", unsubscribeUrl)
+          .replaceAll("%7B%7BunsubscribeUrl%7D%7D", unsubscribeUrl)
+      : emailCampaignHtml({
+          company: company.name,
+          subject,
+          body,
+          staffName: senderName,
+          staffTitle: staff?.title,
+          staffPhone: staff?.phone || company.phone,
+          staffEmail: replyTo,
+          cardUrl: staffCardUrl,
+          unsubscribeUrl,
+          logoUrl,
+        });
     const text = emailCampaignText({
       body,
       staffName: senderName,
@@ -353,6 +359,51 @@ export async function sendEmailCampaign(input: {
     capped: skippedCap,
     suppressed: skippedUnsubscribed,
   };
+}
+
+export async function sendTestMarketingEmail(input: { subject: string; bodyText: string; html?: string }) {
+  const auth = await marketingCampaignAuth();
+  if (!auth.profile) return { error: auth.error, status: auth.status };
+  const { supabase, profile } = auth;
+  const [{ data: companyRow }, { data: staffRow }] = await Promise.all([
+    supabase.from("companies").select("*").eq("id", profile.company_id).maybeSingle(),
+    profile.staff_id
+      ? supabase.from("team_members").select("*").eq("id", profile.staff_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  if (!companyRow) return { error: "Could not load the company for this send.", status: 400 as const };
+  const company = mapCompany(companyRow);
+  const staff = staffRow ? mapStaff(staffRow) : null;
+  const to = staff?.email.trim() || "";
+  if (!looksLikeEmail(to)) {
+    return { error: "Add an email on your profile so the test has somewhere to land.", status: 400 as const };
+  }
+  const senderName = staff?.name.trim() || profile.full_name.trim() || company.name;
+  const subject = input.subject.replace(/[\r\n]+/g, " ").trim() || "Test from Marketing";
+  const text = input.bodyText.trim() || subject;
+  const html =
+    input.html?.trim() ||
+    emailCampaignHtml({
+      company: company.name,
+      subject,
+      body: text,
+      staffName: senderName,
+      staffTitle: staff?.title,
+      staffPhone: staff?.phone || company.phone,
+      staffEmail: to,
+      unsubscribeUrl: `${await appOrigin()}/unsubscribe/test`,
+      logoUrl: [company.cardLogoUrl, company.logoUrl].find((url) => /^https?:\/\//i.test(url || "")) || "",
+    });
+  const result = await sendResendEmail({
+    to,
+    subject: `[Test] ${subject}`,
+    html,
+    text,
+    from: formatResendFrom({ senderName, companyName: company.name }),
+    replyTo: to,
+  });
+  if (!result.ok) return { error: result.error, status: 400 as const };
+  return { status: 200 as const, ok: true, to, mocked: result.mocked };
 }
 
 export type { EmailCampaignRecipient };

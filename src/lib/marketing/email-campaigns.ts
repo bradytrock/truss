@@ -156,9 +156,15 @@ export function campaignStaffCardUrl(input: {
   return cardUrl(slug, person, input.origin || "");
 }
 
-export function applyEmailCampaignMerge(template: string, input: EmailCampaignMergeInput) {
+export function applyEmailCampaignMerge(
+  template: string,
+  input: EmailCampaignMergeInput,
+  options?: { html?: boolean },
+) {
+  const first = firstName(input.recipient.name);
   const values: Record<string, string> = {
-    first: firstName(input.recipient.name),
+    first,
+    firstName: first,
     name: input.recipient.name,
     email: input.recipient.email,
     company: input.companyName,
@@ -169,16 +175,21 @@ export function applyEmailCampaignMerge(template: string, input: EmailCampaignMe
     jobCity: input.recipient.jobCity,
     "staff.name": input.staffName,
     staffName: input.staffName,
+    repName: input.staffName,
     "staff.phone": input.staffPhone,
     staffPhone: input.staffPhone,
+    repPhone: input.staffPhone,
     "staff.card": input.staffCardUrl,
     staffCardUrl: input.staffCardUrl,
+    inspectionLink: input.staffCardUrl,
+    reviewLink: input.staffCardUrl,
   };
-  return template
-    .replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key: string) => values[key]?.trim() ?? "")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  const merged = template.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key: string) => {
+    const value = values[key]?.trim() ?? "";
+    return options?.html ? escapeHtml(value) : value;
+  });
+  if (options?.html) return merged;
+  return merged.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function escapeHtml(value: string) {

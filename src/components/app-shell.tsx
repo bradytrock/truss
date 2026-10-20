@@ -249,6 +249,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const mapLayout = pathname === "/map";
   const measureLayout = /^\/jobs\/[^/]+\/measure$/.test(pathname);
   const fillLayout = inboxLayout || mapLayout || measureLayout;
+  const marketingSuite = pathname === "/marketing" || pathname.startsWith("/marketing/");
 
   const createMenu =
     effectiveStaff && isBusinessDevelopment(effectiveStaff.role) ? (
@@ -271,6 +272,10 @@ export function AppShell({ children }: { children: ReactNode }) {
         <DropdownMenuItem onClick={() => setCreate("client")}>New contact</DropdownMenuItem>
       </>
     );
+
+  if (marketingSuite) {
+    return <div className="flex h-dvh min-h-0 w-full flex-1 flex-col overflow-hidden bg-[#f4f3f1]">{children}</div>;
+  }
 
   return (
     <div
@@ -605,7 +610,7 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
   );
 }
 
-function SearchTrigger() {
+export function SearchTrigger() {
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const { opportunities, jobs, contacts, estimates, invoices, materialOrders, materialOrderTemplates, viewer, effectiveStaff, tasks, jobInsurance } = useCrm();
@@ -1009,7 +1014,7 @@ function LoginAsDialog({
   );
 }
 
-function UserMenu() {
+export function UserMenu() {
   const router = useRouter();
   const { signOut, user, loginAsOptions, viewer, impersonatedStaff, stopLoginAs } = useCrm();
   const [loginAsOpen, setLoginAsOpen] = useState(false);

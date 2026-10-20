@@ -1,116 +1,81 @@
 "use client";
 
-import { useState } from "react";
-import { toast } from "sonner";
-import { EmptyState } from "@/components/page-chrome";
+import Link from "next/link";
+import { SuiteCard, StatCard, SuitePage, SuiteTitle, ToneBadge, PhotoWell } from "@/components/marketing/suite-ui";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { useCrm } from "@/lib/crm-store";
 import { useMarketing } from "@/lib/marketing/store";
-import type { MarketingSocialPost } from "@/lib/marketing/types";
 
 export default function MarketingSocialPage() {
+  const crm = useCrm();
   const marketing = useMarketing();
-  const [title, setTitle] = useState("");
-  const [channel, setChannel] = useState<MarketingSocialPost["channel"]>("instagram");
-  const [body, setBody] = useState("");
-  const [scheduledFor, setScheduledFor] = useState("");
-
-  function addPost() {
-    if (!title.trim() || !body.trim()) {
-      toast.error("Add a title and post body");
-      return;
-    }
-    marketing.saveSocialPost({
-      id: marketing.newId("social"),
-      title: title.trim(),
-      channel,
-      body: body.trim(),
-      materialId: null,
-      scheduledFor: scheduledFor || new Date().toISOString(),
-      status: scheduledFor ? "scheduled" : "idea",
-      createdAt: new Date().toISOString(),
-    });
-    setTitle("");
-    setBody("");
-    setScheduledFor("");
-    toast.success("Added to social calendar");
-  }
+  const accounts = [
+    { name: "Instagram", on: Boolean(crm.company.socialInstagram) },
+    { name: "Facebook", on: Boolean(crm.company.socialFacebook) },
+    { name: "Google Business Profile", on: crm.googleLocations.length > 0 },
+    { name: "LinkedIn", on: Boolean(crm.company.socialLinkedin) },
+  ];
+  const drafts = marketing.socialPosts.filter((post) => post.status !== "posted");
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-      <div className="space-y-3 rounded-lg border p-4">
-        <h2 className="font-heading text-lg font-medium">Schedule a post</h2>
-        <div className="space-y-1.5">
-          <Label htmlFor="social-title">Title</Label>
-          <Input id="social-title" value={title} onChange={(event) => setTitle(event.target.value)} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="social-channel">Channel</Label>
-          <select
-            id="social-channel"
-            className="h-8 w-full rounded-md border bg-background px-2 text-sm"
-            value={channel}
-            onChange={(event) => setChannel(event.target.value as MarketingSocialPost["channel"])}
-          >
-            <option value="instagram">Instagram</option>
-            <option value="facebook">Facebook</option>
-            <option value="linkedin">LinkedIn</option>
-            <option value="tiktok">TikTok</option>
-          </select>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="social-when">Schedule (optional)</Label>
-          <Input
-            id="social-when"
-            type="datetime-local"
-            value={scheduledFor}
-            onChange={(event) => setScheduledFor(event.target.value)}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="social-body">Body</Label>
-          <Textarea
-            id="social-body"
-            value={body}
-            onChange={(event) => setBody(event.target.value)}
-            className="min-h-28"
-          />
-        </div>
-        <Button type="button" onClick={addPost}>
-          Add to calendar
-        </Button>
+    <SuitePage>
+      <SuiteTitle
+        title="Social"
+        description="Posts built from real job photos, on brand every time, scheduled across your accounts."
+        action={
+          <div className="flex gap-2">
+            <Button nativeButton={false} variant="outline" render={<Link href="/settings" />}>Connect account</Button>
+            <Button nativeButton={false} render={<Link href="/marketing/social/compose" />}>Create post</Button>
+          </div>
+        }
+      />
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {accounts.map((account) => (
+          <SuiteCard key={account.name} className="p-3">
+            <p className="font-medium">{account.name}</p>
+            <p className={`text-xs ${account.on ? "text-emerald-700" : "text-[#8a8680]"}`}>{account.on ? "Connected" : "Not connected"}</p>
+          </SuiteCard>
+        ))}
       </div>
-
-      <div className="space-y-3">
-        <h2 className="font-heading text-lg font-medium">Calendar</h2>
-        {marketing.socialPosts.length === 0 ? (
-          <EmptyState
-            title="Nothing scheduled"
-            description="Turn a finished job into a social square, then drop the copy here."
-          />
-        ) : (
-          <ul className="space-y-2">
-            {marketing.socialPosts.map((post) => (
-              <li key={post.id} className="rounded-lg border px-4 py-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="font-medium">{post.title}</p>
-                  <span className="text-[11px] tracking-wide text-muted-foreground uppercase">
-                    {post.channel} · {post.status}
-                  </span>
-                </div>
-                <p className="mt-2 text-sm whitespace-pre-wrap text-muted-foreground">{post.body}</p>
-                {post.scheduledFor ? (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {new Date(post.scheduledFor).toLocaleString()}
-                  </p>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
+      <div className="flex items-end justify-between">
+        <h2 className="font-heading text-2xl font-medium">Drafted by Cassio</h2>
+        <span className="text-xs text-[#8a8680]">{drafts.length} waiting</span>
       </div>
-    </div>
+      <p className="text-sm text-[#6f6a64]">Nothing publishes until someone approves it.</p>
+      {drafts.length === 0 ? (
+        <SuiteCard className="p-6 text-sm text-[#6f6a64]">
+          No drafts yet. Start from a finished job and Cassio&apos;s checks run on the graphic before you schedule it.
+          <div className="mt-3">
+            <Button nativeButton={false} render={<Link href="/marketing/social/compose" />}>Draft a post</Button>
+          </div>
+        </SuiteCard>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-3">
+          {drafts.map((post) => (
+            <SuiteCard key={post.id} className="p-3">
+              <ToneBadge tone={post.channel === "instagram" ? "ink" : "red"}>{post.channel}</ToneBadge>
+              <PhotoWell className="mt-2 h-36" />
+              <p className="mt-2 font-medium">{post.title}</p>
+              <p className="line-clamp-3 text-sm text-[#6f6a64]">{post.body}</p>
+              <div className="mt-3 flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => marketing.saveSocialPost({ ...post, status: "scheduled" })}
+                >
+                  Approve
+                </Button>
+                <Button nativeButton={false} size="sm" variant="outline" render={<Link href={`/marketing/social/compose?post=${post.id}`} />}>Edit</Button>
+              </div>
+            </SuiteCard>
+          ))}
+        </div>
+      )}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard label="Posts" value={String(marketing.socialPosts.length)} hint="Drafts and scheduled" />
+        <StatCard label="Scheduled" value={String(marketing.socialPosts.filter((post) => post.status === "scheduled").length)} hint="Approved, not published from here" />
+        <StatCard label="Channels ready" value={String(accounts.filter((account) => account.on).length)} hint="Profiles with a link on the company" />
+      </div>
+    </SuitePage>
   );
 }

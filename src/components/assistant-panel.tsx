@@ -52,7 +52,7 @@ function visibleMessages(messages: AssistantMessage[]) {
   return messages.filter((message) => message.role === "user" || (message.role === "assistant" && (message.content || !message.toolCalls?.length)));
 }
 
-export function AssistantPanel() {
+export function AssistantPanel({ className }: { className?: string } = {}) {
   const crm = useCrm();
   const pathname = usePathname();
   const router = useRouter();
@@ -271,7 +271,10 @@ export function AssistantPanel() {
       <Button
         type="button"
         size="sm"
-        className="border-0 bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+        className={cn(
+          "border-0 bg-primary text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground",
+          className,
+        )}
         onClick={() => setOpen(true)}
         aria-label={ASSISTANT_ASK_LABEL}
         title={`${ASSISTANT_ASK_LABEL} (⌘.)`}

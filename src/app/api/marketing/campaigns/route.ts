@@ -41,6 +41,7 @@ export async function POST(request: Request) {
     filter: audience.filter,
     subject: typeof body.subject === "string" ? body.subject : "",
     bodyText: typeof body.body === "string" ? body.body : "",
+    htmlTemplate: typeof body.html === "string" ? body.html.slice(0, 200_000) : "",
     contactIds,
   });
   if ("error" in result && result.error) {
