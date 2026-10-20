@@ -17,7 +17,7 @@ import { assignmentOptions } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
 
 const controlClass =
-  "rounded-lg border-[rgba(28,25,22,0.14)] bg-white text-[#1d1d1f] shadow-none placeholder:text-[#a1a1a6]";
+  "w-full min-w-0 max-w-full rounded-lg border-[rgba(28,25,22,0.14)] bg-white text-[#1d1d1f] shadow-none placeholder:text-[#a1a1a6]";
 
 export function ContactInlineEditor({
   contact,
@@ -134,6 +134,7 @@ export function ContactInlineEditor({
   return (
     <form
       aria-label="Edit contact"
+      className="min-w-0 max-w-full"
       onSubmit={handleSubmit}
       onKeyDown={(event) => {
         if (event.key !== "Escape" || saving) return;
@@ -142,15 +143,15 @@ export function ContactInlineEditor({
         onCancel();
       }}
     >
-      <div className="mb-2 flex items-center justify-between gap-3">
+      <div className="mb-2 flex min-w-0 items-center justify-between gap-3">
         <h3 className="text-xs font-semibold text-[#6e6e73]">Editing contact</h3>
         {dirty ? (
-          <span className="text-xs font-medium text-primary" role="status">
+          <span className="shrink-0 text-xs font-medium text-primary" role="status">
             Unsaved changes
           </span>
         ) : null}
       </div>
-      <div className="grid gap-3 rounded-xl border border-primary/70 bg-white p-3.5">
+      <div className="grid min-w-0 max-w-full gap-3 rounded-xl border border-primary/70 bg-white p-3.5">
         <EditorField label="Name" htmlFor="contact-edit-name">
           <Input
             id="contact-edit-name"
@@ -160,7 +161,7 @@ export function ContactInlineEditor({
             className={cn("h-9", controlClass)}
           />
         </EditorField>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid min-w-0 grid-cols-2 gap-3">
           <EditorField label="Title" htmlFor="contact-edit-title">
             <Input
               id="contact-edit-title"
@@ -221,7 +222,7 @@ export function ContactInlineEditor({
               value={ownerStaffId}
               people={owners}
               onChange={setOwnerStaffId}
-              className={cn("h-9 rounded-lg px-3", controlClass)}
+              className={cn("h-9 max-w-full min-w-0 rounded-lg px-3", controlClass)}
             />
           </EditorField>
         ) : null}
@@ -263,7 +264,7 @@ export function ContactInlineEditor({
             Text history from the old number stays on this contact.
           </p>
         ) : null}
-        <div className="flex justify-end gap-2 pt-0.5">
+        <div className="flex min-w-0 flex-wrap justify-end gap-2 pt-0.5">
           <Button
             type="button"
             variant="outline"
@@ -273,7 +274,7 @@ export function ContactInlineEditor({
           >
             Cancel
           </Button>
-          <Button type="submit" className="rounded-lg" disabled={saving || !dirty}>
+          <Button type="submit" className="shrink-0 rounded-lg" disabled={saving || !dirty}>
             {saving ? "Saving…" : "Save contact"}
           </Button>
         </div>
@@ -298,7 +299,7 @@ function EditorField({
   children: ReactNode;
 }) {
   return (
-    <div className="grid gap-1">
+    <div className="grid min-w-0 gap-1">
       <label htmlFor={htmlFor} className="text-xs font-medium text-[#6e6e73]">
         {label}
       </label>
