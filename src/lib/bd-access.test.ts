@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { canSubmitProjectCloseout } from "./commission-closeout.ts";
 import type { SeatRole } from "./types.ts";
 import {
   canCreateEstimates,
@@ -41,3 +42,26 @@ assert.equal(canCreatePages(undefined), false);
 assert.equal(canManageCompanyCamMapping(undefined), false);
 assert.equal(canViewJobPaper(undefined), false);
 assert.equal(canViewInsurance(undefined), false);
+
+assert.equal(
+  canSubmitProjectCloseout({
+    role: "business_development",
+    title: "Business development",
+    viewerName: "Sam Lead",
+    viewerStaffId: "staff_sam",
+    projectManager: "Sam Lead",
+    ownerStaffId: "staff_sam",
+  }),
+  false,
+);
+assert.equal(
+  canSubmitProjectCloseout({
+    role: "project_manager",
+    title: "Project manager",
+    viewerName: "Ada Lopez",
+    viewerStaffId: "staff_ada",
+    projectManager: "Ada Lopez",
+    ownerStaffId: "staff_ada",
+  }),
+  true,
+);

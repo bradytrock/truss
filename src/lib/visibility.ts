@@ -577,7 +577,7 @@ export function scopeDescription(
     return "Company admin — every job, contact, and report in the company.";
   }
   if (scope === "bd") {
-    return "Business development — pipeline you sourced, jobs from the agents you brought in, and company BD ROI. Assign the work; estimates, invoices, Paper, and insurance stay with ops.";
+    return "Business development — pipeline you sourced, jobs from the agents you brought in, and company BD ROI. Assign the work; estimates, invoices, Paper, insurance, and closeout stay with ops.";
   }
   if (scope === "team") {
     return `${team?.name ?? "Your team"} — every job and contact owned by people on this team. Login As a teammate to inspect their book.`;

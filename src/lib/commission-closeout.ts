@@ -752,6 +752,8 @@ export function canSubmitProjectCloseout(input: {
   projectManager?: string;
   ownerStaffId?: string | null;
 }) {
+  // Business development sources the work; ops sends the closeout.
+  if (input.role === "business_development") return false;
   if (
     input.role === "project_manager" ||
     input.role === "company_admin" ||
