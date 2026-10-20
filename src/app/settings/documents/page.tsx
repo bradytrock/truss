@@ -6,12 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageHeader } from "@/components/page-chrome";
+import { SettingsPageHeader } from "@/components/settings-chrome";
 import { TermsLockPreview } from "@/components/document-terms-fields";
 import { SettingsAdminGate } from "@/components/settings-nav";
 import {
   CollapsibleTerms,
-  SettingsSaveActions,
   useCompanySettingsDraft,
 } from "@/components/company-settings-form";
 import {
@@ -47,35 +46,32 @@ function DocumentSettingsForm() {
         event.preventDefault();
         discard();
       }}
-      className="max-w-2xl space-y-4"
+      className="space-y-4"
     >
-      <PageHeader
-        eyebrow="Settings"
-        title="Documents"
-        description="Company admins keep every contract type the company needs. Unsigned proposals follow the contract you pick. Signed proposals and sent invoices stay as they were."
-        actions={<SettingsSaveActions dirty={dirty} pending={pending} />}
+      <SettingsPageHeader
+        eyebrow="Sales"
+        title="Documents & margin"
+        description="The contracts homeowners sign, and the margin guardrail every estimate is checked against."
+        actions={
+          <Button
+            type="button"
+            className="rounded-lg"
+            onClick={() => patch("contractTypes", addCompanyContractType(contracts))}
+          >
+            <Plus data-icon="inline-start" />
+            New template
+          </Button>
+        }
       />
 
-      <Card>
+      <Card className="rounded-2xl border-[#ebe7e2] shadow-sm">
         <CardHeader className="border-b">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <CardTitle>Contracts</CardTitle>
-              <CardDescription>
-                Residential, commercial, insurance, repairs — keep every contract type on file. New
-                proposals use the default. Payment sections stay editable on each document; locked
-                language comes from the contract you pick.
-              </CardDescription>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => patch("contractTypes", addCompanyContractType(contracts))}
-            >
-              <Plus data-icon="inline-start" />
-              Add contract
-            </Button>
+          <div>
+            <CardTitle>Templates</CardTitle>
+            <CardDescription>
+              Fields like the homeowner’s name, address, and estimate total fill in automatically.
+              Unsigned proposals follow the contract you pick. Signed proposals stay as they were.
+            </CardDescription>
           </div>
         </CardHeader>
         <CardContent className="space-y-3 pt-4">
@@ -193,18 +189,18 @@ function DocumentSettingsForm() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-2xl border-[#ebe7e2] shadow-sm">
         <CardHeader className="border-b">
-          <CardTitle>Proposal margin</CardTitle>
+          <CardTitle>Margin guardrails</CardTitle>
           <CardDescription>
-            Catalog items added to a proposal are marked up from unit cost. This company minimum is a
-            floor — an item can carry a higher margin of its own. Changing it does not rewrite lines
-            already on a proposal. Material orders still copy unit cost.
+            Reps see a live margin while they build an estimate. Below the approval floor, it needs a
+            company admin’s OK before it can be sent. Changing the floor does not rewrite lines already
+            on a proposal.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 pt-4">
           <div className="grid gap-1.5 sm:max-w-xs">
-            <Label htmlFor="company-min-margin">Minimum margin</Label>
+            <Label htmlFor="company-min-margin">Approval floor</Label>
             <div className="relative">
               <Input
                 id="company-min-margin"
@@ -212,7 +208,7 @@ function DocumentSettingsForm() {
                 min={0}
                 max={1000}
                 step="0.01"
-                className="pr-8"
+                className="rounded-lg pr-8"
                 value={Number.isFinite(form.minimumMarginPercent) ? String(form.minimumMarginPercent) : "0"}
                 onChange={(event) => {
                   const next = Number(event.target.value);
@@ -223,14 +219,46 @@ function DocumentSettingsForm() {
                 %
               </span>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {(form.minimumMarginPercent ?? 0) > 0
-                ? `A $100 cost drops onto a proposal at ${formatMarginPercent(form.minimumMarginPercent ?? 0)} — $${(100 * (1 + (form.minimumMarginPercent ?? 0) / 100)).toFixed(2)} — unless the item’s own margin is higher.`
-                : "0% means no floor. Set a number like 20 so every catalog line is marked up at least that much."}
-            </p>
           </div>
+          <MarginBar floor={form.minimumMarginPercent ?? 0} />
+          <p className="text-xs text-muted-foreground">
+            {(form.minimumMarginPercent ?? 0) > 0
+              ? `A $100 cost drops onto a proposal at ${formatMarginPercent(form.minimumMarginPercent ?? 0)} — $${(100 * (1 + (form.minimumMarginPercent ?? 0) / 100)).toFixed(2)} — unless the item’s own margin is higher.`
+              : "0% means no floor. Set a number like 20 so every catalog line is marked up at least that much."}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Commissions are paid on <span className="font-medium text-foreground">gross profit</span>.
+          </p>
         </CardContent>
       </Card>
+
+      <div className="flex justify-end gap-2">
+        <Button type="reset" variant="outline" className="rounded-lg bg-white" disabled={pending || !dirty}>
+          Discard
+        </Button>
+        <Button type="submit" className="rounded-lg" disabled={pending || !dirty}>
+          {pending ? "Saving…" : "Save changes"}
+        </Button>
+      </div>
     </form>
+  );
+}
+
+function MarginBar({ floor }: { floor: number }) {
+  const warn = Math.max(floor, Math.min(floor + 8, 100));
+  const target = Math.max(warn, Math.min(warn + 12, 100));
+  return (
+    <div>
+      <div className="flex h-2 overflow-hidden rounded-full bg-[#f3f1ee]">
+        <div className="bg-rose-400" style={{ width: `${Math.min(floor, 100)}%` }} />
+        <div className="bg-amber-300" style={{ width: `${Math.max(warn - floor, 0)}%` }} />
+        <div className="bg-emerald-400" style={{ width: `${Math.max(100 - warn, 0)}%` }} />
+      </div>
+      <div className="mt-1.5 flex justify-between text-[11px] text-muted-foreground">
+        <span>Needs approval</span>
+        <span>Warning</span>
+        <span>On target{target > 0 ? ` · ${formatMarginPercent(target)}` : ""}</span>
+      </div>
+    </div>
   );
 }

@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
+import { EmptyState, ErrorBanner, LoadingScreen } from "@/components/page-chrome";
+import { SettingsPageHeader } from "@/components/settings-chrome";
 import { PriceBookPanel } from "@/components/price-book-panel";
 import { useCrm } from "@/lib/crm-store";
 import { canManageSettings } from "@/lib/visibility";
@@ -31,10 +32,10 @@ export default function PriceBookSettingsPage() {
       {crm.hydrateError ? (
         <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
       ) : null}
-      <PageHeader
-        eyebrow="Settings"
+      <SettingsPageHeader
+        eyebrow="Sales"
         title="Price book"
-        description="Company catalog of labor, material, equipment, allowances, and subcontract packages, organized as dated price lists. Outdate a list when a new book comes out — old lists stay for lookup. Each item can carry a margin. Upload a CSV to load the current list at once, or add items one at a time."
+        description="Line items and lists reps pull into estimates. Change a price here and new estimates pick it up."
       />
       <PriceBookPanel />
     </div>

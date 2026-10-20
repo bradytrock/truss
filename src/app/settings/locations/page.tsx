@@ -1,17 +1,17 @@
 "use client";
 
 import { GoogleLocationsSettings } from "@/components/google-locations-settings";
-import { PageHeader } from "@/components/page-chrome";
+import { SettingsPageHeader } from "@/components/settings-chrome";
 import { SettingsAdminGate } from "@/components/settings-nav";
 
 export default function LocationsSettingsPage() {
   return (
     <SettingsAdminGate>
-      <div className="max-w-4xl space-y-5">
-        <PageHeader
-          eyebrow="Settings"
-          title="Locations"
-          description="Your Google Business Profile listings. Multi-office companies add one per office, then point each person at theirs so reviews land on the right listing."
+      <div className="space-y-5">
+        <SettingsPageHeader
+          eyebrow="Company"
+          title="Locations & reviews"
+          description="Each location links to a Google Business Profile, so review requests land on the right listing."
         />
         <GoogleLocationsSettings />
       </div>

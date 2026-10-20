@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { LayoutGrid, Menu, Plus, Search } from "lucide-react";
+import { toast } from "sonner";
 import { useCrm } from "@/lib/crm-store";
 import { onboardingStep } from "@/lib/invite-onboarding";
 import { createClient } from "@/lib/supabase/client";
@@ -45,6 +46,7 @@ import { canViewReports, canManageSettings, canManageAutomations, canViewAccount
 import { groupLoginAsTargets, readLoginAsRecent, recentLoginAsTargets, rememberLoginAsRecent } from "@/lib/login-as";
 import { isInboxPath } from "@/lib/inbox";
 import { openDialerPopup } from "@/lib/calls/popup";
+import { useSoftphone } from "@/lib/calls/softphone";
 import { actionableReturningClientNotices } from "@/lib/returning-client";
 import { actionableJobCodeReviews } from "@/lib/job-code";
 import { isBusinessDevelopment } from "@/lib/bd";
@@ -53,7 +55,7 @@ import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { BrandMark, ProductWordmark } from "@/components/brand";
 import { NotificationsMenu } from "@/components/notifications-menu";
-import { SettingsMobileBar } from "@/components/settings-nav";
+import { isAutomationBuilderPath, SettingsMobileBar, settingsSectionLabel } from "@/components/settings-nav";
 
 const AssistantPanel = dynamic(
   () => import("@/components/assistant-panel").then((mod) => mod.AssistantPanel),
@@ -290,8 +292,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="min-h-0 flex-1 overflow-y-auto py-1">
           <Nav pathname={pathname} />
         </div>
-        <div className="mt-auto border-t border-sidebar-border px-4 py-3">
-          <LivePulse tone="dark" />
+        <div className="mt-auto border-t border-sidebar-border px-3 py-3">
+          <SidebarSoftphone />
         </div>
       </aside>
 
@@ -316,8 +318,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           <div className="min-h-0 flex-1 overflow-y-auto py-1">
             <Nav pathname={pathname} onNavigate={() => setMobileOpen(false)} />
           </div>
-          <div className="mt-auto border-t border-sidebar-border px-4 py-3">
-            <LivePulse tone="dark" />
+          <div className="mt-auto border-t border-sidebar-border px-3 py-3">
+            <SidebarSoftphone />
           </div>
         </SheetContent>
       </Sheet>
@@ -329,7 +331,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
       >
         <header className={cn("z-30 border-b bg-background", fillLayout ? "shrink-0" : "sticky top-0")}>
-          <div className="flex h-12 items-center gap-2 px-3 sm:px-5">
+          <div className="flex h-14 items-center gap-2 px-3 sm:gap-3 sm:px-5">
             <Button
               variant="ghost"
               size="icon"
@@ -339,10 +341,18 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               <Menu />
             </Button>
+            <SettingsCrumb />
             <SearchTrigger />
             <div className="ml-auto flex items-center gap-1.5">
+              <CompanyAdminPill />
               <NotificationsMenu />
-              <AssistantPanel />
+              <AssistantPanel
+                className={
+                  pathname.startsWith("/settings")
+                    ? "bg-neutral-950 text-white hover:bg-neutral-800 hover:text-white"
+                    : undefined
+                }
+              />
               <DropdownMenu>
                 <DropdownMenuTrigger
                   render={
@@ -375,7 +385,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                 ? "flex min-h-0 flex-1 flex-col overflow-hidden p-0"
               : inboxLayout
                 ? "flex min-h-0 flex-1 flex-col overflow-hidden"
-                : "flex-1 p-5 sm:p-7",
+                : cn(
+                "flex-1 p-5 sm:p-7",
+                pathname.startsWith("/settings") &&
+                  !isAutomationBuilderPath(pathname) &&
+                  "bg-[#f6f5f3] p-0 sm:p-0",
+              ),
           )}
         >
           {children}
@@ -471,6 +486,30 @@ function AppLauncher({
   );
 }
 
+
+function SidebarSoftphone() {
+  const phone = useSoftphone();
+  if (phone.ready && !phone.active && phone.incoming.length === 0) {
+    return (
+      <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+        <p className="flex items-center gap-2 text-xs text-white/85">
+          <span className="size-1.5 rounded-full bg-emerald-400" />
+          Softphone ready
+        </p>
+        <button
+          type="button"
+          className="mt-2 w-full rounded-lg border border-white/15 bg-white/5 py-1.5 text-xs text-white hover:bg-white/10"
+          onClick={() => {
+            if (!openDialerPopup()) toast.error("Allow pop-ups to open the dialer window.");
+          }}
+        >
+          Open dialer
+        </button>
+      </div>
+    );
+  }
+  return <LivePulse tone="dark" />;
+}
 
 function LivePulse({ tone = "light" }: { tone?: "light" | "dark" }) {
   const { configured, liveStatus } = useCrm();
@@ -594,8 +633,38 @@ function Nav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => vo
   );
 }
 
+function SettingsCrumb() {
+  const pathname = usePathname();
+  const label = settingsSectionLabel(pathname);
+  if (!label || isAutomationBuilderPath(pathname)) return null;
+  return (
+    <p className="hidden shrink-0 items-center gap-1.5 text-sm sm:flex">
+      <Link href="/settings" className="text-muted-foreground hover:text-foreground">
+        Settings
+      </Link>
+      <span className="text-muted-foreground/70">/</span>
+      <span className="font-medium text-foreground">{label}</span>
+    </p>
+  );
+}
+
+function CompanyAdminPill() {
+  const pathname = usePathname();
+  const { viewer, impersonatedStaff } = useCrm();
+  if (!pathname.startsWith("/settings") || isAutomationBuilderPath(pathname)) return null;
+  if (!viewer || !canManageSettings(viewer.role, viewer)) return null;
+  const label = impersonatedStaff ? `Viewing as ${impersonatedStaff.name}` : "Company admin view";
+  return (
+    <span className="hidden rounded-full border border-[#e4e0db] bg-white px-3 py-1 text-xs text-muted-foreground lg:inline">
+      {label}
+    </span>
+  );
+}
+
 export function SearchTrigger() {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const onSettings = pathname.startsWith("/settings") && !isAutomationBuilderPath(pathname);
   const router = useRouter();
   const { opportunities, jobs, contacts, estimates, invoices, materialOrders, materialOrderTemplates, viewer, effectiveStaff, tasks, jobInsurance } = useCrm();
   const showFinancials = canViewProjectFinancials(effectiveStaff?.role ?? viewer?.role);
@@ -615,13 +684,25 @@ export function SearchTrigger() {
     <>
       <Button
         variant="ghost"
-        size="icon"
-        className="text-muted-foreground hover:text-foreground"
+        size={onSettings ? "sm" : "icon"}
+        className={cn(
+          "text-muted-foreground hover:text-foreground",
+          onSettings &&
+            "h-9 min-w-0 flex-1 justify-start gap-2 rounded-full border border-[#e6e1db] bg-[#f6f5f3] px-3 font-normal hover:bg-[#f3f1ee] sm:max-w-md",
+        )}
         onClick={() => setOpen(true)}
         aria-label="Search"
         title="Search (⌘K)"
       >
         <Search className="size-4" />
+        {onSettings ? (
+          <>
+            <span className="truncate text-sm">Search jobs, contacts, people</span>
+            <span className="ml-auto hidden rounded-md border bg-white px-1.5 py-0.5 text-[10px] text-muted-foreground sm:inline">
+              ⌘K
+            </span>
+          </>
+        ) : null}
       </Button>
       {open ? (
       <CommandDialog

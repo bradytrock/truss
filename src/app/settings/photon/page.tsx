@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageHeader } from "@/components/page-chrome";
+import { SettingsPageHeader } from "@/components/settings-chrome";
 import { SettingsAdminGate } from "@/components/settings-nav";
 import { photonNotSetupMessage } from "@/lib/photon";
 import { missingPhotonMessage } from "@/lib/supabase/schema-errors";
@@ -102,10 +102,10 @@ function PhotonSettingsForm() {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        eyebrow="Settings"
-        title="Photon"
-        description="Texts, share-link texts, automations, and voice-agent staff alerts go out through this office's Photon project."
+      <SettingsPageHeader
+        eyebrow="Communication"
+        title="Office texts"
+        description="Texts, share-link texts, automations, and voice-agent staff alerts go out through this office’s Photon project."
       />
 
       {info?.sql ? (

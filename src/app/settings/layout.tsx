@@ -11,13 +11,15 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="lg:flex lg:gap-10">
-      <div className="hidden lg:block lg:w-52 lg:shrink-0">
-        <div className="lg:sticky lg:top-16">
-          <SettingsNav variant="rail" />
-        </div>
+    <div className="min-h-full bg-[#f6f5f3]">
+      <div className="lg:grid lg:grid-cols-[16.5rem_minmax(0,1fr)]">
+        <aside className="hidden px-4 py-6 lg:block">
+          <div className="lg:sticky lg:top-16">
+            <SettingsNav variant="rail" />
+          </div>
+        </aside>
+        <div className="min-w-0 px-4 py-6 sm:px-6 lg:py-7 lg:pr-8 lg:pl-2">{children}</div>
       </div>
-      <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }

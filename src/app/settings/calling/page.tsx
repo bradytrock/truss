@@ -2,7 +2,7 @@
 
 import { CallingSettingsForm } from "@/components/calling-settings";
 import { CallingRoutingSettings } from "@/components/calling-routing-settings";
-import { PageHeader } from "@/components/page-chrome";
+import { SettingsPageHeader } from "@/components/settings-chrome";
 import { SettingsAdminGate } from "@/components/settings-nav";
 import { useCrm } from "@/lib/crm-store";
 
@@ -21,7 +21,8 @@ function CallingSettingsBody() {
   const crm = useCrm();
   return (
     <div className="space-y-6">
-      <PageHeader
+      <SettingsPageHeader
+        eyebrow="Communication"
         title="Calling"
         description="Photon Spectrum Voice over LiveKit Cloud SIP. Web softphones, staff cells, and queues share one office line."
       />

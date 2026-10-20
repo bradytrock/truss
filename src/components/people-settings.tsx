@@ -1,12 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Copy, MoreHorizontal, Plus } from "lucide-react";
+import { AlertTriangle, Copy, MoreHorizontal, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +41,8 @@ import {
 } from "@/components/ui/table";
 import { BulkInviteDialog } from "@/components/bulk-invite-dialog";
 import { EmptyState } from "@/components/page-chrome";
+import { SettingsCard, SettingsPageHeader } from "@/components/settings-chrome";
+import { TeamPeopleTabs } from "@/components/people-settings-chrome";
 import { GoogleLocationSelect } from "@/components/google-locations-settings";
 import { StaffPhotoField } from "@/components/staff-photo-field";
 import { staffTeamLabel, TeamSelect } from "@/components/teams-settings";
@@ -73,13 +73,38 @@ const ROLE_ITEMS = SEAT_ROLES.map((role) => ({
   label: SEAT_ROLE_LABELS[role],
 }));
 
-function statusClass(member: StaffMember) {
-  const label = staffStatusLabel(member);
-  if (label === "Locked") return "border-destructive/30 bg-destructive/8 text-destructive";
-  if (label === "Restricted") return "border-border bg-foreground/[0.06] text-foreground";
-  if (label === "Invite expired") return "border-border text-muted-foreground";
-  if (label === "Invited") return "border-primary/30 bg-primary/8 text-primary";
-  return "border-border bg-transparent text-foreground/80";
+const ROLE_SUMMARIES = [
+  {
+    title: "Company admin",
+    body: "Every job, contact, and report. Assigns and reassigns leads. Manages settings and billing.",
+  },
+  {
+    title: "Project manager",
+    body: "Their own leads and jobs. Can pass a lead back to admins, but can’t hand it to another rep.",
+  },
+  {
+    title: "Business development",
+    body: "Prospecting, referral partners, and lead intake. Sees the business-development book.",
+  },
+  {
+    title: "Office / Production",
+    body: "Accounting, team leads, and superintendents. Scheduling, paperwork, and production on the jobs they’re assigned.",
+  },
+];
+
+const AVATAR_TONES = [
+  "bg-rose-100 text-rose-800",
+  "bg-sky-100 text-sky-800",
+  "bg-emerald-100 text-emerald-800",
+  "bg-amber-100 text-amber-900",
+  "bg-violet-100 text-violet-800",
+  "bg-orange-100 text-orange-800",
+];
+
+function avatarTone(name: string) {
+  let hash = 0;
+  for (const char of name) hash = (hash + char.charCodeAt(0)) % AVATAR_TONES.length;
+  return AVATAR_TONES[hash] ?? AVATAR_TONES[0];
 }
 
 async function copyInvite(url: string) {
@@ -100,7 +125,6 @@ export function PeopleSettings({
   onUpdate,
   onRefreshInvite,
   onRemove,
-  hideIntro = false,
 }: {
   teams: Team[];
   staff: StaffMember[];
@@ -132,7 +156,6 @@ export function PeopleSettings({
   ) => Promise<boolean>;
   onRefreshInvite: (id: string) => Promise<string | null>;
   onRemove: (id: string) => Promise<boolean>;
-  hideIntro?: boolean;
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -141,6 +164,9 @@ export function PeopleSettings({
   const [inviteEmailedTo, setInviteEmailedTo] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<StaffMember | null>(null);
   const [profileTarget, setProfileTarget] = useState<StaffMember | null>(null);
+  const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<SeatRole | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "pending" | "expired">("all");
   const people = useMemo(
     () =>
       [...staff].sort((left, right) => {
@@ -150,6 +176,41 @@ export function PeopleSettings({
       }),
     [staff, viewerId],
   );
+  const counts = useMemo(() => {
+    let active = 0;
+    let pending = 0;
+    let expired = 0;
+    for (const member of staff) {
+      if (inviteIsPending(member) && inviteIsExpired(member)) expired += 1;
+      else if (inviteIsPending(member) && !member.locked) pending += 1;
+      else if (!member.locked) active += 1;
+    }
+    return { active, pending, expired };
+  }, [staff]);
+  const visible = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return people.filter((member) => {
+      if (roleFilter !== "all" && member.role !== roleFilter) return false;
+      const expired = inviteIsPending(member) && inviteIsExpired(member);
+      const pending = inviteIsPending(member) && !expired;
+      if (statusFilter === "expired" && !expired) return false;
+      if (statusFilter === "pending" && !pending) return false;
+      if (statusFilter === "active" && (expired || pending || member.locked)) return false;
+      if (!needle) return true;
+      return `${member.name} ${member.title} ${member.email} ${member.phone}`.toLowerCase().includes(needle);
+    });
+  }, [people, query, roleFilter, statusFilter]);
+
+  async function resendExpired() {
+    const expired = staff.filter((member) => inviteIsPending(member) && inviteIsExpired(member));
+    for (const member of expired) {
+      await onRefreshInvite(member.id);
+    }
+    const emailed = await requestInviteEmails(expired.map((member) => member.id));
+    const sent = emailed.results.filter((row) => row.ok).length;
+    if (sent > 0) toast.success(`Resent ${sent} invite${sent === 1 ? "" : "s"}.`);
+    else toast.error(emailed.error || "Could not resend those invites.");
+  }
 
   async function showInvite(url: string | null, name: string, emailedTo?: string | null) {
     if (!url) return;
@@ -160,7 +221,7 @@ export function PeopleSettings({
   }
 
   async function emailSeatInvite(member: StaffMember) {
-    let tokenReady = Boolean(member.inviteToken) && !inviteIsExpired(member);
+    const tokenReady = Boolean(member.inviteToken) && !inviteIsExpired(member);
     if (!tokenReady) {
       const url = await onRefreshInvite(member.id);
       if (!url) return;
@@ -203,38 +264,119 @@ export function PeopleSettings({
     else toast.error("Could not copy the link. Select it and copy it yourself.");
   }
 
+  function menuFor(member: StaffMember, full?: boolean) {
+    return (
+      <SeatMenu
+        member={member}
+        isSelf={member.id === viewerId}
+        onEditProfile={() => setProfileTarget(member)}
+        onUpdate={onUpdate}
+        onCopyCard={() => void copyCard(member)}
+        onRefreshInvite={async () => {
+          const url = await onRefreshInvite(member.id);
+          await showInvite(url, member.name);
+        }}
+        onCopyInvite={async () => {
+          if (member.inviteToken) {
+            await copyInvite(inviteSignupUrl(window.location.origin, member.inviteToken));
+            return;
+          }
+          const url = await onRefreshInvite(member.id);
+          await showInvite(url, member.name);
+        }}
+        onEmailInvite={() => void emailSeatInvite(member)}
+        onRemove={() => setRemoveTarget(member)}
+        full={full}
+      />
+    );
+  }
+
   return (
     <>
-      <Card>
-        <CardHeader
-          className={
-            hideIntro
-              ? "flex flex-row items-center justify-end border-b"
-              : "flex flex-col gap-3 border-b sm:flex-row sm:items-start sm:justify-between"
-          }
-        >
-          {hideIntro ? null : (
-            <div className="space-y-1.5">
-              <CardTitle>People</CardTitle>
-              <CardDescription>
-                Add a roster seat, put them on a team, or email a one-time signup link into this
-                company. Restrict someone to their own book, lock a login, or remove them. Invites
-                expire in {INVITE_DAYS} days and cannot be reused after they set up their account.
-              </CardDescription>
-            </div>
-          )}
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setBulkOpen(true)}>
+      <SettingsPageHeader
+        eyebrow="Team"
+        title="People"
+        description={`Everyone with a seat in this company. Invite links join this company, work once, and expire after ${INVITE_DAYS} days.`}
+        actions={
+          <>
+            <Button type="button" variant="outline" className="rounded-lg bg-white" onClick={() => setBulkOpen(true)}>
               Bulk add
             </Button>
-            <Button type="button" onClick={() => setAddOpen(true)}>
+            <Button type="button" className="rounded-lg" onClick={() => setAddOpen(true)}>
               <Plus />
               Add teammate
             </Button>
+          </>
+        }
+      />
+      <TeamPeopleTabs />
+
+      {counts.expired > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-950">
+          <p className="flex items-center gap-2">
+            <AlertTriangle className="size-4 text-rose-600" />
+            {counts.expired} invite{counts.expired === 1 ? " has" : "s have"} expired. Those teammates can’t sign in until they get a fresh link.
+          </p>
+          <Button type="button" size="sm" onClick={() => void resendExpired()}>
+            Resend all {counts.expired}
+          </Button>
+        </div>
+      ) : null}
+
+      <SettingsCard className="overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-[#f0ece8] px-4 py-3 sm:flex-row sm:items-center">
+          <div className="flex flex-wrap gap-1.5">
+            {(
+              [
+                ["all", `All ${staff.length}`],
+                ["active", `Active ${counts.active}`],
+                ["pending", `Pending ${counts.pending}`],
+                ["expired", `Expired ${counts.expired}`],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setStatusFilter(id)}
+                className={cn(
+                  "rounded-full px-3 py-1 text-sm",
+                  statusFilter === id ? "bg-neutral-950 text-white" : "bg-[#f3f1ee] text-foreground/80 hover:bg-[#ebe7e2]",
+                )}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-        </CardHeader>
-        <CardContent className="pt-4">
-          {people.length === 0 ? (
+          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[#e6e1db] bg-white px-3 py-1.5 sm:max-w-xs sm:ml-auto">
+            <Search className="size-3.5 text-muted-foreground" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search name, title, email"
+              className="w-full bg-transparent text-sm outline-none"
+            />
+          </label>
+          <Select
+            value={roleFilter}
+            onValueChange={(value) => setRoleFilter((value as SeatRole | "all") ?? "all")}
+            items={[{ value: "all", label: "All roles" }, ...ROLE_ITEMS]}
+          >
+            <SelectTrigger className="w-full rounded-lg bg-white sm:w-44">
+              <SelectValue placeholder="All roles" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All roles</SelectItem>
+              {ROLE_ITEMS.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {people.length === 0 ? (
+          <div className="p-4">
             <EmptyState
               title="No seats yet"
               description="Add the people who run jobs, estimates, and the office. An email sends a one-time signup link; skip it to assign work before they have a login."
@@ -249,137 +391,105 @@ export function PeopleSettings({
                 </div>
               }
             />
-          ) : (
-            <>
-              <div className="hidden md:block">
-                <Table className="table-fixed">
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[44%]">Person</TableHead>
-                      <TableHead className="w-[28%]">Role</TableHead>
-                      <TableHead className="w-[18%]">Status</TableHead>
-                      <TableHead className="w-[10%] text-right">
-                        <span className="sr-only">Account</span>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {people.map((member) => (
-                      <TableRow key={member.id}>
-                        <TableCell className="max-w-0 whitespace-normal">
-                          <div className="flex items-start gap-2.5">
-                            <SeatAvatar member={member} />
-                            <div className="min-w-0">
-                              <p className="truncate font-medium">
-                                {member.name}
-                                {member.id === viewerId ? (
-                                  <span className="ml-2 text-xs font-normal text-muted-foreground">You</span>
-                                ) : null}
-                              </p>
-                              {member.title ? (
-                                <p className="truncate text-xs text-muted-foreground">{member.title}</p>
+          </div>
+        ) : visible.length === 0 ? (
+          <p className="px-4 py-8 text-sm text-muted-foreground">No people match that filter.</p>
+        ) : (
+          <>
+            <div className="hidden md:block">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="pl-4 text-[11px] tracking-wide text-muted-foreground uppercase">Person</TableHead>
+                    <TableHead className="text-[11px] tracking-wide text-muted-foreground uppercase">Contact</TableHead>
+                    <TableHead className="text-[11px] tracking-wide text-muted-foreground uppercase">Role</TableHead>
+                    <TableHead className="text-[11px] tracking-wide text-muted-foreground uppercase">Team</TableHead>
+                    <TableHead className="text-[11px] tracking-wide text-muted-foreground uppercase">Status</TableHead>
+                    <TableHead className="w-12 pr-4 text-right">
+                      <span className="sr-only">Account</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visible.map((member) => (
+                    <TableRow key={member.id} className="cursor-pointer" onClick={() => setProfileTarget(member)}>
+                      <TableCell className="pl-4 whitespace-normal">
+                        <div className="flex items-center gap-2.5">
+                          <SeatAvatar member={member} />
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">
+                              {member.name}
+                              {member.id === viewerId ? (
+                                <span className="ml-2 text-xs font-normal text-muted-foreground">You</span>
                               ) : null}
-                              <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                                {member.email || "No email"}
-                              </p>
-                              {member.phone ? (
-                                <p className="truncate text-sm text-muted-foreground">
-                                  {formatPhone(member.phone)}
-                                </p>
-                              ) : null}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="whitespace-normal text-muted-foreground">
-                          <p>{SEAT_ROLE_LABELS[member.role]}</p>
-                          <p className="text-xs">{staffTeamLabel(teams, member)}</p>
-                        </TableCell>
-                        <TableCell className="whitespace-normal">
-                          <StatusBadge member={member} />
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <SeatMenu
-                            member={member}
-                            isSelf={member.id === viewerId}
-                            onEditProfile={() => setProfileTarget(member)}
-                            onUpdate={onUpdate}
-                            onCopyCard={() => void copyCard(member)}
-                            onRefreshInvite={async () => {
-                              const url = await onRefreshInvite(member.id);
-                              await showInvite(url, member.name);
-                            }}
-                            onCopyInvite={async () => {
-                              if (member.inviteToken) {
-                                await copyInvite(inviteSignupUrl(window.location.origin, member.inviteToken));
-                                return;
-                              }
-                              const url = await onRefreshInvite(member.id);
-                              await showInvite(url, member.name);
-                            }}
-                            onEmailInvite={() => void emailSeatInvite(member)}
-                            onRemove={() => setRemoveTarget(member)}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              <div className="grid gap-3 md:hidden">
-                {people.map((member) => (
-                  <div key={member.id} className="grid gap-3 border p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-start gap-2.5">
-                        <SeatAvatar member={member} />
-                        <div className="min-w-0">
-                          <p className="font-medium">
-                            {member.name}
-                            {member.id === viewerId ? (
-                              <span className="ml-2 text-xs font-normal text-muted-foreground">You</span>
+                            </p>
+                            {member.title ? (
+                              <p className="truncate text-xs text-muted-foreground">{member.title}</p>
                             ) : null}
-                          </p>
-                          <p className="text-xs text-muted-foreground">{member.title}</p>
-                          <p className="mt-1 text-sm text-muted-foreground">{member.email || "No email"}</p>
-                          {member.phone ? (
-                            <p className="text-sm text-muted-foreground">{formatPhone(member.phone)}</p>
-                          ) : null}
+                          </div>
                         </div>
-                      </div>
-                      <StatusBadge member={member} />
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {SEAT_ROLE_LABELS[member.role]} · {staffTeamLabel(teams, member)}
-                    </p>
-                    <SeatMenu
-                      member={member}
-                      isSelf={member.id === viewerId}
-                      onEditProfile={() => setProfileTarget(member)}
-                      onUpdate={onUpdate}
-                      onCopyCard={() => void copyCard(member)}
-                      onRefreshInvite={async () => {
-                        const url = await onRefreshInvite(member.id);
-                        await showInvite(url, member.name);
-                      }}
-                      onCopyInvite={async () => {
-                        if (member.inviteToken) {
-                          await copyInvite(inviteSignupUrl(window.location.origin, member.inviteToken));
-                          return;
-                        }
-                        const url = await onRefreshInvite(member.id);
-                        await showInvite(url, member.name);
-                      }}
-                      onEmailInvite={() => void emailSeatInvite(member)}
-                      onRemove={() => setRemoveTarget(member)}
-                      full
-                    />
+                      </TableCell>
+                      <TableCell className="whitespace-normal text-sm text-muted-foreground">
+                        <p className="truncate">{member.email || "No email"}</p>
+                        {member.phone ? <p className="truncate">{formatPhone(member.phone)}</p> : null}
+                      </TableCell>
+                      <TableCell>
+                        <RolePill role={member.role} />
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{staffTeamLabel(teams, member)}</TableCell>
+                      <TableCell>
+                        <StatusBadge member={member} you={member.id === viewerId} />
+                      </TableCell>
+                      <TableCell className="pr-4 text-right" onClick={(event) => event.stopPropagation()}>
+                        {menuFor(member)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <ul className="grid gap-3 p-3 md:hidden">
+              {visible.map((member) => (
+                <li key={member.id} className="rounded-xl border border-[#eeeae6] p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <button type="button" className="flex min-w-0 items-start gap-2.5 text-left" onClick={() => setProfileTarget(member)}>
+                      <SeatAvatar member={member} />
+                      <span className="min-w-0">
+                        <span className="block font-medium">{member.name}</span>
+                        <span className="block text-xs text-muted-foreground">{member.title}</span>
+                        <span className="mt-1 block text-sm text-muted-foreground">{member.email || "No email"}</span>
+                      </span>
+                    </button>
+                    <StatusBadge member={member} you={member.id === viewerId} />
                   </div>
-                ))}
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {SEAT_ROLE_LABELS[member.role]} · {staffTeamLabel(teams, member)}
+                  </p>
+                  <div className="mt-2">{menuFor(member, true)}</div>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        <p className="border-t border-[#f0ece8] px-4 py-2.5 text-xs text-muted-foreground">
+          Showing {visible.length} of {people.length} people
+          <span className="hidden sm:inline"> · Select a name to edit their profile, card, and signature.</span>
+        </p>
+      </SettingsCard>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold">What each role can do</h2>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {ROLE_SUMMARIES.map((role) => (
+            <div key={role.title} className="rounded-2xl border border-[#ebe7e2] bg-white p-4">
+              <p className="text-sm font-medium">{role.title}</p>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{role.body}</p>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <AddTeammateDialog
         open={addOpen}
@@ -502,26 +612,62 @@ export function PeopleSettings({
 function SeatAvatar({ member }: { member: StaffMember }) {
   const photo = member.photoUrl?.trim() ?? "";
   return (
-    <Avatar className="mt-0.5">
+    <Avatar className="size-9">
       {photo ? <AvatarImage src={photo} alt="" /> : null}
-      <AvatarFallback className="text-xs">{initials(member.name) || "?"}</AvatarFallback>
+      <AvatarFallback className={cn("text-[11px] font-medium", avatarTone(member.name))}>
+        {initials(member.name) || "?"}
+      </AvatarFallback>
     </Avatar>
   );
 }
 
-function StatusBadge({ member }: { member: StaffMember }) {
+function RolePill({ role }: { role: SeatRole }) {
+  const dark = role === "company_admin";
+  return (
+    <span
+      className={cn(
+        "inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium",
+        dark && "bg-neutral-950 text-white",
+        role === "project_manager" && "bg-sky-100 text-sky-900",
+        role === "business_development" && "bg-violet-100 text-violet-900",
+        role === "accountant" && "bg-amber-100 text-amber-950",
+        !dark &&
+          role !== "project_manager" &&
+          role !== "business_development" &&
+          role !== "accountant" &&
+          "bg-[#f3f1ee] text-foreground/80",
+      )}
+    >
+      {SEAT_ROLE_LABELS[role]}
+    </span>
+  );
+}
+
+function StatusBadge({ member, you }: { member: StaffMember; you?: boolean }) {
   const label = staffStatusLabel(member);
+  const pending = label === "Invited";
+  const expired = label === "Invite expired";
+  const locked = label === "Locked" || label === "Restricted";
   const hint =
     inviteIsPending(member) && member.inviteExpiresAt
-      ? inviteIsExpired(member)
+      ? expired
         ? `Expired ${formatDate(member.inviteExpiresAt)}`
         : `Expires ${formatDate(member.inviteExpiresAt)}`
-      : null;
+      : you
+        ? "Signed in now"
+        : null;
+  const text = pending ? "Invite pending" : label;
   return (
     <div className="flex flex-col items-start gap-0.5">
-      <Badge variant="outline" className={cn(statusClass(member))}>
-        {label}
-      </Badge>
+      <span className="inline-flex items-center gap-1.5 text-sm">
+        <span
+          className={cn(
+            "size-1.5 rounded-full",
+            expired || locked ? "bg-rose-500" : pending ? "bg-amber-500" : "bg-emerald-500",
+          )}
+        />
+        {text}
+      </span>
       {hint ? <span className="text-[11px] text-muted-foreground">{hint}</span> : null}
     </div>
   );

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { MoreHorizontal, Plus } from "lucide-react";
+import { MoreHorizontal, Plus, UsersRound } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -28,10 +28,31 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EmptyState } from "@/components/page-chrome";
+import Link from "next/link";
+import { SettingsCard, SettingsPageHeader } from "@/components/settings-chrome";
+import { TeamPeopleTabs } from "@/components/people-settings-chrome";
 import { membersOnTeam, NO_TEAM, parseTeamSelect, selectValueForTeam, teamName } from "@/lib/teams";
 import type { StaffMember, Team } from "@/lib/types";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
+import { initials } from "@/lib/format";
+
+const TEAM_SETUPS: Array<{ name: string; description: string; roles: StaffMember["role"][] }> = [
+  {
+    name: "Sales",
+    description: "Project managers and business development. New leads route here first.",
+    roles: ["project_manager", "business_development", "estimator", "team_lead"],
+  },
+  {
+    name: "Production",
+    description: "Runs builds, crews, and materials once a job is sold.",
+    roles: ["superintendent"],
+  },
+  {
+    name: "Office",
+    description: "Paperwork, insurance supplements, invoicing, and collections.",
+    roles: ["company_admin", "accountant", "team_admin"],
+  },
+];
 
 export function TeamsSettings({
   teams,
@@ -39,14 +60,14 @@ export function TeamsSettings({
   onAdd,
   onUpdate,
   onRemove,
-  hideIntro = false,
+  onAssign,
 }: {
   teams: Team[];
   staff: StaffMember[];
   onAdd: (input: { name: string; leadStaffId?: string | null }) => Promise<Team | null>;
   onUpdate: (id: string, patch: { name?: string; leadStaffId?: string | null }) => Promise<boolean>;
   onRemove: (id: string) => Promise<boolean>;
-  hideIntro?: boolean;
+  onAssign?: (staffId: string, teamId: string | null) => Promise<boolean>;
 }) {
   const [editor, setEditor] = useState<{ mode: "add" } | { mode: "edit"; team: Team } | null>(null);
   const [removeTarget, setRemoveTarget] = useState<Team | null>(null);
@@ -54,81 +75,161 @@ export function TeamsSettings({
     () => [...teams].sort((left, right) => left.name.localeCompare(right.name)),
     [teams],
   );
+  const unassigned = useMemo(
+    () => staff.filter((member) => !member.teamId && !member.locked),
+    [staff],
+  );
+  const [applying, setApplying] = useState<string | null>(null);
+
+  async function applySetup(setup: (typeof TEAM_SETUPS)[number]) {
+    setApplying(setup.name);
+    try {
+      let team = teams.find((item) => item.name.toLowerCase() === setup.name.toLowerCase()) ?? null;
+      if (!team) team = await onAdd({ name: setup.name });
+      if (!team) return;
+      const matches = unassigned.filter((member) => setup.roles.includes(member.role));
+      if (onAssign) {
+        for (const member of matches) {
+          await onAssign(member.id, team.id);
+        }
+      }
+      toast.success(
+        matches.length
+          ? `${setup.name} is ready with ${matches.length} ${matches.length === 1 ? "person" : "people"}.`
+          : `${setup.name} is ready. Add people from the unassigned list.`,
+      );
+    } finally {
+      setApplying(null);
+    }
+  }
 
   return (
     <>
-      <Card>
-        <CardHeader
-          className={
-            hideIntro
-              ? "flex flex-row items-center justify-end border-b"
-              : "flex flex-col gap-3 border-b sm:flex-row sm:items-start sm:justify-between"
-          }
-        >
-          {hideIntro ? null : (
-            <div className="space-y-1.5">
-              <CardTitle>Teams</CardTitle>
-              <CardDescription>
-                Crews that share a book. Team leads and team admins see jobs and contacts owned by
-                people on their team, and can Login As a teammate.
-              </CardDescription>
-            </div>
-          )}
-          <Button type="button" onClick={() => setEditor({ mode: "add" })}>
+      <SettingsPageHeader
+        eyebrow="Team"
+        title="Teams"
+        description="Group people for lead routing, ring groups, and reporting. Each person sits on one team."
+        actions={
+          <Button type="button" className="rounded-lg" onClick={() => setEditor({ mode: "add" })}>
             <Plus />
-            Add team
+            New team
           </Button>
-        </CardHeader>
-        <CardContent className="pt-4">
-          {sorted.length === 0 ? (
-            <EmptyState
-              title="No teams yet"
-              description="Add a crew, pick a lead, then put people on it in People."
-              action={
-                <Button type="button" onClick={() => setEditor({ mode: "add" })}>
-                  Add team
+        }
+      />
+      <TeamPeopleTabs />
+
+      <SettingsCard className="px-5 py-10 text-center">
+        {sorted.length === 0 ? (
+          <>
+            <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-rose-50 text-primary">
+              <UsersRound className="size-5" />
+            </div>
+            <h2 className="mt-4 text-lg font-semibold">No teams yet</h2>
+            <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+              All {unassigned.length} people are unassigned. Start from a common setup below, or build your own.
+            </p>
+          </>
+        ) : (
+          <ul className="space-y-3 text-left">
+            {sorted.map((team) => {
+              const members = membersOnTeam(staff, team.id);
+              const lead = staff.find((member) => member.id === team.leadStaffId);
+              return (
+                <li key={team.id} className="flex items-start justify-between gap-3 rounded-xl border border-[#f0ece8] px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="font-medium">{team.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {lead ? `Lead: ${lead.name}` : "No lead"}
+                      {" · "}
+                      {members.length === 1 ? "1 person" : `${members.length} people`}
+                    </p>
+                    {members.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {members.map((member) => (
+                          <span key={member.id} className="inline-flex items-center gap-1.5 rounded-full bg-[#f6f4f1] px-2 py-0.5 text-xs">
+                            <span className="font-medium text-muted-foreground">{initials(member.name)}</span>
+                            {member.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger render={<Button type="button" variant="outline" size="icon-sm" />}>
+                      <MoreHorizontal />
+                      <span className="sr-only">Team actions</span>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setEditor({ mode: "edit", team })}>Edit team</DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem variant="destructive" onClick={() => setRemoveTarget(team)}>
+                        Remove team
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </SettingsCard>
+
+      <div>
+        <h2 className="text-sm font-semibold">Start from a common setup</h2>
+        <div className="mt-3 grid gap-3 lg:grid-cols-3">
+          {TEAM_SETUPS.map((setup) => {
+            const suggested = staff.filter((member) => !member.locked && setup.roles.includes(member.role));
+            return (
+              <SettingsCard key={setup.name} className="flex flex-col p-4">
+                <h3 className="font-medium">{setup.name}</h3>
+                <p className="mt-1 flex-1 text-sm text-muted-foreground">{setup.description}</p>
+                {suggested.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {suggested.slice(0, 6).map((member) => (
+                      <span key={member.id} className="inline-flex items-center gap-1.5 rounded-full bg-[#f6f4f1] px-2 py-0.5 text-xs">
+                        <span className="font-medium text-muted-foreground">{initials(member.name)}</span>
+                        {member.name}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-4 w-fit rounded-lg bg-white"
+                  disabled={applying === setup.name}
+                  onClick={() => void applySetup(setup)}
+                >
+                  {applying === setup.name ? "Setting up…" : "Use this setup"}
                 </Button>
-              }
-            />
-          ) : (
-            <ul className="divide-y">
-              {sorted.map((team) => {
-                const lead = staff.find((member) => member.id === team.leadStaffId);
-                const count = membersOnTeam(staff, team.id).length;
-                return (
-                  <li key={team.id} className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                    <div className="min-w-0">
-                      <p className="font-medium">{team.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {lead ? `Lead: ${lead.name}` : "No lead"}
-                        {" · "}
-                        {count === 1 ? "1 person" : `${count} people`}
-                      </p>
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={<Button type="button" variant="outline" size="icon-sm" />}
-                      >
-                        <MoreHorizontal />
-                        <span className="sr-only">Team actions</span>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setEditor({ mode: "edit", team })}>
-                          Edit team
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem variant="destructive" onClick={() => setRemoveTarget(team)}>
-                          Remove team
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+              </SettingsCard>
+            );
+          })}
+        </div>
+      </div>
+
+      <SettingsCard className="p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold">
+            Unassigned <span className="text-muted-foreground">{unassigned.length}</span>
+          </h2>
+          <Link href="/settings/people" className="text-sm font-medium text-primary hover:underline">
+            Manage people
+          </Link>
+        </div>
+        {unassigned.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">Everyone is on a team.</p>
+        ) : (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {unassigned.map((member) => (
+              <span key={member.id} className="inline-flex items-center gap-1.5 rounded-full border border-[#eeeae6] bg-white px-2.5 py-1 text-xs">
+                <span className="font-medium text-muted-foreground">{initials(member.name)}</span>
+                {member.name}
+              </span>
+            ))}
+          </div>
+        )}
+      </SettingsCard>
 
       <TeamEditorDialog
         open={Boolean(editor)}

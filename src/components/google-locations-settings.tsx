@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EmptyState } from "@/components/page-chrome";
+import { SettingsCard } from "@/components/settings-chrome";
 import { useCrm } from "@/lib/crm-store";
 import type { GoogleLocation, StaffMember } from "@/lib/types";
 
@@ -73,39 +74,39 @@ export function GoogleLocationsSettings() {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader className="border-b">
-          <CardTitle>Google locations</CardTitle>
-          <CardDescription>
-            One entry per Google Business Profile listing. Create the offices here, then set a
-            person’s location on their profile under Settings → People. Anyone without one of their
-            own uses the default.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-4">
-          {locations.length === 0 ? (
-            <EmptyState
-              title="No locations yet"
-              description="Add your first listing below. In Google Business Profile choose Ask for reviews and paste the short link."
+      {locations.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No locations yet. Add a listing below, then paste the Google review link from Ask for reviews.
+        </p>
+      ) : (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {locations.map((location) => (
+            <LocationRow
+              key={`${location.id}:${location.name}:${location.reviewUrl}`}
+              location={location}
+              seats={crm.staff.filter((member) => member.googleLocationId === location.id)}
+              onSave={(patch) => crm.updateGoogleLocation(location.id, patch)}
+              onRemove={() => crm.removeGoogleLocation(location.id)}
             />
-          ) : (
-            <ul className="divide-y">
-              {locations.map((location) => (
-                <li key={`${location.id}:${location.name}:${location.reviewUrl}`}>
-                  <LocationRow
-                    location={location}
-                    seats={crm.staff.filter((member) => member.googleLocationId === location.id)}
-                    onSave={(patch) => crm.updateGoogleLocation(location.id, patch)}
-                    onRemove={() => crm.removeGoogleLocation(location.id)}
-                  />
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+          ))}
+        </div>
+      )}
 
       <AddLocationCard onAdd={crm.addGoogleLocation} />
+
+      <SettingsCard className="p-5">
+        <h2 className="font-semibold">Automatic review requests</h2>
+        <p className="mt-1 max-w-xl text-sm text-muted-foreground">
+          Text homeowners a link to the job’s Google listing after the work is done. Build the rule under Automations, and set each teammate’s listing on their profile in People.
+        </p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          Each teammate’s Google location is set on their profile in{" "}
+          <Link href="/settings/people" className="font-medium text-primary hover:underline">
+            People
+          </Link>
+          .
+        </p>
+      </SettingsCard>
     </div>
   );
 }
@@ -137,7 +138,10 @@ function LocationRow({
   }
 
   return (
-    <div className="grid gap-3 py-4 first:pt-0">
+    <SettingsCard className="grid gap-3 p-4">
+      <div className="flex h-28 items-center justify-center rounded-xl bg-[#f6f4f1] text-xs tracking-wide text-muted-foreground uppercase">
+        Map preview
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{location.name}</span>
@@ -206,7 +210,7 @@ function LocationRow({
           {pending ? "Saving…" : "Save"}
         </Button>
       </div>
-    </div>
+    </SettingsCard>
   );
 }
 

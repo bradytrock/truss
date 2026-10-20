@@ -4,16 +4,17 @@ import Link from "next/link";
 import { CurrencyInput } from "@/components/currency-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageHeader } from "@/components/page-chrome";
+import { SettingsPageHeader } from "@/components/settings-chrome";
 import { SettingsAdminGate } from "@/components/settings-nav";
 import {
   Field,
   LogoField,
-  SettingsSaveActions,
   useCompanySettingsDraft,
 } from "@/components/company-settings-form";
 import { EmailTemplateSettings } from "@/components/email-template-settings";
+import { creatorInitials, jobDateStamp, nextJobCode } from "@/lib/job-code";
 import { LEGAL_EMAIL, LEGAL_PAGES } from "@/lib/legal";
 import { WebsiteChatSnippet } from "@/components/website-chat-snippet";
 
@@ -49,19 +50,18 @@ function CompanySettingsForm() {
         event.preventDefault();
         discard();
       }}
-      className="max-w-2xl space-y-4"
+      className="space-y-4"
     >
-      <PageHeader
-        eyebrow="Settings"
-        title="Company"
-        description="How the company is named on paper, in the sidebar, and on estimates, invoices, and public cards."
-        actions={<SettingsSaveActions dirty={dirty} pending={pending} />}
+      <SettingsPageHeader
+        eyebrow="Company"
+        title="Company profile"
+        description={`How ${form.name.trim() || "the company"} shows up on estimates, contracts, emails, texts, and the mobile app.`}
       />
 
-      <Card>
+      <Card className="rounded-2xl border-[#ebe7e2] shadow-sm">
         <CardHeader className="border-b">
-          <CardTitle>Business</CardTitle>
-          <CardDescription>Letterhead and how people reach the office.</CardDescription>
+          <CardTitle>Identity</CardTitle>
+          <CardDescription>Your logo and names print on every customer-facing document.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 pt-4">
           <Field
@@ -394,7 +394,76 @@ function CompanySettingsForm() {
           </p>
         </CardContent>
       </Card>
+
+      <Card className="rounded-2xl border-[#ebe7e2] shadow-sm">
+        <CardHeader className="border-b">
+          <CardTitle>Brand color</CardTitle>
+          <CardDescription>
+            Used on estimates, emails, and the iOS widgets and Live Activity so every surface matches.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-wrap items-center gap-4 pt-4">
+          <span className="size-9 rounded-lg bg-primary" />
+          <span className="size-9 rounded-lg bg-neutral-950" />
+          <span className="size-9 rounded-lg bg-[#243044]" />
+          <div className="grid gap-1">
+            <span className="text-xs text-muted-foreground">Hex</span>
+            <span className="rounded-lg border bg-[#fbfaf8] px-3 py-1.5 font-mono text-sm">#D71C27</span>
+          </div>
+          <span className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground">
+            Approve estimate
+          </span>
+          <p className="basis-full text-xs text-muted-foreground">Preview of the brand red on a customer email.</p>
+        </CardContent>
+      </Card>
+
+      <JobNumberCard ownerName={crm.viewer?.name || crm.user.name || "Office"} codes={crm.jobs.map((job) => job.code)} />
+
+      <div className="flex justify-end gap-2">
+        <Button type="reset" variant="outline" className="rounded-lg bg-white" disabled={pending || !dirty}>
+          Discard
+        </Button>
+        <Button type="submit" className="rounded-lg" disabled={pending || !dirty}>
+          {pending ? "Saving…" : "Save changes"}
+        </Button>
+      </div>
     </form>
+  );
+}
+
+function JobNumberCard({ ownerName, codes }: { ownerName: string; codes: Array<string | undefined> }) {
+  const stamp = jobDateStamp(new Date());
+  const initials = creatorInitials(ownerName);
+  const next = nextJobCode(
+    ownerName,
+    new Date(),
+    codes.filter((code): code is string => Boolean(code)),
+  );
+  const letter = next.split("-").pop() || "A";
+  return (
+    <Card className="rounded-2xl border-[#ebe7e2] shadow-sm">
+      <CardHeader className="border-b">
+        <CardTitle>Job numbers</CardTitle>
+        <CardDescription>Every new lead gets a code the crew can say over the phone.</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 pt-4 sm:grid-cols-3">
+        <div className="rounded-xl bg-[#f6f4f1] px-4 py-3">
+          <p className="font-mono text-lg font-medium">{initials}</p>
+          <p className="text-xs text-muted-foreground">Rep’s first + last initial</p>
+        </div>
+        <div className="rounded-xl bg-[#f6f4f1] px-4 py-3">
+          <p className="font-mono text-lg font-medium">{stamp}</p>
+          <p className="text-xs text-muted-foreground">Date lead opened (MMDDYY)</p>
+        </div>
+        <div className="rounded-xl bg-[#f6f4f1] px-4 py-3">
+          <p className="font-mono text-lg font-medium">-{letter}</p>
+          <p className="text-xs text-muted-foreground">Next letter that day</p>
+        </div>
+        <p className="text-sm text-muted-foreground sm:col-span-3">
+          Today’s next code for you: <span className="rounded-full bg-neutral-950 px-2 py-0.5 font-mono text-xs text-white">{next}</span>
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 

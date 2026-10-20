@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { EmptyState, PageHeader } from "@/components/page-chrome";
+import { Sparkles } from "lucide-react";
+import { EmptyState } from "@/components/page-chrome";
+import { SentenceChip, SettingsCard, SettingsPageHeader, SettingsToggle } from "@/components/settings-chrome";
+import { askCassio } from "@/lib/assistant/ask";
+import { summarizeAction, summarizeCondition, summarizeTrigger } from "@/lib/automations/summarize";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -50,40 +53,56 @@ export function AutomationList() {
   const showGallery = automations.length === 0 && templates.length > 0;
 
   return (
-    <div className="max-w-4xl space-y-5">
-      <PageHeader
-        eyebrow="Settings"
+    <div className="space-y-4">
+      <SettingsPageHeader
+        eyebrow="Operations"
         title="Automations"
-        description="When a new lead is created, a proposal is won, or a job moves — set the value, change the stage, and text whoever should know. Phones can pause, resume, and confirm."
+        description="When something happens, check a condition, then do the follow-up for you. Each rule reads like a sentence."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            {jobs.length > 0 ? (
-              <Select
-                value={testJob?.id ?? ""}
-                onValueChange={(value) => setTestJobId(String(value))}
-                items={jobs.map((job) => ({
-                  value: job.id,
-                  label: `${job.code} · ${job.name}`,
-                }))}
-              >
-                <SelectTrigger size="sm" className="w-52">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {jobs.map((job) => (
-                    <SelectItem key={job.id} value={job.id}>
-                      {job.code} · {job.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
-            <Button nativeButton={false} render={<Link href="/settings/automations/new" />}>
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-lg bg-neutral-950 text-white hover:bg-neutral-800 hover:text-white"
+              onClick={() =>
+                askCassio(
+                  "Help me write an automation. Ask what should happen, then create a When / If / Then rule for this company.",
+                )
+              }
+            >
+              <Sparkles data-icon="inline-start" />
+              Describe it to Cassio
+            </Button>
+            <Button className="rounded-lg" nativeButton={false} render={<Link href="/settings/automations/new" />}>
               New automation
             </Button>
           </div>
         }
       />
+      {jobs.length > 0 ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>Dry-run against</span>
+          <Select
+            value={testJob?.id ?? ""}
+            onValueChange={(value) => setTestJobId(String(value))}
+            items={jobs.map((job) => ({
+              value: job.id,
+              label: `${job.code} · ${job.name}`,
+            }))}
+          >
+            <SelectTrigger size="sm" className="w-56 rounded-lg bg-white">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {jobs.map((job) => (
+                <SelectItem key={job.id} value={job.id}>
+                  {job.code} · {job.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      ) : null}
 
       {showGallery ? (
         <TemplateGallery
@@ -116,59 +135,80 @@ export function AutomationList() {
           }
         />
       ) : (
-        <ul className="divide-y rounded-md border">
+        <ul className="space-y-3">
           {automations.map((automation) => {
             const bucket = stats.get(automation.id) ?? { recent: 0, failed: 0 };
+            const when = summarizeTrigger(automation.triggerKind, automation.triggerConfig).replace(/^When\s+/i, "");
+            const condition = automation.conditions[0]
+              ? summarizeCondition(automation.conditions[0])
+              : "";
+            const then = automation.actions[0] ? summarizeAction(automation.actions[0]) : "do nothing";
             return (
-              <li key={automation.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <Link
-                    href={`/settings/automations/${automation.id}`}
-                    className="font-medium hover:underline"
+              <li key={automation.id}>
+                <SettingsCard className="flex flex-wrap items-center gap-3 px-4 py-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{automation.name || "Untitled"}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <SentenceChip tone="when">When {when}</SentenceChip>
+                      {condition ? (
+                        <>
+                          <span className="text-muted-foreground">→</span>
+                          <SentenceChip tone="if">If {condition}</SentenceChip>
+                        </>
+                      ) : null}
+                      <span className="text-muted-foreground">→</span>
+                      <SentenceChip tone="then">Then {then.replace(/^./, (char) => char.toLowerCase())}</SentenceChip>
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {summarizeAutomation(automation)}
+                      {" · "}
+                      {automation.lastFiredAt
+                        ? `Last fired ${formatRelative(automation.lastFiredAt)}`
+                        : "Has not fired yet"}
+                      {bucket.recent ? ` · ${bucket.recent} run${bucket.recent === 1 ? "" : "s"} in 30 days` : ""}
+                    </p>
+                  </div>
+                  {bucket.failed > 0 ? <Badge variant="destructive">{bucket.failed} failed</Badge> : null}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-lg bg-white"
+                    nativeButton={false}
+                    render={<Link href={`/settings/automations/${automation.id}`} />}
                   >
-                    {automation.name || "Untitled"}
-                  </Link>
-                  <p className="text-sm text-muted-foreground">{summarizeAutomation(automation)}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {automation.lastFiredAt
-                      ? `Last fired ${formatRelative(automation.lastFiredAt)}`
-                      : "Has not fired yet"}
-                    {bucket.recent ? ` · ${bucket.recent} run${bucket.recent === 1 ? "" : "s"} in 30 days` : ""}
-                  </p>
-                </div>
-                {bucket.failed > 0 ? <Badge variant="destructive">{bucket.failed} failed</Badge> : null}
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox
+                    Edit
+                  </Button>
+                  <SettingsToggle
                     checked={automation.enabled}
-                    onCheckedChange={(value) => void crm.setAutomationEnabled(automation.id, value === true)}
+                    label={automation.enabled ? "Automation on" : "Automation paused"}
+                    onCheckedChange={(value) => void crm.setAutomationEnabled(automation.id, value)}
                   />
-                  {automation.enabled ? "On" : "Paused"}
-                </label>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={testingId === automation.id}
-                  onClick={async () => {
-                    if (!testJob) {
-                      toast.error("Add a job first so we can dry-run against it.");
-                      return;
-                    }
-                    setTestingId(automation.id);
-                    const result = await crm.testAutomation(automation.id, testJob.id);
-                    setTestingId(null);
-                    if (result) toast.message(result);
-                  }}
-                >
-                  Test
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  nativeButton={false}
-                  render={<Link href={`/settings/automations/${automation.id}/runs`} />}
-                >
-                  History
-                </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={testingId === automation.id}
+                    onClick={async () => {
+                      if (!testJob) {
+                        toast.error("Add a job first so we can dry-run against it.");
+                        return;
+                      }
+                      setTestingId(automation.id);
+                      const result = await crm.testAutomation(automation.id, testJob.id);
+                      setTestingId(null);
+                      if (result) toast.message(result);
+                    }}
+                  >
+                    Test
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    nativeButton={false}
+                    render={<Link href={`/settings/automations/${automation.id}/runs`} />}
+                  >
+                    History
+                  </Button>
+                </SettingsCard>
               </li>
             );
           })}

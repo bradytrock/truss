@@ -14,7 +14,6 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -22,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PageHeader } from "@/components/page-chrome";
+import { SettingsCard, SettingsPageHeader } from "@/components/settings-chrome";
 import { useCrm } from "@/lib/crm-store";
 import { formatDate, formatFileSize } from "@/lib/format";
 import {
@@ -48,6 +47,7 @@ export function CompanyFilesPanel() {
   const [filter, setFilter] = useState<CompanyFileCategory | "all">("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
+  const [dragOver, setDragOver] = useState(false);
 
   const files = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -99,58 +99,98 @@ export function CompanyFilesPanel() {
     if (ok) toast.success(`${file.name} removed.`);
   }
 
+  const folders: Array<{ id: CompanyFileCategory; title: string; hint: string }> = [
+    { id: "warranty", title: "Manufacturer warranties", hint: "By shingle and metal system" },
+    { id: "product", title: "Product sheets", hint: "Colors, specs, and brochures" },
+    { id: "insurance", title: "Insurance & licensing", hint: "COI, W-9, license copies" },
+    { id: "template", title: "Homeowner guides", hint: "What to expect on build day" },
+    { id: "other", title: "Other paperwork", hint: "Everything else the crew sends" },
+  ];
+
   return (
     <div className="space-y-4">
-      <PageHeader
-        eyebrow="Settings"
+      <SettingsPageHeader
+        eyebrow="Operations"
         title="File directory"
-        description="Company warranties, product sheets, and templates. Attach a copy onto any job when you need it in the field or on a proposal."
+        description="Warranties, product sheets, and company paperwork your team attaches to jobs and sends to homeowners."
+        actions={
+          <Button type="button" className="rounded-lg" disabled={uploading} onClick={() => inputRef.current?.click()}>
+            <Upload data-icon="inline-start" />
+            {uploading ? "Uploading…" : "Upload PDFs"}
+          </Button>
+        }
       />
 
-      <div className="rounded-md border p-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="min-w-[10rem] space-y-1.5">
-            <Label htmlFor="directory-category">Upload as</Label>
-            <Select
-              value={category}
-              onValueChange={(value) => setCategory((value as CompanyFileCategory) ?? "other")}
-              items={COMPANY_FILE_CATEGORIES.map((item) => ({
-                value: item,
-                label: COMPANY_FILE_CATEGORY_LABELS[item],
-              }))}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {folders.map((folder) => {
+          const active = filter === folder.id;
+          const count = companyFilesList(crm.companyFiles).filter((file) => file.category === folder.id).length;
+          return (
+            <button
+              key={folder.id}
+              type="button"
+              onClick={() => {
+                setFilter(folder.id);
+                setCategory(folder.id);
+              }}
+              className={cn(
+                "rounded-2xl border bg-white p-4 text-left shadow-[0_1px_2px_rgba(28,25,23,0.04)]",
+                active ? "border-primary ring-1 ring-primary" : "border-[#ebe7e2] hover:border-[#ddd7d0]",
+              )}
             >
-              <SelectTrigger id="directory-category" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {COMPANY_FILE_CATEGORIES.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {COMPANY_FILE_CATEGORY_LABELS[item]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <input
-            ref={inputRef}
-            type="file"
-            multiple
-            accept="image/*,application/pdf,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
-            className="sr-only"
-            tabIndex={-1}
-            onChange={(event) => void upload(event.target.files)}
-          />
-          <Button
-            type="button"
-            disabled={uploading}
-            onClick={() => inputRef.current?.click()}
-            className="sm:ml-auto"
-          >
-            <Upload data-icon="inline-start" />
-            {uploading ? "Uploading…" : "Upload files"}
+              <span className={cn("flex size-9 items-center justify-center rounded-xl", active ? "bg-rose-50 text-primary" : "bg-[#f6f4f1] text-muted-foreground")}>
+                <FileText className="size-4" />
+              </span>
+              <span className="mt-3 block text-sm font-medium">{folder.title}</span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                {folder.hint}
+                {count ? ` · ${count}` : ""}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <SettingsCard className="p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-medium">{COMPANY_FILE_CATEGORY_LABELS[category]}</h2>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setFilter("all")}>
+            {filter === "all" ? "Showing every folder" : "Show all folders"}
           </Button>
         </div>
-      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        multiple
+        accept="image/*,application/pdf,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
+        className="sr-only"
+        tabIndex={-1}
+        onChange={(event) => void upload(event.target.files)}
+      />
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragOver(false);
+          void upload(event.dataTransfer.files);
+        }}
+        className={cn(
+          "mt-3 flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-[#e0dbd4] bg-[#fbfaf8] px-4 py-8 text-sm",
+          dragOver && "border-primary bg-rose-50/40",
+        )}
+      >
+        <span className="font-medium">{uploading ? "Uploading…" : "Drop PDFs here"}</span>
+        <span className="mt-1 text-muted-foreground">
+          or <span className="text-primary">browse your computer</span> · PDF up to 25 MB
+        </span>
+      </button>
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <Input
@@ -299,6 +339,7 @@ export function CompanyFilesPanel() {
           })}
         </ul>
       )}
+      </SettingsCard>
     </div>
   );
 }
