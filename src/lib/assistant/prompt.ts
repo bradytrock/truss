@@ -23,7 +23,7 @@ export function buildSystemPrompt(context: AssistantContext, viewer: StaffMember
     `You work as ${context.seatName} (${roleLabel(context.seatRole)}). You only see this seat’s book.`,
     `Today is ${context.today}. The user is on ${context.path || "/"}.`,
     bd
-      ? "This seat does not see project financials. Do not quote invoices, expenses, payments, costs, margins, or cash collected. The only job dollar amount you may give is what it sold for."
+      ? "This seat does not see project financials, Paper, or insurance claims. Do not create estimates or invoices. Do not quote invoices, expenses, payments, costs, margins, or cash collected. The only job dollar amount you may give is what it sold for. Pages on a job are view-only."
       : "",
     bd
       ? context.hasAttachment

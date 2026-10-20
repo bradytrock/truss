@@ -50,6 +50,7 @@ import {
   type PhotoCategory,
   type ScheduleEvent,
 } from "@/lib/types";
+import { canCreateInvoices } from "@/lib/visibility";
 
 export function CreateInvoiceDialog({
   open,
@@ -65,7 +66,7 @@ export function CreateInvoiceDialog({
   onCreated?: (invoiceId: string) => void;
 }) {
   const router = useRouter();
-  const { jobs, addInvoice, customerName } = useCrm();
+  const { jobs, addInvoice, customerName, effectiveStaff, viewer } = useCrm();
   const [name, setName] = useState("");
   const [jobId, setJobId] = useState(defaultJobId ?? jobs[0]?.id ?? "");
   const dueDefault = (() => {
@@ -75,6 +76,7 @@ export function CreateInvoiceDialog({
   })();
   const [dueAt, setDueAt] = useState(dueDefault);
   const [notes, setNotes] = useState("");
+  const allowed = canCreateInvoices(effectiveStaff?.role ?? viewer?.role);
 
   const fallbackJobId = jobs[0]?.id ?? "";
 
@@ -93,6 +95,10 @@ export function CreateInvoiceDialog({
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
+    if (!allowed) {
+      toast.error("This seat cannot create invoices.");
+      return;
+    }
     if (!name.trim() || !jobId) {
       toast.error("A name and job are required.");
       return;

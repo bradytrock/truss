@@ -7,6 +7,7 @@ import { useCrm } from "@/lib/crm-store";
 import type { EagleviewOrder } from "@/lib/eagleview";
 import { formatJobSite } from "@/lib/leads";
 import { workMarket } from "@/lib/market";
+import { canCreateEstimates } from "@/lib/visibility";
 
 export type StartEstimateInput = {
   jobId?: string | null;
@@ -76,6 +77,7 @@ export function useStartEstimate() {
   const [draft, setDraft] = useState<StartEstimateInput>({});
   const [pending, setPending] = useState(false);
   const inflight = useRef(false);
+  const allowed = canCreateEstimates(crm.effectiveStaff?.role ?? crm.viewer?.role);
 
   const measurementOrder = useMemo(
     () => readyMeasurementOrder(crm.eagleviewOrders, asUuid(draft.jobId)),
@@ -83,14 +85,14 @@ export function useStartEstimate() {
   );
 
   const prompt = useCallback((input: StartEstimateInput = {}) => {
-    if (inflight.current) return;
+    if (!allowed || inflight.current) return;
     setDraft(input);
     setOpen(true);
-  }, []);
+  }, [allowed]);
 
   const confirm = useCallback(
     async (choices: StartEstimateChoices) => {
-      if (inflight.current) return;
+      if (!allowed || inflight.current) return;
       inflight.current = true;
       setPending(true);
       try {
@@ -152,7 +154,7 @@ export function useStartEstimate() {
       }
       // Keep pending true on success — full navigation unloads this page.
     },
-    [crm, draft],
+    [allowed, crm, draft],
   );
 
   return {

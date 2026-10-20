@@ -82,10 +82,13 @@ export function PhotoReportBuilder({
   job,
   report,
   onClose,
+  readOnly = false,
 }: {
   job: Job;
   report: PhotoReport;
   onClose: () => void;
+  /** View and share only — no create, edit, or delete. */
+  readOnly?: boolean;
 }) {
   const crm = useCrm();
   const photos = crm.photos.filter((photo) => photo.jobId === job.id && !photo.deletedAt);
@@ -214,6 +217,7 @@ export function PhotoReportBuilder({
   }
 
   function commit(pages: PhotoReportPage[], extra?: Partial<PhotoReport>) {
+    if (readOnly) return;
     const next: PhotoReport = {
       ...draft,
       ...extra,
@@ -361,6 +365,7 @@ export function PhotoReportBuilder({
   }
 
   async function removeReport() {
+    if (readOnly) return;
     await crm.deletePhotoReport(draft.id);
     toast.success("Page deleted.");
     onClose();
@@ -371,47 +376,55 @@ export function PhotoReportBuilder({
       <header className="flex shrink-0 flex-col gap-2 border-b px-3 py-2 sm:flex-row sm:items-center">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-            Page
+            Page{readOnly ? " · view only" : ""}
           </p>
-          <Input
-            value={draft.title}
-            onChange={(event) => commit(draft.pages, { title: event.target.value })}
-            className="mt-1 h-8 border-0 bg-transparent px-0 text-base font-medium shadow-none"
-            aria-label="Page title"
-          />
+          {readOnly ? (
+            <p className="mt-1 truncate text-base font-medium">{draft.title.trim() || "Untitled page"}</p>
+          ) : (
+            <Input
+              value={draft.title}
+              onChange={(event) => commit(draft.pages, { title: event.target.value })}
+              className="mt-1 h-8 border-0 bg-transparent px-0 text-base font-medium shadow-none"
+              aria-label="Page title"
+            />
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={!canUndo}
-            onClick={undoChange}
-            aria-label="Undo last change"
-          >
-            <RotateCcw data-icon="inline-start" />
-            Undo
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => addPage("photos")}>
-            <Plus data-icon="inline-start" />
-            Photos
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<Button type="button" variant="outline" size="sm" />}>
-              <FileText data-icon="inline-start" />
-              Letterhead
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-48">
-              {LETTERHEAD_TEMPLATES.map((template) => (
-                <DropdownMenuItem key={template.id} onClick={() => addLetterhead(template.id)}>
-                  {template.title}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button type="button" variant="outline" size="sm" onClick={() => addPage("cover")}>
-            Cover
-          </Button>
+          {readOnly ? null : (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={!canUndo}
+                onClick={undoChange}
+                aria-label="Undo last change"
+              >
+                <RotateCcw data-icon="inline-start" />
+                Undo
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => addPage("photos")}>
+                <Plus data-icon="inline-start" />
+                Photos
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger render={<Button type="button" variant="outline" size="sm" />}>
+                  <FileText data-icon="inline-start" />
+                  Letterhead
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-48">
+                  {LETTERHEAD_TEMPLATES.map((template) => (
+                    <DropdownMenuItem key={template.id} onClick={() => addLetterhead(template.id)}>
+                      {template.title}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button type="button" variant="outline" size="sm" onClick={() => addPage("cover")}>
+                Cover
+              </Button>
+            </>
+          )}
           <Button type="button" variant="outline" size="sm" disabled={shareBusy} onClick={() => void sharePage()}>
             <Link2 data-icon="inline-start" />
             {shareBusy ? "Preparing…" : "Share"}
@@ -429,37 +442,60 @@ export function PhotoReportBuilder({
       <div
         className={cn(
           "grid min-h-0 flex-1",
-          hasCover ? "lg:grid-cols-[16rem_minmax(0,1fr)_18rem]" : "lg:grid-cols-[16rem_minmax(0,1fr)]",
+          hasCover && !readOnly
+            ? "lg:grid-cols-[16rem_minmax(0,1fr)_18rem]"
+            : "lg:grid-cols-[16rem_minmax(0,1fr)]",
         )}
       >
         <aside className="min-h-0 overflow-y-auto border-b p-2 lg:border-r lg:border-b-0">
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={reorderPages}>
-            <SortableContext items={draft.pages.map((page) => page.id)} strategy={verticalListSortingStrategy}>
-              <ul className="space-y-1">
-                {draft.pages.map((page, index) => (
-                  <SortablePageCard
-                    key={page.id}
-                    page={page}
-                    index={index}
-                    selected={page.id === selected?.id}
-                    canDelete={page.type !== "work_order" && draft.pages.length > 1}
-                    onSelect={() => jumpToPage(page.id)}
-                    onDelete={() => requestRemove(page.id)}
-                  />
-                ))}
-              </ul>
-            </SortableContext>
-          </DndContext>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="mt-3 w-full justify-start text-destructive"
-            onClick={() => void removeReport()}
-          >
-            <Trash2 data-icon="inline-start" />
-            Delete document
-          </Button>
+          {readOnly ? (
+            <ul className="space-y-1">
+              {draft.pages.map((page, index) => (
+                <li key={page.id}>
+                  <button
+                    type="button"
+                    onClick={() => jumpToPage(page.id)}
+                    className={cn(
+                      "w-full rounded-md px-2 py-1.5 text-left text-sm",
+                      page.id === selected?.id ? "bg-muted font-medium" : "hover:bg-muted/60",
+                    )}
+                  >
+                    {pageLabel(page, index)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={reorderPages}>
+                <SortableContext items={draft.pages.map((page) => page.id)} strategy={verticalListSortingStrategy}>
+                  <ul className="space-y-1">
+                    {draft.pages.map((page, index) => (
+                      <SortablePageCard
+                        key={page.id}
+                        page={page}
+                        index={index}
+                        selected={page.id === selected?.id}
+                        canDelete={page.type !== "work_order" && draft.pages.length > 1}
+                        onSelect={() => jumpToPage(page.id)}
+                        onDelete={() => requestRemove(page.id)}
+                      />
+                    ))}
+                  </ul>
+                </SortableContext>
+              </DndContext>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="mt-3 w-full justify-start text-destructive"
+                onClick={() => void removeReport()}
+              >
+                <Trash2 data-icon="inline-start" />
+                Delete document
+              </Button>
+            </>
+          )}
         </aside>
 
         <div ref={scrollerRef} className="min-h-0 overflow-y-auto bg-muted/40 p-4 sm:p-6">
@@ -499,7 +535,7 @@ export function PhotoReportBuilder({
                         page.id === selected?.id && "ring-2 ring-primary/50 ring-offset-2 ring-offset-muted/40",
                       )}
                     >
-                      {page.type === "work_order" ? (
+                      {page.type === "work_order" && !readOnly ? (
                         <WorkOrderEditor
                           page={page}
                           job={job}
@@ -518,19 +554,23 @@ export function PhotoReportBuilder({
                           contacts={crm.contacts}
                           staff={crm.staff}
                           customerName={crm.customerName(job)}
-                          edit={{
-                            onChange: (patch) => patchPage(page.id, patch),
-                            onAddPhotos: photosPage
-                              ? () => {
-                                  jumpToPage(page.id);
-                                  setPickerPageId(page.id);
-                                  setPickerOpen(true);
+                          edit={
+                            readOnly
+                              ? undefined
+                              : {
+                                  onChange: (patch) => patchPage(page.id, patch),
+                                  onAddPhotos: photosPage
+                                    ? () => {
+                                        jumpToPage(page.id);
+                                        setPickerPageId(page.id);
+                                        setPickerOpen(true);
+                                      }
+                                    : undefined,
+                                  onRemovePhoto: photosPage
+                                    ? (photoIndex) => removePhotoFromPage(photosPage, photoIndex)
+                                    : undefined,
                                 }
-                              : undefined,
-                            onRemovePhoto: photosPage
-                              ? (photoIndex) => removePhotoFromPage(photosPage, photoIndex)
-                              : undefined,
-                          }}
+                          }
                         />
                       )}
                     </div>
@@ -541,7 +581,7 @@ export function PhotoReportBuilder({
           )}
         </div>
 
-        {hasCover ? (
+        {hasCover && !readOnly ? (
           <aside className="min-h-0 overflow-y-auto border-t p-3 lg:border-t-0 lg:border-l">
             {selected?.type === "cover" ? (
               <PageInspector

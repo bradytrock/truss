@@ -28,7 +28,7 @@ import { formatDate, formatMoney } from "@/lib/format";
 import { amountForEstimate } from "@/lib/estimate-totals";
 import { marketForEstimate } from "@/lib/market";
 import { useStartEstimate } from "@/lib/start-estimate";
-import { canManageSettings } from "@/lib/visibility";
+import { canCreateEstimates, canManageSettings } from "@/lib/visibility";
 import {
   ESTIMATE_STATUS_LABELS,
   ESTIMATE_STATUSES,
@@ -76,10 +76,11 @@ function EstimatesList() {
   }, [crm, query, status]);
 
   if (!crm.hydrated) return <LoadingScreen />;
+  const allowCreate = canCreateEstimates(crm.effectiveStaff?.role ?? crm.viewer?.role);
 
   return (
     <div className="space-y-5">
-      <StartEstimateDialogHost flow={startEstimateFlow} />
+      {allowCreate ? <StartEstimateDialogHost flow={startEstimateFlow} /> : null}
       {crm.hydrateError ? (
         <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
       ) : null}
@@ -125,10 +126,12 @@ function EstimatesList() {
                 Price book
               </Button>
             ) : null}
-            <Button nativeButton={false} variant="outline" render={<Link href="/estimates/templates" />}>
-              Templates
-            </Button>
-            <StartEstimateButton>New estimate</StartEstimateButton>
+            {allowCreate ? (
+              <Button nativeButton={false} variant="outline" render={<Link href="/estimates/templates" />}>
+                Templates
+              </Button>
+            ) : null}
+            {allowCreate ? <StartEstimateButton>New estimate</StartEstimateButton> : null}
           </div>
         }
       />
@@ -139,9 +142,11 @@ function EstimatesList() {
           description={
             query || status !== "all"
               ? "Clear the search or status filter."
-              : "Draft a proposal from a company template or the price book, then send it to the owner."
+              : allowCreate
+                ? "Draft a proposal from a company template or the price book, then send it to the owner."
+                : "Ops drafts proposals on the job. You still see the sold amount there."
           }
-          action={<StartEstimateButton>New estimate</StartEstimateButton>}
+          action={allowCreate ? <StartEstimateButton>New estimate</StartEstimateButton> : undefined}
         />
       ) : (
         <>

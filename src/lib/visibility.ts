@@ -177,6 +177,43 @@ export function canViewProjectFinancials(role: SeatRole | undefined) {
   return Boolean(role) && role !== "business_development";
 }
 
+/** Draft and edit estimates. Business development assigns the work; ops writes the proposal. */
+export function canCreateEstimates(role: SeatRole | undefined) {
+  return Boolean(role) && role !== "business_development";
+}
+
+/** Draft invoices. Same seats that see project financials. */
+export function canCreateInvoices(role: SeatRole | undefined) {
+  return canViewProjectFinancials(role);
+}
+
+/**
+ * Branded Pages on a job (work orders, photo docs, claim packets).
+ * Business development can open existing pages but not create or edit them.
+ */
+export function canCreatePages(role: SeatRole | undefined) {
+  return Boolean(role) && role !== "business_development";
+}
+
+export function canEditPages(role: SeatRole | undefined) {
+  return canCreatePages(role);
+}
+
+/** Link, unlink, or create a CompanyCam project on a job. */
+export function canManageCompanyCamMapping(role: SeatRole | undefined) {
+  return Boolean(role) && role !== "business_development";
+}
+
+/** Job Paper tab — estimates, invoices, material orders, and related tasks. */
+export function canViewJobPaper(role: SeatRole | undefined) {
+  return Boolean(role) && role !== "business_development";
+}
+
+/** Company insurance desk and the job Insurance tab. */
+export function canViewInsurance(role: SeatRole | undefined) {
+  return Boolean(role) && role !== "business_development";
+}
+
 /** Company name, people, payments, integrations, and other business settings. Directors do not get this. */
 export function canManageSettings(role: SeatRole, member?: StaffMember) {
   if (member?.restricted || member?.locked) return false;
@@ -540,7 +577,7 @@ export function scopeDescription(
     return "Company admin — every job, contact, and report in the company.";
   }
   if (scope === "bd") {
-    return "Business development — pipeline you sourced, jobs from the agents you brought in, and company BD ROI. Assign the work; you still keep the numbers.";
+    return "Business development — pipeline you sourced, jobs from the agents you brought in, and company BD ROI. Assign the work; estimates, invoices, Paper, and insurance stay with ops.";
   }
   if (scope === "team") {
     return `${team?.name ?? "Your team"} — every job and contact owned by people on this team. Login As a teammate to inspect their book.`;
