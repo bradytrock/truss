@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from "react";
+import { CalendarDays, ClipboardCheck, Flag, Home, MapPin, Search, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +13,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  ChoicePills,
+  DateField,
+  QuickFooter,
+  QuickHeader,
+  QuickLabel,
+  QuickSection,
+  TimeField,
+  formatDuration,
+  formatWeekdayDate,
+  quickDialogBodyClass,
+  quickDialogClass,
+  quickFieldClass,
+} from "@/components/quick-action-form";
+import { initials } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -28,7 +44,6 @@ import { localYmd } from "@/lib/format";
 import { LogPaymentDialog } from "@/components/log-financial-dialogs";
 import {
   EVENT_KIND_LABELS,
-  EVENT_KINDS,
   PHOTO_CATEGORIES,
   PHOTO_CATEGORY_LABELS,
   type EventKind,
@@ -325,102 +340,115 @@ export function CreateEventDialog({
     }
   }
 
+  const kindOptions: { value: EventKind; label: string; icon: ReactNode }[] = [
+    { value: "site_walk", label: EVENT_KIND_LABELS.site_walk, icon: <MapPin className="size-3.5" /> },
+    { value: "inspection", label: EVENT_KIND_LABELS.inspection, icon: <Search className="size-3.5" /> },
+    { value: "production", label: EVENT_KIND_LABELS.production, icon: <Home className="size-3.5" /> },
+    { value: "meeting", label: EVENT_KIND_LABELS.meeting, icon: <Users className="size-3.5" /> },
+    { value: "pre_bid", label: EVENT_KIND_LABELS.pre_bid, icon: <Flag className="size-3.5" /> },
+    { value: "punch", label: EVENT_KIND_LABELS.punch, icon: <ClipboardCheck className="size-3.5" /> },
+  ];
+  const span = formatDuration(startTime, endTime);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>{editing ? "Edit event" : "Schedule an event"}</DialogTitle>
-          <DialogDescription>
-            Site walks, inspections, production, and owner meetings for the week. People outside the company get a Google Calendar invite.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-3">
-          <Field label="Title" htmlFor="evt-title">
+      <DialogContent className={quickDialogClass("xl")}>
+        <QuickHeader
+          tone="blue"
+          icon={<CalendarDays className="size-5" />}
+          title={editing ? "Edit event" : "Schedule an event"}
+          description="Site walks, inspections, production days and owner meetings."
+        />
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className={`${quickDialogBodyClass} flex-1 space-y-4 px-5 py-4`}>
+          <div>
+            <QuickLabel htmlFor="evt-title" required>Title</QuickLabel>
             <Input
               id="evt-title"
+              className={quickFieldClass}
               value={title}
               onChange={(formEvent) => setTitle(formEvent.target.value)}
               placeholder="e.g. Pre-bid walk"
               autoFocus
             />
-          </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Type">
-              <Select
-                value={kind}
-                onValueChange={(value) => setKind(value as EventKind)}
-                items={EVENT_KINDS.map((eventKind) => ({
-                  value: eventKind,
-                  label: EVENT_KIND_LABELS[eventKind],
-                }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {EVENT_KINDS.map((eventKind) => (
-                    <SelectItem key={eventKind} value={eventKind}>
-                      {EVENT_KIND_LABELS[eventKind]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field label="Assignee">
-              <Select
-                value={assignee}
-                onValueChange={(value) => setAssignee(String(value ?? ""))}
-                items={people.map((person) => ({ value: person, label: person }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {people.map((person) => (
-                    <SelectItem key={person} value={person}>
-                      {person}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <Field label="Date" htmlFor="evt-date">
-              <Input
-                id="evt-date"
-                type="date"
-                value={date}
-                onChange={(formEvent) => setDate(formEvent.target.value)}
-              />
-            </Field>
-            <Field label="Start" htmlFor="evt-start">
-              <Input
-                id="evt-start"
-                type="time"
-                value={startTime}
-                onChange={(formEvent) => setStartTime(formEvent.target.value)}
-              />
-            </Field>
-            <Field label="End" htmlFor="evt-end">
-              <Input
-                id="evt-end"
-                type="time"
-                value={endTime}
-                onChange={(formEvent) => setEndTime(formEvent.target.value)}
-              />
-            </Field>
-          </div>
-          <Field label="Location" htmlFor="evt-loc">
-            <Input
-              id="evt-loc"
-              value={location}
-              onChange={(formEvent) => setLocation(formEvent.target.value)}
-              placeholder="Jobsite, trailer, or Teams"
+          <div>
+            <QuickLabel>Type</QuickLabel>
+            <ChoicePills
+              label="Event type"
+              value={kind}
+              onChange={setKind}
+              options={kindOptions}
             />
-          </Field>
+          </div>
+          <QuickSection>When & where</QuickSection>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <QuickLabel htmlFor="evt-date">Date</QuickLabel>
+              <DateField
+                id="evt-date"
+                label="Date"
+                value={date}
+                display={formatWeekdayDate}
+                onChange={setDate}
+              />
+            </div>
+            <div>
+              <QuickLabel htmlFor="evt-start">Start</QuickLabel>
+              <TimeField id="evt-start" label="Start" value={startTime} onChange={setStartTime} />
+            </div>
+            <div>
+              <QuickLabel htmlFor="evt-end">End</QuickLabel>
+              <TimeField id="evt-end" label="End" value={endTime} onChange={setEndTime} />
+            </div>
+          </div>
+          {span ? <p className="-mt-2 text-xs text-muted-foreground">{span}</p> : null}
+          <div>
+            <QuickLabel htmlFor="evt-loc">Location</QuickLabel>
+            <div className="relative">
+              <MapPin className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                id="evt-loc"
+                className={`${quickFieldClass} pl-9`}
+                value={location}
+                onChange={(formEvent) => setLocation(formEvent.target.value)}
+                placeholder="Jobsite address, trailer or Teams link"
+              />
+            </div>
+          </div>
+          <div>
+            <QuickLabel>Assignee</QuickLabel>
+            <Select
+              value={assignee}
+              onValueChange={(value) => setAssignee(String(value ?? ""))}
+              items={people.map((person) => ({
+                value: person,
+                label: person === user.name ? `${person} (you)` : person,
+              }))}
+            >
+              <SelectTrigger className="h-10 w-full rounded-lg bg-white data-[size=default]:h-10">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-neutral-900 text-[10px] font-medium text-white">
+                    {initials(assignee)}
+                  </span>
+                  <SelectValue />
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {people.map((person) => (
+                  <SelectItem key={person} value={person}>
+                    {person === user.name ? `${person} (you)` : person}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+            Link & invite <span className="font-normal tracking-normal normal-case">· optional</span>
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Job">
+            <div>
+              <QuickLabel>Job</QuickLabel>
               <Select
                 value={jobId || "none"}
                 onValueChange={(value) => setJobId(value === "none" ? "" : String(value ?? ""))}
@@ -429,7 +457,7 @@ export function CreateEventDialog({
                   ...jobs.map((job) => ({ value: job.id, label: job.name })),
                 ]}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className={`${quickFieldClass} w-full`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -441,8 +469,9 @@ export function CreateEventDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </Field>
-            <Field label="Pursuit">
+            </div>
+            <div>
+              <QuickLabel>Pursuit</QuickLabel>
               <Select
                 value={opportunityId || "none"}
                 onValueChange={(value) =>
@@ -456,7 +485,7 @@ export function CreateEventDialog({
                   })),
                 ]}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className={`${quickFieldClass} w-full`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -468,16 +497,18 @@ export function CreateEventDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </Field>
+            </div>
           </div>
-          <Field label="Invite" htmlFor={guestInputId}>
+          <div>
+            <QuickLabel htmlFor={guestInputId}>Invite guests</QuickLabel>
             <Input
               id={guestInputId}
+              className={quickFieldClass}
               value={guestDraft}
               list={guestListId}
               onChange={(formEvent) => {
                 const value = formEvent.target.value;
-                if (/[,\n;]$/.test(value) || /\s$/.test(value)) {
+                if (/[,\n;]$/.test(value)) {
                   commitGuestDraft(value);
                   return;
                 }
@@ -493,7 +524,7 @@ export function CreateEventDialog({
                 if (guestDraft.trim()) commitGuestDraft(guestDraft, false);
               }}
               aria-describedby={guestHintId}
-              placeholder="name@example.com"
+              placeholder="Add emails, separated by commas"
             />
             <datalist id={guestListId}>
               {contactOptions.map((contact) => (
@@ -503,7 +534,7 @@ export function CreateEventDialog({
               ))}
             </datalist>
             {guestEmails.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 {guestEmails.map((email) => (
                   <span
                     key={email}
@@ -522,38 +553,41 @@ export function CreateEventDialog({
                 ))}
               </div>
             ) : null}
-            <p id={guestHintId} className="text-xs text-muted-foreground">
-              {guestInviteHint(guestPreview.outside, guestPreview.inside)}
+            <p id={guestHintId} className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
+              {guestEmails.length > 0 || guestDraft.trim()
+                ? guestInviteHint(guestPreview.outside, guestPreview.inside)
+                : "Outside guests get a Google Calendar invite. Teammates already see it here."}
             </p>
-          </Field>
-          <Field label="Notes" htmlFor="evt-notes">
+          </div>
+          <div>
+            <QuickLabel htmlFor="evt-notes">Notes</QuickLabel>
             <Textarea
               id="evt-notes"
+              className="min-h-20 rounded-lg bg-white"
               value={notes}
               onChange={(formEvent) => setNotes(formEvent.target.value)}
+              placeholder="Gate code, who to ask for, what to bring"
               rows={2}
             />
-          </Field>
-          <DialogFooter className="sm:justify-between">
-            {editing ? (
-              <Button type="button" variant="outline" className="text-destructive" onClick={() => void handleDelete()}>
-                Delete
-              </Button>
-            ) : (
-              <span />
-            )}
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit">{editing ? "Save changes" : "Add event"}</Button>
-            </div>
-          </DialogFooter>
+          </div>
+          </div>
+          <QuickFooter
+            onCancel={() => onOpenChange(false)}
+            submitLabel={editing ? "Save changes" : "Add event"}
+            note={
+              editing ? (
+                <Button type="button" variant="ghost" className="text-destructive" onClick={() => void handleDelete()}>
+                  Delete
+                </Button>
+              ) : null
+            }
+          />
         </form>
       </DialogContent>
     </Dialog>
   );
 }
+
 
 export function RecordPaymentDialog({
   open,

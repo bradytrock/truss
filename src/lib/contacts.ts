@@ -16,9 +16,44 @@ function siteBelongsToContact(record: SiteRecord, contactId: string) {
   return record.primaryContactId === contactId || record.contactId === contactId;
 }
 
-export function siteForContact(contactId: string, sites: SiteRecord[]) {
+export function siteForContact<T extends SiteRecord>(contactId: string, sites: T[]) {
   const matches = sites.filter((item) => siteBelongsToContact(item, contactId));
   return matches.find((item) => siteLabelFromRecord(item)) ?? matches[0];
+}
+
+export type ContactAddressSource = {
+  label: string;
+  jobId: string | null;
+  opportunityId: string | null;
+};
+
+type AddressJob = SiteRecord & { id: string; opportunityId?: string | null };
+type AddressOpportunity = SiteRecord & { id: string };
+
+/** The job or pursuit whose address the contact drawer shows, plus where a correction should be saved. */
+export function contactAddressSource(
+  contactId: string,
+  jobs: AddressJob[],
+  opportunities: AddressOpportunity[],
+): ContactAddressSource {
+  const tagged = [
+    ...jobs.map((job) => ({ ...job, source: "job" as const })),
+    ...opportunities.map((opportunity) => ({ ...opportunity, source: "opportunity" as const })),
+  ];
+  const site = siteForContact(contactId, tagged);
+  if (!site) return { label: "", jobId: null, opportunityId: null };
+  if (site.source === "job") {
+    return {
+      label: siteLabelFromRecord(site),
+      jobId: site.id,
+      opportunityId: site.opportunityId ?? null,
+    };
+  }
+  return {
+    label: siteLabelFromRecord(site),
+    jobId: null,
+    opportunityId: site.id,
+  };
 }
 
 export function siteFieldsFromRecord(record?: SiteRecord | null) {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   avatarTone,
   buildContactBook,
+  contactSiteAddress,
   contactFilterCounts,
   contactStage,
   contactTypeLine,
@@ -321,5 +322,50 @@ assert.equal(noHeader.rows[0]?.phone, "(469) 555-0104");
 const firstLast = parseContactCsv("first,last,mobile\nKen,Kowalski,2145550138");
 assert.equal(firstLast.rows[0]?.name, "Ken Kowalski");
 assert.equal(firstLast.rows[0]?.phone, "(214) 555-0138");
+
+const siteContact = contact({ id: "c_site", name: "Brady Jones" });
+const site = contactSiteAddress(
+  siteContact,
+  [
+    job({
+      id: "j_empty",
+      name: "Empty",
+      primaryContactId: "c_site",
+      street: "",
+      city: "",
+      state: "",
+      postalCode: "",
+      location: "",
+    }),
+    job({
+      id: "j_site",
+      name: "Arrowwood",
+      primaryContactId: "c_site",
+      opportunityId: "opp_site",
+      street: "545 Arrowwood Beach Circle",
+      city: "Trinidad",
+      state: "TX",
+      postalCode: "",
+    }),
+  ],
+  [
+    opportunity({
+      id: "opp_site",
+      name: "Website lead",
+      primaryContactId: "c_site",
+      street: "100 Other",
+      city: "Dallas",
+      state: "TX",
+    }),
+  ],
+);
+assert.equal(site.label, "545 Arrowwood Beach Circle, Trinidad, TX");
+assert.equal(site.jobId, "j_site");
+assert.equal(site.opportunityId, "opp_site");
+assert.deepEqual(contactSiteAddress(contact({ id: "c_none", name: "Nobody" }), [], []), {
+  label: "",
+  jobId: null,
+  opportunityId: null,
+});
 
 console.log("contact-book tests passed");

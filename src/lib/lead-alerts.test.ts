@@ -9,8 +9,14 @@ import {
   alertForUnassignedUpdate,
   alertFromCatchUp,
   alertKey,
+  appointmentConflicts,
+  appointmentDateLabel,
   appointmentInstants,
   appointmentRangeError,
+  appointmentWhenLabel,
+  conflictSummary,
+  endTimeFromDuration,
+  minutesBetween,
   assignmentAlertSuppressed,
   defaultBookAppointment,
   dismissAlert,
@@ -189,6 +195,33 @@ assert.equal(draft.endTime, "10:00");
 assert.equal(draft.kind, "site_walk");
 assert.equal(draft.title, "Site walk · Dana Alvarez");
 assert.equal(draft.location, "100 Main, Plano");
+assert.equal(minutesBetween("09:00", "10:00"), 60);
+assert.equal(endTimeFromDuration("09:00", 90), "10:30");
+assert.equal(appointmentDateLabel("2026-10-20"), "Tue, Oct 20");
+assert.equal(appointmentWhenLabel("2026-10-20", "09:00", "10:00"), "Tue, Oct 20 · 9:00 AM – 10:00 AM");
+const overlap = appointmentConflicts(
+  [
+    {
+      title: "Inspection · Smith",
+      assignee: "Brady Jones",
+      startsAt: "2026-10-20T09:30:00",
+      endsAt: "2026-10-20T10:30:00",
+    },
+    {
+      title: "Someone else",
+      assignee: "Priya Shah",
+      startsAt: "2026-10-20T09:00:00",
+      endsAt: "2026-10-20T10:00:00",
+    },
+  ],
+  { date: "2026-10-20", startTime: "09:00", endTime: "10:00", assignee: "Brady Jones" },
+);
+assert.equal(overlap.length, 1);
+assert.match(conflictSummary(overlap), /Overlaps Inspection · Smith, 9:30 AM – 10:30 AM/);
+assert.equal(
+  appointmentConflicts(overlap, { date: "2026-10-20", startTime: "11:00", endTime: "12:00", assignee: "Brady Jones" }).length,
+  0,
+);
 assert.equal(appointmentRangeError("2026-10-05", "09:00", "10:00"), "");
 assert.match(appointmentRangeError("2026-10-05", "10:00", "09:00"), /after the start/);
 assert.match(appointmentRangeError("", "09:00", "10:00"), /date/);

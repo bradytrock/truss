@@ -20,9 +20,10 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ContactInlineEditor } from "@/components/contact-inline-editor";
 import { ContactRecordWindow } from "@/components/contact-window";
 import { ContactNewSeedDialog } from "@/components/contact-new-seed-dialog";
-import { CreateClientDialog, EditContactDialog } from "@/components/create-records";
+import { CreateClientDialog } from "@/components/create-records";
 import { ErrorBanner, LoadingScreen } from "@/components/page-chrome";
 import { StartEstimateDialogHost } from "@/components/start-estimate-button";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,7 @@ import { formatDateShort, initials, localYmd } from "@/lib/format";
 import { mailHref } from "@/lib/job-emails";
 import { digitsOnly } from "@/lib/phone";
 import { useStartEstimate } from "@/lib/start-estimate";
+import { staffAssignmentLabel } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
 
 export function ContactsDesk() {
@@ -67,6 +69,10 @@ export function ContactsDesk() {
   const [createOpen, setCreateOpen] = useState(false);
   const [jobOpen, setJobOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const editDirtyRef = useRef(false);
+  const setEditDirty = useCallback((dirty: boolean) => {
+    editDirtyRef.current = dirty;
+  }, []);
   const [fullOpen, setFullOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [vendorName, setVendorName] = useState("");
@@ -156,8 +162,21 @@ export function ContactsDesk() {
     [router, searchParams],
   );
 
+  const editsBlockLeave = useCallback(() => {
+    if (!editOpen || !editDirtyRef.current) return false;
+    toast.message("Save or cancel your contact edits first.");
+    return true;
+  }, [editOpen]);
+
+  const finishEditing = useCallback(() => {
+    editDirtyRef.current = false;
+    setEditOpen(false);
+  }, []);
+
   const setFilter = useCallback(
     (next: ContactFilter) => {
+      if (editsBlockLeave()) return;
+      finishEditing();
       replaceParams((params) => {
         if (next === "all") params.delete("filter");
         else params.set("filter", next);
@@ -165,11 +184,16 @@ export function ContactsDesk() {
         else params.delete("vendor");
       });
     },
-    [replaceParams],
+    [editsBlockLeave, finishEditing, replaceParams],
   );
 
   const selectContact = useCallback(
     (id: string) => {
+      if (id === contactId) {
+        if (editOpen) return;
+      } else if (editsBlockLeave()) {
+        return;
+      }
       replaceParams((params) => {
         params.set("contact", id);
       });
@@ -177,29 +201,33 @@ export function ContactsDesk() {
       setAddingTask(false);
       setTaskTitle("");
       setFullOpen(false);
+      finishEditing();
     },
-    [replaceParams],
+    [contactId, editOpen, editsBlockLeave, finishEditing, replaceParams],
   );
 
   const closeContact = useCallback(() => {
+    if (editsBlockLeave()) return;
     replaceParams((params) => {
       params.delete("contact");
       params.delete("vendor");
     });
     setFullOpen(false);
-    setEditOpen(false);
+    finishEditing();
     setAddingTask(false);
-  }, [replaceParams]);
+  }, [editsBlockLeave, finishEditing, replaceParams]);
 
   const selectVendor = useCallback(
     (id: string) => {
+      if (editsBlockLeave()) return;
+      finishEditing();
       replaceParams((params) => {
         params.set("filter", "vendors");
         params.set("vendor", id);
         params.delete("contact");
       });
     },
-    [replaceParams],
+    [editsBlockLeave, finishEditing, replaceParams],
   );
 
   const step = useCallback(
@@ -241,18 +269,23 @@ export function ContactsDesk() {
         event.preventDefault();
         searchRef.current?.focus();
       }
-      if (event.key === "Escape" && (contactId || vendorId) && !fullOpen && !editOpen) {
+      if (event.key === "Escape" && editOpen && !fullOpen) {
+        event.preventDefault();
+        finishEditing();
+        return;
+      }
+      if (event.key === "Escape" && (contactId || vendorId) && !fullOpen) {
         event.preventDefault();
         closeContact();
       }
-      if ((contactId || vendorId) && !fullOpen && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+      if ((contactId || vendorId) && !fullOpen && !editOpen && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
         event.preventDefault();
         step(event.key === "ArrowDown" ? 1 : -1);
       }
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [closeContact, contactId, editOpen, fullOpen, step, vendorId]);
+  }, [closeContact, contactId, editOpen, finishEditing, fullOpen, step, vendorId]);
 
   async function importCsv(file: File) {
     setImporting(true);
@@ -530,8 +563,17 @@ export function ContactsDesk() {
               onClose={closeContact}
               onPrev={() => step(-1)}
               onNext={() => step(1)}
-              onExpand={() => setFullOpen(true)}
+              onAttemptLeave={editsBlockLeave}
+              editing={editOpen}
+              onExpand={() => {
+                if (editsBlockLeave()) return;
+                finishEditing();
+                setFullOpen(true);
+              }}
               onEdit={() => setEditOpen(true)}
+              onCancelEdit={finishEditing}
+              onSavedEdit={finishEditing}
+              onEditDirty={setEditDirty}
               onNewJob={() => setJobOpen(true)}
               onEstimate={() =>
                 startEstimate.prompt({
@@ -597,9 +639,6 @@ export function ContactsDesk() {
       </Dialog>
       <CreateClientDialog open={createOpen} onOpenChange={setCreateOpen} />
       <ContactNewSeedDialog contact={openContact ?? null} open={jobOpen} onOpenChange={setJobOpen} />
-      {openContact ? (
-        <EditContactDialog contact={openContact} open={editOpen} onOpenChange={setEditOpen} />
-      ) : null}
       {fullOpen && openContact ? (
         <ContactRecordWindow contact={openContact} onClose={() => setFullOpen(false)} />
       ) : null}
@@ -721,7 +760,7 @@ function VendorPanel({
 
   return (
     <>
-      <div className="flex items-center gap-1.5 px-3 pt-3 pr-3 pl-[18px]">
+      <div className="flex min-w-0 items-center gap-1.5 px-3 pt-3 pr-3 pl-[18px]">
         <span
           className={cn(
             "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
@@ -743,7 +782,7 @@ function VendorPanel({
         </IconBtn>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto px-6 pt-1.5 pb-7">
+      <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-6 pt-1.5 pb-7">
         <div className="mt-2 mb-4 flex items-center gap-3.5">
           <ContactAvatar name={row.name} className="size-14 text-[19px]" />
           <div className="min-w-0">
@@ -893,8 +932,13 @@ function ContactPanel({
   onClose,
   onPrev,
   onNext,
+  onAttemptLeave,
   onExpand,
+  editing,
   onEdit,
+  onCancelEdit,
+  onSavedEdit,
+  onEditDirty,
   onNewJob,
   onEstimate,
   onToggleTask,
@@ -911,19 +955,28 @@ function ContactPanel({
   onClose: () => void;
   onPrev: () => void;
   onNext: () => void;
+  onAttemptLeave: () => boolean;
   onExpand: () => void;
+  editing: boolean;
   onEdit: () => void;
+  onCancelEdit: () => void;
+  onSavedEdit: () => void;
+  onEditDirty: (dirty: boolean) => void;
   onNewJob: () => void;
   onEstimate: () => void;
   onToggleTask: (id: string, done: boolean) => void;
 }) {
+  const crm = useCrm();
+  const contact = crm.getContact(row.id);
+  const company = contact?.clientId ? crm.getClient(contact.clientId) : undefined;
+  const owner = contact ? crm.staff.find((member) => member.id === contact.ownerStaffId) : undefined;
   const stage = CONTACT_STAGE_META[row.stage];
   const tel = digitsOnly(row.phoneRaw);
   const via = row.sourceLabel ? ` · via ${row.sourceLabel}` : "";
 
   return (
     <>
-      <div className="flex items-center gap-1.5 px-3 pt-3 pr-3 pl-[18px]">
+      <div className="flex min-w-0 items-center gap-1.5 px-3 pt-3 pr-3 pl-[18px]">
         <span
           className={cn(
             "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
@@ -948,7 +1001,7 @@ function ContactPanel({
         </IconBtn>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto px-6 pt-1.5 pb-7">
+      <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-6 pt-1.5 pb-7">
         <div className="mt-2 mb-4 flex items-center gap-3.5">
           <ContactAvatar name={row.name} className="size-14 text-[19px]" />
           <div className="min-w-0">
@@ -962,7 +1015,7 @@ function ContactPanel({
           </div>
         </div>
 
-        <div className="mb-5 grid grid-cols-4 gap-2">
+        <div className="mb-5 grid min-w-0 grid-cols-4 gap-2">
           {tel ? (
             <a href={`tel:${tel}`} className={quickClass}>
               <Phone className="size-5 text-primary" />
@@ -975,7 +1028,13 @@ function ContactPanel({
             </button>
           )}
           {tel ? (
-            <Link href={`/messages?contact=${row.id}`} className={quickClass}>
+            <Link
+              href={`/messages?contact=${row.id}`}
+              className={quickClass}
+              onClick={(event) => {
+                if (onAttemptLeave()) event.preventDefault();
+              }}
+            >
               <MessageSquare className="size-5 text-primary" />
               Text
             </Link>
@@ -989,6 +1048,9 @@ function ContactPanel({
             <Link
               href={mailHref({ compose: true, email: row.email, contact: row.id })}
               className={quickClass}
+              onClick={(event) => {
+                if (onAttemptLeave()) event.preventDefault();
+              }}
             >
               <Mail className="size-5 text-primary" />
               Email
@@ -1005,23 +1067,41 @@ function ContactPanel({
           </button>
         </div>
 
-        <section className="mb-5">
-          <SectionHead label="Contact" action="Edit" onAction={onEdit} />
-          <div className="overflow-hidden rounded-xl shadow-[0_0_0_1px_rgba(28,25,22,0.08)]">
-            <FieldRow label="Mobile" value={row.phone} copy={row.phoneRaw || undefined} />
-            <FieldRow
-              label="Email"
-              value={row.email || "Add email"}
-              faint={!row.email}
-              copy={row.email || undefined}
+        <section className="mb-5 min-w-0">
+          {editing && contact ? (
+            <ContactInlineEditor
+              key={contact.id}
+              contact={contact}
+              initialAddress={row.address}
+              onCancel={onCancelEdit}
+              onSaved={onSavedEdit}
+              onDirtyChange={onEditDirty}
             />
-            <FieldRow
-              label="Address"
-              value={row.address || "Add address"}
-              faint={!row.address}
-              copy={row.address || undefined}
-            />
-          </div>
+          ) : (
+            <>
+              <SectionHead label="Contact" action={contact ? "Edit" : undefined} onAction={onEdit} />
+              <div className="overflow-hidden rounded-xl shadow-[0_0_0_1px_rgba(28,25,22,0.08)]">
+                <FieldRow label="Mobile" value={row.phone} copy={row.phoneRaw || undefined} />
+                <FieldRow
+                  label="Email"
+                  value={row.email || "Add email"}
+                  faint={!row.email}
+                  copy={row.email || undefined}
+                />
+                <FieldRow
+                  label="Address"
+                  value={row.address || "Add address"}
+                  faint={!row.address}
+                  copy={row.address || undefined}
+                />
+                <FieldRow label="Company" value={company?.name || "None — homeowner / DTC"} />
+                <FieldRow
+                  label="Book owner"
+                  value={owner ? staffAssignmentLabel(owner) : "Unassigned"}
+                />
+              </div>
+            </>
+          )}
         </section>
 
         <section className="mb-5">
@@ -1034,6 +1114,9 @@ function ContactPanel({
                 key={job.id}
                 href={`/jobs?job=${job.id}`}
                 className="mb-2 flex items-center gap-3 rounded-xl px-3.5 py-3 shadow-[0_0_0_1px_rgba(28,25,22,0.08)] last:mb-0 hover:bg-[#fafaf8]"
+                onClick={(event) => {
+                  if (onAttemptLeave()) event.preventDefault();
+                }}
               >
                 <span className="grid size-[34px] shrink-0 place-items-center rounded-[9px] bg-[#f0efec] text-primary">
                   <Home className="size-4" />
@@ -1140,7 +1223,7 @@ function ContactPanel({
 }
 
 const quickClass =
-  "flex flex-col items-center gap-1 rounded-xl bg-[#f0efec] px-1 py-2.5 text-xs font-medium text-[#1d1d1f] hover:bg-[#e7e6e2]";
+  "flex min-w-0 w-full flex-col items-center gap-1 overflow-hidden rounded-xl bg-[#f0efec] px-1 py-2.5 text-xs font-medium text-[#1d1d1f] hover:bg-[#e7e6e2]";
 
 function SectionHead({
   label,
@@ -1176,7 +1259,7 @@ function FieldRow({
 }) {
   return (
     <div className="group flex items-center gap-3 border-t border-[rgba(28,25,22,0.05)] px-3.5 py-2.5 first:border-t-0">
-      <span className="w-[62px] shrink-0 text-xs text-[#6e6e73]">{label}</span>
+      <span className="w-20 shrink-0 text-xs text-[#6e6e73]">{label}</span>
       <span className={cn("min-w-0 flex-1 truncate", faint && "text-[#a1a1a6]")} title={value}>
         {value}
       </span>
@@ -1213,7 +1296,7 @@ function IconBtn({
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="grid size-8 place-items-center rounded-lg text-[#6e6e73] hover:bg-[#f0efec] hover:text-[#1d1d1f] [&_svg]:size-4"
+      className="grid size-8 shrink-0 place-items-center rounded-lg text-[#6e6e73] hover:bg-[#f0efec] hover:text-[#1d1d1f] [&_svg]:size-4"
     >
       {children}
     </button>
