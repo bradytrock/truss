@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronsUpDown } from "lucide-react";
+import { ChevronsUpDown, Search } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Command,
@@ -26,12 +26,16 @@ export function VendorPicker({
   names,
   extraNames = [],
   emptyHint,
+  placeholder = "Select a QuickBooks vendor",
+  appearance = "select",
 }: {
   value: string;
   onChange: (value: string) => void;
   names: string[];
   extraNames?: string[];
   emptyHint?: string;
+  placeholder?: string;
+  appearance?: "select" | "search";
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -70,14 +74,17 @@ export function VendorPicker({
     >
       <PopoverTrigger
         className={cn(
-          buttonVariants({ variant: "outline" }),
-          "h-8 w-full justify-between font-normal",
+          appearance === "search"
+            ? "flex h-10 w-full items-center gap-2 rounded-lg border border-input bg-white px-3 text-left text-sm font-normal focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30"
+            : cn(buttonVariants({ variant: "outline" }), "h-8 w-full justify-between font-normal"),
+          !value && "text-muted-foreground",
         )}
       >
-        <span className={cn("truncate", !value && "text-muted-foreground")}>
-          {value || "Select a QuickBooks vendor"}
-        </span>
-        <ChevronsUpDown className="opacity-50" />
+        {appearance === "search" ? (
+          <Search className="size-4 shrink-0 text-muted-foreground" />
+        ) : null}
+        <span className="truncate">{value || placeholder}</span>
+        {appearance === "search" ? null : <ChevronsUpDown className="opacity-50" />}
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[var(--anchor-width)] p-0" side="bottom">
         <Command shouldFilter={false}>

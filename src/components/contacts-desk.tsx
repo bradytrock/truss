@@ -760,7 +760,7 @@ function VendorPanel({
 
   return (
     <>
-      <div className="flex items-center gap-1.5 px-3 pt-3 pr-3 pl-[18px]">
+      <div className="flex min-w-0 items-center gap-1.5 px-3 pt-3 pr-3 pl-[18px]">
         <span
           className={cn(
             "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
@@ -782,7 +782,7 @@ function VendorPanel({
         </IconBtn>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto px-6 pt-1.5 pb-7">
+      <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-6 pt-1.5 pb-7">
         <div className="mt-2 mb-4 flex items-center gap-3.5">
           <ContactAvatar name={row.name} className="size-14 text-[19px]" />
           <div className="min-w-0">
@@ -976,7 +976,7 @@ function ContactPanel({
 
   return (
     <>
-      <div className="flex items-center gap-1.5 px-3 pt-3 pr-3 pl-[18px]">
+      <div className="flex min-w-0 items-center gap-1.5 px-3 pt-3 pr-3 pl-[18px]">
         <span
           className={cn(
             "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
@@ -1001,7 +1001,7 @@ function ContactPanel({
         </IconBtn>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto px-6 pt-1.5 pb-7">
+      <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-6 pt-1.5 pb-7">
         <div className="mt-2 mb-4 flex items-center gap-3.5">
           <ContactAvatar name={row.name} className="size-14 text-[19px]" />
           <div className="min-w-0">
@@ -1015,7 +1015,7 @@ function ContactPanel({
           </div>
         </div>
 
-        <div className="mb-5 grid grid-cols-4 gap-2">
+        <div className="mb-5 grid min-w-0 grid-cols-4 gap-2">
           {tel ? (
             <a href={`tel:${tel}`} className={quickClass}>
               <Phone className="size-5 text-primary" />
@@ -1067,7 +1067,7 @@ function ContactPanel({
           </button>
         </div>
 
-        <section className="mb-5">
+        <section className="mb-5 min-w-0">
           {editing && contact ? (
             <ContactInlineEditor
               key={contact.id}
@@ -1223,7 +1223,7 @@ function ContactPanel({
 }
 
 const quickClass =
-  "flex flex-col items-center gap-1 rounded-xl bg-[#f0efec] px-1 py-2.5 text-xs font-medium text-[#1d1d1f] hover:bg-[#e7e6e2]";
+  "flex min-w-0 w-full flex-col items-center gap-1 overflow-hidden rounded-xl bg-[#f0efec] px-1 py-2.5 text-xs font-medium text-[#1d1d1f] hover:bg-[#e7e6e2]";
 
 function SectionHead({
   label,
@@ -1296,7 +1296,7 @@ function IconBtn({
       type="button"
       aria-label={label}
       onClick={onClick}
-      className="grid size-8 place-items-center rounded-lg text-[#6e6e73] hover:bg-[#f0efec] hover:text-[#1d1d1f] [&_svg]:size-4"
+      className="grid size-8 shrink-0 place-items-center rounded-lg text-[#6e6e73] hover:bg-[#f0efec] hover:text-[#1d1d1f] [&_svg]:size-4"
     >
       {children}
     </button>

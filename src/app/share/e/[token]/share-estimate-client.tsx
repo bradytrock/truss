@@ -6,7 +6,13 @@ import { Button } from "@/components/ui/button";
 import { ProposalDocument } from "@/components/proposal-document";
 import { EstimateDepositPayPanel } from "@/components/document-pay-panel";
 import { CollectSignatureDialog } from "@/components/signature-pad";
-import { ShareFrame, ShareLoading, ShareMissing, SharePdfButton } from "@/components/share-frame";
+import {
+  ShareFrame,
+  ShareLoading,
+  ShareMissing,
+  SharePdfButton,
+  type ShareDocumentChrome,
+} from "@/components/share-frame";
 import { downloadEstimatePdf } from "@/lib/document-pdf";
 import { useCrm } from "@/lib/crm-store";
 import { documentProjectManager, letterheadCompanyForRecord } from "@/lib/document-owner";
@@ -27,6 +33,20 @@ import { parseSharedEstimate, type ShareSender, type SharedEstimatePayload } fro
 import { SHARE_FETCH, useRemoteShare } from "@/lib/use-remote-share";
 import type { EstimateLine } from "@/lib/types";
 import { isGbbEstimate, type EstimatePackage } from "@/lib/estimate-packages";
+
+function estimateChrome(
+  number: string,
+  status: string,
+  viewerSigned: boolean,
+): ShareDocumentChrome {
+  if (viewerSigned || status === "accepted") {
+    return { kind: "estimate", number, statusLabel: "Signed", tone: "done" };
+  }
+  if (status === "declined") {
+    return { kind: "estimate", number, statusLabel: "Declined", tone: "alert" };
+  }
+  return { kind: "estimate", number, statusLabel: "Awaiting signature", tone: "ready" };
+}
 
 function payloadError(data: unknown, fallback: string) {
   if (data && typeof data === "object" && "error" in data && typeof data.error === "string") {
@@ -191,6 +211,7 @@ export function ShareEstimateClient({
     return (
       <ShareFrame
         wide={isGbbEstimate(fromStore)}
+        document={estimateChrome(fromStore.number, fromStore.status, viewerSigned)}
         actions={
           <>
             <SharePdfButton
@@ -223,7 +244,7 @@ export function ShareEstimateClient({
         }
       >
         {viewerSigned ? (
-          <p className="rounded-md border bg-card px-4 py-3 text-sm">
+          <p className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3.5 text-sm text-green-800">
             {fromStore.status === "accepted"
               ? `This proposal is signed. ${fromStore.signatureName || customer} accepted ${fromStore.number}.`
               : "Your signature is on this proposal. Waiting on the other homeowner."}
@@ -282,7 +303,7 @@ export function ShareEstimateClient({
 
   if (!remote) {
     if (!crm.hydrated || remoteState !== "missing") {
-      return <ShareLoading />;
+      return <ShareLoading kind="estimate" />;
     }
     return <ShareMissing kind="estimate" sender={sender} />;
   }
@@ -301,6 +322,7 @@ export function ShareEstimateClient({
   return (
     <ShareFrame
       wide={isGbbEstimate(estimate)}
+      document={estimateChrome(estimate.number, estimate.status, viewerSigned)}
       actions={
         <>
           <SharePdfButton
@@ -331,7 +353,7 @@ export function ShareEstimateClient({
       }
     >
       {viewerSigned ? (
-        <p className="rounded-md border bg-card px-4 py-3 text-sm">
+        <p className="flex items-start gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3.5 text-sm text-green-800">
           {estimate.status === "accepted"
             ? "This proposal is signed. Thank you."
             : "Your signature is on this proposal. Waiting on the other homeowner."}

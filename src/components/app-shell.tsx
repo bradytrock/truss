@@ -54,7 +54,6 @@ import { cn } from "@/lib/utils";
 import { BrandMark, ProductWordmark } from "@/components/brand";
 import { NotificationsMenu } from "@/components/notifications-menu";
 import { SettingsMobileBar } from "@/components/settings-nav";
-import { useStartEstimate } from "@/lib/start-estimate";
 
 const AssistantPanel = dynamic(
   () => import("@/components/assistant-panel").then((mod) => mod.AssistantPanel),
@@ -69,9 +68,6 @@ const CreateClientDialog = dynamic(() =>
 const CreateEventDialog = dynamic(() =>
   import("@/components/create-ops-dialogs").then((mod) => mod.CreateEventDialog),
 );
-const CreateInvoiceDialog = dynamic(() =>
-  import("@/components/create-ops-dialogs").then((mod) => mod.CreateInvoiceDialog),
-);
 const CreateTaskDialog = dynamic(() =>
   import("@/components/create-task-dialog").then((mod) => mod.CreateTaskDialog),
 );
@@ -83,9 +79,6 @@ const LogForecastedExpenseDialog = dynamic(() =>
 );
 const LogPaymentDialog = dynamic(() =>
   import("@/components/log-financial-dialogs").then((mod) => mod.LogPaymentDialog),
-);
-const StartEstimateDialogHost = dynamic(() =>
-  import("@/components/start-estimate-button").then((mod) => mod.StartEstimateDialogHost),
 );
 const FirstWelcomeHost = dynamic(() =>
   import("@/components/welcome-screen").then((mod) => mod.FirstWelcomeHost),
@@ -185,11 +178,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { effectiveStaff, user } = useCrm();
-  const startEstimateFlow = useStartEstimate();
-  const startEstimate = startEstimateFlow.prompt;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [create, setCreate] = useState<
-    "opportunity" | "client" | "invoice" | "event" | "expense" | "forecast" | "payment" | "task" | null
+    "opportunity" | "client" | "event" | "expense" | "forecast" | "payment" | "task" | null
   >(null);
 
   useEffect(() => {
@@ -239,7 +230,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       void import("@/components/create-task-dialog");
       void import("@/components/log-financial-dialogs");
       void import("@/components/assistant-panel");
-      void import("@/components/start-estimate-button");
     }, 1200);
     return () => window.clearTimeout(warm);
   }, [router]);
@@ -261,13 +251,11 @@ export function AppShell({ children }: { children: ReactNode }) {
     ) : (
       <>
         <DropdownMenuItem onClick={() => setCreate("expense")}>Log expense</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("forecast")}>Log forecasted expense</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setCreate("forecast")}>Forecast an expense</DropdownMenuItem>
         <DropdownMenuItem onClick={() => setCreate("payment")}>Log payment</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => setCreate("opportunity")}>New lead</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => startEstimate()}>New estimate</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("invoice")}>New invoice</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setCreate("event")}>Calendar event</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setCreate("event")}>Schedule an event</DropdownMenuItem>
         <DropdownMenuItem onClick={() => setCreate("task")}>New task</DropdownMenuItem>
         <DropdownMenuItem onClick={() => setCreate("client")}>New contact</DropdownMenuItem>
       </>
@@ -403,9 +391,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       {create === "client" ? (
         <CreateClientDialog open onOpenChange={(open) => setCreate(open ? "client" : null)} />
       ) : null}
-      {create === "invoice" ? (
-        <CreateInvoiceDialog open onOpenChange={(open) => setCreate(open ? "invoice" : null)} />
-      ) : null}
       {create === "event" ? (
         <CreateEventDialog open onOpenChange={(open) => setCreate(open ? "event" : null)} />
       ) : null}
@@ -424,7 +409,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       {create === "payment" ? (
         <LogPaymentDialog open onOpenChange={(open) => setCreate(open ? "payment" : null)} />
       ) : null}
-      {startEstimateFlow.open ? <StartEstimateDialogHost flow={startEstimateFlow} /> : null}
       <FirstWelcomeHost />
     </div>
   );

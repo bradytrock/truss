@@ -4,7 +4,7 @@ import { isLegalPath } from "@/lib/legal";
 import { DEMO_SCHEDULE_URL, shouldForceDemo, subscriptionActiveFromRpc } from "@/lib/subscription";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
-import { railwayClientOptions, railwayDatabaseEnabled } from "@/lib/railway-rest";
+import { railwayClientOptions } from "@/lib/railway-rest";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   getSupabaseKey,
@@ -133,10 +133,7 @@ async function finishSession(
   return response;
 }
 
-export async function updateSession(
-  request: NextRequest,
-  clerk: { getToken: () => Promise<string | null> } | null = null,
-) {
+export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   // Legal pages and homeowner links must not wait on a CRM session.
@@ -150,44 +147,6 @@ export async function updateSession(
   if (!url || !key) {
     if (isPublicAppPath(path)) return NextResponse.next({ request });
     return redirectToLogin(request);
-  }
-
-  let clerkToken: string | null = null;
-  if (clerk) {
-    try {
-      clerkToken = await clerk.getToken();
-    } catch {
-      clerkToken = null;
-    }
-  }
-  if (clerkToken) {
-    const gateOpen = request.cookies.get(GATE_COOKIE)?.value === "1";
-    if (gateOpen) {
-      return await finishSession(request, path, true, true, NextResponse.next({ request }));
-    }
-
-    const supabaseResponse = NextResponse.next({ request });
-    // createServerClient subscribes to auth changes. A Clerk accessToken client
-    // rejects that and the subscription throws, which is the 500 on crmtrock.com.
-    const supabase = createClient(url, key, {
-      ...railwayClientOptions(),
-      accessToken: async () => clerkToken,
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    });
-    let subscriptionActive = true;
-    try {
-      subscriptionActive = subscriptionActiveFromRpc(
-        await supabase.rpc("company_subscription_active"),
-      );
-    } catch {
-      subscriptionActive = true;
-    }
-    rememberGate(supabaseResponse, subscriptionActive);
-    return await finishSession(request, path, true, subscriptionActive, supabaseResponse);
-  }
-
-  if (railwayDatabaseEnabled()) {
-    return await finishSession(request, path, false, false, NextResponse.next({ request }));
   }
 
   const nowSec = Math.floor(Date.now() / 1000);

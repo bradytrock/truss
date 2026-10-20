@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Search, User, XIcon } from "lucide-react";
+import { Clock, Home, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,21 +23,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { AddressStreetField } from "@/components/address-street-field";
-import { MarketField } from "@/components/market-field";
-import { TradesField } from "@/components/trades-field";
 import { PhoneInput } from "@/components/phone-input";
+import {
+  QuickFooter,
+  QuickHeader,
+  QuickHint,
+  QuickLabel,
+  QuickSection,
+  Segmented,
+  TogglePills,
+  quickDialogBodyClass,
+  quickDialogClass,
+  quickFieldClass,
+} from "@/components/quick-action-form";
+import { toggleTrade } from "@/components/trades-field";
+import { LeadAssigneeSelect } from "@/components/lead-assignee";
 import { useCrm } from "@/lib/crm-store";
-import { localYmd } from "@/lib/format";
+import { formatPhone, initials, localYmd } from "@/lib/format";
 import {
   DEFAULT_LEAD_STATE,
   defaultDeliveryForSource,
@@ -48,21 +52,21 @@ import {
 } from "@/lib/leads";
 import { projectTypeForMarket } from "@/lib/market";
 import {
-  CLIENT_TYPE_LABELS,
-  CLIENT_TYPES,
+  JOB_MARKET_LABELS,
+  JOB_MARKETS,
   LEAD_SOURCE_LABELS,
   LEAD_SOURCES,
+  TRADE_LABELS,
   type ClientType,
   type Contact,
   type JobMarket,
   type LeadSource,
+  SEAT_ROLE_LABELS,
   type Trade,
 } from "@/lib/types";
-import { LeadAssigneeSelect } from "@/components/lead-assignee";
 import { assignmentOptions, companyLeadAssignees } from "@/lib/visibility";
 import { hasBusinessDevelopmentSeat } from "@/lib/bd";
 import { phonesMatch } from "@/lib/job-messages";
-import { formatPhone } from "@/lib/format";
 import { formatPhoneInput } from "@/lib/phone";
 import {
   assignsToPreviousPm,
@@ -299,101 +303,99 @@ export function CreateOpportunityDialog({
     await openLead(owner?.id || crm.user.staffId);
   }
 
-  return (
-    <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent
-        side="right"
-        showCloseButton={false}
-        className="w-full gap-0 overflow-y-auto sm:max-w-[28rem]"
-      >
-        <SheetHeader className="relative border-b pr-14">
-          <SheetTitle className="font-heading text-xl">New Lead</SheetTitle>
-          <SheetDescription>
-            {bdSeat
-              ? "You keep credit on this lead. Assign it to anyone with an unlocked seat — estimator, PM, or another closer."
-              : "This slides in so you can finish a quick task without leaving your page."}
-          </SheetDescription>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="absolute top-3 right-3 size-8 rounded-full bg-muted hover:bg-muted/80"
-            onClick={() => handleOpenChange(false)}
-            aria-label="Close"
-          >
-            <XIcon />
-          </Button>
-        </SheetHeader>
-        <form onSubmit={handleSubmit} className="flex flex-1 flex-col">
-          <div className="grid gap-3.5 px-4 py-4">
-            <MarketField value={market} onChange={setMarket} id="lead-market" />
-            <TradesField value={trades} onChange={setTrades} id="lead-trades" />
+  const tradeOrder: Trade[] = ["roofing", "gutters", "siding", "fencing", "flooring", "other"];
 
-            <div className="grid gap-1.5">
-              <div className="flex items-end justify-between gap-2">
-                <Label htmlFor="lead-assignee">Assigned to</Label>
-                {isMe ? (
-                  <span className="text-[11px] text-muted-foreground">Me</span>
-                ) : bdSeat ? (
-                  <span className="text-[11px] text-muted-foreground">You still keep the numbers</span>
-                ) : null}
-              </div>
-              <div className="relative">
-                <User className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                <LeadAssigneeSelect
-                  id="lead-assignee"
-                  className="pl-8"
-                  value={assigneeId}
-                  people={people}
-                  onChange={setAssigneeId}
-                />
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className={quickDialogClass("lg")}>
+        <QuickHeader tone="rose" icon={<Home className="size-5" />} title="New lead" />
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className={`${quickDialogBodyClass} flex-1 space-y-4 px-5 py-4`}>
+            <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm">
+              <Clock className="mt-0.5 size-4 shrink-0 text-amber-700" />
+              <div>
+                <p className="font-semibold text-amber-950">Respond within 5 minutes</p>
+                <p className="text-amber-900/80">
+                  Your company requires a first response within 5 minutes of saving this lead.
+                </p>
               </div>
             </div>
 
+            <div>
+              <QuickLabel>Property type</QuickLabel>
+              <Segmented
+                label="Property type"
+                value={market}
+                onChange={setMarket}
+                options={JOB_MARKETS.map((item) => ({ value: item, label: JOB_MARKET_LABELS[item] }))}
+              />
+              <QuickHint>
+                {market === "residential"
+                  ? "Residential work isn’t taxed."
+                  : "Commercial proposals include sales tax."}
+              </QuickHint>
+            </div>
+
+            <div>
+              <QuickLabel>
+                Trades <span className="font-normal text-muted-foreground">· pick all that apply</span>
+              </QuickLabel>
+              <TogglePills
+                label="Trades"
+                value={trades}
+                onToggle={(trade) => setTrades(toggleTrade(trades, trade))}
+                options={tradeOrder.map((trade) => ({ value: trade, label: TRADE_LABELS[trade] }))}
+              />
+            </div>
+
+            <QuickSection>Homeowner</QuickSection>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="First name" htmlFor="lead-first">
+              <div>
+                <QuickLabel htmlFor="lead-first" required>First name</QuickLabel>
                 <Input
                   id="lead-first"
+                  className={quickFieldClass}
                   value={firstName}
                   onChange={(event) => setFirstName(event.target.value)}
-                  placeholder="John"
                   autoComplete="given-name"
                 />
-              </Field>
-              <Field label="Last name" htmlFor="lead-last">
+              </div>
+              <div>
+                <QuickLabel htmlFor="lead-last">Last name</QuickLabel>
                 <Input
                   id="lead-last"
+                  className={quickFieldClass}
                   value={lastName}
                   onChange={(event) => setLastName(event.target.value)}
-                  placeholder="Smith"
                   autoComplete="family-name"
                 />
-              </Field>
+              </div>
             </div>
-
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Phone" htmlFor="lead-phone">
-                <PhoneInput
-                  id="lead-phone"
-                  value={phone}
-                  onValueChange={setPhone}
-                  placeholder="(214) 555-0100"
-                />
-              </Field>
-              <Field label="Email" htmlFor="lead-email">
-                <Input
-                  id="lead-email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="john@example.com"
-                  autoComplete="email"
-                />
-              </Field>
+            <div>
+              <QuickLabel htmlFor="lead-phone" required>Phone</QuickLabel>
+              <PhoneInput
+                id="lead-phone"
+                className={quickFieldClass}
+                value={phone}
+                onValueChange={setPhone}
+                placeholder="(214) 555-0100"
+              />
+            </div>
+            <div>
+              <QuickLabel htmlFor="lead-email" optional>Email</QuickLabel>
+              <Input
+                id="lead-email"
+                className={quickFieldClass}
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                placeholder="name@example.com"
+                autoComplete="email"
+              />
             </div>
 
             {returning ? (
-              <div className="grid gap-2 border bg-muted/40 px-3 py-2.5">
+              <div className="grid gap-2 rounded-lg border bg-muted/40 px-3 py-2.5">
                 <p className="text-sm font-medium">{returningClientBannerTitle(returning)}</p>
                 <ReturningClientFacts match={returning} assigneeName={assignee?.name} />
                 <p className="text-sm text-muted-foreground">
@@ -404,7 +406,9 @@ export function CreateOpportunityDialog({
               </div>
             ) : null}
 
-            <Field label="Address" htmlFor="lead-street">
+            <QuickSection>Property</QuickSection>
+            <div>
+              <QuickLabel htmlFor="lead-street">Address</QuickLabel>
               <AddressStreetField
                 id="lead-street"
                 street={street}
@@ -418,40 +422,47 @@ export function CreateOpportunityDialog({
                   setRegion(address.state || DEFAULT_LEAD_STATE);
                   setPostalCode(address.postalCode);
                 }}
+                placeholder="Start typing an address"
               />
-            </Field>
-
+              <QuickHint>Picking a suggestion fills city, state and ZIP.</QuickHint>
+            </div>
             <div className="grid grid-cols-[1fr_4.5rem_6rem] gap-3">
-              <Field label="City" htmlFor="lead-city">
+              <div>
+                <QuickLabel htmlFor="lead-city">City</QuickLabel>
                 <Input
                   id="lead-city"
+                  className={quickFieldClass}
                   value={city}
                   onChange={(event) => setCity(event.target.value)}
-                  placeholder="City"
                   autoComplete="address-level2"
                 />
-              </Field>
-              <Field label="State" htmlFor="lead-state">
+              </div>
+              <div>
+                <QuickLabel htmlFor="lead-state">State</QuickLabel>
                 <Input
                   id="lead-state"
+                  className={quickFieldClass}
                   value={region}
                   onChange={(event) => setRegion(event.target.value.toUpperCase().slice(0, 2))}
-                  placeholder="ST"
+                  placeholder="TX"
                   autoComplete="address-level1"
                 />
-              </Field>
-              <Field label="ZIP" htmlFor="lead-zip">
+              </div>
+              <div>
+                <QuickLabel htmlFor="lead-zip">ZIP</QuickLabel>
                 <Input
                   id="lead-zip"
+                  className={quickFieldClass}
                   value={postalCode}
                   onChange={(event) => setPostalCode(event.target.value)}
-                  placeholder="12345"
                   autoComplete="postal-code"
                 />
-              </Field>
+              </div>
             </div>
 
-            <Field label="Seed">
+            <QuickSection>Routing</QuickSection>
+            <div>
+              <QuickLabel>Seed</QuickLabel>
               <Select
                 value={source || null}
                 onValueChange={(value) => {
@@ -467,8 +478,8 @@ export function CreateOpportunityDialog({
                   label: LEAD_SOURCE_LABELS[item],
                 }))}
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select seed" />
+                <SelectTrigger className={`${quickFieldClass} w-full`}>
+                  <SelectValue placeholder="Where did this lead come from?" />
                 </SelectTrigger>
                 <SelectContent>
                   {LEAD_SOURCES.map((item) => (
@@ -478,13 +489,13 @@ export function CreateOpportunityDialog({
                   ))}
                 </SelectContent>
               </Select>
-            </Field>
+            </div>
 
             {leadNeedsReferrer(source) ? (
-              <div className="grid gap-1.5">
-                <Label htmlFor="lead-referral">Who sent this referral</Label>
+              <div>
+                <QuickLabel htmlFor="lead-referral" required>Who sent this referral</QuickLabel>
                 {selectedReferral ? (
-                  <div className="flex items-center justify-between gap-2 border bg-muted/40 px-2.5 py-2">
+                  <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/40 px-2.5 py-2">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium">{selectedReferral.name}</p>
                       <p className="truncate text-xs text-muted-foreground">
@@ -506,7 +517,7 @@ export function CreateOpportunityDialog({
                   </div>
                 ) : (
                   <>
-                    <InputGroup>
+                    <InputGroup className="h-10 rounded-lg bg-white">
                       <InputGroupAddon>
                         <Search />
                       </InputGroupAddon>
@@ -514,18 +525,18 @@ export function CreateOpportunityDialog({
                         id="lead-referral"
                         value={referralQuery}
                         onChange={(event) => setReferralQuery(event.target.value)}
-                        placeholder="Search referral partners..."
+                        placeholder="Search referral partners"
                       />
                     </InputGroup>
                     {referralPartnerCount === 0 ? (
-                      <p className="text-xs text-muted-foreground">
+                      <QuickHint>
                         No referral partners in the contact book yet. Add the realtor or partner as a contact
-                        and mark them as a Referral partner.
-                      </p>
+                        and mark them as a referral partner.
+                      </QuickHint>
                     ) : referralMatches.length === 0 ? (
-                      <p className="text-xs text-muted-foreground">No matching referral partners.</p>
+                      <QuickHint>No matching referral partners.</QuickHint>
                     ) : (
-                      <ul className="max-h-52 divide-y overflow-y-auto border">
+                      <ul className="mt-2 max-h-52 divide-y overflow-y-auto rounded-lg border">
                         {referralMatches.map((contact) => (
                           <li key={contact.id}>
                             <button
@@ -548,31 +559,84 @@ export function CreateOpportunityDialog({
               </div>
             ) : null}
 
-            <Field label="Notes" htmlFor="lead-notes">
+            <div>
+              <QuickLabel
+                aside={
+                  people.some((member) => member.id === crm.user.staffId) ? (
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-primary"
+                      onClick={() => setAssigneeId(crm.user.staffId)}
+                    >
+                      Assign to me
+                    </button>
+                  ) : null
+                }
+              >
+                Assigned to
+              </QuickLabel>
+              <Select
+                value={assigneeId || null}
+                onValueChange={(value) => setAssigneeId(String(value ?? ""))}
+                items={people.map((member) => ({
+                  value: member.id,
+                  label: `${member.name}${member.id === crm.user.staffId ? " (you)" : ""} · ${SEAT_ROLE_LABELS[member.role]}`,
+                }))}
+              >
+                <SelectTrigger className="h-10 w-full rounded-lg bg-white data-[size=default]:h-10">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="grid size-6 shrink-0 place-items-center rounded-full bg-neutral-900 text-[10px] font-medium text-white">
+                      {initials(assignee?.name || "")}
+                    </span>
+                    <SelectValue placeholder="Assign someone" />
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  {people.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.name}
+                      {member.id === crm.user.staffId ? " (you)" : ""} · {SEAT_ROLE_LABELS[member.role]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {bdSeat && !isMe ? (
+                <QuickHint>You keep credit on this lead. The assignee runs the follow-up.</QuickHint>
+              ) : null}
+            </div>
+
+            <div>
+              <QuickLabel htmlFor="lead-notes" optional>Notes</QuickLabel>
               <Textarea
                 id="lead-notes"
+                className="min-h-24 rounded-lg bg-white"
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
-                placeholder="Anything helpful..."
+                placeholder="Storm date, roof age, gate code, anything helpful"
                 rows={4}
               />
-            </Field>
-
-            <div className="border border-destructive/25 bg-destructive/5 px-3 py-2.5">
-              <p className="text-sm font-medium text-destructive">Lead response required</p>
-              <p className="mt-0.5 text-sm text-destructive">Your org requires a response within 5 minutes.</p>
             </div>
           </div>
-          <SheetFooter className="border-t">
-            <Button type="submit" disabled={saving}>
-              {saving ? "Saving…" : "Save lead"}
-            </Button>
-          </SheetFooter>
+          <QuickFooter
+            onCancel={() => handleOpenChange(false)}
+            pending={saving}
+            submitLabel="Save lead"
+            pendingLabel="Saving…"
+          />
         </form>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
+
+type Who = "homeowner" | "realtor" | "adjuster" | "commercial";
+
+const WHO_OPTIONS: { id: Who; label: string; title: string; type: ClientType }[] = [
+  { id: "homeowner", label: "Homeowner", title: "Homeowner", type: "owner" },
+  { id: "realtor", label: "Realtor", title: "Realtor", type: "realtor" },
+  { id: "adjuster", label: "Adjuster", title: "Adjuster", type: "insurance" },
+  { id: "commercial", label: "Commercial", title: "Commercial", type: "owner" },
+];
 
 export function CreateClientDialog({
   open,
@@ -583,17 +647,16 @@ export function CreateClientDialog({
 }) {
   const { addClient, addContact, clients, user } = useCrm();
   const [contactName, setContactName] = useState("");
-  const [contactTitle, setContactTitle] = useState("Homeowner");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [companyMode, setCompanyMode] = useState<"none" | "existing" | "new">("none");
   const [existingClientId, setExistingClientId] = useState(clients[0]?.id ?? "");
   const [companyName, setCompanyName] = useState("");
-  const [type, setType] = useState<ClientType>("owner");
   const [city, setCity] = useState("Denver");
   const [state, setState] = useState("CO");
   const [notes, setNotes] = useState("");
   const [referral, setReferral] = useState(false);
+  const [who, setWho] = useState<Who>("homeowner");
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
@@ -602,22 +665,28 @@ export function CreateClientDialog({
       return;
     }
     try {
-      if (companyMode === "new" && companyName.trim()) {
+      const choice = WHO_OPTIONS.find((item) => item.id === who) ?? WHO_OPTIONS[0];
+      if (who !== "homeowner" && companyMode === "new" && companyName.trim()) {
         await addClient({
           name: companyName.trim(),
-          type,
+          type: choice.type,
           city,
           state,
           notes,
           contactName: contactName.trim(),
-          contactTitle: contactTitle.trim() || "Homeowner",
+          contactTitle: choice.title,
+          email: email.trim(),
+          phone: phone.trim(),
           isReferralPartner: referral,
         });
       } else {
         await addContact({
-          clientId: companyMode === "existing" && existingClientId ? existingClientId : null,
+          clientId:
+            who !== "homeowner" && companyMode === "existing" && existingClientId
+              ? existingClientId
+              : null,
           name: contactName.trim(),
-          title: contactTitle.trim() || "Homeowner",
+          title: choice.title,
           email: email.trim(),
           phone: phone.trim(),
           ownerStaffId: user.staffId,
@@ -635,167 +704,167 @@ export function CreateClientDialog({
       setNotes("");
       setReferral(false);
       setCompanyMode("none");
+      setWho("homeowner");
     } catch {
       // Store already toasted the error.
     }
   }
 
+  const companyValue =
+    who === "homeowner" || companyMode === "none"
+      ? "none"
+      : companyMode === "new"
+        ? "new"
+        : existingClientId || "none";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>New contact</DialogTitle>
-          <DialogDescription>
-            Most Northline work is the homeowner. Add a company only if they actually have one — realtor, adjuster, or the occasional commercial owner.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-3">
-          <Field label="Name" htmlFor="cli-contact">
-            <Input
-              id="cli-contact"
-              value={contactName}
-              onChange={(event) => setContactName(event.target.value)}
-              placeholder="e.g. Dana Alvarez"
-            />
-          </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Title" htmlFor="cli-title">
+      <DialogContent className={quickDialogClass("lg")}>
+        <QuickHeader
+          tone="slate"
+          icon={<UserIcon />}
+          title="New contact"
+          description="Most contacts are homeowners. Realtors, adjusters and commercial owners can be tied to a company."
+        />
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className={`${quickDialogBodyClass} flex-1 space-y-4 px-5 py-4`}>
+            <div>
+              <QuickLabel>Who is this?</QuickLabel>
+              <Segmented
+                label="Who is this?"
+                value={who}
+                onChange={(next) => {
+                  setWho(next);
+                  if (next === "homeowner") setCompanyMode("none");
+                }}
+                options={WHO_OPTIONS.map((item) => ({ value: item.id, label: item.label }))}
+              />
+            </div>
+            <div>
+              <QuickLabel htmlFor="cli-contact" required>Name</QuickLabel>
               <Input
-                id="cli-title"
-                value={contactTitle}
-                onChange={(event) => setContactTitle(event.target.value)}
-                placeholder="Homeowner"
+                id="cli-contact"
+                className={quickFieldClass}
+                value={contactName}
+                onChange={(event) => setContactName(event.target.value)}
+                placeholder="First and last name"
               />
-            </Field>
-            <Field label="Phone" htmlFor="cli-phone">
-              <PhoneInput
-                id="cli-phone"
-                value={phone}
-                onValueChange={setPhone}
-                placeholder="(214) 555-0100"
-              />
-            </Field>
-          </div>
-          <Field label="Email" htmlFor="cli-email">
-            <Input
-              id="cli-email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="dana@example.com"
-            />
-          </Field>
-          <Field label="Company">
-            <Select
-              value={companyMode}
-              onValueChange={(value) => setCompanyMode((value as typeof companyMode) ?? "none")}
-              items={[
-                { value: "none", label: "None — homeowner / DTC" },
-                { value: "existing", label: "Existing company" },
-                { value: "new", label: "Add a company" },
-              ]}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">None — homeowner / DTC</SelectItem>
-                <SelectItem value="existing">Existing company</SelectItem>
-                <SelectItem value="new">Add a company</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-          {companyMode === "existing" ? (
-            <Field label="Which company">
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <QuickLabel htmlFor="cli-phone">Phone</QuickLabel>
+                <PhoneInput
+                  id="cli-phone"
+                  className={quickFieldClass}
+                  value={phone}
+                  onValueChange={setPhone}
+                  placeholder="(214) 555-0100"
+                />
+              </div>
+              <div>
+                <QuickLabel htmlFor="cli-email">Email</QuickLabel>
+                <Input
+                  id="cli-email"
+                  className={quickFieldClass}
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="name@example.com"
+                />
+              </div>
+            </div>
+            <div>
+              <QuickLabel>Company</QuickLabel>
               <Select
-                value={existingClientId}
-                onValueChange={(value) => setExistingClientId(String(value ?? ""))}
-                items={clients.map((client) => ({ value: client.id, label: client.name }))}
+                value={companyValue}
+                disabled={who === "homeowner"}
+                onValueChange={(value) => {
+                  const next = String(value ?? "none");
+                  if (next === "none") setCompanyMode("none");
+                  else if (next === "new") setCompanyMode("new");
+                  else {
+                    setCompanyMode("existing");
+                    setExistingClientId(next);
+                  }
+                }}
+                items={[
+                  { value: "none", label: who === "homeowner" ? "None — homeowner" : "No company" },
+                  ...clients.map((client) => ({ value: client.id, label: client.name })),
+                  { value: "new", label: "Add a company" },
+                ]}
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
+                <SelectTrigger className={`${quickFieldClass} w-full`}>
+                  <SelectValue placeholder="None — homeowner" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">{who === "homeowner" ? "None — homeowner" : "No company"}</SelectItem>
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id}>
                       {client.name}
                     </SelectItem>
                   ))}
+                  <SelectItem value="new">Add a company</SelectItem>
                 </SelectContent>
               </Select>
-            </Field>
-          ) : null}
-          {companyMode === "new" ? (
-            <>
-              <Field label="Company name" htmlFor="cli-name">
-                <Input
-                  id="cli-name"
-                  value={companyName}
-                  onChange={(event) => setCompanyName(event.target.value)}
-                  placeholder="e.g. Summit Claims Group"
-                />
-              </Field>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <Field label="Type">
-                  <Select
-                    value={type}
-                    onValueChange={(value) => setType(value as ClientType)}
-                    items={CLIENT_TYPES.map((clientType) => ({
-                      value: clientType,
-                      label: CLIENT_TYPE_LABELS[clientType],
-                    }))}
-                  >
-                    <SelectTrigger className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CLIENT_TYPES.map((clientType) => (
-                        <SelectItem key={clientType} value={clientType}>
-                          {CLIENT_TYPE_LABELS[clientType]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label="City" htmlFor="cli-city">
-                  <Input id="cli-city" value={city} onChange={(event) => setCity(event.target.value)} />
-                </Field>
-                <Field label="State" htmlFor="cli-state">
+              <QuickHint>Opens up when you pick Realtor, Adjuster or Commercial.</QuickHint>
+            </div>
+            {who !== "homeowner" && companyMode === "new" ? (
+              <div className="grid gap-3">
+                <div>
+                  <QuickLabel htmlFor="cli-name" required>Company name</QuickLabel>
                   <Input
-                    id="cli-state"
-                    value={state}
-                    onChange={(event) => setState(event.target.value)}
+                    id="cli-name"
+                    className={quickFieldClass}
+                    value={companyName}
+                    onChange={(event) => setCompanyName(event.target.value)}
+                    placeholder="e.g. Summit Claims Group"
                   />
-                </Field>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <QuickLabel htmlFor="cli-city">City</QuickLabel>
+                    <Input
+                      id="cli-city"
+                      className={quickFieldClass}
+                      value={city}
+                      onChange={(event) => setCity(event.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <QuickLabel htmlFor="cli-state">State</QuickLabel>
+                    <Input
+                      id="cli-state"
+                      className={quickFieldClass}
+                      value={state}
+                      onChange={(event) => setState(event.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
-            </>
-          ) : null}
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox
-              checked={referral}
-              onCheckedChange={(value) => setReferral(Boolean(value))}
-            />
-            Referral partner — realtor, adjuster, or specifier in this seat’s book
-          </label>
-          {companyMode === "new" ? (
-            <Field label="Notes" htmlFor="cli-notes">
-              <Textarea
-                id="cli-notes"
-                value={notes}
-                onChange={(event) => setNotes(event.target.value)}
-                placeholder="How they send work..."
-              />
-            </Field>
-          ) : null}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit">Add contact</Button>
-          </DialogFooter>
+            ) : null}
+            <label className="flex items-center justify-between gap-3 rounded-lg border px-3 py-3">
+              <span>
+                <span className="block text-sm font-semibold">Referral partner</span>
+                <span className="block text-xs text-muted-foreground">
+                  Track referrals from this person in your book.
+                </span>
+              </span>
+              <Checkbox checked={referral} onCheckedChange={(value) => setReferral(Boolean(value))} />
+            </label>
+          </div>
+          <QuickFooter onCancel={() => onOpenChange(false)} submitLabel="Add contact" />
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function UserIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <circle cx="12" cy="8" r="3.2" />
+      <path d="M5.5 19.2c1.4-2.6 3.7-3.7 6.5-3.7s5.1 1.1 6.5 3.7" />
+    </svg>
   );
 }
 

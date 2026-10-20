@@ -3,26 +3,21 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CreditCard, Hourglass, PieChart, PlugZap, Receipt, RefreshCw, Users } from "lucide-react";
+import { ChevronRight } from "lucide-react";
+import { toast } from "sonner";
 import { CurrencyInput } from "@/components/currency-input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
+import { EmptyState, ErrorBanner, LoadingScreen } from "@/components/page-chrome";
 import { ProfitAndLossReport } from "@/components/profit-and-loss";
 import { AccountingExpenseReview, ExpenseReviewCountBadge } from "@/components/accounting-expense-review";
 import { AccountingInvoiceReview, InvoiceReviewCountBadge } from "@/components/accounting-invoice-review";
-import { AccountingSyncQueues } from "@/components/accounting-qb-queue";
+import { AccountingQuickBooks } from "@/components/accounting-qb-queue";
 import { AccountingCloseouts, CloseoutCountBadge } from "@/components/accounting-closeouts";
-import { QbwcPanel } from "@/components/qbwc-panel";
+import { CreateInvoiceDialog } from "@/components/create-ops-dialogs";
 import { LogPaymentDialog } from "@/components/log-financial-dialogs";
+import { accCard, accRed, CountPill } from "@/components/accounting-chrome";
 import { useCrm } from "@/lib/crm-store";
 import {
   AGING_LABELS,
@@ -32,6 +27,7 @@ import {
   commissionPayout,
   commissionRows,
   completedJobsWithoutInvoice,
+  expenseBlockedReason,
   expensesMissingJob,
   invoiceBlockedReason,
   invoiceReviewAmount,
@@ -43,20 +39,15 @@ import {
   type AgingKey,
 } from "@/lib/accounting-books";
 import { paymentMethodLabel } from "@/lib/payment-posting";
-import { formatCurrency, formatCurrencyFull, formatDate } from "@/lib/format";
-import { qbQueue, type JobBooksBasis } from "@/lib/job-financials";
+import { formatCurrency, formatCurrencyFull, formatDate, localYmd } from "@/lib/format";
+import { jobAddress } from "@/lib/job-record";
+import type { JobBooksBasis } from "@/lib/job-financials";
 import { buildProfitAndLoss, formatPnlPeriod, yearToDateBounds } from "@/lib/profit-and-loss";
 import { canViewAccounting } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
+import type { Job } from "@/lib/types";
 
 const AGING_KEYS: AgingKey[] = ["current", "d1", "d31", "d61", "d90"];
-const AGING_BAR: Record<AgingKey, string> = {
-  current: "bg-foreground",
-  d1: "bg-foreground",
-  d31: "bg-[#f0994f]",
-  d61: "bg-primary",
-  d90: "bg-primary",
-};
 
 export function AccountingPortal() {
   const crm = useCrm();
@@ -71,22 +62,37 @@ export function AccountingPortal() {
   const [contract, setContract] = useState("18640");
   const [jobCost, setJobCost] = useState("11200");
   const [plan, setPlan] = useState<"gp10" | "gp50" | "rev3">("gp10");
-  const [report, setReport] = useState<
-    "aging" | "profit" | "commission" | "payments" | "pending" | "pnl" | null
-  >(null);
+  const [report, setReport] = useState<"aging" | "profit" | "commission" | "payments" | "pending" | "pnl" | null>(null);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [settlingId, setSettlingId] = useState<string | null>(null);
+  const [createJobId, setCreateJobId] = useState<string | null>(null);
+  const [invoicing, setInvoicing] = useState(false);
+  const [payQuery, setPayQuery] = useState("");
+  const [payJobId, setPayJobId] = useState<string | null>(null);
+  const [payInvoiceId, setPayInvoiceId] = useState<string | null>(null);
+  const [payMethod, setPayMethod] = useState("check");
   const ytd = useMemo(() => yearToDateBounds(), []);
 
-  const queue = useMemo(
-    () =>
-      qbQueue({
-        invoices: crm.invoices,
-        invoiceLines: crm.invoiceLines,
-        payments: crm.payments,
-        expenses: crm.expenses,
-      }),
-    [crm.expenses, crm.invoiceLines, crm.invoices, crm.payments],
-  );
+  const connectorQueue = useMemo(() => {
+    const invoices = crm.invoices.filter((invoice) => {
+      if (invoice.archivedAt || invoice.qbStatus === "entered" || invoice.status === "void") return false;
+      const job = invoice.jobId ? crm.getJob(invoice.jobId) : undefined;
+      const lines = crm.invoiceLines.filter((line) => line.invoiceId === invoice.id);
+      const blocked = invoiceBlockedReason({ invoice, job, lines });
+      return invoice.qbStatus === "queued" || invoice.qbStatus === "error" || invoice.qbStatus === "returned" || Boolean(blocked);
+    }).length;
+    const expenses = crm.expenses.filter((expense) => {
+      if (expense.qbStatus === "entered") return false;
+      const job = expense.jobId ? crm.getJob(expense.jobId) : undefined;
+      const blocked = expenseBlockedReason({ expense, job });
+      return expense.qbStatus === "queued" || expense.qbStatus === "error" || expense.qbStatus === "returned" || Boolean(blocked);
+    }).length;
+    const payments = crm.payments.filter((payment) => {
+      if (payment.qbStatus === "entered") return false;
+      return payment.qbStatus === "queued" || payment.qbStatus === "error" || payment.qbStatus === "returned";
+    }).length;
+    return { invoices, expenses, payments };
+  }, [crm]);
   const aging = useMemo(
     () => arAging({ invoices: crm.invoices, invoiceLines: crm.invoiceLines, payments: crm.payments }),
     [crm.invoiceLines, crm.invoices, crm.payments],
@@ -105,8 +111,19 @@ export function AccountingPortal() {
       }),
     [crm],
   );
+  const expenseErrors = useMemo(
+    () =>
+      crm.expenses.filter((expense) => {
+        if (expense.qbStatus === "entered") return false;
+        const job = expense.jobId ? crm.getJob(expense.jobId) : undefined;
+        return expense.qbStatus === "error" || Boolean(expenseBlockedReason({ expense, job }));
+      }),
+    [crm],
+  );
+  const paymentErrors = useMemo(() => crm.payments.filter((payment) => payment.qbStatus === "error"), [crm.payments]);
+  const syncErrorCount = syncErrors.length + expenseErrors.length + paymentErrors.length;
   const missingInvoices = useMemo(
-    () => completedJobsWithoutInvoice(crm.jobs, crm.invoices).slice(0, 5),
+    () => completedJobsWithoutInvoice(crm.jobs, crm.invoices),
     [crm.invoices, crm.jobs],
   );
   const unassignedBills = useMemo(() => expensesMissingJob(crm.expenses), [crm.expenses]);
@@ -167,6 +184,8 @@ export function AccountingPortal() {
   const pendingRows = useMemo(() => pendingCardPaymentRows(crm.payments), [crm.payments]);
   const pendingAmount = pendingRows.reduce((sum, payment) => sum + payment.amount, 0);
   const closeoutWaiting = (crm.commissionCloseouts ?? []).filter((item) => item.status === "submitted");
+  const awaitingAmount = invoiceReviewAmount(awaiting, crm.invoiceLines);
+  const payHits = useMemo(() => searchMoney(payQuery, crm), [crm, payQuery]);
 
   async function settlePending(id: string, next: "posted" | "rejected") {
     setSettlingId(id);
@@ -174,6 +193,30 @@ export function AccountingPortal() {
       await crm.settlePendingPayment(id, next);
     } finally {
       setSettlingId(null);
+    }
+  }
+
+  async function invoiceAll(jobs: Job[]) {
+    if (jobs.length === 0) return;
+    setInvoicing(true);
+    const due = new Date();
+    due.setDate(due.getDate() + 30);
+    const dueAt = localYmd(due);
+    try {
+      for (const job of jobs) {
+        const customer = crm.customerName(job) || job.name || "Job";
+        await crm.addInvoice({
+          name: `${customer} invoice`,
+          clientId: job.clientId,
+          jobId: job.id,
+          dueAt,
+        });
+      }
+      toast.success(`${jobs.length} draft ${jobs.length === 1 ? "invoice" : "invoices"} created.`);
+    } catch {
+      toast.error("Stopped while creating invoices.");
+    } finally {
+      setInvoicing(false);
     }
   }
 
@@ -233,111 +276,147 @@ export function AccountingPortal() {
   }
 
   const monthLabel = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const seat = viewer.role === "accountant" ? "Accounting" : "Admin";
+  const closeItems = [
+    missingInvoices.length > 0,
+    syncErrorCount > 0,
+    unassignedBills.length > 0,
+    closeoutWaiting.length > 0,
+  ];
+  const openClose = closeItems.filter(Boolean).length;
+  const firstError = syncErrors[0];
 
   return (
-    <div className="space-y-4">
-      {crm.hydrateError ? (
-        <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
-      ) : null}
-      <PageHeader
-        eyebrow="Accounting"
-        title="Books and billing"
-        description="Review invoices, send them to QuickBooks, and keep job costs honest."
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Button nativeButton={false} variant="outline" render={<Link href="/settings/integrations/quickbooks" />}>
-              <PlugZap data-icon="inline-start" />
-              Connection
-            </Button>
-            <Button nativeButton={false} render={<Link href="/accounting?tab=sync" />}>
-              <RefreshCw data-icon="inline-start" />
-              Sync now
-            </Button>
-          </div>
-        }
-      />
-      <p className="text-xs text-[#706e6b]">
-        {viewer.role === "accountant" ? "Accounting seat" : "Company admin"} — every invoice, payment, and
-        sync in the company.
-      </p>
-
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList variant="line" className="h-auto w-full justify-start overflow-x-auto rounded-none bg-transparent p-0">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="review">
-            Invoice review
-            <InvoiceReviewCountBadge />
-          </TabsTrigger>
-          <TabsTrigger value="expenses">
-            Expense review
-            <ExpenseReviewCountBadge />
-          </TabsTrigger>
-          <TabsTrigger value="closeouts">
-            Closeouts
-            <CloseoutCountBadge />
-          </TabsTrigger>
-          <TabsTrigger value="sync">
-            QuickBooks sync
-            {queue.invoiceCount + queue.expenseCount + queue.paymentCount > 0 ? (
-              <span className="ml-1 text-muted-foreground">
-                {queue.invoiceCount + queue.expenseCount + queue.paymentCount}
-              </span>
-            ) : null}
-          </TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
-          <TabsTrigger value="tools">Tools</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="mt-4 space-y-4">
-          <div className="flex items-end justify-between gap-2">
-            <div>
-              <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
-                Accounting snapshot
-              </p>
-              <p className="text-sm text-[#706e6b]">Receivables and sync health for {monthLabel}</p>
-            </div>
-            <Button type="button" variant="link" className="h-auto p-0 text-primary" onClick={() => setTab("reports")}>
+    <div className="space-y-5">
+      {crm.hydrateError ? <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} /> : null}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-sm text-[#8a847c]">{seat} · Every invoice, payment and sync in the company</p>
+          <h1 className="mt-1 text-[2rem] leading-none font-semibold tracking-tight text-[#1a1a1a]">Accounting</h1>
+        </div>
+        {tab === "overview" ? (
+          <div className="flex items-center gap-2">
+            <span className="rounded-full border border-[#e6e1da] bg-white px-4 py-2 text-sm">{monthLabel}</span>
+            <Button type="button" variant="outline" className="rounded-full" onClick={() => setTab("reports")}>
               Open reports
             </Button>
           </div>
+        ) : null}
+      </div>
+
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList
+          variant="line"
+          className="h-auto! w-full justify-start gap-1 overflow-x-auto rounded-none border-b border-[#e6e1da] bg-transparent p-0"
+        >
+          <Tab value="overview">Overview</Tab>
+          <Tab value="review">
+            Invoice review
+            <InvoiceReviewCountBadge />
+          </Tab>
+          <Tab value="expenses">
+            Expense review
+            <ExpenseReviewCountBadge />
+          </Tab>
+          <Tab value="closeouts">
+            Closeouts
+            <CloseoutCountBadge />
+          </Tab>
+          <Tab value="sync">
+            QuickBooks sync
+            {syncErrorCount > 0 ? <CountPill tone="danger">{syncErrorCount} errors</CountPill> : null}
+          </Tab>
+          <Tab value="reports">Reports</Tab>
+          <Tab value="tools">Tools</Tab>
+        </TabsList>
+
+        <TabsContent value="overview" className="mt-5 space-y-4">
+          <section className="rounded-3xl bg-[#161616] px-5 py-5 text-white">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold tracking-[0.16em] text-white/55">{monthLabel.toUpperCase()} CLOSE</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight">
+                  {openClose === 0
+                    ? "Nothing stands between you and a clean month"
+                    : `${openClose} ${openClose === 1 ? "thing stands" : "things stand"} between you and a clean month`}
+                </h2>
+              </div>
+              <p className="text-sm text-white/60">{4 - openClose} of 4 cleared</p>
+            </div>
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <CloseCard
+                title="Invoice finished jobs"
+                count={missingInvoices.length}
+                body="Completed work with no invoice yet."
+                action="Create invoices"
+                onClick={() => document.getElementById("finished-jobs")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              />
+              <CloseCard
+                title="Clear sync errors"
+                count={syncErrorCount}
+                body={firstError ? `${firstError.number} is blocking QuickBooks.` : "Nothing is blocking QuickBooks."}
+                action={firstError ? `Fix ${firstError.number}` : "Open the queue"}
+                onClick={() => (firstError ? setInvoice(firstError.id) : setTab("sync"))}
+              />
+              <CloseCard
+                title="Match supplier bills"
+                count={unassignedBills.length}
+                body="Bills not tied to any job."
+                action="Match to jobs"
+                onClick={() => setTab("expenses")}
+              />
+              <CloseCard
+                title="Release closeout"
+                count={closeoutWaiting.length}
+                body="Compare QuickBooks to job expenses, then pay commission."
+                action="Open closeout"
+                onClick={() => setTab("closeouts")}
+              />
+            </div>
+          </section>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <Kpi label="AR outstanding" value={formatCurrency(aging.total)} hint={`${aging.count} open invoices`} />
             <Kpi
-              label="Awaiting approval"
-              value={String(awaiting.length)}
-              hint={`${formatCurrencyFull(invoiceReviewAmount(awaiting, crm.invoiceLines))} ready to review`}
+              label="AR outstanding"
+              value={formatCurrencyFull(aging.total)}
+              hint={`${aging.count} open ${aging.count === 1 ? "invoice" : "invoices"}${aging.d1 > 0 && aging.total === aging.d1 ? " · all 1–30 days" : ""}`}
             />
             <Kpi
-              label="Collected MTD"
+              label="Awaiting approval"
+              value={formatCurrencyFull(awaitingAmount)}
+              hint={`${awaiting.length} ${awaiting.length === 1 ? "invoice" : "invoices"} ready`}
+              action="Review"
+              onAction={() => setTab("review")}
+            />
+            <Kpi
+              label="Collected this month"
               value={formatCurrency(collected.amount)}
-              hint={`${collected.count} payment${collected.count === 1 ? "" : "s"} recorded`}
+              hint={`${collected.count} ${collected.count === 1 ? "payment" : "payments"} recorded`}
             />
             <Kpi
               label="Sync errors"
-              value={String(syncErrors.length)}
-              hint={
-                syncErrors[0]
-                  ? `${syncErrors[0].number} is blocked`
-                  : "No mapping or job problems"
-              }
-              warn={syncErrors.length > 0}
+              value={String(syncErrorCount)}
+              hint={firstError ? `${firstError.number} is blocked` : "Queue is clear"}
+              warn={syncErrorCount > 0}
+              action={syncErrorCount > 0 ? "Fix" : undefined}
+              onAction={() => (firstError ? setInvoice(firstError.id) : setTab("sync"))}
             />
           </div>
+
           {pendingRows.length > 0 ? (
-            <section className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-[#f0994f] bg-[#fff8f0] px-4 py-3">
+            <section className={cn(accCard, "flex flex-wrap items-center justify-between gap-3 px-4 py-3")}>
               <div>
-                <p className="text-sm font-semibold text-[#181818]">
-                  {pendingRows.length} pending card payment{pendingRows.length === 1 ? "" : "s"}
+                <p className="text-sm font-semibold">
+                  {pendingRows.length} pending card {pendingRows.length === 1 ? "payment" : "payments"}
                 </p>
-                <p className="text-xs text-[#706e6b]">
-                  {formatCurrencyFull(pendingAmount)} charged in Stripe. Match and post as a job
-                  deposit, or reject if it does not belong.
+                <p className="text-xs text-[#6f6a64]">
+                  {formatCurrencyFull(pendingAmount)} charged in Stripe. Match and post as a job deposit, or reject it.
                 </p>
               </div>
               <Button
                 type="button"
                 variant="outline"
+                className="rounded-full"
                 onClick={() => {
                   setTab("reports");
                   setReport("pending");
@@ -347,230 +426,216 @@ export function AccountingPortal() {
               </Button>
             </section>
           ) : null}
-          {closeoutWaiting.length > 0 ? (
-            <section className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-[#c9c9c9] bg-white px-4 py-3">
-              <div>
-                <p className="text-sm font-semibold text-[#181818]">
-                  {closeoutWaiting.length} closeout{closeoutWaiting.length === 1 ? "" : "s"} waiting
-                </p>
-                <p className="text-xs text-[#706e6b]">
-                  Compare QuickBooks with the job expenses, then release the sheet for commission payout.
-                </p>
-              </div>
-              <Button type="button" variant="outline" onClick={() => setTab("closeouts")}>
-                Open closeouts
-              </Button>
-            </section>
-          ) : null}
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-            <section className="overflow-hidden rounded-sm border border-[#c9c9c9] bg-white shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
-              <div className="flex items-start justify-between gap-3 border-b border-[#c9c9c9] bg-[#f3f3f3] px-4 py-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-[#181818]">Receivables aging</h3>
-                  <p className="mt-0.5 text-xs text-[#706e6b]">Open balance by days past due</p>
-                </div>
-                <Button type="button" variant="link" className="h-auto p-0 text-primary" onClick={() => setTab("reports")}>
-                  AR aging
-                </Button>
-              </div>
-              <div className="space-y-3 px-4 py-4">
-                {AGING_KEYS.map((key) => (
-                  <div key={key} className="grid grid-cols-[6.5rem_minmax(0,1fr)_5.5rem] items-center gap-3 text-sm">
-                    <span>{AGING_LABELS[key]}</span>
-                    <div className="h-3.5 overflow-hidden rounded-sm bg-[#f1f0ec]">
-                      <span
-                        className={cn("block h-full", AGING_BAR[key])}
-                        style={{ width: `${aging.total > 0 ? Math.max(2, (aging[key] / aging.total) * 100) : 0}%` }}
-                      />
-                    </div>
-                    <span className="text-right tabular-nums">{formatCurrencyFull(aging[key])}</span>
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.7fr)]">
+            <div className="space-y-4">
+              <section id="finished-jobs" className={cn(accCard, "overflow-hidden")}>
+                <div className="flex items-center justify-between gap-3 px-4 py-4">
+                  <div>
+                    <h3 className="text-base font-semibold">Finished jobs with no invoice</h3>
+                    <p className="text-sm text-[#8a847c]">Billable work sitting idle. Invoice these before month end.</p>
                   </div>
-                ))}
-              </div>
-            </section>
+                  {missingInvoices.length > 0 ? (
+                    <Button
+                      type="button"
+                      className={cn("rounded-full", accRed)}
+                      disabled={invoicing}
+                      onClick={() => void invoiceAll(missingInvoices)}
+                    >
+                      Invoice all {missingInvoices.length}
+                    </Button>
+                  ) : null}
+                </div>
+                {missingInvoices.length === 0 ? (
+                  <p className="px-4 pb-5 text-sm text-[#6f6a64]">Every finished job has an invoice.</p>
+                ) : (
+                  <table className="w-full text-left text-sm">
+                    <thead className="text-xs text-[#8a847c]">
+                      <tr>
+                        <th className="px-4 py-2 font-medium">Customer</th>
+                        <th className="px-4 py-2 font-medium">Address</th>
+                        <th className="px-4 py-2 font-medium">City</th>
+                        <th className="px-4 py-2" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {missingInvoices.map((job) => {
+                        const customer = crm.customerName(job) || job.name;
+                        return (
+                          <tr key={job.id} className="border-t border-[#f3efe9]">
+                            <td className="px-4 py-3 font-medium">{lastWord(customer)}</td>
+                            <td className="px-4 py-3 text-[#3c3a37]">{job.street.trim() || jobAddress(job) || "—"}</td>
+                            <td className="px-4 py-3 text-[#3c3a37]">{cityLine(job) || "—"}</td>
+                            <td className="px-4 py-3 text-right">
+                              <Button type="button" size="sm" variant="outline" className="rounded-full" onClick={() => setCreateJobId(job.id)}>
+                                Create invoice
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </section>
 
-            <QbConnectionCard
-              queueCount={queue.invoiceCount + queue.expenseCount + queue.paymentCount}
-              invoices={queue.invoiceCount}
-              expenses={queue.expenseCount}
-              payments={queue.paymentCount}
-              onViewQueue={() => setTab("sync")}
-              onReview={() => setTab("review")}
-            />
-          </div>
-
-          <section className="overflow-hidden rounded-sm border border-[#c9c9c9] bg-white shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
-            <div className="border-b border-[#c9c9c9] bg-[#f3f3f3] px-4 py-3">
-              <h3 className="text-sm font-semibold text-[#181818]">Needs attention</h3>
-              <p className="mt-0.5 text-xs text-[#706e6b]">Things blocking a clean close this month</p>
+              <section className={cn(accCard, "p-5")}>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-base font-semibold">Receivables aging</h3>
+                  <button type="button" className="text-sm font-medium text-[#c43832] hover:underline" onClick={() => { setTab("reports"); setReport("aging"); }}>
+                    Full AR aging →
+                  </button>
+                </div>
+                <div className="mt-4 flex h-3 overflow-hidden rounded-full bg-[#eceae4]">
+                  {AGING_KEYS.map((key) =>
+                    aging[key] > 0 ? (
+                      <span
+                        key={key}
+                        className={key === "current" || key === "d1" ? "bg-[#1c1c1c]" : key === "d31" ? "bg-[#8d8680]" : "bg-[#c43832]"}
+                        style={{ width: `${(aging[key] / aging.total) * 100}%` }}
+                      />
+                    ) : null,
+                  )}
+                </div>
+                <div className="mt-3 grid grid-cols-5 gap-2 text-sm">
+                  {AGING_KEYS.map((key) => (
+                    <div key={key}>
+                      <p className="text-[#8a847c]">{AGING_LABELS[key]}</p>
+                      <p className="mt-1 font-medium tabular-nums">{aging[key] ? formatCurrencyFull(aging[key]) : "$0"}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
             </div>
-            <ul className="divide-y divide-[#e5e5e5]">
-              {syncErrors[0] ? (
-                <li className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                  <span>
-                    {syncErrors[0].number} needs a job, lines, or a QuickBooks retry before it can go.
-                  </span>
-                  <Button size="sm" variant="outline" onClick={() => setInvoice(syncErrors[0].id)}>
-                    Review invoice
-                  </Button>
-                </li>
-              ) : null}
-              {missingInvoices.length > 0 ? (
-                <li className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                  <span>
-                    {missingInvoices.length} finished job{missingInvoices.length === 1 ? "" : "s"} with no
-                    invoice
-                    {missingInvoices[0] ? ` — ${missingInvoices.map((job) => job.name).join(", ")}` : ""}.
-                  </span>
-                  <Button nativeButton={false} size="sm" variant="outline" render={<Link href="/jobs" />}>
-                    Open jobs
-                  </Button>
-                </li>
-              ) : null}
-              {unassignedBills.length > 0 ? (
-                <li className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
-                  <span>
-                    {unassignedBills.length} supplier bill{unassignedBills.length === 1 ? "" : "s"} not tied
-                    to a job.
-                  </span>
-                  <Button size="sm" variant="outline" onClick={() => setTab("expenses")}>
-                    Review expenses
-                  </Button>
-                </li>
-              ) : null}
-              {!syncErrors[0] && missingInvoices.length === 0 && unassignedBills.length === 0 ? (
-                <li className="px-4 py-6 text-sm text-[#706e6b]">Nothing blocking the books right now.</li>
-              ) : null}
-            </ul>
-          </section>
+
+            <div className="space-y-4">
+              <QbDeskCard
+                queueCount={connectorQueue.invoices + connectorQueue.expenses + connectorQueue.payments}
+                invoices={connectorQueue.invoices}
+                expenses={connectorQueue.expenses}
+                payments={connectorQueue.payments}
+                onViewQueue={() => setTab("sync")}
+                onSync={() => setTab("sync")}
+              />
+              <BlockingCard
+                invoiceNumber={firstError?.number}
+                invoiceId={firstError?.id}
+                reason={
+                  firstError
+                    ? invoiceBlockedReason({
+                        invoice: firstError,
+                        job: firstError.jobId ? crm.getJob(firstError.jobId) : undefined,
+                        lines: crm.invoiceLines.filter((line) => line.invoiceId === firstError.id),
+                      })
+                    : null
+                }
+                onOpen={(id) => setInvoice(id)}
+                onRetry={() => {
+                  if (!firstError) return;
+                  const job = firstError.jobId ? crm.getJob(firstError.jobId) : undefined;
+                  const lines = crm.invoiceLines.filter((line) => line.invoiceId === firstError.id);
+                  const blocked = invoiceBlockedReason({ invoice: firstError, job, lines });
+                  if (blocked) {
+                    toast.error(blocked);
+                    return;
+                  }
+                  void crm.setQbStatus("invoice", firstError.id, "queued").then((ok) => {
+                    if (ok) toast.success(`${firstError.number} is back in the Web Connector queue.`);
+                  });
+                }}
+              />
+            </div>
+          </div>
         </TabsContent>
 
-        <TabsContent value="review" className="mt-4">
+        <TabsContent value="review" className="mt-5">
           <AccountingInvoiceReview selectedId={selectedInvoice} onSelect={setInvoice} />
         </TabsContent>
 
-        <TabsContent value="expenses" className="mt-4">
+        <TabsContent value="expenses" className="mt-5">
           <AccountingExpenseReview selectedId={selectedExpense} onSelect={setExpense} />
         </TabsContent>
 
-        <TabsContent value="closeouts" className="mt-4">
+        <TabsContent value="closeouts" className="mt-5">
           <AccountingCloseouts selectedId={searchParams.get("closeout")} onSelect={setCloseout} />
         </TabsContent>
 
-        <TabsContent value="sync" className="mt-4 space-y-4">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
-                QuickBooks sync
-              </p>
-              <p className="text-sm text-[#706e6b]">
-                Desktop through the Web Connector. Invoice and expense approval live on their review tabs.
-              </p>
-            </div>
-            <Button nativeButton={false} variant="outline" render={<Link href="/settings/integrations/quickbooks" />}>
-              Download .qwc
-            </Button>
-          </div>
-          <div className="grid gap-4 xl:grid-cols-3">
-            <div className="xl:col-span-2">
-              <QbwcPanel />
-            </div>
-            <section className="overflow-hidden rounded-sm border border-[#c9c9c9] bg-white shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
-              <div className="border-b border-[#c9c9c9] bg-[#f3f3f3] px-4 py-3">
-                <h3 className="text-sm font-semibold text-[#181818]">What syncs</h3>
-                <p className="mt-0.5 text-xs text-[#706e6b]">Direction per record type</p>
-              </div>
-              <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 px-4 py-4 text-sm">
-                <dt className="text-[#706e6b]">Customers and jobs</dt>
-                <dd className="text-right">CRM → QuickBooks</dd>
-                <dt className="text-[#706e6b]">Invoices</dt>
-                <dd className="text-right">CRM → QuickBooks</dd>
-                <dt className="text-[#706e6b]">Payments received</dt>
-                <dd className="text-right">Both ways</dd>
-                <dt className="text-[#706e6b]">Vendors</dt>
-                <dd className="text-right">QuickBooks → CRM</dd>
-                <dt className="text-[#706e6b]">Vendor bills / expenses</dt>
-                <dd className="text-right">CRM → QuickBooks</dd>
-              </dl>
-            </section>
-          </div>
-          <AccountingSyncQueues />
+        <TabsContent value="sync" className="mt-5">
+          <AccountingQuickBooks onReviewInvoice={setInvoice} />
         </TabsContent>
 
-        <TabsContent value="reports" className="mt-4 space-y-4">
-          <div className="flex flex-wrap items-end justify-between gap-2">
-            <div>
-              <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
-                Accounting reports
-              </p>
-              <p className="text-sm text-[#706e6b]">Run in the CRM from live job and invoice books.</p>
-            </div>
-            <div className="flex border">
+        <TabsContent value="reports" className="mt-5 space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-[#6f6a64]">Run from live job and invoice books, no QuickBooks needed.</p>
+            <div className="flex rounded-full bg-[#eceae4] p-1">
               <button
                 type="button"
-                className={cn(
-                  "px-3 py-1.5 text-xs font-medium",
-                  basis === "accrual" ? "bg-foreground text-background" : "text-muted-foreground",
-                )}
+                className={cn("rounded-full px-4 py-1.5 text-sm font-medium", basis === "accrual" ? "bg-white shadow-sm" : "text-[#6f6a64]")}
                 onClick={() => setBasis("accrual")}
               >
                 Accrual
               </button>
               <button
                 type="button"
-                className={cn(
-                  "px-3 py-1.5 text-xs font-medium",
-                  basis === "cash" ? "bg-foreground text-background" : "text-muted-foreground",
-                )}
+                className={cn("rounded-full px-4 py-1.5 text-sm font-medium", basis === "cash" ? "bg-white shadow-sm" : "text-[#6f6a64]")}
                 onClick={() => setBasis("cash")}
               >
                 Cash
               </button>
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+
+          <ReportSection title="Money in">
             <ReportCard
-              icon={<Hourglass className="size-5 text-primary" />}
               title="AR aging"
               description="Open balances by invoice and days past due."
-              onRun={() => setReport("aging")}
+              metric={`${formatCurrencyFull(aging.total)} open · ${aging.count} ${aging.count === 1 ? "invoice" : "invoices"}`}
+              active={report === "aging"}
+              onRun={() => setReport(report === "aging" ? null : "aging")}
             />
             <ReportCard
-              icon={<PieChart className="size-5 text-primary" />}
-              title="Job profitability"
-              description="Contract vs. actual cost for billed jobs, with margin."
-              onRun={() => setReport("profit")}
-            />
-            <ReportCard
-              icon={<Users className="size-5 text-primary" />}
-              title="Commission report"
-              description="10% of gross profit by sales rep on billed jobs."
-              onRun={() => setReport("commission")}
-            />
-            <ReportCard
-              icon={<Receipt className="size-5 text-primary" />}
               title="Deposits and payments"
               description="Every posted payment, newest first."
-              onRun={() => setReport("payments")}
+              metric={`${formatCurrency(collected.amount)} collected this month`}
+              active={report === "payments"}
+              onRun={() => setReport(report === "payments" ? null : "payments")}
             />
             <ReportCard
-              icon={<CreditCard className="size-5 text-primary" />}
               title="Pending card payments"
               description="Match Stripe charges before they post as a job deposit."
-              onRun={() => setReport("pending")}
+              metric={pendingRows.length ? `${formatCurrencyFull(pendingAmount)} to match` : undefined}
+              active={report === "pending"}
+              onRun={() => setReport(report === "pending" ? null : "pending")}
+            />
+          </ReportSection>
+          <ReportSection title="Profit">
+            <ReportCard
+              title="Job profitability"
+              description="Contract vs. actual cost for billed jobs, with margin."
+              active={report === "profit"}
+              onRun={() => setReport(report === "profit" ? null : "profit")}
             />
             <ReportCard
-              icon={<PieChart className="size-5 text-primary" />}
               title="Profit and loss"
               description="Year-to-date books in QuickBooks form."
-              onRun={() => setReport("pnl")}
+              active={report === "pnl"}
+              onRun={() => setReport(report === "pnl" ? null : "pnl")}
             />
-          </div>
+          </ReportSection>
+          <ReportSection title="People">
+            <ReportCard
+              title="Commission report"
+              description="Payout by sales rep on billed jobs."
+              active={report === "commission"}
+              onRun={() => setReport(report === "commission" ? null : "commission")}
+              wide
+            />
+          </ReportSection>
+
           {report === "aging" ? (
             <ReportPreview title="AR aging" subtitle={`${formatCurrencyFull(aging.total)} open`}>
               <table className="w-full text-sm">
-                <thead className="border-b border-[#c9c9c9] bg-[#f3f3f3] text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
+                <thead className="border-b border-[#ece7e1] text-[11px] font-semibold tracking-wide text-[#8a847c] uppercase">
                   <tr>
                     <th className="px-4 py-2 text-left">Invoice</th>
                     <th className="px-4 py-2 text-left">Bucket</th>
@@ -579,12 +644,12 @@ export function AccountingPortal() {
                 </thead>
                 <tbody>
                   {agingRows.slice(0, 12).map((row) => (
-                    <tr key={row.id} className="border-b border-[#e5e5e5] last:border-0">
+                    <tr key={row.id} className="border-b border-[#f3efe9] last:border-0">
                       <td className="px-4 py-2.5">
-                        <button type="button" className="text-primary hover:underline" onClick={() => setInvoice(row.id)}>
+                        <button type="button" className="text-[#c43832] hover:underline" onClick={() => setInvoice(row.id)}>
                           {row.number}
                         </button>
-                        <p className="text-xs text-[#86827b]">{row.name}</p>
+                        <p className="text-xs text-[#8a847c]">{row.name}</p>
                       </td>
                       <td className="px-4 py-2.5">{AGING_LABELS[row.bucket]}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrencyFull(row.balance)}</td>
@@ -597,7 +662,7 @@ export function AccountingPortal() {
           {report === "profit" ? (
             <ReportPreview title="Job profitability" subtitle={`${basis} basis`}>
               <table className="w-full text-sm">
-                <thead className="border-b border-[#c9c9c9] bg-[#f3f3f3] text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
+                <thead className="border-b border-[#ece7e1] text-[11px] font-semibold tracking-wide text-[#8a847c] uppercase">
                   <tr>
                     <th className="px-4 py-2 text-left">Job</th>
                     <th className="px-4 py-2 text-right">Income</th>
@@ -607,10 +672,10 @@ export function AccountingPortal() {
                 </thead>
                 <tbody>
                   {profitJobs.slice(0, 12).map((row) => (
-                    <tr key={row.id} className="border-b border-[#e5e5e5] last:border-0">
+                    <tr key={row.id} className="border-b border-[#f3efe9] last:border-0">
                       <td className="px-4 py-2.5">
                         {row.name}
-                        <p className="text-xs text-[#86827b]">{row.salesRep}</p>
+                        <p className="text-xs text-[#8a847c]">{row.salesRep}</p>
                       </td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrencyFull(row.income)}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrencyFull(row.expenses)}</td>
@@ -624,7 +689,7 @@ export function AccountingPortal() {
           {report === "commission" ? (
             <ReportPreview title="Commission report" subtitle="10% of gross profit">
               <table className="w-full text-sm">
-                <thead className="border-b border-[#c9c9c9] bg-[#f3f3f3] text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
+                <thead className="border-b border-[#ece7e1] text-[11px] font-semibold tracking-wide text-[#8a847c] uppercase">
                   <tr>
                     <th className="px-4 py-2 text-left">Rep</th>
                     <th className="px-4 py-2 text-right">Jobs</th>
@@ -633,7 +698,7 @@ export function AccountingPortal() {
                 </thead>
                 <tbody>
                   {commissions.map((row) => (
-                    <tr key={row.name} className="border-b border-[#e5e5e5] last:border-0">
+                    <tr key={row.name} className="border-b border-[#f3efe9] last:border-0">
                       <td className="px-4 py-2.5">{row.name}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{row.jobs}</td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrencyFull(row.payout)}</td>
@@ -646,7 +711,7 @@ export function AccountingPortal() {
           {report === "payments" ? (
             <ReportPreview title="Deposits and payments" subtitle={`${paymentRows.length} latest`}>
               <table className="w-full text-sm">
-                <thead className="border-b border-[#c9c9c9] bg-[#f3f3f3] text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
+                <thead className="border-b border-[#ece7e1] text-[11px] font-semibold tracking-wide text-[#8a847c] uppercase">
                   <tr>
                     <th className="px-4 py-2 text-left">Date</th>
                     <th className="px-4 py-2 text-left">Method</th>
@@ -655,13 +720,11 @@ export function AccountingPortal() {
                 </thead>
                 <tbody>
                   {paymentRows.map((payment) => (
-                    <tr key={payment.id} className="border-b border-[#e5e5e5] last:border-0">
+                    <tr key={payment.id} className="border-b border-[#f3efe9] last:border-0">
                       <td className="px-4 py-2.5">{formatDate(payment.paidAt)}</td>
                       <td className="px-4 py-2.5">
                         {payment.method}
-                        {payment.reference ? (
-                          <p className="text-xs text-[#86827b]">{payment.reference}</p>
-                        ) : null}
+                        {payment.reference ? <p className="text-xs text-[#8a847c]">{payment.reference}</p> : null}
                       </td>
                       <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrencyFull(payment.amount)}</td>
                     </tr>
@@ -673,20 +736,15 @@ export function AccountingPortal() {
           {report === "pending" ? (
             <ReportPreview
               title="Pending card payments"
-              subtitle={
-                pendingRows.length
-                  ? `${pendingRows.length} to match · ${formatCurrencyFull(pendingAmount)}`
-                  : "None waiting"
-              }
+              subtitle={pendingRows.length ? `${pendingRows.length} to match · ${formatCurrencyFull(pendingAmount)}` : "None waiting"}
             >
               {pendingRows.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-[#706e6b]">
-                  No card charges are waiting. New Stripe payments show here until someone in
-                  accounting matches them.
+                <p className="px-4 py-6 text-sm text-[#6f6a64]">
+                  No card charges are waiting. New Stripe payments show here until someone in accounting matches them.
                 </p>
               ) : (
                 <table className="w-full text-sm">
-                  <thead className="border-b border-[#c9c9c9] bg-[#f3f3f3] text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
+                  <thead className="border-b border-[#ece7e1] text-[11px] font-semibold tracking-wide text-[#8a847c] uppercase">
                     <tr>
                       <th className="px-4 py-2 text-left">Date</th>
                       <th className="px-4 py-2 text-left">On</th>
@@ -696,68 +754,39 @@ export function AccountingPortal() {
                   </thead>
                   <tbody>
                     {pendingRows.map((payment) => {
-                      const invoice = payment.invoiceId
-                        ? crm.invoices.find((item) => item.id === payment.invoiceId)
-                        : undefined;
-                      const estimate = payment.estimateId
-                        ? crm.estimates.find((item) => item.id === payment.estimateId)
-                        : undefined;
+                      const invoice = payment.invoiceId ? crm.invoices.find((item) => item.id === payment.invoiceId) : undefined;
+                      const estimate = payment.estimateId ? crm.estimates.find((item) => item.id === payment.estimateId) : undefined;
                       const job = payment.jobId ? crm.getJob(payment.jobId) : undefined;
-                      const label =
-                        invoice?.number ||
-                        estimate?.number ||
-                        job?.name ||
-                        job?.code ||
-                        "Job deposit";
+                      const label = invoice?.number || estimate?.number || job?.name || job?.code || "Job deposit";
                       return (
-                        <tr key={payment.id} className="border-b border-[#e5e5e5] last:border-0">
+                        <tr key={payment.id} className="border-b border-[#f3efe9] last:border-0">
                           <td className="px-4 py-2.5">
                             {formatDate(payment.paidAt)}
-                            <p className="text-xs text-[#86827b]">
+                            <p className="text-xs text-[#8a847c]">
                               {paymentMethodLabel(payment.method)}
                               {payment.reference ? ` · ${payment.reference}` : ""}
                             </p>
                           </td>
                           <td className="px-4 py-2.5">
                             {invoice ? (
-                              <button
-                                type="button"
-                                className="text-primary hover:underline"
-                                onClick={() => setInvoice(invoice.id)}
-                              >
+                              <button type="button" className="text-[#c43832] hover:underline" onClick={() => setInvoice(invoice.id)}>
                                 {label}
                               </button>
                             ) : job ? (
-                              <Link href={`/jobs?job=${job.id}`} className="text-primary hover:underline">
+                              <Link href={`/jobs?job=${job.id}`} className="text-[#c43832] hover:underline">
                                 {label}
                               </Link>
                             ) : (
                               label
                             )}
-                            {job && (invoice || estimate) ? (
-                              <p className="text-xs text-[#86827b]">{job.name || job.code}</p>
-                            ) : null}
                           </td>
-                          <td className="px-4 py-2.5 text-right tabular-nums">
-                            {formatCurrencyFull(payment.amount)}
-                          </td>
+                          <td className="px-4 py-2.5 text-right tabular-nums">{formatCurrencyFull(payment.amount)}</td>
                           <td className="px-4 py-2.5">
                             <div className="flex justify-end gap-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                disabled={settlingId === payment.id}
-                                onClick={() => void settlePending(payment.id, "posted")}
-                              >
+                              <Button type="button" size="sm" disabled={settlingId === payment.id} onClick={() => void settlePending(payment.id, "posted")}>
                                 Match & post
                               </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                disabled={settlingId === payment.id}
-                                onClick={() => void settlePending(payment.id, "rejected")}
-                              >
+                              <Button type="button" size="sm" variant="outline" disabled={settlingId === payment.id} onClick={() => void settlePending(payment.id, "rejected")}>
                                 Reject
                               </Button>
                             </div>
@@ -771,115 +800,203 @@ export function AccountingPortal() {
             </ReportPreview>
           ) : null}
           {report === "pnl" ? <ProfitAndLossReport statement={statement} /> : null}
+
+          <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-[#e0dbd4] px-4 py-4">
+            <div>
+              <p className="text-sm font-semibold">Get these by email</p>
+              <p className="text-sm text-[#6f6a64]">Schedule AR aging or P&L to land every Monday morning.</p>
+              {scheduleOpen ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button type="button" size="sm" variant="outline" className="rounded-full" onClick={() => { setReport("aging"); setScheduleOpen(false); }}>
+                    Open AR aging
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" className="rounded-full" onClick={() => { setReport("pnl"); setScheduleOpen(false); }}>
+                    Open profit and loss
+                  </Button>
+                  <p className="text-xs text-[#8a847c]">Monday email isn’t connected on this workspace, so the report opens here.</p>
+                </div>
+              ) : null}
+            </div>
+            <Button type="button" variant="outline" className="rounded-full" onClick={() => setScheduleOpen((value) => !value)}>
+              Schedule a report
+            </Button>
+          </section>
         </TabsContent>
 
-        <TabsContent value="tools" className="mt-4 space-y-4">
-          <div>
-            <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">
-              Accounting tools
-            </p>
-            <p className="text-sm text-[#706e6b]">Everyday money tasks without opening QuickBooks.</p>
-          </div>
-          <div className="grid gap-4 xl:grid-cols-3">
-            <section className="rounded-sm border border-[#c9c9c9] bg-white p-4 shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
-              <h3 className="text-sm font-semibold text-[#181818]">Commission calculator</h3>
-              <p className="mt-0.5 text-xs text-[#706e6b]">Rep payout on a closed job</p>
-              <div className="mt-3 space-y-3">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="c-amt">Contract amount</Label>
-                  <CurrencyInput id="c-amt" value={contract} onValueChange={setContract} />
+        <TabsContent value="tools" className="mt-5">
+          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(18rem,0.85fr)]">
+            <section className={cn(accCard, "grid overflow-hidden md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]")}>
+              <div className="p-5">
+                <h3 className="text-base font-semibold">Commission calculator</h3>
+                <p className="mt-0.5 text-sm text-[#8a847c]">Rep payout on a closed job</p>
+                <div className="mt-4 space-y-3">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="c-amt">Contract amount</Label>
+                    <CurrencyInput id="c-amt" value={contract} onValueChange={setContract} />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="c-cost">Job cost</Label>
+                    <CurrencyInput id="c-cost" value={jobCost} onValueChange={setJobCost} />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <PlanButton active={plan === "gp10"} onClick={() => setPlan("gp10")}>
+                      10% of gross profit
+                    </PlanButton>
+                    <PlanButton active={plan === "gp50"} onClick={() => setPlan("gp50")}>
+                      50% profit split
+                    </PlanButton>
+                    <PlanButton active={plan === "rev3"} onClick={() => setPlan("rev3")}>
+                      3% of contract
+                    </PlanButton>
+                  </div>
                 </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="c-cost">Job cost</Label>
-                  <CurrencyInput id="c-cost" value={jobCost} onValueChange={setJobCost} />
+              </div>
+              <div className="flex flex-col justify-between bg-[#161616] p-5 text-white">
+                <div>
+                  <p className="text-sm text-white/60">Rep payout</p>
+                  <p className="mt-2 text-5xl font-semibold tracking-tight tabular-nums">{formatCurrencyFull(payout.payout)}</p>
+                  <div className="relative mt-6 h-1.5 rounded-full bg-white/15">
+                    <span
+                      className="absolute top-1/2 size-3 -translate-y-1/2 rounded-full bg-[#c43832]"
+                      style={{ left: `${Math.min(96, Math.max(4, payout.margin * 100))}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="grid gap-1.5">
-                  <Label>Plan</Label>
-                  <Select
-                    value={plan}
-                    onValueChange={(value) => {
-                      if (value === "gp10" || value === "gp50" || value === "rev3") setPlan(value);
-                    }}
-                    items={[
-                      { value: "gp10", label: "10% of gross profit" },
-                      { value: "gp50", label: "50/50 profit split" },
-                      { value: "rev3", label: "3% of contract" },
-                    ]}
+                <dl className="mt-8 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <dt className="text-white/60">Gross profit</dt>
+                    <dd className="tabular-nums">{formatCurrencyFull(payout.profit)}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-white/60">Margin</dt>
+                    <dd className="tabular-nums">{(payout.margin * 100).toFixed(1)}%</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-white/60">Company keeps</dt>
+                    <dd className="tabular-nums">{formatCurrencyFull(Math.max(0, payout.profit - payout.payout))}</dd>
+                  </div>
+                </dl>
+              </div>
+            </section>
+
+            <section className={cn(accCard, "p-5")}>
+              <h3 className="text-base font-semibold">Record a payment</h3>
+              <p className="mt-0.5 text-sm text-[#8a847c]">Queues for QuickBooks after you save</p>
+              <label className="mt-4 block text-sm">
+                <span className="mb-1.5 block text-[#6f6a64]">Job or invoice</span>
+                <input
+                  value={payQuery}
+                  onChange={(event) => {
+                    setPayQuery(event.target.value);
+                    setPayJobId(null);
+                    setPayInvoiceId(null);
+                  }}
+                  placeholder="Search by customer, address or INV #"
+                  aria-label="Search by customer, address or invoice number"
+                  className="h-11 w-full rounded-xl border border-[#e6e1da] bg-white px-3 text-sm outline-none placeholder:text-[#9a958e] focus:border-[#c8c2b8]"
+                />
+              </label>
+              {payHits.length > 0 && !payJobId && !payInvoiceId ? (
+                <ul className="mt-2 overflow-hidden rounded-xl border border-[#ece7e1]">
+                  {payHits.map((hit) => (
+                    <li key={hit.id}>
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-[#faf9f7]"
+                        onClick={() => {
+                          setPayQuery(hit.label);
+                          setPayJobId(hit.jobId);
+                          setPayInvoiceId(hit.invoiceId);
+                        }}
+                      >
+                        <span>{hit.label}</span>
+                        <span className="text-xs text-[#8a847c]">{hit.kind}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <p className="mt-4 text-sm text-[#6f6a64]">Method</p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {[
+                  ["check", "Check"],
+                  ["ACH", "ACH"],
+                  ["card", "Card"],
+                  ["insurance", "Insurance draw"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setPayMethod(value)}
+                    className={cn(
+                      "h-11 rounded-xl border text-sm font-medium",
+                      payMethod === value ? "border-[#1c1c1c] bg-[#1c1c1c] text-white" : "border-[#e6e1da] bg-white",
+                    )}
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="gp10">10% of gross profit</SelectItem>
-                      <SelectItem value="gp50">50/50 profit split</SelectItem>
-                      <SelectItem value="rev3">3% of contract</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="rounded-sm border border-[#dad7d1] bg-[#f3f3f3] px-3 py-3">
-                  <p className="text-xs text-[#706e6b]">Rep payout</p>
-                  <p className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
-                    {formatCurrencyFull(payout.payout)}
-                  </p>
-                  <p className="mt-1 text-xs text-[#706e6b]">
-                    Gross profit {formatCurrencyFull(payout.profit)} ({(payout.margin * 100).toFixed(1)}%)
-                  </p>
-                </div>
+                    {label}
+                  </button>
+                ))}
               </div>
-            </section>
-
-            <section className="rounded-sm border border-[#c9c9c9] bg-white p-4 shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
-              <h3 className="text-sm font-semibold text-[#181818]">Record a payment</h3>
-              <p className="mt-0.5 text-xs text-[#706e6b]">Check, ACH, card, or insurance draw</p>
-              <p className="mt-3 text-sm text-[#55524d]">
-                Opens the same payment form used on a job. It queues for QuickBooks after you save.
-              </p>
-              <Button className="mt-4 w-full" onClick={() => setPaymentOpen(true)}>
-                Record payment
+              <Button
+                type="button"
+                className={cn("mt-4 h-11 w-full rounded-xl", accRed)}
+                onClick={() => setPaymentOpen(true)}
+              >
+                Continue
               </Button>
-            </section>
-
-            <section className="overflow-hidden rounded-sm border border-[#c9c9c9] bg-white shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
-              <div className="border-b border-[#c9c9c9] bg-[#f3f3f3] px-4 py-3">
-                <h3 className="text-sm font-semibold text-[#181818]">More tools</h3>
-                <p className="mt-0.5 text-xs text-[#706e6b]">Receipts and invoices each have a review tab</p>
-              </div>
-              <ul className="divide-y divide-[#e5e5e5] text-sm">
-                <li className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div>
-                    <p>Expense review</p>
-                    <p className="text-xs text-[#706e6b]">Receipts and supplier bills</p>
-                  </div>
-                  <Button size="sm" variant="outline" onClick={() => setTab("expenses")}>
-                    Open
-                  </Button>
-                </li>
-                <li className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div>
-                    <p>Web Connector</p>
-                    <p className="text-xs text-[#706e6b]">Password, .qwc, and poll</p>
-                  </div>
-                  <Button nativeButton={false} size="sm" variant="outline" render={<Link href="/settings/integrations/quickbooks" />}>
-                    Open
-                  </Button>
-                </li>
-                <li className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div>
-                    <p>Profit and loss</p>
-                    <p className="text-xs text-[#706e6b]">Year to date books</p>
-                  </div>
-                  <Button size="sm" variant="outline" onClick={() => setTab("reports")}>
-                    Open
-                  </Button>
-                </li>
-              </ul>
             </section>
           </div>
         </TabsContent>
       </Tabs>
 
-      <LogPaymentDialog open={paymentOpen} onOpenChange={setPaymentOpen} />
+      <LogPaymentDialog
+        open={paymentOpen}
+        onOpenChange={setPaymentOpen}
+        defaultJobId={payJobId}
+        defaultInvoiceId={payInvoiceId}
+        defaultMethod={payMethod}
+      />
+      <CreateInvoiceDialog
+        open={Boolean(createJobId)}
+        onOpenChange={(open) => {
+          if (!open) setCreateJobId(null);
+        }}
+        defaultJobId={createJobId ?? undefined}
+      />
     </div>
+  );
+}
+
+function Tab({ value, children }: { value: string; children: ReactNode }) {
+  return (
+    <TabsTrigger value={value} className="h-11 flex-none rounded-none px-3 text-[15px] font-medium text-[#6f6a64] data-active:text-[#1a1a1a]">
+      {children}
+    </TabsTrigger>
+  );
+}
+
+function CloseCard({
+  title,
+  count,
+  body,
+  action,
+  onClick,
+}: {
+  title: string;
+  count: number;
+  body: string;
+  action: string;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" onClick={onClick} className="rounded-2xl bg-[#242424] p-4 text-left hover:bg-[#2c2c2c]">
+      <span className="flex items-start justify-between gap-3">
+        <span className="text-sm font-medium">{title}</span>
+        <span className="text-2xl font-semibold tabular-nums">{count}</span>
+      </span>
+      <span className="mt-3 block min-h-10 text-sm text-white/65">{body}</span>
+      <span className="mt-4 block text-sm text-white/80">{action} →</span>
+    </button>
   );
 }
 
@@ -888,44 +1005,53 @@ function Kpi({
   value,
   hint,
   warn,
+  action,
+  onAction,
 }: {
   label: string;
   value: string;
   hint: string;
   warn?: boolean;
+  action?: string;
+  onAction?: () => void;
 }) {
   return (
-    <div className="rounded-sm border border-[#c9c9c9] bg-white px-4 py-4 shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
-      <p className="text-[11px] font-semibold tracking-wide text-[#706e6b] uppercase">{label}</p>
-      <p className={cn("mt-2 text-[1.85rem] leading-none font-semibold tabular-nums", warn ? "text-primary" : "text-foreground")}>
+    <div className={cn(accCard, "px-4 py-4", warn && "border-[#f0c8c4]")}>
+      <p className={cn("text-sm", warn ? "text-[#c43832]" : "text-[#6f6a64]")}>{label}</p>
+      <p className={cn("mt-2 text-3xl font-semibold tracking-tight tabular-nums", warn ? "text-[#c43832]" : "text-[#1a1a1a]")}>
         {value}
       </p>
-      <p className="mt-2 text-sm text-[#706e6b]">{hint}</p>
+      <p className="mt-2 text-sm text-[#6f6a64]">
+        {hint}
+        {action ? (
+          <>
+            {" · "}
+            <button type="button" className="font-medium text-[#c43832] hover:underline" onClick={onAction}>
+              {action}
+            </button>
+          </>
+        ) : null}
+      </p>
     </div>
   );
 }
 
-function QbConnectionCard({
+function QbDeskCard({
   queueCount,
   invoices,
   expenses,
   payments,
   onViewQueue,
-  onReview,
+  onSync,
 }: {
   queueCount: number;
   invoices: number;
   expenses: number;
   payments: number;
   onViewQueue: () => void;
-  onReview: () => void;
+  onSync: () => void;
 }) {
-  const [info, setInfo] = useState<{
-    configured?: boolean;
-    lastConnectedAt?: string | null;
-    lastError?: string;
-  } | null>(null);
-
+  const [info, setInfo] = useState<{ configured?: boolean; lastConnectedAt?: string | null; lastError?: string } | null>(null);
   useEffect(() => {
     let cancelled = false;
     void fetch("/api/qbwc/setup")
@@ -940,92 +1066,255 @@ function QbConnectionCard({
       cancelled = true;
     };
   }, []);
-
   const connected = Boolean(info?.lastConnectedAt);
+  const stale = pollIsStale(info?.lastConnectedAt);
+  const total = Math.max(queueCount, 1);
   return (
-    <section className="overflow-hidden rounded-sm border border-[#c9c9c9] bg-white shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
-      <div className="border-b border-[#c9c9c9] bg-[#f3f3f3] px-4 py-3">
-        <h3 className="text-sm font-semibold text-[#181818]">QuickBooks Desktop</h3>
-        <p className="mt-0.5 text-xs text-[#706e6b]">Web Connector status</p>
+    <section className={cn(accCard, "p-5")}>
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold">QuickBooks Desktop</h3>
+        <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium", connected ? "bg-[#e7f6ea] text-[#217a45]" : "bg-[#f3f1ec] text-[#5c5854]")}>
+          <span className={cn("size-1.5 rounded-full", connected ? "bg-[#217a45]" : "bg-[#8a847c]")} />
+          {connected ? "Connected" : info?.configured ? "Waiting" : "Not set up"}
+        </span>
       </div>
-      <div className="space-y-3 px-4 py-4 text-sm">
-        <p className="font-medium">
-          <span
-            className={cn(
-              "mr-2 inline-block size-2.5 rounded-full",
-              connected ? "bg-[#2f7a45] shadow-[0_0_0_4px_#e3f1e6]" : "bg-[#86827b]",
-            )}
-          />
-          {connected ? "Connected" : info?.configured ? "Waiting for first poll" : "Not configured"}
+      {stale ? (
+        <p className="mt-3 rounded-xl bg-[#fbf1df] px-3 py-2 text-sm text-[#8a5a22]">
+          Last poll was {info?.lastConnectedAt ? formatDate(info.lastConnectedAt) : "never"}. Web Connector hasn’t checked in
+          since.
+          {queueCount > 0 ? " Requests are piling up." : ""}
         </p>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2">
-          <dt className="text-[#706e6b]">Last poll</dt>
-          <dd className="text-right">{info?.lastConnectedAt ? formatDate(info.lastConnectedAt) : "—"}</dd>
-          <dt className="text-[#706e6b]">In queue</dt>
-          <dd className="text-right">
-            {queueCount} request{queueCount === 1 ? "" : "s"}
-          </dd>
-        </dl>
-        <p className="text-[#706e6b]">
-          {invoices} invoices · {expenses} expenses · {payments} payments
-        </p>
-        {info?.lastError ? <p className="text-[#b3261e]">{info.lastError}</p> : null}
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" onClick={onViewQueue}>
-            View queue
-          </Button>
-          <Button size="sm" onClick={onReview}>
-            Review invoices
-          </Button>
-        </div>
+      ) : (
+        <p className="mt-3 text-sm text-[#6f6a64]">Last poll {formatDate(info?.lastConnectedAt)}</p>
+      )}
+      <div className="mt-4 flex items-end justify-between text-sm">
+        <span className="text-[#6f6a64]">In queue</span>
+        <span className="font-semibold">{queueCount} requests</span>
       </div>
-    </section>
-  );
-}
-
-function ReportCard({
-  icon,
-  title,
-  description,
-  onRun,
-}: {
-  icon: ReactNode;
-  title: string;
-  description: string;
-  onRun: () => void;
-}) {
-  return (
-    <section className="flex flex-col rounded-sm border border-[#c9c9c9] bg-white p-4 shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
-      <h3 className="flex items-center gap-2 text-sm font-semibold text-[#181818]">
-        {icon}
-        {title}
-      </h3>
-      <p className="mt-2 flex-1 text-sm text-[#706e6b]">{description}</p>
-      <div className="mt-3">
-        <Button size="sm" onClick={onRun}>
-          Run report
+      <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-[#eceae4]">
+        <span className="bg-[#1c1c1c]" style={{ width: `${(invoices / total) * 100}%` }} />
+        <span className="bg-[#8d8680]" style={{ width: `${(expenses / total) * 100}%` }} />
+        <span className="bg-[#c43832]" style={{ width: `${(payments / total) * 100}%` }} />
+      </div>
+      <p className="mt-2 text-xs text-[#8a847c]">
+        {invoices} invoices · {expenses} expenses · {payments} payments
+      </p>
+      {info?.lastError ? <p className="mt-2 text-sm text-[#c43832]">{info.lastError}</p> : null}
+      <div className="mt-4 flex gap-2">
+        <Button type="button" className="rounded-full bg-[#1c1c1c] text-white hover:bg-[#333]" onClick={onSync}>
+          Run sync now
+        </Button>
+        <Button type="button" variant="outline" className="rounded-full" onClick={onViewQueue}>
+          View queue
         </Button>
       </div>
     </section>
   );
 }
 
-function ReportPreview({
+function BlockingCard({
+  invoiceNumber,
+  invoiceId,
+  reason,
+  onOpen,
+  onRetry,
+}: {
+  invoiceNumber?: string;
+  invoiceId?: string;
+  reason: string | null;
+  onOpen: (id: string) => void;
+  onRetry: () => void;
+}) {
+  if (!invoiceNumber || !invoiceId) {
+    return (
+      <section className={cn(accCard, "p-5")}>
+        <p className="text-[11px] font-semibold tracking-[0.14em] text-[#8a847c]">BLOCKING SYNC</p>
+        <p className="mt-2 text-sm text-[#6f6a64]">Nothing is blocking QuickBooks.</p>
+      </section>
+    );
+  }
+  const noJob = Boolean(reason && /job/i.test(reason));
+  const noLines = Boolean(reason && /line item/i.test(reason));
+  return (
+    <section className={cn(accCard, "border-[#f0c8c4] p-5")}>
+      <p className="text-[11px] font-semibold tracking-[0.14em] text-[#c43832]">BLOCKING SYNC</p>
+      <h3 className="mt-2 text-base font-semibold">{invoiceNumber} can’t go to QuickBooks</h3>
+      <p className="mt-1 text-sm text-[#6f6a64]">Pick one fix to unblock it.</p>
+      <div className="mt-3 space-y-2">
+        {noJob ? (
+          <BlockAction label="Link a job" hint="no job attached" onClick={() => onOpen(invoiceId)} />
+        ) : null}
+        {noLines ? (
+          <BlockAction label="Add line items" hint="invoice is empty" href={`/invoices/${invoiceId}`} />
+        ) : null}
+        {!noJob && !noLines ? (
+          <BlockAction label="Review the invoice" hint={reason || "QuickBooks rejected it"} onClick={() => onOpen(invoiceId)} />
+        ) : null}
+        <BlockAction label="Retry sync" hint="if it’s already fixed" onClick={onRetry} />
+      </div>
+    </section>
+  );
+}
+
+function BlockAction({
+  label,
+  hint,
+  onClick,
+  href,
+}: {
+  label: string;
+  hint: string;
+  onClick?: () => void;
+  href?: string;
+}) {
+  const className = "flex w-full items-center justify-between rounded-xl border border-[#ece7e1] px-3 py-3 text-left text-sm hover:bg-[#faf9f7]";
+  const body = (
+    <>
+      <span>
+        <span className="font-medium">{label}</span>
+        <span className="text-[#8a847c]"> · {hint}</span>
+      </span>
+      <ChevronRight className="size-4 text-[#8a847c]" />
+    </>
+  );
+  if (href) {
+    return (
+      <Link href={href} className={className}>
+        {body}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" className={className} onClick={onClick}>
+      {body}
+    </button>
+  );
+}
+
+function ReportSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <p className="text-[11px] font-semibold tracking-[0.16em] text-[#8a847c] uppercase">{title}</p>
+      <div className="mt-2 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{children}</div>
+    </section>
+  );
+}
+
+function ReportCard({
   title,
-  subtitle,
-  children,
+  description,
+  metric,
+  onRun,
+  active,
+  wide,
 }: {
   title: string;
-  subtitle: string;
-  children: ReactNode;
+  description: string;
+  metric?: string;
+  onRun: () => void;
+  active?: boolean;
+  wide?: boolean;
 }) {
   return (
-    <section className="overflow-hidden rounded-sm border border-[#c9c9c9] bg-white shadow-[0_2px_2px_rgba(0,0,0,0.05)]">
-      <div className="border-b border-[#c9c9c9] bg-[#f3f3f3] px-4 py-3">
-        <h3 className="text-sm font-semibold text-[#181818]">{title}</h3>
-        <p className="mt-0.5 text-xs text-[#706e6b]">{subtitle}</p>
+    <button
+      type="button"
+      onClick={onRun}
+      className={cn(accCard, "flex items-start justify-between gap-3 p-4 text-left", wide && "xl:col-span-3", active && "ring-1 ring-[#1c1c1c]")}
+    >
+      <span>
+        <span className="block text-base font-semibold">{title}</span>
+        <span className="mt-1 block text-sm text-[#6f6a64]">{description}</span>
+        {metric ? <span className="mt-3 block text-sm font-medium">{metric}</span> : null}
+      </span>
+      <ChevronRight className="mt-1 size-4 shrink-0 text-[#8a847c]" />
+    </button>
+  );
+}
+
+function ReportPreview({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
+  return (
+    <section className={cn(accCard, "overflow-hidden")}>
+      <div className="border-b border-[#ece7e1] px-4 py-3">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <p className="mt-0.5 text-xs text-[#8a847c]">{subtitle}</p>
       </div>
       {children}
     </section>
   );
+}
+
+function PlanButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "h-10 rounded-full px-3 text-sm font-medium",
+        active ? "bg-[#1c1c1c] text-white" : "border border-[#e6e1da] bg-white text-[#1a1a1a]",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function pollIsStale(iso: string | null | undefined) {
+  if (!iso) return true;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return true;
+  return Date.now() - date.getTime() > 2 * 86_400_000;
+}
+
+function lastWord(name: string) {
+  const parts = name.trim().split(/\s+/);
+  return parts.length > 1 ? parts[parts.length - 1]! : name || "—";
+}
+
+function cityLine(job: Job) {
+  const region = [job.state, job.postalCode].filter((part) => part.trim()).join(" ");
+  return [job.city.trim(), region].filter(Boolean).join(", ");
+}
+
+function searchMoney(
+  query: string,
+  crm: {
+    invoices: { id: string; number: string; name: string; jobId: string | null; status: string; archivedAt?: string | null }[];
+    jobs: Job[];
+    customerName: (record: { jobId?: string | null; clientId?: string | null; primaryContactId?: string | null; opportunityId?: string | null }) => string;
+    getJob: (id: string) => Job | undefined;
+  },
+) {
+  const needle = query.trim().toLowerCase();
+  if (needle.length < 2) return [];
+  const hits: { id: string; label: string; kind: string; jobId: string | null; invoiceId: string | null }[] = [];
+  for (const invoice of crm.invoices) {
+    if (invoice.archivedAt || invoice.status === "void") continue;
+    const job = invoice.jobId ? crm.getJob(invoice.jobId) : undefined;
+    const customer = crm.customerName(invoice);
+    const hay = `${invoice.number} ${invoice.name} ${customer} ${job ? jobAddress(job) : ""}`.toLowerCase();
+    if (!hay.includes(needle)) continue;
+    hits.push({
+      id: invoice.id,
+      label: `${invoice.number} · ${customer || invoice.name}`,
+      kind: "Invoice",
+      jobId: invoice.jobId,
+      invoiceId: invoice.id,
+    });
+    if (hits.length >= 6) return hits;
+  }
+  for (const job of crm.jobs) {
+    if (job.deletedAt) continue;
+    const customer = crm.customerName(job);
+    const hay = `${job.code} ${job.name} ${customer} ${jobAddress(job)}`.toLowerCase();
+    if (!hay.includes(needle)) continue;
+    hits.push({
+      id: job.id,
+      label: `${customer || job.name}${job.code ? ` · ${job.code}` : ""}`,
+      kind: "Job",
+      jobId: job.id,
+      invoiceId: null,
+    });
+    if (hits.length >= 6) break;
+  }
+  return hits;
 }

@@ -1,17 +1,10 @@
 "use client";
 
 import { useEffect, useId, useState, type FormEvent } from "react";
-import { Camera, LoaderCircle, Sparkles } from "lucide-react";
+import { Camera, LoaderCircle, Sparkles, TrendingUp, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { CurrencyInput } from "@/components/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,10 +26,24 @@ import { invoiceBalance } from "@/lib/money";
 import { matchVendorName, vendorChoices } from "@/lib/qb-vendors";
 import { VendorPicker } from "@/components/vendor-picker";
 import {
+  DateField,
+  InfoNote,
+  QuickFooter,
+  QuickHeader,
+  QuickHint,
+  QuickLabel,
+  QuickSection,
+  RecordSearch,
+  Segmented,
+  SyncBadge,
+  quickDialogBodyClass,
+  quickDialogClass,
+  quickFieldClass,
+} from "@/components/quick-action-form";
+import { formatDate, formatMoney } from "@/lib/format";
+import {
   EXPENSE_ACCOUNT_LABELS,
   EXPENSE_ACCOUNTS,
-  EXPENSE_METHOD_LABELS,
-  EXPENSE_METHODS,
   type ExpenseAccount,
   type ExpenseMethod,
 } from "@/lib/types";
@@ -74,12 +81,19 @@ function ReceiptFields({
   previewUrl,
   fileName,
   onFile,
+  title,
+  detail,
+  label,
 }: {
   previewUrl: string;
   fileName?: string;
   onFile: (file: File, dataUrl: string) => void;
+  title: string;
+  detail: string;
+  label: string;
 }) {
   const inputId = useId();
+  const [dragOver, setDragOver] = useState(false);
   const showingPdf = fileName
     ? isPdfFile({ name: fileName, type: "" })
     : previewUrl.startsWith("data:application/pdf");
@@ -87,7 +101,7 @@ function ReceiptFields({
   async function handle(file: File | undefined) {
     if (!file) return;
     if (!isReceiptUpload(file)) {
-      toast.error("Use a photo or PDF of the receipt.");
+      toast.error("Use a photo or PDF.");
       return;
     }
     const receipt =
@@ -103,37 +117,104 @@ function ReceiptFields({
   }
 
   return (
-    <div className="grid gap-2">
-      <Label htmlFor={inputId}>Receipt</Label>
-      <p className="text-xs text-muted-foreground">
-        Required. A photo or a PDF. It stays on the record.
-      </p>
-      {previewUrl ? (
-        showingPdf ? (
-          <div className="flex h-32 flex-col items-center justify-center gap-1 border bg-muted px-3 text-sm">
-            <span className="font-medium">PDF attached</span>
-            {fileName ? (
-              <span className="max-w-full truncate text-xs text-muted-foreground">{fileName}</span>
-            ) : null}
-          </div>
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <Label htmlFor={inputId} className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+        {label} <span className="text-primary">*</span>
+      </Label>
+      <div
+        className={`flex min-h-64 flex-1 flex-col items-center justify-center rounded-xl border border-dashed bg-white px-6 py-8 text-center ${
+          dragOver ? "border-primary bg-primary/5" : "border-neutral-300"
+        }`}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragOver(false);
+          void handle(event.dataTransfer.files?.[0]);
+        }}
+      >
+        {previewUrl ? (
+          showingPdf ? (
+            <div className="grid gap-1">
+              <p className="text-sm font-medium">PDF attached</p>
+              {fileName ? (
+                <p className="max-w-full truncate text-xs text-muted-foreground">{fileName}</p>
+              ) : null}
+            </div>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={previewUrl} alt="" className="max-h-56 w-full object-contain" />
+          )
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={previewUrl} alt="Receipt" className="max-h-48 w-full border object-contain bg-muted" />
-        )
-      ) : (
-        <div className="flex h-32 items-center justify-center border border-dashed text-sm text-muted-foreground">
-          No receipt yet
-        </div>
-      )}
-      <Input
-        id={inputId}
-        type="file"
-        accept="image/*,application/pdf,.pdf"
-        onChange={(event) => void handle(event.target.files?.[0])}
-      />
-      <p className="text-[11px] text-muted-foreground">
-        Photo or PDF. On a phone, take a picture or choose a file.
-      </p>
+          <>
+            <span className="grid size-14 place-items-center rounded-full bg-neutral-100 text-neutral-500">
+              <Camera className="size-6" />
+            </span>
+            <p className="mt-4 text-sm font-semibold">{title}</p>
+            <p className="mt-1 max-w-[16rem] text-xs leading-relaxed text-muted-foreground">{detail}</p>
+          </>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          className="mt-4 h-9 rounded-lg bg-white px-4"
+          onClick={() => document.getElementById(inputId)?.click()}
+        >
+          Choose file
+        </Button>
+        <Input
+          id={inputId}
+          type="file"
+          accept="image/*,application/pdf,.pdf"
+          className="sr-only"
+          onChange={(event) => void handle(event.target.files?.[0])}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ReadWithAi({
+  title,
+  detail,
+  ready,
+  reading,
+  disabled,
+  onClick,
+}: {
+  title: string;
+  detail: string;
+  ready: boolean | null;
+  reading: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className="grid gap-2">
+      <button
+        type="button"
+        disabled={disabled || reading}
+        onClick={onClick}
+        className="flex items-start gap-2.5 rounded-xl border bg-white px-3 py-3 text-left disabled:opacity-60"
+      >
+        {reading ? (
+          <LoaderCircle className="mt-0.5 size-4 shrink-0 animate-spin text-primary" />
+        ) : (
+          <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
+        )}
+        <span>
+          <span className="block text-sm font-semibold">{reading ? "Reading…" : title}</span>
+          <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{detail}</span>
+        </span>
+      </button>
+      {ready === false ? (
+        <p className="text-xs text-muted-foreground">
+          This host has no AI key, so the fields stay blank. The photo still saves on the record.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -156,6 +237,7 @@ export function LogExpenseDialog({
   const [incurredAt, setIncurredAt] = useState(localYmd(new Date()));
   const [account, setAccount] = useState<ExpenseAccount>("materials");
   const [method, setMethod] = useState<ExpenseMethod>("credit_card");
+  const [posting, setPosting] = useState<"job" | "overhead">("job");
   const [jobId, setJobId] = useState(defaultJobId ?? "");
   const [memo, setMemo] = useState("");
   const [extractedByAi, setExtractedByAi] = useState(false);
@@ -175,6 +257,7 @@ export function LogExpenseDialog({
     setIncurredAt(localYmd(new Date()));
     setAccount("materials");
     setMethod("credit_card");
+    setPosting("job");
     setJobId(defaultJobId ?? "");
     setMemo("");
     setExtractedByAi(false);
@@ -223,9 +306,13 @@ export function LogExpenseDialog({
       toast.error("Add a photo or PDF of the receipt.");
       return;
     }
-    const assignedJobId = defaultJobId || jobId;
-    if (expenseRequiresJob(account) && !assignedJobId) {
-      toast.error("Pick the job. QuickBooks costs this to Customer:Job, not company overhead.");
+    const assignedJobId = posting === "overhead" ? "" : defaultJobId || jobId;
+    if (posting === "job" && !assignedJobId) {
+      toast.error("Pick the job. QuickBooks costs this to Customer:Job.");
+      return;
+    }
+    if (posting === "overhead" && expenseRequiresJob(account)) {
+      toast.error("Office and insurance can stay on the company. Switch the account, or post this as a job cost.");
       return;
     }
     setPending(true);
@@ -249,196 +336,200 @@ export function LogExpenseDialog({
     }
   }
 
+  const paidWith: { value: ExpenseMethod; label: string }[] = [
+    { value: "credit_card", label: "Card" },
+    { value: "check", label: "Check" },
+    { value: "cash", label: "Cash" },
+  ];
+  if (method === "debit") paidWith.splice(1, 0, { value: "debit", label: "Debit" });
+  if (method === "ach") paidWith.push({ value: "ach", label: "ACH" });
+  const jobs = jobChoices(crm);
+  const logger = crm.effectiveStaff?.name.trim() || crm.user.name.trim() || "you";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Log expense</DialogTitle>
-          <DialogDescription>
-            Same idea as a QuickBooks check or credit-card expense: vendor, account, job, and the
-            receipt. Job costs post onto Customer:Job. Office and insurance can stay on the company.
-            The receipt is required even if you type the numbers.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={onSubmit} className="grid gap-3">
-          <ReceiptFields
-            previewUrl={preview}
-            fileName={file?.name}
-            onFile={(nextFile, dataUrl) => {
-              setFile(nextFile);
-              setPreview(dataUrl);
-              setExtractedByAi(false);
-              void applyExpenseExtract(dataUrl);
-            }}
-          />
-          <Button
-            type="button"
-            variant="outline"
-            disabled={!preview || reading}
-            onClick={() => void applyExpenseExtract(preview)}
-          >
-            {reading ? <LoaderCircle className="animate-spin" /> : <Sparkles />}
-            {reading ? "Reading…" : "Read receipt with AI"}
-          </Button>
-          {aiReady === false ? (
-            <p className="text-xs text-muted-foreground">
-              This host has no OPENAI_API_KEY or ANTHROPIC_API_KEY, so AI cannot fill the fields. The photo
-              still saves on the expense.
-            </p>
-          ) : null}
-          <div className="grid gap-1.5">
-            <Label>Vendor</Label>
-            <p className="text-xs text-muted-foreground">
-              Pick the payee as it appears in QuickBooks so the connector does not create a second
-              vendor. Type a new name only when it is not in the company file yet.
-            </p>
-            <VendorPicker
-              value={vendor}
-              onChange={setVendor}
-              names={vendors.fromQb.map((item) => item.name)}
-              extraNames={vendors.extras}
-              emptyHint={
-                vendors.fromQb.length === 0
-                  ? "No vendors pulled yet. Run the Web Connector (or Pull vendors in Settings), or type the payee."
-                  : "No matching vendor. Type the name QuickBooks should use."
-              }
-            />
-            <input type="text" value={vendor} onChange={() => undefined} required className="sr-only" tabIndex={-1} />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="exp-invoice">Invoice number</Label>
-            <p className="text-xs text-muted-foreground">
-              The number printed on the vendor invoice or receipt. QuickBooks keeps the first 11
-              characters as the bill or charge reference.
-            </p>
-            <Input
-              id="exp-invoice"
-              value={invoiceNumber}
-              onChange={(event) => setInvoiceNumber(event.target.value)}
-              placeholder="88421"
-              autoComplete="off"
-            />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-1.5">
-              <Label htmlFor="exp-amt">Amount</Label>
-              <CurrencyInput id="exp-amt" value={amount} onValueChange={setAmount} required />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="exp-date">Date</Label>
-              <Input
-                id="exp-date"
-                type="date"
-                value={incurredAt}
-                onChange={(event) => setIncurredAt(event.target.value)}
-                required
+      <DialogContent className={quickDialogClass("wide")}>
+        <QuickHeader
+          tone="rose"
+          icon={<ReceiptIcon />}
+          title="Log expense"
+          description="Posts to QuickBooks as a card charge or check, with the receipt attached."
+          aside={<SyncBadge />}
+        />
+        <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className={`${quickDialogBodyClass} grid flex-1 lg:grid-cols-[18rem_minmax(0,1fr)]`}>
+            <div className="flex flex-col gap-3 border-b bg-[#f7f6f3] p-4 lg:border-r lg:border-b-0">
+              <ReceiptFields
+                label="Receipt"
+                title="Snap or drop the receipt"
+                detail="Photo or PDF. Required even if you type the numbers. It stays on the record."
+                previewUrl={preview}
+                fileName={file?.name}
+                onFile={(nextFile, dataUrl) => {
+                  setFile(nextFile);
+                  setPreview(dataUrl);
+                  setExtractedByAi(false);
+                  void applyExpenseExtract(dataUrl);
+                }}
+              />
+              <ReadWithAi
+                title="Read receipt with AI"
+                detail="Fills vendor, amount, date and invoice # once a receipt is attached."
+                ready={aiReady}
+                reading={reading}
+                disabled={!preview}
+                onClick={() => void applyExpenseExtract(preview)}
               />
             </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-1.5">
-              <Label>Account</Label>
-              <Select
-                value={account}
-                onValueChange={(value) => setAccount(value as ExpenseAccount)}
-                items={EXPENSE_ACCOUNTS.map((item) => ({
-                  value: item,
-                  label: EXPENSE_ACCOUNT_LABELS[item],
-                }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {EXPENSE_ACCOUNTS.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {EXPENSE_ACCOUNT_LABELS[item]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="min-h-0 space-y-4 overflow-y-auto p-5">
+              <QuickSection>Vendor & amount</QuickSection>
+              <div>
+                <QuickLabel required>Vendor</QuickLabel>
+                <VendorPicker
+                  appearance="search"
+                  placeholder="Search QuickBooks vendors"
+                  value={vendor}
+                  onChange={setVendor}
+                  names={vendors.fromQb.map((item) => item.name)}
+                  extraNames={vendors.extras}
+                  emptyHint={
+                    vendors.fromQb.length === 0
+                      ? "No vendors pulled yet. Run the Web Connector (or Pull vendors in Settings), or type the payee."
+                      : "No matching vendor. Type the name QuickBooks should use."
+                  }
+                />
+                <QuickHint>
+                  Pick the vendor as it appears in QuickBooks. Type a new name only if they’re not there yet.
+                </QuickHint>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <QuickLabel htmlFor="exp-amt" required>Amount</QuickLabel>
+                  <CurrencyInput id="exp-amt" className={quickFieldClass} value={amount} onValueChange={setAmount} required />
+                </div>
+                <div>
+                  <QuickLabel htmlFor="exp-date">Date</QuickLabel>
+                  <DateField
+                    id="exp-date"
+                    label="Date"
+                    value={incurredAt}
+                    display={formatDate}
+                    onChange={setIncurredAt}
+                  />
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <QuickLabel htmlFor="exp-invoice" optional>Invoice #</QuickLabel>
+                  <Input
+                    id="exp-invoice"
+                    className={quickFieldClass}
+                    value={invoiceNumber}
+                    onChange={(event) => setInvoiceNumber(event.target.value)}
+                    placeholder="From the receipt"
+                    autoComplete="off"
+                  />
+                  <QuickHint>First 11 characters sync.</QuickHint>
+                </div>
+                <div>
+                  <QuickLabel>Paid with</QuickLabel>
+                  <Segmented
+                    label="Paid with"
+                    value={method}
+                    onChange={setMethod}
+                    options={paidWith}
+                  />
+                </div>
+              </div>
+              <QuickSection>Where it posts</QuickSection>
+              <div>
+                <Segmented
+                  label="Where it posts"
+                  value={posting}
+                  onChange={setPosting}
+                  options={[
+                    { value: "job", label: "Job cost" },
+                    { value: "overhead", label: "Company overhead" },
+                  ]}
+                />
+                <QuickHint>
+                  Job costs post to Customer:Job. Switch to overhead for office, insurance and other company costs.
+                </QuickHint>
+              </div>
+              <div className={posting === "job" ? "grid gap-3 sm:grid-cols-2" : "grid gap-3"}>
+                <div>
+                  <QuickLabel>Account</QuickLabel>
+                  <Select
+                    value={account}
+                    onValueChange={(value) => setAccount(value as ExpenseAccount)}
+                    items={EXPENSE_ACCOUNTS.map((item) => ({
+                      value: item,
+                      label: EXPENSE_ACCOUNT_LABELS[item],
+                    }))}
+                  >
+                    <SelectTrigger className={`${quickFieldClass} w-full`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {EXPENSE_ACCOUNTS.map((item) => (
+                        <SelectItem key={item} value={item}>
+                          {EXPENSE_ACCOUNT_LABELS[item]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {posting === "job" ? (
+                  <div>
+                    <QuickLabel required>Job</QuickLabel>
+                    <RecordSearch
+                      label="Job"
+                      placeholder="Search jobs"
+                      value={jobId}
+                      onChange={setJobId}
+                      disabled={Boolean(defaultJobId)}
+                      options={jobs}
+                      emptyText="No matching jobs."
+                    />
+                  </div>
+                ) : null}
+              </div>
+              <div>
+                <QuickLabel htmlFor="exp-memo" optional>Memo</QuickLabel>
+                <Textarea
+                  id="exp-memo"
+                  rows={3}
+                  value={memo}
+                  onChange={(event) => setMemo(event.target.value)}
+                  placeholder="What it was for, the way you’d write it in QuickBooks"
+                  className="min-h-20 rounded-lg bg-white"
+                />
+              </div>
             </div>
-            <div className="grid gap-1.5">
-              <Label>Paid with</Label>
-              <Select
-                value={method}
-                onValueChange={(value) => setMethod(value as ExpenseMethod)}
-                items={EXPENSE_METHODS.map((item) => ({
-                  value: item,
-                  label: EXPENSE_METHOD_LABELS[item],
-                }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {EXPENSE_METHODS.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {EXPENSE_METHOD_LABELS[item]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </div>
-          <div className="grid gap-1.5">
-            <Label>Job</Label>
-            <p className="text-xs text-muted-foreground">
-              {defaultJobId
-                ? "Logged on this job. QuickBooks will cost it to Customer:Job, not company overhead."
-                : expenseRequiresJob(account)
-                  ? "Required. QuickBooks costs materials, labor, and other job accounts to Customer:Job."
-                  : "Office and insurance can stay on the company. Assign a job if this cost belongs on one."}
-            </p>
-            <Select
-              value={jobId || (defaultJobId || expenseRequiresJob(account) ? "" : "none")}
-              onValueChange={(value) => setJobId(value === "none" ? "" : String(value))}
-              disabled={Boolean(defaultJobId)}
-              items={
-                defaultJobId || expenseRequiresJob(account)
-                  ? jobChoices(crm)
-                  : [{ value: "none", label: "Overhead — not a job" }, ...jobChoices(crm)]
-              }
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a job" />
-              </SelectTrigger>
-              <SelectContent>
-                {defaultJobId || expenseRequiresJob(account) ? null : (
-                  <SelectItem value="none">Overhead — not a job</SelectItem>
-                )}
-                {jobChoices(crm).map((job) => (
-                  <SelectItem key={job.value} value={job.value}>
-                    {job.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="exp-memo">Memo</Label>
-            <Textarea
-              id="exp-memo"
-              rows={3}
-              value={memo}
-              onChange={(event) => setMemo(event.target.value)}
-              placeholder="What this is for, in QuickBooks language."
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Logged by {crm.effectiveStaff?.name.trim() || crm.user.name.trim() || "you"}
-          </p>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {pending ? "Saving…" : "Save expense"}
-            </Button>
-          </DialogFooter>
+          <QuickFooter
+            onCancel={() => onOpenChange(false)}
+            pending={pending}
+            submitLabel="Save expense"
+            note={
+              <span className="inline-flex items-center gap-1.5">
+                <UserRound className="size-3.5" />
+                Logged by {logger}
+              </span>
+            }
+          />
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ReceiptIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <path d="M7 3.5h10a1 1 0 0 1 1 1V20l-2-1.2-2 1.2-2-1.2-2 1.2-2-1.2-2 1.2V4.5a1 1 0 0 1 1-1Z" />
+      <path d="M9 8h6M9 12h6" />
+    </svg>
   );
 }
 
@@ -447,16 +538,19 @@ export function LogPaymentDialog({
   onOpenChange,
   defaultJobId,
   defaultInvoiceId,
+  defaultMethod,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultJobId?: string | null;
   defaultInvoiceId?: string | null;
+  defaultMethod?: string | null;
 }) {
   const crm = useCrm();
   const [file, setFile] = useState<File | undefined>();
   const [preview, setPreview] = useState("");
   const [jobId, setJobId] = useState(defaultJobId ?? "");
+  const [applyTo, setApplyTo] = useState<"invoice" | "deposit">("invoice");
   const [invoiceId, setInvoiceId] = useState(defaultInvoiceId ?? "");
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState("check");
@@ -478,9 +572,10 @@ export function LogPaymentDialog({
     setFile(undefined);
     setPreview("");
     setJobId(defaultJobId ?? "");
+    setApplyTo("invoice");
     setInvoiceId(defaultInvoiceId ?? "");
     setAmount("");
-    setMethod("check");
+    setMethod(defaultMethod || "check");
     setPaidAt(localYmd(new Date()));
     setReference("");
     void fetch("/api/receipts/extract", { cache: "no-store" })
@@ -489,7 +584,7 @@ export function LogPaymentDialog({
         setAiReady(Boolean(body.openai || body.anthropic));
       })
       .catch(() => setAiReady(null));
-  }, [open, defaultJobId, defaultInvoiceId]);
+  }, [open, defaultJobId, defaultInvoiceId, defaultMethod]);
 
   useEffect(() => {
     const invoice = crm.invoices.find((item) => item.id === invoiceId);
@@ -532,10 +627,18 @@ export function LogPaymentDialog({
       toast.error("Add a photo or PDF of the check, remit, or deposit slip.");
       return;
     }
+    if (!jobId) {
+      toast.error("Pick the job.");
+      return;
+    }
+    if (applyTo === "invoice" && !invoiceId) {
+      toast.error("Choose an open invoice, or switch to deposit only.");
+      return;
+    }
     setPending(true);
     try {
       const saved = await crm.recordPayment({
-        invoiceId: invoiceId || null,
+        invoiceId: applyTo === "deposit" ? null : invoiceId || null,
         jobId: jobId || null,
         amount: value,
         method,
@@ -550,154 +653,180 @@ export function LogPaymentDialog({
     }
   }
 
+  const methods = [
+    { value: "check", label: "Check" },
+    { value: "ACH", label: "ACH" },
+    { value: "card", label: "Card" },
+    { value: "cash", label: "Cash" },
+    { value: "insurance", label: "Insurance draw" },
+  ];
+  if (method && !methods.some((item) => item.value === method)) {
+    methods.push({ value: method, label: method === "wire" ? "Wire" : method });
+  }
+  const selectedInvoice = invoices.find((invoice) => invoice.id === invoiceId) ?? null;
+  const balance =
+    applyTo === "invoice" && selectedInvoice
+      ? invoiceBalance(selectedInvoice.id, crm.invoiceLines, crm.payments)
+      : null;
+  const paymentValue = Number(amount) || 0;
+  const leftAfter = balance == null ? null : balance - paymentValue;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Log payment</DialogTitle>
-          <DialogDescription>
-            Receive payment like QuickBooks: apply it to an invoice when you can, keep the check
-            image either way.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={onSubmit} className="grid gap-3">
-          <ReceiptFields
-            previewUrl={preview}
-            fileName={file?.name}
-            onFile={(nextFile, dataUrl) => {
-              setFile(nextFile);
-              setPreview(dataUrl);
-              void applyPaymentExtract(dataUrl);
-            }}
+      <DialogContent className={quickDialogClass("wide")}>
+        <QuickHeader
+          tone="green"
+          icon={<DollarIcon />}
+          title="Log payment"
+          description="Receive a payment and apply it to an invoice. The check image stays on the record either way."
+          aside={<SyncBadge />}
+        />
+        <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className={`${quickDialogBodyClass} grid flex-1 lg:grid-cols-[18rem_minmax(0,1fr)]`}>
+            <div className="flex flex-col gap-3 border-b bg-[#f7f6f3] p-4 lg:border-r lg:border-b-0">
+              <ReceiptFields
+                label="Check or remittance"
+                title="Snap or drop the check"
+                detail="Front of the check, or the remittance slip. Photo or PDF."
+                previewUrl={preview}
+                fileName={file?.name}
+                onFile={(nextFile, dataUrl) => {
+                  setFile(nextFile);
+                  setPreview(dataUrl);
+                  void applyPaymentExtract(dataUrl);
+                }}
+              />
+              <ReadWithAi
+                title="Read check with AI"
+                detail="Fills amount, date and check # once an image is attached."
+                ready={aiReady}
+                reading={reading}
+                disabled={!preview}
+                onClick={() => void applyPaymentExtract(preview)}
+              />
+            </div>
+            <div className="min-h-0 space-y-4 overflow-y-auto p-5">
+              <QuickSection>Job & invoice</QuickSection>
+              <div>
+                <QuickLabel required>Job</QuickLabel>
+                <RecordSearch
+                  label="Job"
+                  placeholder="Search jobs and pipeline leads"
+                  value={jobId}
+                  onChange={(next) => {
+                    setJobId(next);
+                    if (invoiceId) {
+                      const invoice = crm.invoices.find((item) => item.id === invoiceId);
+                      if (invoice && invoice.jobId !== next) setInvoiceId("");
+                    }
+                  }}
+                  disabled={Boolean(defaultJobId)}
+                  options={jobChoices(crm)}
+                  emptyText="No matching jobs."
+                />
+                <QuickHint>Leads in the pipeline count as jobs. Bids still in play show their stage.</QuickHint>
+              </div>
+              <div>
+                <QuickLabel>Apply to</QuickLabel>
+                <Segmented
+                  label="Apply to"
+                  value={applyTo}
+                  onChange={(next) => {
+                    setApplyTo(next);
+                    if (next === "deposit") setInvoiceId("");
+                  }}
+                  options={[
+                    { value: "invoice", label: "An open invoice" },
+                    { value: "deposit", label: "Deposit only" },
+                  ]}
+                />
+              </div>
+              <div>
+                <QuickLabel>Invoice</QuickLabel>
+                <Select
+                  value={invoiceId || null}
+                  onValueChange={(value) => setInvoiceId(value ? String(value) : "")}
+                  disabled={applyTo === "deposit"}
+                  items={invoices.map((invoice) => ({
+                    value: invoice.id,
+                    label: `${invoice.number} · ${invoice.name}`,
+                  }))}
+                >
+                  <SelectTrigger className={`${quickFieldClass} w-full`}>
+                    <SelectValue placeholder="Choose an open invoice" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {invoices.map((invoice) => (
+                      <SelectItem key={invoice.id} value={invoice.id}>
+                        {invoice.number} · {invoice.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <QuickSection>Payment</QuickSection>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <QuickLabel htmlFor="pay2-amt" required>Amount</QuickLabel>
+                  <CurrencyInput id="pay2-amt" className={quickFieldClass} value={amount} onValueChange={setAmount} required />
+                </div>
+                <div>
+                  <QuickLabel htmlFor="pay2-date">Date received</QuickLabel>
+                  <DateField
+                    id="pay2-date"
+                    label="Date received"
+                    value={paidAt}
+                    display={formatDate}
+                    onChange={setPaidAt}
+                  />
+                </div>
+              </div>
+              <div>
+                <QuickLabel>Method</QuickLabel>
+                <Segmented label="Method" value={method} onChange={setMethod} options={methods} />
+              </div>
+              <div>
+                <QuickLabel htmlFor="pay2-ref" optional>Check #</QuickLabel>
+                <Input
+                  id="pay2-ref"
+                  className={quickFieldClass}
+                  value={reference}
+                  onChange={(event) => setReference(event.target.value)}
+                  placeholder="Printed top right of the check"
+                />
+              </div>
+              <div className="grid grid-cols-3 overflow-hidden rounded-lg border bg-[#fafaf8]">
+                <div className="px-3 py-3">
+                  <p className="text-xs text-muted-foreground">Invoice balance</p>
+                  <p className="mt-1 text-sm">{balance == null ? "—" : formatMoney(balance)}</p>
+                </div>
+                <div className="border-l px-3 py-3">
+                  <p className="text-xs text-muted-foreground">This payment</p>
+                  <p className="mt-1 text-sm font-semibold">{formatMoney(paymentValue)}</p>
+                </div>
+                <div className="border-l px-3 py-3">
+                  <p className="text-xs text-muted-foreground">Left after</p>
+                  <p className="mt-1 text-sm">{leftAfter == null ? "—" : formatMoney(leftAfter)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <QuickFooter
+            onCancel={() => onOpenChange(false)}
+            pending={pending}
+            submitLabel="Save payment"
           />
-          <Button
-            type="button"
-            variant="outline"
-            disabled={!preview || reading}
-            onClick={() => void applyPaymentExtract(preview)}
-          >
-            {reading ? <LoaderCircle className="animate-spin" /> : <Camera />}
-            {reading ? "Reading…" : "Read check / remit with AI"}
-          </Button>
-          {aiReady === false ? (
-            <p className="text-xs text-muted-foreground">
-              This host has no OPENAI_API_KEY or ANTHROPIC_API_KEY, so AI cannot fill the fields. The photo
-              still saves on the payment.
-            </p>
-          ) : null}
-          <div className="grid gap-1.5">
-            <Label>Job</Label>
-            <p className="text-xs text-muted-foreground">
-              Pipeline leads are jobs. Pick the stage-labeled row when the check is for a bid still in play.
-            </p>
-            <Select
-              value={jobId || "none"}
-              onValueChange={(value) => setJobId(value === "none" ? "" : String(value))}
-              items={[
-                { value: "none", label: "Select a job" },
-                ...jobChoices(crm),
-              ]}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a job" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Select a job</SelectItem>
-                {jobChoices(crm).map((job) => (
-                  <SelectItem key={job.value} value={job.value}>
-                    {job.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Invoice</Label>
-            <Select
-              value={invoiceId || "none"}
-              onValueChange={(value) => setInvoiceId(value === "none" ? "" : String(value))}
-              items={[
-                { value: "none", label: "Unapplied — deposit only" },
-                ...invoices.map((invoice) => ({
-                  value: invoice.id,
-                  label: `${invoice.number} · ${invoice.name}`,
-                })),
-              ]}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Apply to invoice" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Unapplied — deposit only</SelectItem>
-                {invoices.map((invoice) => (
-                  <SelectItem key={invoice.id} value={invoice.id}>
-                    {invoice.number} · {invoice.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-1.5">
-              <Label htmlFor="pay2-amt">Amount</Label>
-              <CurrencyInput id="pay2-amt" value={amount} onValueChange={setAmount} required />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="pay2-date">Date</Label>
-              <Input
-                id="pay2-date"
-                type="date"
-                value={paidAt}
-                onChange={(event) => setPaidAt(event.target.value)}
-                required
-              />
-            </div>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-1.5">
-              <Label>Method</Label>
-              <Select
-                value={method}
-                onValueChange={(value) => setMethod(String(value ?? "check"))}
-                items={[
-                  { value: "check", label: "Check" },
-                  { value: "ACH", label: "ACH" },
-                  { value: "wire", label: "Wire" },
-                  { value: "card", label: "Card" },
-                ]}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="check">Check</SelectItem>
-                  <SelectItem value="ACH">ACH</SelectItem>
-                  <SelectItem value="wire">Wire</SelectItem>
-                  <SelectItem value="card">Card</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="pay2-ref">Reference</Label>
-              <Input
-                id="pay2-ref"
-                value={reference}
-                onChange={(event) => setReference(event.target.value)}
-                placeholder="Check number"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {pending ? "Saving…" : "Save payment"}
-            </Button>
-          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function DollarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <path d="M12 3v18M16.5 7.5c0-1.7-1.8-3-4.5-3S7.5 5.8 7.5 7.5 9.3 10.5 12 10.5s4.5 1.2 4.5 3-1.8 3-4.5 3-4.5-1.3-4.5-3" />
+    </svg>
   );
 }
 
@@ -720,6 +849,16 @@ export function LogForecastedExpenseDialog({
   const [pending, setPending] = useState(false);
   const vendors = vendorChoices(crm.qbVendors ?? [], crm.expenses);
   const jobs = jobChoices(crm);
+
+  useEffect(() => {
+    if (!open) return;
+    setVendor("");
+    setAmount("");
+    setExpectedAt(localYmd(new Date()));
+    setAccount("materials");
+    setJobId(defaultJobId ?? "");
+    setMemo("");
+  }, [open, defaultJobId]);
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
@@ -746,112 +885,100 @@ export function LogForecastedExpenseDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Log forecasted expense</DialogTitle>
-          <DialogDescription>
-            A forecasted estimate of a cost that has not been incurred. It shows on the job under
-            Forecasted expenses and rolls into the projected column. It does not need a receipt and
-            does not post to QuickBooks.
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={onSubmit} className="grid gap-3">
-          <div className="grid gap-1.5">
-            <Label>Vendor</Label>
-            <VendorPicker
-              value={vendor}
-              onChange={setVendor}
-              names={vendors.fromQb.map((item) => item.name)}
-              extraNames={vendors.extras}
-              emptyHint={
-                vendors.fromQb.length === 0
-                  ? "No vendors pulled yet. Type the payee you expect to use."
-                  : "No matching vendor. Type the name you expect to pay."
-              }
-            />
-            <input type="text" value={vendor} onChange={() => undefined} required className="sr-only" tabIndex={-1} />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-1.5">
-              <Label htmlFor="fest-amt">Amount</Label>
-              <CurrencyInput id="fest-amt" value={amount} onValueChange={setAmount} required />
+      <DialogContent className={quickDialogClass("xl")}>
+        <QuickHeader
+          tone="blue"
+          icon={<TrendingUp className="size-5" />}
+          title="Forecast an expense"
+          description="Plan a cost that hasn’t happened yet. It rolls into the job’s projected column."
+        />
+        <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className={`${quickDialogBodyClass} flex-1 space-y-4 px-5 py-4`}>
+            <InfoNote>No receipt needed. Forecasts don’t post to QuickBooks.</InfoNote>
+            <div>
+              <QuickLabel required>Job</QuickLabel>
+              <RecordSearch
+                label="Job"
+                placeholder="Search jobs"
+                value={jobId}
+                onChange={setJobId}
+                disabled={Boolean(defaultJobId)}
+                options={jobs}
+                emptyText="No matching jobs."
+              />
+              <QuickHint>Shows under Forecasted expenses on this job.</QuickHint>
             </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="fest-date">Expected date</Label>
-              <Input
-                id="fest-date"
-                type="date"
-                value={expectedAt}
-                onChange={(event) => setExpectedAt(event.target.value)}
-                required
+            <div>
+              <QuickLabel optional>Vendor</QuickLabel>
+              <VendorPicker
+                appearance="search"
+                placeholder="Search QuickBooks vendors"
+                value={vendor}
+                onChange={setVendor}
+                names={vendors.fromQb.map((item) => item.name)}
+                extraNames={vendors.extras}
+                emptyHint={
+                  vendors.fromQb.length === 0
+                    ? "No vendors pulled yet. Type the payee you expect to use."
+                    : "No matching vendor. Type the name you expect to pay."
+                }
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <QuickLabel htmlFor="fest-amt" required>Estimated amount</QuickLabel>
+                <CurrencyInput id="fest-amt" className={quickFieldClass} value={amount} onValueChange={setAmount} required />
+              </div>
+              <div>
+                <QuickLabel htmlFor="fest-date">Expected date</QuickLabel>
+                <DateField
+                  id="fest-date"
+                  label="Expected date"
+                  value={expectedAt}
+                  display={formatDate}
+                  onChange={setExpectedAt}
+                />
+              </div>
+            </div>
+            <div>
+              <QuickLabel>Account</QuickLabel>
+              <Select
+                value={account}
+                onValueChange={(value) => setAccount(value as ExpenseAccount)}
+                items={EXPENSE_ACCOUNTS.map((item) => ({
+                  value: item,
+                  label: EXPENSE_ACCOUNT_LABELS[item],
+                }))}
+              >
+                <SelectTrigger className={`${quickFieldClass} w-full`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EXPENSE_ACCOUNTS.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {EXPENSE_ACCOUNT_LABELS[item]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <QuickLabel htmlFor="fest-memo" optional>Memo</QuickLabel>
+              <Textarea
+                id="fest-memo"
+                value={memo}
+                onChange={(event) => setMemo(event.target.value)}
+                placeholder="What you expect to spend, and why"
+                rows={3}
+                className="min-h-24 rounded-lg bg-white"
               />
             </div>
           </div>
-          <div className="grid gap-1.5">
-            <Label>Account</Label>
-            <Select
-              value={account}
-              onValueChange={(value) => setAccount(value as ExpenseAccount)}
-              items={EXPENSE_ACCOUNTS.map((item) => ({
-                value: item,
-                label: EXPENSE_ACCOUNT_LABELS[item],
-              }))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {EXPENSE_ACCOUNTS.map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {EXPENSE_ACCOUNT_LABELS[item]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label>Job</Label>
-            <p className="text-xs text-muted-foreground">
-              {defaultJobId
-                ? "Logged on this job’s financials."
-                : "Required. The forecasted estimate shows under Forecasted expenses on that job."}
-            </p>
-            <Select
-              value={jobId}
-              onValueChange={(value) => setJobId(String(value ?? ""))}
-              disabled={Boolean(defaultJobId)}
-              items={jobs}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Choose a job" />
-              </SelectTrigger>
-              <SelectContent>
-                {jobs.map((job) => (
-                  <SelectItem key={job.value} value={job.value}>
-                    {job.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="fest-memo">Memo</Label>
-            <Textarea
-              id="fest-memo"
-              value={memo}
-              onChange={(event) => setMemo(event.target.value)}
-              placeholder="What you expect to spend, and why"
-              rows={3}
-            />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={pending}>
-              {pending ? "Saving…" : "Save forecast"}
-            </Button>
-          </DialogFooter>
+          <QuickFooter
+            onCancel={() => onOpenChange(false)}
+            pending={pending}
+            submitLabel="Save forecast"
+          />
         </form>
       </DialogContent>
     </Dialog>
