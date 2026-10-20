@@ -1,18 +1,14 @@
 import { INVITE_DAYS, inviteSignupUrl } from "@/lib/accounts";
 import { appOrigin } from "@/lib/app-origin";
 import { loadProfileCompany } from "@/lib/eagleview-server";
-import {
-  emailTemplateHasOverride,
-  resolveSystemEmail,
-  systemEmailHtml,
-  systemEmailText,
-} from "@/lib/email-templates";
+import { resolveSystemEmail } from "@/lib/email-templates";
 import { loadCompanyEmailTemplates } from "@/lib/email-templates-server";
 import { firstName } from "@/lib/phone";
 import {
   canEmailInvite,
   inviteEmailAllowed,
   inviteEmailHtml,
+  inviteEmailLogoUrl,
   inviteEmailSubject,
   inviteEmailText,
   parseInviteEmailStaffIds,
@@ -56,7 +52,7 @@ export async function sendStaffInviteEmails(body: Record<string, unknown>) {
   const companyId = profile.company_id;
 
   const [{ data: company }, { data: senderSeat }] = await Promise.all([
-    supabase.from("companies").select("name").eq("id", companyId).maybeSingle(),
+    supabase.from("companies").select("name, logo_url, card_logo_url").eq("id", companyId).maybeSingle(),
     profile.staff_id
       ? supabase.from("team_members").select("name, email").eq("id", profile.staff_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -76,6 +72,7 @@ export async function sendStaffInviteEmails(body: Record<string, unknown>) {
   }
 
   const origin = await appOrigin();
+  const logoUrl = inviteEmailLogoUrl(company?.logo_url || company?.card_logo_url, origin);
   const from = formatResendFrom({ senderName: String(inviterName), companyName });
   const emailTemplates = await loadCompanyEmailTemplates(supabase, companyId);
   const results: InviteEmailSendResult[] = [];
@@ -158,6 +155,13 @@ export async function sendStaffInviteEmails(body: Record<string, unknown>) {
     }
 
     const to = canEmailInvite(invite.email) ? invite.email.trim() : seat.email.trim();
+    const copy = resolveSystemEmail("invite", emailTemplates, {
+      name: firstName(seat.name),
+      company: companyName,
+      inviter: String(inviterName),
+      seat: seat.title?.trim() ? ` as ${seat.title.trim()}` : "",
+      days: String(INVITE_DAYS),
+    });
     const payload = {
       company: companyName,
       seatName: seat.name,
@@ -165,30 +169,17 @@ export async function sendStaffInviteEmails(body: Record<string, unknown>) {
       inviterName: String(inviterName),
       signupUrl,
       email: to,
+      logoUrl,
+      subject: copy.subject,
+      headline: copy.headline,
+      message: copy.message,
+      button: copy.button,
     };
-    const custom = emailTemplateHasOverride(emailTemplates, "invite")
-      ? resolveSystemEmail("invite", emailTemplates, {
-          name: firstName(seat.name),
-          company: companyName,
-          inviter: String(inviterName),
-          seat: seat.title?.trim() ? ` as ${seat.title.trim()}` : "",
-          days: String(INVITE_DAYS),
-        })
-      : null;
     const sent = await sendResendEmail({
       to,
-      subject: custom?.subject || inviteEmailSubject(companyName),
-      html: custom
-        ? systemEmailHtml({
-            headline: custom.headline,
-            message: custom.message,
-            button: custom.button,
-            url: signupUrl,
-          })
-        : inviteEmailHtml(payload),
-      text: custom
-        ? systemEmailText({ headline: custom.headline, message: custom.message, url: signupUrl })
-        : inviteEmailText(payload),
+      subject: copy.subject || inviteEmailSubject(companyName),
+      html: inviteEmailHtml(payload),
+      text: inviteEmailText(payload),
       from,
       replyTo,
     });
