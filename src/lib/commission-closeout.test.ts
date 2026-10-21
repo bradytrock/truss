@@ -325,7 +325,7 @@ assert.equal(
     projectManager: "Sam Lead",
     ownerStaffId: "staff_other",
   }),
-  true,
+  false,
 );
 assert.equal(
   canSubmitProjectCloseout({
@@ -336,7 +336,7 @@ assert.equal(
     projectManager: "Office name",
     ownerStaffId: "staff_sam",
   }),
-  true,
+  false,
 );
 assert.equal(
   canSubmitProjectCloseout({

@@ -126,7 +126,11 @@ import { formatJobSite } from "@/lib/leads";
 import { jobPaperHref } from "@/lib/job-record";
 import { archiveStamp } from "@/lib/paper-archive";
 import { CATALOG_KIND_LABELS, type CatalogKind, type Estimate, type EstimateLine, type JobPhoto } from "@/lib/types";
-import { canGenerateSignatureCertificate, canManageSettings } from "@/lib/visibility";
+import {
+  canCreateEstimates,
+  canGenerateSignatureCertificate,
+  canManageSettings,
+} from "@/lib/visibility";
 import { cn } from "@/lib/utils";
 
 export function CommitInput({
@@ -768,9 +772,14 @@ export function EstimateWriter({ estimate }: { estimate: Estimate }) {
   const relatedInvoice = crm.invoices.find(
     (invoice) => invoice.estimateId === estimate.id && !invoice.archivedAt,
   );
-  const editable = estimate.status === "draft";
-  const optionalOpen = estimate.status === "draft" || estimate.status === "sent" || estimate.status === "viewed";
+  const seatRole = crm.effectiveStaff?.role ?? crm.viewer?.role;
+  const canWriteEstimate = canCreateEstimates(seatRole);
+  const editable = estimate.status === "draft" && canWriteEstimate;
+  const optionalOpen =
+    canWriteEstimate &&
+    (estimate.status === "draft" || estimate.status === "sent" || estimate.status === "viewed");
   const canConvert =
+    canWriteEstimate &&
     (estimate.status === "sent" || estimate.status === "viewed" || estimate.status === "accepted") &&
     !relatedInvoice;
   const contact = estimate.contactId ? crm.getContact(estimate.contactId) : undefined;

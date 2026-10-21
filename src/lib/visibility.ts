@@ -177,6 +177,43 @@ export function canViewProjectFinancials(role: SeatRole | undefined) {
   return Boolean(role) && role !== "business_development";
 }
 
+/** Draft and edit estimates. Business development assigns the work; ops writes the proposal. */
+export function canCreateEstimates(role: SeatRole | undefined) {
+  return Boolean(role) && role !== "business_development";
+}
+
+/** Draft invoices. Same seats that see project financials. */
+export function canCreateInvoices(role: SeatRole | undefined) {
+  return canViewProjectFinancials(role);
+}
+
+/**
+ * Branded Pages on a job (work orders, photo docs, claim packets).
+ * Business development can open existing pages but not create or edit them.
+ */
+export function canCreatePages(role: SeatRole | undefined) {
+  return Boolean(role) && role !== "business_development";
+}
+
+export function canEditPages(role: SeatRole | undefined) {
+  return canCreatePages(role);
+}
+
+/** Link, unlink, or create a CompanyCam project on a job. */
+export function canManageCompanyCamMapping(role: SeatRole | undefined) {
+  return Boolean(role) && role !== "business_development";
+}
+
+/** Job Paper tab — estimates, invoices, material orders, and related tasks. */
+export function canViewJobPaper(role: SeatRole | undefined) {
+  return Boolean(role) && role !== "business_development";
+}
+
+/** Company insurance desk and the job Insurance tab. */
+export function canViewInsurance(role: SeatRole | undefined) {
+  return Boolean(role) && role !== "business_development";
+}
+
 /** Company name, people, payments, integrations, and other business settings. Directors do not get this. */
 export function canManageSettings(role: SeatRole, member?: StaffMember) {
   if (member?.restricted || member?.locked) return false;
@@ -202,6 +239,16 @@ export function canGenerateSignatureCertificate(viewer: StaffMember | undefined)
 export function canDeleteJobs(viewer: StaffMember | undefined) {
   if (!viewer || viewer.restricted || viewer.locked) return false;
   return isCompanyLeader(viewer.role);
+}
+
+/** Field school / training resources. Business development does not use this library. */
+export function canViewTraining(role: SeatRole | undefined) {
+  return Boolean(role) && role !== "business_development";
+}
+
+/** Add, trash, restore, or set primary job photos. BD can view the gallery only. */
+export function canManageJobPhotos(role: SeatRole | undefined) {
+  return Boolean(role) && role !== "business_development";
 }
 
 export function canViewTeamTraining(role: SeatRole) {
@@ -540,7 +587,7 @@ export function scopeDescription(
     return "Company admin — every job, contact, and report in the company.";
   }
   if (scope === "bd") {
-    return "Business development — pipeline you sourced, jobs from the agents you brought in, and company BD ROI. Assign the work; you still keep the numbers.";
+    return "Business development — pipeline you sourced, jobs from the agents you brought in, and company BD ROI. Assign the work; estimates, invoices, Paper, insurance, closeout, and training stay with ops.";
   }
   if (scope === "team") {
     return `${team?.name ?? "Your team"} — every job and contact owned by people on this team. Login As a teammate to inspect their book.`;

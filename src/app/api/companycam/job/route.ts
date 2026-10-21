@@ -14,6 +14,8 @@ import { isUuid } from "@/lib/companycam";
 import { loadProfileCompany } from "@/lib/eagleview-server";
 import { createClient } from "@/lib/supabase/server";
 import { isMissingCompanyCam, missingCompanyCamMessage } from "@/lib/supabase/schema-errors";
+import { canManageCompanyCamMapping } from "@/lib/visibility";
+import type { SeatRole } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -95,6 +97,15 @@ export async function POST(request: Request) {
       { error: "Connect this company's CompanyCam account in Settings first." },
       { status: 400 },
     );
+  }
+
+  if (action === "unlink" || action === "create" || action === "link") {
+    if (!canManageCompanyCamMapping(profile.role as SeatRole)) {
+      return NextResponse.json(
+        { error: "This seat cannot change the CompanyCam project on a job." },
+        { status: 403 },
+      );
+    }
   }
 
   if (action === "unlink") {

@@ -3,7 +3,9 @@
 import type { ComponentProps } from "react";
 import { Button } from "@/components/ui/button";
 import { StartEstimateDialog } from "@/components/start-estimate-dialog";
+import { useCrm } from "@/lib/crm-store";
 import { useStartEstimate, type StartEstimateInput } from "@/lib/start-estimate";
+import { canCreateEstimates } from "@/lib/visibility";
 
 /** Renders the New estimate dialog for a `useStartEstimate()` flow. */
 export function StartEstimateDialogHost({
@@ -39,7 +41,9 @@ export function StartEstimateButton({
   Omit<ComponentProps<typeof Button>, "onClick"> & {
     pendingLabel?: string;
   }) {
+  const crm = useCrm();
   const flow = useStartEstimate();
+  if (!canCreateEstimates(crm.effectiveStaff?.role ?? crm.viewer?.role)) return null;
   return (
     <>
       <Button

@@ -116,7 +116,18 @@ import {
 import { cn } from "@/lib/utils";
 import { PhotoReportBuilder } from "@/components/photo-report-builder";
 import { canSubmitProjectCloseout } from "@/lib/commission-closeout";
-import { canDeleteJobs, canViewProjectFinancials } from "@/lib/visibility";
+import {
+  canCreateEstimates,
+  canCreatePages,
+  canDeleteJobs,
+  canEditPages,
+  canManageCompanyCamMapping,
+  canManageJobPhotos,
+  canViewInsurance,
+  canViewJobPaper,
+  canViewProjectFinancials,
+  canViewTraining,
+} from "@/lib/visibility";
 import { useStartEstimate } from "@/lib/start-estimate";
 import { useStartMaterialOrder } from "@/lib/start-material-order";
 import { materialOrderLinesFor, materialOrderTotal } from "@/lib/material-orders";
@@ -309,9 +320,23 @@ export function JobRecord({
   const startEstimateFlow = useStartEstimate();
   const { prompt: startEstimate, pending: estimatePending } = startEstimateFlow;
   const { start: startMaterialOrder, pending: materialPending } = useStartMaterialOrder();
-  const showFinancials = canViewProjectFinancials(crm.effectiveStaff?.role);
+  const seatRole = crm.effectiveStaff?.role;
+  const showFinancials = canViewProjectFinancials(seatRole);
+  const showPaper = canViewJobPaper(seatRole);
+  const showInsurance = canViewInsurance(seatRole);
+  const allowEstimates = canCreateEstimates(seatRole);
+  const allowPages = canCreatePages(seatRole);
+  const editPages = canEditPages(seatRole);
+  const allowCompanyCamMap = canManageCompanyCamMapping(seatRole);
+  const showTraining = canViewTraining(seatRole);
+  const managePhotos = canManageJobPhotos(seatRole);
   const requestedTab = parseJobTab(searchParams.get("tab"));
-  const tab = requestedTab === "financials" && !showFinancials ? "overview" : requestedTab;
+  const tab =
+    (requestedTab === "financials" && !showFinancials) ||
+    (requestedTab === "paper" && !showPaper) ||
+    (requestedTab === "insurance" && !showInsurance)
+      ? "overview"
+      : requestedTab;
   const [photoOffset, setPhotoOffset] = useState(0);
   const [addressOpen, setAddressOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
@@ -348,6 +373,7 @@ export function JobRecord({
   }
 
   function promptJobEstimate() {
+    if (!allowEstimates) return;
     startEstimate({
       jobId: job.id,
       opportunityId: job.opportunityId,
@@ -359,18 +385,19 @@ export function JobRecord({
   function openNew(kind: "estimate" | "invoice" | "interaction" | "expense" | "materials") {
     if (deleted) return;
     if (kind === "estimate") {
-      setJobTab("paper");
+      if (!allowEstimates) return;
+      if (showPaper) setJobTab("paper");
       promptJobEstimate();
       return;
     }
     if (kind === "materials") {
-      setJobTab("paper");
+      if (showPaper) setJobTab("paper");
       void startMaterialOrder(job.id);
       return;
     }
     if (kind === "invoice") {
       if (!showFinancials) return;
-      setJobTab("paper");
+      if (showPaper) setJobTab("paper");
       setInvoiceOpen(true);
       return;
     }
@@ -529,6 +556,7 @@ export function JobRecord({
   }
 
   async function startPage(template: PageTemplateId, photoLayout: PhotoPageLayout) {
+    if (!allowPages) return;
     setPageCreating(true);
     try {
       const created = await crm.addPhotoReport(
@@ -612,14 +640,20 @@ export function JobRecord({
         <ChevronDown data-icon="inline-end" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-44">
-        <DropdownMenuItem onClick={() => openNew("estimate")}>New estimate</DropdownMenuItem>
+        {allowEstimates ? (
+          <DropdownMenuItem onClick={() => openNew("estimate")}>New estimate</DropdownMenuItem>
+        ) : null}
         {showFinancials ? (
           <DropdownMenuItem onClick={() => openNew("invoice")}>New invoice</DropdownMenuItem>
         ) : null}
-        <DropdownMenuItem onClick={() => openNew("materials")}>New material order</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setMaterialTemplateOpen(true)}>
-          New material order from template
-        </DropdownMenuItem>
+        {showPaper ? (
+          <>
+            <DropdownMenuItem onClick={() => openNew("materials")}>New material order</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setMaterialTemplateOpen(true)}>
+              New material order from template
+            </DropdownMenuItem>
+          </>
+        ) : null}
         <DropdownMenuItem onClick={() => openNew("interaction")}>New interaction</DropdownMenuItem>
         {showFinancials ? (
           <DropdownMenuItem onClick={() => openNew("expense")}>New expense</DropdownMenuItem>
@@ -803,7 +837,7 @@ export function JobRecord({
                   className="aspect-[16/10] w-full object-cover"
                 />
               </button>
-            ) : (
+            ) : managePhotos && !deleted ? (
               <button
                 type="button"
                 onClick={() => setPhotoOpen(true)}
@@ -812,6 +846,11 @@ export function JobRecord({
                 <ImageIcon className="size-8" />
                 <span className="text-sm">Add a job-site photo</span>
               </button>
+            ) : (
+              <div className="flex aspect-[16/10] w-full flex-col items-center justify-center gap-2 text-muted-foreground">
+                <ImageIcon className="size-8" />
+                <span className="text-sm">No job-site photo yet</span>
+              </div>
             )}
             {shownPhoto && job.primaryPhotoId === shownPhoto.id ? (
               <span className="absolute bottom-3 left-3 rounded-sm bg-background/90 px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase">
@@ -1168,16 +1207,20 @@ export function JobRecord({
             Files
             <span className="ml-1 text-muted-foreground">{fileCount}</span>
           </TabsTrigger>
-          <TabsTrigger value="paper" className="flex-none">
-            Paper
-            <span className="ml-1 text-muted-foreground">{estimates.length + invoices.length}</span>
-          </TabsTrigger>
-          <TabsTrigger value="insurance" className="flex-none">
-            Insurance
-            {claimMath?.openCount ? (
-              <span className="ml-1 text-muted-foreground">{claimMath.openCount}</span>
-            ) : null}
-          </TabsTrigger>
+          {showPaper ? (
+            <TabsTrigger value="paper" className="flex-none">
+              Paper
+              <span className="ml-1 text-muted-foreground">{estimates.length + invoices.length}</span>
+            </TabsTrigger>
+          ) : null}
+          {showInsurance ? (
+            <TabsTrigger value="insurance" className="flex-none">
+              Insurance
+              {claimMath?.openCount ? (
+                <span className="ml-1 text-muted-foreground">{claimMath.openCount}</span>
+              ) : null}
+            </TabsTrigger>
+          ) : null}
           {showFinancials ? (
             <TabsTrigger value="financials" className="flex-none">Financials</TabsTrigger>
           ) : null}
@@ -1189,8 +1232,16 @@ export function JobRecord({
               eyebrow="Estimate"
               title={featuredEstimate?.number ?? "No estimate yet"}
               href={featuredEstimate ? `/estimates/${featuredEstimate.id}` : undefined}
-              ariaLabel={featuredEstimate ? undefined : "Create an estimate"}
-              onClick={featuredEstimate || deleted ? undefined : promptJobEstimate}
+              ariaLabel={
+                featuredEstimate
+                  ? undefined
+                  : allowEstimates
+                    ? "Create an estimate"
+                    : undefined
+              }
+              onClick={
+                featuredEstimate || deleted || !allowEstimates ? undefined : promptJobEstimate
+              }
             >
               {featuredEstimate ? (
                 <>
@@ -1214,7 +1265,7 @@ export function JobRecord({
                   </p>
                 </>
               ) : (
-                <p>Click to create an estimate.</p>
+                <p>{allowEstimates ? "Click to create an estimate." : "Ops will draft the proposal."}</p>
               )}
             </SummaryCard>
             <SummaryCard
@@ -1239,30 +1290,32 @@ export function JobRecord({
                 <p>Photo reports and job files land here.</p>
               )}
             </SummaryCard>
-            <SummaryCard
-              eyebrow="Insurance"
-              title={claim?.carrier || "No claim yet"}
-              onClick={() => setJobTab("insurance")}
-            >
-              {claim && claimMath ? (
-                <>
-                  <p>
-                    {claim.claimNumber || "No claim number"}
-                    {claim.adjusterName ? ` · ${claim.adjusterName}` : ""}
-                    {claimMath.openCount ? ` · ${claimMath.openCount} supplement${claimMath.openCount === 1 ? "" : "s"} open` : ""}
-                  </p>
-                  {showFinancials ? (
-                    <p className="mt-1">{formatCurrencyFull(claimMath.outstanding)} still to collect</p>
-                  ) : null}
-                </>
-              ) : (
-                <p>Carrier, supplements, and insurance checks.</p>
-              )}
-            </SummaryCard>
+            {showInsurance ? (
+              <SummaryCard
+                eyebrow="Insurance"
+                title={claim?.carrier || "No claim yet"}
+                onClick={() => setJobTab("insurance")}
+              >
+                {claim && claimMath ? (
+                  <>
+                    <p>
+                      {claim.claimNumber || "No claim number"}
+                      {claim.adjusterName ? ` · ${claim.adjusterName}` : ""}
+                      {claimMath.openCount ? ` · ${claimMath.openCount} supplement${claimMath.openCount === 1 ? "" : "s"} open` : ""}
+                    </p>
+                    {showFinancials ? (
+                      <p className="mt-1">{formatCurrencyFull(claimMath.outstanding)} still to collect</p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p>Carrier, supplements, and insurance checks.</p>
+                )}
+              </SummaryCard>
+            ) : null}
             <SummaryCard
               eyebrow="Next step"
               title={nextStepTitle}
-              onClick={() => setJobTab("paper")}
+              onClick={showPaper ? () => setJobTab("paper") : undefined}
             >
               <p>This week</p>
               <p className="mt-1">{nextStepDate}</p>
@@ -1396,22 +1449,24 @@ export function JobRecord({
             )}
           </JobSection>
 
-          <JobSection title="Training for this job" defaultOpen={false}>
-            <ul className="space-y-2">
-              {recommendedChapterIds(job.projectType || opportunity?.projectType).map((chapterId) => {
-                const chapter = COURSE.chapters.find((item) => item.id === chapterId);
-                if (!chapter) return null;
-                return (
-                  <li key={chapterId}>
-                    <Link href={`/training/${chapter.id}`} className="text-sm font-medium hover:underline">
-                      {chapter.title}
-                    </Link>
-                    <p className="text-xs text-muted-foreground">{chapter.tagline}</p>
-                  </li>
-                );
-              })}
-            </ul>
-          </JobSection>
+          {showTraining ? (
+            <JobSection title="Training for this job" defaultOpen={false}>
+              <ul className="space-y-2">
+                {recommendedChapterIds(job.projectType || opportunity?.projectType).map((chapterId) => {
+                  const chapter = COURSE.chapters.find((item) => item.id === chapterId);
+                  if (!chapter) return null;
+                  return (
+                    <li key={chapterId}>
+                      <Link href={`/training/${chapter.id}`} className="text-sm font-medium hover:underline">
+                        {chapter.title}
+                      </Link>
+                      <p className="text-xs text-muted-foreground">{chapter.tagline}</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            </JobSection>
+          ) : null}
 
           <section className="pt-2" id="job-activity">
             <p className="mb-3 text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
@@ -1456,11 +1511,17 @@ export function JobRecord({
         </TabsContent>
 
         <TabsContent value="photos" className="mt-0">
-          <JobCompanyCamPanel jobId={job.id} disabled={deleted} />
-          <JobPhotosPanel
+          <JobCompanyCamPanel
             jobId={job.id}
             disabled={deleted}
-            onAddPhoto={() => setPhotoOpen(true)}
+            mappingLocked={!allowCompanyCamMap}
+          />
+          <JobPhotosPanel
+            jobId={job.id}
+            disabled={deleted || !managePhotos}
+            onAddPhoto={() => {
+              if (managePhotos) setPhotoOpen(true);
+            }}
           />
         </TabsContent>
 
@@ -1519,10 +1580,12 @@ export function JobRecord({
                     : `${reports.length} page${reports.length === 1 ? "" : "s"}`}
                 </p>
               </div>
-              <Button size="sm" onClick={() => setPageCreateOpen(true)}>
-                <FileText data-icon="inline-start" />
-                New page
-              </Button>
+              {allowPages && !deleted ? (
+                <Button size="sm" onClick={() => setPageCreateOpen(true)}>
+                  <FileText data-icon="inline-start" />
+                  New page
+                </Button>
+              ) : null}
             </div>
             {reports.length > 0 ? (
               <ul className="space-y-1.5">
@@ -1565,16 +1628,19 @@ export function JobRecord({
               </ul>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Pages are branded job documents you send out — work orders, photo documentation, inspections,
-                closeouts, and claim packets. Pick a template, then share a link or download a PDF.
+                {allowPages
+                  ? "Pages are branded job documents you send out — work orders, photo documentation, inspections, closeouts, and claim packets. Pick a template, then share a link or download a PDF."
+                  : "Pages are branded job documents ops sends out. You can open any page already on this job."}
               </p>
             )}
           </section>
         </TabsContent>
 
-        <TabsContent value="insurance" className="mt-0">
-          <JobInsurancePanel job={job} readOnly={deleted} />
-        </TabsContent>
+        {showInsurance ? (
+          <TabsContent value="insurance" className="mt-0">
+            <JobInsurancePanel job={job} readOnly={deleted} />
+          </TabsContent>
+        ) : null}
 
         {showFinancials ? (
           <TabsContent value="financials" className="mt-0">
@@ -1582,6 +1648,7 @@ export function JobRecord({
           </TabsContent>
         ) : null}
 
+        {showPaper ? (
         <TabsContent value="paper" className="mt-0 space-y-4">
           <AutomationRuns jobId={job.id} />
           <div>
@@ -1850,6 +1917,7 @@ export function JobRecord({
             </div>
           ) : null}
         </TabsContent>
+        ) : null}
 
       </Tabs>
         </div>
@@ -1944,7 +2012,12 @@ export function JobRecord({
       />
       <StartEstimateDialogHost flow={startEstimateFlow} />
       {openReport ? (
-        <PhotoReportBuilder job={job} report={openReport} onClose={() => setReportId(null)} />
+        <PhotoReportBuilder
+          job={job}
+          report={openReport}
+          readOnly={!editPages || deleted}
+          onClose={() => setReportId(null)}
+        />
       ) : null}
       <Dialog open={codeOpen} onOpenChange={setCodeOpen}>
         <DialogContent className="sm:max-w-md">

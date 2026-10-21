@@ -31,6 +31,7 @@ import {
   supplementIsOpen,
   type ClaimStatus,
 } from "@/lib/insurance";
+import { canViewInsurance } from "@/lib/visibility";
 
 export default function InsurancePage() {
   const crm = useCrm();
@@ -72,6 +73,19 @@ export default function InsurancePage() {
   const outstanding = rows.reduce((sum, row) => sum + row.totals.outstanding, 0);
 
   if (!crm.hydrated) return <LoadingScreen />;
+  if (!canViewInsurance(crm.effectiveStaff?.role)) {
+    return (
+      <EmptyState
+        title="Insurance stays with the office"
+        description="Business development tracks the lead and the sold job. Carrier claims stay with ops."
+        action={
+          <Link href="/jobs" className="text-sm font-medium text-primary hover:underline">
+            Back to jobs
+          </Link>
+        }
+      />
+    );
+  }
 
   return (
     <div className="space-y-5">

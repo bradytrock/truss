@@ -42,7 +42,16 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { canViewReports, canManageSettings, canManageAutomations, canViewAccounting, canViewProjectFinancials } from "@/lib/visibility";
+import {
+  canViewReports,
+  canManageSettings,
+  canManageAutomations,
+  canViewAccounting,
+  canViewInsurance,
+  canViewProjectFinancials,
+  canViewTraining,
+  canCreateEstimates,
+} from "@/lib/visibility";
 import { groupLoginAsTargets, readLoginAsRecent, recentLoginAsTargets, rememberLoginAsRecent } from "@/lib/login-as";
 import { isInboxPath } from "@/lib/inbox";
 import { openDialerPopup } from "@/lib/calls/popup";
@@ -99,7 +108,6 @@ function navSections(options: { bdOnly: boolean }): NavSection[] {
           { href: "/messages", label: "Inbox" },
           { href: "/calls", label: "Calls" },
           { href: "/jobs", label: "Jobs" },
-          { href: "/insurance", label: "Insurance" },
           { href: "/map", label: "Map" },
           { href: "/contacts", label: "Agents & contacts" },
           { href: "/tasks", label: "Tasks" },
@@ -667,7 +675,11 @@ export function SearchTrigger() {
   const onSettings = pathname.startsWith("/settings") && !isAutomationBuilderPath(pathname);
   const router = useRouter();
   const { opportunities, jobs, contacts, estimates, invoices, materialOrders, materialOrderTemplates, viewer, effectiveStaff, tasks, jobInsurance } = useCrm();
-  const showFinancials = canViewProjectFinancials(effectiveStaff?.role ?? viewer?.role);
+  const seatRole = effectiveStaff?.role ?? viewer?.role;
+  const showFinancials = canViewProjectFinancials(seatRole);
+  const showInsurance = canViewInsurance(seatRole);
+  const showEstimates = canCreateEstimates(seatRole);
+  const showTraining = canViewTraining(seatRole);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -838,6 +850,7 @@ export function SearchTrigger() {
                 </CommandItem>
               ))}
             </CommandGroup>
+            {showInsurance ? (
             <CommandGroup heading="Insurance">
               <CommandItem
                 value="insurance claims supplements checks carrier"
@@ -868,6 +881,8 @@ export function SearchTrigger() {
                 );
               })}
             </CommandGroup>
+            ) : null}
+            {showEstimates ? (
             <CommandGroup heading="Estimates">
               {viewer && canManageSettings(viewer.role, viewer) ? (
                 <CommandItem
@@ -902,6 +917,7 @@ export function SearchTrigger() {
                 </CommandItem>
               ))}
             </CommandGroup>
+            ) : null}
             {showFinancials ? (
             <CommandGroup heading="Invoices">
               {invoices.map((invoice) => (
@@ -954,6 +970,7 @@ export function SearchTrigger() {
                 </CommandItem>
               ))}
             </CommandGroup>
+            {showTraining ? (
             <CommandGroup heading="Training">
               {COURSE.chapters.map((chapter) => (
                 <CommandItem
@@ -968,6 +985,7 @@ export function SearchTrigger() {
                 </CommandItem>
               ))}
             </CommandGroup>
+            ) : null}
           </CommandList>
         </Command>
       </CommandDialog>

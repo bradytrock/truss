@@ -54,7 +54,7 @@ export const TRADE_LABELS: Record<Trade, string> = {
   roofing: "Roofing",
   gutters: "Gutters",
   siding: "Siding",
-  flooring: "Flooring",
+  flooring: "Interior",
   other: "Other",
 };
 

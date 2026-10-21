@@ -57,4 +57,16 @@ const withoutCodes = availableHomeModules({
 });
 assert.ok(!withoutCodes.includes("jobCodes"));
 
+const bdHome = availableHomeModules({
+  hasLeads: true,
+  isAccountant: false,
+  isBd: true,
+  canViewAccounting: false,
+  hasAccountingNotices: false,
+  hasReturningClients: false,
+  hasJobCodeReviews: false,
+});
+assert.ok(bdHome.includes("bdRoi"));
+assert.ok(!bdHome.includes("training"));
+
 console.log("home-layout.test.ts ok");

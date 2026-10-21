@@ -39,9 +39,19 @@ type JobResponse = {
   syncError?: string;
 };
 
-export function JobCompanyCamPanel({ jobId, disabled }: { jobId: string; disabled?: boolean }) {
+export function JobCompanyCamPanel({
+  jobId,
+  disabled,
+  mappingLocked,
+}: {
+  jobId: string;
+  disabled?: boolean;
+  /** Seat can see the linked project but cannot link, unlink, or create. */
+  mappingLocked?: boolean;
+}) {
   const crm = useCrm();
   const job = crm.jobs.find((item) => item.id === jobId);
+  const mappingDisabled = Boolean(disabled || mappingLocked);
   const [info, setInfo] = useState<JobResponse | null>(null);
   const [query, setQuery] = useState<string | null>(null);
   const [projects, setProjects] = useState<CompanyCamProject[]>([]);
@@ -120,7 +130,7 @@ export function JobCompanyCamPanel({ jobId, disabled }: { jobId: string; disable
   const searchValue = query ?? job?.street ?? "";
 
   async function act(action: "link" | "create" | "unlink", projectId?: string) {
-    if (disabled) return;
+    if (mappingDisabled) return;
     if (action === "unlink" && !window.confirm("Unlink this CompanyCam project from the job?")) return;
     setPending(true);
     try {
@@ -170,9 +180,11 @@ export function JobCompanyCamPanel({ jobId, disabled }: { jobId: string; disable
               : "Connect this company's CompanyCam account to show a project's photos on the job."}
           </p>
         </div>
-        <Button nativeButton={false} size="sm" variant="ghost" render={<Link href="/settings/integrations/companycam" />}>
-          Settings
-        </Button>
+        {mappingLocked ? null : (
+          <Button nativeButton={false} size="sm" variant="ghost" render={<Link href="/settings/integrations/companycam" />}>
+            Settings
+          </Button>
+        )}
       </div>
 
       <div className="space-y-3 rounded-md border p-3">
@@ -197,7 +209,11 @@ export function JobCompanyCamPanel({ jobId, disabled }: { jobId: string; disable
             <p className="text-sm font-medium">{link.name || "CompanyCam project"}</p>
             {link.address ? <p className="text-sm text-muted-foreground">{link.address}</p> : null}
             <p className="text-sm text-muted-foreground">
-              {pending ? "Syncing photos…" : "Photos taken in CompanyCam show up here. Photos added on this job go to CompanyCam."}
+              {pending
+                ? "Syncing photos…"
+                : mappingLocked
+                  ? "Photos from this CompanyCam project show in the gallery."
+                  : "Photos taken in CompanyCam show up here. Photos added on this job go to CompanyCam."}
             </p>
             <div className="flex flex-wrap gap-2">
               {link.url ? (
@@ -205,21 +221,29 @@ export function JobCompanyCamPanel({ jobId, disabled }: { jobId: string; disable
                   Open in CompanyCam
                 </Button>
               ) : null}
-              <Button type="button" size="sm" variant="outline" disabled={disabled || pending} onClick={() => void act("unlink")}>
-                Unlink
-              </Button>
+              {mappingLocked ? null : (
+                <Button type="button" size="sm" variant="outline" disabled={mappingDisabled || pending} onClick={() => void act("unlink")}>
+                  Unlink
+                </Button>
+              )}
             </div>
           </div>
         ) : null}
 
-        {loaded && info?.connected ? (
+        {loaded && info?.connected && mappingLocked && !link ? (
+          <p className="text-sm text-muted-foreground">
+            This job is not linked to a CompanyCam project yet. An ops seat can map it.
+          </p>
+        ) : null}
+
+        {loaded && info?.connected && !mappingLocked ? (
           <div className="space-y-2">
             <Label htmlFor={`cc-search-${jobId}`}>{link ? "Link a different project" : "Find a project"}</Label>
             <div className="flex flex-wrap gap-2">
               <Input
                 id={`cc-search-${jobId}`}
                 value={searchValue}
-                disabled={disabled || pending}
+                disabled={mappingDisabled || pending}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Address or project name"
                 className="min-w-48 flex-1"
@@ -228,13 +252,13 @@ export function JobCompanyCamPanel({ jobId, disabled }: { jobId: string; disable
                 type="button"
                 size="sm"
                 variant="outline"
-                disabled={disabled || pending}
+                disabled={mappingDisabled || pending}
                 onClick={() => void load(searchValue)}
               >
                 Search
               </Button>
               {!link ? (
-                <Button type="button" size="sm" disabled={disabled || pending || !canCreate} onClick={() => void act("create")}>
+                <Button type="button" size="sm" disabled={mappingDisabled || pending || !canCreate} onClick={() => void act("create")}>
                   Create project
                 </Button>
               ) : null}
@@ -259,7 +283,7 @@ export function JobCompanyCamPanel({ jobId, disabled }: { jobId: string; disable
                       type="button"
                       size="sm"
                       variant="outline"
-                      disabled={disabled || pending}
+                      disabled={mappingDisabled || pending}
                       onClick={() => void act("link", project.id)}
                     >
                       Link
