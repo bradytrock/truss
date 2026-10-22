@@ -5,8 +5,11 @@
  */
 
 export const GATE_COOKIE = "truss-gate";
-/** How long a confirmed, subscribed session can skip Auth and the subscription RPC. */
-export const GATE_COOKIE_MAX_AGE = 120;
+/**
+ * How long a confirmed, subscribed session can skip Auth and the subscription RPC.
+ * Every navigation waits on that RPC once the cookie expires.
+ */
+export const GATE_COOKIE_MAX_AGE = 10 * 60;
 /** Refresh before the access token expires so the session does not die mid-click. */
 export const TOKEN_REFRESH_LEEWAY_SEC = 90;
 

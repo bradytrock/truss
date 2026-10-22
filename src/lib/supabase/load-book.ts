@@ -124,6 +124,14 @@ export function isTransientRequestError(
 }
 
 const BOOK_QUERY_WIDTH = 4;
+
+/** History rows include bodies and photo URLs. The desk only needs the recent page. */
+export const BOOK_ROW_LIMITS = {
+  activities: 2000,
+  messages: 1000,
+  gmailMessages: 250,
+  photos: 2000,
+} as const;
 let bookQueriesActive = 0;
 const bookQueryWaiters: Array<() => void> = [];
 
@@ -203,7 +211,8 @@ function messageQuery(supabase: Client, companyId: string) {
     .from("messages")
     .select("*")
     .eq("company_id", companyId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(BOOK_ROW_LIMITS.messages);
 }
 
 async function loadMessages(supabase: Client, companyId: string) {
@@ -234,7 +243,8 @@ function queryCore(supabase: Client, companyId: string) {
         .from("activities")
         .select("*")
         .eq("company_id", companyId)
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .limit(BOOK_ROW_LIMITS.activities),
     ),
     limitBookQuery(() => supabase.from("tasks").select("*").eq("company_id", companyId).order("due_at")),
     limitBookQuery(() => supabase.from("team_members").select("*").eq("company_id", companyId).order("name")),
@@ -290,7 +300,12 @@ function queryDeferred(
       supabase.from("estimate_template_lines").select("*").eq("company_id", companyId).order("sort_order"),
     ),
     limitBookQuery(() =>
-      supabase.from("job_photos").select("*").eq("company_id", companyId).order("taken_at", { ascending: false }),
+      supabase
+        .from("job_photos")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("taken_at", { ascending: false })
+        .limit(BOOK_ROW_LIMITS.photos),
     ),
     limitBookQuery(() =>
       supabase
@@ -354,7 +369,8 @@ function queryDeferred(
         .from("gmail_messages")
         .select("*")
         .eq("company_id", companyId)
-        .order("received_at", { ascending: false }),
+        .order("received_at", { ascending: false })
+        .limit(BOOK_ROW_LIMITS.gmailMessages),
     ),
     limitBookQuery(() =>
       supabase.from("job_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
@@ -645,13 +661,15 @@ function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
 }
 
 /**
- * Core tables unblock the desk. Photos, mail, files, and audit history stream in after.
- * Both groups start together, so the slow tables do not add a second waterfall.
+ * Core tables unblock the desk. Photos, mail, files, and audit history wait until
+ * those queries finish, so a large mailbox cannot take a pool slot the jobs are waiting on.
  */
 export function loadCompanyBook(supabase: Client, companyId: string) {
-  const messagesPromise = loadMessages(supabase, companyId);
   const corePromise = queryCore(supabase, companyId);
-  const deferredPromise = queryDeferred(supabase, companyId, messagesPromise);
+  const deferredPromise = corePromise.then(() => {
+    const messagesPromise = loadMessages(supabase, companyId);
+    return queryDeferred(supabase, companyId, messagesPromise);
+  });
   return {
     core: corePromise.then((core) => assembleBook(core, emptyDeferred())),
     full: Promise.all([corePromise, deferredPromise]).then(([core, deferred]) =>

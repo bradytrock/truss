@@ -448,6 +448,35 @@ export function remapDroppedJobId(jobId: string | null | undefined, dropped: Map
   return dropped.get(jobId) ?? jobId;
 }
 
+/**
+ * Desk corrections that used to block the first paint. `jobs` is what to show.
+ * `persistFrom` is the same list before lead fields are filled, so the later
+ * write still sees the empty columns. `dirty` means a database write is needed.
+ */
+export function prepareDeskJobs(jobs: Job[], opportunities: Opportunity[], keepName: string) {
+  const dropped = new Map<string, string>();
+  for (const { keep, drop } of duplicateLeadJobs(jobs)) {
+    for (const extra of drop) dropped.set(extra.id, keep.id);
+  }
+  const kept = dropped.size ? jobs.filter((job) => !dropped.has(job.id)) : jobs;
+  const byId = new Map(opportunities.map((item) => [item.id, item]));
+  let dirty = dropped.size > 0;
+  const persistFrom = kept.map((job) => {
+    const stripped = stripNorthlineCrew(job, keepName);
+    if (stripped !== job) dirty = true;
+    return stripped;
+  });
+  const prepared = persistFrom.map((job) => {
+    const opportunity = job.opportunityId ? byId.get(job.opportunityId) : undefined;
+    if (!opportunity) return job;
+    const patch = leadOverviewBackfill(job, opportunity);
+    if (!patch) return job;
+    dirty = true;
+    return fillJobRecord({ ...job, ...patch }, opportunity);
+  });
+  return { jobs: prepared, dropped, persistFrom, dirty };
+}
+
 export function isDeletedJob(job: Pick<Job, "deletedAt">) {
   return Boolean(job.deletedAt);
 }
