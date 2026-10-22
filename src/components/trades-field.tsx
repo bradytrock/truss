@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
-import { TRADE_LABELS, TRADES, parseTrades, tradeSummary, type Trade } from "@/lib/types";
+import { TRADE_LABELS, TRADES, parseTrades, type Trade } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function toggleTrade(current: readonly string[], trade: Trade) {
@@ -65,13 +65,22 @@ export function TradesMenu({
   onChange,
   disabled,
   className,
+  separator = ", ",
 }: {
   value: readonly string[];
   onChange: (next: Trade[]) => void;
   disabled?: boolean;
   className?: string;
+  separator?: string;
 }) {
   const selected = parseTrades(value);
+  const storedOrder = value
+    .map((item) => item.trim().toLowerCase())
+    .filter((item): item is Trade => selected.includes(item as Trade));
+  const ordered = [...new Set([...storedOrder, ...selected])];
+  const label = ordered.length
+    ? ordered.map((trade) => TRADE_LABELS[trade]).join(separator)
+    : "Trades involved";
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -90,7 +99,7 @@ export function TradesMenu({
           />
         }
       >
-        <span className="truncate">{tradeSummary(selected)}</span>
+        <span className="truncate">{label}</span>
         <ChevronDown className="size-3 opacity-60" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-44">

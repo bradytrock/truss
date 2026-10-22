@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { JobDocumentReview } from "@/components/job-document-review";
 import { JobRecord } from "@/components/job-record";
@@ -8,10 +8,12 @@ import { RecordErrorBoundary } from "@/components/record-error-boundary";
 import { escapeDismissesOverlay } from "@/lib/draft-escape";
 import { parseJobDocParam } from "@/lib/qb-review";
 import type { Job } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 export function JobRecordWindow({ job, onClose }: { job: Job; onClose: () => void }) {
   const searchParams = useSearchParams();
   const fileOpen = Boolean(parseJobDocParam(searchParams.get("doc")));
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -30,7 +32,7 @@ export function JobRecordWindow({ job, onClose }: { job: Job; onClose: () => voi
     <div className="fixed inset-x-0 top-12 bottom-0 z-40 md:left-52">
       <button
         type="button"
-        className="absolute inset-0 bg-black/20 supports-backdrop-filter:backdrop-blur-xs"
+        className="absolute inset-0 bg-[#2a2724]/25"
         aria-label="Close job"
         onClick={onClose}
       />
@@ -38,7 +40,12 @@ export function JobRecordWindow({ job, onClose }: { job: Job; onClose: () => voi
         role="dialog"
         aria-modal="true"
         aria-labelledby="job-window-title"
-        className="absolute inset-x-3 top-3 bottom-3 mx-auto flex w-full max-w-6xl flex-col overflow-hidden rounded-xl border bg-background shadow-lg sm:inset-y-5"
+        className={cn(
+          "absolute flex flex-col overflow-hidden rounded-[22px] border border-[#e4e1dc] bg-[#f6f5f2] shadow-[0_24px_70px_rgba(40,32,24,0.18)] dark:border-border dark:bg-background",
+          expanded
+            ? "inset-2"
+            : "inset-x-3 top-3 bottom-3 mx-auto w-full max-w-[76rem] sm:inset-x-5 sm:inset-y-4",
+        )}
       >
         <RecordErrorBoundary
           fallbackTitle="This job would not open"
@@ -48,7 +55,14 @@ export function JobRecordWindow({ job, onClose }: { job: Job; onClose: () => voi
           {fileOpen ? (
             <JobDocumentReview job={job} />
           ) : (
-            <JobRecord key={job.id} job={job} onClose={onClose} className="min-h-0 flex-1" />
+            <JobRecord
+              key={job.id}
+              job={job}
+              onClose={onClose}
+              expanded={expanded}
+              onToggleExpand={() => setExpanded((value) => !value)}
+              className="min-h-0 flex-1"
+            />
           )}
         </RecordErrorBoundary>
       </div>
