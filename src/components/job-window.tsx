@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { JobDocumentReview } from "@/components/job-document-review";
 import { JobRecord } from "@/components/job-record";
@@ -12,6 +12,7 @@ import type { Job } from "@/lib/types";
 export function JobRecordWindow({ job, onClose }: { job: Job; onClose: () => void }) {
   const searchParams = useSearchParams();
   const fileOpen = Boolean(parseJobDocParam(searchParams.get("doc")));
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -38,7 +39,11 @@ export function JobRecordWindow({ job, onClose }: { job: Job; onClose: () => voi
         role="dialog"
         aria-modal="true"
         aria-labelledby="job-window-title"
-        className="absolute inset-x-3 top-3 bottom-3 mx-auto flex w-full max-w-6xl flex-col overflow-hidden rounded-xl border bg-background shadow-lg sm:inset-y-5"
+        className={
+          expanded
+            ? "absolute inset-2 flex flex-col overflow-hidden rounded-[18px] border bg-background shadow-2xl"
+            : "absolute inset-x-3 top-3 bottom-3 mx-auto flex w-full max-w-6xl flex-col overflow-hidden rounded-[18px] border bg-background shadow-2xl sm:inset-y-5"
+        }
       >
         <RecordErrorBoundary
           fallbackTitle="This job would not open"
@@ -48,7 +53,14 @@ export function JobRecordWindow({ job, onClose }: { job: Job; onClose: () => voi
           {fileOpen ? (
             <JobDocumentReview job={job} />
           ) : (
-            <JobRecord key={job.id} job={job} onClose={onClose} className="min-h-0 flex-1" />
+            <JobRecord
+              key={job.id}
+              job={job}
+              onClose={onClose}
+              expanded={expanded}
+              onToggleExpand={() => setExpanded((value) => !value)}
+              className="min-h-0 flex-1"
+            />
           )}
         </RecordErrorBoundary>
       </div>

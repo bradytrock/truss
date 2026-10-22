@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { RotateCcw, Star, Trash2 } from "lucide-react";
+import { Plus, RotateCcw, Star, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -35,6 +35,7 @@ export function JobPhotosPanel({
   const [openId, setOpenId] = useState<string | null>(null);
   const [tag, setTag] = useState<"all" | PhotoCategory>("all");
   const [sort, setSort] = useState<PhotoSort>("newest");
+  const [showAll, setShowAll] = useState(false);
   const canManage = canManageJobPhotos(crm.effectiveStaff?.role ?? crm.viewer?.role);
   const manageDisabled = Boolean(disabled || !canManage);
 
@@ -45,6 +46,18 @@ export function JobPhotosPanel({
     [photos, tag],
   );
   const groups = useMemo(() => groupJobPhotos(filtered, sort), [filtered, sort]);
+  const visibleGroups = useMemo(() => {
+    if (showAll || filtered.length <= 3) return groups;
+    let remaining = 3;
+    return groups
+      .map((group) => {
+        if (remaining <= 0) return { ...group, items: [] as JobPhoto[] };
+        const items = group.items.slice(0, remaining);
+        remaining -= items.length;
+        return { ...group, items };
+      })
+      .filter((group) => group.items.length > 0);
+  }, [filtered.length, groups, showAll]);
   const openPhoto = photos.find((photo) => photo.id === openId) ?? null;
   const trashed = useMemo(() => trashedPhotos(crm.photos, jobId), [crm.photos, jobId]);
   const primary = job ? primaryJobPhoto(crm.photos, job) : null;
@@ -103,155 +116,151 @@ export function JobPhotosPanel({
   return (
     <div className="space-y-8">
       <section>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-muted-foreground">
-            {photos.length === 0
-              ? "No photos on this job."
-              : `${photos.length} photos · primary shows on the job header`}
-          </p>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-base font-medium">
+              {photos.length === 0 ? "No photos yet" : `${photos.length} photo${photos.length === 1 ? "" : "s"}`}
+            </p>
+            <p className="mt-0.5 text-sm text-muted-foreground">The primary photo shows in the job header.</p>
+          </div>
           {canManage ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {photos.length > 0 ? (
+                <>
+                  <Select
+                    value={tag}
+                    onValueChange={(value) => {
+                      setTag((value as "all" | PhotoCategory) ?? "all");
+                      setShowAll(false);
+                    }}
+                    items={PHOTO_TAG_FILTERS.map((item) => ({ value: item.value, label: item.label }))}
+                  >
+                    <SelectTrigger className="h-8 w-auto rounded-lg bg-card" aria-label="Filter by tag">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PHOTO_TAG_FILTERS.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={sort}
+                    onValueChange={(value) => setSort((value as PhotoSort) ?? "newest")}
+                    items={Object.entries(PHOTO_SORT_LABELS).map(([value, label]) => ({ value, label }))}
+                  >
+                    <SelectTrigger className="h-8 w-auto rounded-lg bg-card" aria-label="Sort photos">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(PHOTO_SORT_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </>
+              ) : null}
               <Button
                 type="button"
                 size="sm"
                 variant="outline"
+                className="bg-card"
                 disabled={disabled}
                 onClick={() => setTrashOpen((open) => !open)}
               >
                 <Trash2 data-icon="inline-start" />
-                Trashcan{trashed.length > 0 ? ` (${trashed.length})` : ""}
+                Trash
               </Button>
-              <Button type="button" size="sm" variant="outline" disabled={disabled} onClick={onAddPhoto}>
-                Add photo
+              <Button type="button" size="sm" disabled={disabled} onClick={onAddPhoto}>
+                <Plus data-icon="inline-start" />
+                Add photos
               </Button>
             </div>
           ) : null}
         </div>
-        {photos.length > 0 ? (
-          <div className="mb-4 flex flex-wrap gap-2">
-            <Select
-              value={tag}
-              onValueChange={(value) => setTag((value as "all" | PhotoCategory) ?? "all")}
-              items={PHOTO_TAG_FILTERS.map((item) => ({ value: item.value, label: item.label }))}
-            >
-              <SelectTrigger className="w-full sm:w-36" aria-label="Filter by tag">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PHOTO_TAG_FILTERS.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={sort}
-              onValueChange={(value) => setSort((value as PhotoSort) ?? "newest")}
-              items={Object.entries(PHOTO_SORT_LABELS).map(([value, label]) => ({ value, label }))}
-            >
-              <SelectTrigger className="w-full sm:w-40" aria-label="Sort photos">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(PHOTO_SORT_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        ) : null}
         {photos.length > 0 && filtered.length === 0 ? (
           <p className="text-sm text-muted-foreground">No photos match this tag. Choose All tags or another tag.</p>
         ) : null}
         {filtered.length > 0 ? (
           <div className="space-y-6">
-            {groups.map((group) => (
+            {visibleGroups.map((group) => (
               <section key={group.key}>
                 {sort === "tag" || groups.length > 1 ? (
                   <h3 className="mb-3 text-sm font-medium">{group.label}</h3>
                 ) : null}
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
                   {group.items.map((photo) => {
                     const isPrimary = primary?.id === photo.id;
                     return (
-                      <figure key={photo.id} className="overflow-hidden border">
-                        <div className="relative">
-                          <button
-                            type="button"
-                            onClick={() => setOpenId(photo.id)}
-                            className="block w-full"
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={photo.imageUrl}
-                              alt={photo.caption || "Job photo"}
-                              className="aspect-[4/3] w-full object-cover"
-                            />
-                          </button>
-                          <PhotoCategoryBadge
-                            category={photo.category}
-                            className="absolute top-2 right-2 border-white/20 bg-black/60 text-white"
+                      <figure key={photo.id} className="group relative overflow-hidden rounded-[12px] border">
+                        <button
+                          type="button"
+                          onClick={() => setOpenId(photo.id)}
+                          className="block w-full"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={photo.imageUrl}
+                            alt={photo.caption || "Job photo"}
+                            className="aspect-[4/3] w-full object-cover"
                           />
-                          {isPrimary ? (
-                            <span className="absolute top-2 left-2 bg-background/90 px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase">
-                              Primary
-                            </span>
-                          ) : null}
-                        </div>
-                        <figcaption className="space-y-2 p-2.5">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0 space-y-1">
-                              <PhotoCategoryBadge category={photo.category} />
-                              <p className="text-sm leading-snug">{photo.caption || "Untitled"}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {photo.createdBy?.trim()
-                                  ? `Taken by ${photo.createdBy.trim()} · ${formatDate(photo.takenAt)}`
-                                  : formatDate(photo.takenAt)}
-                              </p>
-                            </div>
-                            {canManage ? (
-                              <div className="flex shrink-0 gap-0.5">
-                                <Button
-                                  type="button"
-                                  size="icon-sm"
-                                  variant="ghost"
-                                  disabled={disabled || busyId === photo.id || isPrimary}
-                                  aria-label={
-                                    isPrimary
-                                      ? `${photo.caption || "Photo"} is the primary project photo`
-                                      : `Set ${photo.caption || "photo"} as primary`
-                                  }
-                                  title={isPrimary ? "Primary project photo" : "Set as primary"}
-                                  onClick={() => void setPrimary(photo)}
-                                >
-                                  <Star
-                                    className={`size-3.5 ${isPrimary ? "fill-current text-foreground" : ""}`}
-                                  />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="icon-sm"
-                                  variant="ghost"
-                                  disabled={disabled || busyId === photo.id}
-                                  aria-label={`Move ${photo.caption || "photo"} to trashcan`}
-                                  title="Move to Project Trashcan"
-                                  onClick={() => void trash(photo)}
-                                >
-                                  <Trash2 className="size-3.5" />
-                                </Button>
-                              </div>
-                            ) : null}
+                        </button>
+                        <PhotoCategoryBadge
+                          category={photo.category}
+                          className="absolute top-2 right-2 border-white/20 bg-black/55 text-white"
+                        />
+                        {isPrimary ? (
+                          <span className="absolute top-2 left-2 rounded-md bg-black/70 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-white uppercase">
+                            Primary
+                          </span>
+                        ) : null}
+                        {canManage ? (
+                          <div className="absolute right-2 bottom-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                            <Button
+                              type="button"
+                              size="icon-sm"
+                              variant="secondary"
+                              disabled={disabled || busyId === photo.id || isPrimary}
+                              aria-label={
+                                isPrimary
+                                  ? `${photo.caption || "Photo"} is the primary project photo`
+                                  : `Set ${photo.caption || "photo"} as primary`
+                              }
+                              title={isPrimary ? "Primary project photo" : "Set as primary"}
+                              onClick={() => void setPrimary(photo)}
+                            >
+                              <Star className={`size-3.5 ${isPrimary ? "fill-current" : ""}`} />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon-sm"
+                              variant="secondary"
+                              disabled={disabled || busyId === photo.id}
+                              aria-label={`Move ${photo.caption || "photo"} to trash`}
+                              title="Move to Project Trashcan"
+                              onClick={() => void trash(photo)}
+                            >
+                              <Trash2 className="size-3.5" />
+                            </Button>
                           </div>
-                        </figcaption>
+                        ) : null}
                       </figure>
                     );
                   })}
                 </div>
               </section>
             ))}
+            {!showAll && filtered.length > 3 ? (
+              <div className="flex justify-center">
+                <Button type="button" variant="outline" className="bg-card" onClick={() => setShowAll(true)}>
+                  Show {filtered.length - 3} more
+                </Button>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </section>

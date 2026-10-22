@@ -11,14 +11,24 @@ import { cn } from "@/lib/utils";
 
 const types = ["note", "call", "email", "text", "meeting", "site_walk"] as const;
 
+function personInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
+  return `${first}${last}`.toUpperCase();
+}
+
 export function ActivityComposer({
   entityType,
   entityId,
   focusRequest = 0,
+  tone = "default",
 }: {
   entityType: "opportunity" | "job" | "client";
   entityId: string;
   focusRequest?: number;
+  tone?: "default" | "record";
 }) {
   const { addActivity } = useCrm();
   const [body, setBody] = useState("");
@@ -43,21 +53,49 @@ export function ActivityComposer({
     toast.success("Logged to the record.");
   }
 
+  const typeButtons = types.map((item) => (
+    <Button
+      key={item}
+      type="button"
+      size="sm"
+      variant={type === item ? "secondary" : "ghost"}
+      className={cn(tone === "record" && "h-7 rounded-md px-2.5 text-xs shadow-none", type === item && tone === "record" && "bg-card")}
+      onClick={() => setType(item)}
+    >
+      {ACTIVITY_LABELS[item]}
+    </Button>
+  ));
+
+  if (tone === "record") {
+    return (
+      <div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Activity</p>
+          <div className="flex flex-wrap gap-0.5 rounded-lg bg-muted/70 p-0.5">{typeButtons}</div>
+        </div>
+        <div className="rounded-[12px] border bg-card p-3">
+          <Textarea
+            ref={bodyRef}
+            id="job-activity-composer"
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            placeholder="What happened? Bid recap, owner call, site walk notes..."
+            rows={3}
+            className="border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
+          />
+          <div className="mt-2 flex justify-end">
+            <Button size="sm" onClick={submit}>
+              Log activity
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-md border bg-card p-3">
-      <div className="mb-2 flex flex-wrap gap-1">
-        {types.map((item) => (
-          <Button
-            key={item}
-            type="button"
-            size="sm"
-            variant={type === item ? "secondary" : "ghost"}
-            onClick={() => setType(item)}
-          >
-            {ACTIVITY_LABELS[item]}
-          </Button>
-        ))}
-      </div>
+      <div className="mb-2 flex flex-wrap gap-1">{typeButtons}</div>
       <Textarea
         ref={bodyRef}
         id="job-activity-composer"
@@ -78,12 +116,39 @@ export function ActivityComposer({
 export function ActivityList({
   items,
   empty,
+  tone = "default",
 }: {
   items: Activity[];
   empty: string;
+  tone?: "default" | "record";
 }) {
   if (items.length === 0) {
+    if (tone === "record") return null;
     return <p className="py-8 text-sm text-muted-foreground">{empty}</p>;
+  }
+
+  if (tone === "record") {
+    return (
+      <ol className="mt-4 divide-y">
+        {items.map((activity) => (
+          <li key={activity.id} className="flex gap-3 py-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">
+              {personInitials(activity.author)}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="text-sm font-medium">{activity.author}</span>
+                <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                  {ACTIVITY_LABELS[activity.type]}
+                </span>
+                <span className="text-xs text-muted-foreground">{formatRelative(activity.createdAt)}</span>
+              </div>
+              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{activity.body}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    );
   }
 
   return (

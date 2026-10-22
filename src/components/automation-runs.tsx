@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { Sparkles } from "lucide-react";
 import { PageHeader } from "@/components/page-chrome";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,9 +25,11 @@ const STATUS_LABEL: Record<AutomationRunStatus, string> = {
 export function AutomationRuns({
   automationId,
   jobId,
+  variant = "default",
 }: {
   automationId?: string;
   jobId?: string;
+  variant?: "default" | "activity";
 }) {
   const crm = useCrm();
   const [query, setQuery] = useState("");
@@ -42,6 +45,66 @@ export function AutomationRuns({
       return hay.includes(query.trim().toLowerCase());
     });
   }, [automationId, crm.book.automationRuns, jobId, query]);
+
+  if (variant === "activity") {
+    if (rows.length === 0 && !query.trim()) return null;
+    return (
+      <div className="mt-4 space-y-3">
+        <Input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Filter by message, person or status"
+          className="h-9 rounded-lg bg-card"
+        />
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No runs match that.</p>
+        ) : (
+          <ul className="space-y-3">
+            {rows.map((run) => {
+              const rule = (crm.book.automations ?? []).find((item) => item.id === run.automationId);
+              const steps = rule?.actions.length ?? 0;
+              return (
+                <li key={run.id} className="rounded-[12px] border bg-muted/30 px-3 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Sparkles className="size-3.5 text-sky-600" />
+                    <span className="text-sm font-medium">{rule?.name || "Automation"}</span>
+                    <Badge variant={run.status === "failed" ? "destructive" : "secondary"}>
+                      {STATUS_LABEL[run.status]}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {formatDate(run.createdAt)}
+                      {run.confirmedByName
+                        ? ` · ${run.status === "skipped" ? "skipped" : "confirmed"} by ${run.confirmedByName}`
+                        : ""}
+                    </span>
+                  </div>
+                  {steps > 0 ? (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Step {Math.min(steps, (run.workflowCursor?.index ?? 0) + 1)} · {steps === 1 ? "1 step" : `${steps} steps`}
+                    </p>
+                  ) : null}
+                  {run.renderedPreview ? (
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">“{run.renderedPreview}”</p>
+                  ) : null}
+                  {run.errorText ? <p className="mt-1 text-xs text-muted-foreground">{run.errorText}</p> : null}
+                  {run.status === "pending_confirmation" ? (
+                    <div className="mt-2 flex gap-2">
+                      <Button size="sm" onClick={() => void crm.confirmAutomationRun(run.id)}>
+                        Send
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => void crm.skipAutomationRun(run.id)}>
+                        Skip
+                      </Button>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={jobId ? "space-y-3" : "max-w-4xl space-y-5"}>

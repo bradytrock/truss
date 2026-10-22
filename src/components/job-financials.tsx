@@ -115,15 +115,15 @@ export function JobFinancials({ job }: { job: Job }) {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-3 gap-2">
-        <Button size="sm" variant="outline" className="w-full" onClick={() => setExpenseOpen(true)}>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" className="bg-card" onClick={() => setPaymentOpen(true)}>
+          Log payment
+        </Button>
+        <Button size="sm" variant="outline" className="bg-card" onClick={() => setExpenseOpen(true)}>
           Log expense
         </Button>
-        <Button size="sm" variant="outline" className="w-full" onClick={() => setForecastOpen(true)}>
+        <Button size="sm" variant="outline" className="bg-card" onClick={() => setForecastOpen(true)}>
           Log forecasted expense
-        </Button>
-        <Button size="sm" className="w-full" onClick={() => setPaymentOpen(true)}>
-          Log payment
         </Button>
       </div>
 

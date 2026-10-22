@@ -11,8 +11,8 @@ import {
   ImageIcon,
   Link2,
   Link2Off,
-  Paperclip,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { CompletionCertificateDialog } from "@/components/completion-certificate-dialog";
 import { toast } from "sonner";
@@ -126,16 +126,12 @@ export function JobFilesPanel({
   }
 
   return (
-    <section>
-      <div className="mb-3 flex items-center justify-between gap-2">
+    <section className="rounded-[12px] border bg-card p-4">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">
-            Uploaded files
-          </p>
+          <p className="text-sm font-medium">Uploaded files {files.length}</p>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            {files.length === 0
-              ? "Drop files onto this job, attach one, or generate a certificate."
-              : `${files.length} file${files.length === 1 ? "" : "s"} · private unless you share a link`}
+            Private to signed-in teammates. Share a link only when someone outside needs one file.
           </p>
         </div>
         <input
@@ -169,15 +165,6 @@ export function JobFilesPanel({
             <FolderOpen data-icon="inline-start" />
             From directory
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            disabled={disabled || uploading || attachingFromDirectory}
-            onClick={() => inputRef.current?.click()}
-          >
-            <Paperclip data-icon="inline-start" />
-            {uploading ? "Uploading…" : "Attach"}
-          </Button>
         </div>
       </div>
       {job ? (
@@ -205,23 +192,27 @@ export function JobFilesPanel({
         {(dragOver) => (
           <div
             className={cn(
-              "space-y-2 rounded-md border border-dashed px-3 py-3 transition-colors",
+              "space-y-2 rounded-[12px] border border-dashed bg-muted/20 px-3 py-3 transition-colors",
               dragOver ? "border-primary bg-muted/40" : "border-border",
             )}
           >
-            <div
-              className={cn("px-1 text-center", files.length === 0 && "py-4")}
+            <button
+              type="button"
+              className={cn("flex w-full flex-col items-center px-1 text-center", files.length === 0 ? "py-8" : "py-3")}
               aria-label="Drop files to attach them to this job"
+              disabled={disabled || uploading || attachingFromDirectory}
+              onClick={() => inputRef.current?.click()}
             >
+              <span className="mb-2 flex size-8 items-center justify-center rounded-full border bg-card text-muted-foreground">
+                <Upload className="size-4" />
+              </span>
               <p className="text-sm font-medium">
-                {dragOver ? "Drop to attach" : "Drop files here"}
+                {uploading ? "Uploading…" : dragOver ? "Drop to attach" : "Drop files here or click to attach"}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {files.length === 0
-                  ? "PDFs, photos, spreadsheets, and documents. Attach still opens the file picker. Files stay private to signed-in teammates; create a share link only when someone outside needs that one file."
-                  : "Drop more files onto this job, or use Attach."}
+                PDFs, photos, spreadsheets and documents
               </p>
-            </div>
+            </button>
             {files.length > 0 ? (
               <ul className="space-y-1.5">
                 {files.map((file) => {
@@ -326,37 +317,30 @@ function FileThumb({ file }: { file: JobFile }) {
       />
     );
   }
-  const Icon = iconForFile(file);
   return (
     <div
       className={cn(
         "flex size-10 shrink-0 items-center justify-center rounded-sm border bg-muted text-muted-foreground",
       )}
     >
-      <Icon className="size-4" />
+      <FileGlyph file={file} />
     </div>
   );
 }
 
-function iconForFile(file: JobFile) {
+function FileGlyph({ file }: { file: JobFile }) {
   const mime = file.mimeType.toLowerCase();
   const name = file.name.toLowerCase();
-  if (mime.startsWith("video/") || /\.(mp4|mov|m4v|webm)$/.test(name))
-    return Film;
-  if (
-    mime.includes("spreadsheet") ||
-    mime.includes("excel") ||
-    /\.(xlsx|xls|csv)$/.test(name)
-  ) {
-    return FileSpreadsheet;
+  const className = "size-4";
+  if (mime.startsWith("video/") || /\.(mp4|mov|m4v|webm)$/.test(name)) {
+    return <Film className={className} />;
   }
-  if (
-    mime.includes("zip") ||
-    mime.includes("compressed") ||
-    /\.(zip|rar|7z)$/.test(name)
-  ) {
-    return FileArchive;
+  if (mime.includes("spreadsheet") || mime.includes("excel") || /\.(xlsx|xls|csv)$/.test(name)) {
+    return <FileSpreadsheet className={className} />;
   }
-  if (mime.startsWith("image/")) return ImageIcon;
-  return FileText;
+  if (mime.includes("zip") || mime.includes("compressed") || /\.(zip|rar|7z)$/.test(name)) {
+    return <FileArchive className={className} />;
+  }
+  if (mime.startsWith("image/")) return <ImageIcon className={className} />;
+  return <FileText className={className} />;
 }
