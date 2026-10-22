@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BadgeCheck,
   FileArchive,
@@ -34,9 +34,11 @@ import { cn } from "@/lib/utils";
 export function JobFilesPanel({
   jobId,
   disabled,
+  openPicker = 0,
 }: {
   jobId: string;
   disabled?: boolean;
+  openPicker?: number;
 }) {
   const crm = useCrm();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -47,6 +49,13 @@ export function JobFilesPanel({
   const [attachingFromDirectory, setAttachingFromDirectory] = useState(false);
   const files = (crm.jobFiles ?? []).filter((file) => file.jobId === jobId);
   const job = crm.getJob(jobId);
+  const openedPicker = useRef(0);
+
+  useEffect(() => {
+    if (!openPicker || disabled || openPicker === openedPicker.current) return;
+    openedPicker.current = openPicker;
+    inputRef.current?.click();
+  }, [disabled, openPicker]);
 
   async function attach(list: FileList | File[] | null) {
     const incoming = list ? Array.from(list) : [];

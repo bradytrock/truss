@@ -49,6 +49,7 @@ export function CreateTaskDialog({
   task,
   defaultRelatedType,
   defaultRelatedId,
+  defaultTitle,
   lockRelated,
 }: {
   open: boolean;
@@ -56,6 +57,7 @@ export function CreateTaskDialog({
   task?: Task | null;
   defaultRelatedType?: Task["relatedType"];
   defaultRelatedId?: string | null;
+  defaultTitle?: string;
   lockRelated?: boolean;
 }) {
   const { jobs, opportunities, contacts, clients, teamMembers, user, addTask, updateTask, deleteTask } = useCrm();
@@ -82,13 +84,13 @@ export function CreateTaskDialog({
       return;
     }
     const preset = relatedKind({ relatedType: defaultRelatedType ?? null });
-    setTitle("");
+    setTitle(defaultTitle ?? "");
     setDueAt(localYmd(new Date()));
     setAssignee(defaultAssignee);
     setKind(preset);
     setRelatedId(defaultRelatedId ?? "");
     setNotes("");
-  }, [open, task, defaultAssignee, defaultRelatedId, defaultRelatedType]);
+  }, [open, task, defaultAssignee, defaultRelatedId, defaultRelatedType, defaultTitle]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
