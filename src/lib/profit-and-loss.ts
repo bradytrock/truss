@@ -1,9 +1,11 @@
+import { accountsForPnlSection, expenseCategoryLabel } from "@/lib/expense-categories";
 import type {
   CatalogItem,
   Estimate,
   EstimateLine,
   Expense,
   ExpenseAccount,
+  ExpenseCategory,
   ForecastedExpense,
   Invoice,
   InvoiceLine,
@@ -11,7 +13,6 @@ import type {
   Opportunity,
   Payment,
 } from "@/lib/types";
-import { EXPENSE_ACCOUNT_LABELS } from "@/lib/types";
 import { formatDate, formatMoney } from "@/lib/format";
 import { invoiceTotal } from "@/lib/money";
 import {
@@ -156,11 +157,12 @@ function expenseDetailLine(expense: Expense, jobs: Job[], nameJob: boolean): Pnl
 
 function sumByAccount(
   expenses: Expense[],
-  accounts: readonly ExpenseAccount[],
+  accounts: readonly string[],
   jobs: Job[],
   nameJob: boolean,
+  categories?: readonly ExpenseCategory[],
 ): PnlLine[] {
-  const grouped = new Map<ExpenseAccount, Expense[]>();
+  const grouped = new Map<string, Expense[]>();
   for (const expense of expenses) {
     if (!accounts.includes(expense.account)) continue;
     const list = grouped.get(expense.account) ?? [];
@@ -179,7 +181,7 @@ function sumByAccount(
     if (items.length === 0) return [];
     const line = rollup(
       account,
-      EXPENSE_ACCOUNT_LABELS[account],
+      expenseCategoryLabel(account, categories),
       items.map((expense) => expenseDetailLine(expense, jobs, nameJob)),
     );
     return line.amount === 0 ? [] : [line];
@@ -626,10 +628,9 @@ export function explainJobProfitGap(input: {
   return { summary: parts.join(" "), items };
 }
 
-function forecastSum(items: ForecastedExpense[], accounts: readonly ExpenseAccount[]) {
-  return roundMoney(
-    items.reduce((sum, item) => (accounts.includes(item.account) ? sum + item.amount : sum), 0),
-  );
+function forecastSum(items: ForecastedExpense[], accounts: readonly string[]) {
+  const keys = new Set(accounts);
+  return roundMoney(items.reduce((sum, item) => (keys.has(item.account) ? sum + item.amount : sum), 0));
 }
 
 /**
@@ -639,11 +640,13 @@ function forecastSum(items: ForecastedExpense[], accounts: readonly ExpenseAccou
 export function applyForecastedExpenses(
   comparison: JobPnlComparison | null,
   forecasts: ForecastedExpense[],
+  categories?: readonly ExpenseCategory[],
 ): JobPnlComparison | null {
   if (!comparison || forecasts.length === 0) return comparison;
-  const costOfSales = forecastSum(forecasts, COST_OF_SALES_ACCOUNTS);
-  const expenses = forecastSum(forecasts, OPERATING_EXPENSE_ACCOUNTS);
-  const other = forecastSum(forecasts, OTHER_EXPENSE_ACCOUNTS);
+  const used = forecasts.map((item) => item.account);
+  const costOfSales = forecastSum(forecasts, accountsForPnlSection("cost_of_sales", categories, used));
+  const expenses = forecastSum(forecasts, accountsForPnlSection("operating", categories, used));
+  const other = forecastSum(forecasts, accountsForPnlSection("other", categories, used));
   const projectedCostOfSales =
     comparison.projectedCostOfSales == null
       ? null
@@ -697,10 +700,11 @@ export function projectJobComparison(
   input: {
     forecasts: ForecastedExpense[];
     averageMarginPercent?: number | null;
+    categories?: readonly ExpenseCategory[];
   },
 ): JobPnlComparison | null {
   if (input.averageMarginPercent != null) return applyAverageMargin(comparison, input.averageMarginPercent);
-  return applyForecastedExpenses(comparison, input.forecasts);
+  return applyForecastedExpenses(comparison, input.forecasts, input.categories);
 }
 
 /** Weighted net margin of jobs that already have income. Null when none do. */
@@ -748,6 +752,7 @@ export function buildProfitAndLoss(input: {
   from: string | null;
   to: string | null;
   periodLabel: string;
+  categories?: readonly ExpenseCategory[];
 }): ProfitAndLossStatement {
   const jobId = input.job?.id ?? null;
   const estimates = input.estimates ?? [];
@@ -779,26 +784,40 @@ export function buildProfitAndLoss(input: {
     incomeLines,
   );
   const nameJob = !jobId;
+  const usedAccounts = jobExpenses.map((expense) => expense.account);
+  const categories = input.categories;
   const costOfSales = section(
     "cos",
     "Cost of Sales",
     "Total Cost of Sales",
     "Cost of sales",
-    sumByAccount(jobExpenses, COST_OF_SALES_ACCOUNTS, input.jobs, nameJob),
+    sumByAccount(
+      jobExpenses,
+      accountsForPnlSection("cost_of_sales", categories, usedAccounts),
+      input.jobs,
+      nameJob,
+      categories,
+    ),
   );
   const expenses = section(
     "expenses",
     "Expenses",
     "Total Expenses",
     "General and admin expenses",
-    sumByAccount(jobExpenses, OPERATING_EXPENSE_ACCOUNTS, input.jobs, nameJob),
+    sumByAccount(
+      jobExpenses,
+      accountsForPnlSection("operating", categories, usedAccounts),
+      input.jobs,
+      nameJob,
+      categories,
+    ),
   );
   const otherExpenses = section(
     "other",
     "Other Expenses",
     "Total Other Expenses",
     "Other Expense",
-    sumByAccount(jobExpenses, OTHER_EXPENSE_ACCOUNTS, input.jobs, nameJob),
+    sumByAccount(jobExpenses, accountsForPnlSection("other", categories, usedAccounts), input.jobs, nameJob, categories),
   );
   const grossProfit = income.total - costOfSales.total;
   const netIncome = grossProfit - expenses.total - otherExpenses.total;

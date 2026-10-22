@@ -30,14 +30,13 @@ import { formatMoney } from "@/lib/format";
 import { moneyAmount } from "@/lib/money-input";
 import { isReceiptPdf } from "@/lib/qb-review";
 import { matchVendorName, vendorChoices } from "@/lib/qb-vendors";
-import { qbChartAccount } from "@/lib/qbwc/accounts";
+import { expenseCategoriesOrDefaults, expenseChartAccount } from "@/lib/expense-categories";
+import { ExpenseCategorySelect } from "@/components/expense-category-select";
 import { cn } from "@/lib/utils";
 import {
-  EXPENSE_ACCOUNTS,
   EXPENSE_METHOD_LABELS,
   EXPENSE_METHODS,
   type Expense,
-  type ExpenseAccount,
   type ExpenseMethod,
   type Job,
 } from "@/lib/types";
@@ -63,7 +62,11 @@ export function AccountingExpenseReview({
   const rows = useMemo(() => {
     return reviewableExpenses(crm.expenses).map((expense) => {
       const job = expense.jobId ? crm.getJob(expense.jobId) : undefined;
-      const blocked = expenseBlockedReason({ expense, job });
+      const blocked = expenseBlockedReason({
+        expense,
+        job,
+        categories: expenseCategoriesOrDefaults(crm.expenseCategories),
+      });
       const status = expenseReviewStatus(expense, blocked);
       const customer = job
         ? crm.customerName({
@@ -244,7 +247,8 @@ function ExpenseDetail({
   const { expense, job, customer, status } = row;
   const locked = status === "queued";
   const vendors = vendorChoices(crm.qbVendors ?? [], crm.expenses);
-  const chart = qbChartAccount(expense.account);
+  const categories = expenseCategoriesOrDefaults(crm.expenseCategories);
+  const chart = expenseChartAccount(expense.account, categories);
   const jobs = crm.jobs.filter((item) => !item.deletedAt);
   const payNoun = expenseQbPayWith(expense.method) === "credit_card" ? "a credit card charge" : "a vendor bill";
   const where = job
@@ -376,25 +380,17 @@ function ExpenseDetail({
           </Field>
         </div>
         <Field label="Expense account">
-          <Select
+          <ExpenseCategorySelect
             value={expense.account}
             disabled={locked}
+            showChart
             onValueChange={(value) => {
-              if (value) void crm.updateExpense(expense.id, { account: value as ExpenseAccount });
+              void crm.updateExpense(expense.id, { account: value });
             }}
-            items={EXPENSE_ACCOUNTS.map((item) => ({ value: item, label: chartLabel(item) }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {EXPENSE_ACCOUNTS.map((item) => (
-                <SelectItem key={item} value={item}>
-                  {chartLabel(item)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          />
+          <Link href="/accounting?tab=categories" className="mt-1.5 inline-block text-xs font-medium text-[#c43832] hover:underline">
+            Change where categories post
+          </Link>
         </Field>
         <Field label="Customer · Job">
           <Select
@@ -539,11 +535,6 @@ function jobOption(job: Job, crm: ReturnType<typeof useCrm>) {
     opportunityId: job.opportunityId,
   });
   return `${customer || job.name}${job.code ? ` · ${job.code}` : ""}`;
-}
-
-function chartLabel(account: ExpenseAccount) {
-  const chart = qbChartAccount(account);
-  return `${chart.number} · ${chart.name}`;
 }
 
 function datesDiffer(createdAt: string, incurredAt: string) {

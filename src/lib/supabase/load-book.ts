@@ -1,3 +1,4 @@
+import { preferLocalChartAccounts, preferLocalExpenseCategories } from "@/lib/expense-categories";
 import { mapPhotoAuditEvent } from "@/lib/photo-trash";
 import { mapCompanyAuditEvent } from "@/lib/company-audit";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -25,6 +26,8 @@ import {
   mapOpportunity,
   mapPayment,
   mapExpense,
+  mapExpenseCategory,
+  mapCompanyChartAccount,
   mapForecastedExpense,
   mapCommissionCloseout,
   mapJobInsurance,
@@ -193,6 +196,8 @@ export function applyDeferredBook(current: CrmState, incoming: CrmState): CrmSta
   for (const key of DEFERRED_ID_KEYS) {
     target[key] = overlayById(local[key], remote[key]);
   }
+  next.expenseCategories = preferLocalExpenseCategories(current.expenseCategories, incoming.expenseCategories);
+  next.chartAccounts = preferLocalChartAccounts(current.chartAccounts, incoming.chartAccounts);
   next.calendarAccounts = replaceIfEmpty(current.calendarAccounts, incoming.calendarAccounts);
   next.calendarShares = replaceIfEmpty(current.calendarShares, incoming.calendarShares);
   next.trainingProgress = replaceIfEmpty(current.trainingProgress, incoming.trainingProgress);
@@ -429,6 +434,12 @@ function queryDeferred(
         .eq("company_id", companyId)
         .order("updated_at", { ascending: false }),
     ),
+    limitBookQuery(() =>
+      supabase.from("expense_categories").select("*").eq("company_id", companyId).order("sort_order"),
+    ),
+    limitBookQuery(() =>
+      supabase.from("qb_chart_accounts").select("*").eq("company_id", companyId).order("account_number"),
+    ),
   ]);
 }
 
@@ -437,7 +448,7 @@ type DeferredRows = Awaited<ReturnType<typeof queryDeferred>>;
 
 function emptyDeferred(): DeferredRows {
   const blank = { data: [] as never[], error: null };
-  return Array.from({ length: 38 }, () => blank) as unknown as DeferredRows;
+  return Array.from({ length: 40 }, () => blank) as unknown as DeferredRows;
 }
 
 function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
@@ -501,6 +512,8 @@ function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
     automationRunsRes,
     automationTemplatesRes,
     commissionCloseoutsRes,
+    expenseCategoriesRes,
+    chartAccountsRes,
   ] = deferred;
   const missingTeams = Boolean(teamsRes.error);
   requireTable("clients", clientsRes);
@@ -570,6 +583,8 @@ function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
     invoiceLines: invoiceLinesRes.error ? [] : mapRows(invoiceLinesRes.data, mapInvoiceLine),
     payments: paymentsRes.error ? [] : mapRows(paymentsRes.data, mapPayment),
     expenses: expensesRes.error ? [] : (expensesRes.data ?? []).map(mapExpense),
+    expenseCategories: expenseCategoriesRes.error ? [] : (expenseCategoriesRes.data ?? []).map(mapExpenseCategory),
+    chartAccounts: chartAccountsRes.error ? [] : (chartAccountsRes.data ?? []).map(mapCompanyChartAccount),
     forecastedExpenses: forecastedExpensesRes.error
       ? []
       : (forecastedExpensesRes.data ?? []).map(mapForecastedExpense),

@@ -26,7 +26,7 @@ import { storedPhone } from "@/lib/phone";
 import { resolveStoredFileUrl, normalizeObjectKey } from "@/lib/storage/urls";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { parseQbStatus, parseTrades } from "@/lib/types";
-import { isExpenseAccount } from "@/lib/job-financials";
+import { storedExpenseAccount } from "@/lib/expense-categories";
 import {
   isClaimPeril,
   isClaimStatus,
@@ -65,7 +65,10 @@ import type {
   Payment,
   PriceList,
   PhotoReport,
+  CompanyChartAccount,
   Expense,
+  ExpenseCategory,
+  ExpenseCategorySection,
   ForecastedExpense,
   QbReviewComment,
   QbReviewIntent,
@@ -970,19 +973,7 @@ export function mapExpense(row: Database["public"]["Tables"]["expenses"]["Row"])
     invoiceNumber: row.invoice_number ?? "",
     jobId: row.job_id,
     vendor: row.vendor,
-    account:
-      account === "materials" ||
-      account === "subcontractors" ||
-      account === "equipment_rental" ||
-      account === "dumpsters" ||
-      account === "permits" ||
-      account === "labor" ||
-      account === "fuel" ||
-      account === "office" ||
-      account === "insurance" ||
-      account === "other"
-        ? account
-        : "other",
+    account: storedExpenseAccount(account),
     amount: Number(row.amount),
     incurredAt: row.incurred_at,
     method:
@@ -1045,12 +1036,43 @@ export function mapForecastedExpense(
     number: row.number,
     jobId: row.job_id,
     vendor: row.vendor,
-    account: isExpenseAccount(row.account) ? row.account : "other",
+    account: storedExpenseAccount(row.account),
     amount: Number(row.amount),
     expectedAt: row.expected_at,
     memo: row.memo,
     createdAt: row.created_at,
     createdBy: row.created_by,
+  };
+}
+
+function expenseCategorySection(value: string): ExpenseCategorySection {
+  if (value === "cost_of_sales" || value === "operating" || value === "other") return value;
+  return "other";
+}
+
+export function mapCompanyChartAccount(
+  row: Database["public"]["Tables"]["qb_chart_accounts"]["Row"],
+): CompanyChartAccount {
+  return {
+    id: row.id,
+    accountNumber: row.account_number,
+    name: row.name,
+    active: row.active,
+  };
+}
+
+export function mapExpenseCategory(row: Database["public"]["Tables"]["expense_categories"]["Row"]): ExpenseCategory {
+  return {
+    id: row.id,
+    key: row.key,
+    label: row.label,
+    chartAccountId: row.chart_account_id,
+    qbAccountNumber: row.qb_account_number,
+    qbAccountName: row.qb_account_name,
+    section: expenseCategorySection(row.section),
+    requiresJob: row.requires_job,
+    sortOrder: row.sort_order,
+    active: row.active,
   };
 }
 

@@ -1136,6 +1136,62 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["expenses"]["Insert"]>;
         Relationships: [];
       };
+      qb_chart_accounts: {
+        Row: {
+          id: string;
+          company_id: string;
+          account_number: string;
+          name: string;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          account_number: string;
+          name: string;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["qb_chart_accounts"]["Insert"]>;
+        Relationships: [];
+      };
+      expense_categories: {
+        Row: {
+          id: string;
+          company_id: string;
+          key: string;
+          label: string;
+          chart_account_id: string | null;
+          qb_account_number: string;
+          qb_account_name: string;
+          section: string;
+          requires_job: boolean;
+          sort_order: number;
+          active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          key: string;
+          label: string;
+          chart_account_id?: string | null;
+          qb_account_number?: string;
+          qb_account_name?: string;
+          section?: string;
+          requires_job?: boolean;
+          sort_order?: number;
+          active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["expense_categories"]["Insert"]>;
+        Relationships: [];
+      };
       forecasted_expenses: {
         Row: {
           id: string;

@@ -15,10 +15,12 @@ import { AccountingExpenseReview, ExpenseReviewCountBadge } from "@/components/a
 import { AccountingInvoiceReview, InvoiceReviewCountBadge } from "@/components/accounting-invoice-review";
 import { AccountingQuickBooks } from "@/components/accounting-qb-queue";
 import { AccountingCloseouts, CloseoutCountBadge } from "@/components/accounting-closeouts";
+import { AccountingCategories } from "@/components/accounting-categories";
 import { CreateInvoiceDialog } from "@/components/create-ops-dialogs";
 import { LogPaymentDialog } from "@/components/log-financial-dialogs";
 import { accCard, accRed, CountPill } from "@/components/accounting-chrome";
 import { useCrm } from "@/lib/crm-store";
+import { expenseCategoriesOrDefaults } from "@/lib/expense-categories";
 import {
   AGING_LABELS,
   agingInvoiceRows,
@@ -84,7 +86,11 @@ export function AccountingPortal() {
     const expenses = crm.expenses.filter((expense) => {
       if (expense.qbStatus === "entered") return false;
       const job = expense.jobId ? crm.getJob(expense.jobId) : undefined;
-      const blocked = expenseBlockedReason({ expense, job });
+      const blocked = expenseBlockedReason({
+        expense,
+        job,
+        categories: expenseCategoriesOrDefaults(crm.expenseCategories),
+      });
       return expense.qbStatus === "queued" || expense.qbStatus === "error" || expense.qbStatus === "returned" || Boolean(blocked);
     }).length;
     const payments = crm.payments.filter((payment) => {
@@ -116,7 +122,16 @@ export function AccountingPortal() {
       crm.expenses.filter((expense) => {
         if (expense.qbStatus === "entered") return false;
         const job = expense.jobId ? crm.getJob(expense.jobId) : undefined;
-        return expense.qbStatus === "error" || Boolean(expenseBlockedReason({ expense, job }));
+        return (
+          expense.qbStatus === "error" ||
+          Boolean(
+            expenseBlockedReason({
+              expense,
+              job,
+              categories: expenseCategoriesOrDefaults(crm.expenseCategories),
+            }),
+          )
+        );
       }),
     [crm],
   );
@@ -138,6 +153,7 @@ export function AccountingPortal() {
       expenses: crm.expenses,
       estimates: crm.estimates,
       estimateLines: crm.estimateLines,
+      categories: expenseCategoriesOrDefaults(crm.expenseCategories),
       basis,
       from: ytd.from,
       to: ytd.to,
@@ -148,6 +164,7 @@ export function AccountingPortal() {
     crm.company.name,
     crm.estimateLines,
     crm.estimates,
+    crm.expenseCategories,
     crm.expenses,
     crm.invoiceLines,
     crm.invoices,
@@ -326,6 +343,7 @@ export function AccountingPortal() {
             QuickBooks sync
             {syncErrorCount > 0 ? <CountPill tone="danger">{syncErrorCount} errors</CountPill> : null}
           </Tab>
+          <Tab value="categories">Categories</Tab>
           <Tab value="reports">Reports</Tab>
           <Tab value="tools">Tools</Tab>
         </TabsList>
@@ -562,6 +580,10 @@ export function AccountingPortal() {
 
         <TabsContent value="sync" className="mt-5">
           <AccountingQuickBooks onReviewInvoice={setInvoice} />
+        </TabsContent>
+
+        <TabsContent value="categories" className="mt-5">
+          <AccountingCategories />
         </TabsContent>
 
         <TabsContent value="reports" className="mt-5 space-y-6">
