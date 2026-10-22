@@ -12,6 +12,7 @@ import {
   mapEmailCampaignRow,
   normalizeCampaignEmail,
   resolveEmailCampaignAudience,
+  resolveListAudience,
   type EmailCampaignAudience,
   type EmailCampaignFilter,
   type EmailCampaignRecipient,
@@ -33,20 +34,24 @@ export async function marketingCampaignAuth() {
 
 export function parseAudienceInput(
   body: Record<string, unknown>,
-): { error: string } | { audienceKind: EmailCampaignAudience; filter: EmailCampaignFilter } {
+): { error: string } | { audienceKind: EmailCampaignAudience; filter: EmailCampaignFilter; listId: string } {
   const audienceKind = typeof body.audienceKind === "string" ? body.audienceKind : "";
   if (!isEmailCampaignAudience(audienceKind)) {
-    return { error: "Pick a list: realtors, current clients, past clients, or a storm ZIP." };
+    return { error: "Pick a list: realtors, current clients, past clients, a storm ZIP, or one of your lists." };
   }
+  const listId = typeof body.listId === "string" ? body.listId.trim() : "";
   const filter: EmailCampaignFilter = {
     city: typeof body.city === "string" ? body.city : "",
     zip: typeof body.zip === "string" ? body.zip : "",
     includePunch: Boolean(body.includePunch),
   };
+  if (audienceKind === "list" && !listId) {
+    return { error: "Pick a list to send to." };
+  }
   if (audienceKind === "storm" && !filter.city?.trim() && !filter.zip?.trim()) {
     return { error: "Add a city or ZIP so the storm list has somewhere to look." };
   }
-  return { audienceKind, filter };
+  return { audienceKind, filter, listId };
 }
 
 export async function loadCampaignBook(
@@ -161,6 +166,7 @@ export async function sendEmailCampaign(input: {
   bodyText: string;
   htmlTemplate?: string;
   contactIds?: string[];
+  listId?: string;
 }) {
   const auth = await marketingCampaignAuth();
   if (!auth.profile) return { error: auth.error, status: auth.status };
@@ -195,12 +201,34 @@ export async function sendEmailCampaign(input: {
   if (unsub.error) return { error: unsub.error, status: 400 as const };
 
   const allowedIds = new Set((input.contactIds ?? []).filter(Boolean));
-  const resolved = resolveEmailCampaignAudience(
-    input.audienceKind,
-    book.contacts,
-    book.jobs,
-    input.filter,
-  ).filter((row) => (allowedIds.size ? allowedIds.has(row.contactId) : true));
+  let listName = "";
+  let resolved: EmailCampaignRecipient[];
+  if (input.audienceKind === "list") {
+    const listId = input.listId?.trim() || "";
+    const { data: listRow, error: listError } = await supabase
+      .from("marketing_lists")
+      .select("id,name")
+      .eq("id", listId)
+      .eq("company_id", profile.company_id)
+      .maybeSingle();
+    if (listError) return { error: listError.message, status: 400 as const };
+    if (!listRow) return { error: "That list is not on this company.", status: 400 as const };
+    const { data: memberRows, error: memberError } = await supabase
+      .from("marketing_list_members")
+      .select("contact_id")
+      .eq("list_id", listRow.id)
+      .eq("company_id", profile.company_id);
+    if (memberError) return { error: memberError.message, status: 400 as const };
+    listName = listRow.name;
+    const memberIds = (memberRows ?? []).map((row) => row.contact_id);
+    resolved = resolveListAudience(memberIds, book.contacts).filter((row) =>
+      allowedIds.size ? allowedIds.has(row.contactId) : true,
+    );
+  } else {
+    resolved = resolveEmailCampaignAudience(input.audienceKind, book.contacts, book.jobs, input.filter).filter((row) =>
+      allowedIds.size ? allowedIds.has(row.contactId) : true,
+    );
+  }
   const eligible = resolved.filter((row) => !unsub.emails.has(row.email));
   const skippedUnsubscribed = resolved.length - eligible.length;
   const recipients = eligible.slice(0, EMAIL_CAMPAIGN_SEND_CAP);
@@ -219,6 +247,7 @@ export async function sendEmailCampaign(input: {
   const logoUrl = [company.cardLogoUrl, company.logoUrl].find((url) => /^https?:\/\//i.test(url || "")) || "";
   const campaignName =
     input.name.trim() ||
+    listName ||
     `${EMAIL_CAMPAIGN_AUDIENCE_LABELS[input.audienceKind]}${
       input.filter.city?.trim() ? ` · ${input.filter.city.trim()}` : ""
     }${input.filter.zip?.trim() ? ` ${input.filter.zip.trim()}` : ""}`;
@@ -229,6 +258,7 @@ export async function sendEmailCampaign(input: {
       company_id: profile.company_id,
       name: campaignName,
       audience_kind: input.audienceKind,
+      ...(input.audienceKind === "list" ? { audience_list_id: input.listId?.trim() || null } : {}),
       audience_city: input.filter.city?.trim() || "",
       audience_zip: input.filter.zip?.trim() || "",
       include_punch: Boolean(input.filter.includePunch),

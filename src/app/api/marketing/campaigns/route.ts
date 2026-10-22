@@ -43,6 +43,7 @@ export async function POST(request: Request) {
     bodyText: typeof body.body === "string" ? body.body : "",
     htmlTemplate: typeof body.html === "string" ? body.html.slice(0, 200_000) : "",
     contactIds,
+    listId: audience.listId,
   });
   if ("error" in result && result.error) {
     return NextResponse.json({ error: result.error }, { status: result.status });
