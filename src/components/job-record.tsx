@@ -135,6 +135,8 @@ import { useStartMaterialOrder } from "@/lib/start-material-order";
 import { materialOrderLinesFor, materialOrderTotal } from "@/lib/material-orders";
 import { archivedPaper, livePaper } from "@/lib/paper-archive";
 import { MaterialOrderFromTemplateDialog } from "@/components/material-order-from-template-dialog";
+import { JobTagField } from "@/components/job-tag-field";
+import { jobTagSuggestions } from "@/lib/job-tags";
 
 const JOB_TABS = ["overview", "photos", "files", "insurance", "financials", "paper"] as const;
 type JobTab = (typeof JOB_TABS)[number];
@@ -434,8 +436,6 @@ export function JobRecord({
   const [taskOpen, setTaskOpen] = useState(false);
   const [pageCreateOpen, setPageCreateOpen] = useState(false);
   const [pageCreating, setPageCreating] = useState(false);
-  const [tagDraft, setTagDraft] = useState("");
-  const [tagOpen, setTagOpen] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [street, setStreet] = useState(job.street);
   const [city, setCity] = useState(job.city);
@@ -561,6 +561,10 @@ export function JobRecord({
         existingRecordCodes([...crm.jobs, ...crm.opportunities]),
       )
     : "";
+  const tagSuggestions = useMemo(
+    () => jobTagSuggestions(crm.jobs.map((item) => item.tags ?? [])),
+    [crm.jobs],
+  );
   const pmOptions = [
     ...crm.staff.filter((member) => !member.locked),
     ...(job.projectManager && !crm.staff.some((member) => member.name === job.projectManager)
@@ -694,14 +698,6 @@ export function JobRecord({
     });
     setAddressOpen(false);
     toast.success("Job site saved.");
-  }
-
-  function addTag() {
-    const value = tagDraft.trim();
-    if (!value) return;
-    patch({ tags: uniqueNames([...job.tags, value]) });
-    setTagDraft("");
-    setTagOpen(false);
   }
 
   async function duplicateJob() {
@@ -1283,47 +1279,11 @@ export function JobRecord({
                   />
                 </DetailRow>
                 <DetailRow label="Tags">
-                  <div className="flex flex-wrap items-center justify-end gap-1">
-                    {job.tags.map((tag) => (
-                      <Badge key={tag} className="gap-1 border-transparent bg-emerald-100 pr-1 text-emerald-900 hover:bg-emerald-100">
-                        {tag}
-                        <button
-                          type="button"
-                          className="rounded-sm p-0.5 hover:bg-foreground/10"
-                          onClick={() => patch({ tags: job.tags.filter((item) => item !== tag) })}
-                          aria-label={`Remove ${tag}`}
-                        >
-                          <XIcon className="size-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                    {tagOpen ? (
-                      <Input
-                        autoFocus
-                        value={tagDraft}
-                        onChange={(event) => setTagDraft(event.target.value)}
-                        onBlur={() => {
-                          if (tagDraft.trim()) addTag();
-                          else setTagOpen(false);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault();
-                            addTag();
-                          }
-                          if (event.key === "Escape") setTagOpen(false);
-                        }}
-                        placeholder="Tag"
-                        aria-label="New tag"
-                        className="h-7 w-24"
-                      />
-                    ) : (
-                      <Button type="button" variant="outline" size="sm" className="h-6 rounded-full px-2 text-xs" onClick={() => setTagOpen(true)}>
-                        <Plus data-icon="inline-start" />
-                        Tag
-                      </Button>
-                    )}
-                  </div>
+                  <JobTagField
+                    tags={job.tags ?? []}
+                    suggestions={tagSuggestions}
+                    onChange={(tags) => crm.updateJob(job.id, { tags })}
+                  />
                 </DetailRow>
               </div>
 
