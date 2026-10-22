@@ -1,8 +1,19 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { BusinessCardMissing, BusinessCardView } from "@/components/business-card";
 import { appOrigin } from "@/lib/app-origin";
 import { cardPath } from "@/lib/card";
-import { loadSharedCard } from "@/lib/share-server";
+import { loadSharedCard, resolveCardAlias } from "@/lib/share-server";
+
+async function loadCard(company: string, person: string) {
+  const card = await loadSharedCard(company, person);
+  if (card?.available && card.person) return { card, redirectSlug: null as string | null };
+  const alias = await resolveCardAlias(company, person);
+  if (!alias) return { card, redirectSlug: null as string | null };
+  const followed = await loadSharedCard(company, alias);
+  if (followed?.available && followed.person) return { card: followed, redirectSlug: alias };
+  return { card, redirectSlug: null as string | null };
+}
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -15,7 +26,7 @@ export async function generateMetadata({
   params: Promise<CardParams>;
 }): Promise<Metadata> {
   const { company, person } = await params;
-  const card = await loadSharedCard(company, person);
+  const { card } = await loadCard(company, person);
   const origin = await appOrigin();
   // Texted and pasted links unfurl from these tags, so the base has to be absolute.
   const base = { metadataBase: new URL(origin) } satisfies Metadata;
@@ -62,7 +73,8 @@ export async function generateMetadata({
 
 export default async function PublicCardPage({ params }: { params: Promise<CardParams> }) {
   const { company, person } = await params;
-  const card = await loadSharedCard(company, person);
-  if (!card) return <BusinessCardMissing />;
-  return <BusinessCardView card={card} />;
+  const loaded = await loadCard(company, person);
+  if (loaded.redirectSlug) redirect(cardPath(company, loaded.redirectSlug));
+  if (!loaded.card) return <BusinessCardMissing />;
+  return <BusinessCardView card={loaded.card} />;
 }

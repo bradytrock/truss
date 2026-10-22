@@ -35,6 +35,7 @@ import { membersOnTeam, NO_TEAM, parseTeamSelect, selectValueForTeam, teamName }
 import type { StaffMember, Team } from "@/lib/types";
 import { SEAT_ROLE_LABELS } from "@/lib/types";
 import { initials } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 const TEAM_SETUPS: Array<{ name: string; description: string; roles: StaffMember["role"][] }> = [
   {
@@ -286,6 +287,8 @@ export function TeamSelect({
   onChange,
   full,
   allowNone = true,
+  disabled = false,
+  triggerClassName,
 }: {
   id?: string;
   value: string | null | undefined;
@@ -293,6 +296,8 @@ export function TeamSelect({
   onChange: (teamId: string) => void;
   full?: boolean;
   allowNone?: boolean;
+  disabled?: boolean;
+  triggerClassName?: string;
 }) {
   const items = [
     ...(allowNone ? [{ value: NO_TEAM, label: "No team" }] : []),
@@ -305,8 +310,14 @@ export function TeamSelect({
       value={selectValueForTeam(value)}
       onValueChange={(next) => onChange(parseTeamSelect(String(next ?? "")) )}
       items={items}
+      disabled={disabled}
     >
-      <SelectTrigger id={id} className={full ? "w-full" : "w-44"} size={full ? "default" : "sm"}>
+      <SelectTrigger
+        id={id}
+        disabled={disabled}
+        className={cn(full ? "w-full" : "w-44", triggerClassName)}
+        size={full ? "default" : "sm"}
+      >
         <SelectValue placeholder="No team" />
       </SelectTrigger>
       <SelectContent>

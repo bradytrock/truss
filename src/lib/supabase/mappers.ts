@@ -247,6 +247,13 @@ export function mapStaff(row: StaffRow): StaffMember {
     email: row.email ?? "",
     phone: storedPhone(row.phone),
     cardSlug: "card_slug" in row ? String(row.card_slug ?? "") : "",
+    cardSlugAliases:
+      "card_slug_aliases" in row
+        ? String(row.card_slug_aliases ?? "")
+            .split(",")
+            .map((alias) => alias.trim().toLowerCase())
+            .filter(Boolean)
+        : [],
     photoUrl: resolveStoredFileUrl({
       storagePath: "photo_storage_path" in row ? row.photo_storage_path : "",
       url: "photo_url" in row ? row.photo_url : "",

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { AlertTriangle, Copy, MoreHorizontal, Plus, Search } from "lucide-react";
+import { useMemo, useState, type FormEvent } from "react";
+import { AlertTriangle, Copy, MoreHorizontal, Plus, Search, UserRoundMinus } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -20,10 +20,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { CurrencyInput } from "@/components/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -43,8 +41,6 @@ import { BulkInviteDialog } from "@/components/bulk-invite-dialog";
 import { EmptyState } from "@/components/page-chrome";
 import { SettingsCard, SettingsPageHeader } from "@/components/settings-chrome";
 import { TeamPeopleTabs } from "@/components/people-settings-chrome";
-import { GoogleLocationSelect } from "@/components/google-locations-settings";
-import { StaffPhotoField } from "@/components/staff-photo-field";
 import { staffTeamLabel, TeamSelect } from "@/components/teams-settings";
 import { requestInviteEmails } from "@/lib/invite-email";
 import {
@@ -57,10 +53,9 @@ import {
 } from "@/lib/accounts";
 import { PhoneInput } from "@/components/phone-input";
 import { formatDate, formatPhone, initials } from "@/lib/format";
-import { formatPhoneInput } from "@/lib/phone";
 import { copyText } from "@/lib/share";
 import { cardUrl } from "@/lib/card";
-import { WebsiteChatSnippet } from "@/components/website-chat-snippet";
+import { ProfileEditor } from "@/components/profile-editor";
 import { mintPersonCardSlug } from "@/lib/card-slug";
 import { NO_TEAM, parseTeamSelect } from "@/lib/teams";
 import type { GoogleLocation, SeatRole, StaffMember, Team } from "@/lib/types";
@@ -124,6 +119,7 @@ export function PeopleSettings({
   onInviteMany,
   onUpdate,
   onRefreshInvite,
+  onRevokeInvite,
   onRemove,
 }: {
   teams: Team[];
@@ -152,10 +148,29 @@ export function PeopleSettings({
   ) => Promise<Array<{ member: StaffMember; inviteUrl: string | null }>>;
   onUpdate: (
     id: string,
-    patch: Partial<Pick<StaffMember, "name" | "title" | "role" | "email" | "phone" | "emailSignature" | "locked" | "restricted" | "manageAutomations" | "teamId" | "cardSlug">>,
+    patch: Partial<
+      Pick<
+        StaffMember,
+        | "name"
+        | "title"
+        | "role"
+        | "email"
+        | "phone"
+        | "emailSignature"
+        | "locked"
+        | "restricted"
+        | "manageAutomations"
+        | "teamId"
+        | "cardSlug"
+        | "cardSlugAliases"
+        | "googleLocationId"
+        | "monthlySalesQuota"
+      >
+    >,
   ) => Promise<boolean>;
   onRefreshInvite: (id: string) => Promise<string | null>;
-  onRemove: (id: string) => Promise<boolean>;
+  onRevokeInvite: (id: string) => Promise<boolean>;
+  onRemove: (id: string, reassignTo?: string | null) => Promise<boolean>;
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -163,7 +178,9 @@ export function PeopleSettings({
   const [inviteName, setInviteName] = useState("");
   const [inviteEmailedTo, setInviteEmailedTo] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<StaffMember | null>(null);
-  const [profileTarget, setProfileTarget] = useState<StaffMember | null>(null);
+  const [profileId, setProfileId] = useState<string | null>(null);
+  const [removeAssignee, setRemoveAssignee] = useState("admins");
+  const profileTarget = staff.find((member) => member.id === profileId) ?? null;
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<SeatRole | "all">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "pending" | "expired">("all");
@@ -269,7 +286,7 @@ export function PeopleSettings({
       <SeatMenu
         member={member}
         isSelf={member.id === viewerId}
-        onEditProfile={() => setProfileTarget(member)}
+        onEditProfile={() => setProfileId(member.id)}
         onUpdate={onUpdate}
         onCopyCard={() => void copyCard(member)}
         onRefreshInvite={async () => {
@@ -285,7 +302,10 @@ export function PeopleSettings({
           await showInvite(url, member.name);
         }}
         onEmailInvite={() => void emailSeatInvite(member)}
-        onRemove={() => setRemoveTarget(member)}
+        onRemove={() => {
+          setRemoveAssignee("admins");
+          setRemoveTarget(member);
+        }}
         full={full}
       />
     );
@@ -412,7 +432,7 @@ export function PeopleSettings({
                 </TableHeader>
                 <TableBody>
                   {visible.map((member) => (
-                    <TableRow key={member.id} className="cursor-pointer" onClick={() => setProfileTarget(member)}>
+                    <TableRow key={member.id} className="cursor-pointer" onClick={() => setProfileId(member.id)}>
                       <TableCell className="pl-4 whitespace-normal">
                         <div className="flex items-center gap-2.5">
                           <SeatAvatar member={member} />
@@ -452,7 +472,7 @@ export function PeopleSettings({
               {visible.map((member) => (
                 <li key={member.id} className="rounded-xl border border-[#eeeae6] p-3">
                   <div className="flex items-start justify-between gap-3">
-                    <button type="button" className="flex min-w-0 items-start gap-2.5 text-left" onClick={() => setProfileTarget(member)}>
+                    <button type="button" className="flex min-w-0 items-start gap-2.5 text-left" onClick={() => setProfileId(member.id)}>
                       <SeatAvatar member={member} />
                       <span className="min-w-0">
                         <span className="block font-medium">{member.name}</span>
@@ -563,48 +583,152 @@ export function PeopleSettings({
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(removeTarget)} onOpenChange={(open) => !open && setRemoveTarget(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Remove {removeTarget?.name}?</DialogTitle>
-            <DialogDescription>
-              Their jobs and contacts move to you. Pending invites are void. If they already have a
-              login, it is dropped from this company until you send a new invite.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setRemoveTarget(null)}>
-              Keep them
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={async () => {
-                if (!removeTarget) return;
-                const ok = await onRemove(removeTarget.id);
-                if (ok) setRemoveTarget(null);
+      <Dialog
+        open={Boolean(removeTarget)}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+      >
+        <DialogContent className="rounded-2xl p-0 sm:max-w-lg" showCloseButton={false}>
+          {removeTarget ? (
+            <RemoveSeatDialog
+              member={removeTarget}
+              staff={staff}
+              assignee={removeAssignee}
+              onAssignee={setRemoveAssignee}
+              onKeep={() => setRemoveTarget(null)}
+              onRemove={async () => {
+                const reassignTo = removeAssignee === "admins" ? null : removeAssignee;
+                const ok = await onRemove(removeTarget.id, reassignTo);
+                if (!ok) return;
+                if (profileId === removeTarget.id) setProfileId(null);
+                setRemoveTarget(null);
               }}
-            >
-              Remove
-            </Button>
-          </DialogFooter>
+            />
+          ) : null}
         </DialogContent>
       </Dialog>
 
-      <EditProfileDialog
+      <ProfileEditor
         member={profileTarget}
+        viewerId={viewerId}
         companySlug={companySlug}
         teams={teams}
         googleLocations={googleLocations}
         companySignature={companySignature}
-        onOpenChange={(open) => !open && setProfileTarget(null)}
+        onOpenChange={(next) => {
+          if (!next) setProfileId(null);
+        }}
         onSave={async (patch) => {
           if (!profileTarget) return false;
-          const ok = await onUpdate(profileTarget.id, patch);
-          if (ok) setProfileTarget(null);
-          return ok;
+          return onUpdate(profileTarget.id, patch);
+        }}
+        onCopyInvite={async (member) => {
+          if (member.inviteToken && !inviteIsExpired(member)) {
+            await copyInvite(inviteSignupUrl(window.location.origin, member.inviteToken));
+            return;
+          }
+          const url = await onRefreshInvite(member.id);
+          await showInvite(url, member.name);
+        }}
+        onResendInvite={async (member) => {
+          const url = await onRefreshInvite(member.id);
+          if (!url) return false;
+          const emailed = await requestInviteEmails([member.id]);
+          const row = emailed.results.find((item) => item.staffId === member.id);
+          if (emailed.ok || row?.ok) return true;
+          toast.error(emailed.error || row?.error || "Could not email that invite.");
+          return false;
+        }}
+        onRevokeInvite={(member) => onRevokeInvite(member.id)}
+        onAskRemove={(member) => {
+          setRemoveAssignee("admins");
+          setRemoveTarget(member);
         }}
       />
+    </>
+  );
+}
+
+function RemoveSeatDialog({
+  member,
+  staff,
+  assignee,
+  onAssignee,
+  onKeep,
+  onRemove,
+}: {
+  member: StaffMember;
+  staff: StaffMember[];
+  assignee: string;
+  onAssignee: (value: string) => void;
+  onKeep: () => void;
+  onRemove: () => Promise<void>;
+}) {
+  const [pending, setPending] = useState(false);
+  const given = member.name.trim().split(/\s+/)[0] || "They";
+  const choices = staff
+    .filter((person) => person.id !== member.id && !person.locked)
+    .sort((left, right) => left.name.localeCompare(right.name));
+  return (
+    <>
+      <div className="px-6 pt-6">
+        <div className="flex items-start gap-3">
+          <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-rose-50 text-primary">
+            <UserRoundMinus className="size-5" />
+          </div>
+          <DialogHeader className="gap-1">
+            <DialogTitle className="text-xl font-semibold tracking-tight">Remove {member.name}’s seat?</DialogTitle>
+            <DialogDescription className="sr-only">
+              {given} can’t sign in. Open leads and jobs move to someone else. History stays.
+            </DialogDescription>
+          </DialogHeader>
+        </div>
+        <ul className="mt-4 grid list-disc gap-2 pl-5 text-sm text-neutral-700">
+          <li>{given} can’t sign in, and the seat frees up for someone else.</li>
+          <li>Their digital card and website chat stop working.</li>
+          <li>Jobs, notes, and history stay — nothing is deleted.</li>
+        </ul>
+        <div className="mt-4 grid gap-1.5">
+          <Label htmlFor="remove-seat-assignee">Move their open leads and jobs to</Label>
+          <Select
+            value={assignee}
+            onValueChange={(value) => onAssignee(String(value ?? "admins"))}
+            items={[
+              { value: "admins", label: "Company admins to reassign" },
+              ...choices.map((person) => ({ value: person.id, label: person.name })),
+            ]}
+          >
+            <SelectTrigger id="remove-seat-assignee" className="h-11 w-full rounded-xl">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="admins">Company admins to reassign</SelectItem>
+              {choices.map((person) => (
+                <SelectItem key={person.id} value={person.id}>
+                  {person.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="mt-5 flex items-center justify-end gap-2 rounded-b-2xl border-t bg-[#f7f5f2] px-6 py-4">
+        <Button type="button" variant="outline" className="h-10 rounded-lg" onClick={onKeep}>
+          Keep seat
+        </Button>
+        <Button
+          type="button"
+          className="h-10 rounded-lg"
+          disabled={pending}
+          onClick={() => {
+            setPending(true);
+            void onRemove().finally(() => setPending(false));
+          }}
+        >
+          {pending ? "Removing..." : "Remove seat"}
+        </Button>
+      </div>
     </>
   );
 }
@@ -670,37 +794,6 @@ function StatusBadge({ member, you }: { member: StaffMember; you?: boolean }) {
       </span>
       {hint ? <span className="text-[11px] text-muted-foreground">{hint}</span> : null}
     </div>
-  );
-}
-
-function RoleSelect({
-  id,
-  value,
-  onChange,
-  full,
-}: {
-  id?: string;
-  value: SeatRole;
-  onChange: (role: SeatRole) => void;
-  full?: boolean;
-}) {
-  return (
-    <Select
-      value={value}
-      onValueChange={(next) => onChange(String(next ?? value) as SeatRole)}
-      items={ROLE_ITEMS}
-    >
-      <SelectTrigger id={id} className={full ? "w-full" : "w-44"} size={full ? "default" : "sm"}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {SEAT_ROLES.map((role) => (
-          <SelectItem key={role} value={role}>
-            {SEAT_ROLE_LABELS[role]}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }
 
@@ -930,248 +1023,6 @@ function AddTeammateDialog({
             </Button>
             <Button type="submit" nativeButton disabled={pending}>
               {pending ? "Saving…" : email.trim() ? "Add and email invite" : "Add to roster"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-type ProfilePatch = Partial<
-  Pick<
-    StaffMember,
-    | "name"
-    | "title"
-    | "email"
-    | "phone"
-    | "role"
-    | "teamId"
-    | "cardSlug"
-    | "googleLocationId"
-    | "emailSignature"
-    | "monthlySalesQuota"
-  >
->;
-
-function EditProfileDialog({
-  member,
-  companySlug,
-  teams,
-  googleLocations,
-  companySignature,
-  onOpenChange,
-  onSave,
-}: {
-  member: StaffMember | null;
-  companySlug: string;
-  teams: Team[];
-  googleLocations: GoogleLocation[];
-  companySignature: string;
-  onOpenChange: (open: boolean) => void;
-  onSave: (patch: ProfilePatch) => Promise<boolean>;
-}) {
-  const [name, setName] = useState("");
-  const [title, setTitle] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [cardSlug, setCardSlug] = useState("");
-  const [role, setRole] = useState<SeatRole>("project_manager");
-  const [teamId, setTeamId] = useState(NO_TEAM);
-  const [locationId, setLocationId] = useState<string | null>(null);
-  const [signature, setSignature] = useState("");
-  const [quota, setQuota] = useState("");
-  const [pending, setPending] = useState(false);
-
-  useEffect(() => {
-    if (!member) return;
-    setName(member.name);
-    setTitle(member.title);
-    setEmail(member.email);
-    setPhone(formatPhoneInput(member.phone));
-    setCardSlug(member.cardSlug);
-    setRole(member.role);
-    setTeamId(member.teamId || NO_TEAM);
-    setLocationId(member.googleLocationId ?? null);
-    setSignature(member.emailSignature ?? "");
-    setQuota(
-      member.monthlySalesQuota == null ? "" : String(member.monthlySalesQuota),
-    );
-  }, [member]);
-
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    if (!member) return;
-    setPending(true);
-    try {
-      await onSave({
-        name: name.trim(),
-        title: title.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        cardSlug: cardSlug.trim(),
-        role,
-        teamId: parseTeamSelect(teamId),
-        googleLocationId: locationId,
-        emailSignature: signature,
-        monthlySalesQuota: quota.trim() === "" ? null : Math.max(0, Number(quota) || 0),
-      });
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <Dialog open={Boolean(member)} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <form onSubmit={onSubmit} className="grid gap-4">
-          <DialogHeader>
-            <DialogTitle>Profile for {member?.name}</DialogTitle>
-            <DialogDescription>
-              Everything about this person lives here. Name, title, and phone print on estimates and
-              invoices for jobs they own. Team controls who sees their book.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-3">
-            {member ? (
-              <div className="grid gap-1.5">
-                <Label>Card photo</Label>
-                <StaffPhotoField
-                  member={member}
-                  description={`Tops ${member.name.split(" ")[0] || "their"}’s digital card. Saves as soon as you pick it.`}
-                />
-              </div>
-            ) : null}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label htmlFor="profile-edit-name">Name</Label>
-                <Input
-                  id="profile-edit-name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  required
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="profile-edit-title">Title</Label>
-                <Input
-                  id="profile-edit-title"
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label htmlFor="profile-edit-phone">Phone</Label>
-                <PhoneInput
-                  id="profile-edit-phone"
-                  value={phone}
-                  onValueChange={setPhone}
-                  placeholder="(214) 555-0142"
-                />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="profile-edit-email">Email</Label>
-                <Input
-                  id="profile-edit-email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="grid gap-1.5">
-                <Label htmlFor="profile-edit-role">Role</Label>
-                <RoleSelect id="profile-edit-role" value={role} onChange={setRole} full />
-              </div>
-              <div className="grid gap-1.5">
-                <Label htmlFor="profile-edit-team">Team</Label>
-                <TeamSelect id="profile-edit-team" value={teamId} teams={teams} onChange={setTeamId} full />
-              </div>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="profile-edit-card">Card URL</Label>
-              <Input
-                id="profile-edit-card"
-                value={cardSlug}
-                onChange={(event) => setCardSlug(event.target.value)}
-                placeholder="jordan.hale"
-              />
-              <p className="text-xs text-muted-foreground">
-                first.last. Changing this breaks NFC and QR that already use the old link.
-              </p>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="profile-edit-location">Google location</Label>
-              <GoogleLocationSelect
-                id="profile-edit-location"
-                value={locationId}
-                locations={googleLocations}
-                onChange={setLocationId}
-                full
-              />
-              <p className="text-xs text-muted-foreground">
-                {googleLocations.length === 0
-                  ? "No locations yet. Add one under Settings → Locations to turn on the review button."
-                  : "Which listing the review button on their card opens. Manage the list under Settings → Locations."}
-              </p>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="profile-edit-quota">Monthly sales quota</Label>
-              <CurrencyInput
-                id="profile-edit-quota"
-                value={quota}
-                onValueChange={setQuota}
-                placeholder="Company default"
-              />
-              <p className="text-xs text-muted-foreground">
-                {quota.trim()
-                  ? "Overrides the company default on the home Goal bar."
-                  : "Blank inherits the company default from Settings → Company."}
-              </p>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="profile-edit-signature">Email signature</Label>
-              <Textarea
-                id="profile-edit-signature"
-                rows={4}
-                className="field-sizing-fixed min-h-24 resize-y"
-                value={signature}
-                onChange={(event) => setSignature(event.target.value)}
-                placeholder={companySignature || "Best,\nJordan Hale"}
-              />
-              <p className="text-xs text-muted-foreground">
-                {signature.trim()
-                  ? "Signs off mail they send from Inbox."
-                  : "Blank uses the company default from Settings → Company."}
-              </p>
-            </div>
-            <div className="grid gap-1.5">
-              <p className="text-sm font-medium">Their website chat</p>
-              <p className="text-xs text-muted-foreground">
-                {member?.locked
-                  ? "This seat is locked, so this header code will not open leads."
-                  : "Paste this in the header of a site they run. New conversations open a lead in their pipeline and notify only them."}
-              </p>
-              {member ? (
-                <WebsiteChatSnippet
-                  company={companySlug}
-                  personId={member.id}
-                  fieldId="person-chat-snippet"
-                />
-              ) : null}
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" nativeButton disabled={pending || !name.trim()}>
-              {pending ? "Saving…" : "Save profile"}
             </Button>
           </DialogFooter>
         </form>

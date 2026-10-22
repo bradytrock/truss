@@ -45,7 +45,8 @@ import {
   missingScheduleGuestInvitesMessage,
 } from "@/lib/supabase/schema-errors";
 import { distinctMessageHandle, isDuplicateMessageHandle, outboundMessageHandle } from "@/lib/message-handle";
-import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug } from "@/lib/card-slug";
+import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug, normalizePersonCardSlug } from "@/lib/card-slug";
+import { serializeCardSlugAliases, takenCardSlugs } from "@/lib/profile-editor";
 import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newPortalToken, portalInviteExpiry, portalUrl } from "@/lib/portal";
 import {
@@ -1037,11 +1038,12 @@ type CrmContextValue = CrmState & {
         | "locked"
         | "restricted"
         | "manageAutomations"
-        | "teamId"
-        | "cardSlug"
-      >
-    >,
-  ) => Promise<boolean>;
+          | "teamId"
+          | "cardSlug"
+          | "cardSlugAliases"
+        >
+      >,
+    ) => Promise<boolean>;
   saveAutomation: (input: Partial<Automation> & Pick<Automation, "name" | "triggerKind" | "actions">) => Promise<Automation | null>;
   setAutomationEnabled: (id: string, enabled: boolean) => Promise<boolean>;
   confirmAutomationRun: (id: string) => Promise<boolean>;
@@ -1059,7 +1061,8 @@ type CrmContextValue = CrmState & {
   updateTeam: (id: string, patch: { name?: string; leadStaffId?: string | null }) => Promise<boolean>;
   removeTeam: (id: string) => Promise<boolean>;
   refreshStaffInvite: (id: string) => Promise<string | null>;
-  removeStaff: (id: string) => Promise<boolean>;
+  removeStaff: (id: string, reassignTo?: string | null) => Promise<boolean>;
+  revokeStaffInvite: (id: string) => Promise<boolean>;
   moveOpportunity: (
     id: string,
     stage: PipelineStage,
@@ -13595,6 +13598,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         email: member.email,
         phone: member.phone,
         card_slug: member.cardSlug || mintPersonCardSlug(member.name),
+        card_slug_aliases: serializeCardSlugAliases(member.cardSlugAliases ?? []),
         photo_url: member.photoUrl ?? "",
         photo_storage_path: member.photoStoragePath ?? "",
         google_location_id: looksLikeUuid(member.googleLocationId) ? member.googleLocationId : null,
@@ -13611,6 +13615,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         const retry = await supabase.from("team_members").upsert(withoutPhone);
         error = retry.error;
         if (!retry.error) toast.message(missingStaffPhoneMessage());
+      }
+      if (error && /card_slug_aliases/i.test(error.message ?? "")) {
+        const { card_slug_aliases: _aliases, ...withoutAliases } = payload;
+        const retry = await supabase.from("team_members").upsert(withoutAliases);
+        error = retry.error;
       }
       if (error && isMissingCardSlug(error)) {
         const { card_slug: _cardSlug, ...withoutSlug } = payload;
@@ -13911,6 +13920,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           | "manageAutomations"
           | "teamId"
           | "cardSlug"
+          | "cardSlugAliases"
         >
       >,
     ) => {
@@ -13942,6 +13952,16 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       const current = state.staff.find((member) => member.id === id);
       if (!current) return false;
+      const requestedSlug = patch.cardSlug !== undefined ? normalizePersonCardSlug(patch.cardSlug) : "";
+      const currentSlug = normalizePersonCardSlug(current.cardSlug || "");
+      if (
+        requestedSlug &&
+        requestedSlug !== currentSlug &&
+        takenCardSlugs(state.staff, id).has(requestedSlug)
+      ) {
+        toast.error("That card URL already belongs to someone on this company.");
+        return false;
+      }
       const next: StaffMember = {
         ...current,
         ...patch,
@@ -13956,19 +13976,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             ? (looksLikeUuid(patch.googleLocationId) ? patch.googleLocationId : null)
             : (current.googleLocationId ?? null),
         teamId: patch.teamId !== undefined ? (looksLikeUuid(patch.teamId) ? patch.teamId : "") : current.teamId,
-        cardSlug:
-          patch.cardSlug !== undefined
-            ? mintPersonCardSlug(
-                patch.name !== undefined ? patch.name.trim() : current.name,
-                patch.cardSlug,
-                state.staff.filter((member) => member.id !== id).map((member) => member.cardSlug),
-              )
-            : current.cardSlug ||
-              mintPersonCardSlug(
-                patch.name !== undefined ? patch.name.trim() : current.name,
-                "",
-                state.staff.filter((member) => member.id !== id).map((member) => member.cardSlug),
-              ),
+        cardSlug: requestedSlug
+          ? requestedSlug
+          : current.cardSlug ||
+            mintPersonCardSlug(
+              patch.name !== undefined ? patch.name.trim() : current.name,
+              "",
+              takenCardSlugs(state.staff, id),
+            ),
         initials:
           patch.name !== undefined ? initialsFromName(patch.name.trim() || current.name) : current.initials,
       };
@@ -14123,8 +14138,29 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [canEditCompany, persistStaffFields, state.staff],
   );
 
-  const removeStaff = useCallback(
+  const revokeStaffInvite = useCallback(
     async (id: string) => {
+      if (!canEditCompany) {
+        toast.error("Only a company admin can revoke invites.");
+        return false;
+      }
+      const current = state.staff.find((member) => member.id === id);
+      if (!current) return false;
+      const next: StaffMember = { ...current, inviteToken: null, inviteExpiresAt: null };
+      const ok = await persistStaffFields(next, { inviteToken: null, inviteExpiresAt: null });
+      if (!ok) return false;
+      setState((currentBook) => ({
+        ...currentBook,
+        staff: currentBook.staff.map((member) => (member.id === id ? next : member)),
+      }));
+      toast.success(`Invite revoked for ${current.name}`);
+      return true;
+    },
+    [canEditCompany, persistStaffFields, state.staff],
+  );
+
+  const removeStaff = useCallback(
+    async (id: string, reassignTo?: string | null) => {
       if (!canEditCompany) {
         toast.error("Only a company admin can remove people.");
         return false;
@@ -14139,7 +14175,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error("Keep at least one unlocked company admin.");
         return false;
       }
-      const fallbackId = viewer?.id || user.staffId;
+      const requested = reassignTo && state.staff.some((member) => member.id === reassignTo && member.id !== id)
+        ? reassignTo
+        : "";
+      const fallbackId = requested || viewer?.id || user.staffId;
       const applyLocalRemove = () => {
         setState((currentBook) => ({
           ...currentBook,
@@ -14540,6 +14579,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateTeam,
       removeTeam,
       refreshStaffInvite,
+      revokeStaffInvite,
       removeStaff,
       moveOpportunity,
       moveWork,
@@ -14748,6 +14788,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateTeam,
       removeTeam,
       refreshStaffInvite,
+      revokeStaffInvite,
       removeStaff,
       moveOpportunity,
       moveWork,

@@ -119,6 +119,25 @@ export async function loadSharedPage(token: string): Promise<{
   return { payload, sender };
 }
 
+export async function resolveCardAlias(company: string, person: string): Promise<string | null> {
+  const companySlug = company.trim().toLowerCase();
+  const personSlug = person.trim().toLowerCase();
+  if (!companySlug || !personSlug || !isSupabaseConfigured()) return null;
+  try {
+    const supabase = createAnonClient();
+    const { data, error } = await supabase.rpc("resolve_card_alias", {
+      p_company: companySlug,
+      p_person: personSlug,
+    });
+    if (error || typeof data !== "string") return null;
+    const slug = data.trim().toLowerCase();
+    if (!slug || slug === personSlug) return null;
+    return slug;
+  } catch {
+    return null;
+  }
+}
+
 export async function loadSharedCard(
   company: string,
   person: string,

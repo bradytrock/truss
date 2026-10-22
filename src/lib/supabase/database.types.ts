@@ -211,6 +211,7 @@ export type Database = {
           email: string;
           phone: string;
           card_slug: string;
+          card_slug_aliases: string;
           photo_url: string;
           photo_storage_path: string;
           google_review_url: string;
@@ -236,6 +237,7 @@ export type Database = {
           email?: string;
           phone?: string;
           card_slug?: string;
+          card_slug_aliases?: string;
           photo_url?: string;
           photo_storage_path?: string;
           google_review_url?: string;
@@ -3902,6 +3904,10 @@ export type Database = {
       shared_card: {
         Args: { p_company: string; p_person: string };
         Returns: Json;
+      };
+      resolve_card_alias: {
+        Args: { p_company: string; p_person: string };
+        Returns: string;
       };
       record_card_event: {
         Args: {

@@ -266,6 +266,8 @@ export interface StaffMember {
   phone: string;
   /** first.last, unique per company. Sticky on rename. */
   cardSlug: string;
+  /** Older card URLs that still open this card, comma-separated in the database. */
+  cardSlugAliases?: string[];
   /** Headshot on the digital card. Blank falls back to initials. */
   photoUrl?: string;
   photoStoragePath?: string;

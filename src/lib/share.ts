@@ -82,26 +82,46 @@ export function shareUrl(kind: "e" | "i" | "p" | "f", token: string, origin = ""
   return path;
 }
 
-export async function copyText(value: string) {
+function copyTextLegacy(value: string) {
   try {
-    await navigator.clipboard.writeText(value);
-    return true;
+    const input = document.createElement("textarea");
+    input.value = value;
+    input.setAttribute("readonly", "");
+    input.style.position = "fixed";
+    input.style.top = "0";
+    input.style.left = "0";
+    input.style.opacity = "0";
+    document.body.appendChild(input);
+    input.focus();
+    input.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(input);
+    return ok;
   } catch {
-    try {
-      const input = document.createElement("textarea");
-      input.value = value;
-      input.setAttribute("readonly", "");
-      input.style.position = "fixed";
-      input.style.left = "-9999px";
-      document.body.appendChild(input);
-      input.select();
-      const ok = document.execCommand("copy");
-      document.body.removeChild(input);
-      return ok;
-    } catch {
-      return false;
-    }
+    return false;
   }
+}
+
+export function copyText(value: string) {
+  // Run the textarea copy inside the click. clipboard.writeText can hang on a
+  // permission prompt, and awaiting it first drops the user gesture.
+  const legacyOk = copyTextLegacy(value);
+  if (legacyOk) return Promise.resolve(true);
+  const write = navigator.clipboard?.writeText?.bind(navigator.clipboard);
+  if (!write) return Promise.resolve(false);
+  return new Promise<boolean>((resolve) => {
+    const timer = window.setTimeout(() => resolve(false), 400);
+    write(value).then(
+      () => {
+        window.clearTimeout(timer);
+        resolve(true);
+      },
+      () => {
+        window.clearTimeout(timer);
+        resolve(false);
+      },
+    );
+  });
 }
 
 export function downloadBlob(blob: Blob, filename: string) {

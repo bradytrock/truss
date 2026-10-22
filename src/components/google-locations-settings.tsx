@@ -18,6 +18,7 @@ import {
 import { SettingsCard } from "@/components/settings-chrome";
 import { useCrm } from "@/lib/crm-store";
 import type { GoogleLocation, StaffMember } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 /** Sentinel because a Select cannot hold an empty string value. */
 export const DEFAULT_LOCATION = "__default__";
@@ -28,12 +29,16 @@ export function GoogleLocationSelect({
   locations,
   onChange,
   full,
+  disabled = false,
+  triggerClassName,
 }: {
   id?: string;
   value: string | null | undefined;
   locations: GoogleLocation[];
   onChange: (locationId: string | null) => void;
   full?: boolean;
+  disabled?: boolean;
+  triggerClassName?: string;
 }) {
   const fallback = locations.find((location) => location.isDefault);
   // Distinct from picking that listing outright: this one follows the default if it moves.
@@ -52,8 +57,9 @@ export function GoogleLocationSelect({
         { value: DEFAULT_LOCATION, label: noneLabel },
         ...options.map((location) => ({ value: location.id, label: location.name })),
       ]}
+      disabled={disabled}
     >
-      <SelectTrigger id={id} className={full ? "w-full" : "w-56"}>
+      <SelectTrigger id={id} disabled={disabled} className={cn(full ? "w-full" : "w-56", triggerClassName)}>
         <SelectValue placeholder={noneLabel} />
       </SelectTrigger>
       <SelectContent>

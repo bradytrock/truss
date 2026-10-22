@@ -27,6 +27,7 @@ function PeopleSettingsBody() {
       onInviteMany={crm.inviteStaffMany}
       onUpdate={crm.updateStaffAccount}
       onRefreshInvite={crm.refreshStaffInvite}
+      onRevokeInvite={crm.revokeStaffInvite}
       onRemove={crm.removeStaff}
     />
   );
