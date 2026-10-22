@@ -2,8 +2,13 @@ import assert from "node:assert/strict";
 import {
   appointmentLabel,
   buildInboxTimeline,
+  cassioTextDraft,
+  daysSinceLabel,
   formatCallDuration,
   formatInboxDay,
+  jobProgress,
+  quickReplyBody,
+  smsSegmentLabel,
   inboxChips,
   inboxQueue,
   inboxRoleLabel,
@@ -94,6 +99,12 @@ assert.equal(shortStaffName("Elena"), "Elena");
 assert.equal(formatCallDuration(134), "2m 14s");
 assert.equal(formatCallDuration(8), "8s");
 assert.equal(formatInboxDay("2026-10-20T15:00:00.000Z", new Date("2026-10-20T18:00:00.000Z")), "Today");
+assert.equal(smsSegmentLabel(""), "");
+assert.equal(smsSegmentLabel("hello"), "5 chars · 1 text");
+assert.equal(daysSinceLabel("2026-10-15T12:00:00.000Z", new Date("2026-10-20T12:00:00.000Z")), "5 days");
+assert.match(quickReplyBody("omw", "Linda Whitfield"), /On my way, Linda/);
+assert.match(cassioTextDraft("Linda", "When does the adjuster come out?"), /confirm the time/);
+assert.equal(jobProgress("in_progress") > jobProgress("precon"), true);
 
 assert.deepEqual(inboxStage({ inspected: true, hasSentEstimate: false, opportunity: { stage: "pursuing", nextStep: "" } }), {
   current: "Inspected",
