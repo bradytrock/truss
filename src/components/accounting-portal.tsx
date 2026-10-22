@@ -15,6 +15,7 @@ import { AccountingExpenseReview, ExpenseReviewCountBadge } from "@/components/a
 import { AccountingInvoiceReview, InvoiceReviewCountBadge } from "@/components/accounting-invoice-review";
 import { AccountingQuickBooks } from "@/components/accounting-qb-queue";
 import { AccountingCloseouts, CloseoutCountBadge } from "@/components/accounting-closeouts";
+import { AccountingRefunds, RefundCountBadge } from "@/components/accounting-refunds";
 import { CreateInvoiceDialog } from "@/components/create-ops-dialogs";
 import { LogPaymentDialog } from "@/components/log-financial-dialogs";
 import { accCard, accRed, CountPill } from "@/components/accounting-chrome";
@@ -39,8 +40,9 @@ import {
   type AgingKey,
 } from "@/lib/accounting-books";
 import { paymentMethodLabel } from "@/lib/payment-posting";
-import { formatCurrency, formatCurrencyFull, formatDate, localYmd } from "@/lib/format";
+import { formatCurrency, formatCurrencyFull, formatDate, formatMoney, localYmd } from "@/lib/format";
 import { jobAddress } from "@/lib/job-record";
+import { isOpenRefund, refundPayout } from "@/lib/refunds";
 import type { JobBooksBasis } from "@/lib/job-financials";
 import { buildProfitAndLoss, formatPnlPeriod, yearToDateBounds } from "@/lib/profit-and-loss";
 import { canViewAccounting } from "@/lib/visibility";
@@ -183,6 +185,8 @@ export function AccountingPortal() {
   const paymentRows = useMemo(() => recentPaymentRows(crm.payments).slice(0, 8), [crm.payments]);
   const pendingRows = useMemo(() => pendingCardPaymentRows(crm.payments), [crm.payments]);
   const pendingAmount = pendingRows.reduce((sum, payment) => sum + payment.amount, 0);
+  const openRefunds = (crm.refundRequests ?? []).filter(isOpenRefund);
+  const openRefundAmount = openRefunds.reduce((sum, refund) => sum + refundPayout(refund), 0);
   const closeoutWaiting = (crm.commissionCloseouts ?? []).filter((item) => item.status === "submitted");
   const awaitingAmount = invoiceReviewAmount(awaiting, crm.invoiceLines);
   const payHits = useMemo(() => searchMoney(payQuery, crm), [crm, payQuery]);
@@ -227,6 +231,7 @@ export function AccountingPortal() {
     if (next !== "review") params.delete("invoice");
     if (next !== "expenses") params.delete("expense");
     if (next !== "closeouts") params.delete("closeout");
+    if (next !== "refunds") params.delete("refund");
     const qs = params.toString();
     router.replace(qs ? `/accounting?${qs}` : "/accounting", { scroll: false });
   }
@@ -247,6 +252,16 @@ export function AccountingPortal() {
     params.delete("expense");
     if (id) params.set("closeout", id);
     else params.delete("closeout");
+    router.replace(`/accounting?${params.toString()}`, { scroll: false });
+  }
+
+  function setRefund(id: string | null) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", "refunds");
+    params.delete("invoice");
+    params.delete("expense");
+    if (id) params.set("refund", id);
+    else params.delete("refund");
     router.replace(`/accounting?${params.toString()}`, { scroll: false });
   }
 
@@ -291,7 +306,7 @@ export function AccountingPortal() {
       {crm.hydrateError ? <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} /> : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-sm text-[#8a847c]">{seat} · Every invoice, payment and sync in the company</p>
+          <p className="text-sm text-[#8a847c]">{seat} · Every invoice, payment, refund, and sync in the company</p>
           <h1 className="mt-1 text-[2rem] leading-none font-semibold tracking-tight text-[#1a1a1a]">Accounting</h1>
         </div>
         {tab === "overview" ? (
@@ -321,6 +336,10 @@ export function AccountingPortal() {
           <Tab value="closeouts">
             Closeouts
             <CloseoutCountBadge />
+          </Tab>
+          <Tab value="refunds">
+            Refunds
+            <RefundCountBadge />
           </Tab>
           <Tab value="sync">
             QuickBooks sync
@@ -402,6 +421,22 @@ export function AccountingPortal() {
               onAction={() => (firstError ? setInvoice(firstError.id) : setTab("sync"))}
             />
           </div>
+
+          {openRefunds.length > 0 ? (
+            <section className={cn(accCard, "flex flex-wrap items-center justify-between gap-3 px-4 py-3")}>
+              <div>
+                <p className="text-sm font-semibold">
+                  {openRefunds.length} {openRefunds.length === 1 ? "refund" : "refunds"} to process
+                </p>
+                <p className="text-xs text-[#6f6a64]">
+                  {formatMoney(openRefundAmount)} requested from jobs. Approve it, then send the money back.
+                </p>
+              </div>
+              <Button type="button" variant="outline" className="rounded-full" onClick={() => setTab("refunds")}>
+                Open refunds
+              </Button>
+            </section>
+          ) : null}
 
           {pendingRows.length > 0 ? (
             <section className={cn(accCard, "flex flex-wrap items-center justify-between gap-3 px-4 py-3")}>
@@ -558,6 +593,10 @@ export function AccountingPortal() {
 
         <TabsContent value="closeouts" className="mt-5">
           <AccountingCloseouts selectedId={searchParams.get("closeout")} onSelect={setCloseout} />
+        </TabsContent>
+
+        <TabsContent value="refunds" className="mt-5">
+          <AccountingRefunds selectedId={searchParams.get("refund")} onSelect={setRefund} />
         </TabsContent>
 
         <TabsContent value="sync" className="mt-5">

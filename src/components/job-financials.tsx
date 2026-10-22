@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 import { QbStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
 import { crmExpenseActors, expenseLoggedByLabel } from "@/lib/accounting-books";
@@ -24,6 +23,7 @@ import { JobCloseout } from "@/components/job-closeout";
 import { JobPnlComparisonTable, ProfitAndLossReport } from "@/components/profit-and-loss";
 import { EXPENSE_ACCOUNT_LABELS, type Job } from "@/lib/types";
 import { LogExpenseDialog, LogForecastedExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
+import { JobRefundDesk } from "@/components/job-refunds";
 import { jobDocumentHref, latestReturnNote } from "@/lib/qb-review";
 
 export function JobFinancials({ job }: { job: Job }) {
@@ -115,17 +115,12 @@ export function JobFinancials({ job }: { job: Job }) {
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-3 gap-2">
-        <Button size="sm" variant="outline" className="w-full" onClick={() => setExpenseOpen(true)}>
-          Log expense
-        </Button>
-        <Button size="sm" variant="outline" className="w-full" onClick={() => setForecastOpen(true)}>
-          Log forecasted expense
-        </Button>
-        <Button size="sm" className="w-full" onClick={() => setPaymentOpen(true)}>
-          Log payment
-        </Button>
-      </div>
+      <JobRefundDesk
+        job={job}
+        onLogPayment={() => setPaymentOpen(true)}
+        onLogExpense={() => setExpenseOpen(true)}
+        onLogForecast={() => setForecastOpen(true)}
+      />
 
       <JobCloseout job={job} />
 

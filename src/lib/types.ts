@@ -1410,6 +1410,8 @@ export interface CrmState {
   jobInsurance: import("@/lib/insurance").JobInsurance[];
   /** One commission closeout per job. */
   commissionCloseouts: import("@/lib/commission-closeout").CommissionCloseout[];
+  /** Refunds requested from a job and processed in Accounting. */
+  refundRequests: import("@/lib/refunds").RefundRequest[];
   materialOrders: MaterialOrder[];
   materialOrderLines: MaterialOrderLine[];
   materialOrderTemplates: MaterialOrderTemplate[];

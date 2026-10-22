@@ -41,6 +41,12 @@ import {
   parseSplits,
   type CommissionCloseout,
 } from "@/lib/commission-closeout";
+import {
+  parseRefundDestination,
+  parseRefundQuestions,
+  parseRefundStatus,
+  type RefundRequest,
+} from "@/lib/refunds";
 import { parseReturningClientStatus } from "@/lib/returning-client";
 import type {
   Activity,
@@ -1033,6 +1039,38 @@ export function mapCommissionCloseout(
     varianceAck: row.variance_ack,
     notes: row.notes,
     expenseAdjustments: parseExpenseAdjustments(row.expense_adjustments),
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapRefundRequest(row: Database["public"]["Tables"]["refund_requests"]["Row"]): RefundRequest {
+  return {
+    id: row.id,
+    number: row.number,
+    jobId: row.job_id,
+    paymentId: row.payment_id ?? "",
+    amount: Number(row.amount),
+    full: row.full_refund,
+    reason: row.reason,
+    note: row.note,
+    destination: parseRefundDestination(row.destination),
+    destinationLabel: row.destination_label,
+    feeAmount: Number(row.fee_amount),
+    feeCoveredByCompany: row.fee_covered_by_company,
+    attachmentName: row.attachment_name,
+    attachmentUrl: row.attachment_url,
+    status: parseRefundStatus(row.status),
+    requestedBy: row.requested_by,
+    requestedByName: row.requested_by_name,
+    requestedAt: row.requested_at,
+    decidedBy: row.decided_by,
+    decidedByName: row.decided_by_name,
+    decidedAt: row.decided_at,
+    denyReason: row.deny_reason,
+    processedAt: row.processed_at,
+    refundedAt: row.refunded_at,
+    refundPaymentId: row.refund_payment_id,
+    questions: parseRefundQuestions(row.questions),
     updatedAt: row.updated_at,
   };
 }

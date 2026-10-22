@@ -27,6 +27,7 @@ import {
   mapExpense,
   mapForecastedExpense,
   mapCommissionCloseout,
+  mapRefundRequest,
   mapJobInsurance,
   mapQbVendor,
   mapVendorFeedback,
@@ -182,6 +183,7 @@ const DEFERRED_ID_KEYS = [
   "automationRuns",
   "automationTemplates",
   "commissionCloseouts",
+  "refundRequests",
 ] as const satisfies readonly (keyof CrmState)[];
 
 /** Merge photos, mail, files, and the rest onto a book that already painted. */
@@ -429,6 +431,13 @@ function queryDeferred(
         .eq("company_id", companyId)
         .order("updated_at", { ascending: false }),
     ),
+    limitBookQuery(() =>
+      supabase
+        .from("refund_requests")
+        .select("*")
+        .eq("company_id", companyId)
+        .order("updated_at", { ascending: false }),
+    ),
   ]);
 }
 
@@ -437,7 +446,7 @@ type DeferredRows = Awaited<ReturnType<typeof queryDeferred>>;
 
 function emptyDeferred(): DeferredRows {
   const blank = { data: [] as never[], error: null };
-  return Array.from({ length: 38 }, () => blank) as unknown as DeferredRows;
+  return Array.from({ length: 39 }, () => blank) as unknown as DeferredRows;
 }
 
 function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
@@ -501,6 +510,7 @@ function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
     automationRunsRes,
     automationTemplatesRes,
     commissionCloseoutsRes,
+    refundRequestsRes,
   ] = deferred;
   const missingTeams = Boolean(teamsRes.error);
   requireTable("clients", clientsRes);
@@ -577,6 +587,7 @@ function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
     commissionCloseouts: commissionCloseoutsRes.error
       ? []
       : (commissionCloseoutsRes.data ?? []).map(mapCommissionCloseout),
+    refundRequests: refundRequestsRes.error ? [] : (refundRequestsRes.data ?? []).map(mapRefundRequest),
     qbVendors: qbVendorsRes.error ? [] : (qbVendorsRes.data ?? []).map(mapQbVendor),
     vendorProfiles: vendorProfilesRes.error ? [] : (vendorProfilesRes.data ?? []).map(mapVendorProfile),
     vendorFeedback: vendorFeedbackRes.error ? [] : (vendorFeedbackRes.data ?? []).map(mapVendorFeedback),

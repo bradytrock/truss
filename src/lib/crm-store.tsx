@@ -13,7 +13,7 @@ import {
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
-import { isPendingPayment } from "@/lib/payment-posting";
+import { isPendingPayment, roundCents } from "@/lib/payment-posting";
 import {
   applyDeferredBook,
   fetchCompanyBook,
@@ -32,7 +32,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingTradesColumn, missingTradesMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage } from "@/lib/supabase/schema-errors";
 import {
   eventTimesAreInvitable,
   externalInvitees,
@@ -201,6 +201,7 @@ import {
   mapExpense,
   mapForecastedExpense,
   mapCommissionCloseout,
+  mapRefundRequest,
   mapJobInsurance,
   expensePatch,
   mapMaterialOrder,
@@ -255,6 +256,21 @@ import {
   type CommissionSplitLine,
   type ExpenseAdjustment,
 } from "@/lib/commission-closeout";
+import {
+  canProcessRefunds,
+  cardFeeForRefund,
+  isOpenRefund,
+  nextRefundNumber,
+  paymentHeading,
+  refundApprovalChecks,
+  refundDestinationLabel,
+  refundDraftError,
+  refundPayout,
+  refundRequestPayload,
+  refundableRemaining,
+  type RefundDestination,
+  type RefundRequest,
+} from "@/lib/refunds";
 import { isBusinessDevelopment } from "@/lib/bd";
 import {
   NORTHLINE_COMPANY,
@@ -392,7 +408,7 @@ import { imessageEffectId, imessageEffectLabel, imessageReactionText } from "@/l
 import { looksLikePhone, storedPhone, toE164 } from "@/lib/phone";
 import { resolveCustomerName, applyCoOwnerToEstimate, coOwnerContact, type CustomerRecord } from "@/lib/parties";
 import { isMissingPhotoReports, missingPhotoReportsMessage, missingPageShareMessage, isMissingPageShare, parsePageTemplate } from "@/lib/photo-report";
-import { canDeleteJobs, canLeadCompany, canLoginAs, canManageAutomations, canManageSettings, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
+import { canDeleteJobs, canLeadCompany, canLoginAs, canManageAutomations, canManageSettings, canViewProjectFinancials, loginAsTargets, scopeBook, scopeDescription } from "@/lib/visibility";
 import { teamsAfterLeavingLead } from "@/lib/teams";
 
 export type LiveStatus = "offline" | "connecting" | "live";
@@ -455,6 +471,7 @@ const emptyState: CrmState = {
   forecastedExpenses: [],
   jobInsurance: [],
   commissionCloseouts: [],
+  refundRequests: [],
   materialOrders: [],
   materialOrderLines: [],
   materialOrderTemplates: [],
@@ -1363,6 +1380,25 @@ type CrmContextValue = CrmState & {
     },
   ) => Promise<CommissionCloseout | null>;
   markCommissionPayout: (id: string) => Promise<CommissionCloseout | null>;
+  requestRefund: (input: {
+    jobId: string;
+    paymentId: string;
+    amount: number;
+    reason: string;
+    note: string;
+    destination: RefundDestination;
+    feeCoveredByCompany: boolean;
+    attachmentName?: string;
+    attachmentUrl?: string;
+  }) => Promise<RefundRequest | null>;
+  withdrawRefund: (id: string) => Promise<RefundRequest | null>;
+  decideRefund: (
+    id: string,
+    decision: "approve" | "deny",
+    denyReason?: string,
+  ) => Promise<RefundRequest | null>;
+  advanceRefund: (id: string, step: "processing" | "refunded") => Promise<RefundRequest | null>;
+  askRefundQuestion: (id: string, body: string) => Promise<RefundRequest | null>;
   addMaterialOrder: (input: {
     jobId: string;
     vendor?: string;
@@ -1851,6 +1887,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             ...closeout,
             jobId: remapDroppedJobId(closeout.jobId, pruned.dropped) ?? closeout.jobId,
           })),
+          refundRequests: (book.state.refundRequests ?? []).map((refund) => ({
+            ...refund,
+            jobId: remapDroppedJobId(refund.jobId, pruned.dropped) ?? refund.jobId,
+          })),
           materialOrderLines: book.state.materialOrderLines ?? [],
         };
         if (!loadedFullBook || book.messagesError) {
@@ -1896,6 +1936,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
               commissionCloseouts: (merged.commissionCloseouts ?? []).map((closeout) => ({
                 ...closeout,
                 jobId: remapDroppedJobId(closeout.jobId, dropped) ?? closeout.jobId,
+              })),
+              refundRequests: (merged.refundRequests ?? []).map((refund) => ({
+                ...refund,
+                jobId: remapDroppedJobId(refund.jobId, dropped) ?? refund.jobId,
               })),
             };
           });
@@ -9101,6 +9145,472 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     [addActivity, effectiveStaff, finishCloseoutTasks, persistCloseout, state.commissionCloseouts, state.jobs],
   );
 
+  const placeRefund = useCallback(
+    (record: RefundRequest) => (current: CrmState) => ({
+      ...current,
+      refundRequests: [record, ...(current.refundRequests ?? []).filter((item) => item.id !== record.id)],
+    }),
+    [],
+  );
+
+  const persistRefund = useCallback(
+    async (next: RefundRequest, previous: RefundRequest | null) => {
+      setState(placeRefund(next));
+      const supabase = maybeClient();
+      if (!supabase || !looksLikeUuid(next.id) || !looksLikeUuid(user.companyId) || !looksLikeUuid(next.jobId)) {
+        return next;
+      }
+      const payload = {
+        ...refundRequestPayload(next, user.companyId),
+        payment_id: looksLikeUuid(next.paymentId) ? next.paymentId : null,
+        refund_payment_id:
+          next.refundPaymentId && looksLikeUuid(next.refundPaymentId) ? next.refundPaymentId : null,
+        questions: next.questions as unknown as Json,
+      };
+      const saved = await supabase.from("refund_requests").upsert(payload).select("*").single();
+      if (saved.error || !saved.data) {
+        if (saved.error && isMissingRefundRequests(saved.error)) {
+          toast.message(missingRefundRequestsMessage());
+          return next;
+        }
+        setState((current) => {
+          const without = (current.refundRequests ?? []).filter((item) => item.id !== next.id);
+          return { ...current, refundRequests: previous ? [previous, ...without] : without };
+        });
+        toast.error(saved.error?.message ?? "Could not save the refund.");
+        return null;
+      }
+      const mapped = mapRefundRequest(saved.data);
+      setState(placeRefund(mapped));
+      return mapped;
+    },
+    [placeRefund, user.companyId],
+  );
+
+  const finishRefundTasks = useCallback(
+    async (jobId: string, number: string) => {
+      const title = `Review refund ${number}`;
+      const open = state.tasks.filter(
+        (task) => !task.completed && task.relatedId === jobId && task.title === title,
+      );
+      for (const task of open) {
+        await toggleTask(task.id);
+      }
+    },
+    [state.tasks, toggleTask],
+  );
+
+  const postRefundPayment = useCallback(
+    async (refund: RefundRequest, payout: number) => {
+      const source = state.payments.find((item) => item.id === refund.paymentId);
+      const now = new Date().toISOString();
+      const payment = fillPayment({
+        id: crypto.randomUUID(),
+        invoiceId: source?.invoiceId ?? null,
+        jobId: refund.jobId,
+        amount: -payout,
+        method: "refund",
+        paidAt: localYmd(new Date()),
+        reference: refund.number,
+        receiptUrl: "",
+        qbStatus: "not_in_qb",
+        createdBy: effectiveStaff?.name || user.name,
+        postingStatus: "posted",
+        postedAt: now,
+        postedBy: effectiveStaff?.name || user.name,
+      });
+      const applyLocal = (saved: typeof payment) => {
+        setState((prev) => {
+          const payments = [saved, ...prev.payments.filter((item) => item.id !== saved.id)];
+          const invoice = saved.invoiceId ? prev.invoices.find((item) => item.id === saved.invoiceId) : undefined;
+          if (!invoice || invoice.status === "void" || invoice.status === "draft") return { ...prev, payments };
+          const status = derivedInvoiceStatus(invoice, prev.invoiceLines, payments);
+          return {
+            ...prev,
+            payments,
+            invoices: prev.invoices.map((item) => (item.id === invoice.id ? { ...item, status } : item)),
+          };
+        });
+      };
+      const supabase = maybeClient();
+      if (!supabase || !looksLikeUuid(user.companyId)) {
+        applyLocal(payment);
+        return payment;
+      }
+      const actor = actorUuid(user);
+      const payload = {
+        id: payment.id,
+        company_id: user.companyId,
+        invoice_id: payment.invoiceId,
+        job_id: payment.jobId && looksLikeUuid(payment.jobId) ? payment.jobId : null,
+        amount: payment.amount,
+        method: payment.method,
+        paid_at: payment.paidAt,
+        reference: payment.reference,
+        receipt_url: "",
+        receipt_storage_path: "",
+        qb_status: payment.qbStatus,
+        posting_status: "posted" as const,
+        ...(actor ? { created_by: actor } : {}),
+      };
+      let inserted = await supabase.from("payments").insert(payload).select("*").single();
+      const uuidRetry = withCreatedByRetry(payload, user, inserted.error);
+      if (uuidRetry) inserted = await supabase.from("payments").insert(uuidRetry).select("*").single();
+      if (inserted.error && isMissingFinancials(inserted.error)) {
+        toast.message(missingFinancialsMessage());
+        applyLocal(payment);
+        return payment;
+      }
+      if (inserted.error || !inserted.data) {
+        toast.error(inserted.error?.message ?? "Could not post the refund on the job.");
+        return null;
+      }
+      const saved = { ...mapPayment(inserted.data), createdBy: payment.createdBy };
+      applyLocal(saved);
+      return saved;
+    },
+    [effectiveStaff?.name, state.payments, user],
+  );
+
+  const requestRefund = useCallback(
+    async (input: {
+      jobId: string;
+      paymentId: string;
+      amount: number;
+      reason: string;
+      note: string;
+      destination: RefundDestination;
+      feeCoveredByCompany: boolean;
+      attachmentName?: string;
+      attachmentUrl?: string;
+    }) => {
+      const actor = effectiveStaff;
+      const job = state.jobs.find((item) => item.id === input.jobId);
+      if (!actor || !job) {
+        toast.error("Open the job before requesting a refund.");
+        return null;
+      }
+      if (!canViewProjectFinancials(actor.role)) {
+        toast.error("This seat can't request a refund.");
+        return null;
+      }
+      const refunds = state.refundRequests ?? [];
+      const payment =
+        paymentsForJob(job.id, state.payments, state.invoices).find((item) => item.id === input.paymentId) ?? null;
+      const problem = refundDraftError({
+        payment,
+        refunds,
+        amount: input.amount,
+        reason: input.reason,
+        feeCoveredByCompany: input.feeCoveredByCompany,
+      });
+      if (problem || !payment) {
+        toast.error(problem ?? "Choose the payment to refund.");
+        return null;
+      }
+      const contact = state.contacts.find((item) => item.id === job.primaryContactId);
+      const client = state.clients.find((item) => item.id === job.clientId);
+      const customer = contact?.name.trim() || client?.name.trim() || job.name;
+      const now = new Date().toISOString();
+      const feeAmount = cardFeeForRefund(payment, input.amount);
+      const cap = refundableRemaining(payment, refunds);
+      const next: RefundRequest = {
+        id: crypto.randomUUID(),
+        number: nextRefundNumber(refunds.map((item) => item.number)),
+        jobId: job.id,
+        paymentId: payment.id,
+        amount: roundCents(input.amount),
+        full: input.amount >= cap - 0.001,
+        reason: input.reason,
+        note: input.note.trim(),
+        destination: input.destination,
+        destinationLabel: refundDestinationLabel(payment, input.destination, customer),
+        feeAmount,
+        feeCoveredByCompany: feeAmount > 0 ? input.feeCoveredByCompany : true,
+        attachmentName: input.attachmentName?.trim() ?? "",
+        attachmentUrl: input.attachmentUrl?.trim() ?? "",
+        status: "requested",
+        requestedBy: actor.id,
+        requestedByName: actor.name,
+        requestedAt: now,
+        decidedBy: "",
+        decidedByName: "",
+        decidedAt: null,
+        denyReason: "",
+        processedAt: null,
+        refundedAt: null,
+        refundPaymentId: null,
+        questions: [],
+        updatedAt: now,
+      };
+      const saved = await persistRefund(next, null);
+      if (!saved) return null;
+      const money = next.amount.toLocaleString("en-US", { style: "currency", currency: "USD" });
+      await addActivity({
+        entityType: "job",
+        entityId: job.id,
+        type: "note",
+        body: `${actor.name} requested a ${money} refund on the ${paymentHeading(payment).toLowerCase()}.`,
+      });
+      const title = `Review refund ${saved.number}`;
+      for (const member of state.staff) {
+        if (member.locked || member.id === actor.id || !canProcessRefunds(member.role)) continue;
+        const open = state.tasks.some(
+          (task) => !task.completed && task.relatedId === job.id && task.assignee === member.name && task.title === title,
+        );
+        if (open) continue;
+        await addTask({
+          title,
+          dueAt: localYmd(new Date()),
+          relatedType: "job",
+          relatedId: job.id,
+          assignee: member.name,
+          notes: `${actor.name} requested ${money} back on ${job.code || job.name}. ${refundDestinationLabel(payment, next.destination, customer)}.`,
+        });
+      }
+      toast.success(`${saved.number} is with Accounting.`);
+      return saved;
+    },
+    [
+      addActivity,
+      addTask,
+      effectiveStaff,
+      persistRefund,
+      state.clients,
+      state.contacts,
+      state.invoices,
+      state.jobs,
+      state.payments,
+      state.refundRequests,
+      state.staff,
+      state.tasks,
+    ],
+  );
+
+  const withdrawRefund = useCallback(
+    async (id: string) => {
+      const actor = effectiveStaff;
+      const current = (state.refundRequests ?? []).find((item) => item.id === id);
+      if (!actor || !current) return null;
+      const mine = current.requestedBy === actor.id || current.requestedByName === actor.name;
+      if (!mine && !canProcessRefunds(actor.role)) {
+        toast.error("The person who requested this refund can withdraw it.");
+        return null;
+      }
+      if (current.status !== "requested" && current.status !== "approved") {
+        toast.error("This refund has already moved, so it can't be withdrawn.");
+        return null;
+      }
+      const now = new Date().toISOString();
+      const next: RefundRequest = {
+        ...current,
+        status: "withdrawn",
+        decidedBy: actor.id,
+        decidedByName: actor.name,
+        decidedAt: now,
+        updatedAt: now,
+      };
+      const saved = await persistRefund(next, current);
+      if (!saved) return null;
+      await finishRefundTasks(current.jobId, current.number);
+      await addActivity({
+        entityType: "job",
+        entityId: current.jobId,
+        type: "note",
+        body: `${actor.name} withdrew refund ${current.number}.`,
+      });
+      toast.success(`${current.number} withdrawn.`);
+      return saved;
+    },
+    [addActivity, effectiveStaff, finishRefundTasks, persistRefund, state.refundRequests],
+  );
+
+  const decideRefund = useCallback(
+    async (id: string, decision: "approve" | "deny", denyReason = "") => {
+      const actor = effectiveStaff;
+      const current = (state.refundRequests ?? []).find((item) => item.id === id);
+      if (!actor || !current) return null;
+      if (!canProcessRefunds(actor.role)) {
+        toast.error("Accounting approves refunds.");
+        return null;
+      }
+      if (current.status !== "requested") {
+        toast.error("This refund is no longer waiting on approval.");
+        return null;
+      }
+      if (decision === "deny" && !denyReason.trim()) {
+        toast.error("Say why this refund is denied.");
+        return null;
+      }
+      const payment =
+        paymentsForJob(current.jobId, state.payments, state.invoices).find((item) => item.id === current.paymentId) ??
+        null;
+      if (decision === "approve") {
+        const failed = refundApprovalChecks({
+          payment,
+          refund: current,
+          refunds: state.refundRequests ?? [],
+          viewerStaffId: actor.id,
+          viewerName: actor.name,
+        }).find((item) => !item.ok);
+        if (failed) {
+          toast.error(failed.label);
+          return null;
+        }
+      }
+      const now = new Date().toISOString();
+      const next: RefundRequest = {
+        ...current,
+        status: decision === "approve" ? "approved" : "denied",
+        decidedBy: actor.id,
+        decidedByName: actor.name,
+        decidedAt: now,
+        denyReason: decision === "deny" ? denyReason.trim() : "",
+        updatedAt: now,
+      };
+      const saved = await persistRefund(next, current);
+      if (!saved) return null;
+      await finishRefundTasks(current.jobId, current.number);
+      const money = refundPayout(current).toLocaleString("en-US", { style: "currency", currency: "USD" });
+      await addActivity({
+        entityType: "job",
+        entityId: current.jobId,
+        type: "note",
+        body:
+          decision === "approve"
+            ? `${actor.name} approved refund ${current.number} for ${money}.`
+            : `${actor.name} denied refund ${current.number}. ${denyReason.trim()}`,
+      });
+      toast.success(decision === "approve" ? `${current.number} approved.` : `${current.number} denied.`);
+      return saved;
+    },
+    [
+      addActivity,
+      effectiveStaff,
+      finishRefundTasks,
+      persistRefund,
+      state.invoices,
+      state.payments,
+      state.refundRequests,
+    ],
+  );
+
+  const advanceRefund = useCallback(
+    async (id: string, step: "processing" | "refunded") => {
+      const actor = effectiveStaff;
+      const current = (state.refundRequests ?? []).find((item) => item.id === id);
+      if (!actor || !current) return null;
+      if (!canProcessRefunds(actor.role)) {
+        toast.error("Accounting sends the refund.");
+        return null;
+      }
+      if (step === "processing" && current.status !== "approved") {
+        toast.error("Approve the refund before processing it.");
+        return null;
+      }
+      if (step === "refunded" && current.status !== "processing") {
+        toast.error("Mark the refund processing before the money goes back.");
+        return null;
+      }
+      const now = new Date().toISOString();
+      let refundPaymentId = current.refundPaymentId;
+      if (step === "refunded" && !refundPaymentId) {
+        const posted = await postRefundPayment(current, refundPayout(current));
+        if (!posted) return null;
+        refundPaymentId = posted.id;
+      }
+      const next: RefundRequest = {
+        ...current,
+        status: step,
+        processedAt: step === "processing" ? now : current.processedAt,
+        refundedAt: step === "refunded" ? now : current.refundedAt,
+        refundPaymentId,
+        updatedAt: now,
+      };
+      const saved = await persistRefund(next, current);
+      if (!saved) {
+        if (step === "refunded" && refundPaymentId && refundPaymentId !== current.refundPaymentId) {
+          setState((prev) => {
+            const posted = prev.payments.find((item) => item.id === refundPaymentId);
+            const payments = prev.payments.filter((item) => item.id !== refundPaymentId);
+            if (!posted?.invoiceId) return { ...prev, payments };
+            const invoice = prev.invoices.find((item) => item.id === posted.invoiceId);
+            if (!invoice) return { ...prev, payments };
+            const status = derivedInvoiceStatus(invoice, prev.invoiceLines, payments);
+            return {
+              ...prev,
+              payments,
+              invoices: prev.invoices.map((item) => (item.id === invoice.id ? { ...item, status } : item)),
+            };
+          });
+          const supabase = maybeClient();
+          if (supabase) await supabase.from("payments").delete().eq("id", refundPaymentId);
+        }
+        return null;
+      }
+      const money = refundPayout(current).toLocaleString("en-US", { style: "currency", currency: "USD" });
+      await addActivity({
+        entityType: "job",
+        entityId: current.jobId,
+        type: "note",
+        body:
+          step === "processing"
+            ? `${actor.name} started processing refund ${current.number}.`
+            : `${actor.name} refunded ${money} on ${current.number}.`,
+      });
+      toast.success(step === "processing" ? `${current.number} is processing.` : `${money} refunded.`);
+      return saved;
+    },
+    [addActivity, effectiveStaff, persistRefund, postRefundPayment, state.refundRequests],
+  );
+
+  const askRefundQuestion = useCallback(
+    async (id: string, body: string) => {
+      const actor = effectiveStaff;
+      const current = (state.refundRequests ?? []).find((item) => item.id === id);
+      const note = body.trim();
+      if (!actor || !current) return null;
+      if (!note) {
+        toast.error("Write the question first.");
+        return null;
+      }
+      if (!isOpenRefund(current)) {
+        toast.error("This refund is already closed.");
+        return null;
+      }
+      const now = new Date().toISOString();
+      const next: RefundRequest = {
+        ...current,
+        questions: [
+          ...current.questions,
+          { id: crypto.randomUUID(), authorId: actor.id, authorName: actor.name, body: note, createdAt: now },
+        ],
+        updatedAt: now,
+      };
+      const saved = await persistRefund(next, current);
+      if (!saved) return null;
+      await addActivity({
+        entityType: "job",
+        entityId: current.jobId,
+        type: "note",
+        body: `${actor.name} asked about refund ${current.number}: ${note}`,
+      });
+      if (current.requestedByName && current.requestedByName !== actor.name) {
+        await addTask({
+          title: `Answer a question on ${current.number}`,
+          dueAt: localYmd(new Date()),
+          relatedType: "job",
+          relatedId: current.jobId,
+          assignee: current.requestedByName,
+          notes: note,
+        });
+      }
+      toast.success("Question sent.");
+      return saved;
+    },
+    [addActivity, addTask, effectiveStaff, persistRefund, state.refundRequests],
+  );
+
   const addMaterialOrder = useCallback(
     async (input: {
       jobId: string;
@@ -14698,6 +15208,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       returnCommissionCloseout,
       releaseCommissionCloseout,
       markCommissionPayout,
+      requestRefund,
+      withdrawRefund,
+      decideRefund,
+      advanceRefund,
+      askRefundQuestion,
       addMaterialOrder,
       updateMaterialOrder,
       addMaterialOrderLineFromCatalog,
@@ -14907,6 +15422,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       returnCommissionCloseout,
       releaseCommissionCloseout,
       markCommissionPayout,
+      requestRefund,
+      withdrawRefund,
+      decideRefund,
+      advanceRefund,
+      askRefundQuestion,
       addMaterialOrder,
       updateMaterialOrder,
       addMaterialOrderLineFromCatalog,

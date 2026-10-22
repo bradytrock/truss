@@ -293,6 +293,24 @@ export function missingCommissionCloseoutsMessage() {
   return `Saved in this browser. Run ${COMMISSION_CLOSEOUT_SQL}, then ${COMMISSION_CLOSEOUT_ADJUSTMENTS_SQL}, in the SQL editor so commission closeouts stay on the job.`;
 }
 
+export const REFUND_REQUESTS_SQL = "supabase/migrations/20261022120000_refund_requests.sql";
+
+export function isMissingRefundRequests(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = error.message ?? "";
+  return (
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    message.includes("schema cache") ||
+    message.includes("Could not find the") ||
+    message.includes("refund_requests")
+  );
+}
+
+export function missingRefundRequestsMessage() {
+  return `Saved in this browser. Run ${REFUND_REQUESTS_SQL} in the SQL editor so refund requests stay on the job.`;
+}
+
 export function isMissingOriginator(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
   const message = error.message ?? "";
