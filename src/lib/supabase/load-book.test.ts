@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { isTransientRequestError, limitBookQuery } from "./load-book.ts";
+import { BOOK_ROW_LIMITS, isTransientRequestError, limitBookQuery } from "./load-book.ts";
 
 assert.equal(isTransientRequestError({ message: "TypeError: Failed to fetch" }), true);
 assert.equal(isTransientRequestError({ message: "Could not find the table public.messages" }), false);
@@ -11,6 +11,10 @@ assert.equal(
   true,
 );
 assert.equal(isTransientRequestError(null), false);
+assert.equal(BOOK_ROW_LIMITS.activities, 2000);
+assert.equal(BOOK_ROW_LIMITS.messages, 1000);
+assert.equal(BOOK_ROW_LIMITS.gmailMessages, 250);
+assert.equal(BOOK_ROW_LIMITS.photos, 2000);
 
 async function main() {
   let active = 0;

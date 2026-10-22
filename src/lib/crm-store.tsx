@@ -54,7 +54,7 @@ import {
   realtorPortalUrl,
 } from "@/lib/realtor-portal";
 import { newShareToken, shareUrl } from "@/lib/share";
-import { fillJobRecord, jobAddress, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId, jobInsertPayload, jobsFilledFromLeads, jobPatchFromLead, leadOverviewBackfill } from "@/lib/job-record";
+import { fillJobRecord, jobAddress, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId, jobInsertPayload, jobsFilledFromLeads, jobPatchFromLead, leadOverviewBackfill, prepareDeskJobs } from "@/lib/job-record";
 import { livePhotos } from "@/lib/photo-trash";
 import {
   amountForEstimate,
@@ -259,6 +259,7 @@ import {
   NORTHLINE_COMPANY,
   STAGE_LABELS,
   STAGE_PROBABILITY,
+  isNorthlineDemoName,
   isShelvedStage,
   initialsFromName,
   staffByName,
@@ -1529,6 +1530,15 @@ function mirrorCompanyCamPhoto(photoId: string, action: "push" | "remove") {
   }).catch(() => undefined);
 }
 
+/** A short tab switch should not download the company again. */
+const BOOK_REFRESH_AFTER_HIDDEN_MS = 3 * 60 * 1000;
+/** Coalesce a burst of realtime events into one book reload. */
+const LIVE_REFRESH_DEBOUNCE_MS = 1000;
+/** Railway has no realtime channel, so the desk polls. A full book every 15s saturated the pool. */
+const RAILWAY_BOOK_POLL_MS = 60_000;
+/** Own cleanup writes echo through realtime. Hold the reload until they finish. */
+const MAINTENANCE_QUIET_MS = 15_000;
+
 export function CrmProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const configured = isSupabaseConfigured();
@@ -1543,8 +1553,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   const [liveStatus, setLiveStatus] = useState<LiveStatus>("offline");
   const seeding = useRef(false);
   const bookEpoch = useRef(0);
+  const maintenanceQuietUntil = useRef(0);
+  const refreshInFlight = useRef(false);
+  const refreshAgain = useRef(false);
+  const quietTimer = useRef<number | null>(null);
+  const liveStatusRef = useRef<LiveStatus>("offline");
   const bookRef = useRef(state);
   bookRef.current = state;
+  const liveRefreshRef = useRef<() => Promise<void>>(async () => undefined);
   const threadOpenWrites = useRef(new Map<string, number>());
   const guestInviteColumnWarned = useRef(false);
   const enqueueAutomationEventRef = useRef<(event: AutomationEvent) => void>(() => undefined);
@@ -1685,9 +1701,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     const companyId = profile.company_id;
     try {
       const bookLoad = loadCompanyBook(supabase, companyId);
-      let book = await bookLoad.core;
-      let loadedFullBook = false;
-      let ensured = await ensureSignedInStaff(
+      const book = await bookLoad.core;
+      const ensured = await ensureSignedInStaff(
         supabase,
         companyId,
         {
@@ -1701,34 +1716,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         book.state.staff,
         authUser.email ?? "",
       );
-      if (ensured.matched) {
-        try {
-          const removed = await retireDemoStaff(supabase, companyId, {
-            staffId: ensured.matched.id,
-            name: profile.full_name,
-          });
-          if (removed) {
-            book = await fetchCompanyBook(supabase, companyId);
-            loadedFullBook = true;
-            ensured = await ensureSignedInStaff(
-              supabase,
-              companyId,
-              {
-                id: profile.id,
-                full_name: profile.full_name,
-                title: profile.title,
-                initials: profile.initials,
-                role: (profile.role as SeatRole | undefined) ?? "company_admin",
-                staff_id: profile.staff_id,
-              },
-              book.state.staff,
-              authUser.email ?? "",
-            );
-          }
-        } catch {
-          // Demo roster cleanup must not blank the book.
-        }
-      }
       const matched = ensured.matched;
       const roster = ensured.roster;
       if (matched?.locked) {
@@ -1765,145 +1752,180 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         book.state.jobs,
         roster,
       );
-      let opportunities = stamped.opportunities;
-      let jobs = stamped.jobs;
-      if (jobsFromOpenLeads(opportunities, jobs).length > 0 && !seeding.current) {
-        seeding.current = true;
-        try {
-          const added = await persistOpenLeadJobs(supabase, companyId, opportunities, jobs);
-          if (added) {
-            book = await fetchCompanyBook(supabase, companyId);
-            loadedFullBook = true;
-            const restamped = backfillRecordCodes(
-              book.state.opportunities,
-              book.state.jobs,
-              roster,
-            );
-            opportunities = restamped.opportunities;
-            jobs = restamped.jobs;
-          }
-        } finally {
-          seeding.current = false;
-        }
-      }
-      const pruned = await pruneDuplicateLeadJobs(supabase, jobs);
-      jobs = await scrubNorthlineCrewFromJobs(supabase, pruned.jobs, profile.full_name);
-      const backfilled = await persistLeadFieldsOnJobs(supabase, jobs, opportunities);
-      jobs = jobsFilledFromLeads(backfilled.jobs, opportunities);
-      const remapJob = (jobId: string | null) => remapDroppedJobId(jobId, pruned.dropped);
+      const opportunities = stamped.opportunities;
+      const prepared = prepareDeskJobs(stamped.jobs, opportunities, profile.full_name);
+      const jobs = jobsFilledFromLeads(prepared.jobs, opportunities);
+      const dropped = prepared.dropped;
+      const remapJob = (jobId: string | null) => remapDroppedJobId(jobId, dropped);
       if (epoch !== bookEpoch.current) return;
-      const keptMessages =
-        (!loadedFullBook || book.messagesError) && bookRef.current.messages.length
-          ? bookRef.current.messages
-          : book.state.messages;
-      setState((prev) => {
-        const next = {
-          ...book.state,
-          staff: roster,
-          opportunities,
-          jobs,
-          estimates: book.state.estimates.map((estimate) => ({
-            ...estimate,
-            jobId: remapJob(estimate.jobId),
-          })),
-          invoices: book.state.invoices.map((invoice) => ({
-            ...invoice,
-            jobId: remapJob(invoice.jobId),
-          })),
-          expenses: book.state.expenses.map((expense) => ({
-            ...expense,
-            jobId: remapJob(expense.jobId),
-          })),
-          payments: book.state.payments.map((payment) => ({
-            ...payment,
-            jobId: remapJob(payment.jobId),
-          })),
-          events: book.state.events.map((event) => ({
-            ...event,
-            jobId: remapJob(event.jobId),
-          })),
-          photos: book.state.photos.map((photo) => ({
-            ...photo,
-            jobId: remapDroppedJobId(photo.jobId, pruned.dropped) ?? photo.jobId,
-          })),
-          jobFiles: (book.state.jobFiles ?? []).map((file) => ({
-            ...file,
-            jobId: remapDroppedJobId(file.jobId, pruned.dropped) ?? file.jobId,
-          })),
-          photoReports: book.state.photoReports.map((report) => ({
-            ...report,
-            jobId: remapDroppedJobId(report.jobId, pruned.dropped) ?? report.jobId,
-            template: parsePageTemplate(report.template),
-            shareToken: report.shareToken ?? "",
-          })),
-          materialOrders: (book.state.materialOrders ?? []).map((order) => ({
-            ...order,
-            jobId: remapDroppedJobId(order.jobId, pruned.dropped) ?? order.jobId,
-          })),
-          jobInsurance: (book.state.jobInsurance ?? []).map((claim) => ({
-            ...claim,
-            jobId: remapDroppedJobId(claim.jobId, pruned.dropped) ?? claim.jobId,
-          })),
-          commissionCloseouts: (book.state.commissionCloseouts ?? []).map((closeout) => ({
-            ...closeout,
-            jobId: remapDroppedJobId(closeout.jobId, pruned.dropped) ?? closeout.jobId,
-          })),
-          materialOrderLines: book.state.materialOrderLines ?? [],
-        };
-        if (!loadedFullBook || book.messagesError) {
-          next.messages = prev.messages.length ? prev.messages : next.messages;
-        }
-        return next;
-      });
+      setState((prev) => ({
+        ...book.state,
+        staff: roster,
+        opportunities,
+        jobs,
+        messages: prev.messages.length ? prev.messages : book.state.messages,
+        estimates: book.state.estimates.map((estimate) => ({
+          ...estimate,
+          jobId: remapJob(estimate.jobId),
+        })),
+        invoices: book.state.invoices.map((invoice) => ({
+          ...invoice,
+          jobId: remapJob(invoice.jobId),
+        })),
+        expenses: book.state.expenses.map((expense) => ({
+          ...expense,
+          jobId: remapJob(expense.jobId),
+        })),
+        payments: book.state.payments.map((payment) => ({
+          ...payment,
+          jobId: remapJob(payment.jobId),
+        })),
+        events: book.state.events.map((event) => ({
+          ...event,
+          jobId: remapJob(event.jobId),
+        })),
+        photos: book.state.photos.map((photo) => ({
+          ...photo,
+          jobId: remapDroppedJobId(photo.jobId, dropped) ?? photo.jobId,
+        })),
+        jobFiles: (book.state.jobFiles ?? []).map((file) => ({
+          ...file,
+          jobId: remapDroppedJobId(file.jobId, dropped) ?? file.jobId,
+        })),
+        photoReports: book.state.photoReports.map((report) => ({
+          ...report,
+          jobId: remapDroppedJobId(report.jobId, dropped) ?? report.jobId,
+          template: parsePageTemplate(report.template),
+          shareToken: report.shareToken ?? "",
+        })),
+        materialOrders: (book.state.materialOrders ?? []).map((order) => ({
+          ...order,
+          jobId: remapDroppedJobId(order.jobId, dropped) ?? order.jobId,
+        })),
+        jobInsurance: (book.state.jobInsurance ?? []).map((claim) => ({
+          ...claim,
+          jobId: remapDroppedJobId(claim.jobId, dropped) ?? claim.jobId,
+        })),
+        commissionCloseouts: (book.state.commissionCloseouts ?? []).map((closeout) => ({
+          ...closeout,
+          jobId: remapDroppedJobId(closeout.jobId, dropped) ?? closeout.jobId,
+        })),
+        materialOrderLines: book.state.materialOrderLines ?? [],
+      }));
       setHydrateError(null);
       setHydrated(true);
-      setMessagesReady(loadedFullBook);
-      setMessagesError(loadedFullBook && book.messagesError && keptMessages.length === 0 ? TEXTS_UNAVAILABLE : null);
-      if (!loadedFullBook) {
-        try {
-          const full = await bookLoad.full;
-          if (epoch !== bookEpoch.current) return;
-          setState((prev) => {
-            const merged = applyDeferredBook(prev, full.state);
-            const dropped = pruned.dropped;
-            const messages = full.messagesError ? prev.messages : merged.messages;
-            return {
-              ...merged,
-              messages,
-              photos: merged.photos.map((photo) => ({
-                ...photo,
-                jobId: remapDroppedJobId(photo.jobId, dropped) ?? photo.jobId,
-              })),
-              jobFiles: merged.jobFiles.map((file) => ({
-                ...file,
-                jobId: remapDroppedJobId(file.jobId, dropped) ?? file.jobId,
-              })),
-              photoReports: merged.photoReports.map((report) => ({
-                ...report,
-                jobId: remapDroppedJobId(report.jobId, dropped) ?? report.jobId,
-              })),
-              materialOrders: merged.materialOrders.map((order) => ({
-                ...order,
-                jobId: remapDroppedJobId(order.jobId, dropped) ?? order.jobId,
-              })),
-              jobInsurance: merged.jobInsurance.map((claim) => ({
-                ...claim,
-                jobId: remapDroppedJobId(claim.jobId, dropped) ?? claim.jobId,
-              })),
-              commissionCloseouts: (merged.commissionCloseouts ?? []).map((closeout) => ({
-                ...closeout,
-                jobId: remapDroppedJobId(closeout.jobId, dropped) ?? closeout.jobId,
-              })),
-            };
-          });
-          if (epoch !== bookEpoch.current) return;
-          const stillEmpty = bookRef.current.messages.length === 0 && full.state.messages.length === 0;
-          setMessagesError(full.messagesError && stillEmpty ? TEXTS_UNAVAILABLE : null);
-        } catch {
-          if (bookRef.current.messages.length === 0) setMessagesError(TEXTS_UNAVAILABLE);
-        } finally {
-          if (epoch === bookEpoch.current) setMessagesReady(true);
+      setMessagesReady(bookRef.current.messages.length > 0);
+      setMessagesError(null);
+
+      const needsLeadJobs = jobsFromOpenLeads(opportunities, jobs).length > 0;
+      if (prepared.dirty || needsLeadJobs) {
+        maintenanceQuietUntil.current = Date.now() + MAINTENANCE_QUIET_MS;
+      }
+
+      void (async () => {
+        if (ensured.matched) {
+          try {
+            const removed = await retireDemoStaff(supabase, companyId, {
+              staffId: ensured.matched.id,
+              name: profile.full_name,
+            });
+            if (removed && epoch === bookEpoch.current) {
+              setState((prev) => ({
+                ...prev,
+                staff: prev.staff.filter((member) => {
+                  if (!isNorthlineDemoName(member.name)) return true;
+                  if (member.id === ensured.matched?.id) return true;
+                  return namesMatch(member.name, profile.full_name);
+                }),
+              }));
+            }
+          } catch {
+            // Demo roster cleanup must not blank the book.
+          }
         }
+        if (epoch !== bookEpoch.current) return;
+        if (needsLeadJobs && !seeding.current) {
+          seeding.current = true;
+          try {
+            const added = await persistOpenLeadJobs(supabase, companyId, opportunities, jobs);
+            if (added && epoch === bookEpoch.current) {
+              const { data, error } = await supabase
+                .from("jobs")
+                .select("*")
+                .eq("company_id", companyId)
+                .order("start_date", { ascending: false });
+              if (!error && data && epoch === bookEpoch.current) {
+                const freshJobs = jobsFilledFromLeads(
+                  data.flatMap((row) => {
+                    try {
+                      return [mapJob(row)];
+                    } catch {
+                      return [];
+                    }
+                  }),
+                  opportunities,
+                );
+                setState((prev) => ({ ...prev, jobs: freshJobs }));
+              }
+            }
+          } finally {
+            seeding.current = false;
+          }
+        }
+        if (epoch !== bookEpoch.current) return;
+        await pruneDuplicateLeadJobs(supabase, stamped.jobs);
+        if (epoch !== bookEpoch.current) return;
+        await scrubNorthlineCrewFromJobs(
+          supabase,
+          stamped.jobs.filter((job) => !dropped.has(job.id)),
+          profile.full_name,
+        );
+        if (epoch !== bookEpoch.current) return;
+        await persistLeadFieldsOnJobs(supabase, prepared.persistFrom, opportunities);
+      })();
+
+      try {
+        const full = await bookLoad.full;
+        if (epoch !== bookEpoch.current) return;
+        setState((prev) => {
+          const merged = applyDeferredBook(prev, full.state);
+          const messages = full.messagesError ? prev.messages : merged.messages;
+          return {
+            ...merged,
+            messages,
+            photos: merged.photos.map((photo) => ({
+              ...photo,
+              jobId: remapDroppedJobId(photo.jobId, dropped) ?? photo.jobId,
+            })),
+            jobFiles: merged.jobFiles.map((file) => ({
+              ...file,
+              jobId: remapDroppedJobId(file.jobId, dropped) ?? file.jobId,
+            })),
+            photoReports: merged.photoReports.map((report) => ({
+              ...report,
+              jobId: remapDroppedJobId(report.jobId, dropped) ?? report.jobId,
+            })),
+            materialOrders: merged.materialOrders.map((order) => ({
+              ...order,
+              jobId: remapDroppedJobId(order.jobId, dropped) ?? order.jobId,
+            })),
+            jobInsurance: merged.jobInsurance.map((claim) => ({
+              ...claim,
+              jobId: remapDroppedJobId(claim.jobId, dropped) ?? claim.jobId,
+            })),
+            commissionCloseouts: (merged.commissionCloseouts ?? []).map((closeout) => ({
+              ...closeout,
+              jobId: remapDroppedJobId(closeout.jobId, dropped) ?? closeout.jobId,
+            })),
+          };
+        });
+        if (epoch !== bookEpoch.current) return;
+        const stillEmpty = bookRef.current.messages.length === 0 && full.state.messages.length === 0;
+        setMessagesError(full.messagesError && stillEmpty ? TEXTS_UNAVAILABLE : null);
+      } catch {
+        if (bookRef.current.messages.length === 0) setMessagesError(TEXTS_UNAVAILABLE);
+      } finally {
+        if (epoch === bookEpoch.current) setMessagesReady(true);
       }
     } catch (error) {
       if (epoch !== bookEpoch.current) return;
@@ -1951,6 +1973,23 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     if (!isSupabaseConfigured()) return;
     const companyId = user.companyId;
     if (!companyId) return;
+    if (refreshInFlight.current) {
+      refreshAgain.current = true;
+      return;
+    }
+    const quietFor = maintenanceQuietUntil.current - Date.now();
+    if (quietFor > 0) {
+      refreshAgain.current = true;
+      if (quietTimer.current == null) {
+        quietTimer.current = window.setTimeout(() => {
+          quietTimer.current = null;
+          refreshAgain.current = false;
+          void liveRefreshRef.current();
+        }, quietFor + 40);
+      }
+      return;
+    }
+    refreshInFlight.current = true;
     const epoch = ++bookEpoch.current;
     const supabase = createClient();
     try {
@@ -1976,9 +2015,19 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       );
       setMessagesReady(true);
     } catch {
-      // Keep the current book; the next event, focus, or reconnect will try again.
+      // Keep the current book; the next event or reconnect will try again.
+    } finally {
+      refreshInFlight.current = false;
+      if (refreshAgain.current) {
+        refreshAgain.current = false;
+        void liveRefreshRef.current();
+      }
     }
   }, [user.companyId]);
+
+  useEffect(() => {
+    liveRefreshRef.current = liveRefresh;
+  }, [liveRefresh]);
 
   useEffect(() => {
     if (!configured || !hydrated || !user.companyId) {
@@ -1989,7 +2038,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     let timer: number | undefined;
     let cancelled = false;
     const pendingIds: string[] = [];
-    setLiveStatus("connecting");
+    const setLive = (status: LiveStatus) => {
+      liveStatusRef.current = status;
+      setLiveStatus(status);
+    };
+    setLive("connecting");
 
     const drain = (grace: number) => {
       if (cancelled) return;
@@ -2012,29 +2065,41 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       if (payload.table === "message_thread_opens") return;
       pendingIds.push(changedRowId(payload));
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => drain(0), 350);
+      timer = window.setTimeout(() => drain(0), LIVE_REFRESH_DEBOUNCE_MS);
+    };
+
+    let hiddenAt = 0;
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        return;
+      }
+      const away = hiddenAt ? Date.now() - hiddenAt : 0;
+      hiddenAt = 0;
+      if (away >= BOOK_REFRESH_AFTER_HIDDEN_MS || liveStatusRef.current === "offline") {
+        void liveRefresh();
+      }
+    };
+    const onOnline = () => {
+      void liveRefresh();
     };
 
     if (railwayDatabaseEnabled()) {
-      setLiveStatus("live");
+      setLive("live");
       const poll = window.setInterval(() => {
         if (document.visibilityState === "visible") void liveRefresh();
-      }, 15000);
-      const onVisible = () => {
-        if (document.visibilityState === "visible") void liveRefresh();
-      };
-      const onOnline = () => {
-        void liveRefresh();
-      };
-      document.addEventListener("visibilitychange", onVisible);
-      window.addEventListener("focus", onVisible);
+      }, RAILWAY_BOOK_POLL_MS);
+      document.addEventListener("visibilitychange", onVisibility);
       window.addEventListener("online", onOnline);
       return () => {
         cancelled = true;
         window.clearTimeout(timer);
         window.clearInterval(poll);
-        document.removeEventListener("visibilitychange", onVisible);
-        window.removeEventListener("focus", onVisible);
+        if (quietTimer.current != null) {
+          window.clearTimeout(quietTimer.current);
+          quietTimer.current = null;
+        }
+        document.removeEventListener("visibilitychange", onVisibility);
         window.removeEventListener("online", onOnline);
       };
     }
@@ -2045,31 +2110,27 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       .subscribe((status) => {
         if (cancelled) return;
         if (status === "SUBSCRIBED") {
-          setLiveStatus("live");
+          setLive("live");
           return;
         }
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          setLiveStatus("offline");
+          setLive("offline");
           return;
         }
-        setLiveStatus("connecting");
+        setLive("connecting");
       });
 
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void liveRefresh();
-    };
-    const onOnline = () => {
-      void liveRefresh();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", onVisible);
+    document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("online", onOnline);
 
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", onVisible);
+      if (quietTimer.current != null) {
+        window.clearTimeout(quietTimer.current);
+        quietTimer.current = null;
+      }
+      document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("online", onOnline);
       void supabase.removeChannel(channel);
     };
