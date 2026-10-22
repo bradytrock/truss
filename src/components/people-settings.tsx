@@ -628,7 +628,7 @@ export function PeopleSettings({
           return onUpdate(profileTarget.id, patch);
         }}
         onCopyInvite={async (member) => {
-          if (member.inviteToken && !inviteIsExpired(member)) {
+          if (inviteLinkUsable(member) && member.inviteToken) {
             await copyInvite(inviteSignupUrl(window.location.origin, member.inviteToken));
             return;
           }

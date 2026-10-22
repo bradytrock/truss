@@ -36,7 +36,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { GoogleLocationSelect } from "@/components/google-locations-settings";
 import { PhoneInput } from "@/components/phone-input";
 import { TeamSelect } from "@/components/teams-settings";
-import { inviteExpiry, inviteIsExpired, inviteIsPending } from "@/lib/accounts";
+import { inviteExpiry, seatInviteStatus, staffStatusLabel } from "@/lib/accounts";
 import { cardUrl } from "@/lib/card";
 import { normalizePersonCardSlug } from "@/lib/card-slug";
 import { LOGO_ACCEPT, LOGO_MAX_BYTES, validateLogoFile } from "@/lib/company-logo";
@@ -344,8 +344,9 @@ export function ProfileEditor({
   }
 
   const given = member ? firstName(member.name) : "";
-  const pendingInvite = member ? inviteIsPending(member) : false;
-  const expiredInvite = member ? pendingInvite && inviteIsExpired(member) : false;
+  const inviteStatus = member ? seatInviteStatus(member) : "none";
+  const pendingInvite = inviteStatus === "open" || inviteStatus === "accepted";
+  const expiredInvite = inviteStatus === "expired" || inviteStatus === "declined";
   const slugChanged = Boolean(normalizedSlug && baselineSlug && normalizedSlug !== baselineSlug);
   const quotaAmount =
     draft && member
@@ -398,7 +399,7 @@ export function ProfileEditor({
               <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
                 <section className="rounded-2xl border border-[#ece7e2] bg-white p-5 shadow-sm">
                   <div className="flex items-start gap-4">
-                    <ProfileAvatar member={member} dashed={pendingInvite && !expiredInvite && !member.photoUrl?.trim()} />
+                    <ProfileAvatar member={member} dashed={pendingInvite && !member.photoUrl?.trim()} />
                     <div className="min-w-0 flex-1 pt-0.5">
                       <div className="flex items-start justify-between gap-3">
                         <h2 className="truncate text-2xl font-semibold tracking-tight">{draft.name.trim() || member.name}</h2>
@@ -442,7 +443,7 @@ export function ProfileEditor({
                   </div>
                 </section>
 
-                {resentExpires || pendingInvite ? (
+                {resentExpires || pendingInvite || expiredInvite ? (
                   <section className="rounded-2xl border border-[#ece7e2] bg-white p-3 shadow-sm">
                     {resentExpires ? (
                       <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
@@ -454,7 +455,8 @@ export function ProfileEditor({
                     ) : member ? (
                       <InviteBanner
                     member={member}
-                    expired={expiredInvite}
+                    expired={inviteStatus === "expired"}
+                    declined={inviteStatus === "declined"}
                     given={given}
                     busy={inviteBusy}
                     onCopy={() => {
@@ -694,11 +696,11 @@ function RolePill({ role }: { role: SeatRole }) {
 }
 
 function StatusPill({ member }: { member: StaffMember }) {
-  const pending = inviteIsPending(member);
-  const expired = pending && inviteIsExpired(member);
-  const locked = member.locked;
-  const label = expired ? "Invite expired" : pending ? "Invite pending" : locked ? "Locked" : "Active";
-  const tone = expired || locked ? "rose" : pending ? "amber" : "green";
+  const status = seatInviteStatus(member);
+  const label = staffStatusLabel(member);
+  const attention = status === "expired" || status === "declined" || label === "Locked" || label === "Restricted";
+  const waiting = status === "open" || status === "accepted";
+  const tone = attention ? "rose" : waiting ? "amber" : "green";
   return (
     <span
       className={cn(
@@ -724,6 +726,7 @@ function StatusPill({ member }: { member: StaffMember }) {
 function InviteBanner({
   member,
   expired,
+  declined,
   given,
   busy,
   onCopy,
@@ -732,6 +735,7 @@ function InviteBanner({
 }: {
   member: StaffMember;
   expired: boolean;
+  declined: boolean;
   given: string;
   busy: "copy" | "resend" | "revoke" | null;
   onCopy: () => void;
@@ -739,13 +743,14 @@ function InviteBanner({
   onRevoke: () => void;
 }) {
   const when = member.inviteExpiresAt ? chicagoDate(member.inviteExpiresAt) : "";
-  if (expired) {
+  if (expired || declined) {
+    const headline = declined ? "Invite declined." : `Invite expired ${when}.`;
     return (
       <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4 text-sm text-rose-950">
         <p className="flex gap-2">
           <Clock3 className="mt-0.5 size-4 shrink-0" />
           <span>
-            <span className="font-semibold">Invite expired {when}.</span> {given} can’t sign in until you send a fresh link. Their profile and card still work.
+            <span className="font-semibold">{headline}</span> {given} can’t sign in until you send a fresh link. Their profile and card still work.
           </span>
         </p>
         <Button type="button" className="mt-3 h-10 rounded-lg bg-[#7f1d1d] px-4 hover:bg-[#6b1818]" disabled={busy !== null} onClick={onResend}>
@@ -1286,7 +1291,10 @@ function SignatureTab({
         <div className="mt-2 flex gap-3 rounded-xl bg-white p-3">
           <ProfileAvatar
             member={{ ...member, name: draft.name || member.name }}
-            dashed={!member.photoUrl?.trim() && inviteIsPending(member) && !inviteIsExpired(member)}
+            dashed={
+              !member.photoUrl?.trim() &&
+              (seatInviteStatus(member) === "open" || seatInviteStatus(member) === "accepted")
+            }
           />
           <p className="whitespace-pre-wrap text-sm">{preview.trim() || "No company signature yet."}</p>
         </div>
