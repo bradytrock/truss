@@ -58,6 +58,7 @@ import {
   mapAutomationTemplate,
 } from "@/lib/supabase/mappers";
 import type { Database } from "@/lib/supabase/database.types";
+import { attachAccountInvites, type AccountInviteSnapshot } from "@/lib/accounts";
 import { initialsFromName, type CrmState, type SeatRole } from "@/lib/types";
 import { jobFilesFromJobs, mergeJobFiles } from "@/lib/job-files";
 import { jobsFilledFromLeads } from "@/lib/job-record";
@@ -265,10 +266,32 @@ function queryCore(supabase: Client, companyId: string) {
     limitBookQuery(() =>
       supabase.from("price_lists").select("*").eq("company_id", companyId).order("effective_on", { ascending: false }),
     ),
-    limitBookQuery(() =>
-      supabase.from("account_invites").select("staff_id, token, expires_at").eq("company_id", companyId),
-    ),
+    loadAccountInvites(supabase, companyId),
   ]);
+}
+
+async function loadAccountInvites(supabase: Client, companyId: string) {
+  const full = await limitBookQuery(() =>
+    supabase
+      .from("account_invites")
+      .select("staff_id, token, expires_at, used_at, accepted_at, declined_at")
+      .eq("company_id", companyId),
+  );
+  if (!full.error) return full;
+  const message = full.error.message ?? "";
+  if (!/used_at|accepted_at|declined_at/i.test(message)) return full;
+  const basic = await limitBookQuery(() =>
+    supabase.from("account_invites").select("staff_id, token, expires_at").eq("company_id", companyId),
+  );
+  return {
+    data: (basic.data ?? []).map((row) => ({
+      ...row,
+      used_at: null,
+      accepted_at: null,
+      declined_at: null,
+    })),
+    error: basic.error,
+  };
 }
 
 function queryDeferred(
@@ -509,16 +532,11 @@ function assembleBook(core: CoreRows, deferred: DeferredRows): CompanyBook {
     }
   });
 
-  const invites = invitesRes.error ? [] : (invitesRes.data ?? []);
-  const staffWithInvites = staff.map((member) => {
-    const invite = invites.find((row) => row.staff_id === member.id);
-    if (!invite) return member;
-    return {
-      ...member,
-      inviteToken: invite.token,
-      inviteExpiresAt: invite.expires_at,
-    };
-  });
+  const invites: AccountInviteSnapshot[] = invitesRes.error ? [] : (invitesRes.data ?? []);
+  const signedInStaffIds = (profilesRes.error ? [] : (profilesRes.data ?? []))
+    .map((row) => row.staff_id)
+    .filter((id): id is string => Boolean(id));
+  const staffWithInvites = attachAccountInvites(staff, invites, signedInStaffIds);
 
   const teams = missingTeams ? [] : (teamsRes.data ?? []).map(mapTeam);
   const googleLocations = googleLocationsRes.error

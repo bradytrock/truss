@@ -13661,17 +13661,44 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         return false;
       }
       if (inviteToken && member.email) {
-        const { error: inviteError } = await supabase.from("account_invites").upsert(
-          {
-            token: inviteToken,
-            company_id: user.companyId,
-            staff_id: member.id,
-            email: member.email,
-            expires_at: inviteExpiresAt ?? inviteExpiry(),
-            created_by: user.id || null,
-          },
-          { onConflict: "staff_id" },
-        );
+        const replacingInvite = Boolean(extras?.inviteToken);
+        const inviteRow = {
+          token: inviteToken,
+          company_id: user.companyId,
+          staff_id: member.id,
+          email: member.email,
+          expires_at: inviteExpiresAt ?? inviteExpiry(),
+          created_by: user.id || null,
+          ...(replacingInvite
+            ? {
+                used_at: null,
+                accepted_at: null,
+                declined_at: null,
+                reinvite_requested_at: null,
+              }
+            : {}),
+        };
+        let { error: inviteError } = await supabase.from("account_invites").upsert(inviteRow, {
+          onConflict: "staff_id",
+        });
+        if (
+          inviteError &&
+          replacingInvite &&
+          /used_at|accepted_at|declined_at|reinvite_requested_at/i.test(inviteError.message ?? "")
+        ) {
+          const retry = await supabase.from("account_invites").upsert(
+            {
+              token: inviteToken,
+              company_id: user.companyId,
+              staff_id: member.id,
+              email: member.email,
+              expires_at: inviteExpiresAt ?? inviteExpiry(),
+              created_by: user.id || null,
+            },
+            { onConflict: "staff_id" },
+          );
+          inviteError = retry.error;
+        }
         if (inviteError) {
           toast.error("Teammate saved, invite link did not", {
             description: isMissingAccountManagement(inviteError)
@@ -14110,7 +14137,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       }
       const token = newInviteToken();
       const expires = inviteExpiry();
-      const next: StaffMember = { ...current, inviteToken: token, inviteExpiresAt: expires };
+      const next: StaffMember = {
+        ...current,
+        inviteToken: token,
+        inviteExpiresAt: expires,
+        inviteUsedAt: null,
+        inviteAcceptedAt: null,
+        inviteDeclinedAt: null,
+      };
       const ok = await persistStaffFields(next, { inviteToken: token, inviteExpiresAt: expires });
       if (!ok) return null;
       setState((currentBook) => ({

@@ -50,9 +50,11 @@ import { requestInviteEmails } from "@/lib/invite-email";
 import {
   defaultTitleForRole,
   INVITE_DAYS,
+  inviteCanRefresh,
   inviteIsExpired,
-  inviteIsPending,
+  inviteLinkUsable,
   inviteSignupUrl,
+  seatInviteStatus,
   staffStatusLabel,
 } from "@/lib/accounts";
 import { PhoneInput } from "@/components/phone-input";
@@ -181,9 +183,10 @@ export function PeopleSettings({
     let pending = 0;
     let expired = 0;
     for (const member of staff) {
-      if (inviteIsPending(member) && inviteIsExpired(member)) expired += 1;
-      else if (inviteIsPending(member) && !member.locked) pending += 1;
-      else if (!member.locked) active += 1;
+      const status = seatInviteStatus(member);
+      if (status === "expired") expired += 1;
+      else if ((status === "open" || status === "accepted") && !member.locked) pending += 1;
+      else if (status !== "declined" && !member.locked) active += 1;
     }
     return { active, pending, expired };
   }, [staff]);
@@ -191,18 +194,19 @@ export function PeopleSettings({
     const needle = query.trim().toLowerCase();
     return people.filter((member) => {
       if (roleFilter !== "all" && member.role !== roleFilter) return false;
-      const expired = inviteIsPending(member) && inviteIsExpired(member);
-      const pending = inviteIsPending(member) && !expired;
+      const status = seatInviteStatus(member);
+      const expired = status === "expired";
+      const pending = status === "open" || status === "accepted";
       if (statusFilter === "expired" && !expired) return false;
       if (statusFilter === "pending" && !pending) return false;
-      if (statusFilter === "active" && (expired || pending || member.locked)) return false;
+      if (statusFilter === "active" && (expired || pending || status === "declined" || member.locked)) return false;
       if (!needle) return true;
       return `${member.name} ${member.title} ${member.email} ${member.phone}`.toLowerCase().includes(needle);
     });
   }, [people, query, roleFilter, statusFilter]);
 
   async function resendExpired() {
-    const expired = staff.filter((member) => inviteIsPending(member) && inviteIsExpired(member));
+    const expired = staff.filter((member) => inviteIsExpired(member));
     for (const member of expired) {
       await onRefreshInvite(member.id);
     }
@@ -221,7 +225,7 @@ export function PeopleSettings({
   }
 
   async function emailSeatInvite(member: StaffMember) {
-    const tokenReady = Boolean(member.inviteToken) && !inviteIsExpired(member);
+    const tokenReady = inviteLinkUsable(member);
     if (!tokenReady) {
       const url = await onRefreshInvite(member.id);
       if (!url) return;
@@ -277,7 +281,7 @@ export function PeopleSettings({
           await showInvite(url, member.name);
         }}
         onCopyInvite={async () => {
-          if (member.inviteToken) {
+          if (inviteLinkUsable(member) && member.inviteToken) {
             await copyInvite(inviteSignupUrl(window.location.origin, member.inviteToken));
             return;
           }
@@ -644,29 +648,36 @@ function RolePill({ role }: { role: SeatRole }) {
 }
 
 function StatusBadge({ member, you }: { member: StaffMember; you?: boolean }) {
+  const status = seatInviteStatus(member);
   const label = staffStatusLabel(member);
-  const pending = label === "Invited";
-  const expired = label === "Invite expired";
+  const pending = status === "open" || status === "accepted";
+  const expired = status === "expired";
+  const declined = status === "declined";
   const locked = label === "Locked" || label === "Restricted";
   const hint =
-    inviteIsPending(member) && member.inviteExpiresAt
-      ? expired
-        ? `Expired ${formatDate(member.inviteExpiresAt)}`
-        : `Expires ${formatDate(member.inviteExpiresAt)}`
-      : you
-        ? "Signed in now"
-        : null;
-  const text = pending ? "Invite pending" : label;
+    status === "expired" && member.inviteExpiresAt
+      ? `Expired ${formatDate(member.inviteExpiresAt)}`
+      : status === "accepted" && member.inviteExpiresAt
+        ? `Accepted · expires ${formatDate(member.inviteExpiresAt)}`
+        : status === "open" && member.inviteExpiresAt
+          ? `Expires ${formatDate(member.inviteExpiresAt)}`
+          : status === "declined"
+            ? member.inviteDeclinedAt
+              ? `Declined ${formatDate(member.inviteDeclinedAt)}`
+              : "Declined"
+            : you
+              ? "Signed in now"
+              : null;
   return (
     <div className="flex flex-col items-start gap-0.5">
       <span className="inline-flex items-center gap-1.5 text-sm">
         <span
           className={cn(
             "size-1.5 rounded-full",
-            expired || locked ? "bg-rose-500" : pending ? "bg-amber-500" : "bg-emerald-500",
+            expired || declined || locked ? "bg-rose-500" : pending ? "bg-amber-500" : "bg-emerald-500",
           )}
         />
-        {text}
+        {label}
       </span>
       {hint ? <span className="text-[11px] text-muted-foreground">{hint}</span> : null}
     </div>
@@ -759,7 +770,7 @@ function SeatMenu({
           Copy invite link
         </DropdownMenuItem>
         <DropdownMenuItem disabled={!canInvite} onClick={() => void onRefreshInvite()}>
-          {inviteIsPending(member) ? "Refresh invite" : "Create invite"}
+          {inviteCanRefresh(member) ? "Refresh invite" : "Create invite"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

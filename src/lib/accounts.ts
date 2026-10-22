@@ -46,21 +46,107 @@ export function inviteSignupUrl(origin: string, token: string) {
   return `${origin.replace(/\/+$/, "")}/signup?invite=${encodeURIComponent(token)}`;
 }
 
-export function inviteIsPending(member: Pick<StaffMember, "inviteExpiresAt" | "inviteToken">) {
-  return Boolean(member.inviteToken || member.inviteExpiresAt);
+export type SeatInviteStatus = "none" | "open" | "accepted" | "expired" | "used" | "declined";
+
+export type SeatInviteFields = Pick<StaffMember, "inviteExpiresAt" | "inviteToken"> &
+  Partial<Pick<StaffMember, "inviteUsedAt" | "inviteAcceptedAt" | "inviteDeclinedAt" | "signedIn">>;
+
+/** Same order as invite_gate: a login or a used invite beats declined, expiry, and acceptance. */
+export function seatInviteStatus(member: SeatInviteFields, now = Date.now()): SeatInviteStatus {
+  if (member.signedIn || member.inviteUsedAt) {
+    return member.inviteToken || member.inviteExpiresAt || member.inviteUsedAt ? "used" : "none";
+  }
+  if (member.inviteDeclinedAt) return "declined";
+  if (!member.inviteToken && !member.inviteExpiresAt) return "none";
+  if (member.inviteExpiresAt && new Date(member.inviteExpiresAt).getTime() <= now) return "expired";
+  if (member.inviteAcceptedAt) return "accepted";
+  return "open";
 }
 
-export function inviteIsExpired(member: Pick<StaffMember, "inviteExpiresAt">) {
-  if (!member.inviteExpiresAt) return false;
-  return new Date(member.inviteExpiresAt).getTime() <= Date.now();
+export function inviteIsPending(member: SeatInviteFields, now = Date.now()) {
+  const status = seatInviteStatus(member, now);
+  return status === "open" || status === "accepted";
 }
 
-export function staffStatusLabel(member: StaffMember) {
+export function inviteIsExpired(member: SeatInviteFields, now = Date.now()) {
+  return seatInviteStatus(member, now) === "expired";
+}
+
+export function inviteLinkUsable(member: SeatInviteFields, now = Date.now()) {
+  return Boolean(member.inviteToken) && inviteIsPending(member, now);
+}
+
+export function inviteCanRefresh(member: SeatInviteFields, now = Date.now()) {
+  const status = seatInviteStatus(member, now);
+  return status === "open" || status === "accepted" || status === "expired" || status === "declined";
+}
+
+export function staffStatusLabel(member: StaffMember, now = Date.now()) {
   if (member.locked) return "Locked";
   if (member.restricted) return "Restricted";
-  if (inviteIsPending(member) && inviteIsExpired(member)) return "Invite expired";
-  if (inviteIsPending(member)) return "Invited";
+  const status = seatInviteStatus(member, now);
+  if (status === "expired") return "Invite expired";
+  if (status === "declined") return "Invite declined";
+  if (status === "accepted") return "Invite accepted";
+  if (status === "open") return "Invite pending";
   return "Active";
+}
+
+export type AccountInviteSnapshot = {
+  staff_id: string;
+  token?: string | null;
+  expires_at?: string | null;
+  used_at?: string | null;
+  accepted_at?: string | null;
+  declined_at?: string | null;
+};
+
+/** Keep the historical invite row on the seat, and record whether it is still outstanding. */
+export function attachAccountInvites<T extends StaffMember>(
+  staff: T[],
+  invites: AccountInviteSnapshot[],
+  signedInStaffIds: Iterable<string> = [],
+): T[] {
+  const signedIn = new Set(signedInStaffIds);
+  const byStaff = new Map<string, AccountInviteSnapshot>();
+  for (const invite of invites) {
+    if (!invite.staff_id || byStaff.has(invite.staff_id)) continue;
+    byStaff.set(invite.staff_id, invite);
+  }
+  return staff.map((member) => {
+    const invite = byStaff.get(member.id);
+    const hasLogin = signedIn.has(member.id);
+    if (!invite) {
+      return hasLogin ? { ...member, signedIn: true } : member;
+    }
+    return {
+      ...member,
+      signedIn: hasLogin,
+      inviteToken: invite.token ?? null,
+      inviteExpiresAt: invite.expires_at ?? null,
+      inviteUsedAt: invite.used_at ?? null,
+      inviteAcceptedAt: invite.accepted_at ?? null,
+      inviteDeclinedAt: invite.declined_at ?? null,
+    };
+  });
+}
+
+export function inviteSendBlockReason(
+  invite: {
+    token?: string | null;
+    expires_at?: string | null;
+    used_at?: string | null;
+    declined_at?: string | null;
+  },
+  now = Date.now(),
+) {
+  if (!invite.token) return "Create or refresh the invite before emailing it.";
+  if (invite.used_at) return "That invite was already used. Refresh it, then send again.";
+  if (invite.declined_at) return "That invite was declined. Refresh it, then send again.";
+  if (invite.expires_at && new Date(invite.expires_at).getTime() <= now) {
+    return "That invite expired. Refresh it, then send again.";
+  }
+  return null;
 }
 
 export function defaultTitleForRole(role: SeatRole) {
