@@ -19,6 +19,24 @@ import {
   readAuthCookieSession,
 } from "@/lib/supabase/session-cookie";
 
+const AUTH_TIMEOUT_MS = 4000;
+
+function withTimeout<T>(work: PromiseLike<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("timeout")), ms);
+    Promise.resolve(work).then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
 function redirectToDemo() {
   return NextResponse.redirect(DEMO_SCHEDULE_URL);
 }
@@ -189,12 +207,27 @@ export async function updateSession(request: NextRequest) {
 
   let signedIn = session.fresh;
   if (!session.fresh) {
-    const { data } = await supabase.auth.getUser();
-    signedIn = Boolean(data.user);
+    try {
+      // getClaims verifies locally when it can; otherwise it asks Auth. Cap the wait so a
+      // slow Auth server cannot hold every page for 30 seconds.
+      const { data } = await withTimeout(supabase.auth.getClaims(), AUTH_TIMEOUT_MS);
+      signedIn = Boolean(data?.claims?.sub);
+    } catch {
+      // Auth is slow or down. A token that has not expired yet still counts as signed in.
+      signedIn = session.expiresAt != null && session.expiresAt > nowSec;
+    }
   }
-  const subscriptionActive = signedIn
-    ? subscriptionActiveFromRpc(await supabase.rpc("company_subscription_active"))
-    : false;
+  let subscriptionActive = false;
+  if (signedIn) {
+    try {
+      subscriptionActive = subscriptionActiveFromRpc(
+        await withTimeout(supabase.rpc("company_subscription_active"), AUTH_TIMEOUT_MS),
+      );
+    } catch {
+      // Keep a recently confirmed subscription open rather than bounce users to the demo page.
+      subscriptionActive = gateOpen;
+    }
+  }
   rememberGate(supabaseResponse, signedIn && subscriptionActive);
 
   return await finishSession(request, path, signedIn, subscriptionActive, supabaseResponse);
