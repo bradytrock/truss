@@ -282,6 +282,14 @@ export interface StaffMember {
   manageAutomations?: boolean;
   inviteExpiresAt: string | null;
   inviteToken: string | null;
+  /** Set when this seat already has a login profile. */
+  signedIn?: boolean;
+  /** account_invites.used_at — they finished signup with this invite. */
+  inviteUsedAt?: string | null;
+  /** account_invites.accepted_at — they reserved the link and have not joined. */
+  inviteAcceptedAt?: string | null;
+  /** account_invites.declined_at — they turned the link down. */
+  inviteDeclinedAt?: string | null;
 }
 
 export interface Team {

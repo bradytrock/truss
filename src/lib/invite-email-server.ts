@@ -1,4 +1,4 @@
-import { INVITE_DAYS, inviteSignupUrl } from "@/lib/accounts";
+import { INVITE_DAYS, inviteSendBlockReason, inviteSignupUrl } from "@/lib/accounts";
 import { appOrigin } from "@/lib/app-origin";
 import { loadProfileCompany } from "@/lib/eagleview-server";
 import {
@@ -118,12 +118,24 @@ export async function sendStaffInviteEmails(body: Record<string, unknown>) {
       continue;
     }
 
-    const { data: invite, error: inviteError } = await supabase
+    const inviteResult = await supabase
       .from("account_invites")
-      .select("token, email, expires_at")
+      .select("token, email, expires_at, used_at, declined_at")
       .eq("company_id", companyId)
       .eq("staff_id", staffId)
       .maybeSingle();
+    let invite = inviteResult.data;
+    let inviteError = inviteResult.error;
+    if (inviteError && /used_at|declined_at/i.test(inviteError.message ?? "")) {
+      const basic = await supabase
+        .from("account_invites")
+        .select("token, email, expires_at")
+        .eq("company_id", companyId)
+        .eq("staff_id", staffId)
+        .maybeSingle();
+      inviteError = basic.error;
+      invite = basic.data ? { ...basic.data, used_at: null, declined_at: null } : null;
+    }
     if (inviteError || !invite?.token) {
       results.push({
         staffId,
@@ -134,13 +146,14 @@ export async function sendStaffInviteEmails(body: Record<string, unknown>) {
       });
       continue;
     }
-    if (new Date(invite.expires_at).getTime() <= Date.now()) {
+    const block = inviteSendBlockReason(invite);
+    if (block) {
       results.push({
         staffId,
         email: seat.email,
         name: seat.name,
         ok: false,
-        error: "That invite expired. Refresh it, then send again.",
+        error: block,
       });
       continue;
     }
