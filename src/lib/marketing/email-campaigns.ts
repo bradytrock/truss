@@ -112,6 +112,23 @@ function pushRecipient(
   });
 }
 
+export function splitCampaignRecipients(
+  recipients: EmailCampaignRecipient[],
+  excludedContactIds: readonly string[],
+) {
+  if (excludedContactIds.length === 0) {
+    return { sending: recipients, removed: [] as EmailCampaignRecipient[] };
+  }
+  const excluded = new Set(excludedContactIds);
+  const sending: EmailCampaignRecipient[] = [];
+  const removed: EmailCampaignRecipient[] = [];
+  for (const row of recipients) {
+    if (excluded.has(row.contactId)) removed.push(row);
+    else sending.push(row);
+  }
+  return { sending, removed };
+}
+
 export function resolveEmailCampaignAudience(
   kind: EmailCampaignAudience,
   contacts: Contact[],
