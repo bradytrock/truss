@@ -64,13 +64,9 @@ export function RefundRequestDialog({
   const [attachmentUrl, setAttachmentUrl] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const payments = useMemo(
-    () =>
-      paymentsForJob(job.id, crm.payments, crm.invoices)
-        .filter((payment) => payment.amount > 0 && !/refund/i.test(payment.method))
-        .sort((a, b) => a.paidAt.localeCompare(b.paidAt)),
-    [crm.invoices, crm.payments, job.id],
-  );
+  const payments = paymentsForJob(job.id, crm.payments, crm.invoices)
+    .filter((payment) => payment.amount > 0 && !/refund/i.test(payment.method))
+    .sort((a, b) => a.paidAt.localeCompare(b.paidAt));
   const refunds = (crm.refundRequests ?? []).filter((item) => item.jobId === job.id);
   const payment = payments.find((item) => item.id === paymentId) ?? null;
   const cap = payment ? refundableRemaining(payment, refunds) : 0;
