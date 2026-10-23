@@ -30,14 +30,9 @@ import {
   paymentPushBlocked,
   workFromBook,
 } from "@/lib/qbwc/work";
-import {
-  EXPENSE_ACCOUNT_LABELS,
-  EXPENSE_ACCOUNTS,
-  EXPENSE_METHOD_LABELS,
-  EXPENSE_METHODS,
-  type ExpenseAccount,
-  type ExpenseMethod,
-} from "@/lib/types";
+import { expenseCategoriesOrDefaults } from "@/lib/expense-categories";
+import { ExpenseCategorySelect } from "@/components/expense-category-select";
+import { EXPENSE_METHOD_LABELS, EXPENSE_METHODS, type ExpenseMethod } from "@/lib/types";
 
 export function DocumentPreview({ item }: { item: QbReviewItem }) {
   const crm = useCrm();
@@ -97,6 +92,7 @@ export function blockReason(item: QbReviewItem, crm: ReturnType<typeof useCrm>) 
     return expensePushBlocked({
       expense: item.expense,
       job: item.expense.jobId ? crm.getJob(item.expense.jobId) : undefined,
+      categories: expenseCategoriesOrDefaults(crm.expenseCategories),
     });
   }
   const invoice = item.payment.invoiceId
@@ -261,7 +257,8 @@ export function ExpenseFields({ expenseId, locked }: { expenseId: string; locked
       })
     : "";
   const jobFullName = job ? `${customer}:${job.code || job.name || "Job"}` : "";
-  const needsJob = expenseRequiresJob(expense.account);
+  const categories = expenseCategoriesOrDefaults(crm.expenseCategories);
+  const needsJob = expenseRequiresJob(expense.account, categories);
 
   return (
     <div className="space-y-3">
@@ -270,7 +267,7 @@ export function ExpenseFields({ expenseId, locked }: { expenseId: string; locked
         {expense.method === "credit_card" ? "credit card charge" : "vendor bill"}{" "}
         to{" "}
         <span className="font-medium">{expense.vendor || "the vendor"}</span> on{" "}
-        {EXPENSE_ACCOUNT_LABELS[expense.account]}
+        {categories.find((item) => item.key === expense.account)?.label ?? expense.account}
         {jobFullName ? (
           <>
             {" "}
@@ -338,23 +335,12 @@ export function ExpenseFields({ expenseId, locked }: { expenseId: string; locked
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Expense account">
-          <Select
+          <ExpenseCategorySelect
             value={expense.account}
             disabled={locked}
-            onValueChange={(value) => void crm.updateExpense(expense.id, { account: value as ExpenseAccount })}
-            items={EXPENSE_ACCOUNTS.map((item) => ({ value: item, label: EXPENSE_ACCOUNT_LABELS[item] }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {EXPENSE_ACCOUNTS.map((item) => (
-                <SelectItem key={item} value={item}>
-                  {EXPENSE_ACCOUNT_LABELS[item]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            showChart
+            onValueChange={(value) => void crm.updateExpense(expense.id, { account: value })}
+          />
         </Field>
         <Field label="Paid with">
           <Select

@@ -753,6 +753,38 @@ export const EXPENSE_ACCOUNTS = [
 ] as const;
 export type ExpenseAccount = (typeof EXPENSE_ACCOUNTS)[number];
 
+/** Where a category lands on the profit and loss. */
+export const EXPENSE_CATEGORY_SECTIONS = ["cost_of_sales", "operating", "other"] as const;
+export type ExpenseCategorySection = (typeof EXPENSE_CATEGORY_SECTIONS)[number];
+
+export const EXPENSE_CATEGORY_SECTION_LABELS: Record<ExpenseCategorySection, string> = {
+  cost_of_sales: "Cost of sales",
+  operating: "Operating expense",
+  other: "Other expense",
+};
+
+/** A receipt category and the QuickBooks chart account it posts to. */
+export interface ExpenseCategory {
+  id: string;
+  key: string;
+  label: string;
+  chartAccountId: string | null;
+  qbAccountNumber: string;
+  qbAccountName: string;
+  section: ExpenseCategorySection;
+  requiresJob: boolean;
+  sortOrder: number;
+  active: boolean;
+}
+
+/** One account from the company chart of accounts. */
+export interface CompanyChartAccount {
+  id: string;
+  accountNumber: string;
+  name: string;
+  active: boolean;
+}
+
 export const EXPENSE_METHODS = ["credit_card", "debit", "check", "ach", "cash"] as const;
 export type ExpenseMethod = (typeof EXPENSE_METHODS)[number];
 
@@ -786,7 +818,8 @@ export interface Expense {
   invoiceNumber: string;
   jobId: string | null;
   vendor: string;
-  account: ExpenseAccount;
+  /** Category key. Built-in keys live on EXPENSE_ACCOUNTS; companies can add more. */
+  account: string;
   amount: number;
   incurredAt: string;
   method: ExpenseMethod;
@@ -808,7 +841,8 @@ export interface ForecastedExpense {
   number: string;
   jobId: string | null;
   vendor: string;
-  account: ExpenseAccount;
+  /** Category key. Built-in keys live on EXPENSE_ACCOUNTS; companies can add more. */
+  account: string;
   amount: number;
   expectedAt: string;
   memo: string;
@@ -1406,6 +1440,10 @@ export interface CrmState {
   payments: Payment[];
   expenses: Expense[];
   forecastedExpenses: ForecastedExpense[];
+  /** Receipt categories and the QuickBooks account each one posts to. */
+  expenseCategories: ExpenseCategory[];
+  /** Chart of accounts the categories can post to. */
+  chartAccounts: CompanyChartAccount[];
   /** One insurance claim per job: carrier, supplements, and checks. */
   jobInsurance: import("@/lib/insurance").JobInsurance[];
   /** One commission closeout per job. */

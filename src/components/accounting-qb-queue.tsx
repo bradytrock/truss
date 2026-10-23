@@ -17,6 +17,7 @@ import { formatMoney } from "@/lib/format";
 import { invoiceTotal } from "@/lib/money";
 import { qbwcFile } from "@/lib/qbwc/soap";
 import { paymentPushBlocked } from "@/lib/qbwc/work";
+import { expenseCategoriesOrDefaults } from "@/lib/expense-categories";
 import { cn } from "@/lib/utils";
 import type { QbSyncStatus } from "@/lib/types";
 
@@ -69,7 +70,15 @@ export function AccountingQuickBooks({
     .filter((expense) => expense.qbStatus !== "entered")
     .map((expense) => {
       const job = expense.jobId ? crm.getJob(expense.jobId) : undefined;
-      return { expense, job, blocked: expenseBlockedReason({ expense, job }) };
+      return {
+        expense,
+        job,
+        blocked: expenseBlockedReason({
+          expense,
+          job,
+          categories: expenseCategoriesOrDefaults(crm.expenseCategories),
+        }),
+      };
     });
   const paymentRows = crm.payments
     .filter((payment) => payment.qbStatus !== "entered")

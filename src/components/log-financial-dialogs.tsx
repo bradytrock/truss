@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { Camera, LoaderCircle, Sparkles, TrendingUp, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -41,13 +41,10 @@ import {
   quickFieldClass,
 } from "@/components/quick-action-form";
 import { formatDate, formatMoney } from "@/lib/format";
-import {
-  EXPENSE_ACCOUNT_LABELS,
-  EXPENSE_ACCOUNTS,
-  type ExpenseAccount,
-  type ExpenseMethod,
-} from "@/lib/types";
+import { type ExpenseMethod } from "@/lib/types";
 import { expenseRequiresJob } from "@/lib/qbwc/work";
+import { expenseCategoriesOrDefaults } from "@/lib/expense-categories";
+import { ExpenseCategoryPostingHint, ExpenseCategorySelect } from "@/components/expense-category-select";
 
 function jobChoices(crm: ReturnType<typeof useCrm>) {
   return [...crm.jobs]
@@ -235,7 +232,7 @@ export function LogExpenseDialog({
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [amount, setAmount] = useState("");
   const [incurredAt, setIncurredAt] = useState(localYmd(new Date()));
-  const [account, setAccount] = useState<ExpenseAccount>("materials");
+  const [account, setAccount] = useState("materials");
   const [method, setMethod] = useState<ExpenseMethod>("credit_card");
   const [posting, setPosting] = useState<"job" | "overhead">("job");
   const [jobId, setJobId] = useState(defaultJobId ?? "");
@@ -246,6 +243,17 @@ export function LogExpenseDialog({
   const [aiReady, setAiReady] = useState<boolean | null>(null);
   const vendors = vendorChoices(crm.qbVendors ?? [], crm.expenses);
   const vendorNames = [...vendors.fromQb.map((item) => item.name), ...vendors.extras];
+  const categories = useMemo(
+    () => expenseCategoriesOrDefaults(crm.expenseCategories),
+    [crm.expenseCategories],
+  );
+
+  function choosePosting(next: "job" | "overhead") {
+    setPosting(next);
+    if (next !== "overhead" || !expenseRequiresJob(account, categories)) return;
+    const overhead = categories.find((item) => item.active && !item.requiresJob);
+    if (overhead) setAccount(overhead.key);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -285,7 +293,15 @@ export function LogExpenseDialog({
           setIncurredAt(result.date);
         }
         if (typeof result.memo === "string") setMemo(result.memo);
-        if (typeof result.account === "string") setAccount(result.account as ExpenseAccount);
+        if (typeof result.account === "string") {
+          const extracted = result.account;
+          if (posting === "overhead" && expenseRequiresJob(extracted, categories)) {
+            const overhead = categories.find((item) => item.active && !item.requiresJob);
+            setAccount(overhead?.key ?? extracted);
+          } else {
+            setAccount(extracted);
+          }
+        }
         if (typeof result.method === "string") setMethod(result.method as ExpenseMethod);
         setExtractedByAi(true);
         toast.success("Read the receipt. Check the fields before you save.");
@@ -311,8 +327,8 @@ export function LogExpenseDialog({
       toast.error("Pick the job. QuickBooks costs this to Customer:Job.");
       return;
     }
-    if (posting === "overhead" && expenseRequiresJob(account)) {
-      toast.error("Office and insurance can stay on the company. Switch the account, or post this as a job cost.");
+    if (posting === "overhead" && expenseRequiresJob(account, expenseCategoriesOrDefaults(crm.expenseCategories))) {
+      toast.error("This category needs a job. Pick a company overhead category, or post this as a job cost.");
       return;
     }
     setPending(true);
@@ -446,7 +462,7 @@ export function LogExpenseDialog({
                 <Segmented
                   label="Where it posts"
                   value={posting}
-                  onChange={setPosting}
+                  onChange={choosePosting}
                   options={[
                     { value: "job", label: "Job cost" },
                     { value: "overhead", label: "Company overhead" },
@@ -459,25 +475,13 @@ export function LogExpenseDialog({
               <div className={posting === "job" ? "grid gap-3 sm:grid-cols-2" : "grid gap-3"}>
                 <div>
                   <QuickLabel>Account</QuickLabel>
-                  <Select
+                  <ExpenseCategorySelect
                     value={account}
-                    onValueChange={(value) => setAccount(value as ExpenseAccount)}
-                    items={EXPENSE_ACCOUNTS.map((item) => ({
-                      value: item,
-                      label: EXPENSE_ACCOUNT_LABELS[item],
-                    }))}
-                  >
-                    <SelectTrigger className={`${quickFieldClass} w-full`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {EXPENSE_ACCOUNTS.map((item) => (
-                        <SelectItem key={item} value={item}>
-                          {EXPENSE_ACCOUNT_LABELS[item]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    onValueChange={setAccount}
+                    overheadOnly={posting === "overhead"}
+                    triggerClassName={quickFieldClass}
+                  />
+                  <ExpenseCategoryPostingHint account={account} />
                 </div>
                 {posting === "job" ? (
                   <div>
@@ -843,7 +847,7 @@ export function LogForecastedExpenseDialog({
   const [vendor, setVendor] = useState("");
   const [amount, setAmount] = useState("");
   const [expectedAt, setExpectedAt] = useState(localYmd(new Date()));
-  const [account, setAccount] = useState<ExpenseAccount>("materials");
+  const [account, setAccount] = useState("materials");
   const [jobId, setJobId] = useState(defaultJobId ?? "");
   const [memo, setMemo] = useState("");
   const [pending, setPending] = useState(false);
@@ -942,25 +946,12 @@ export function LogForecastedExpenseDialog({
             </div>
             <div>
               <QuickLabel>Account</QuickLabel>
-              <Select
+              <ExpenseCategorySelect
                 value={account}
-                onValueChange={(value) => setAccount(value as ExpenseAccount)}
-                items={EXPENSE_ACCOUNTS.map((item) => ({
-                  value: item,
-                  label: EXPENSE_ACCOUNT_LABELS[item],
-                }))}
-              >
-                <SelectTrigger className={`${quickFieldClass} w-full`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {EXPENSE_ACCOUNTS.map((item) => (
-                    <SelectItem key={item} value={item}>
-                      {EXPENSE_ACCOUNT_LABELS[item]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                onValueChange={setAccount}
+                triggerClassName={quickFieldClass}
+              />
+              <ExpenseCategoryPostingHint account={account} />
             </div>
             <div>
               <QuickLabel htmlFor="fest-memo" optional>Memo</QuickLabel>

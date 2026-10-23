@@ -1,12 +1,13 @@
-import type { ExpenseAccount } from "@/lib/types";
+import { EXPENSE_ACCOUNTS, type ExpenseAccount } from "@/lib/types";
 
 /**
  * Chart of accounts in the company file. Job costs must hit these numbered
  * accounts. "Job materials" and "Subcontractors" are stray Expense accounts
  * and are not used.
  *
- * Keep in sync with qbwc_expense_payload in
- * supabase/migrations/20260930120000_qbwc_job_bill_chart_accounts.sql.
+ * The accounting suite can remap a category. These defaults stay in sync with
+ * defaultExpenseCategories in src/lib/expense-categories.ts and with the
+ * fallback in qbwc_expense_payload.
  */
 export const QB_CHART_ACCOUNTS: Record<ExpenseAccount, { number: string; name: string }> = {
   materials: { number: "50400", name: "Construction Materials Costs" },
@@ -36,12 +37,15 @@ const LEGACY_ACCOUNT_NAMES: Record<string, ExpenseAccount> = {
 
 export type QbChartAccount = { number: string; name: string };
 
-export function qbChartAccount(account: ExpenseAccount): QbChartAccount {
-  return QB_CHART_ACCOUNTS[account];
+export function qbChartAccount(account: string): QbChartAccount {
+  if ((EXPENSE_ACCOUNTS as readonly string[]).includes(account)) {
+    return QB_CHART_ACCOUNTS[account as ExpenseAccount];
+  }
+  return QB_CHART_ACCOUNTS.other;
 }
 
-export function qbChartAccountLabel(account: ExpenseAccount) {
-  const chart = QB_CHART_ACCOUNTS[account];
+export function qbChartAccountLabel(account: string) {
+  const chart = qbChartAccount(account);
   return `${chart.number} · ${chart.name}`;
 }
 

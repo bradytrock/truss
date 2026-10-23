@@ -32,7 +32,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage } from "@/lib/supabase/schema-errors";
 import {
   eventTimesAreInvitable,
   externalInvitees,
@@ -199,6 +199,8 @@ import {
   mapOpportunity,
   mapPayment,
   mapExpense,
+  mapExpenseCategory,
+  mapCompanyChartAccount,
   mapForecastedExpense,
   mapCommissionCloseout,
   mapRefundRequest,
@@ -238,6 +240,22 @@ import {
 import { plannedRunsForEvent, previewAutomation } from "@/lib/automations/queue";
 import { validateAutomationDraft, type Automation, type AutomationEvent } from "@/lib/automations";
 import { expenseRequiresJob } from "@/lib/qbwc/work";
+import {
+  applyCategoryEdit,
+  applyChartAccountEdit,
+  chartAccountsOrDefaults,
+  expenseCategoriesOrDefaults,
+  expenseCategoryInUse,
+  installCategory,
+  installChartAccount,
+  isPersistedId,
+  removeCategoryEdit,
+  removeChartAccountEdit,
+  retargetChartAccount,
+  storedCategoryRows,
+} from "@/lib/expense-categories";
+import type { CategoryDraft, ChartDraft } from "@/lib/expense-categories";
+import type { CompanyChartAccount, ExpenseCategory } from "@/lib/types";
 import { insuranceActivityNote, jobInsurancePayload, type JobInsurance } from "@/lib/insurance";
 import {
   buildCommissionSheet,
@@ -319,7 +337,6 @@ import {
   type TrainingBulletin,
   type TrainingProgress,
   type Expense,
-  type ExpenseAccount,
   type ForecastedExpense,
   type ExpenseMethod,
   type MaterialOrder,
@@ -469,6 +486,8 @@ const emptyState: CrmState = {
   photoReports: [],
   expenses: [],
   forecastedExpenses: [],
+  expenseCategories: [],
+  chartAccounts: [],
   jobInsurance: [],
   commissionCloseouts: [],
   refundRequests: [],
@@ -1335,7 +1354,7 @@ type CrmContextValue = CrmState & {
     jobId: string | null;
     vendor: string;
     invoiceNumber?: string;
-    account: ExpenseAccount;
+    account: string;
     amount: number;
     incurredAt: string;
     method: ExpenseMethod;
@@ -1347,12 +1366,16 @@ type CrmContextValue = CrmState & {
   addForecastedExpense: (input: {
     jobId: string;
     vendor: string;
-    account: ExpenseAccount;
+    account: string;
     amount: number;
     expectedAt: string;
     memo: string;
   }) => Promise<ForecastedExpense | null>;
   removeForecastedExpense: (id: string) => Promise<boolean>;
+  saveExpenseCategory: (draft: CategoryDraft) => Promise<ExpenseCategory | null>;
+  removeExpenseCategory: (id: string) => Promise<boolean>;
+  saveChartAccount: (draft: ChartDraft) => Promise<CompanyChartAccount | null>;
+  removeChartAccount: (id: string) => Promise<boolean>;
   saveJobInsurance: (claim: JobInsurance) => Promise<JobInsurance | null>;
   submitCommissionCloseout: (jobId: string, notes?: string) => Promise<CommissionCloseout | null>;
   saveCommissionCloseoutReview: (
@@ -8361,7 +8384,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       jobId: string | null;
       vendor: string;
       invoiceNumber?: string;
-      account: ExpenseAccount;
+      account: string;
       amount: number;
       incurredAt: string;
       method: ExpenseMethod;
@@ -8378,7 +8401,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error("Enter the vendor.");
         return null;
       }
-      if (expenseRequiresJob(input.account) && !input.jobId) {
+      if (expenseRequiresJob(input.account, expenseCategoriesOrDefaults(state.expenseCategories)) && !input.jobId) {
         toast.error("Assign this expense to a job so QuickBooks costs it to Customer:Job, not company overhead.");
         return null;
       }
@@ -8496,14 +8519,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       });
       return saved;
     },
-    [addActivity, recordCompanyAudit, state.expenses, user.companyId, user.id, user.name, user.staffId],
+    [addActivity, recordCompanyAudit, state.expenseCategories, state.expenses, user.companyId, user.id, user.name, user.staffId],
   );
 
   const addForecastedExpense = useCallback(
     async (input: {
       jobId: string;
       vendor: string;
-      account: ExpenseAccount;
+      account: string;
       amount: number;
       expectedAt: string;
       memo: string;
@@ -8661,6 +8684,248 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return true;
     },
     [addActivity, recordCompanyAudit, state.forecastedExpenses],
+  );
+
+  const writeChartAccount = useCallback(
+    async (account: CompanyChartAccount, previous: CompanyChartAccount | null) => {
+      const supabase = maybeClient();
+      if (!supabase || !user.companyId || user.companyId === "local") {
+        return { account, missing: false };
+      }
+      const stamp = new Date().toISOString();
+      const patch = {
+        account_number: account.accountNumber,
+        name: account.name,
+        active: account.active,
+        updated_at: stamp,
+      };
+      if (previous) {
+        const updated = await supabase
+          .from("qb_chart_accounts")
+          .update(patch)
+          .eq("company_id", user.companyId)
+          .eq("account_number", previous.accountNumber)
+          .select("*")
+          .maybeSingle();
+        if (updated.error) {
+          if (isMissingExpenseCategories(updated.error)) return { account, missing: true };
+          toast.error(updated.error.message);
+          return null;
+        }
+        if (updated.data) return { account: mapCompanyChartAccount(updated.data), missing: false };
+      }
+      const inserted = await supabase
+        .from("qb_chart_accounts")
+        .insert({ ...patch, company_id: user.companyId })
+        .select("*")
+        .single();
+      if (inserted.error || !inserted.data) {
+        if (inserted.error && isMissingExpenseCategories(inserted.error)) return { account, missing: true };
+        toast.error(inserted.error?.message || "Could not save that account.");
+        return null;
+      }
+      return { account: mapCompanyChartAccount(inserted.data), missing: false };
+    },
+    [user.companyId],
+  );
+
+  const saveChartAccount = useCallback(
+    async (draft: ChartDraft) => {
+      const categories = expenseCategoriesOrDefaults(state.expenseCategories);
+      const charts = chartAccountsOrDefaults(state.chartAccounts, categories);
+      const next = applyChartAccountEdit(charts, categories, draft);
+      if (!next.ok) {
+        toast.error(next.error);
+        return null;
+      }
+      const written = await writeChartAccount(next.account, next.previous);
+      if (!written) return null;
+      const account = written.account;
+      if (written.missing) toast.message(missingExpenseCategoriesMessage());
+      setState((prev) => ({
+        ...prev,
+        chartAccounts: installChartAccount(prev.chartAccounts ?? [], account, next.previous?.id),
+        expenseCategories: next.previous
+          ? storedCategoryRows(
+              retargetChartAccount(expenseCategoriesOrDefaults(prev.expenseCategories), next.previous, account),
+            )
+          : prev.expenseCategories,
+      }));
+      if (next.previous && !written.missing && user.companyId && user.companyId !== "local") {
+        const supabase = maybeClient();
+        if (supabase) {
+          const { error } = await supabase
+            .from("expense_categories")
+            .update({
+              qb_account_number: account.accountNumber,
+              qb_account_name: account.name,
+              chart_account_id: account.id,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("company_id", user.companyId)
+            .eq("qb_account_number", next.previous.accountNumber);
+          if (error && !isMissingExpenseCategories(error)) toast.error(error.message);
+        }
+      }
+      toast.success(`${account.accountNumber} · ${account.name} is on the chart.`);
+      return account;
+    },
+    [state.chartAccounts, state.expenseCategories, user.companyId, writeChartAccount],
+  );
+
+  const saveExpenseCategory = useCallback(
+    async (draft: CategoryDraft) => {
+      const categories = expenseCategoriesOrDefaults(state.expenseCategories);
+      const charts = chartAccountsOrDefaults(state.chartAccounts, categories);
+      const edited = applyCategoryEdit(categories, charts, draft);
+      if (!edited.ok) {
+        toast.error(edited.error);
+        return null;
+      }
+      let category = edited.category;
+      let chartsNext = charts;
+      const chart = charts.find((item) => item.id === category.chartAccountId) ?? null;
+      const supabase = maybeClient();
+      const online = Boolean(supabase && user.companyId && user.companyId !== "local");
+      if (online && chart && !isPersistedId(chart.id)) {
+        const written = await writeChartAccount(chart, chart);
+        if (!written) return null;
+        if (written.missing) toast.message(missingExpenseCategoriesMessage());
+        chartsNext = installChartAccount(charts, written.account, chart.id);
+        category = { ...category, chartAccountId: isPersistedId(written.account.id) ? written.account.id : category.chartAccountId };
+        if (written.account.id !== chart.id) {
+          category = {
+            ...category,
+            chartAccountId: written.account.id,
+            qbAccountNumber: written.account.accountNumber,
+            qbAccountName: written.account.name,
+          };
+        }
+      }
+      if (online && supabase && user.companyId) {
+        const chartId = isPersistedId(category.chartAccountId ?? "") ? category.chartAccountId : null;
+        const { data, error } = await supabase
+          .from("expense_categories")
+          .upsert(
+            {
+              company_id: user.companyId,
+              key: category.key,
+              label: category.label,
+              chart_account_id: chartId,
+              qb_account_number: category.qbAccountNumber,
+              qb_account_name: category.qbAccountName,
+              section: category.section,
+              requires_job: category.requiresJob,
+              sort_order: category.sortOrder,
+              active: category.active,
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "company_id,key" },
+          )
+          .select("*")
+          .single();
+        if (error || !data) {
+          if (error && isMissingExpenseCategories(error)) toast.message(missingExpenseCategoriesMessage());
+          else {
+            toast.error(error?.message || "Could not save that category.");
+            return null;
+          }
+        } else {
+          category = mapExpenseCategory(data);
+        }
+      }
+      const persistedChart =
+        chart && chart.id !== category.chartAccountId
+          ? chartsNext.find((item) => item.id === category.chartAccountId) ?? null
+          : null;
+      setState((prev) => ({
+        ...prev,
+        chartAccounts: persistedChart
+          ? installChartAccount(prev.chartAccounts ?? [], persistedChart, chart?.id)
+          : prev.chartAccounts,
+        expenseCategories: installCategory(
+          persistedChart && chart
+            ? retargetChartAccount(prev.expenseCategories ?? [], chart, persistedChart)
+            : prev.expenseCategories ?? [],
+          category,
+        ),
+      }));
+      const where = category.qbAccountNumber
+        ? `${category.qbAccountNumber} · ${category.qbAccountName}`
+        : category.qbAccountName;
+      toast.success(
+        draft.id ? `${category.label} posts to ${where}.` : `${category.label} is on the list. It posts to ${where}.`,
+      );
+      return category;
+    },
+    [state.chartAccounts, state.expenseCategories, user.companyId, writeChartAccount],
+  );
+
+  const removeExpenseCategory = useCallback(
+    async (id: string) => {
+      const categories = expenseCategoriesOrDefaults(state.expenseCategories);
+      const removed = removeCategoryEdit(
+        categories,
+        id,
+        expenseCategoryInUse(
+          categories.find((item) => item.id === id)?.key ?? "",
+          state.expenses,
+          state.forecastedExpenses ?? [],
+        ),
+      );
+      if (!removed.ok) {
+        toast.error(removed.error);
+        return false;
+      }
+      const supabase = maybeClient();
+      if (supabase && user.companyId && user.companyId !== "local" && isPersistedId(removed.category.id)) {
+        const { error } = await supabase.from("expense_categories").delete().eq("id", removed.category.id);
+        if (error && !isMissingExpenseCategories(error)) {
+          toast.error(error.message);
+          return false;
+        }
+        if (error && isMissingExpenseCategories(error)) toast.message(missingExpenseCategoriesMessage());
+      }
+      setState((prev) => ({
+        ...prev,
+        expenseCategories: (prev.expenseCategories ?? []).filter(
+          (item) => item.id !== removed.category.id && item.key !== removed.category.key,
+        ),
+      }));
+      toast.success(`${removed.category.label} removed.`);
+      return true;
+    },
+    [state.expenseCategories, state.expenses, state.forecastedExpenses, user.companyId],
+  );
+
+  const removeChartAccount = useCallback(
+    async (id: string) => {
+      const categories = expenseCategoriesOrDefaults(state.expenseCategories);
+      const charts = chartAccountsOrDefaults(state.chartAccounts, categories);
+      const removed = removeChartAccountEdit(charts, categories, id);
+      if (!removed.ok) {
+        toast.error(removed.error);
+        return false;
+      }
+      const supabase = maybeClient();
+      if (supabase && user.companyId && user.companyId !== "local" && isPersistedId(removed.account.id)) {
+        const { error } = await supabase.from("qb_chart_accounts").delete().eq("id", removed.account.id);
+        if (error && !isMissingExpenseCategories(error)) {
+          toast.error(error.message);
+          return false;
+        }
+        if (error && isMissingExpenseCategories(error)) toast.message(missingExpenseCategoriesMessage());
+      }
+      setState((prev) => ({
+        ...prev,
+        chartAccounts: (prev.chartAccounts ?? []).filter(
+          (item) => item.id !== removed.account.id && item.accountNumber !== removed.account.accountNumber,
+        ),
+      }));
+      toast.success(`${removed.account.accountNumber} · ${removed.account.name} removed from the chart.`);
+      return true;
+    },
+    [state.chartAccounts, state.expenseCategories, user.companyId],
   );
 
   const saveJobInsurance = useCallback(
@@ -10346,7 +10611,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     const current = state.expenses.find((item) => item.id === id);
     if (current) {
       const next = { ...current, ...patch };
-      if (expenseRequiresJob(next.account) && !next.jobId) {
+      if (expenseRequiresJob(next.account, expenseCategoriesOrDefaults(state.expenseCategories)) && !next.jobId) {
         toast.error("Assign this expense to a job so QuickBooks costs it to Customer:Job, not company overhead.");
         return false;
       }
@@ -10373,7 +10638,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     }
     apply();
     return true;
-  }, [state.expenses]);
+  }, [state.expenseCategories, state.expenses]);
 
   const updatePayment = useCallback(async (id: string, patch: Partial<Payment>) => {
     const apply = () =>
@@ -15202,6 +15467,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addExpense,
       addForecastedExpense,
       removeForecastedExpense,
+      saveExpenseCategory,
+      removeExpenseCategory,
+      saveChartAccount,
+      removeChartAccount,
       saveJobInsurance,
       submitCommissionCloseout,
       saveCommissionCloseoutReview,
@@ -15416,6 +15685,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       addExpense,
       addForecastedExpense,
       removeForecastedExpense,
+      saveExpenseCategory,
+      removeExpenseCategory,
+      saveChartAccount,
+      removeChartAccount,
       saveJobInsurance,
       submitCommissionCloseout,
       saveCommissionCloseoutReview,

@@ -21,7 +21,8 @@ import {
 } from "@/lib/profit-and-loss";
 import { JobCloseout } from "@/components/job-closeout";
 import { JobPnlComparisonTable, ProfitAndLossReport } from "@/components/profit-and-loss";
-import { EXPENSE_ACCOUNT_LABELS, type Job } from "@/lib/types";
+import { expenseCategoriesOrDefaults, expenseCategoryLabel } from "@/lib/expense-categories";
+import type { Job } from "@/lib/types";
 import { LogExpenseDialog, LogForecastedExpenseDialog, LogPaymentDialog } from "@/components/log-financial-dialogs";
 import { JobRefundDesk } from "@/components/job-refunds";
 import { jobDocumentHref, latestReturnNote } from "@/lib/qb-review";
@@ -52,10 +53,12 @@ export function JobFinancials({ job }: { job: Job }) {
         from: null,
         to: null,
         periodLabel: period.periodLabel,
+        categories: expenseCategoriesOrDefaults(crm.expenseCategories),
       }),
     [
       basis,
       crm.company.name,
+      crm.expenseCategories,
       crm.expenses,
       crm.estimateLines,
       crm.estimates,
@@ -89,9 +92,10 @@ export function JobFinancials({ job }: { job: Job }) {
         {
           forecasts,
           averageMarginPercent: job.projectedMarginPercent ?? null,
+          categories: expenseCategoriesOrDefaults(crm.expenseCategories),
         },
       ),
-    [crm.catalog, crm.estimateLines, crm.estimates, crm.opportunities, forecasts, job, statement],
+    [crm.catalog, crm.estimateLines, crm.estimates, crm.expenseCategories, crm.opportunities, forecasts, job, statement],
   );
   const companyAverage = useMemo(
     () =>
@@ -160,7 +164,7 @@ export function JobFinancials({ job }: { job: Job }) {
                   <span className="tabular-nums text-sm">{formatMoney(forecast.amount)}</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Forecasted estimate {forecast.number} · {EXPENSE_ACCOUNT_LABELS[forecast.account]} ·{" "}
+                  Forecasted estimate {forecast.number} · {expenseCategoryLabel(forecast.account, expenseCategoriesOrDefaults(crm.expenseCategories))} ·{" "}
                   {formatDate(forecast.expectedAt)}
                   {` · logged by ${expenseLoggedByLabel(forecast.createdBy, actors)}`}
                 </p>
@@ -181,7 +185,7 @@ export function JobFinancials({ job }: { job: Job }) {
           <p className="mt-2 text-xs text-muted-foreground">
             {comparison?.marginBasis === "average"
               ? "Projected profit is using the average margin, so these costs are not in the projected column. Nothing here posts to QuickBooks."
-              : "Job costs (materials, labor, dumpsters, permits, and similar) move projected cost of sales. Fuel, office, and insurance move projected expenses. Nothing here posts to QuickBooks."}
+              : "Cost-of-sales categories move projected cost of sales. Operating and other categories move projected expenses. Nothing here posts to QuickBooks."}
           </p>
         ) : null}
       </div>
@@ -214,7 +218,7 @@ export function JobFinancials({ job }: { job: Job }) {
                   <p className="text-xs text-muted-foreground">
                     {expense.number}
                     {expense.invoiceNumber.trim() ? ` · invoice ${expense.invoiceNumber.trim()}` : ""} ·{" "}
-                    {EXPENSE_ACCOUNT_LABELS[expense.account]} · {formatDate(expense.incurredAt)}
+                    {expenseCategoryLabel(expense.account, expenseCategoriesOrDefaults(crm.expenseCategories))} · {formatDate(expense.incurredAt)}
                     {` · logged by ${expenseLoggedByLabel(expense.createdBy, actors)}`}
                   </p>
                   {expense.memo ? <p className="text-sm leading-snug">{expense.memo}</p> : null}

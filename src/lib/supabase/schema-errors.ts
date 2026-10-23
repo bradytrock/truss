@@ -786,6 +786,26 @@ export const QB_REVIEW_SQL = "supabase/migrations/20260825270000_qb_review.sql";
 export const QB_REVIEW_MENTIONS_SQL = "supabase/migrations/20260827010000_qb_review_mentions.sql";
 export const QBWC_EXPENSE_JOB_SQL = "supabase/migrations/20260827020000_qbwc_expense_job.sql";
 export const QBWC_JOB_BILL_SQL = "supabase/migrations/20260930120000_qbwc_job_bill_chart_accounts.sql";
+export const EXPENSE_CATEGORIES_SQL = "supabase/migrations/20261022160000_expense_category_accounts.sql";
+
+export function isMissingExpenseCategories(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const code = (error.code ?? "").toLowerCase();
+  const mentions = message.includes("expense_categories") || message.includes("qb_chart_accounts");
+  return (
+    mentions &&
+    (code === "pgrst205" ||
+      code === "42p01" ||
+      message.includes("schema cache") ||
+      message.includes("could not find the") ||
+      message.includes("does not exist"))
+  );
+}
+
+export function missingExpenseCategoriesMessage() {
+  return `Saved in this browser. Run ${EXPENSE_CATEGORIES_SQL} in the SQL editor so expense categories and their QuickBooks accounts persist.`;
+}
 
 export function isMissingQbReview(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;

@@ -10,6 +10,7 @@ import type {
   Opportunity,
   Payment,
 } from "@/lib/types";
+import { expenseChartLabel } from "@/lib/expense-categories";
 import { qbChartAccountLabel } from "@/lib/qbwc/accounts";
 import { customerAliasName, customerJobFullName, qbName, type QbInvoiceLine } from "@/lib/qbwc/qbxml";
 
@@ -278,15 +279,26 @@ export function workFromBook(input: {
 /** Office and insurance may stay on the company. Everything else is a job cost. */
 export const COMPANY_OVERHEAD_ACCOUNTS: ExpenseAccount[] = ["office", "insurance"];
 
-export function expenseRequiresJob(account: ExpenseAccount) {
-  return !COMPANY_OVERHEAD_ACCOUNTS.includes(account);
+const COMPANY_OVERHEAD = new Set<string>(COMPANY_OVERHEAD_ACCOUNTS);
+
+export function expenseRequiresJob(
+  account: string,
+  categories?: readonly { key: string; requiresJob: boolean }[],
+) {
+  const match = categories?.find((item) => item.key === account);
+  if (match) return match.requiresJob;
+  return !COMPANY_OVERHEAD.has(account);
 }
 
-export function expensePushBlocked(input: { expense: Expense; job?: Job | null }) {
+export function expensePushBlocked(input: {
+  expense: Expense;
+  job?: Job | null;
+  categories?: readonly { key: string; requiresJob: boolean }[];
+}) {
   const expense = input.expense;
   if (!expense.vendor.trim()) return "Add a vendor so QuickBooks has a payee.";
   if (!(expense.amount > 0)) return "That expense has no amount.";
-  const needsJob = expenseRequiresJob(expense.account) || Boolean(expense.jobId);
+  const needsJob = expenseRequiresJob(expense.account, input.categories) || Boolean(expense.jobId);
   if (!needsJob) return null;
   if (!expense.jobId) {
     return "Assign this expense to a job so QuickBooks costs it to Customer:Job, not company overhead.";
@@ -310,7 +322,11 @@ export function paymentPushBlocked(input: { payment: Payment; invoice?: Invoice;
   return null;
 }
 
-export function qbExpenseAccountName(account: ExpenseAccount) {
+export function qbExpenseAccountName(
+  account: string,
+  categories?: readonly { key: string; qbAccountNumber: string; qbAccountName: string }[],
+) {
+  if (categories?.length) return expenseChartLabel(account, categories);
   return qbChartAccountLabel(account);
 }
 

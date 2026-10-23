@@ -20,7 +20,7 @@ import {
   type Payment,
 } from "@/lib/types";
 
-export const ACCOUNTING_TABS = ["overview", "review", "expenses", "closeouts", "refunds", "sync", "reports", "tools"] as const;
+export const ACCOUNTING_TABS = ["overview", "review", "expenses", "closeouts", "refunds", "sync", "categories", "reports", "tools"] as const;
 export type AccountingTab = (typeof ACCOUNTING_TABS)[number];
 
 export const INVOICE_REVIEW_FILTERS = ["all", "ready", "needs_review", "held"] as const;
@@ -86,7 +86,11 @@ export function expenseReviewStatus(
   return "ready";
 }
 
-export function expenseBlockedReason(input: { expense: Expense; job?: Job | null }) {
+export function expenseBlockedReason(input: {
+  expense: Expense;
+  job?: Job | null;
+  categories?: readonly { key: string; requiresJob: boolean }[];
+}) {
   if (input.expense.qbStatus === "error") {
     return "QuickBooks rejected this last time. Fix the vendor, job, or account, then retry.";
   }
@@ -151,13 +155,17 @@ export function expenseQbPreview(
   expense: Expense,
   job?: Job | null,
   customerName = "",
-  accounts?: { bankAccount?: string; ccAccount?: string },
+  accounts?: {
+    bankAccount?: string;
+    ccAccount?: string;
+    categories?: readonly { key: string; requiresJob: boolean; qbAccountNumber: string; qbAccountName: string }[];
+  },
 ) {
   const payWith = expenseQbPayWith(expense.method, Boolean(job));
   const hasJob = Boolean(job);
   const jobLabel = job
     ? `${customerName || "Customer"}:${job.code || job.name}`
-    : expenseRequiresJob(expense.account)
+    : expenseRequiresJob(expense.account, accounts?.categories)
       ? "Needs a job"
       : "Company overhead";
   return {
@@ -165,7 +173,7 @@ export function expenseQbPreview(
     vendor: expense.vendor.trim() || "Add a vendor",
     amount: expense.amount,
     txnDate: expense.incurredAt.slice(0, 10),
-    accountName: qbExpenseAccountName(expense.account),
+    accountName: qbExpenseAccountName(expense.account, accounts?.categories),
     paidWith: EXPENSE_METHOD_LABELS[expense.method],
     payAccount:
       payWith === "credit_card"
