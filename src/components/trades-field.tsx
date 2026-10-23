@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -65,22 +65,18 @@ export function TradesMenu({
   onChange,
   disabled,
   className,
+  emptyLabel = "Trades involved",
   separator = ", ",
 }: {
   value: readonly string[];
   onChange: (next: Trade[]) => void;
   disabled?: boolean;
   className?: string;
+  emptyLabel?: string;
   separator?: string;
 }) {
   const selected = parseTrades(value);
-  const storedOrder = value
-    .map((item) => item.trim().toLowerCase())
-    .filter((item): item is Trade => selected.includes(item as Trade));
-  const ordered = [...new Set([...storedOrder, ...selected])];
-  const label = ordered.length
-    ? ordered.map((trade) => TRADE_LABELS[trade]).join(separator)
-    : "Trades involved";
+  const summary = selected.map((trade) => TRADE_LABELS[trade]).join(separator);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -92,14 +88,15 @@ export function TradesMenu({
             disabled={disabled}
             aria-label="Trades involved"
             className={cn(
-              "h-7 w-auto max-w-56 gap-1 rounded-full border bg-background px-2.5 text-xs font-medium shadow-none",
+              "h-7 w-auto max-w-72 gap-1 rounded-full border bg-card px-2.5 text-xs font-medium shadow-none",
               !selected.length && "text-muted-foreground",
               className,
             )}
           />
         }
       >
-        <span className="truncate">{label}</span>
+        {selected.length === 0 ? <Plus className="size-3" /> : null}
+        <span className="truncate">{selected.length === 0 ? emptyLabel : summary}</span>
         <ChevronDown className="size-3 opacity-60" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-44">

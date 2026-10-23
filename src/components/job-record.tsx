@@ -6,9 +6,8 @@ import { useMemo, useState, type ReactNode } from "react";
 import {
   Calendar,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Copy,
+  Ellipsis,
   FileText,
   ImageIcon,
   Mail,
@@ -16,7 +15,6 @@ import {
   Maximize2,
   MessageSquare,
   Minimize2,
-  MoreHorizontal,
   Pencil,
   Phone,
   Plus,
@@ -77,7 +75,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { TradesMenu } from "@/components/trades-field";
 import { EstimateStatusBadge, InvoiceStatusBadge, QbStatusBadge } from "@/components/status-badge";
 import { useCrm } from "@/lib/crm-store";
-import { daysUntil, formatCurrencyFull, formatDate, formatInboxTime, formatPhone, initials } from "@/lib/format";
+import { formatCurrencyFull, formatDate, formatInboxTime, formatPhone } from "@/lib/format";
 import { mailHref } from "@/lib/job-emails";
 import { assignedCrewPatch, isDeletedJob, jobAddress, jobRecordHref, mapsUrl, primaryHomeownerPatch, uniqueIds, uniqueNames } from "@/lib/job-record";
 import {
@@ -104,22 +102,18 @@ import { derivedInvoiceStatus, invoiceBalance } from "@/lib/money";
 import { amountForEstimate, featuredEstimateForJob, jobSoldAmount } from "@/lib/estimate-totals";
 import { jobProfitAndLoss } from "@/lib/job-financials";
 import { hasEstimateSignature } from "@/lib/estimate-signature";
-import { projectTypeForMarket, workMarket } from "@/lib/market";
+import { workMarket } from "@/lib/market";
 import { WORK_COLUMNS, WORK_COLUMN_LABELS, workColumnFor, type WorkColumn } from "@/lib/work-board";
 import { COURSE } from "@/lib/training/engine";
 import { recommendedChapterIds } from "@/lib/training/recommend";
 import {
   ESTIMATE_STATUS_LABELS,
   JOB_MARKET_LABELS,
-  isShelvedStage,
   type Contact,
   type Job,
-  type JobStatus,
   type LeadSource,
   type PageTemplateId,
   type PhotoPageLayout,
-  type PipelineStage,
-  type Task,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { PhotoReportBuilder } from "@/components/photo-report-builder";
@@ -158,132 +152,131 @@ function copyText(value: string, label: string) {
   );
 }
 
-const recordPanel =
-  "rounded-[14px] border border-[#e6e3de] bg-white shadow-[0_1px_2px_rgba(28,25,23,0.04)] dark:border-border dark:bg-card";
-
-const quietSelect =
-  "h-auto w-full justify-end gap-1 border-0 bg-transparent p-0 text-sm font-medium shadow-none hover:bg-transparent dark:bg-transparent [&_svg]:size-3.5";
-
-const headerPill =
-  "h-8 w-auto max-w-56 gap-1 rounded-full border border-[#e4e1dc] bg-white px-3 text-xs font-medium shadow-none dark:border-border dark:bg-card [&_svg]:size-3.5";
-
-const outlineAction =
-  "h-8 rounded-[10px] border-[#e4e1dc] bg-white px-3 shadow-none hover:bg-[#faf9f7] dark:border-border dark:bg-card dark:hover:bg-muted";
-
-const STATUS_PILL: Record<WorkColumn, string> = {
-  lead: "border-[#e4e1dc] bg-white text-foreground",
-  proposal_sent: "border-transparent bg-[#f8efd8] text-foreground",
-  supplementing: "border-transparent bg-[#e7eefc] text-foreground",
-  in_progress: "border-transparent bg-[#e5f5ea] text-foreground",
-  punch: "border-transparent bg-[#fdecdc] text-foreground",
-  complete: "border-transparent bg-[#e7f6ee] text-foreground",
-  on_hold: "border-transparent bg-[#f3f1ee] text-foreground",
-  unqualified: "border-transparent bg-[#fde8e8] text-foreground",
-  lost: "border-transparent bg-[#fde8e8] text-foreground",
-  deleted: "border-transparent bg-[#f3f1ee] text-muted-foreground",
-};
-
-const STATUS_DOT: Record<WorkColumn, string> = {
-  lead: "bg-[#8a847c]",
-  proposal_sent: "bg-[#c2880a]",
-  supplementing: "bg-[#3b6fe0]",
-  in_progress: "bg-[#16a34a]",
-  punch: "bg-[#ea580c]",
-  complete: "bg-[#15803d]",
-  on_hold: "bg-[#8a847c]",
-  unqualified: "bg-[#dc2626]",
-  lost: "bg-[#dc2626]",
-  deleted: "bg-[#8a847c]",
-};
-
-function formatJobSpan(start?: string | null, end?: string | null) {
-  const startDay = start?.slice(0, 10) ?? "";
-  const endDay = end?.slice(0, 10) ?? "";
-  if (!startDay && !endDay) return "";
-  if (!startDay) return formatDate(endDay);
-  if (!endDay || endDay === startDay) return formatDate(startDay);
-  const startDate = new Date(`${startDay}T12:00:00`);
-  const endDate = new Date(`${endDay}T12:00:00`);
-  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-    return `${formatDate(startDay)} – ${formatDate(endDay)}`;
-  }
-  const sameYear = startDate.getFullYear() === endDate.getFullYear();
-  const sameMonth = sameYear && startDate.getMonth() === endDate.getMonth();
-  if (sameMonth) {
-    const month = startDate.toLocaleDateString("en-US", { month: "short" });
-    return `${month} ${startDate.getDate()} – ${endDate.getDate()}, ${startDate.getFullYear()}`;
-  }
-  if (sameYear) {
-    const left = startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    const right = endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    return `${left} – ${right}, ${startDate.getFullYear()}`;
-  }
-  return `${formatDate(startDay)} – ${formatDate(endDay)}`;
-}
-
-function nextStepDetail(dueAt?: string | null) {
-  if (!dueAt) return "Due this week · no date set";
-  const days = daysUntil(dueAt);
-  if (days === null) return "Due this week · no date set";
-  if (days < 0) return `Overdue · ${formatDate(dueAt)}`;
-  if (days === 0) return "Due today";
-  if (days <= 7) return `Due this week · ${formatDate(dueAt)}`;
-  return `Due ${formatDate(dueAt)}`;
-}
-
-function stageForCopy(column: WorkColumn): PipelineStage {
-  if (column === "proposal_sent") return "bid_submitted";
-  if (column === "supplementing") return "supplementing";
-  if (column === "in_progress" || column === "punch" || column === "complete" || column === "on_hold") {
-    return "awarded";
-  }
-  return "pursuing";
-}
-
-function statusForCopy(column: WorkColumn): JobStatus {
-  if (column === "punch") return "punch";
-  if (column === "complete") return "complete";
-  if (column === "on_hold") return "on_hold";
-  if (column === "in_progress") return "in_progress";
-  return "precon";
-}
-
 function JobSection({
   title,
-  count,
+  meta,
   defaultOpen = true,
   actions,
   children,
 }: {
   title: string;
-  count?: number;
+  meta?: ReactNode;
   defaultOpen?: boolean;
   actions?: ReactNode;
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <section className={recordPanel}>
-      <div className="flex items-center gap-2 px-4 py-3">
+    <section className="border-b">
+      <div className="flex items-center gap-2 py-3">
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
           className="flex min-w-0 flex-1 items-center gap-2 text-left"
         >
-          <ChevronRight
-            className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-90")}
+          <ChevronDown
+            className={cn("size-4 shrink-0 text-muted-foreground transition-transform", !open && "-rotate-90")}
           />
-          <span className="text-sm font-medium">{title}</span>
+          <span className="text-[11px] font-semibold tracking-[0.16em] text-foreground uppercase">
+            {title}
+          </span>
+          {meta != null ? (
+            <span className="ml-auto text-xs font-normal tracking-normal text-muted-foreground normal-case">
+              {meta}
+            </span>
+          ) : null}
         </button>
-        {open ? actions : null}
-        {typeof count === "number" ? (
-          <span className="text-sm tabular-nums text-muted-foreground">{count}</span>
-        ) : null}
+        {actions}
       </div>
-      {open ? <div className="border-t border-[#eeeae6] px-4 py-3 dark:border-border">{children}</div> : null}
+      {open ? <div className="pb-4">{children}</div> : null}
     </section>
   );
 }
+
+function personInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
+  return `${first}${last}`.toUpperCase();
+}
+
+function formatJobRange(start?: string | null, end?: string | null) {
+  if (!start && !end) return "";
+  if (start && end) {
+    const left = new Date(`${start.slice(0, 10)}T12:00:00`);
+    const right = new Date(`${end.slice(0, 10)}T12:00:00`);
+    if (
+      !Number.isNaN(left.getTime()) &&
+      !Number.isNaN(right.getTime()) &&
+      left.getFullYear() === right.getFullYear() &&
+      left.getMonth() === right.getMonth()
+    ) {
+      const month = left.toLocaleDateString("en-US", { month: "short" });
+      return `${month} ${left.getDate()} – ${right.getDate()}, ${right.getFullYear()}`;
+    }
+    return `${formatDate(start)} – ${formatDate(end)}`;
+  }
+  return formatDate(start || end);
+}
+
+const COLUMN_PILL: Record<WorkColumn, string> = {
+  lead: "border-amber-200 bg-amber-50 text-amber-950",
+  proposal_sent: "border-sky-200 bg-sky-50 text-sky-950",
+  supplementing: "border-blue-200 bg-blue-50 text-blue-950",
+  in_progress: "border-emerald-200 bg-emerald-50 text-emerald-950",
+  punch: "border-orange-200 bg-orange-50 text-orange-950",
+  complete: "border-emerald-200 bg-emerald-50 text-emerald-950",
+  on_hold: "border-zinc-200 bg-zinc-100 text-zinc-800",
+  unqualified: "border-rose-200 bg-rose-50 text-rose-900",
+  lost: "border-rose-200 bg-rose-50 text-rose-900",
+  deleted: "border-zinc-300 bg-zinc-100 text-zinc-700",
+};
+
+const COLUMN_DOT: Record<WorkColumn, string> = {
+  lead: "bg-amber-500",
+  proposal_sent: "bg-sky-500",
+  supplementing: "bg-blue-500",
+  in_progress: "bg-emerald-500",
+  punch: "bg-orange-500",
+  complete: "bg-emerald-600",
+  on_hold: "bg-zinc-400",
+  unqualified: "bg-rose-400",
+  lost: "bg-rose-600",
+  deleted: "bg-zinc-500",
+};
+
+const QUICK_PAGE_TEMPLATES: Array<{ id: PageTemplateId; title: string }> = [
+  { id: "work_order", title: "Work order" },
+  { id: "photos", title: "Photo documentation" },
+  { id: "inspection", title: "Inspection" },
+  { id: "completion", title: "Closeout" },
+  { id: "claim", title: "Claim packet" },
+];
+
+function WorkRow({
+  label,
+  action,
+  children,
+}: {
+  label: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="grid items-start gap-2 border-b px-4 py-3 last:border-b-0 sm:grid-cols-[9.5rem_minmax(0,1fr)_auto] sm:items-center">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <div className="min-w-0 text-sm">{children}</div>
+      <div className="flex flex-wrap justify-end gap-1">{action}</div>
+    </div>
+  );
+}
+
+const quietSelect =
+  "h-auto w-full justify-end border-0 bg-transparent p-0 shadow-none hover:bg-transparent dark:bg-transparent";
+
+const pillSelect =
+  "h-7 w-auto gap-1 rounded-full border bg-background px-2.5 text-xs font-medium shadow-none";
 
 function DetailRow({
   label,
@@ -293,76 +286,44 @@ function DetailRow({
   children: ReactNode;
 }) {
   return (
-    <div className="grid grid-cols-[7.75rem_minmax(0,1fr)] items-center gap-3 border-b border-[#eeeae6] py-2.5 last:border-b-0 dark:border-border">
+    <div className="grid grid-cols-[7.5rem_minmax(0,1fr)] items-center gap-3 py-2.5">
       <p className="text-sm text-muted-foreground">{label}</p>
       <div className="min-w-0 text-right text-sm">{children}</div>
     </div>
   );
 }
 
-function DateField({
-  label,
-  value,
-  onChange,
-  disabled,
-  empty = "Set date",
-}: {
-  label: string;
-  value: string | null | undefined;
-  onChange: (value: string) => void;
-  disabled?: boolean;
-  empty?: string;
-}) {
-  const day = value?.slice(0, 10) ?? "";
-  return (
-    <label className="relative inline-flex cursor-pointer items-center justify-end gap-1 text-sm">
-      <span className={day ? "font-medium text-foreground" : "text-muted-foreground"}>
-        {day ? formatDate(day) : empty}
-      </span>
-      <ChevronDown className="size-3.5 text-muted-foreground" />
-      <input
-        type="date"
-        value={day}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-        className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
-        aria-label={label}
-      />
-    </label>
-  );
-}
-
 function SummaryCard({
   eyebrow,
   title,
-  body,
+  detail,
   action,
   href,
   onClick,
 }: {
   eyebrow: string;
   title: string;
-  body: string;
+  detail: ReactNode;
   action?: string;
   href?: string;
   onClick?: () => void;
 }) {
-  const linkClass = "mt-auto pt-3 text-left text-sm font-medium text-primary hover:underline";
+  const actionClass = "mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline";
   return (
-    <div className={cn(recordPanel, "flex min-h-[148px] flex-col p-4")}>
-      <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-        {eyebrow}
-      </p>
-      <p className="mt-2 text-sm font-semibold">{title}</p>
-      <p className="mt-1 text-sm leading-snug text-muted-foreground">{body}</p>
+    <div className="flex h-full flex-col rounded-[12px] border bg-card p-4">
+      <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">{eyebrow}</p>
+      <p className="mt-3 text-lg leading-snug font-semibold">{title}</p>
+      <div className="mt-1 flex-1 text-sm text-muted-foreground">{detail}</div>
       {action && href ? (
-        <Link href={href} className={linkClass}>
-          {action} →
+        <Link href={href} className={actionClass}>
+          {action}
+          <span aria-hidden="true">→</span>
         </Link>
       ) : null}
       {action && !href && onClick ? (
-        <button type="button" onClick={onClick} className={linkClass}>
-          {action} →
+        <button type="button" onClick={onClick} className={cn(actionClass, "text-left")}>
+          {action}
+          <span aria-hidden="true">→</span>
         </button>
       ) : null}
     </div>
@@ -387,7 +348,7 @@ function PeopleChips({
     <div className="flex flex-wrap items-center justify-end gap-1">
       {names.length === 0 ? <span className="text-muted-foreground">{empty}</span> : null}
       {names.map((name) => (
-        <Badge key={name} variant="secondary" className="h-6 gap-1 rounded-full bg-[#f1efec] px-2 font-normal text-foreground dark:bg-muted">
+        <Badge key={name} variant="secondary" className="gap-1 pr-1">
           {name}
           <button
             type="button"
@@ -401,16 +362,7 @@ function PeopleChips({
       ))}
       {remaining.length > 0 ? (
         <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="outline"
-                size="icon-xs"
-                className="size-6 rounded-full border-[#e4e1dc] bg-white dark:border-border dark:bg-card"
-                aria-label="Add assignee"
-              />
-            }
-          >
+          <DropdownMenuTrigger render={<Button variant="ghost" size="icon-xs" className="size-6" />}>
             <Plus className="size-3.5" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="max-h-64 min-w-44 overflow-auto">
@@ -439,7 +391,7 @@ export function JobRecord({
   job,
   className,
   onClose,
-  expanded = false,
+  expanded,
   onToggleExpand,
 }: {
   job: Job;
@@ -471,7 +423,6 @@ export function JobRecord({
     (requestedTab === "insurance" && !showInsurance)
       ? "overview"
       : requestedTab;
-  const [photoOffset, setPhotoOffset] = useState(0);
   const [addressOpen, setAddressOpen] = useState(false);
   const [photoOpen, setPhotoOpen] = useState(false);
   const [photoViewOpen, setPhotoViewOpen] = useState(false);
@@ -484,17 +435,14 @@ export function JobRecord({
   const [pageCreateOpen, setPageCreateOpen] = useState(false);
   const [pageCreating, setPageCreating] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
+  const [tagOpen, setTagOpen] = useState(false);
+  const [duplicating, setDuplicating] = useState(false);
   const [street, setStreet] = useState(job.street);
   const [city, setCity] = useState(job.city);
   const [state, setState] = useState(job.state);
   const [postalCode, setPostalCode] = useState(job.postalCode);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [restoring, setRestoring] = useState(false);
-  const [duplicating, setDuplicating] = useState(false);
-  const [tagsOpen, setTagsOpen] = useState(false);
-  const [filePicker, setFilePicker] = useState(0);
-  const [taskDraft, setTaskDraft] = useState<Task | null>(null);
-  const [taskTitleDefault, setTaskTitleDefault] = useState("");
   const [codeOpen, setCodeOpen] = useState(false);
   const [codeDraft, setCodeDraft] = useState(job.code);
   const [reviewBusy, setReviewBusy] = useState(false);
@@ -559,12 +507,7 @@ export function JobRecord({
   const reports = crm.photoReports.filter((report) => report.jobId === job.id);
   const openReport = reportId ? reports.find((report) => report.id === reportId) : undefined;
   const hero = primaryJobPhoto(crm.photos, job);
-  const primaryPhotoIndex = photos.findIndex((photo) => photo.id === job.primaryPhotoId);
-  const startPhotoIndex = primaryPhotoIndex >= 0 ? primaryPhotoIndex : 0;
-  const photoIndex = photos.length
-    ? (((startPhotoIndex + photoOffset) % photos.length) + photos.length) % photos.length
-    : 0;
-  const shownPhoto = photos[photoIndex] ?? hero ?? null;
+  const shownPhoto = hero ?? photos[0] ?? null;
   const address = jobAddress(job);
   const cityLine = [job.city, [job.state, job.postalCode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
   const jobFiles = (crm.jobFiles ?? []).filter((file) => file.jobId === job.id);
@@ -647,9 +590,16 @@ export function JobRecord({
     .slice()
     .sort((left, right) => (left.dueAt || "z").localeCompare(right.dueAt || "z"))[0];
   const pipelineColumn = workColumnFor(job, opportunity);
-  const nextStepTitle =
-    nextTask?.title.trim() ||
-    (pipelineColumn === "lead" ? "Scope review" : WORK_COLUMN_LABELS[pipelineColumn]);
+  const nextStepTitle = nextTask?.title.trim() || WORK_COLUMN_LABELS[pipelineColumn];
+  const nextStepDetail = nextTask?.dueAt
+    ? formatDate(nextTask.dueAt)
+    : pipelineColumn === "lead"
+      ? "No inspection date set"
+      : "Due this week · no date set";
+  const nextStepAction = nextTask ? "Open tasks" : pipelineColumn === "lead" ? "Set inspection" : "Set date";
+  const hasWork = estimates.length + invoices.length + tasks.length + materialOrders.length > 0;
+  const dateRange = formatJobRange(job.startDate, job.substantialCompletion);
+  const homeownerName = primary?.name || client?.name || crm.customerName(job) || "Add a homeowner";
   const latestPage = reports[0];
   const jobMail = (crm.gmailMessages ?? [])
     .filter((message) => message.jobId === job.id)
@@ -751,114 +701,68 @@ export function JobRecord({
     if (!value) return;
     patch({ tags: uniqueNames([...job.tags, value]) });
     setTagDraft("");
-  }
-
-  function openAddress() {
-    setStreet(job.street);
-    setCity(job.city);
-    setState(job.state);
-    setPostalCode(job.postalCode);
-    setAddressOpen(true);
-  }
-
-  function openNextStepDate() {
-    setTaskDraft(nextTask ?? null);
-    setTaskTitleDefault(nextTask ? "" : nextStepTitle);
-    setTaskOpen(true);
-  }
-
-  function uploadFiles() {
-    if (deleted) return;
-    setJobTab("files");
-    setFilePicker((value) => value + 1);
+    setTagOpen(false);
   }
 
   async function duplicateJob() {
     if (deleted || duplicating) return;
-    if (!job.primaryContactId && !opportunity?.primaryContactId) {
-      toast.error("Add a homeowner before duplicating this job.");
-      return;
-    }
     setDuplicating(true);
     try {
-      const stage = stageForCopy(pipelineColumn);
-      const created = await crm.addOpportunity({
+      const created = await crm.addJob({
         name: job.name,
+        opportunityId: null,
         clientId: job.clientId,
-        primaryContactId: job.primaryContactId || opportunity?.primaryContactId || "",
-        stage: isShelvedStage(stage) ? "pursuing" : stage,
-        value: 0,
-        bidDueAt: opportunity?.bidDueAt ?? null,
-        preBidWalkAt: opportunity?.preBidWalkAt ?? null,
-        location: job.location || address || "Address TBD",
-        projectType: opportunity?.projectType || projectTypeForMarket(job.market || "residential"),
-        market: job.market || opportunity?.market,
-        deliveryMethod: opportunity?.deliveryMethod || "insurance_claim",
-        estimator: job.projectManager || opportunity?.estimator || crm.user.name,
-        ownerStaffId: job.ownerStaffId,
-        originatorStaffId: opportunity?.originatorStaffId,
-        nextStep: opportunity?.nextStep || "Review the duplicated job.",
-        leadSource: job.leadSource || opportunity?.leadSource || "",
-        referralContactId: opportunity?.referralContactId ?? null,
+        primaryContactId: job.primaryContactId,
+        status: job.status,
+        contractValue: job.contractValue,
+        startDate: job.startDate,
+        substantialCompletion: job.substantialCompletion,
+        superintendent: job.superintendent,
+        projectManager: job.projectManager,
+        location: job.location,
+        description: job.description,
+        tags: job.tags,
         street: job.street,
         city: job.city,
         state: job.state,
         postalCode: job.postalCode,
-        notes: job.description,
-      });
-      const copy = created.costingJob;
-      if (!copy?.id) {
-        toast.error("The lead opened, but the job copy did not.");
-        return;
-      }
-      const saved = await crm.updateJob(copy.id, {
-        status: statusForCopy(pipelineColumn),
-        trades: job.trades,
-        description: job.description,
-        tags: job.tags,
-        startDate: job.startDate,
-        substantialCompletion: job.substantialCompletion,
-        assigned: job.assigned,
-        relatedContactIds: job.relatedContactIds,
-        subcontractorIds: job.subcontractorIds,
-        leadSource: job.leadSource,
-        projectManager: job.projectManager,
-        superintendent: job.superintendent,
-        market: job.market,
+        lat: job.lat,
+        lng: job.lng,
         salesRep: job.salesRep,
+        assigned: job.assigned,
+        subcontractorIds: job.subcontractorIds,
+        relatedContactIds: job.relatedContactIds,
+        customFields: job.customFields,
+        projectType: job.projectType,
+        leadSource: job.leadSource,
+        market: job.market,
+        trades: job.trades,
       });
-      if (saved) toast.success("Job duplicated.");
-      else toast.message("Job duplicated. Some details did not copy.");
-      router.replace(jobRecordHref(copy.id));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not duplicate this job.");
+      toast.success(`Duplicated as ${created.code}.`);
+      router.replace(jobRecordHref(created.id), { scroll: false });
+    } catch {
+      // addJob already reports the failure.
     } finally {
       setDuplicating(false);
     }
   }
 
-  const dateSpan = formatJobSpan(job.startDate, job.substantialCompletion);
-  const namedHomeowner = primary?.name?.trim() || client?.name?.trim() || "";
-  const resolvedCustomer = crm.customerName(job).trim();
-  const homeownerName =
-    namedHomeowner || (resolvedCustomer && resolvedCustomer !== "Homeowner" ? resolvedCustomer : "");
-
   const newMenu = !deleted ? (
     <DropdownMenu>
-      <DropdownMenuTrigger
+        <DropdownMenuTrigger
         render={
           <Button
             type="button"
             size="sm"
+            className="rounded-lg"
             disabled={estimatePending || materialPending}
             aria-label="Create on this job"
-            className="h-8 rounded-[10px] px-3"
           />
         }
       >
         <Plus data-icon="inline-start" />
         {estimatePending || materialPending ? "Opening…" : "New"}
-        <ChevronDown data-icon="inline-end" className="size-3.5" />
+        <ChevronDown data-icon="inline-end" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-44">
         {allowEstimates ? (
@@ -884,26 +788,19 @@ export function JobRecord({
   ) : null;
 
   return (
-    <div className={cn("flex h-full min-h-0 flex-col bg-[#f6f5f2] dark:bg-background", className)}>
-      <header className="shrink-0 px-5 pt-4">
-        <div className="flex items-center justify-between gap-3">
+    <div className={cn("flex h-full min-h-0 flex-col bg-background", className)}>
+      <div className="shrink-0 px-4 pt-3 sm:px-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             {job.code ? (
-              <span className="inline-flex h-8 items-center rounded-[10px] border border-[#e4e1dc] bg-white px-2.5 font-mono text-xs font-medium dark:border-border dark:bg-card">
-                {job.code}
-              </span>
-            ) : null}
-            {job.code ? (
-              <Button
+              <button
                 type="button"
-                variant="outline"
-                size="icon-sm"
-                className="size-8 rounded-[10px] border-[#e4e1dc] bg-white shadow-none dark:border-border dark:bg-card"
+                className="inline-flex h-7 items-center gap-1.5 rounded-full border bg-card px-2.5 font-mono text-xs"
                 onClick={() => copyText(job.code, "Job code")}
-                aria-label="Copy job code"
               >
-                <Copy />
-              </Button>
+                {job.code}
+                <Copy className="size-3 text-muted-foreground" />
+              </button>
             ) : null}
             <Select
               value={pipelineColumn}
@@ -920,8 +817,8 @@ export function JobRecord({
                 label: WORK_COLUMN_LABELS[column],
               }))}
             >
-              <SelectTrigger className={cn(headerPill, STATUS_PILL[pipelineColumn])} aria-label="Pipeline status">
-                <span className={cn("size-1.5 shrink-0 rounded-full", STATUS_DOT[pipelineColumn])} />
+              <SelectTrigger className={cn(pillSelect, "bg-card", COLUMN_PILL[pipelineColumn])} aria-label="Pipeline status">
+                <span className={cn("size-1.5 rounded-full", COLUMN_DOT[pipelineColumn])} />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -958,7 +855,7 @@ export function JobRecord({
                 { value: "commercial", label: JOB_MARKET_LABELS.commercial },
               ]}
             >
-              <SelectTrigger className={cn(headerPill, "border-[#e4e1dc]")} aria-label="Residential">
+              <SelectTrigger className={cn(pillSelect, "bg-card")} aria-label="Residential">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -969,39 +866,31 @@ export function JobRecord({
             <TradesMenu
               value={job.trades}
               disabled={deleted}
+              emptyLabel="Add trades"
               separator=" · "
-              className={cn(headerPill, "max-w-none border-[#e4e1dc]")}
               onChange={(trades) => patch({ trades })}
             />
           </div>
-          <div className="flex shrink-0 items-center gap-0.5">
+          <div className="flex items-center gap-1">
             {onToggleExpand ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
-                className="size-8 text-muted-foreground"
                 onClick={onToggleExpand}
-                aria-label={expanded ? "Shrink job" : "Expand job"}
+                aria-label={expanded ? "Shrink job window" : "Expand job window"}
               >
                 {expanded ? <Minimize2 /> : <Maximize2 />}
               </Button>
             ) : null}
             <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="size-8 text-muted-foreground"
-                    aria-label="More job actions"
-                  />
-                }
-              >
-                <MoreHorizontal />
+              <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label="More job actions" />}>
+                <Ellipsis />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-44">
+              <DropdownMenuContent align="end" className="min-w-40">
+                {job.code ? (
+                  <DropdownMenuItem onClick={() => copyText(job.code, "Job code")}>Copy job code</DropdownMenuItem>
+                ) : null}
                 {canEditCode && !deleted ? (
                   <DropdownMenuItem
                     onClick={() => {
@@ -1012,19 +901,10 @@ export function JobRecord({
                     Change code
                   </DropdownMenuItem>
                 ) : null}
-                <DropdownMenuItem onClick={() => copyText(address, "Address")} disabled={!address}>
-                  Copy address
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => copyText(`${window.location.origin}${jobRecordHref(job.id)}`, "Job link")}
-                >
-                  Copy link
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setTagsOpen(true)}>Edit tags</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             {onClose ? (
-              <Button type="button" variant="ghost" size="icon-sm" className="size-8" onClick={onClose} aria-label="Close">
+              <Button type="button" variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close">
                 <XIcon />
               </Button>
             ) : null}
@@ -1032,19 +912,36 @@ export function JobRecord({
         </div>
 
         <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
-          <h1
-            id="job-window-title"
-            className="min-w-0 font-heading text-[1.7rem] leading-tight font-medium text-balance"
-          >
-            {job.name}
-          </h1>
+          <div className="min-w-0">
+            <h1 id="job-window-title" className="font-heading text-[1.65rem] leading-tight font-medium text-balance">
+              {job.name}
+            </h1>
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
+                <MapPin className="size-3.5" />
+                {cityLine || address || "Add a job-site address"}
+              </span>
+              {job.projectManager ? (
+                <span className="inline-flex items-center gap-1">
+                  <User className="size-3.5" />
+                  PM {job.projectManager}
+                </span>
+              ) : null}
+              {dateRange ? (
+                <span className="inline-flex items-center gap-1">
+                  <Calendar className="size-3.5" />
+                  {dateRange}
+                </span>
+              ) : null}
+            </p>
+          </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {primary?.phone ? (
               <Button
                 nativeButton={false}
                 variant="outline"
                 size="sm"
-                className={outlineAction}
+                className="rounded-lg bg-card"
                 render={<Link href={`/messages?job=${job.id}&contact=${primary.id}`} />}
               >
                 <MessageSquare data-icon="inline-start" />
@@ -1055,7 +952,7 @@ export function JobRecord({
               nativeButton={false}
               variant="outline"
               size="sm"
-              className={outlineAction}
+              className="rounded-lg bg-card"
               render={<Link href={mailHref({ job: job.id, contact: primary?.id })} />}
             >
               <Mail data-icon="inline-start" />
@@ -1066,7 +963,7 @@ export function JobRecord({
                 type="button"
                 variant="outline"
                 size="sm"
-                className={outlineAction}
+                className="rounded-lg bg-card"
                 disabled={closeoutBusy}
                 onClick={() => {
                   setCloseoutBusy(true);
@@ -1080,92 +977,65 @@ export function JobRecord({
             {newMenu}
           </div>
         </div>
-
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-          <button
-            type="button"
-            onClick={openAddress}
-            className="inline-flex items-center gap-1.5 hover:text-foreground"
-          >
-            <MapPin className="size-3.5" />
-            {cityLine || address || "Add a job-site address"}
-          </button>
-          {job.projectManager ? (
-            <span className="inline-flex items-center gap-1.5">
-              <User className="size-3.5" />
-              PM {job.projectManager}
-            </span>
-          ) : null}
-          {dateSpan ? (
-            <span className="inline-flex items-center gap-1.5">
-              <Calendar className="size-3.5" />
-              {dateSpan}
-            </span>
-          ) : null}
-        </div>
-      </header>
+      </div>
 
       <Tabs
         value={tab}
         onValueChange={(value) => {
           if (typeof value === "string") setJobTab(parseJobTab(value));
         }}
-        className="min-h-0 flex-1 gap-0"
+        className="min-h-0 flex-1"
       >
-        <div className="flex shrink-0 items-end justify-between gap-4 border-b border-[#e6e3de] px-5 pt-3 dark:border-border">
-          <TabsList variant="line" className="h-auto w-auto justify-start gap-4 overflow-visible rounded-none bg-transparent px-0 pb-0">
-            <TabsTrigger value="overview" className="flex-none rounded-none px-0 pb-2.5 after:bottom-0 after:bg-primary">
-              Overview
-            </TabsTrigger>
-            <TabsTrigger value="photos" className="flex-none rounded-none px-0 pb-2.5 after:bottom-0 after:bg-primary">
+        <div className="flex shrink-0 flex-wrap items-end justify-between gap-3 border-b px-4 sm:px-5">
+          <TabsList variant="line" className="h-auto justify-start gap-4 overflow-visible rounded-none bg-transparent px-0 pt-3 pb-0">
+            <TabsTrigger value="overview" className="flex-none px-0 after:bg-primary">Overview</TabsTrigger>
+            <TabsTrigger value="photos" className="flex-none px-0 after:bg-primary">
               Photos
-              <span className="text-muted-foreground">{photos.length}</span>
+              <span className="text-primary tabular-nums">{photos.length}</span>
             </TabsTrigger>
-            <TabsTrigger value="files" className="flex-none rounded-none px-0 pb-2.5 after:bottom-0 after:bg-primary">
+            <TabsTrigger value="files" className="flex-none px-0 after:bg-primary">
               Files
-              <span className="text-muted-foreground">{fileCount}</span>
+              <span className="text-primary tabular-nums">{fileCount}</span>
             </TabsTrigger>
             {showPaper ? (
-              <TabsTrigger value="paper" className="flex-none rounded-none px-0 pb-2.5 after:bottom-0 after:bg-primary">
+              <TabsTrigger value="paper" className="flex-none px-0 after:bg-primary">
                 Paper
-                <span className="text-muted-foreground">{estimates.length + invoices.length}</span>
+                <span className="text-primary tabular-nums">{estimates.length + invoices.length}</span>
               </TabsTrigger>
             ) : null}
             {showInsurance ? (
-              <TabsTrigger value="insurance" className="flex-none rounded-none px-0 pb-2.5 after:bottom-0 after:bg-primary">
+              <TabsTrigger value="insurance" className="flex-none px-0 after:bg-primary">
                 Insurance
                 {claimMath?.openCount ? (
-                  <span className="text-muted-foreground">{claimMath.openCount}</span>
+                  <span className="text-primary tabular-nums">{claimMath.openCount}</span>
                 ) : null}
               </TabsTrigger>
             ) : null}
             {showFinancials ? (
-              <TabsTrigger value="financials" className="flex-none rounded-none px-0 pb-2.5 after:bottom-0 after:bg-primary">
-                Financials
-              </TabsTrigger>
+              <TabsTrigger value="financials" className="flex-none px-0 after:bg-primary">Financials</TabsTrigger>
             ) : null}
           </TabsList>
-          <p className="shrink-0 pb-2.5 text-sm tabular-nums">
+          <p className="shrink-0 pb-2 text-sm tabular-nums">
             {showFinancials && books ? (
               <>
-                <span className="font-semibold">{formatCurrencyFull(books.invoiced)}</span>
+                <span className="font-medium">{formatCurrencyFull(books.invoiced)}</span>
                 <span className="text-muted-foreground"> invoiced</span>
-                <span className="ml-3 text-muted-foreground">
-                  {formatCurrencyFull(draftEstimateTotal)} est. draft
-                </span>
+                <span className="mx-2 text-muted-foreground"> </span>
+                <span className="font-medium text-primary">{formatCurrencyFull(draftEstimateTotal)}</span>
+                <span className="text-muted-foreground"> est. draft</span>
               </>
             ) : (
               <>
-                <span className="font-semibold">{soldFor > 0 ? formatCurrencyFull(soldFor) : "Not sold"}</span>
-                {soldFor > 0 ? <span className="text-muted-foreground"> sold</span> : null}
+                <span className="font-medium">{soldFor > 0 ? formatCurrencyFull(soldFor) : "Not sold"}</span>
+                <span className="text-muted-foreground">{soldFor > 0 ? " sold" : ""}</span>
               </>
             )}
           </p>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {deleted ? (
-            <div className={cn(recordPanel, "px-4 py-3")}>
+            <div className="mx-4 mt-4 rounded-[12px] border bg-muted/60 px-4 py-3 sm:mx-5">
               <p className="text-sm font-medium">This job is in Deleted.</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 {job.deletedBy ? `${job.deletedBy} removed it` : "Removed"}
@@ -1176,7 +1046,7 @@ export function JobRecord({
           ) : null}
 
           {codeReview && canEditCode && !deleted ? (
-            <div className={cn(recordPanel, "px-4 py-3")}>
+            <div className="mx-4 mt-4 rounded-[12px] border bg-primary/8 px-4 py-3 sm:mx-5">
               <p className="text-sm font-medium">
                 {job.projectManager || codeReview.toName || "A new project manager"} now owns this job.
               </p>
@@ -1206,7 +1076,7 @@ export function JobRecord({
           ) : null}
 
           {showFinancials && returnedDocs.length > 0 ? (
-            <div className={cn(recordPanel, "px-4 py-3")}>
+            <div className="mx-4 mt-4 rounded-[12px] border bg-primary/8 px-4 py-3 sm:mx-5">
               <p className="text-sm font-medium">
                 Accounting sent {returnedDocs.length} file{returnedDocs.length === 1 ? "" : "s"} back.
               </p>
@@ -1233,334 +1103,566 @@ export function JobRecord({
             </div>
           ) : null}
 
-          <TabsContent value="overview" className="mt-0">
-            <div className="grid gap-5 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
-              <aside className="min-w-0 space-y-3">
-                <section className={cn(recordPanel, "p-4")}>
-                  <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-                    Homeowner
-                  </p>
-                  <div className="mt-3 flex items-center gap-3">
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#f6d6de] text-sm font-semibold text-[#9a3d4d]">
-                      {initials(homeownerName) || "—"}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <Link
-                        href={primary ? `/contacts?contact=${primary.id}` : client ? `/clients/${client.id}` : "/contacts"}
-                        className="block truncate text-sm font-semibold hover:underline"
-                      >
-                        {homeownerName || "Add a homeowner"}
-                      </Link>
-                      <p className="truncate text-sm text-muted-foreground">
-                        {primary?.phone ? formatPhone(primary.phone) : "No phone"}
-                      </p>
-                    </div>
+          <div className="grid gap-6 px-4 py-5 sm:px-5 lg:grid-cols-[17.75rem_minmax(0,1fr)] lg:items-start">
+            <aside className="min-w-0 space-y-4">
+              <section>
+                <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+                  Homeowner
+                </p>
+                <div className="flex items-center gap-3 rounded-[12px] border bg-card p-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-rose-100 text-sm font-medium text-rose-700">
+                    {personInitials(homeownerName)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <Link
+                      href={primary ? `/contacts?contact=${primary.id}` : client ? `/clients/${client.id}` : "/contacts"}
+                      className="block truncate text-sm font-medium hover:underline"
+                    >
+                      {homeownerName}
+                    </Link>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {primary?.phone ? formatPhone(primary.phone) : "No phone"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
                     {primary?.phone ? (
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <Button
-                          variant="outline"
-                          size="icon-sm"
-                          className="size-8 rounded-[10px] border-[#e4e1dc] bg-white shadow-none dark:border-border dark:bg-card"
-                          nativeButton={false}
-                          render={<a href={`tel:${primary.phone}`} />}
-                          aria-label={`Call ${primary.name}`}
-                        >
-                          <Phone />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon-sm"
-                          className="size-8 rounded-[10px] border-[#e4e1dc] bg-white shadow-none dark:border-border dark:bg-card"
-                          nativeButton={false}
-                          render={<Link href={`/messages?job=${job.id}&contact=${primary.id}`} />}
-                          aria-label={`Text ${primary.name}`}
-                        >
-                          <MessageSquare />
-                        </Button>
-                      </div>
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        className="bg-card"
+                        nativeButton={false}
+                        render={<a href={`tel:${primary.phone}`} />}
+                        aria-label={`Call ${primary.name}`}
+                      >
+                        <Phone />
+                      </Button>
+                    ) : null}
+                    {primary?.phone ? (
+                      <Button
+                        variant="outline"
+                        size="icon-sm"
+                        className="bg-card"
+                        nativeButton={false}
+                        render={<Link href={`/messages?job=${job.id}&contact=${primary.id}`} />}
+                        aria-label={`Text ${primary.name}`}
+                      >
+                        <MessageSquare />
+                      </Button>
                     ) : null}
                   </div>
-                </section>
+                </div>
+              </section>
 
-                <div
-                  className={cn(
-                    "relative overflow-hidden rounded-[14px] bg-[#fbfaf8] dark:bg-muted",
-                    shownPhoto
-                      ? "border border-[#e6e3de] dark:border-border"
-                      : "border border-dashed border-[#d7d3ce] dark:border-border",
-                  )}
-                >
-                  {shownPhoto ? (
-                    <button type="button" onClick={() => setPhotoViewOpen(true)} className="block w-full">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={shownPhoto.imageUrl}
-                        alt={shownPhoto.caption || job.name}
-                        className="aspect-[4/3] w-full object-cover"
+              <div className="relative overflow-hidden rounded-[12px] border bg-muted">
+                {shownPhoto ? (
+                  <button type="button" onClick={() => setPhotoViewOpen(true)} className="block w-full">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={shownPhoto.imageUrl}
+                      alt={shownPhoto.caption || job.name}
+                      className="aspect-[16/10] w-full object-cover"
+                    />
+                  </button>
+                ) : managePhotos && !deleted ? (
+                  <button
+                    type="button"
+                    onClick={() => setPhotoOpen(true)}
+                    className="flex aspect-[16/10] w-full flex-col items-center justify-center gap-2 text-muted-foreground"
+                  >
+                    <ImageIcon className="size-8" />
+                    <span className="text-sm">Add a job-site photo</span>
+                  </button>
+                ) : (
+                  <div className="flex aspect-[16/10] w-full flex-col items-center justify-center gap-2 text-muted-foreground">
+                    <ImageIcon className="size-8" />
+                    <span className="text-sm">No job-site photo yet</span>
+                  </div>
+                )}
+                {shownPhoto && job.primaryPhotoId === shownPhoto.id ? (
+                  <span className="absolute top-2 left-2 rounded-md bg-black/75 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-white uppercase">
+                    Primary
+                  </span>
+                ) : null}
+                {photos.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setJobTab("photos")}
+                    className="absolute right-2 bottom-2 inline-flex items-center gap-1 rounded-lg bg-card px-2 py-1 text-xs font-medium shadow-sm"
+                  >
+                    <ImageIcon className="size-3.5" />
+                    All {photos.length} photo{photos.length === 1 ? "" : "s"}
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="divide-y rounded-[12px] border bg-card px-3">
+                <DetailRow label="Lead source">
+                  <Select
+                    value={job.leadSource || undefined}
+                    onValueChange={(value) => {
+                      if (value) patch({ leadSource: value as LeadSource });
+                    }}
+                    items={leadSourceChoices(job.leadSource).map((source) => ({
+                      value: source,
+                      label: leadSourceLabel(source),
+                    }))}
+                  >
+                    <SelectTrigger className={cn(quietSelect, !job.leadSource && "text-muted-foreground")}>
+                      <SelectValue placeholder="How they found you" />
+                    </SelectTrigger>
+                    <SelectContent align="end">
+                      {leadSourceChoices(job.leadSource).map((source) => (
+                        <SelectItem key={source} value={source}>
+                          {leadSourceLabel(source)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </DetailRow>
+                <DetailRow label="Project manager">
+                  <Select
+                    value={job.projectManager || undefined}
+                    disabled={deleted}
+                    onValueChange={(value) => {
+                      if (value) assignProjectManager(value);
+                    }}
+                    items={pmOptions.map((member) => ({
+                      value: member.name,
+                      label: member.name,
+                    }))}
+                  >
+                    <SelectTrigger className={cn(quietSelect, !job.projectManager && "text-muted-foreground")}>
+                      <SelectValue placeholder="Assign a project manager" />
+                    </SelectTrigger>
+                    <SelectContent align="end">
+                      {pmOptions.map((member) => (
+                        <SelectItem key={member.id} value={member.name}>
+                          {member.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </DetailRow>
+                <DetailRow label="Start">
+                  <label className="relative inline-flex cursor-pointer items-center justify-end gap-1">
+                    <span className={job.startDate ? "" : "text-muted-foreground"}>
+                      {job.startDate ? formatDate(job.startDate) : "Set date"}
+                    </span>
+                    <ChevronDown className="size-3.5 text-muted-foreground" />
+                    <input
+                      type="date"
+                      aria-label="Start date"
+                      value={job.startDate?.slice(0, 10) ?? ""}
+                      onChange={(event) => patch({ startDate: event.target.value })}
+                      className="absolute inset-0 cursor-pointer opacity-0"
+                    />
+                  </label>
+                </DetailRow>
+                <DetailRow label="End">
+                  <label className="relative inline-flex cursor-pointer items-center justify-end gap-1">
+                    <span className={job.substantialCompletion ? "" : "text-muted-foreground"}>
+                      {job.substantialCompletion ? formatDate(job.substantialCompletion) : "Set date"}
+                    </span>
+                    <ChevronDown className="size-3.5 text-muted-foreground" />
+                    <input
+                      type="date"
+                      aria-label="End date"
+                      value={job.substantialCompletion?.slice(0, 10) ?? ""}
+                      onChange={(event) => patch({ substantialCompletion: event.target.value || null })}
+                      className="absolute inset-0 cursor-pointer opacity-0"
+                    />
+                  </label>
+                </DetailRow>
+                <DetailRow label="Assigned">
+                  <PeopleChips
+                    names={job.assigned ?? []}
+                    options={crm.teamMembers}
+                    empty="Add crew"
+                    onRemove={(name) => patch(assignedCrewPatch(job.assigned.filter((item) => item !== name), crm.staff))}
+                    onAdd={(name) => patch(assignedCrewPatch([...job.assigned, name], crm.staff))}
+                  />
+                </DetailRow>
+                <DetailRow label="Tags">
+                  <div className="flex flex-wrap items-center justify-end gap-1">
+                    {job.tags.map((tag) => (
+                      <Badge key={tag} className="gap-1 border-transparent bg-emerald-100 pr-1 text-emerald-900 hover:bg-emerald-100">
+                        {tag}
+                        <button
+                          type="button"
+                          className="rounded-sm p-0.5 hover:bg-foreground/10"
+                          onClick={() => patch({ tags: job.tags.filter((item) => item !== tag) })}
+                          aria-label={`Remove ${tag}`}
+                        >
+                          <XIcon className="size-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                    {tagOpen ? (
+                      <Input
+                        autoFocus
+                        value={tagDraft}
+                        onChange={(event) => setTagDraft(event.target.value)}
+                        onBlur={() => {
+                          if (tagDraft.trim()) addTag();
+                          else setTagOpen(false);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            event.preventDefault();
+                            addTag();
+                          }
+                          if (event.key === "Escape") setTagOpen(false);
+                        }}
+                        placeholder="Tag"
+                        aria-label="New tag"
+                        className="h-7 w-24"
                       />
-                    </button>
-                  ) : managePhotos && !deleted ? (
-                    <button
-                      type="button"
-                      onClick={() => setPhotoOpen(true)}
-                      className="flex min-h-[220px] w-full flex-col items-center justify-center gap-2 text-muted-foreground"
+                    ) : (
+                      <Button type="button" variant="outline" size="sm" className="h-6 rounded-full px-2 text-xs" onClick={() => setTagOpen(true)}>
+                        <Plus data-icon="inline-start" />
+                        Tag
+                      </Button>
+                    )}
+                  </div>
+                </DetailRow>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-card"
+                  disabled={!address}
+                  nativeButton={false}
+                  render={address ? <a href={mapsUrl(address)} target="_blank" rel="noreferrer" /> : undefined}
+                >
+                  <MapPin data-icon="inline-start" />
+                  Map
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-card"
+                  disabled={deleted || duplicating}
+                  onClick={() => void duplicateJob()}
+                >
+                  <Copy data-icon="inline-start" />
+                  {duplicating ? "Copying…" : "Duplicate"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-card"
+                  onClick={() => {
+                    setStreet(job.street);
+                    setCity(job.city);
+                    setState(job.state);
+                    setPostalCode(job.postalCode);
+                    setAddressOpen(true);
+                  }}
+                >
+                  <Pencil data-icon="inline-start" />
+                  Edit
+                </Button>
+              </div>
+              {canTrash ? (
+                <div>
+                  {deleted ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={restoring}
+                      onClick={() => {
+                        setRestoring(true);
+                        void crm.restoreJob(job.id).then((ok) => {
+                          setRestoring(false);
+                          if (ok) toast.success(`${job.code || job.name} is back on the board.`);
+                        });
+                      }}
                     >
-                      <ImageIcon className="size-6" />
-                      <span className="text-sm">Add a job-site photo</span>
-                    </button>
+                      <RotateCcw data-icon="inline-start" />
+                      Restore
+                    </Button>
                   ) : (
-                    <div className="flex min-h-[220px] w-full flex-col items-center justify-center gap-2 text-muted-foreground">
-                      <ImageIcon className="size-6" />
-                      <span className="text-sm">No job-site photo yet</span>
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => setDeleteOpen(true)}
+                    >
+                      <Trash2 data-icon="inline-start" />
+                      Delete job
+                    </Button>
                   )}
-                  {shownPhoto && job.primaryPhotoId === shownPhoto.id ? (
-                    <span className="absolute bottom-3 left-3 rounded-md bg-background/90 px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase">
-                      Primary
-                    </span>
-                  ) : null}
-                  {photos.length > 0 ? (
-                    <span className="absolute right-3 bottom-3 rounded-md bg-background/90 px-2 py-0.5 text-[11px] text-muted-foreground">
-                      {photos.length} photo{photos.length === 1 ? "" : "s"}
-                    </span>
-                  ) : null}
-                  {photos.length > 1 ? (
+                </div>
+              ) : null}
+            </aside>
+
+            <div className="min-w-0">
+        <TabsContent value="overview" className="mt-0">
+          <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard
+              eyebrow="Estimate"
+              title={
+                featuredEstimate
+                  ? formatCurrencyFull(
+                      amountForEstimate(featuredEstimate, crm.estimateLines, workMarket(job, opportunity)),
+                    )
+                  : "No estimate yet"
+              }
+              detail={
+                featuredEstimate
+                  ? `${featuredEstimate.number} · ${ESTIMATE_STATUS_LABELS[featuredEstimate.status].toLowerCase()}, ${
+                      hasEstimateSignature(featuredEstimate)
+                        ? `signed by ${featuredEstimate.signatureName}`
+                        : featuredEstimate.status === "declined"
+                          ? "declined"
+                          : "not yet signed"
+                    }`
+                  : "Build one from a measurement report or by hand."
+              }
+              action={featuredEstimate ? "Open estimate" : allowEstimates && !deleted ? "Create estimate" : undefined}
+              href={featuredEstimate ? `/estimates/${featuredEstimate.id}` : undefined}
+              onClick={featuredEstimate || deleted || !allowEstimates ? undefined : promptJobEstimate}
+            />
+            <SummaryCard
+              eyebrow="Files"
+              title={fileCount > 0 ? `${fileCount} uploaded` : "No files yet"}
+              detail={
+                latestPage?.title ||
+                jobFiles[0]?.name ||
+                (featuredEstimate
+                  ? "Measurements, reports and uploads."
+                  : "Photo reports and job files land here.")
+              }
+              action={featuredEstimate || fileCount > 0 ? "Go to files" : "Upload"}
+              onClick={() => setJobTab("files")}
+            />
+            {showInsurance ? (
+              <SummaryCard
+                eyebrow="Insurance"
+                title={claim?.carrier || "No claim yet"}
+                detail={
+                  claim && claimMath
+                    ? [
+                        claim.claimNumber || "No claim number",
+                        claim.adjusterName || null,
+                        claimMath.openCount
+                          ? `${claimMath.openCount} supplement${claimMath.openCount === 1 ? "" : "s"} open`
+                          : null,
+                        showFinancials ? `${formatCurrencyFull(claimMath.outstanding)} still to collect` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : "Carrier, supplements and checks."
+                }
+                action={claim ? "Open claim" : featuredEstimate ? "Start the claim" : "Add claim"}
+                onClick={() => setJobTab("insurance")}
+              />
+            ) : null}
+            <SummaryCard
+              eyebrow="Next step"
+              title={nextStepTitle}
+              detail={nextStepDetail}
+              action={deleted ? undefined : nextStepAction}
+              onClick={
+                deleted
+                  ? undefined
+                  : () => {
+                      if (nextTask && showPaper && !hasWork) setJobTab("paper");
+                      else setTaskOpen(true);
+                    }
+              }
+            />
+          </div>
+
+          {showPaper && hasWork ? (
+            <section className="mb-6 overflow-hidden rounded-[12px] border bg-card">
+              <div className="border-b px-4 py-3">
+                <p className="text-sm font-medium">Work on this job</p>
+              </div>
+              <WorkRow
+                label={estimates.length ? `Estimates ${estimates.length}` : "Estimates"}
+                action={
+                  allowEstimates && !deleted ? (
+                    <Button type="button" size="sm" variant="outline" className="bg-card" onClick={promptJobEstimate}>
+                      <Plus data-icon="inline-start" />
+                      New
+                    </Button>
+                  ) : null
+                }
+              >
+                {estimates.length === 0 ? (
+                  <span className="text-muted-foreground">No estimates yet.</span>
+                ) : (
+                  <ul className="space-y-2">
+                    {estimates.map((estimate) => (
+                      <li key={estimate.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <Link href={`/estimates/${estimate.id}`} className="font-medium hover:underline">
+                          {estimate.number}
+                        </Link>
+                        <EstimateStatusBadge status={estimate.status} />
+                        <span className="text-muted-foreground">
+                          {hasEstimateSignature(estimate)
+                            ? `Signed by ${estimate.signatureName}`
+                            : estimate.status === "declined"
+                              ? "Declined"
+                              : "Open to collect a signature"}
+                        </span>
+                        <span className="ml-auto tabular-nums">
+                          {formatCurrencyFull(
+                            amountForEstimate(estimate, crm.estimateLines, workMarket(job, opportunity)),
+                          )}
+                        </span>
+                        {!deleted ? (
+                          <PaperArchiveButton
+                            compact
+                            archivedAt={estimate.archivedAt}
+                            label={estimate.number}
+                            onChange={(archivedAt) => crm.updateEstimate(estimate.id, { archivedAt })}
+                          />
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </WorkRow>
+              {showFinancials ? (
+                <WorkRow
+                  label="Invoices"
+                  action={
+                    deleted ? null : (
+                      <Button type="button" size="sm" variant="outline" className="bg-card" onClick={() => setInvoiceOpen(true)}>
+                        <Plus data-icon="inline-start" />
+                        New
+                      </Button>
+                    )
+                  }
+                >
+                  {invoices.length === 0 ? (
+                    <span className="text-muted-foreground">No invoices on this job.</span>
+                  ) : (
+                    <ul className="space-y-2">
+                      {invoices.map((invoice) => (
+                        <li key={invoice.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <button
+                            type="button"
+                            className="font-medium hover:underline"
+                            onClick={() => router.replace(jobDocumentHref(job.id, "invoice", invoice.id), { scroll: false })}
+                          >
+                            {invoice.number}
+                          </button>
+                          <InvoiceStatusBadge status={derivedInvoiceStatus(invoice, crm.invoiceLines, crm.payments)} />
+                          <span className="ml-auto tabular-nums text-muted-foreground">
+                            {formatCurrencyFull(invoiceBalance(invoice.id, crm.invoiceLines, crm.payments))} due
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </WorkRow>
+              ) : null}
+              <WorkRow
+                label="Tasks"
+                action={
+                  deleted ? null : (
+                    <Button type="button" size="sm" variant="outline" className="bg-card" onClick={() => setTaskOpen(true)}>
+                      <Plus data-icon="inline-start" />
+                      New
+                    </Button>
+                  )
+                }
+              >
+                {tasks.length === 0 ? (
+                  <span className="text-muted-foreground">No tasks on this job yet.</span>
+                ) : (
+                  <ul className="divide-y overflow-hidden rounded-lg border">
+                    {tasks.map((task) => (
+                      <TaskRow key={task.id} task={task} onToggle={() => void crm.toggleTask(task.id)} />
+                    ))}
+                  </ul>
+                )}
+              </WorkRow>
+              <WorkRow
+                label="Material orders"
+                action={
+                  deleted ? null : (
                     <>
                       <Button
-                        variant="secondary"
-                        size="icon"
-                        className="absolute top-1/2 left-2 size-7 -translate-y-1/2 bg-background/90"
-                        onClick={() => setPhotoOffset((offset) => offset - 1)}
-                        aria-label="Previous photo"
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="bg-card"
+                        disabled={materialPending}
+                        onClick={() => setMaterialTemplateOpen(true)}
                       >
-                        <ChevronLeft className="size-4" />
+                        From template
                       </Button>
                       <Button
-                        variant="secondary"
-                        size="icon"
-                        className="absolute top-1/2 right-2 size-7 -translate-y-1/2 bg-background/90"
-                        onClick={() => setPhotoOffset((offset) => offset + 1)}
-                        aria-label="Next photo"
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="bg-card"
+                        disabled={materialPending}
+                        onClick={() => void startMaterialOrder(job.id)}
                       >
-                        <ChevronRight className="size-4" />
+                        <Plus data-icon="inline-start" />
+                        New
                       </Button>
                     </>
-                  ) : null}
-                </div>
+                  )
+                }
+              >
+                {materialOrders.length === 0 ? (
+                  <span className="text-muted-foreground">
+                    None yet. Build one from the price book — it does not follow the estimate.
+                  </span>
+                ) : (
+                  <ul className="space-y-2">
+                    {materialOrders.map((order) => {
+                      const lines = materialOrderLinesFor(order.id, crm.materialOrderLines ?? []);
+                      return (
+                        <li key={order.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <Link href={`/material-orders/${order.id}`} className="font-medium hover:underline">
+                            {order.number}
+                          </Link>
+                          <span className="text-muted-foreground">{order.vendor.trim() || "No supplier yet"}</span>
+                          {showFinancials ? (
+                            <span className="ml-auto tabular-nums text-muted-foreground">
+                              {formatCurrencyFull(materialOrderTotal(lines))} est.
+                            </span>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </WorkRow>
+            </section>
+          ) : null}
 
-                <div className={cn(recordPanel, "px-4")}>
-                  <DetailRow label="Lead source">
-                    <Select
-                      value={job.leadSource || undefined}
-                      disabled={deleted}
-                      onValueChange={(value) => {
-                        if (value) patch({ leadSource: value as LeadSource });
-                      }}
-                      items={leadSourceChoices(job.leadSource).map((source) => ({
-                        value: source,
-                        label: leadSourceLabel(source),
-                      }))}
-                    >
-                      <SelectTrigger className={cn(quietSelect, !job.leadSource && "text-muted-foreground")}>
-                        <SelectValue placeholder="How they found you" />
-                      </SelectTrigger>
-                      <SelectContent align="end">
-                        {leadSourceChoices(job.leadSource).map((source) => (
-                          <SelectItem key={source} value={source}>
-                            {leadSourceLabel(source)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </DetailRow>
-                  <DetailRow label="Project manager">
-                    <Select
-                      value={job.projectManager || undefined}
-                      disabled={deleted}
-                      onValueChange={(value) => {
-                        if (value) assignProjectManager(value);
-                      }}
-                      items={pmOptions.map((member) => ({
-                        value: member.name,
-                        label: member.name,
-                      }))}
-                    >
-                      <SelectTrigger className={cn(quietSelect, !job.projectManager && "text-muted-foreground")}>
-                        <SelectValue placeholder="Assign a project manager" />
-                      </SelectTrigger>
-                      <SelectContent align="end">
-                        {pmOptions.map((member) => (
-                          <SelectItem key={member.id} value={member.name}>
-                            {member.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </DetailRow>
-                  <DetailRow label="Start">
-                    <DateField
-                      label="Start date"
-                      value={job.startDate}
-                      disabled={deleted}
-                      onChange={(value) => patch({ startDate: value })}
-                    />
-                  </DetailRow>
-                  <DetailRow label="End">
-                    <DateField
-                      label="End date"
-                      value={job.substantialCompletion}
-                      disabled={deleted}
-                      onChange={(value) => patch({ substantialCompletion: value || null })}
-                    />
-                  </DetailRow>
-                  <DetailRow label="Assigned">
-                    <PeopleChips
-                      names={job.assigned ?? []}
-                      options={deleted ? [] : crm.teamMembers}
-                      empty="Add crew"
-                      onRemove={(name) => patch(assignedCrewPatch(job.assigned.filter((item) => item !== name), crm.staff))}
-                      onAdd={(name) => patch(assignedCrewPatch([...job.assigned, name], crm.staff))}
-                    />
-                  </DetailRow>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={outlineAction}
-                    disabled={!address}
-                    nativeButton={false}
-                    render={address ? <a href={mapsUrl(address)} target="_blank" rel="noreferrer" /> : undefined}
-                  >
-                    <MapPin data-icon="inline-start" />
-                    Map
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={outlineAction}
-                    disabled={deleted || duplicating}
-                    onClick={() => void duplicateJob()}
-                  >
-                    <Copy data-icon="inline-start" />
-                    {duplicating ? "Duplicating…" : "Duplicate"}
-                  </Button>
-                  <Button variant="outline" size="sm" className={outlineAction} onClick={openAddress}>
-                    <Pencil data-icon="inline-start" />
-                    Edit
-                  </Button>
-                </div>
-              </aside>
-
-              <div className="min-w-0 space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                  <SummaryCard
-                    eyebrow="Estimate"
-                    title={featuredEstimate?.number ?? "No estimate yet"}
-                    body={
-                      featuredEstimate
-                        ? `${ESTIMATE_STATUS_LABELS[featuredEstimate.status]} · ${formatCurrencyFull(
-                            amountForEstimate(
-                              featuredEstimate,
-                              crm.estimateLines,
-                              workMarket(job, opportunity),
-                            ),
-                          )}${
-                            hasEstimateSignature(featuredEstimate)
-                              ? ` · Signed by ${featuredEstimate.signatureName}`
-                              : featuredEstimate.status === "declined"
-                                ? " · Declined"
-                                : ""
-                          }`
-                        : allowEstimates
-                          ? "Build one from a measurement report or by hand."
-                          : "Ops will draft the proposal."
-                    }
-                    action={
-                      featuredEstimate
-                        ? "Open estimate"
-                        : allowEstimates && !deleted
-                          ? "Create estimate"
-                          : undefined
-                    }
-                    href={featuredEstimate ? `/estimates/${featuredEstimate.id}` : undefined}
-                    onClick={
-                      featuredEstimate || deleted || !allowEstimates ? undefined : promptJobEstimate
-                    }
-                  />
-                  <SummaryCard
-                    eyebrow="Files"
-                    title={fileCount > 0 ? `${fileCount} file${fileCount === 1 ? "" : "s"}` : "No files yet"}
-                    body={
-                      latestPage
-                        ? [
-                            latestPage.title || "Untitled page",
-                            PAGE_TEMPLATE_OPTIONS.find((option) => option.id === latestPage.template)?.title,
-                          ]
-                            .filter(Boolean)
-                            .join(" · ")
-                        : jobFiles[0]?.name || "Photo reports and job files land here."
-                    }
-                    action={deleted ? undefined : fileCount > 0 ? "Open files" : "Upload"}
-                    onClick={
-                      deleted ? undefined : fileCount > 0 ? () => setJobTab("files") : uploadFiles
-                    }
-                  />
-                  {showInsurance ? (
-                    <SummaryCard
-                      eyebrow="Insurance"
-                      title={claim?.carrier || "No claim yet"}
-                      body={
-                        claim && claimMath
-                          ? [
-                              claim.claimNumber || "No claim number",
-                              claim.adjusterName,
-                              claimMath.openCount
-                                ? `${claimMath.openCount} supplement${claimMath.openCount === 1 ? "" : "s"} open`
-                                : "",
-                              showFinancials
-                                ? `${formatCurrencyFull(claimMath.outstanding)} still to collect`
-                                : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")
-                          : "Carrier, supplements and insurance checks."
-                      }
-                      action={claim ? "Open claim" : "Add claim"}
-                      onClick={() => setJobTab("insurance")}
-                    />
-                  ) : null}
-                  <SummaryCard
-                    eyebrow="Next step"
-                    title={nextStepTitle}
-                    body={nextStepDetail(nextTask?.dueAt)}
-                    action={deleted ? undefined : "Set date"}
-                    onClick={deleted ? undefined : openNextStepDate}
-                  />
-                </div>
-
-                <section>
-                  <p className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-                    Description
-                  </p>
-                  <Textarea
-                    defaultValue={job.description}
-                    placeholder="Scope, roof type, damage notes..."
-                    rows={3}
-                    disabled={deleted}
-                    className="min-h-[76px] rounded-[12px] border-[#e6e3de] bg-white dark:border-border dark:bg-card"
-                    onBlur={(event) => {
-                      if (event.target.value !== job.description) {
-                        patch({ description: event.target.value });
-                      }
-                    }}
-                  />
-                </section>
+          {!hasWork ? (
+          <>
+          <section className="mb-2">
+            <p className="mb-2 text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
+              Description
+            </p>
+            <Textarea
+              defaultValue={job.description}
+              placeholder="Scope, roof type, damage notes..."
+              rows={3}
+              className="rounded-[12px] bg-card"
+              onBlur={(event) => {
+                if (event.target.value !== job.description) {
+                  patch({ description: event.target.value });
+                }
+              }}
+            />
+          </section>
 
           <JobSection
             title="Related contacts"
-            count={related.length}
+            meta={related.length || undefined}
             defaultOpen={false}
             actions={
               relatedOptions.length > 0 ? (
@@ -1684,11 +1786,13 @@ export function JobRecord({
                     </li>
                   );
                 })}
-              </ul>
-            </JobSection>
+            </ul>
+          </JobSection>
+          ) : null}
+          </>
           ) : null}
 
-          <section className={cn(recordPanel, "p-4")} id="job-activity">
+          <section className="pt-2" id="job-activity">
             {jobMail.length > 0 ? (
               <div className="mb-4 space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">Tagged mail</p>
@@ -1697,7 +1801,7 @@ export function JobRecord({
                     <li key={message.id}>
                       <Link
                         href={mailHref({ thread: message.threadId || message.id, job: job.id })}
-                        className="block rounded-[12px] border border-[#e6e3de] px-3 py-2 hover:bg-[#faf9f7] dark:border-border dark:hover:bg-muted"
+                        className="block rounded-md border px-3 py-2 hover:bg-muted/50"
                       >
                         <span className="flex items-baseline justify-between gap-2">
                           <span className="truncate text-sm font-medium">
@@ -1717,49 +1821,15 @@ export function JobRecord({
                 </ul>
               </div>
             ) : null}
-            <ActivityComposer variant="record" entityType="job" entityId={job.id} focusRequest={activityFocus} />
-            <div className="mt-4 border-t border-[#eeeae6] pt-3 dark:border-border">
-              <ActivityList
-                variant="record"
-                items={activities}
-                empty="No field notes yet. Log a call, text, or what the crew needs to see."
-              />
-            </div>
+            <ActivityComposer entityType="job" entityId={job.id} focusRequest={activityFocus} tone="record" />
+            <ActivityList
+              items={activities}
+              tone="record"
+              empty="No field notes yet. Log a call, text, or what the crew needs to see."
+            />
+            <AutomationRuns jobId={job.id} variant="activity" />
           </section>
-              </div>
-            </div>
-            {canTrash ? (
-              <div className="mt-4 flex justify-end">
-                {deleted ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-primary hover:bg-primary/10 hover:text-primary"
-                    disabled={restoring}
-                    onClick={() => {
-                      setRestoring(true);
-                      void crm.restoreJob(job.id).then((ok) => {
-                        setRestoring(false);
-                        if (ok) toast.success(`${job.code || job.name} is back on the board.`);
-                      });
-                    }}
-                  >
-                    <RotateCcw data-icon="inline-start" />
-                    Restore job
-                  </Button>
-                ) : (
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-                    onClick={() => setDeleteOpen(true)}
-                  >
-                    <Trash2 className="size-3.5" />
-                    Delete job
-                  </button>
-                )}
-              </div>
-            ) : null}
-          </TabsContent>
+        </TabsContent>
 
         <TabsContent value="photos" className="mt-0">
           <JobCompanyCamPanel
@@ -1776,19 +1846,28 @@ export function JobRecord({
           />
         </TabsContent>
 
-        <TabsContent value="files" className="mt-0 space-y-8">
-          {showFinancials ? (
-          <section>
-            <div className="mb-3">
-              <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Invoices, receipts, and payments</p>
+        <TabsContent value="files" className="mt-0 space-y-4">
+          <section className="overflow-hidden rounded-[12px] border bg-card">
+            <div className="border-b px-4 py-3">
+              <p className="text-sm font-medium">Roof measurements</p>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                Open a file to see comments from accounting. Reply here — not on Approve.
+                Measured lengths save on the job and feed the estimate.
+              </p>
+            </div>
+            <RoofMeasureEntry jobId={job.id} disabled={deleted} embedded />
+            <JobEagleviewPanel jobId={job.id} disabled={deleted} embedded />
+          </section>
+          <JobFilesPanel jobId={job.id} disabled={deleted} />
+          {showFinancials ? (
+          <section className="rounded-[12px] border bg-card p-4">
+            <div className="mb-3">
+              <p className="text-sm font-medium">Invoices, receipts and payments</p>
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Open a file to see comments from accounting. Reply there, not on Approve.
               </p>
             </div>
             {financialDocs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No invoices, expenses, or payments on this job yet.
-              </p>
+              <p className="text-sm text-muted-foreground">Nothing from accounting on this job yet.</p>
             ) : (
               <ul className="space-y-1.5">
                 {financialDocs.map((item) => {
@@ -1800,7 +1879,7 @@ export function JobRecord({
                         onClick={() =>
                           router.replace(jobDocumentHref(job.id, item.kind, item.id), { scroll: false })
                         }
-                        className="flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left hover:bg-muted/50"
+                        className="flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left hover:bg-muted/50"
                       >
                         <FileText className="size-4 shrink-0 text-muted-foreground" />
                         <span className="min-w-0 flex-1">
@@ -1818,22 +1897,17 @@ export function JobRecord({
             )}
           </section>
           ) : null}
-          <RoofMeasureEntry jobId={job.id} disabled={deleted} />
-          <JobEagleviewPanel jobId={job.id} disabled={deleted} />
-          <JobFilesPanel jobId={job.id} disabled={deleted} openPicker={filePicker} />
-          <section>
-            <div className="mb-3 flex items-center justify-between gap-2">
+          <section className="rounded-[12px] border bg-card p-4">
+            <div className="mb-3 flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Pages you send out</p>
+                <p className="text-sm font-medium">Pages you send out</p>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  {reports.length === 0
-                    ? "No pages on this job."
-                    : `${reports.length} page${reports.length === 1 ? "" : "s"}`}
+                  Branded job documents. Share a link or download a PDF.
                 </p>
               </div>
               {allowPages && !deleted ? (
                 <Button size="sm" onClick={() => setPageCreateOpen(true)}>
-                  <FileText data-icon="inline-start" />
+                  <Plus data-icon="inline-start" />
                   New page
                 </Button>
               ) : null}
@@ -1878,11 +1952,28 @@ export function JobRecord({
                 })}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">
-                {allowPages
-                  ? "Pages are branded job documents you send out — work orders, photo documentation, inspections, closeouts, and claim packets. Pick a template, then share a link or download a PDF."
-                  : "Pages are branded job documents ops sends out. You can open any page already on this job."}
-              </p>
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  {allowPages ? "No pages yet. Start from a template:" : "No pages on this job yet."}
+                </p>
+                {allowPages && !deleted ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {QUICK_PAGE_TEMPLATES.map((template) => (
+                      <Button
+                        key={template.id}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full bg-card"
+                        disabled={pageCreating}
+                        onClick={() => void startPage(template.id, "four")}
+                      >
+                        {template.title}
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             )}
           </section>
         </TabsContent>
@@ -1901,20 +1992,11 @@ export function JobRecord({
 
         {showPaper ? (
         <TabsContent value="paper" className="mt-0 space-y-4">
-          <AutomationRuns jobId={job.id} />
           <div>
             <div className="mb-2 flex items-center justify-between">
               <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Tasks</p>
               {deleted ? null : (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setTaskDraft(null);
-                    setTaskTitleDefault("");
-                    setTaskOpen(true);
-                  }}
-                >
+                <Button size="sm" variant="ghost" onClick={() => setTaskOpen(true)}>
                   New
                 </Button>
               )}
@@ -2178,6 +2260,8 @@ export function JobRecord({
         </TabsContent>
         ) : null}
 
+            </div>
+          </div>
         </div>
       </Tabs>
 
@@ -2257,15 +2341,7 @@ export function JobRecord({
       <LogExpenseDialog open={expenseOpen} onOpenChange={setExpenseOpen} defaultJobId={job.id} />
       <CreateTaskDialog
         open={taskOpen}
-        onOpenChange={(open) => {
-          setTaskOpen(open);
-          if (!open) {
-            setTaskDraft(null);
-            setTaskTitleDefault("");
-          }
-        }}
-        task={taskDraft}
-        defaultTitle={taskTitleDefault}
+        onOpenChange={setTaskOpen}
         defaultRelatedType="job"
         defaultRelatedId={job.id}
         lockRelated
@@ -2317,43 +2393,6 @@ export function JobRecord({
             >
               {reviewBusy ? "Saving…" : "Save code"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={tagsOpen} onOpenChange={setTagsOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Tags</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {job.tags.map((tag) => (
-              <Badge key={tag} variant="secondary" className="gap-1 pr-1">
-                {tag}
-                <button
-                  type="button"
-                  className="rounded-sm p-0.5 hover:bg-foreground/10"
-                  onClick={() => patch({ tags: job.tags.filter((item) => item !== tag) })}
-                  aria-label={`Remove ${tag}`}
-                >
-                  <XIcon className="size-3" />
-                </button>
-              </Badge>
-            ))}
-            <Input
-              value={tagDraft}
-              onChange={(event) => setTagDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addTag();
-                }
-              }}
-              placeholder="Add a tag"
-              className="h-8 w-36"
-            />
-          </div>
-          <DialogFooter>
-            <Button onClick={() => setTagsOpen(false)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

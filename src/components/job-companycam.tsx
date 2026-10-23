@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Camera } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,6 +58,7 @@ export function JobCompanyCamPanel({
   const [projects, setProjects] = useState<CompanyCamProject[]>([]);
   const [pending, setPending] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [changing, setChanging] = useState(false);
   const syncedProject = useRef("");
   const reloadRef = useRef(crm.reload);
   useEffect(() => {
@@ -170,24 +172,26 @@ export function JobCompanyCamPanel({
   );
 
   return (
-    <section className="mb-8">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">CompanyCam</p>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            {info?.connected
-              ? `This company is connected to ${info.companyName || "CompanyCam"}. Link the job's project and its photos stay in the gallery.`
-              : "Connect this company's CompanyCam account to show a project's photos on the job."}
-          </p>
+    <section className="mb-4">
+      {link ? null : (
+        <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">CompanyCam</p>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {info?.connected
+                ? `This company is connected to ${info.companyName || "CompanyCam"}. Link the job's project and its photos stay in the gallery.`
+                : "Connect this company's CompanyCam account to show a project's photos on the job."}
+            </p>
+          </div>
+          {mappingLocked ? null : (
+            <Button nativeButton={false} size="sm" variant="ghost" render={<Link href="/settings/integrations/companycam" />}>
+              Settings
+            </Button>
+          )}
         </div>
-        {mappingLocked ? null : (
-          <Button nativeButton={false} size="sm" variant="ghost" render={<Link href="/settings/integrations/companycam" />}>
-            Settings
-          </Button>
-        )}
-      </div>
+      )}
 
-      <div className="space-y-3 rounded-md border p-3">
+      <div className="space-y-3 rounded-[12px] border bg-card p-4">
         {info?.sql ? (
           <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">{info.sql}</p>
         ) : null}
@@ -205,26 +209,46 @@ export function JobCompanyCamPanel({
         ) : null}
 
         {link ? (
-          <div className="space-y-2">
-            <p className="text-sm font-medium">{link.name || "CompanyCam project"}</p>
-            {link.address ? <p className="text-sm text-muted-foreground">{link.address}</p> : null}
-            <p className="text-sm text-muted-foreground">
-              {pending
-                ? "Syncing photos…"
-                : mappingLocked
-                  ? "Photos from this CompanyCam project show in the gallery."
-                  : "Photos taken in CompanyCam show up here. Photos added on this job go to CompanyCam."}
-            </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex min-w-0 gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-700">
+                <Camera className="size-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
+                  Linked CompanyCam project
+                </p>
+                <p className="mt-0.5 text-sm font-medium">
+                  {link.name || "CompanyCam project"}
+                  <span className="ml-2 font-normal text-sky-700">
+                    {pending ? "Syncing photos…" : "Photos stay in sync"}
+                  </span>
+                </p>
+                {link.address ? <p className="text-sm text-muted-foreground">{link.address}</p> : null}
+              </div>
+            </div>
             <div className="flex flex-wrap gap-2">
               {link.url ? (
-                <Button nativeButton={false} size="sm" variant="outline" render={<a href={link.url} target="_blank" rel="noreferrer" />}>
+                <Button nativeButton={false} size="sm" variant="outline" className="bg-card" render={<a href={link.url} target="_blank" rel="noreferrer" />}>
                   Open in CompanyCam
                 </Button>
               ) : null}
               {mappingLocked ? null : (
-                <Button type="button" size="sm" variant="outline" disabled={mappingDisabled || pending} onClick={() => void act("unlink")}>
-                  Unlink
-                </Button>
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="bg-card"
+                    disabled={mappingDisabled || pending}
+                    onClick={() => setChanging((value) => !value)}
+                  >
+                    Change project
+                  </Button>
+                  <Button type="button" size="sm" variant="outline" className="bg-card" disabled={mappingDisabled || pending} onClick={() => void act("unlink")}>
+                    Unlink
+                  </Button>
+                </>
               )}
             </div>
           </div>
@@ -236,7 +260,7 @@ export function JobCompanyCamPanel({
           </p>
         ) : null}
 
-        {loaded && info?.connected && !mappingLocked ? (
+        {loaded && info?.connected && !mappingLocked && (!link || changing) ? (
           <div className="space-y-2">
             <Label htmlFor={`cc-search-${jobId}`}>{link ? "Link a different project" : "Find a project"}</Label>
             <div className="flex flex-wrap gap-2">

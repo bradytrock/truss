@@ -5,22 +5,30 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useCrm } from "@/lib/crm-store";
-import { formatRelative, initials } from "@/lib/format";
+import { formatRelative } from "@/lib/format";
 import { ACTIVITY_LABELS, type Activity, type ActivityType } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const types = ["note", "call", "email", "text", "meeting", "site_walk"] as const;
 
+function personInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const first = parts[0]?.[0] ?? "";
+  const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
+  return `${first}${last}`.toUpperCase();
+}
+
 export function ActivityComposer({
   entityType,
   entityId,
   focusRequest = 0,
-  variant = "default",
+  tone = "default",
 }: {
   entityType: "opportunity" | "job" | "client";
   entityId: string;
   focusRequest?: number;
-  variant?: "default" | "record";
+  tone?: "default" | "record";
 }) {
   const { addActivity } = useCrm();
   const [body, setBody] = useState("");
@@ -45,44 +53,41 @@ export function ActivityComposer({
     toast.success("Logged to the record.");
   }
 
-  if (variant === "record") {
+  const typeButtons = types.map((item) => (
+    <Button
+      key={item}
+      type="button"
+      size="sm"
+      variant={type === item ? "secondary" : "ghost"}
+      className={cn(tone === "record" && "h-7 rounded-md px-2.5 text-xs shadow-none", type === item && tone === "record" && "bg-card")}
+      onClick={() => setType(item)}
+    >
+      {ACTIVITY_LABELS[item]}
+    </Button>
+  ));
+
+  if (tone === "record") {
     return (
       <div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-            Activity
-          </p>
-          <div className="flex flex-wrap rounded-[10px] bg-[#efece8] p-0.5 dark:bg-muted">
-            {types.map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setType(item)}
-                className={cn(
-                  "h-7 rounded-md px-2.5 text-xs font-medium",
-                  type === item
-                    ? "bg-white text-foreground shadow-sm dark:bg-background"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {ACTIVITY_LABELS[item]}
-              </button>
-            ))}
-          </div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Activity</p>
+          <div className="flex flex-wrap gap-0.5 rounded-lg bg-muted/70 p-0.5">{typeButtons}</div>
         </div>
-        <Textarea
-          ref={bodyRef}
-          id="job-activity-composer"
-          value={body}
-          onChange={(event) => setBody(event.target.value)}
-          placeholder="What happened? Bid recap, owner call, site walk notes..."
-          rows={3}
-          className="mt-3 min-h-[92px] rounded-[12px] border-[#e6e3de] bg-white dark:border-border dark:bg-background"
-        />
-        <div className="mt-3 flex justify-end">
-          <Button type="button" size="sm" className="rounded-[10px] px-3" onClick={submit}>
-            Log activity
-          </Button>
+        <div className="rounded-[12px] border bg-card p-3">
+          <Textarea
+            ref={bodyRef}
+            id="job-activity-composer"
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            placeholder="What happened? Bid recap, owner call, site walk notes..."
+            rows={3}
+            className="border-0 bg-transparent px-1 shadow-none focus-visible:ring-0"
+          />
+          <div className="mt-2 flex justify-end">
+            <Button size="sm" onClick={submit}>
+              Log activity
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -90,19 +95,7 @@ export function ActivityComposer({
 
   return (
     <div className="rounded-md border bg-card p-3">
-      <div className="mb-2 flex flex-wrap gap-1">
-        {types.map((item) => (
-          <Button
-            key={item}
-            type="button"
-            size="sm"
-            variant={type === item ? "secondary" : "ghost"}
-            onClick={() => setType(item)}
-          >
-            {ACTIVITY_LABELS[item]}
-          </Button>
-        ))}
-      </div>
+      <div className="mb-2 flex flex-wrap gap-1">{typeButtons}</div>
       <Textarea
         ref={bodyRef}
         id="job-activity-composer"
@@ -123,39 +116,34 @@ export function ActivityComposer({
 export function ActivityList({
   items,
   empty,
-  variant = "default",
+  tone = "default",
 }: {
   items: Activity[];
   empty: string;
-  variant?: "default" | "record";
+  tone?: "default" | "record";
 }) {
   if (items.length === 0) {
-    return (
-      <p className={cn("text-sm text-muted-foreground", variant === "record" ? "py-4" : "py-8")}>
-        {empty}
-      </p>
-    );
+    if (tone === "record") return null;
+    return <p className="py-8 text-sm text-muted-foreground">{empty}</p>;
   }
 
-  if (variant === "record") {
+  if (tone === "record") {
     return (
-      <ol className="divide-y divide-[#eeeae6] dark:divide-border">
+      <ol className="mt-4 divide-y">
         {items.map((activity) => (
-          <li key={activity.id} className="flex gap-3 py-3 first:pt-1">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#eceae6] text-[11px] font-semibold text-[#5c5854] dark:bg-muted dark:text-foreground">
-              {initials(activity.author) || "•"}
+          <li key={activity.id} className="flex gap-3 py-3">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium text-muted-foreground">
+              {personInitials(activity.author)}
             </span>
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span className="text-sm font-semibold">{activity.author}</span>
-                <span className="rounded-md bg-[#f1efec] px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground dark:bg-muted">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span className="text-sm font-medium">{activity.author}</span>
+                <span className="rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                   {ACTIVITY_LABELS[activity.type]}
                 </span>
                 <span className="text-xs text-muted-foreground">{formatRelative(activity.createdAt)}</span>
               </div>
-              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-foreground/85">
-                {activity.body}
-              </p>
+              <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{activity.body}</p>
             </div>
           </li>
         ))}

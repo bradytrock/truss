@@ -2,7 +2,6 @@
 
 import { useState, type ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CurrencyInput } from "@/components/currency-input";
@@ -18,8 +17,9 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState } from "@/components/page-chrome";
+import { cn } from "@/lib/utils";
 import { useCrm } from "@/lib/crm-store";
-import { formatCurrencyFull, formatDate } from "@/lib/format";
+import { formatCurrencyFull } from "@/lib/format";
 import {
   CHECK_KIND_LABELS,
   CHECK_KINDS,
@@ -127,7 +127,7 @@ function ClaimEditor({
     <div className="space-y-6">
       {totals ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Metric label="RCV with supplements" value={formatCurrencyFull(totals.rcvWithSupplements)} />
+          <Metric label="RCV w/ supplements" value={formatCurrencyFull(totals.rcvWithSupplements)} />
           <Metric label="Net after deductible" value={formatCurrencyFull(totals.netClaim)} />
           <Metric
             label="Supplements open"
@@ -137,7 +137,12 @@ function ClaimEditor({
         </div>
       ) : null}
 
-      <section className="grid gap-4 rounded-md border p-4 md:grid-cols-2">
+      <section className="space-y-4 rounded-[12px] border bg-card p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-medium">Claim</h3>
+          <ClaimStatusBadge status={draft.status} />
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
         <Field label="Carrier">
           <Input value={draft.carrier} disabled={readOnly} onChange={(event) => patch({ carrier: event.target.value })} placeholder="State Farm" />
         </Field>
@@ -147,6 +152,8 @@ function ClaimEditor({
         <Field label="Policy number">
           <Input value={draft.policyNumber} disabled={readOnly} onChange={(event) => patch({ policyNumber: event.target.value })} />
         </Field>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
         <Field label="Date of loss">
           <Input type="date" value={draft.dateOfLoss ?? ""} disabled={readOnly} onChange={(event) => patch({ dateOfLoss: event.target.value || null })} />
         </Field>
@@ -194,8 +201,11 @@ function ClaimEditor({
             </SelectContent>
           </Select>
         </Field>
-        <div className="grid gap-4 sm:grid-cols-3 md:col-span-2">
-          <Field label="Adjuster">
+        </div>
+        <div>
+          <p className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">Adjuster</p>
+          <div className="grid gap-4 sm:grid-cols-3">
+          <Field label="Name">
             <Input
               value={draft.adjusterName}
               disabled={readOnly}
@@ -204,7 +214,7 @@ function ClaimEditor({
               onChange={(event) => patch({ adjusterName: event.target.value })}
             />
           </Field>
-          <Field label="Adjuster email">
+          <Field label="Email">
             <Input
               type="email"
               value={draft.adjusterEmail}
@@ -214,7 +224,7 @@ function ClaimEditor({
               onChange={(event) => patch({ adjusterEmail: event.target.value })}
             />
           </Field>
-          <Field label="Adjuster phone">
+          <Field label="Phone">
             <PhoneInput
               value={draft.adjusterPhone}
               disabled={readOnly}
@@ -223,22 +233,36 @@ function ClaimEditor({
               onValueChange={(adjusterPhone) => patch({ adjusterPhone })}
             />
           </Field>
+          </div>
         </div>
+        <div>
+          <p className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">Mortgage</p>
+          <div className="grid gap-4 md:grid-cols-2">
         <Field label="Mortgage company">
           <Input value={draft.mortgageCompany} disabled={readOnly} onChange={(event) => patch({ mortgageCompany: event.target.value })} />
         </Field>
         <Field label="Loan number">
           <Input value={draft.loanNumber} disabled={readOnly} onChange={(event) => patch({ loanNumber: event.target.value })} />
         </Field>
+          </div>
+        </div>
       </section>
 
-      <section className="grid gap-4 rounded-md border p-4 md:grid-cols-3">
+      <section className="space-y-4 rounded-[12px] border bg-card p-4">
+        <div>
+          <h3 className="text-sm font-medium">Claim amounts</h3>
+          <p className="mt-0.5 text-sm text-muted-foreground">From the carrier&apos;s scope of loss.</p>
+        </div>
+        <div className="grid gap-4 md:grid-cols-4">
         <MoneyField label="RCV" value={draft.rcv} disabled={readOnly} onChange={(rcv) => patch({ rcv })} />
         <MoneyField label="ACV" value={draft.acv} disabled={readOnly} onChange={(acv) => patch({ acv })} />
         <MoneyField label="Depreciation" value={draft.depreciation} disabled={readOnly} onChange={(depreciation) => patch({ depreciation })} />
         <MoneyField label="Deductible" value={draft.deductible} disabled={readOnly} onChange={(deductible) => patch({ deductible })} />
+        </div>
+        <div className="max-w-xs">
         <MoneyField label="Overhead & profit" value={draft.overheadProfit} disabled={readOnly} onChange={(overheadProfit) => patch({ overheadProfit })} />
-        <label className="flex items-end gap-2 pb-2 text-sm">
+        </div>
+        <label className="flex items-center gap-2 text-sm">
           <Checkbox
             checked={draft.recoverable}
             disabled={readOnly}
@@ -248,9 +272,9 @@ function ClaimEditor({
         </label>
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3 rounded-[12px] border bg-card p-4">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="text-[11px] font-semibold tracking-[0.16em] uppercase">Supplements</h3>
+          <h3 className="text-sm font-medium">Supplements {draft.supplements.length}</h3>
           {readOnly ? null : (
             <Button
               type="button"
@@ -280,7 +304,7 @@ function ClaimEditor({
           )}
         </div>
         {draft.supplements.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No supplements yet. Add one when the carrier leaves money off the scope.</p>
+          <p className="text-sm text-muted-foreground">Add one when the carrier leaves money off the scope.</p>
         ) : (
           <ul className="space-y-3">
             {draft.supplements.map((supplement) => (
@@ -519,56 +543,33 @@ function ClaimEditor({
         />
       </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
-          <AdjusterLine claim={draft} />
-          {draft.dateOfLoss
-            ? `${draft.adjusterName.trim() || draft.adjusterEmail.trim() || draft.adjusterPhone.trim() ? " · " : ""}Loss ${formatDate(draft.dateOfLoss)}`
-            : ""}
-        </p>
+      <div className="flex flex-wrap items-center justify-end gap-2">
         {readOnly ? null : (
-          <Button type="button" disabled={saving} onClick={() => void persist(draft)}>
-            {saving ? "Saving…" : "Save claim"}
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              className="bg-card"
+              disabled={saving}
+              onClick={() => setDraft(saved ?? null)}
+            >
+              Discard
+            </Button>
+            <Button type="button" disabled={saving} onClick={() => void persist(draft)}>
+              {saving ? "Saving…" : "Save claim"}
+            </Button>
+          </>
         )}
       </div>
     </div>
   );
 }
 
-function AdjusterLine({ claim }: { claim: JobInsurance }) {
-  const name = claim.adjusterName.trim();
-  const email = claim.adjusterEmail.trim();
-  const phone = claim.adjusterPhone.trim();
-  if (!name && !email && !phone) return null;
-  return (
-    <>
-      {name ? <span>{name}</span> : null}
-      {email ? (
-        <>
-          {name ? " · " : null}
-          <a href={`mailto:${email}`} className="hover:underline">
-            {email}
-          </a>
-        </>
-      ) : null}
-      {phone ? (
-        <>
-          {name || email ? " · " : null}
-          <a href={`tel:${phone.replace(/[^\d+]/g, "")}`} className="hover:underline">
-            {phone}
-          </a>
-        </>
-      ) : null}
-    </>
-  );
-}
-
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border bg-card px-3 py-3">
+    <div className="rounded-[12px] border bg-card px-4 py-3">
       <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">{label}</p>
-      <p className="mt-1 text-sm font-medium tabular-nums">{value}</p>
+      <p className="mt-2 text-xl font-semibold tabular-nums">{value}</p>
     </div>
   );
 }
@@ -622,5 +623,16 @@ function updateCheck(
 }
 
 export function ClaimStatusBadge({ status }: { status: ClaimStatus }) {
-  return <Badge variant={status === "denied" ? "destructive" : status === "closed" ? "secondary" : "outline"}>{CLAIM_STATUS_LABELS[status]}</Badge>;
+  const tone =
+    status === "denied"
+      ? "bg-rose-50 text-rose-700"
+      : status === "closed"
+        ? "bg-muted text-muted-foreground"
+        : "bg-sky-50 text-sky-800";
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium", tone)}>
+      <span className="size-1.5 rounded-full bg-current" />
+      {CLAIM_STATUS_LABELS[status]}
+    </span>
+  );
 }
