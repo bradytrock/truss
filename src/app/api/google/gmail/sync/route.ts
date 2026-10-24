@@ -5,7 +5,7 @@ import {
 import { gmailAccessToken, gmailCredentialsForStaff } from "@/lib/google-gmail-server";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { addressesOnMessage, tagsFromAddresses } from "@/lib/job-emails";
+import { buildGmailSyncRows, gmailSyncUpsertBatches } from "@/lib/gmail-sync";
 import type { Database } from "@/lib/supabase/database.types";
 
 function mapRow(row: Database["public"]["Tables"]["gmail_messages"]["Row"]) {
@@ -100,42 +100,31 @@ export async function POST(request: Request) {
       isReferralPartner: Boolean(row.is_referral_partner),
     }));
 
-    const byGmailId = new Map((existing ?? []).map((row) => [row.gmail_id, row]));
-
-    const rows = parsed.map((message) => {
-      const prior = byGmailId.get(message.gmailId);
-      const tags = tagsFromAddresses(bookContacts, addressesOnMessage({
-        fromEmail: message.fromEmail,
-        toEmail: message.toEmail,
-        ccEmail: message.ccEmail,
-      }));
-      const row: Database["public"]["Tables"]["gmail_messages"]["Insert"] = {
-        company_id: accountRow.company_id,
-        account_id: accountRow.id,
-        gmail_id: message.gmailId,
-        thread_id: message.threadId,
-        from_name: message.fromName,
-        from_email: message.fromEmail,
-        to_email: message.toEmail,
-        cc_email: message.ccEmail,
-        subject: message.subject,
-        snippet: message.snippet,
-        body_text: message.bodyText,
-        received_at: message.receivedAt,
-        direction: message.direction,
-        job_id: prior?.job_id ?? null,
-        contact_id: prior?.contact_id ?? tags.contactId,
-        related_contact_ids: prior?.related_contact_ids?.length
-          ? prior.related_contact_ids
-          : tags.relatedContactIds,
-      };
-      if (prior?.id) row.id = prior.id;
-      return row;
+    const rows = buildGmailSyncRows({
+      companyId: accountRow.company_id,
+      accountId: accountRow.id,
+      messages: parsed,
+      existing: existing ?? [],
+      contacts: bookContacts,
     });
+    const { updates, inserts } = gmailSyncUpsertBatches(
+      rows,
+      new Set((existing ?? []).map((row) => row.gmail_id)),
+    );
 
-    if (rows.length) {
-      const { error } = await supabase.from("gmail_messages").upsert(rows, {
+    if (updates.length) {
+      const { error } = await supabase.from("gmail_messages").upsert(updates, {
         onConflict: "account_id,gmail_id",
+        defaultToNull: false,
+      });
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+    }
+    if (inserts.length) {
+      const { error } = await supabase.from("gmail_messages").upsert(inserts, {
+        onConflict: "account_id,gmail_id",
+        defaultToNull: false,
       });
       if (error) {
         return NextResponse.json({ error: error.message }, { status: 400 });
