@@ -52,6 +52,7 @@ function Field({ label, value }: { label: string; value: string }) {
 export function CommissionSheetView({
   sheet,
   closeout,
+  heading = "Commission closeout",
   editing = false,
   onSplit,
   onAddSplit,
@@ -68,6 +69,7 @@ export function CommissionSheetView({
 }: {
   sheet: CommissionSheet;
   closeout?: CommissionCloseout | null;
+  heading?: string;
   editing?: boolean;
   qbLines?: CommissionQbLine[];
   onSplit?: (id: string, patch: Partial<CommissionSplitLine>) => void;
@@ -86,7 +88,7 @@ export function CommissionSheetView({
     <div className="space-y-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">Commission closeout</p>
+          <p className="text-[11px] font-semibold tracking-[0.16em] uppercase">{heading}</p>
           <p className="text-sm text-muted-foreground">
             {closeout ? CLOSEOUT_STATUS_LABELS[closeout.status] : "Not submitted"}
             {closeout?.submittedByName ? ` · submitted by ${closeout.submittedByName}` : ""}

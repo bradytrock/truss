@@ -381,6 +381,7 @@ const openCloseout = base({
 });
 const closeoutTask = openCloseout.rows.find((row) => row.id === "task-co");
 assert.equal(closeoutTask?.badge, "CLOSEOUT");
+assert.equal(closeoutTask?.titleHref, "/jobs?job=job-co&tab=closeout");
 assert.equal(closeoutTask?.actions.some((action) => action.type === "done" && action.taskId === "co"), true);
 assert.equal(closeoutTask?.actions.some((action) => action.type === "link" && action.label === "Review"), true);
 assert.equal(openCloseout.rows.some((row) => row.id === "closeout-job-co"), false);
@@ -409,6 +410,7 @@ const syntheticCloseout = base({
 });
 const synthetic = syntheticCloseout.rows.find((row) => row.id === "closeout-job-co");
 assert.equal(synthetic?.badge, "CLOSEOUT");
+assert.equal(synthetic?.titleHref, "/jobs?job=job-co&tab=closeout");
 const syntheticDone = synthetic?.actions.find((action) => action.type === "clear");
 assert.equal(syntheticDone?.type === "clear" ? syntheticDone.title : "", "Review closeout BJ100426-A");
 assert.equal(syntheticDone?.type === "clear" ? syntheticDone.relatedId : "", "job-co");

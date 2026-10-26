@@ -27,6 +27,26 @@ export const WARRANTY_FUND = 50;
 export const CLOSEOUT_STATUSES = ["submitted", "returned", "released", "payout"] as const;
 export type CloseoutStatus = (typeof CLOSEOUT_STATUSES)[number];
 
+/** Accounting has submitted the closeout. Until then the job shows the mock sheet. */
+export function closeoutIsFinal(status: CloseoutStatus) {
+  return status === "released" || status === "payout";
+}
+
+/**
+ * QuickBooks lines, splits, and expense moves from accounting’s submitted closeout.
+ * Null keeps the job tab on the mock sheet built from the job itself.
+ */
+export function finalCloseoutLines(
+  closeout: Pick<CommissionCloseout, "status" | "qbLines" | "splits" | "expenseAdjustments"> | null | undefined,
+) {
+  if (!closeout || !closeoutIsFinal(closeout.status)) return null;
+  return {
+    qbLines: closeout.qbLines,
+    splits: closeout.splits,
+    expenseAdjustments: closeout.expenseAdjustments,
+  };
+}
+
 export const CLOSEOUT_STATUS_LABELS: Record<CloseoutStatus, string> = {
   submitted: "With accounting",
   returned: "Sent back",

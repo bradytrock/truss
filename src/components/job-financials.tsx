@@ -19,7 +19,6 @@ import {
   jobPeriodBounds,
   projectJobComparison,
 } from "@/lib/profit-and-loss";
-import { JobCloseout } from "@/components/job-closeout";
 import { JobPnlComparisonTable, ProfitAndLossReport } from "@/components/profit-and-loss";
 import { expenseCategoriesOrDefaults, expenseCategoryLabel } from "@/lib/expense-categories";
 import type { Job } from "@/lib/types";
@@ -125,8 +124,6 @@ export function JobFinancials({ job }: { job: Job }) {
         onLogExpense={() => setExpenseOpen(true)}
         onLogForecast={() => setForecastOpen(true)}
       />
-
-      <JobCloseout job={job} />
 
       {comparison ? (
         <JobPnlComparisonTable

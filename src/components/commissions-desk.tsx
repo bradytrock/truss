@@ -141,7 +141,7 @@ export function CommissionsDesk() {
                   Your check on this job is <span className="font-medium text-foreground tabular-nums">{formatMoney(selected.check)}</span>.
                 </p>
                 <Link
-                  href={jobRecordHref(selected.job.id, showFinancials ? { tab: "financials" } : undefined)}
+                  href={jobRecordHref(selected.job.id, showFinancials ? { tab: "closeout" } : undefined)}
                   className="text-sm text-primary hover:underline"
                 >
                   Open job

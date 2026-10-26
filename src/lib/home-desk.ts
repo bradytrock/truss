@@ -298,7 +298,7 @@ function taskRows(
 
 function closeoutHref(input: HomeDeskInput, job: Job | undefined, payoutReview: boolean) {
   if (input.showCommissions !== false && (payoutReview || !job)) return "/commissions";
-  if (job) return jobRecordHref(job.id);
+  if (job) return jobRecordHref(job.id, input.showCommissions === false ? undefined : { tab: "closeout" });
   return "/";
 }
 

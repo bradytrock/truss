@@ -62,7 +62,7 @@ export function AccountingCloseouts({
   if (rows.length === 0) {
     return (
       <p className="text-sm text-[#6f6a64]">
-        No closeouts yet. A project manager submits one from the job’s financials.
+        No closeouts yet. A project manager submits one from the job.
       </p>
     );
   }
@@ -267,7 +267,7 @@ function CloseoutReview({ closeout }: { closeout: CommissionCloseout }) {
             {job.code ? (
               <>
                 {" · "}
-                <Link href={jobRecordHref(job.id, { tab: "financials" })} className="font-medium text-[#c43832] hover:underline">
+                <Link href={jobRecordHref(job.id, { tab: "closeout" })} className="font-medium text-[#c43832] hover:underline">
                   {job.code}
                 </Link>
               </>

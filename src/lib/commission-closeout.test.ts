@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import {
   buildCommissionSheet,
   canSubmitProjectCloseout,
+  closeoutIsFinal,
   closeoutReleaseBlock,
+  finalCloseoutLines,
   compareJobExpenses,
   closeoutPdfFilename,
   defaultCommissionSplits,
@@ -234,6 +236,42 @@ assert.equal(actual.needsAck, false);
 assert.equal(closeoutReleaseBlock(actual, false), null);
 assert.equal(actual.validationOnly, false);
 assert.equal(defaultCommissionSplits()[0]?.percent, 50);
+
+assert.equal(closeoutIsFinal("submitted"), false);
+assert.equal(closeoutIsFinal("returned"), false);
+assert.equal(closeoutIsFinal("released"), true);
+assert.equal(closeoutIsFinal("payout"), true);
+
+const accountingSplits = defaultCommissionSplits().map((line) =>
+  line.id === "pm" ? { ...line, percent: 10 } : line,
+);
+const accountingLines = {
+  status: "submitted" as const,
+  qbLines: seedQuickbooksLines([
+    expense({ id: "e1", amount: 4000, vendor: "ABC Supply", qbStatus: "entered", qbTxnId: "TXN-1" }),
+  ]),
+  splits: accountingSplits,
+  expenseAdjustments: [],
+};
+assert.equal(finalCloseoutLines(accountingLines), null);
+const mockFromJob = buildCommissionSheet({
+  job: job(),
+  payments: [payment({ id: "p1", amount: 10000, method: "check" })],
+  expenses: [expense({ id: "e1", amount: 4000, vendor: "ABC Supply", qbStatus: "entered", qbTxnId: "TXN-1" })],
+  forecasts: [],
+  ...(finalCloseoutLines(accountingLines) ?? {}),
+});
+assert.equal(mockFromJob.splits.find((line) => line.id === "pm")?.percent, 50);
+const finalLines = finalCloseoutLines({ ...accountingLines, status: "released" });
+assert.equal(finalLines?.splits.find((line) => line.id === "pm")?.percent, 10);
+const finalSheet = buildCommissionSheet({
+  job: job(),
+  payments: [payment({ id: "p1", amount: 10000, method: "check" })],
+  expenses: [expense({ id: "e1", amount: 4000, vendor: "ABC Supply", qbStatus: "entered", qbTxnId: "TXN-1" })],
+  forecasts: [],
+  ...(finalLines ?? {}),
+});
+assert.equal(finalSheet.splits.find((line) => line.id === "pm")?.percent, 10);
 
 const differed = compareJobExpenses(
   [

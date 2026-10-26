@@ -42,6 +42,7 @@ import { JobCompanyCamPanel } from "@/components/job-companycam";
 import { JobPhotosPanel } from "@/components/job-photos-panel";
 import { PhotoViewer } from "@/components/photo-viewer";
 import { JobFinancials } from "@/components/job-financials";
+import { JobCloseout } from "@/components/job-closeout";
 import { JobInsurancePanel } from "@/components/job-insurance-panel";
 import { claimTotals } from "@/lib/insurance";
 import { AutomationRuns } from "@/components/automation-runs";
@@ -138,7 +139,7 @@ import { MaterialOrderFromTemplateDialog } from "@/components/material-order-fro
 import { JobTagField } from "@/components/job-tag-field";
 import { jobTagSuggestions } from "@/lib/job-tags";
 
-const JOB_TABS = ["overview", "photos", "files", "insurance", "financials", "paper"] as const;
+const JOB_TABS = ["overview", "photos", "files", "insurance", "financials", "closeout", "paper"] as const;
 type JobTab = (typeof JOB_TABS)[number];
 
 function parseJobTab(raw: string | null): JobTab {
@@ -418,11 +419,14 @@ export function JobRecord({
   const allowCompanyCamMap = canManageCompanyCamMapping(seatRole);
   const showTraining = canViewTraining(seatRole);
   const managePhotos = canManageJobPhotos(seatRole);
+  const closeout = (crm.commissionCloseouts ?? []).find((item) => item.jobId === job.id) ?? null;
+  const showCloseout = showFinancials && closeout != null;
   const requestedTab = parseJobTab(searchParams.get("tab"));
   const tab =
     (requestedTab === "financials" && !showFinancials) ||
     (requestedTab === "paper" && !showPaper) ||
-    (requestedTab === "insurance" && !showInsurance)
+    (requestedTab === "insurance" && !showInsurance) ||
+    (requestedTab === "closeout" && !showCloseout)
       ? "overview"
       : requestedTab;
   const [addressOpen, setAddressOpen] = useState(false);
@@ -537,7 +541,6 @@ export function JobRecord({
   );
   const tasks = crm.tasks.filter((task) => task.relatedType === "job" && task.relatedId === job.id);
   const actor = crm.effectiveStaff;
-  const closeout = (crm.commissionCloseouts ?? []).find((item) => item.jobId === job.id) ?? null;
   const canSendCloseout =
     !deleted &&
     Boolean(actor) &&
@@ -963,7 +966,12 @@ export function JobRecord({
                 disabled={closeoutBusy}
                 onClick={() => {
                   setCloseoutBusy(true);
-                  void crm.submitCommissionCloseout(job.id).finally(() => setCloseoutBusy(false));
+                  void crm
+                    .submitCommissionCloseout(job.id)
+                    .then((saved) => {
+                      if (saved) setJobTab("closeout");
+                    })
+                    .finally(() => setCloseoutBusy(false));
                 }}
               >
                 <Send data-icon="inline-start" />
@@ -1009,6 +1017,11 @@ export function JobRecord({
             ) : null}
             {showFinancials ? (
               <TabsTrigger value="financials" className="flex-none px-0 after:bg-primary">Financials</TabsTrigger>
+            ) : null}
+            {showCloseout ? (
+              <TabsTrigger value="closeout" className="flex-none px-0 after:bg-primary">
+                Closeout
+              </TabsTrigger>
             ) : null}
           </TabsList>
           <p className="shrink-0 pb-2 text-sm tabular-nums">
@@ -1947,6 +1960,12 @@ export function JobRecord({
         {showFinancials ? (
           <TabsContent value="financials" className="mt-0">
             <JobFinancials job={job} />
+          </TabsContent>
+        ) : null}
+
+        {showCloseout ? (
+          <TabsContent value="closeout" className="mt-0">
+            <JobCloseout job={job} />
           </TabsContent>
         ) : null}
 
