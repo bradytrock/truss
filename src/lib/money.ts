@@ -37,10 +37,4 @@ export function derivedInvoiceStatus(
   return invoice.status;
 }
 
-export function nextNumber(prefix: string, existing: string[]) {
-  const max = existing.reduce((current, value) => {
-    const match = value.match(/(\d+)$/);
-    return match ? Math.max(current, Number(match[1])) : current;
-  }, 1000);
-  return `${prefix}-${max + 1}`;
-}
+export { nextNumber } from "./document-numbers";

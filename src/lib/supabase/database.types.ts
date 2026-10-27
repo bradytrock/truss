@@ -4218,6 +4218,10 @@ export type Database = {
         Args: { p_ticket: string };
         Returns: Json;
       };
+      allocate_estimate_number: {
+        Args: Record<string, never>;
+        Returns: string;
+      };
     };
     Enums: {
       pipeline_stage:
