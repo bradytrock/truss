@@ -117,6 +117,12 @@ export interface CommissionCloseout {
   varianceAck: boolean;
   notes: string;
   expenseAdjustments: ExpenseAdjustment[];
+  /** Job photos the project manager chose as the vent pipes. */
+  ventPhotoIds: string[];
+  /** Why the job has no vent-pipe photos, when none were selected. */
+  ventNote: string;
+  /** Accounting confirmed the vent pipes are compliant. */
+  ventCompliant: boolean;
   updatedAt: string;
 }
 
@@ -708,6 +714,65 @@ export function buildCommissionSheet(input: {
   };
 }
 
+export type VentCloseoutInput = {
+  photoIds: string[];
+  note: string;
+};
+
+export function parseVentPhotoIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const ids = value.flatMap((item) => {
+    const id = typeof item === "string" ? item.trim() : "";
+    return id ? [id] : [];
+  });
+  return [...new Set(ids)];
+}
+
+/** Vent photos in the order the project manager selected them. Missing ids are skipped. */
+export function photosForVentCloseout<T extends { id: string }>(photos: T[], ids: string[]): T[] {
+  const byId = new Map(photos.map((photo) => [photo.id, photo]));
+  return parseVentPhotoIds(ids).flatMap((id) => {
+    const photo = byId.get(id);
+    return photo ? [photo] : [];
+  });
+}
+
+/** Photos win. An explanation is kept only when no vent photo was selected. */
+export function normalizeVentCloseout(input: VentCloseoutInput): VentCloseoutInput {
+  const photoIds = parseVentPhotoIds(input.photoIds);
+  return { photoIds, note: photoIds.length > 0 ? "" : input.note.trim() };
+}
+
+export function closeoutHasVentRecord(
+  closeout: Pick<CommissionCloseout, "ventPhotoIds" | "ventNote"> | null | undefined,
+) {
+  if (!closeout) return false;
+  return closeout.ventPhotoIds.some((id) => id.trim().length > 0) || closeout.ventNote.trim().length > 0;
+}
+
+/** First submit needs vent photos, or a written reason this job has none. */
+export function ventSubmitBlock(input: VentCloseoutInput) {
+  const vents = normalizeVentCloseout(input);
+  if (vents.photoIds.length > 0 || vents.note) return null;
+  return "Select the vent pipe photos, or explain why this job has none.";
+}
+
+/** Accounting confirms the pipes before payout can be released. */
+export function ventComplianceBlock(compliant: boolean) {
+  if (compliant) return null;
+  return "Mark the vent pipes compliant before releasing payout.";
+}
+
+export type CloseoutReviewPatch = {
+  qbLines: CommissionQbLine[];
+  splits: CommissionSplitLine[];
+  varianceAck: boolean;
+  accountingNote: string;
+  notes: string;
+  expenseAdjustments: ExpenseAdjustment[];
+  ventCompliant: boolean;
+};
+
 export function closeoutReleaseBlock(sheet: CommissionSheet, acknowledged: boolean) {
   if (!sheet.needsAck || acknowledged) return null;
   const reclassified = sheet.expenseLines.some((line) => !line.forecasted && line.disposition !== "job");
@@ -850,9 +915,12 @@ export function newCommissionCloseout(input: {
   expenses: Expense[];
   now: string;
   notes: string;
+  vents?: VentCloseoutInput;
   previous?: CommissionCloseout | null;
 }): CommissionCloseout {
   const previous = input.previous;
+  const keepVents = closeoutHasVentRecord(previous);
+  const vents = keepVents ? null : normalizeVentCloseout(input.vents ?? { photoIds: [], note: "" });
   return {
     id: previous?.id || input.id,
     jobId: input.jobId,
@@ -874,6 +942,9 @@ export function newCommissionCloseout(input: {
     varianceAck: false,
     notes: input.notes.trim(),
     expenseAdjustments: previous?.expenseAdjustments ?? [],
+    ventPhotoIds: keepVents ? previous!.ventPhotoIds : vents!.photoIds,
+    ventNote: keepVents ? previous!.ventNote : vents!.note,
+    ventCompliant: keepVents ? previous!.ventCompliant : false,
     updatedAt: input.now,
   };
 }
@@ -901,6 +972,9 @@ export function commissionCloseoutPayload(row: CommissionCloseout, companyId: st
     variance_ack: row.varianceAck,
     notes: row.notes,
     expense_adjustments: row.expenseAdjustments,
+    vent_photo_ids: row.ventPhotoIds,
+    vent_note: row.ventNote,
+    vent_compliant: row.ventCompliant,
     updated_at: row.updatedAt,
   };
 }

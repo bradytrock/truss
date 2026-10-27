@@ -161,6 +161,9 @@ const pdf = await buildCloseoutPdf({
     varianceAck: false,
     notes: "Homeowner paid the deductible.",
     expenseAdjustments: [],
+    ventPhotoIds: [],
+    ventNote: "No vent pipes on this roof.",
+    ventCompliant: false,
     updatedAt: "2026-10-02T00:00:00.000Z",
   },
 });

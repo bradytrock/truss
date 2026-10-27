@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { CloseoutVentDialog, CloseoutVentRecord } from "@/components/closeout-vents";
 import { CommissionSheetView } from "@/components/commission-sheet";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,8 +10,10 @@ import {
   buildCommissionSheet,
   canMarkCommissionPayout,
   canSubmitProjectCloseout,
+  closeoutHasVentRecord,
   closeoutIsFinal,
   finalCloseoutLines,
+  type VentCloseoutInput,
 } from "@/lib/commission-closeout";
 import { isBusinessDevelopment } from "@/lib/bd";
 import { expensesForJob, forecastedExpensesForJob, paymentsForJob } from "@/lib/job-financials";
@@ -23,6 +26,8 @@ export function JobCloseout({ job }: { job: Job }) {
   const closeout = (crm.commissionCloseouts ?? []).find((item) => item.jobId === job.id) ?? null;
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [ventOpen, setVentOpen] = useState(false);
+  const [ventSession, setVentSession] = useState(0);
   const client = job.clientId ? crm.clients.find((item) => item.id === job.clientId) : null;
   const contact = job.primaryContactId ? crm.contacts.find((item) => item.id === job.primaryContactId) : null;
   const opportunity = job.opportunityId ? crm.opportunities.find((item) => item.id === job.opportunityId) : null;
@@ -88,11 +93,18 @@ export function JobCloseout({ job }: { job: Job }) {
         })
       : false;
 
-  async function submit() {
+  async function submit(vents?: VentCloseoutInput) {
+    if (!vents && !closeoutHasVentRecord(closeout)) {
+      setVentSession((value) => value + 1);
+      setVentOpen(true);
+      return;
+    }
     setBusy(true);
     try {
-      await crm.submitCommissionCloseout(job.id, note);
+      const saved = await crm.submitCommissionCloseout(job.id, note, vents);
+      if (!saved) return;
       setNote("");
+      setVentOpen(false);
     } finally {
       setBusy(false);
     }
@@ -161,6 +173,15 @@ export function JobCloseout({ job }: { job: Job }) {
           {closeout.payoutMarkedByName ? ` by ${closeout.payoutMarkedByName}` : ""}.
         </p>
       ) : null}
+      {closeoutHasVentRecord(closeout) ? <CloseoutVentRecord closeout={closeout} photos={crm.photos} /> : null}
+      <CloseoutVentDialog
+        key={ventSession}
+        jobId={job.id}
+        open={ventOpen}
+        busy={busy}
+        onOpenChange={setVentOpen}
+        onSubmit={(vents) => void submit(vents)}
+      />
     </section>
   );
 }

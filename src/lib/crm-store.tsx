@@ -265,14 +265,16 @@ import {
   CLOSEOUT_PAYOUT_TASK,
   CLOSEOUT_REVIEW_TASK,
   LEGACY_CLOSEOUT_PAYOUT_TASK,
+  closeoutHasVentRecord,
   closeoutReleaseBlock,
   closeoutTaskTitle,
   commissionCloseoutPayload,
   newCommissionCloseout,
+  ventComplianceBlock,
+  ventSubmitBlock,
+  type CloseoutReviewPatch,
   type CommissionCloseout,
-  type CommissionQbLine,
-  type CommissionSplitLine,
-  type ExpenseAdjustment,
+  type VentCloseoutInput,
 } from "@/lib/commission-closeout";
 import {
   canProcessRefunds,
@@ -1377,30 +1379,17 @@ type CrmContextValue = CrmState & {
   saveChartAccount: (draft: ChartDraft) => Promise<CompanyChartAccount | null>;
   removeChartAccount: (id: string) => Promise<boolean>;
   saveJobInsurance: (claim: JobInsurance) => Promise<JobInsurance | null>;
-  submitCommissionCloseout: (jobId: string, notes?: string) => Promise<CommissionCloseout | null>;
-  saveCommissionCloseoutReview: (
-    id: string,
-    patch: {
-      qbLines: CommissionQbLine[];
-      splits: CommissionSplitLine[];
-      varianceAck: boolean;
-      accountingNote: string;
-      notes: string;
-      expenseAdjustments: ExpenseAdjustment[];
-    },
+  submitCommissionCloseout: (
+    jobId: string,
+    notes?: string,
+    vents?: VentCloseoutInput,
   ) => Promise<CommissionCloseout | null>;
+  saveCommissionCloseoutReview: (id: string, patch: CloseoutReviewPatch) => Promise<CommissionCloseout | null>;
   returnCommissionCloseout: (id: string, note: string) => Promise<CommissionCloseout | null>;
   releaseCommissionCloseout: (
     id: string,
     staffId: string,
-    review?: {
-      qbLines: CommissionQbLine[];
-      splits: CommissionSplitLine[];
-      varianceAck: boolean;
-      accountingNote: string;
-      notes: string;
-      expenseAdjustments: ExpenseAdjustment[];
-    },
+    review?: CloseoutReviewPatch,
   ) => Promise<CommissionCloseout | null>;
   markCommissionPayout: (id: string) => Promise<CommissionCloseout | null>;
   requestRefund: (input: {
@@ -9025,6 +9014,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         qb_lines: next.qbLines as unknown as Json,
         splits: next.splits as unknown as Json,
         expense_adjustments: next.expenseAdjustments as unknown as Json,
+        vent_photo_ids: next.ventPhotoIds as unknown as Json,
       };
       const saved = await supabase
         .from("commission_closeouts")
@@ -9147,7 +9137,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const submitCommissionCloseout = useCallback(
-    async (jobId: string, notes = "") => {
+    async (jobId: string, notes = "", vents?: VentCloseoutInput) => {
       const actor = effectiveStaff;
       const job = state.jobs.find((item) => item.id === jobId);
       if (!actor || !job) {
@@ -9176,6 +9166,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         );
         return null;
       }
+      const keepVents = closeoutHasVentRecord(previous);
+      if (!keepVents) {
+        const ventBlock = ventSubmitBlock(vents ?? { photoIds: [], note: "" });
+        if (ventBlock) {
+          toast.error(ventBlock);
+          return null;
+        }
+      }
       const now = new Date().toISOString();
       const next = newCommissionCloseout({
         id: crypto.randomUUID(),
@@ -9185,6 +9183,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         expenses: expensesForJob(jobId, state.expenses),
         now,
         notes,
+        vents,
         previous,
       });
       const saved = await persistCloseout(next, previous);
@@ -9205,17 +9204,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
   );
 
   const saveCommissionCloseoutReview = useCallback(
-    async (
-      id: string,
-      patch: {
-        qbLines: CommissionQbLine[];
-        splits: CommissionSplitLine[];
-        varianceAck: boolean;
-        accountingNote: string;
-        notes: string;
-        expenseAdjustments: ExpenseAdjustment[];
-      },
-    ) => {
+    async (id: string, patch: CloseoutReviewPatch) => {
       const actor = effectiveStaff;
       const current = (state.commissionCloseouts ?? []).find((item) => item.id === id);
       if (!actor || !current) return null;
@@ -9231,6 +9220,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         accountingNote: patch.accountingNote.trim(),
         notes: patch.notes,
         expenseAdjustments: patch.expenseAdjustments,
+        ventCompliant: patch.ventCompliant,
         updatedAt: new Date().toISOString(),
       };
       return persistCloseout(next, current);
@@ -9287,14 +9277,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
     async (
       id: string,
       staffId: string,
-      review?: {
-        qbLines: CommissionQbLine[];
-        splits: CommissionSplitLine[];
-        varianceAck: boolean;
-        accountingNote: string;
-        notes: string;
-        expenseAdjustments: ExpenseAdjustment[];
-      },
+      review?: CloseoutReviewPatch,
     ) => {
       const actor = effectiveStaff;
       const current = (state.commissionCloseouts ?? []).find((item) => item.id === id);
@@ -9317,12 +9300,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             accountingNote: review.accountingNote.trim(),
             notes: review.notes,
             expenseAdjustments: review.expenseAdjustments,
+            ventCompliant: review.ventCompliant,
           }
         : current;
       const sheet = sheetForCloseout(draft);
       const block = sheet ? closeoutReleaseBlock(sheet, draft.varianceAck) : "This closeout is missing its job.";
-      if (block) {
-        toast.error(block);
+      const ventBlock = ventComplianceBlock(draft.ventCompliant);
+      if (block || ventBlock) {
+        toast.error(block || ventBlock);
         return null;
       }
       const now = new Date().toISOString();

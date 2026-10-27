@@ -2,9 +2,15 @@ import assert from "node:assert/strict";
 import {
   buildCommissionSheet,
   canSubmitProjectCloseout,
+  closeoutHasVentRecord,
   closeoutIsFinal,
   closeoutReleaseBlock,
   finalCloseoutLines,
+  newCommissionCloseout,
+  normalizeVentCloseout,
+  photosForVentCloseout,
+  ventComplianceBlock,
+  ventSubmitBlock,
   compareJobExpenses,
   closeoutPdfFilename,
   defaultCommissionSplits,
@@ -272,6 +278,71 @@ const finalSheet = buildCommissionSheet({
   ...(finalLines ?? {}),
 });
 assert.equal(finalSheet.splits.find((line) => line.id === "pm")?.percent, 10);
+
+assert.equal(ventSubmitBlock({ photoIds: [], note: "  " })?.includes("vent pipe"), true);
+assert.equal(ventSubmitBlock({ photoIds: ["p1"], note: "" }), null);
+assert.equal(ventSubmitBlock({ photoIds: [], note: "No pipes on this roof." }), null);
+assert.deepEqual(normalizeVentCloseout({ photoIds: [" p1 ", "p1", ""], note: "skip me" }), {
+  photoIds: ["p1"],
+  note: "",
+});
+assert.equal(closeoutHasVentRecord(null), false);
+assert.equal(closeoutHasVentRecord({ ventPhotoIds: [], ventNote: "  " }), false);
+assert.equal(closeoutHasVentRecord({ ventPhotoIds: ["p1"], ventNote: "" }), true);
+assert.equal(ventComplianceBlock(false)?.includes("compliant"), true);
+assert.equal(ventComplianceBlock(true), null);
+assert.deepEqual(
+  photosForVentCloseout(
+    [
+      { id: "p2", caption: "second" },
+      { id: "p1", caption: "first" },
+    ],
+    ["p1", "missing", "p2"],
+  ).map((photo) => photo.id),
+  ["p1", "p2"],
+);
+
+const resent = newCommissionCloseout({
+  id: "new",
+  jobId: "job_1",
+  submittedBy: "staff_1",
+  submittedByName: "Ada",
+  expenses: [],
+  now: "2026-10-03T00:00:00.000Z",
+  notes: "again",
+  vents: { photoIds: ["other"], note: "should stay" },
+  previous: {
+    id: "closeout_1",
+    jobId: "job_1",
+    status: "returned",
+    submittedBy: "staff_1",
+    submittedByName: "Ada",
+    submittedAt: "2026-10-02T00:00:00.000Z",
+    accountingNote: "fix the bill",
+    reviewedBy: "",
+    reviewedByName: "",
+    reviewedAt: null,
+    releasedToStaffId: "",
+    releasedToName: "",
+    payoutMarkedBy: "",
+    payoutMarkedByName: "",
+    payoutMarkedAt: null,
+    qbLines: [],
+    splits: [],
+    varianceAck: false,
+    notes: "",
+    expenseAdjustments: [],
+    ventPhotoIds: ["p1"],
+    ventNote: "",
+    ventCompliant: true,
+    updatedAt: "2026-10-02T00:00:00.000Z",
+  },
+});
+assert.equal(resent.status, "submitted");
+assert.deepEqual(resent.ventPhotoIds, ["p1"]);
+assert.equal(resent.ventNote, "");
+assert.equal(resent.ventCompliant, true);
+assert.equal(resent.notes, "again");
 
 const differed = compareJobExpenses(
   [

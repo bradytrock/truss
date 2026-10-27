@@ -276,6 +276,7 @@ export function missingJobInsuranceMessage() {
 export const COMMISSION_CLOSEOUT_SQL = "supabase/migrations/20261012120000_commission_closeouts.sql";
 export const COMMISSION_CLOSEOUT_ADJUSTMENTS_SQL =
   "supabase/migrations/20261014160000_closeout_expense_adjustments.sql";
+export const COMMISSION_CLOSEOUT_VENTS_SQL = "supabase/migrations/20261027120000_closeout_vent_pipes.sql";
 
 export function isMissingCommissionCloseouts(error: { message?: string; code?: string } | null | undefined) {
   if (!error) return false;
@@ -290,7 +291,7 @@ export function isMissingCommissionCloseouts(error: { message?: string; code?: s
 }
 
 export function missingCommissionCloseoutsMessage() {
-  return `Saved in this browser. Run ${COMMISSION_CLOSEOUT_SQL}, then ${COMMISSION_CLOSEOUT_ADJUSTMENTS_SQL}, in the SQL editor so commission closeouts stay on the job.`;
+  return `Saved in this browser. Run ${COMMISSION_CLOSEOUT_SQL}, then ${COMMISSION_CLOSEOUT_ADJUSTMENTS_SQL}, then ${COMMISSION_CLOSEOUT_VENTS_SQL}, in the SQL editor so commission closeouts stay on the job.`;
 }
 
 export const REFUND_REQUESTS_SQL = "supabase/migrations/20261022120000_refund_requests.sql";

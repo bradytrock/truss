@@ -39,6 +39,7 @@ import {
   parseExpenseAdjustments,
   parseQbLines,
   parseSplits,
+  parseVentPhotoIds,
   type CommissionCloseout,
 } from "@/lib/commission-closeout";
 import {
@@ -1030,6 +1031,9 @@ export function mapCommissionCloseout(
     varianceAck: row.variance_ack,
     notes: row.notes,
     expenseAdjustments: parseExpenseAdjustments(row.expense_adjustments),
+    ventPhotoIds: parseVentPhotoIds(row.vent_photo_ids),
+    ventNote: row.vent_note ?? "",
+    ventCompliant: Boolean(row.vent_compliant),
     updatedAt: row.updated_at,
   };
 }

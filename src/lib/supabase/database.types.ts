@@ -1245,6 +1245,9 @@ export type Database = {
           variance_ack: boolean;
           notes: string;
           expense_adjustments: Json;
+          vent_photo_ids: Json;
+          vent_note: string;
+          vent_compliant: boolean;
           updated_at: string;
         };
         Insert: {
@@ -1269,6 +1272,9 @@ export type Database = {
           variance_ack?: boolean;
           notes?: string;
           expense_adjustments?: Json;
+          vent_photo_ids?: Json;
+          vent_note?: string;
+          vent_compliant?: boolean;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["commission_closeouts"]["Insert"]>;

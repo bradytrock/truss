@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { CloseoutVentRecord } from "@/components/closeout-vents";
 import { CommissionSheetView } from "@/components/commission-sheet";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,6 +22,7 @@ import {
   blankSplitLine,
   buildCommissionSheet,
   closeoutReleaseBlock,
+  ventComplianceBlock,
   mergePostedBills,
   payoutRecipients,
   setDeductionAmount,
@@ -142,6 +144,7 @@ function CloseoutReview({ closeout }: { closeout: CommissionCloseout }) {
   const [splits, setSplits] = useState(closeout.splits);
   const [adjustments, setAdjustments] = useState(closeout.expenseAdjustments ?? []);
   const [ack, setAck] = useState(closeout.varianceAck);
+  const [ventCompliant, setVentCompliant] = useState(closeout.ventCompliant);
   const [note, setNote] = useState(closeout.accountingNote);
   const [returnNote, setReturnNote] = useState("");
   const [returning, setReturning] = useState(false);
@@ -192,8 +195,10 @@ function CloseoutReview({ closeout }: { closeout: CommissionCloseout }) {
     accountingNote: note,
     notes: closeout.notes,
     expenseAdjustments: adjustments,
+    ventCompliant,
   };
   const block = editing ? closeoutReleaseBlock(sheet, ack) : null;
+  const ventBlock = editing ? ventComplianceBlock(ventCompliant) : null;
   const check = sheet.splitTotals.check;
 
   async function save() {
@@ -284,7 +289,7 @@ function CloseoutReview({ closeout }: { closeout: CommissionCloseout }) {
             </Button>
           ) : null}
           {editing ? (
-            <Button type="button" className={cn("h-10 rounded-xl px-4", accRed)} disabled={busy || !recipient || Boolean(block)} onClick={() => void release()}>
+            <Button type="button" className={cn("h-10 rounded-xl px-4", accRed)} disabled={busy || !recipient || Boolean(block) || Boolean(ventBlock)} onClick={() => void release()}>
               Release {formatMoney(check)} for payout
             </Button>
           ) : null}
@@ -305,6 +310,13 @@ function CloseoutReview({ closeout }: { closeout: CommissionCloseout }) {
           </Button>
         </div>
       ) : null}
+
+      <CloseoutVentRecord
+        closeout={{ ...closeout, ventCompliant: editing ? ventCompliant : closeout.ventCompliant }}
+        photos={crm.photos}
+        editing={editing}
+        onCompliant={setVentCompliant}
+      />
 
       {editing && block ? (
         <label className="flex items-start gap-2 text-sm text-[#6f6a64]">

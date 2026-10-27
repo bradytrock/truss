@@ -118,7 +118,8 @@ import {
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { PhotoReportBuilder } from "@/components/photo-report-builder";
-import { canSubmitProjectCloseout } from "@/lib/commission-closeout";
+import { CloseoutVentDialog } from "@/components/closeout-vents";
+import { canSubmitProjectCloseout, closeoutHasVentRecord } from "@/lib/commission-closeout";
 import {
   canCreateEstimates,
   canCreatePages,
@@ -451,6 +452,8 @@ export function JobRecord({
   const [codeDraft, setCodeDraft] = useState(job.code);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [closeoutBusy, setCloseoutBusy] = useState(false);
+  const [ventOpen, setVentOpen] = useState(false);
+  const [ventSession, setVentSession] = useState(0);
 
   const canTrash = canDeleteJobs(crm.viewer) && !crm.impersonatedStaff;
   const deleted = isDeletedJob(job);
@@ -965,13 +968,18 @@ export function JobRecord({
                 className="rounded-lg bg-card"
                 disabled={closeoutBusy}
                 onClick={() => {
-                  setCloseoutBusy(true);
-                  void crm
-                    .submitCommissionCloseout(job.id)
-                    .then((saved) => {
-                      if (saved) setJobTab("closeout");
-                    })
-                    .finally(() => setCloseoutBusy(false));
+                  if (closeout && closeoutHasVentRecord(closeout)) {
+                    setCloseoutBusy(true);
+                    void crm
+                      .submitCommissionCloseout(job.id)
+                      .then((saved) => {
+                        if (saved) setJobTab("closeout");
+                      })
+                      .finally(() => setCloseoutBusy(false));
+                    return;
+                  }
+                  setVentSession((value) => value + 1);
+                  setVentOpen(true);
                 }}
               >
                 <Send data-icon="inline-start" />
@@ -2290,6 +2298,24 @@ export function JobRecord({
         </DialogContent>
       </Dialog>
 
+      <CloseoutVentDialog
+        key={ventSession}
+        jobId={job.id}
+        open={ventOpen}
+        busy={closeoutBusy}
+        onOpenChange={setVentOpen}
+        onSubmit={(vents) => {
+          setCloseoutBusy(true);
+          void crm
+            .submitCommissionCloseout(job.id, "", vents)
+            .then((saved) => {
+              if (!saved) return;
+              setVentOpen(false);
+              setJobTab("closeout");
+            })
+            .finally(() => setCloseoutBusy(false));
+        }}
+      />
       <AddPhotoDialog open={photoOpen} onOpenChange={setPhotoOpen} jobId={job.id} />
       <PhotoViewer
         photo={shownPhoto}
