@@ -1,4 +1,14 @@
-import { WORK_COLUMNS, boardCardDetails, canonicalizeWorkColumn, patchForWorkColumn, workColumnFor } from "./work-board";
+import {
+  WORK_COLUMNS,
+  boardCardAddress,
+  boardCardCue,
+  boardCardDetails,
+  boardCardName,
+  canonicalizeWorkColumn,
+  isShelvedWorkColumn,
+  patchForWorkColumn,
+  workColumnFor,
+} from "./work-board";
 
 function assert(condition: unknown, message: string) {
   if (!condition) throw new Error(message);
@@ -80,5 +90,28 @@ assert(
 );
 assert(!(WORK_COLUMNS as readonly string[]).includes("estimating"), "estimating is no longer its own column");
 assert(canonicalizeWorkColumn("estimating") === "supplementing", "old estimating column name maps to supplementing");
+
+const now = new Date(2026, 9, 28, 15, 0, 0);
+const yesterday = boardCardCue({ column: "lead", openedAt: "2026-10-27", now });
+assert(yesterday.label === "New · yesterday" && yesterday.tone === "fresh", "a lead from yesterday stays new");
+assert(boardCardCue({ column: "lead", openedAt: "2026-10-26", now }).label === "New · 2 days", "recent leads count the days");
+assert(boardCardCue({ column: "lead", openedAt: "2026-10-01", now }).label === "Aging · 27 days", "a lead past two weeks is aging");
+const viewed = boardCardCue({ column: "proposal_sent", openedAt: "2026-10-01", estimate: "viewed", now });
+assert(
+  viewed.label === "Estimate viewed — follow up" && viewed.tone === "attention",
+  "a viewed proposal asks for follow up",
+);
+assert(boardCardCue({ column: "in_progress", startedAt: "2026-10-20", now }).label === "On track · 8 days", "fresh production stays on track");
+assert(boardCardCue({ column: "in_progress", startedAt: "2026-10-11", now }).label === "Aging · 17 days", "production past two weeks is aging");
+assert(boardCardCue({ column: "complete", now }).label === "Done", "finished work is done");
+assert(boardCardName("Shawn Gonzales", "Gonzales — 5400 Ragan Dr") === "Gonzales", "person cards use the last name");
+assert(boardCardName("Northline Roofing LLC", "Northline — site") === "Northline Roofing LLC", "company names stay whole");
+assert(boardCardName("", "Roof replacement — 1 Main") === "Roof replacement", "blank customer falls back to the title");
+assert(
+  boardCardAddress({ street: "5400 Ragan Dr", city: "The Colony", state: "TX" }) === "5400 Ragan Dr, The Colony",
+  "address is street and city",
+);
+assert(isShelvedWorkColumn("lost"), "lost is closed");
+assert(!isShelvedWorkColumn("complete"), "complete stays on the open board");
 
 console.log("work-board card tests passed");

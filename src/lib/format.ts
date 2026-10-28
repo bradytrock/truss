@@ -253,6 +253,17 @@ export function daysUntil(iso: string | null | undefined) {
   return Math.round((date.getTime() - today.getTime()) / 86_400_000);
 }
 
+/** Whole local days from a date (or timestamp) to now. Future dates count as 0. */
+export function calendarDaysAgo(iso: string | null | undefined, now = new Date()) {
+  const date = validDate(iso);
+  if (!date) return null;
+  const then = new Date(date);
+  then.setHours(12, 0, 0, 0);
+  const today = new Date(now);
+  today.setHours(12, 0, 0, 0);
+  return Math.max(0, Math.round((today.getTime() - then.getTime()) / 86_400_000));
+}
+
 export function greeting() {
   const hour = new Date().getHours();
   if (hour < 12) return "Good morning";

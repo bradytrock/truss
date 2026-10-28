@@ -8,7 +8,14 @@ function emptyMetrics(): BoardScrollMetrics {
   return { overflowing: false, maxScroll: 0, thumbRatio: 1, thumbStart: 0 };
 }
 
-export function KanbanScroller({ children }: { children: ReactNode }) {
+export function KanbanScroller({
+  children,
+  fill = false,
+}: {
+  children: ReactNode;
+  /** Fill the parent height so columns can scroll under a fixed header. */
+  fill?: boolean;
+}) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [metrics, setMetrics] = useState<BoardScrollMetrics>(emptyMetrics);
 
@@ -39,16 +46,26 @@ export function KanbanScroller({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="relative">
+    <div className={cn("relative", fill && "h-full min-h-0")}>
       <div
         ref={scrollerRef}
-        className="w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className={cn(
+          "w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          fill && "h-full overflow-y-hidden",
+        )}
       >
         {children}
       </div>
-      <div className="pointer-events-none sticky bottom-4 z-20 -mt-9 flex justify-end pr-1">
-        <BoardScrollSlider metrics={metrics} onScrub={scrub} />
-      </div>
+      {metrics.overflowing ? (
+        <div
+          className={cn(
+            "pointer-events-none z-20 flex justify-end pr-1",
+            fill ? "absolute inset-x-0 bottom-2" : "sticky bottom-4 -mt-9",
+          )}
+        >
+          <BoardScrollSlider metrics={metrics} onScrub={scrub} />
+        </div>
+      ) : null}
     </div>
   );
 }

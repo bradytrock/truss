@@ -1,3 +1,4 @@
+import { calendarDaysAgo } from "@/lib/format";
 import { parseLocation } from "@/lib/job-record";
 import type { Job, JobStatus, Opportunity, PipelineStage } from "./types";
 
@@ -156,4 +157,94 @@ export function boardCardDetails(input: {
     /** City, state, and zip, kept off the street line. */
     locality: localityInTitle ? "" : locality,
   };
+}
+
+/** Lost, unqualified, and deleted stay off the board until someone asks for closed work. */
+const SHELVED_WORK_COLUMNS = new Set<WorkColumn>(["unqualified", "lost", "deleted"]);
+
+export function isShelvedWorkColumn(column: WorkColumn) {
+  return SHELVED_WORK_COLUMNS.has(column);
+}
+
+export type BoardCueTone = "fresh" | "attention" | "steady" | "aging" | "done" | "muted";
+
+export type BoardCue = {
+  label: string;
+  tone: BoardCueTone;
+};
+
+const AGING_AFTER_DAYS = 14;
+
+export function boardAgeLabel(days: number) {
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  return `${days} days`;
+}
+
+/** One status line for a board card. Replaces the stack of estimate, age, and stage badges. */
+export function boardCardCue(input: {
+  column: WorkColumn;
+  openedAt?: string | null;
+  startedAt?: string | null;
+  estimate?: "signed" | "viewed" | "sent" | null;
+  now?: Date;
+}): BoardCue {
+  const now = input.now ?? new Date();
+  if (input.column === "complete") return { label: "Done", tone: "done" };
+  if (input.column === "deleted") return { label: "Deleted", tone: "muted" };
+  if (input.column === "lost") return { label: "Lost", tone: "muted" };
+  if (input.column === "unqualified") return { label: "Unqualified", tone: "muted" };
+  if (input.column === "on_hold") return { label: "On hold", tone: "muted" };
+
+  const opened = calendarDaysAgo(input.openedAt, now) ?? calendarDaysAgo(input.startedAt, now) ?? 0;
+  const started = calendarDaysAgo(input.startedAt, now) ?? opened;
+
+  if (input.column === "proposal_sent" || input.column === "supplementing") {
+    if (input.estimate === "viewed") return { label: "Estimate viewed — follow up", tone: "attention" };
+    if (input.estimate === "signed") return { label: "Estimate signed", tone: "done" };
+    if (opened > AGING_AFTER_DAYS) return { label: `Aging · ${boardAgeLabel(opened)}`, tone: "aging" };
+    if (input.estimate === "sent") return { label: `Sent · ${boardAgeLabel(opened)}`, tone: "steady" };
+    if (input.column === "supplementing") {
+      return { label: `Supplementing · ${boardAgeLabel(opened)}`, tone: "steady" };
+    }
+    return { label: `New · ${boardAgeLabel(opened)}`, tone: "fresh" };
+  }
+
+  if (input.column === "in_progress" || input.column === "punch") {
+    if (started > AGING_AFTER_DAYS) return { label: `Aging · ${boardAgeLabel(started)}`, tone: "aging" };
+    return { label: `On track · ${boardAgeLabel(started)}`, tone: "steady" };
+  }
+
+  if (opened > AGING_AFTER_DAYS) return { label: `Aging · ${boardAgeLabel(opened)}`, tone: "aging" };
+  return { label: `New · ${boardAgeLabel(opened)}`, tone: "fresh" };
+}
+
+const COMPANY_NAME = /\b(llc|l\.l\.c|inc|corp|co|company|ltd|roofing|construction)\b/i;
+
+/** Last name when the customer is a person. Companies and blank names fall back to the job title. */
+export function boardCardName(customerName: string, title: string) {
+  const customer = customerName.trim();
+  const parts = customer.split(/\s+/).filter(Boolean);
+  if (customer && parts.length > 1 && parts.length <= 4 && !COMPANY_NAME.test(customer)) {
+    return parts[parts.length - 1] ?? customer;
+  }
+  if (customer) return customer;
+  const head = title.split(/\s[—–-]\s/)[0]?.trim() ?? "";
+  return head || title.trim() || "Untitled job";
+}
+
+/** One address line: street and city, without state or zip. */
+export function boardCardAddress(input: {
+  street?: string;
+  city?: string;
+  state?: string;
+  location?: string;
+}) {
+  const street = input.street?.trim() ?? "";
+  const city = input.city?.trim() ?? "";
+  const state = input.state?.trim() ?? "";
+  if (street && city) return `${street}, ${city}`;
+  if (street) return street;
+  if (city) return [city, state].filter(Boolean).join(", ");
+  return (input.location ?? "").trim();
 }
