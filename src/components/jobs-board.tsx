@@ -31,6 +31,7 @@ import { estimatesForJob } from "@/lib/won";
 import {
   WORK_COLUMNS,
   WORK_COLUMN_LABELS,
+  BOARD_COLUMN_PREVIEW,
   boardCardAddress,
   boardCardCue,
   boardCardDetails,
@@ -68,6 +69,7 @@ const cueTone: Record<BoardCueTone, string> = {
   attention: "bg-sky-50 text-sky-800",
   steady: "bg-neutral-100 text-neutral-600",
   aging: "bg-amber-50 text-amber-900",
+  stale: "bg-orange-50 text-orange-800",
   done: "bg-emerald-50 text-emerald-800",
   muted: "bg-neutral-100 text-neutral-500",
 };
@@ -94,6 +96,7 @@ export function JobsBoard({
   const crm = useCrm();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Job | null>(null);
+  const [openColumns, setOpenColumns] = useState<Set<WorkColumn>>(() => new Set());
   const canTrash = canDeleteJobs(crm.viewer) && !crm.impersonatedStaff;
   const columns = canTrash ? WORK_COLUMNS : WORK_COLUMNS.filter((column) => column !== "deleted");
 
@@ -217,15 +220,32 @@ export function JobsBoard({
       onDragEnd={onDragEnd}
       onDragCancel={() => setActiveId(null)}
     >
-      <div className="flex h-full min-h-0 flex-1 flex-col">
-        <KanbanScroller fill>
-          <div className="flex h-full min-h-0 items-stretch gap-3">
+      <KanbanScroller clipVertical>
+          <div className="flex items-start gap-3 pb-6">
             {visibleColumns.map((column) => {
               const cards = filtered.filter((job) => columnOf(job) === column);
               const total = cards.reduce((sum, job) => sum + contractOnBoard(crm, job), 0);
+              const opened = searching || openColumns.has(column);
+              const visibleCards = opened ? cards : cards.slice(0, BOARD_COLUMN_PREVIEW);
+              const hiddenCount = searching ? 0 : cards.length - visibleCards.length;
               return (
-                <JobColumn key={column} column={column} count={cards.length} total={total}>
-                  {cards.map((job) => (
+                <JobColumn
+                  key={column}
+                  column={column}
+                  count={cards.length}
+                  total={total}
+                  hiddenCount={hiddenCount}
+                  expanded={!searching && openColumns.has(column)}
+                  onToggle={() => {
+                    setOpenColumns((current) => {
+                      const next = new Set(current);
+                      if (next.has(column)) next.delete(column);
+                      else next.add(column);
+                      return next;
+                    });
+                  }}
+                >
+                  {visibleCards.map((job) => (
                     <JobCard
                       key={job.id}
                       job={job}
@@ -239,7 +259,6 @@ export function JobsBoard({
             })}
           </div>
         </KanbanScroller>
-      </div>
       <DragOverlay>
         {active ? (
           <JobCard
@@ -266,29 +285,36 @@ function JobColumn({
   column,
   count,
   total,
+  hiddenCount,
+  expanded,
+  onToggle,
   children,
 }: {
   column: WorkColumn;
   count: number;
   total: number;
+  hiddenCount: number;
+  expanded: boolean;
+  onToggle: () => void;
   children: ReactNode;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column });
+  const canToggle = hiddenCount > 0 || expanded;
 
   return (
     <div
       ref={setNodeRef}
       className={cn(
-        "flex h-full min-h-0 w-[17.5rem] shrink-0 flex-col overflow-y-auto overscroll-contain",
-        isOver && "rounded-xl bg-black/[0.03]",
+        "flex w-[15rem] shrink-0 flex-col rounded-xl border border-black/8 bg-[#f6f6f6] p-2",
+        isOver && "border-primary/40 bg-primary/5",
       )}
     >
-      <div className="sticky top-0 z-10 shrink-0 bg-background px-0.5 pb-2">
+      <div className="sticky top-14 z-10 bg-[#f6f6f6] px-0.5 pb-2">
         <div className="flex items-start justify-between gap-2">
           <h2 className="pt-0.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
             {WORK_COLUMN_LABELS[column]}
           </h2>
-          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-muted px-2 text-xs font-medium tabular-nums text-muted-foreground">
+          <span className="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-black/6 px-2 text-xs font-medium tabular-nums text-muted-foreground">
             {count}
           </span>
         </div>
@@ -296,12 +322,22 @@ function JobColumn({
           {formatCurrency(total)}
         </p>
       </div>
-      <div className="flex flex-col gap-2 px-0.5 pt-0.5 pb-8">
+      <div className="flex flex-col gap-2">
         {count === 0 && isOver ? (
           <p className="py-6 text-center text-[11px] text-muted-foreground">Drop here</p>
         ) : null}
         {children}
       </div>
+      {canToggle ? (
+        <button
+          type="button"
+          className="mt-2 w-full rounded-lg border border-black/10 bg-card py-2 text-xs font-medium text-muted-foreground hover:bg-white"
+          aria-expanded={expanded}
+          onClick={onToggle}
+        >
+          {expanded ? "Show less" : `Show ${hiddenCount} more`}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -405,7 +441,7 @@ function JobCard({
       className={cn(
         "rounded-xl border border-black/8 bg-card px-3 py-2.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]",
         isDragging && !overlay && "opacity-40",
-        overlay && "w-[17.5rem] shadow-md",
+        overlay && "w-[15rem] shadow-md",
         deleted && "opacity-80",
       )}
     >
@@ -438,7 +474,7 @@ function JobCard({
               <span className="size-1.5 shrink-0 rounded-full bg-current" />
               {cue.label}
             </span>
-            <RecordCode code={job.code} className="shrink-0 pt-0.5" />
+            <RecordCode code={job.code} className="min-w-0 max-w-[42%] truncate pt-0.5" />
           </div>
           <p
             className={cn(

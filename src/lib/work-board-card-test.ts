@@ -94,15 +94,21 @@ assert(canonicalizeWorkColumn("estimating") === "supplementing", "old estimating
 const now = new Date(2026, 9, 28, 15, 0, 0);
 const yesterday = boardCardCue({ column: "lead", openedAt: "2026-10-27", now });
 assert(yesterday.label === "New · yesterday" && yesterday.tone === "fresh", "a lead from yesterday stays new");
-assert(boardCardCue({ column: "lead", openedAt: "2026-10-26", now }).label === "New · 2 days", "recent leads count the days");
-assert(boardCardCue({ column: "lead", openedAt: "2026-10-01", now }).label === "Aging · 27 days", "a lead past two weeks is aging");
-const viewed = boardCardCue({ column: "proposal_sent", openedAt: "2026-10-01", estimate: "viewed", now });
+assert(boardCardCue({ column: "lead", openedAt: "2026-10-26", now }).label === "New · 2d", "a two-day lead stays new");
+assert(boardCardCue({ column: "lead", openedAt: "2026-10-22", now }).label === "On track · 6d", "a lead past a couple of days is on track");
+assert(boardCardCue({ column: "lead", openedAt: "2026-10-01", now }).label === "Aging · 27d", "a lead past two weeks is aging");
+assert(boardCardCue({ column: "lead", openedAt: "2026-09-04", now }).label === "Stale · 54d", "a lead past a month and a half is stale");
+const viewed = boardCardCue({ column: "proposal_sent", openedAt: "2026-10-20", estimate: "viewed", now });
 assert(
-  viewed.label === "Estimate viewed — follow up" && viewed.tone === "attention",
+  viewed.label === "Viewed · follow up" && viewed.tone === "attention",
   "a viewed proposal asks for follow up",
 );
-assert(boardCardCue({ column: "in_progress", startedAt: "2026-10-20", now }).label === "On track · 8 days", "fresh production stays on track");
-assert(boardCardCue({ column: "in_progress", startedAt: "2026-10-11", now }).label === "Aging · 17 days", "production past two weeks is aging");
+assert(
+  boardCardCue({ column: "supplementing", openedAt: "2026-10-21", now }).label === "Supplementing · 7d",
+  "fresh supplementing names the stage",
+);
+assert(boardCardCue({ column: "in_progress", startedAt: "2026-10-20", now }).label === "On track · 8d", "fresh production stays on track");
+assert(boardCardCue({ column: "in_progress", startedAt: "2026-10-11", now }).label === "Aging · 17d", "production past two weeks is aging");
 assert(boardCardCue({ column: "complete", now }).label === "Done", "finished work is done");
 assert(boardCardName("Shawn Gonzales", "Gonzales — 5400 Ragan Dr") === "Gonzales", "person cards use the last name");
 assert(boardCardName("Northline Roofing LLC", "Northline — site") === "Northline Roofing LLC", "company names stay whole");

@@ -143,7 +143,7 @@ function JobsBoardPage() {
   if (!crm.hydrated) return <LoadingScreen />;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+    <div className="space-y-4">
       {crm.hydrateError ? (
         <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
       ) : null}
@@ -181,7 +181,7 @@ function JobsBoardPage() {
         fallbackTitle="The board could not open"
         fallbackDescription="Reload the page. A single bad card should not keep Jobs hidden."
       >
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div>
           <JobsBoard
             query={query}
             ownerIds={ownerIds}

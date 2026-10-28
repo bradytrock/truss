@@ -166,19 +166,34 @@ export function isShelvedWorkColumn(column: WorkColumn) {
   return SHELVED_WORK_COLUMNS.has(column);
 }
 
-export type BoardCueTone = "fresh" | "attention" | "steady" | "aging" | "done" | "muted";
+export type BoardCueTone = "fresh" | "attention" | "steady" | "aging" | "stale" | "done" | "muted";
 
 export type BoardCue = {
   label: string;
   tone: BoardCueTone;
 };
 
+const NEW_FOR_DAYS = 2;
 const AGING_AFTER_DAYS = 14;
+const STALE_AFTER_DAYS = 45;
+
+/** Cards kept in view before a column asks to show the rest. */
+export const BOARD_COLUMN_PREVIEW = 4;
 
 export function boardAgeLabel(days: number) {
   if (days <= 0) return "today";
   if (days === 1) return "yesterday";
-  return `${days} days`;
+  return `${days}d`;
+}
+
+function ageCue(days: number, kind: "lead" | "track" | "sent" | "supplementing"): BoardCue {
+  const age = boardAgeLabel(days);
+  if (days > STALE_AFTER_DAYS) return { label: `Stale · ${age}`, tone: "stale" };
+  if (days > AGING_AFTER_DAYS) return { label: `Aging · ${age}`, tone: "aging" };
+  if (kind === "supplementing") return { label: `Supplementing · ${age}`, tone: "steady" };
+  if (kind === "sent") return { label: `Sent · ${age}`, tone: "steady" };
+  if (kind === "lead" && days <= NEW_FOR_DAYS) return { label: `New · ${age}`, tone: "fresh" };
+  return { label: `On track · ${age}`, tone: "steady" };
 }
 
 /** One status line for a board card. Replaces the stack of estimate, age, and stage badges. */
@@ -200,23 +215,17 @@ export function boardCardCue(input: {
   const started = calendarDaysAgo(input.startedAt, now) ?? opened;
 
   if (input.column === "proposal_sent" || input.column === "supplementing") {
-    if (input.estimate === "viewed") return { label: "Estimate viewed — follow up", tone: "attention" };
-    if (input.estimate === "signed") return { label: "Estimate signed", tone: "done" };
-    if (opened > AGING_AFTER_DAYS) return { label: `Aging · ${boardAgeLabel(opened)}`, tone: "aging" };
-    if (input.estimate === "sent") return { label: `Sent · ${boardAgeLabel(opened)}`, tone: "steady" };
-    if (input.column === "supplementing") {
-      return { label: `Supplementing · ${boardAgeLabel(opened)}`, tone: "steady" };
-    }
-    return { label: `New · ${boardAgeLabel(opened)}`, tone: "fresh" };
+    if (opened > STALE_AFTER_DAYS) return ageCue(opened, "sent");
+    if (input.estimate === "viewed") return { label: "Viewed · follow up", tone: "attention" };
+    if (input.estimate === "signed") return { label: "Signed", tone: "done" };
+    return ageCue(opened, input.column === "supplementing" ? "supplementing" : input.estimate === "sent" ? "sent" : "lead");
   }
 
   if (input.column === "in_progress" || input.column === "punch") {
-    if (started > AGING_AFTER_DAYS) return { label: `Aging · ${boardAgeLabel(started)}`, tone: "aging" };
-    return { label: `On track · ${boardAgeLabel(started)}`, tone: "steady" };
+    return ageCue(started, "track");
   }
 
-  if (opened > AGING_AFTER_DAYS) return { label: `Aging · ${boardAgeLabel(opened)}`, tone: "aging" };
-  return { label: `New · ${boardAgeLabel(opened)}`, tone: "fresh" };
+  return ageCue(opened, "lead");
 }
 
 const COMPANY_NAME = /\b(llc|l\.l\.c|inc|corp|co|company|ltd|roofing|construction)\b/i;
