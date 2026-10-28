@@ -173,7 +173,7 @@ assert.match(text, /RK100126-1/);
 assert.match(text, /Keller Homeowner/);
 assert.match(text, /Ada Lopez/);
 assert.match(text, /1st payment/);
-assert.match(text, /Merchant fees 4%/);
+assert.match(text, /Merchant fees \(4%\)/);
 assert.match(text, /Dwelling/);
 assert.match(text, /ISOW/);
 assert.match(text, /Crew 01/);
