@@ -32,7 +32,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage, isMissingCrmImport, missingCrmImportMessage } from "@/lib/supabase/schema-errors";
 import {
   eventTimesAreInvitable,
   externalInvitees,
@@ -47,7 +47,7 @@ import {
 import { distinctMessageHandle, isDuplicateMessageHandle, outboundMessageHandle } from "@/lib/message-handle";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug, normalizePersonCardSlug } from "@/lib/card-slug";
 import { serializeCardSlugAliases, takenCardSlugs } from "@/lib/profile-editor";
-import { insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
+import { insertJobRowsWithFallbacks, insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
 import { newPortalToken, portalInviteExpiry, portalUrl } from "@/lib/portal";
 import {
   newRealtorPortalToken,
@@ -81,6 +81,7 @@ import {
   withSyncedDefaultEstimateTerms,
 } from "@/lib/contract-types";
 import { matchCatalogItem, type CatalogImportDraft } from "@/lib/catalog-csv";
+import { HUBSPOT_SOURCE, isReadyHubSpotDraft, type HubSpotDealDraft, type HubSpotImportResult } from "@/lib/hubspot-import";
 import {
   catalogItemDescription,
   catalogProposalUnitPrice,
@@ -155,7 +156,7 @@ import {
   withJobFileField,
   withoutJobFileId,
 } from "@/lib/job-files";
-import { patchForWorkColumn, workColumnFor, type WorkColumn } from "@/lib/work-board";
+import { patchForWorkColumn, workColumnFor, WORK_COLUMN_LABELS, type WorkColumn } from "@/lib/work-board";
 import {
   clerkBrowserEnabled,
   clerkBrowserSignedIn,
@@ -306,6 +307,7 @@ import {
   type CatalogItem,
   type CatalogKind,
   type CompanySettings,
+  type Activity,
   type Contact,
   type CrmState,
   type CurrentUser,
@@ -395,7 +397,7 @@ import {
   suggestedJobCode,
   codeReviewAudience,
 } from "@/lib/job-code";
-import { formatJobSite } from "@/lib/leads";
+import { formatJobSite, leadSourceLabel } from "@/lib/leads";
 import { leadAssignNeedsEmail, requestLeadAssignNotification } from "@/lib/lead-assign-email";
 import { NOTIFICATIONS_REFRESH } from "@/lib/notification-inbox";
 import { defaultEstimateValidUntil, localYmd } from "@/lib/format";
@@ -1267,6 +1269,15 @@ type CrmContextValue = CrmState & {
     rows: CatalogImportDraft[],
     priceListId?: string | null,
   ) => Promise<{ added: number; updated: number }>;
+  /**
+   * Bring HubSpot deals in as contacts, leads, and jobs. Silent on purpose: no
+   * lead-assigned email, no automation events, no returning-client notices, no
+   * texts. Every record lands on the seat the Verify step chose.
+   */
+  importHubSpotDeals: (
+    drafts: HubSpotDealDraft[],
+    options?: { onProgress?: (done: number, total: number) => void },
+  ) => Promise<HubSpotImportResult>;
   addPriceList: (input: {
     name: string;
     effectiveOn: string;
@@ -7122,6 +7133,409 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return { added: inserted.length || toInsert.length, updated: toUpdate.length };
     },
     [state.catalog, state.priceLists, user.companyId],
+  );
+
+  const importHubSpotDeals = useCallback(
+    async (
+      drafts: HubSpotDealDraft[],
+      options?: { onProgress?: (done: number, total: number) => void },
+    ): Promise<HubSpotImportResult> => {
+      const ready = drafts.filter(isReadyHubSpotDraft);
+      const result: HubSpotImportResult = {
+        created: 0,
+        updated: 0,
+        contactsCreated: 0,
+        contactsMatched: 0,
+        skipped: drafts.length - ready.length,
+      };
+      if (ready.length === 0) return result;
+
+      const importedAt = new Date().toISOString();
+      const staffById = new Map(state.staff.map((member) => [member.id, member]));
+      const contactsById = new Map(state.contacts.map((contact) => [contact.id, contact]));
+      const jobsByOpportunity = new Map(
+        state.jobs.filter((job) => job.opportunityId && !job.deletedAt).map((job) => [job.opportunityId as string, job]),
+      );
+      const opportunitiesById = new Map(state.opportunities.map((item) => [item.id, item]));
+      const codes = new Set(existingRecordCodes([...state.jobs, ...state.opportunities]));
+
+      // One contact per person, even when several deals name them.
+      const contactByKey = new Map<string, Contact>();
+      const newContacts: Contact[] = [];
+      const contactFills = new Map<string, Partial<Contact>>();
+      for (const draft of ready) {
+        if (contactByKey.has(draft.contact.key)) continue;
+        if (draft.contact.existingId) {
+          const existing = contactsById.get(draft.contact.existingId);
+          if (existing) {
+            contactByKey.set(draft.contact.key, existing);
+            result.contactsMatched += 1;
+            const fill: Partial<Contact> = {};
+            if (!existing.phone.trim() && draft.contact.phone) fill.phone = draft.contact.phone;
+            if (!existing.email.trim() && draft.contact.email) fill.email = draft.contact.email;
+            if (Object.keys(fill).length) contactFills.set(existing.id, fill);
+            continue;
+          }
+        }
+        const contact: Contact = {
+          id: crypto.randomUUID(),
+          clientId: null,
+          name: draft.contact.name || draft.name,
+          title: "Homeowner",
+          email: draft.contact.email,
+          phone: draft.contact.phone,
+          ownerStaffId: draft.ownerStaffId,
+          isReferralPartner: false,
+          listingWatchUrl: "",
+          listingWatchEnabled: false,
+        };
+        contactByKey.set(draft.contact.key, contact);
+        newContacts.push(contact);
+        result.contactsCreated += 1;
+      }
+
+      const newOpportunities: Opportunity[] = [];
+      const opportunityUpdates: Array<{ id: string; next: Opportunity }> = [];
+      const newJobs: Job[] = [];
+      const jobUpdates: Array<{ id: string; next: Job }> = [];
+      const jobCreatedAt = new Map<string, string>();
+      const activityRows: Array<{ entityId: string; body: string }> = [];
+
+      for (const draft of ready) {
+        const contact = contactByKey.get(draft.contact.key);
+        const owner = staffById.get(draft.ownerStaffId);
+        const ownerName = owner?.name ?? draft.ownerName;
+        const stage: PipelineStage = draft.stage ?? "pursuing";
+        const site = formatJobSite(draft.address);
+        const existing = draft.existingOpportunityId
+          ? opportunitiesById.get(draft.existingOpportunityId)
+          : undefined;
+        const opportunityId = existing?.id ?? crypto.randomUUID();
+        const code =
+          existing?.code ||
+          nextJobCode(ownerName || user.name, new Date(draft.createdAt), codes);
+        codes.add(code);
+        const opportunity: Opportunity = {
+          id: opportunityId,
+          code,
+          name: draft.name,
+          clientId: null,
+          primaryContactId: contact?.id ?? "",
+          stage,
+          value: draft.amount,
+          bidDueAt: null,
+          preBidWalkAt: null,
+          location: site || draft.address.city || "Address TBD",
+          projectType: existing?.projectType || projectTypeForMarket("residential"),
+          market: existing?.market || "residential",
+          deliveryMethod: existing?.deliveryMethod || "fixed_price",
+          estimator: ownerName,
+          winProbability: STAGE_PROBABILITY[stage],
+          nextStep: draft.nextStep,
+          createdAt: existing?.createdAt || draft.createdAt,
+          lostReason: draft.lostReason || undefined,
+          ownerStaffId: draft.ownerStaffId,
+          originatorStaffId: draft.ownerStaffId,
+          leadSource: draft.leadSource,
+          referralContactId: existing?.referralContactId ?? null,
+          street: draft.address.street,
+          city: draft.address.city,
+          state: draft.address.state,
+          postalCode: draft.address.postalCode,
+          notes: draft.notes,
+          importedAt: existing?.importedAt || importedAt,
+          externalSource: HUBSPOT_SOURCE,
+          externalId: draft.recordId || undefined,
+        };
+
+        const existingJob = existing ? jobsByOpportunity.get(existing.id) : undefined;
+        const closeYmd = draft.closeDate;
+        const createdYmd = draft.createdAt.slice(0, 10);
+        const finished = draft.column === "complete";
+        const started = draft.column === "in_progress" || draft.column === "punch" || finished;
+        const base = fillJobRecord(
+          jobDraftFromOpportunity(opportunity, {
+            id: existingJob?.id ?? crypto.randomUUID(),
+            ownerStaffId: draft.ownerStaffId,
+            projectManager: ownerName,
+          }),
+          opportunity,
+        );
+        const job: Job = {
+          ...base,
+          ...(existingJob
+            ? {
+                customFields: existingJob.customFields,
+                primaryPhotoId: existingJob.primaryPhotoId,
+                lat: existingJob.lat,
+                lng: existingJob.lng,
+                geocodedAt: existingJob.geocodedAt,
+                geocodeQuery: existingJob.geocodeQuery,
+                trades: existingJob.trades,
+                subcontractorIds: existingJob.subcontractorIds,
+                relatedContactIds: existingJob.relatedContactIds,
+                assigned: existingJob.assigned,
+                superintendent: existingJob.superintendent,
+              }
+            : {}),
+          status: draft.status,
+          contractValue: draft.amount,
+          startDate: started ? closeYmd || createdYmd : createdYmd,
+          substantialCompletion: finished ? closeYmd || createdYmd : null,
+          tags: draft.tags.length ? draft.tags : base.tags,
+          importedAt: existingJob?.importedAt || importedAt,
+          externalSource: HUBSPOT_SOURCE,
+          externalId: draft.recordId || undefined,
+        };
+
+        jobCreatedAt.set(job.id, opportunity.createdAt);
+        if (existing) {
+          opportunityUpdates.push({ id: existing.id, next: opportunity });
+          if (existingJob) jobUpdates.push({ id: existingJob.id, next: job });
+          else newJobs.push(job);
+          result.updated += 1;
+        } else {
+          newOpportunities.push(opportunity);
+          newJobs.push(job);
+          result.created += 1;
+        }
+        activityRows.push({
+          entityId: job.id,
+          body: [
+            `Imported from HubSpot${draft.recordId ? ` (record ${draft.recordId})` : ""}.`,
+            `Stage “${draft.stageLabel || "blank"}” → ${WORK_COLUMN_LABELS[draft.column]}.`,
+            `Owner ${draft.ownerLabel ? `“${draft.ownerLabel}”` : "blank"} → ${ownerName}.`,
+            draft.sourceLabel ? `Seed “${draft.sourceLabel}” → ${leadSourceLabel(draft.leadSource) || "none"}.` : "",
+          ]
+            .filter(Boolean)
+            .join(" "),
+        });
+      }
+
+      const total = newContacts.length + newOpportunities.length + newJobs.length + activityRows.length + 1;
+      let done = 0;
+      const tick = (count: number) => {
+        done += count;
+        options?.onProgress?.(Math.min(done, total), total);
+      };
+
+      const applyState = (activities: Activity[]) => {
+        setState((prev) => {
+          const contacts = new Map(prev.contacts.map((item) => [item.id, item]));
+          for (const [id, fill] of contactFills) {
+            const current = contacts.get(id);
+            if (current) contacts.set(id, { ...current, ...fill });
+          }
+          for (const contact of newContacts) contacts.set(contact.id, contact);
+          const opportunities = new Map(prev.opportunities.map((item) => [item.id, item]));
+          for (const change of opportunityUpdates) opportunities.set(change.id, change.next);
+          for (const item of newOpportunities) opportunities.set(item.id, item);
+          const jobs = new Map(prev.jobs.map((item) => [item.id, item]));
+          for (const change of jobUpdates) jobs.set(change.id, change.next);
+          for (const item of newJobs) jobs.set(item.id, item);
+          return {
+            ...prev,
+            contacts: [...contacts.values()],
+            opportunities: [...opportunities.values()],
+            jobs: dedupeJobsByOpportunity([...jobs.values()]),
+            activities: [...activities, ...prev.activities],
+          };
+        });
+      };
+
+      const auditSummary = [
+        `Imported ${result.created + result.updated} HubSpot deal${result.created + result.updated === 1 ? "" : "s"}`,
+        result.updated ? `${result.updated} updated` : "",
+        result.contactsCreated ? `${result.contactsCreated} new contact${result.contactsCreated === 1 ? "" : "s"}` : "",
+        result.contactsMatched ? `${result.contactsMatched} matched` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+      const supabase = maybeClient();
+      if (!supabase) {
+        const activities: Activity[] = activityRows.map((row) => ({
+          id: crypto.randomUUID(),
+          entityType: "job",
+          entityId: row.entityId,
+          type: "audit",
+          body: row.body,
+          createdAt: importedAt,
+          author: user.name,
+        }));
+        applyState(activities);
+        void recordCompanyAudit({
+          entityType: "company_settings",
+          entityId: user.companyId,
+          action: "updated",
+          summary: auditSummary,
+        });
+        tick(total);
+        return result;
+      }
+
+      // Fail before anything is written when the import migration has not run.
+      const preflight = await supabase.from("opportunities").select("id").not("imported_at", "is", null).limit(1);
+      if (preflight.error) {
+        const message = isMissingCrmImport(preflight.error)
+          ? missingCrmImportMessage()
+          : preflight.error.message || "Could not reach the book.";
+        toast.error(message);
+        throw new Error(message);
+      }
+
+      const chunkSize = 80;
+      const fail = (error: { message?: string; code?: string } | null, fallback: string): never => {
+        const message = isMissingCrmImport(error)
+          ? missingCrmImportMessage()
+          : isInvalidEnumValue(error)
+            ? missingResidentialEnumsMessage()
+            : error?.message || fallback;
+        toast.error(message);
+        throw new Error(message);
+      };
+
+      for (let i = 0; i < newContacts.length; i += chunkSize) {
+        const chunk = newContacts.slice(i, i + chunkSize);
+        const { error } = await supabase.from("contacts").insert(
+          chunk.map((contact) => ({
+            id: contact.id,
+            company_id: user.companyId,
+            client_id: null,
+            name: contact.name,
+            title: contact.title,
+            email: contact.email,
+            phone: contact.phone,
+            owner_staff_id: contact.ownerStaffId || null,
+            is_referral_partner: false,
+            listing_watch_url: "",
+            listing_watch_enabled: false,
+            imported_at: importedAt,
+            external_source: HUBSPOT_SOURCE,
+          })),
+        );
+        if (error) fail(error, "Could not add the imported contacts.");
+        tick(chunk.length);
+      }
+      for (const [id, fill] of contactFills) {
+        const { error } = await supabase.from("contacts").update(contactPatch(fill)).eq("id", id);
+        if (error) fail(error, "Could not update a matched contact.");
+      }
+
+      const opportunityRow = (opportunity: Opportunity) => ({
+        id: opportunity.id,
+        company_id: user.companyId,
+        name: opportunity.name,
+        client_id: null,
+        primary_contact_id: opportunity.primaryContactId || null,
+        stage: opportunity.stage,
+        value: opportunity.value,
+        bid_due_at: null,
+        pre_bid_walk_at: null,
+        location: opportunity.location,
+        project_type: opportunity.projectType,
+        market: opportunity.market ?? "residential",
+        delivery_method: opportunity.deliveryMethod,
+        estimator: opportunity.estimator,
+        owner_staff_id: opportunity.ownerStaffId || null,
+        originator_staff_id: opportunity.originatorStaffId || null,
+        win_probability: opportunity.winProbability,
+        next_step: opportunity.nextStep,
+        lost_reason: opportunity.lostReason ?? null,
+        code: opportunity.code,
+        lead_source: opportunity.leadSource ?? "",
+        referral_contact_id: opportunity.referralContactId ?? null,
+        street: opportunity.street ?? "",
+        city: opportunity.city ?? "",
+        state: opportunity.state ?? "",
+        postal_code: opportunity.postalCode ?? "",
+        notes: opportunity.notes ?? "",
+        created_at: opportunity.createdAt,
+        imported_at: opportunity.importedAt ?? importedAt,
+        external_source: HUBSPOT_SOURCE,
+        external_id: opportunity.externalId ?? null,
+      });
+      for (let i = 0; i < newOpportunities.length; i += chunkSize) {
+        const chunk = newOpportunities.slice(i, i + chunkSize).map(opportunityRow);
+        let { error } = await supabase.from("opportunities").insert(chunk);
+        if (error && isInvalidEnumValue(error)) {
+          const retry = await supabase.from("opportunities").insert(
+            chunk.map((row) => ({
+              ...row,
+              project_type: legacyProjectType(row.project_type),
+              delivery_method: legacyDeliveryMethod(row.delivery_method),
+            })),
+          );
+          error = retry.error;
+        }
+        if (error) fail(error, "Could not add the imported leads.");
+        tick(chunk.length);
+      }
+      for (const change of opportunityUpdates) {
+        const { id: _id, company_id: _company, created_at: _created, ...patch } = opportunityRow(change.next);
+        const { error } = await supabase.from("opportunities").update(patch).eq("id", change.id);
+        if (error) fail(error, "Could not update an imported lead.");
+      }
+
+      const jobRow = (job: Job) => ({
+        ...jobInsertPayload(job, user.companyId, { id: job.id, code: job.code }),
+        created_at: jobCreatedAt.get(job.id) ?? importedAt,
+        imported_at: job.importedAt ?? importedAt,
+        external_source: HUBSPOT_SOURCE,
+        external_id: job.externalId ?? null,
+      });
+      for (let i = 0; i < newJobs.length; i += chunkSize) {
+        const chunk = newJobs.slice(i, i + chunkSize).map(jobRow);
+        const inserted = await insertJobRowsWithFallbacks(chunk, async (rows) => {
+          const { error } = await supabase.from("jobs").insert(rows as never);
+          return { error };
+        });
+        if (inserted.error) fail(inserted.error, "Could not add the imported jobs.");
+        if (inserted.hint) toast.message(inserted.hint);
+        tick(chunk.length);
+      }
+      for (const change of jobUpdates) {
+        const { id: _id, company_id: _company, created_at: _created, ...patch } = jobRow(change.next);
+        const { error } = await supabase.from("jobs").update(patch as never).eq("id", change.id);
+        if (error) fail(error, "Could not update an imported job.");
+      }
+
+      const activities: Activity[] = [];
+      for (let i = 0; i < activityRows.length; i += chunkSize) {
+        const chunk = activityRows.slice(i, i + chunkSize);
+        const payload = chunk.map((row) => ({
+          company_id: user.companyId,
+          entity_type: "job" as const,
+          entity_id: row.entityId,
+          type: "audit" as const,
+          body: row.body,
+          author: user.name,
+        }));
+        let { data, error } = await supabase.from("activities").insert(payload).select("*");
+        if (error && isInvalidEnumValue(error)) {
+          const retry = await supabase
+            .from("activities")
+            .insert(payload.map((row) => ({ ...row, type: "stage_change" as const })))
+            .select("*");
+          data = retry.data;
+          error = retry.error;
+        }
+        // The records are already in; a missing timeline note should not fail the import.
+        if (!error && data) activities.push(...data.map(mapActivity));
+        tick(chunk.length);
+      }
+
+      applyState(activities);
+      void recordCompanyAudit({
+        entityType: "company_settings",
+        entityId: user.companyId,
+        action: "updated",
+        summary: auditSummary,
+      });
+      tick(1);
+      return result;
+    },
+    [recordCompanyAudit, state.contacts, state.jobs, state.opportunities, state.staff, user.companyId, user.name],
   );
 
   const addPriceList = useCallback(
@@ -15431,6 +15845,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateCatalogItem,
       removeCatalogItem,
       importCatalogItems,
+      importHubSpotDeals,
       addPriceList,
       updatePriceList,
       outdatePriceList,
@@ -15649,6 +16064,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       updateCatalogItem,
       removeCatalogItem,
       importCatalogItems,
+      importHubSpotDeals,
       addPriceList,
       updatePriceList,
       outdatePriceList,
