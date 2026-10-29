@@ -32,7 +32,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage, isMissingCrmImport, missingCrmImportMessage, isMissingContactImportId, missingContactImportMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage, isMissingCrmImport, missingCrmImportMessage, isMissingContactImportId, missingContactImportMessage, isMissingClientParent, missingClientParentMessage } from "@/lib/supabase/schema-errors";
 import {
   eventTimesAreInvitable,
   externalInvitees,
@@ -176,6 +176,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { findStaffForProfile, isUnsignedDemo, namesMatch, staffMemberFromProfile } from "@/lib/seats";
 import {
   jobPatch,
+  clientPatch,
   contactPatch,
   estimatePatch,
   estimateLinePatch,
@@ -298,6 +299,7 @@ import {
   type RefundRequest,
 } from "@/lib/refunds";
 import { isBusinessDevelopment } from "@/lib/bd";
+import { companyFamily, companyNameKey } from "@/lib/company-groups";
 import {
   NORTHLINE_COMPANY,
   STAGE_LABELS,
@@ -1151,6 +1153,8 @@ type CrmContextValue = CrmState & {
       isReferralPartner?: boolean;
     }
   ) => Promise<Client>;
+  /** Edit a company on file, including the parent brand it rolls up under. */
+  updateClient: (id: string, patch: Partial<Omit<Client, "id">>) => Promise<boolean>;
   addContact: (input: Omit<Contact, "id">) => Promise<Contact>;
   updateContact: (id: string, patch: Partial<Omit<Contact, "id">>) => Promise<boolean>;
   addJob: (input: Omit<JobDraft, "id" | "ownerStaffId"> & { ownerStaffId?: string }) => Promise<Job>;
@@ -4091,12 +4095,12 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       phone?: string;
       isReferralPartner?: boolean;
     }) => {
-      const { contactName, contactTitle, email, phone, isReferralPartner, ...clientInput } = input;
+      const { contactName, contactTitle, email, phone, isReferralPartner, parentClientId, ...clientInput } = input;
       const contactEmail = email?.trim() ?? "";
       const contactPhone = storedPhone(phone ?? "");
       const supabase = requireClient();
       if (!supabase) {
-        const client: Client = { ...clientInput, id: crypto.randomUUID() };
+        const client: Client = { ...clientInput, id: crypto.randomUUID(), parentClientId: parentClientId ?? null };
         const contacts = contactName
           ? [
               {
@@ -4125,11 +4129,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         .insert({
           company_id: user.companyId,
           ...clientInput,
+          // Only sent when set, so books without the parent column still add companies.
+          ...(parentClientId ? { parent_client_id: parentClientId } : {}),
         })
         .select("*")
         .single();
       if (error || !data) {
-        toast.error(error?.message ?? "Could not add the client.");
+        toast.error(
+          isMissingClientParent(error) ? missingClientParentMessage() : (error?.message ?? "Could not add the client."),
+        );
         throw error ?? new Error("Could not add the client.");
       }
       const client = mapClient(data);
@@ -4157,6 +4165,41 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return client;
     },
     [user.companyId, user.staffId]
+  );
+
+  const updateClient = useCallback(
+    async (id: string, patch: Partial<Omit<Client, "id">>) => {
+      const before = state.clients.find((client) => client.id === id);
+      if (!before) return false;
+      if (patch.parentClientId) {
+        // A company cannot sit under itself or under one of its own offices.
+        const loop = companyFamily(state.clients, id).some((client) => client.id === patch.parentClientId);
+        if (loop) {
+          toast.error("That company already rolls up under this one.");
+          return false;
+        }
+      }
+      const apply = () =>
+        setState((prev) => ({
+          ...prev,
+          clients: prev.clients.map((client) => (client.id === id ? { ...client, ...patch } : client)),
+        }));
+      const supabase = requireClient();
+      if (!supabase) {
+        apply();
+        return true;
+      }
+      const { error } = await supabase.from("clients").update(clientPatch(patch)).eq("id", id);
+      if (error) {
+        toast.error(
+          isMissingClientParent(error) ? missingClientParentMessage() : error.message || "Could not save the company.",
+        );
+        return false;
+      }
+      apply();
+      return true;
+    },
+    [state.clients],
   );
 
   const addContact = useCallback(
@@ -7564,6 +7607,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         updated: 0,
         companiesCreated: 0,
         companiesMatched: 0,
+        parentsCreated: 0,
+        companiesGrouped: 0,
         skipped: drafts.length - ready.length,
       };
       if (ready.length === 0) return result;
@@ -7572,18 +7617,62 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const contactsById = new Map(state.contacts.map((contact) => [contact.id, contact]));
       const clientsById = new Map(state.clients.map((client) => [client.id, client]));
 
-      // One company per name, even when many contacts work there.
+      // Parent brands first, so every office can point at one. A parent that is
+      // also a company in the file is created once, here, and reused below.
       const clientByKey = new Map<string, Client>();
+      const newParents: Client[] = [];
       const newClients: Client[] = [];
+      const clientParentUpdates: Array<{ id: string; parentClientId: string }> = [];
       for (const draft of ready) {
         const company = draft.company;
-        if (!company || company.type === "skip" || clientByKey.has(company.key)) continue;
+        const parent = company?.parent;
+        if (!company || company.type === "skip" || !parent || parent.onFile || clientByKey.has(parent.key)) continue;
+        const existing = parent.existingId ? clientsById.get(parent.existingId) : undefined;
+        if (existing) {
+          clientByKey.set(parent.key, existing);
+          continue;
+        }
+        const client: Client = {
+          id: crypto.randomUUID(),
+          name: parent.name,
+          type: company.type,
+          city: "",
+          state: "",
+          notes: "",
+          parentClientId: null,
+        };
+        clientByKey.set(parent.key, client);
+        newParents.push(client);
+        result.parentsCreated += 1;
+      }
+
+      // One company per name, even when many contacts work there.
+      const parentIdFor = (company: NonNullable<HubSpotContactDraft["company"]>) => {
+        const parent = company.parent;
+        if (!parent || parent.onFile || parent.key === company.key) return null;
+        return clientByKey.get(parent.key)?.id ?? null;
+      };
+      for (const draft of ready) {
+        const company = draft.company;
+        if (!company || company.type === "skip") continue;
+        if (clientByKey.has(company.key)) {
+          // Already placed as a parent above; it is the brand itself, so it has no parent of its own.
+          continue;
+        }
         const existing = company.existingId ? clientsById.get(company.existingId) : undefined;
         if (existing) {
           clientByKey.set(company.key, existing);
           result.companiesMatched += 1;
+          const parentId = parentIdFor(company);
+          if (parentId && !existing.parentClientId && parentId !== existing.id) {
+            clientParentUpdates.push({ id: existing.id, parentClientId: parentId });
+            result.companiesGrouped += 1;
+          } else if (existing.parentClientId) {
+            result.companiesGrouped += 1;
+          }
           continue;
         }
+        const parentId = parentIdFor(company);
         const client: Client = {
           id: crypto.randomUUID(),
           name: company.name,
@@ -7591,10 +7680,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           city: "",
           state: "",
           notes: "",
+          parentClientId: parentId,
         };
+        if (parentId) result.companiesGrouped += 1;
         clientByKey.set(company.key, client);
         newClients.push(client);
         result.companiesCreated += 1;
+      }
+      // A parent created above that is also a company in the file counts as a company, not a parent.
+      for (const parent of newParents) {
+        const alsoCompany = ready.some((draft) => draft.company && draft.company.type !== "skip" && draft.company.key === companyNameKey(parent.name));
+        if (alsoCompany) {
+          result.parentsCreated -= 1;
+          result.companiesCreated += 1;
+        }
       }
 
       // One contact per person, even when the file lists them twice.
@@ -7642,7 +7741,8 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         result.created += 1;
       }
 
-      const total = newClients.length + newContacts.length + contactUpdates.length + 1;
+      const total =
+        newParents.length + newClients.length + clientParentUpdates.length + newContacts.length + contactUpdates.length + 1;
       let done = 0;
       const tick = (count: number) => {
         done += count;
@@ -7652,7 +7752,11 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const applyState = () => {
         setState((prev) => {
           const clients = new Map(prev.clients.map((item) => [item.id, item]));
-          for (const client of newClients) clients.set(client.id, client);
+          for (const client of [...newParents, ...newClients]) clients.set(client.id, client);
+          for (const change of clientParentUpdates) {
+            const current = clients.get(change.id);
+            if (current) clients.set(change.id, { ...current, parentClientId: change.parentClientId });
+          }
           const contacts = new Map(prev.contacts.map((item) => [item.id, item]));
           for (const change of contactUpdates) {
             const current = contacts.get(change.id);
@@ -7671,6 +7775,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         result.updated ? `${result.updated} updated` : "",
         partners ? `${partners} referral partner${partners === 1 ? "" : "s"}` : "",
         result.companiesCreated ? `${result.companiesCreated} new compan${result.companiesCreated === 1 ? "y" : "ies"}` : "",
+        result.parentsCreated ? `${result.parentsCreated} parent compan${result.parentsCreated === 1 ? "y" : "ies"}` : "",
       ]
         .filter(Boolean)
         .join(" · ");
@@ -7699,6 +7804,18 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         toast.error(message);
         throw new Error(message);
       }
+      const usesParents =
+        clientParentUpdates.length > 0 || newClients.some((client) => client.parentClientId);
+      if (usesParents) {
+        const parentCheck = await supabase.from("clients").select("id").not("parent_client_id", "is", null).limit(1);
+        if (parentCheck.error) {
+          const message = isMissingClientParent(parentCheck.error)
+            ? missingClientParentMessage()
+            : parentCheck.error.message || "Could not reach the book.";
+          toast.error(message);
+          throw new Error(message);
+        }
+      }
 
       const chunkSize = 80;
       const fail = (error: { message?: string; code?: string } | null, fallback: string): never => {
@@ -7706,33 +7823,50 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           ? missingContactImportMessage()
           : isMissingCrmImport(error)
             ? missingCrmImportMessage()
-            : error?.message || fallback;
+            : isMissingClientParent(error)
+              ? missingClientParentMessage()
+              : error?.message || fallback;
         toast.error(message);
         throw new Error(message);
       };
 
-      for (let i = 0; i < newClients.length; i += chunkSize) {
-        const chunk = newClients.slice(i, i + chunkSize).map((client) => ({
-          id: client.id,
-          company_id: user.companyId,
-          name: client.name,
-          type: client.type,
-          city: client.city,
-          state: client.state,
-          notes: client.notes,
-        }));
-        let { error } = await supabase.from("clients").insert(chunk);
-        if (error && isInvalidEnumValue(error)) {
-          // Older books do not have the realtor / insurance / trade partner company types yet.
-          const retry = await supabase.from("clients").insert(chunk.map((row) => ({ ...row, type: "owner" as const })));
-          error = retry.error;
-          if (!error) {
-            for (const client of newClients) client.type = "owner";
-            toast.message("Company types were saved as Owner / company; run the latest bootstrap to keep realtor and adjuster types.");
+      // Parents go in before the offices that reference them.
+      const insertClients = async (clients: Client[]) => {
+        for (let i = 0; i < clients.length; i += chunkSize) {
+          const slice = clients.slice(i, i + chunkSize);
+          const chunk = slice.map((client) => ({
+            id: client.id,
+            company_id: user.companyId,
+            name: client.name,
+            type: client.type,
+            city: client.city,
+            state: client.state,
+            notes: client.notes,
+            ...(client.parentClientId ? { parent_client_id: client.parentClientId } : {}),
+          }));
+          let { error } = await supabase.from("clients").insert(chunk);
+          if (error && isInvalidEnumValue(error)) {
+            // Older books do not have the realtor / insurance / trade partner company types yet.
+            const retry = await supabase.from("clients").insert(chunk.map((row) => ({ ...row, type: "owner" as const })));
+            error = retry.error;
+            if (!error) {
+              for (const client of slice) client.type = "owner";
+              toast.message("Company types were saved as Owner / company; run the latest bootstrap to keep realtor and adjuster types.");
+            }
           }
+          if (error) fail(error, "Could not add the imported companies.");
+          tick(chunk.length);
         }
-        if (error) fail(error, "Could not add the imported companies.");
-        tick(chunk.length);
+      };
+      await insertClients(newParents);
+      await insertClients(newClients);
+      for (const change of clientParentUpdates) {
+        const { error } = await supabase
+          .from("clients")
+          .update({ parent_client_id: change.parentClientId })
+          .eq("id", change.id);
+        if (error) fail(error, "Could not group a company under its parent.");
+        tick(1);
       }
 
       for (let i = 0; i < newContacts.length; i += chunkSize) {
@@ -16040,6 +16174,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       restoreJob,
       addOpportunity,
       addClient,
+      updateClient,
       addContact,
       updateContact,
       addJob,
@@ -16260,6 +16395,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       restoreJob,
       addOpportunity,
       addClient,
+      updateClient,
       addContact,
       updateContact,
       addJob,

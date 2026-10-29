@@ -1,5 +1,6 @@
 import { hasBusinessDevelopmentSeat } from "@/lib/bd";
 import { parseDelimited } from "@/lib/catalog-csv";
+import { companyNameKey, suggestCompanyGroups } from "@/lib/company-groups";
 import {
   HUBSPOT_SOURCE,
   detectHubSpotColumns,
@@ -183,6 +184,13 @@ export type HubSpotContactsMapping = {
   leadStatuses: Record<string, boolean>;
   /** Associated Company text → company type (or skip to leave the contact without a company). */
   companies: Record<string, HubSpotCompanyTarget>;
+  /**
+   * Associated Company text → the parent company it rolls up under ("" for
+   * none). "Keller Williams Realty" → "Keller Williams", every eXp office →
+   * "eXp Realty". The parent is created on file when it is not there yet, so
+   * ROI can be tracked for the whole business.
+   */
+  companyParents: Record<string, string>;
 };
 
 const COMPANY_TYPE_GUESSES: Array<{ test: RegExp; type: ClientType }> = [
@@ -232,6 +240,7 @@ export function defaultHubSpotContactsMapping(
   parsed: HubSpotContactsParsed,
   staff: StaffMember[],
   fallbackOwnerId: string,
+  clients: Client[] = [],
 ): HubSpotContactsMapping {
   const owners: Record<string, string> = {};
   for (const owner of parsed.owners) owners[owner.value] = guessOwnerStaffId(owner.value, staff);
@@ -239,7 +248,32 @@ export function defaultHubSpotContactsMapping(
   for (const status of parsed.leadStatuses) leadStatuses[status.value] = true;
   const companies: Record<string, HubSpotCompanyTarget> = {};
   for (const company of parsed.companies) companies[company.value] = guessCompanyType(company.value);
-  return { owners, defaultOwnerStaffId: fallbackOwnerId, referralPartner: true, leadStatuses, companies };
+  const companyParents = suggestHubSpotCompanyParents(parsed, clients);
+  return { owners, defaultOwnerStaffId: fallbackOwnerId, referralPartner: true, leadStatuses, companies, companyParents };
+}
+
+/** Pre-fill "Group under" for every Associated Company from the brand it looks like. */
+export function suggestHubSpotCompanyParents(parsed: HubSpotContactsParsed, clients: Client[] = []) {
+  const groups = suggestCompanyGroups(
+    parsed.companies.map((company) => company.value),
+    clients,
+  );
+  const companyParents: Record<string, string> = {};
+  for (const company of parsed.companies) companyParents[company.value] = groups.get(company.value)?.parentName ?? "";
+  return companyParents;
+}
+
+/** Distinct parent names in play, with how many companies roll up under each. */
+export function hubspotCompanyParentOptions(mapping: Pick<HubSpotContactsMapping, "companyParents">) {
+  const counts = new Map<string, number>();
+  for (const parent of Object.values(mapping.companyParents)) {
+    const name = parent.trim();
+    if (!name) continue;
+    counts.set(name, (counts.get(name) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name));
 }
 
 // ---------------------------------------------------------------------------
@@ -250,6 +284,16 @@ export type HubSpotContactMatch = "record" | "phone" | "email" | null;
 export const HUBSPOT_PARTNER_TITLE = "Referral partner";
 export const HUBSPOT_HOMEOWNER_TITLE = "Homeowner";
 
+export type HubSpotContactCompanyParent = {
+  /** Same shape of key as the company's, so a parent that is also a row in the file is one company. */
+  key: string;
+  name: string;
+  /** Parent already on file with this name. */
+  existingId: string | null;
+  /** True when the company is already on file under this parent, so the import leaves it alone. */
+  onFile: boolean;
+};
+
 export type HubSpotContactCompany = {
   /** Rows in the same file that name this company share this key. */
   key: string;
@@ -258,6 +302,8 @@ export type HubSpotContactCompany = {
   type: HubSpotCompanyTarget;
   /** Company already on file with this name. */
   existingId: string | null;
+  /** The parent brand this company rolls up under, if any. */
+  parent: HubSpotContactCompanyParent | null;
 };
 
 export type HubSpotContactDraft = {
@@ -300,6 +346,10 @@ export type HubSpotContactsImportResult = {
   updated: number;
   companiesCreated: number;
   companiesMatched: number;
+  /** Parent companies added so offices could roll up under them. */
+  parentsCreated: number;
+  /** Companies (new or already on file) that now point at a parent. */
+  companiesGrouped: number;
   skipped: number;
 };
 
@@ -322,9 +372,7 @@ function emailKey(value: string) {
   return value.trim().toLowerCase();
 }
 
-function companyKey(name: string) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
+const companyKey = companyNameKey;
 
 function splitFullName(value: string) {
   const parts = value.split(" ").filter(Boolean);
@@ -352,6 +400,7 @@ export function applyHubSpotContactsMapping(
     const email = emailKey(contact.email);
     if (email && !contactsByEmail.has(email)) contactsByEmail.set(email, contact);
   }
+  const clientsById = new Map(context.clients.map((client) => [client.id, client]));
   const clientsByKey = new Map<string, Client>();
   for (const client of context.clients) {
     const key = companyKey(client.name);
@@ -461,12 +510,27 @@ export function applyHubSpotContactsMapping(
     if (companyName) {
       const target = mapping.companies[companyName] ?? guessCompanyType(companyName);
       const existingClient = clientsByKey.get(companyKey(companyName));
+      let parent: HubSpotContactCompanyParent | null = null;
+      const onFileParent = existingClient?.parentClientId ? clientsById.get(existingClient.parentClientId) : undefined;
+      const parentName = (mapping.companyParents?.[companyName] ?? "").replace(/\s+/g, " ").trim();
+      if (onFileParent) {
+        parent = { key: companyKey(onFileParent.name), name: onFileParent.name, existingId: onFileParent.id, onFile: true };
+      } else if (parentName && companyKey(parentName) !== companyKey(companyName)) {
+        const existingParent = clientsByKey.get(companyKey(parentName));
+        parent = {
+          key: companyKey(parentName),
+          name: existingParent?.name ?? parentName,
+          existingId: existingParent?.id ?? null,
+          onFile: false,
+        };
+      }
       company = {
         key: companyKey(companyName),
         name: existingClient?.name ?? companyName,
         hubspotId: (values.companyId ?? "").trim(),
         type: target,
         existingId: existingClient?.id ?? null,
+        parent,
       };
       if (existing?.clientId && existingClient && existing.clientId !== existingClient.id) {
         warnings.push("Already linked to a different company; that link is kept.");
@@ -570,8 +634,14 @@ export type HubSpotContactsSummary = {
   referralPartners: number;
   newCompanies: number;
   matchedCompanies: number;
+  /** Parent companies that will be added so offices can roll up under them. */
+  newParents: number;
+  /** Companies that will sit under a parent after the import. */
+  groupedCompanies: number;
   byOwner: Array<{ staffId: string; name: string; count: number; partners: number }>;
   byLeadStatus: Array<{ status: string; count: number }>;
+  /** Each parent with the companies under it, biggest first. */
+  byParent: Array<{ key: string; name: string; existingId: string | null; companies: string[]; contacts: number }>;
 };
 
 export function isReadyHubSpotContactDraft(draft: HubSpotContactDraft) {
@@ -583,16 +653,35 @@ export function summarizeHubSpotContactDrafts(drafts: HubSpotContactDraft[]): Hu
   const byOwner = new Map<string, { name: string; count: number; partners: number }>();
   const byLeadStatus = new Map<string, number>();
   const companies = new Map<string, boolean>();
+  const parents = new Map<string, { name: string; existingId: string | null; companies: Set<string>; contacts: number }>();
   for (const draft of ready) {
     const owner = byOwner.get(draft.ownerStaffId) ?? { name: draft.ownerName, count: 0, partners: 0 };
     owner.count += 1;
     if (draft.isReferralPartner) owner.partners += 1;
     byOwner.set(draft.ownerStaffId, owner);
     byLeadStatus.set(draft.leadStatus, (byLeadStatus.get(draft.leadStatus) ?? 0) + 1);
-    if (draft.company && draft.company.type !== "skip" && !companies.has(draft.company.key)) {
-      companies.set(draft.company.key, Boolean(draft.company.existingId));
+    if (draft.company && draft.company.type !== "skip") {
+      if (!companies.has(draft.company.key)) companies.set(draft.company.key, Boolean(draft.company.existingId));
+      const parent = draft.company.parent;
+      if (parent) {
+        const entry = parents.get(parent.key) ?? { name: parent.name, existingId: parent.existingId, companies: new Set<string>(), contacts: 0 };
+        entry.companies.add(draft.company.name);
+        entry.contacts += 1;
+        parents.set(parent.key, entry);
+      }
     }
   }
+  const byParent = [...parents.entries()]
+    .map(([key, entry]) => ({
+      key,
+      name: entry.name,
+      existingId: entry.existingId,
+      companies: [...entry.companies].sort((left, right) => left.localeCompare(right)),
+      contacts: entry.contacts,
+    }))
+    .sort((left, right) => right.companies.length - left.companies.length || left.name.localeCompare(right.name));
+  // A parent that is also a company in the file is added as that company, not again as a parent.
+  const newParents = [...parents.entries()].filter(([key, entry]) => entry.existingId === null && !companies.has(key)).length;
   return {
     total: drafts.length,
     ready: ready.length,
@@ -603,6 +692,9 @@ export function summarizeHubSpotContactDrafts(drafts: HubSpotContactDraft[]): Hu
     referralPartners: ready.filter((draft) => draft.isReferralPartner).length,
     newCompanies: [...companies.values()].filter((existing) => !existing).length,
     matchedCompanies: [...companies.values()].filter((existing) => existing).length,
+    newParents,
+    groupedCompanies: byParent.reduce((sum, entry) => sum + entry.companies.length, 0),
+    byParent,
     byOwner: [...byOwner.entries()]
       .map(([staffId, entry]) => ({ staffId, ...entry }))
       .sort((left, right) => right.count - left.count || left.name.localeCompare(right.name)),

@@ -318,6 +318,7 @@ export type Database = {
           city: string;
           state: string;
           notes: string;
+          parent_client_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -328,6 +329,7 @@ export type Database = {
           city: string;
           state: string;
           notes?: string;
+          parent_client_id?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["clients"]["Insert"]>;

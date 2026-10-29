@@ -21,6 +21,7 @@ import {
   companyTargetLabel,
   defaultBdOwnerStaffId,
   defaultHubSpotContactsMapping,
+  hubspotCompanyParentOptions,
   hubspotContactsSkippedCsv,
   isReadyHubSpotContactDraft,
   overrideHubSpotContactDraft,
@@ -35,7 +36,8 @@ import {
   type HubSpotContactsMapping,
   type HubSpotContactsParsed,
 } from "@/lib/hubspot-contacts-import";
-import { CLIENT_TYPE_LABELS, type StaffMember } from "@/lib/types";
+import { companyNameKey } from "@/lib/company-groups";
+import { CLIENT_TYPE_LABELS, type Client, type StaffMember } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { companyLeadAssignees, staffAssignmentLabel } from "@/lib/visibility";
 
@@ -148,7 +150,7 @@ export function HubSpotContactsImportWizard() {
         }
         setParsed(next);
         setFileName(file.name);
-        setMapping(defaultHubSpotContactsMapping(next, crm.book.staff, fallbackOwnerId));
+        setMapping(defaultHubSpotContactsMapping(next, crm.book.staff, fallbackOwnerId, crm.book.clients));
         setOverrides({});
         setResult(null);
         setProgress(null);
@@ -159,7 +161,7 @@ export function HubSpotContactsImportWizard() {
         if (fileRef.current) fileRef.current.value = "";
       }
     },
-    [crm.book.staff, fallbackOwnerId],
+    [crm.book.clients, crm.book.staff, fallbackOwnerId],
   );
 
   function reset() {
@@ -227,6 +229,7 @@ export function HubSpotContactsImportWizard() {
           parsed={parsed}
           mapping={mapping}
           people={people}
+          clients={crm.book.clients}
           onChange={setMapping}
           onBack={() => setStep("upload")}
           onNext={() => setStep("verify")}
@@ -439,6 +442,12 @@ function UploadStep({
             is reused.
           </li>
           <li>
+            <span className="font-medium text-foreground">Parent companies.</span> Offices of one business roll up under
+            a parent company — Keller Williams and Keller Williams Realty under Keller Williams, every eXp office under
+            eXp Realty — so pipeline, jobs, and referred leads read together and ROI can be tracked for the whole
+            business. The parent is created for you when it is not on file yet; you pick or change it on Map.
+          </li>
+          <li>
             <span className="font-medium text-foreground">Quiet and repeatable.</span> No emails, texts, tasks, or
             automations fire. Record ID is remembered, so uploading the same export later updates people rather than
             duplicating them.
@@ -462,6 +471,7 @@ function MapStep({
   parsed,
   mapping,
   people,
+  clients,
   onChange,
   onBack,
   onNext,
@@ -469,6 +479,7 @@ function MapStep({
   parsed: HubSpotContactsParsed;
   mapping: HubSpotContactsMapping;
   people: StaffMember[];
+  clients: Client[];
   onChange: (mapping: HubSpotContactsMapping) => void;
   onBack: () => void;
   onNext: () => void;
@@ -476,6 +487,23 @@ function MapStep({
   const unmatchedOwners = parsed.owners.filter((owner) => !mapping.owners[owner.value]).length;
   const includedStatuses = parsed.leadStatuses.filter((status) => mapping.leadStatuses[status.value] !== false).length;
   const linkedCompanies = parsed.companies.filter((company) => mapping.companies[company.value] !== "skip").length;
+  const parentOptions = hubspotCompanyParentOptions(mapping);
+  const clientKeys = useMemo(() => new Set(clients.map((client) => companyNameKey(client.name))), [clients]);
+  const groupedCompanies = parsed.companies.filter((company) => {
+    const parent = (mapping.companyParents[company.value] ?? "").trim();
+    return parent && companyNameKey(parent) !== companyNameKey(company.value) && mapping.companies[company.value] !== "skip";
+  }).length;
+  const newParents = parentOptions.filter((option) => !clientKeys.has(companyNameKey(option.name))).length;
+  /** Companies in the file that other rows roll up under, so the row can say so instead of offering a parent. */
+  const parentKeysInFile = useMemo(() => {
+    const keys = new Map<string, number>();
+    for (const [company, parent] of Object.entries(mapping.companyParents)) {
+      const key = companyNameKey(parent.trim());
+      if (!key || key === companyNameKey(company)) continue;
+      keys.set(key, (keys.get(key) ?? 0) + 1);
+    }
+    return keys;
+  }, [mapping.companyParents]);
   const bdSeats = people.filter((member) => hasBusinessDevelopmentSeat(member));
   const defaultOwner = people.find((member) => member.id === mapping.defaultOwnerStaffId);
   const defaultIsBd = Boolean(defaultOwner && hasBusinessDevelopmentSeat(defaultOwner));
@@ -614,42 +642,93 @@ function MapStep({
           title="Associated companies → companies on file"
           description={
             parsed.companies.length
-              ? `${linkedCompanies} of ${parsed.companies.length} will be linked. Pick what kind of company each one is, or leave it unlinked.`
+              ? `${linkedCompanies} of ${parsed.companies.length} will be linked. Pick what kind of company each one is, or leave it unlinked.${
+                  groupedCompanies
+                    ? ` ${groupedCompanies} roll${groupedCompanies === 1 ? "s" : ""} up under ${parentOptions.length} parent compan${parentOptions.length === 1 ? "y" : "ies"}${
+                        newParents ? ` (${newParents} new)` : ""
+                      }.`
+                    : ""
+                }`
               : "No company column in this file."
+          }
+          actions={
+            parsed.companies.length && groupedCompanies ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  const cleared: Record<string, string> = {};
+                  for (const company of parsed.companies) cleared[company.value] = "";
+                  onChange({ ...mapping, companyParents: cleared });
+                }}
+              >
+                Clear all parents
+              </Button>
+            ) : null
           }
         />
         {parsed.companies.length === 0 ? (
           <p className="p-5 text-sm text-muted-foreground">Contacts come in without a company.</p>
         ) : (
-          <MappingTable
-            headers={["HubSpot company", "Contacts", "Company type"]}
-            rows={parsed.companies.map((company) => ({
-              key: company.value,
-              label: company.value,
-              sub: company.hubspotId ? `HubSpot company ${company.hubspotId}` : undefined,
-              count: company.count,
-              tone: mapping.companies[company.value] === "skip" ? "muted" : undefined,
-              control: (
-                <select
-                  className={selectClass}
-                  aria-label={`Company type for ${company.value}`}
-                  value={mapping.companies[company.value] ?? "owner"}
-                  onChange={(event) =>
-                    onChange({
-                      ...mapping,
-                      companies: { ...mapping.companies, [company.value]: event.target.value as HubSpotCompanyTarget },
-                    })
-                  }
-                >
-                  {HUBSPOT_COMPANY_TARGETS.map((target) => (
-                    <option key={target} value={target}>
-                      {companyTargetLabel(target)}
-                    </option>
-                  ))}
-                </select>
-              ),
-            }))}
-          />
+          <>
+            <p className="border-b border-[#f0ece8] px-5 py-3 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Group under</span> puts offices of one business under a parent
+              company — Keller Williams and Keller Williams Realty under Keller Williams, every eXp office under eXp Realty
+              — so pipeline, jobs, and referred leads from all of them read together on the parent’s page. Brands we
+              recognize are filled in; type a name to make a new parent, or pick one already on file.
+            </p>
+            <MappingTable
+              headers={["HubSpot company", "Contacts", "Company type", "Group under"]}
+              rows={parsed.companies.map((company) => {
+                const skip = mapping.companies[company.value] === "skip";
+                const ownKey = companyNameKey(company.value);
+                const parentOf = parentKeysInFile.get(ownKey) ?? 0;
+                return {
+                  key: company.value,
+                  label: company.value,
+                  sub: company.hubspotId ? `HubSpot company ${company.hubspotId}` : undefined,
+                  count: company.count,
+                  tone: skip ? "muted" : undefined,
+                  control: (
+                    <select
+                      className={selectClass}
+                      aria-label={`Company type for ${company.value}`}
+                      value={mapping.companies[company.value] ?? "owner"}
+                      onChange={(event) =>
+                        onChange({
+                          ...mapping,
+                          companies: { ...mapping.companies, [company.value]: event.target.value as HubSpotCompanyTarget },
+                        })
+                      }
+                    >
+                      {HUBSPOT_COMPANY_TARGETS.map((target) => (
+                        <option key={target} value={target}>
+                          {companyTargetLabel(target)}
+                        </option>
+                      ))}
+                    </select>
+                  ),
+                  extra: skip ? (
+                    <span className="text-xs text-muted-foreground">Not linked</span>
+                  ) : parentOf ? (
+                    <span className="text-xs text-muted-foreground">
+                      Parent of {parentOf} other{parentOf === 1 ? "" : "s"} in this file
+                    </span>
+                  ) : (
+                    <ParentPicker
+                      company={company.value}
+                      value={mapping.companyParents[company.value] ?? ""}
+                      options={parentOptions}
+                      clients={clients}
+                      onChange={(value) =>
+                        onChange({ ...mapping, companyParents: { ...mapping.companyParents, [company.value]: value } })
+                      }
+                    />
+                  ),
+                };
+              })}
+            />
+          </>
         )}
       </SettingsCard>
 
@@ -669,7 +748,7 @@ function MappingTable({
   headers,
   rows,
 }: {
-  headers: [string, string, string];
+  headers: [string, string, string] | [string, string, string, string];
   rows: Array<{
     key: string;
     label: string;
@@ -677,8 +756,10 @@ function MappingTable({
     count: number;
     tone?: "warn" | "muted";
     control: React.ReactNode;
+    extra?: React.ReactNode;
   }>;
 }) {
+  const extraHeader = headers[3];
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
@@ -686,7 +767,8 @@ function MappingTable({
           <tr className="border-b border-[#f0ece8] text-left text-xs uppercase tracking-wide text-muted-foreground">
             <th className="px-5 py-2 font-medium">{headers[0]}</th>
             <th className="px-3 py-2 text-right font-medium">{headers[1]}</th>
-            <th className="w-[40%] px-5 py-2 font-medium">{headers[2]}</th>
+            <th className={cn(extraHeader ? "w-[26%] px-3" : "w-[40%] px-5", "py-2 font-medium")}>{headers[2]}</th>
+            {extraHeader ? <th className="w-[30%] px-5 py-2 font-medium">{extraHeader}</th> : null}
           </tr>
         </thead>
         <tbody className="divide-y divide-[#f6f3f0]">
@@ -700,11 +782,124 @@ function MappingTable({
                 {row.sub ? <p className="text-xs text-muted-foreground">{row.sub}</p> : null}
               </td>
               <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{row.count}</td>
-              <td className="px-5 py-2">{row.control}</td>
+              <td className={cn(extraHeader ? "px-3" : "px-5", "py-2")}>{row.control}</td>
+              {extraHeader ? <td className="px-5 py-2">{row.extra}</td> : null}
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+const NEW_PARENT = "__new__";
+
+/**
+ * Pick the parent company an office rolls up under: none, a parent already
+ * chosen for another row, a company on file, or a new name typed in.
+ */
+function ParentPicker({
+  company,
+  value,
+  options,
+  clients,
+  onChange,
+}: {
+  company: string;
+  value: string;
+  options: Array<{ name: string; count: number }>;
+  clients: Client[];
+  onChange: (value: string) => void;
+}) {
+  const [typing, setTyping] = useState(false);
+  const [draft, setDraft] = useState("");
+  const ownKey = companyNameKey(company);
+  const clientKeys = useMemo(() => new Set(clients.map((client) => companyNameKey(client.name))), [clients]);
+  const optionKeys = new Set(options.map((option) => companyNameKey(option.name)));
+  const onFile = clients
+    .filter((client) => {
+      const key = companyNameKey(client.name);
+      return key !== ownKey && !optionKeys.has(key);
+    })
+    .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base" }));
+  const valueKey = companyNameKey(value);
+  const isNew = Boolean(value) && !clientKeys.has(valueKey);
+
+  function commit() {
+    const next = draft.replace(/\s+/g, " ").trim();
+    setTyping(false);
+    setDraft("");
+    if (!next || companyNameKey(next) === ownKey) return;
+    onChange(next);
+  }
+
+  if (typing) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <Input
+          autoFocus
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              commit();
+            } else if (event.key === "Escape") {
+              setTyping(false);
+              setDraft("");
+            }
+          }}
+          onBlur={commit}
+          placeholder="Parent company name"
+          aria-label={`New parent company for ${company}`}
+          className="h-8 text-sm"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <select
+        className={selectClass}
+        aria-label={`Parent company for ${company}`}
+        value={value}
+        onChange={(event) => {
+          if (event.target.value === NEW_PARENT) {
+            setDraft("");
+            setTyping(true);
+            return;
+          }
+          onChange(event.target.value);
+        }}
+      >
+        <option value="">No parent company</option>
+        {options.length > 0 ? (
+          <optgroup label="In this import">
+            {options
+              .filter((option) => companyNameKey(option.name) !== ownKey)
+              .map((option) => (
+                <option key={option.name} value={option.name}>
+                  {option.name}
+                  {clientKeys.has(companyNameKey(option.name)) ? "" : " (new)"} · {option.count}
+                </option>
+              ))}
+          </optgroup>
+        ) : null}
+        {onFile.length > 0 ? (
+          <optgroup label="On file">
+            {onFile.map((client) => (
+              <option key={client.id} value={client.name}>
+                {client.name}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
+        <option value={NEW_PARENT}>New parent company…</option>
+      </select>
+      {value ? (
+        <p className="mt-0.5 text-xs text-muted-foreground">{isNew ? "Will be added as a new company" : "Already on file"}</p>
+      ) : null}
     </div>
   );
 }
@@ -745,7 +940,7 @@ function VerifyStep({
       if (filter === "excluded" && !draft.excluded) return false;
       if (ownerFilter && draft.ownerStaffId !== ownerFilter) return false;
       if (needle) {
-        const hay = `${draft.name} ${draft.phone} ${draft.email} ${draft.company?.name ?? ""} ${draft.recordId} ${draft.leadStatus}`.toLowerCase();
+        const hay = `${draft.name} ${draft.phone} ${draft.email} ${draft.company?.name ?? ""} ${draft.company?.parent?.name ?? ""} ${draft.recordId} ${draft.leadStatus}`.toLowerCase();
         if (!hay.includes(needle)) return false;
       }
       return true;
@@ -757,13 +952,22 @@ function VerifyStep({
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-7">
         <Stat label="Ready" value={summary.ready} tone="good" />
         <Stat label="Needs a fix" value={summary.blocked} tone={summary.blocked ? "bad" : undefined} />
         <Stat label="Left out" value={summary.excluded} />
         <Stat label="Updates" value={summary.updates} hint="already in Contacts" />
         <Stat label="Referral partners" value={summary.referralPartners} hint="tracked in BD" />
         <Stat label="New companies" value={summary.newCompanies} hint={summary.matchedCompanies ? `${summary.matchedCompanies} matched` : undefined} />
+        <Stat
+          label="Parent companies"
+          value={summary.byParent.length}
+          hint={
+            summary.byParent.length
+              ? `${summary.newParents} new · ${summary.groupedCompanies} grouped`
+              : "none grouped"
+          }
+        />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
@@ -833,6 +1037,34 @@ function VerifyStep({
           </div>
         </SettingsCard>
       </div>
+
+      {summary.byParent.length > 0 ? (
+        <SettingsCard>
+          <SettingsCardHeader
+            title="Parent companies"
+            description="Offices roll up under these, so pipeline, jobs, and referred leads from every office read together on the parent’s page. Change a grouping on the Map step."
+          />
+          <ul className="divide-y divide-[#f6f3f0]">
+            {summary.byParent.map((parent) => (
+              <li key={parent.key} className="flex flex-wrap items-start justify-between gap-3 px-5 py-3 text-sm">
+                <div className="min-w-0">
+                  <p className="flex items-center gap-2 font-medium">
+                    {parent.name}
+                    <Badge variant={parent.existingId ? "secondary" : "outline"} className="font-normal">
+                      {parent.existingId ? "On file" : "New"}
+                    </Badge>
+                  </p>
+                  <p className="text-xs text-muted-foreground">{parent.companies.join(" · ")}</p>
+                </div>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {parent.companies.length} compan{parent.companies.length === 1 ? "y" : "ies"} · {parent.contacts} contact
+                  {parent.contacts === 1 ? "" : "s"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </SettingsCard>
+      ) : null}
 
       <SettingsCard>
         <SettingsCardHeader
@@ -992,6 +1224,7 @@ function VerifyRow({
             </select>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {draft.company.type === "skip" ? "Not linked" : draft.company.existingId ? "On file" : "New company"}
+              {draft.company.type !== "skip" && draft.company.parent ? ` · under ${draft.company.parent.name}` : ""}
             </p>
           </>
         ) : (
@@ -1102,11 +1335,16 @@ function ImportStep({
           </div>
         ) : (
           <>
-            <div className="grid gap-3 sm:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-5">
               <Stat label="Contacts added" value={result.created} tone="good" />
               <Stat label="Contacts updated" value={result.updated} />
               <Stat label="Companies added" value={result.companiesCreated} />
               <Stat label="Companies matched" value={result.companiesMatched} />
+              <Stat
+                label="Parent companies"
+                value={result.parentsCreated}
+                hint={result.companiesGrouped ? `${result.companiesGrouped} grouped under a parent` : "none grouped"}
+              />
             </div>
             {skipped.length > 0 ? (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[#f6f4f1] px-4 py-3 text-sm">

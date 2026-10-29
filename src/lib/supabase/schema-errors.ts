@@ -1037,6 +1037,26 @@ export function missingContactImportMessage() {
   return `Run ${CONTACT_IMPORT_SQL} in the SQL editor first. It lets imported contacts remember their HubSpot Record ID.`;
 }
 
+export const CLIENT_PARENT_SQL = "supabase/migrations/20261029180000_client_parent.sql";
+
+/** clients.parent_client_id groups offices under one parent brand. */
+export function isMissingClientParent(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("parent_client_id") &&
+    (message.includes("schema cache") ||
+      message.includes("does not exist") ||
+      message.includes("could not find") ||
+      error.code === "PGRST204" ||
+      error.code === "42703")
+  );
+}
+
+export function missingClientParentMessage() {
+  return `Run ${CLIENT_PARENT_SQL} in the SQL editor first. It lets a company roll up under a parent brand like Keller Williams or eXp Realty.`;
+}
+
 export const PHOTON_SQL = "supabase/migrations/20260930120000_photon_connections.sql";
 export const PHOTON_WEBHOOK_SQL = "supabase/migrations/20261001140000_photon_company_webhooks.sql";
 

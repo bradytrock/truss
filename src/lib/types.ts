@@ -301,6 +301,11 @@ export interface Client {
   city: string;
   state: string;
   notes: string;
+  /**
+   * The parent brand this company rolls up under, e.g. "Keller Williams Realty"
+   * sits under "Keller Williams", so ROI can be read for the whole business.
+   */
+  parentClientId?: string | null;
 }
 
 export interface Contact {

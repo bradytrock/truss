@@ -318,7 +318,19 @@ export function mapClient(row: ClientRow): Client {
     city: row.city,
     state: row.state,
     notes: row.notes,
+    parentClientId: row.parent_client_id ?? null,
   };
+}
+
+export function clientPatch(patch: Partial<Client>) {
+  const row: Database["public"]["Tables"]["clients"]["Update"] = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.type !== undefined) row.type = patch.type;
+  if (patch.city !== undefined) row.city = patch.city;
+  if (patch.state !== undefined) row.state = patch.state;
+  if (patch.notes !== undefined) row.notes = patch.notes;
+  if (patch.parentClientId !== undefined) row.parent_client_id = patch.parentClientId || null;
+  return row;
 }
 
 export function mapContact(row: ContactRow): Contact {
