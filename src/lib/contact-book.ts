@@ -106,6 +106,8 @@ export type ContactBookRow = {
   id: string;
   name: string;
   typeLine: string;
+  /** The parent brand the contact's company rolls up under, so "Keller Williams" finds every office's people. */
+  companyGroup: string;
   sourceLabel: string;
   address: string;
   phone: string;
@@ -294,6 +296,9 @@ export function buildContactBookRow(
   const client = contact.clientId
     ? book.clients.find((item) => item.id === contact.clientId)
     : undefined;
+  const parentClient = client?.parentClientId
+    ? book.clients.find((item) => item.id === client.parentClientId)
+    : undefined;
   const jobs = sortJobs(jobsForContact(contact, book.jobs));
   const opportunities = opportunitiesForContact(contact, book.opportunities);
   const estimates = estimatesForContact(contact, book.estimates, jobs, opportunities);
@@ -314,6 +319,7 @@ export function buildContactBookRow(
     id: contact.id,
     name: contact.name,
     typeLine: contactTypeLine(contact, client),
+    companyGroup: parentClient?.name ?? "",
     sourceLabel: contactSourceLabel(jobs, opportunities),
     address,
     phone: formatPhone(contact.phone),
@@ -355,7 +361,7 @@ export function contactRowMatchesQuery(row: ContactBookRow, query: string) {
   return contactMatchesQuery(
     { name: row.name, title: row.typeLine, email: row.email, phone: row.phoneRaw },
     query,
-    [row.address, row.typeLine, row.sourceLabel],
+    [row.address, row.typeLine, row.sourceLabel, row.companyGroup],
   );
 }
 

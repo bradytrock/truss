@@ -1094,7 +1094,14 @@ function ContactPanel({
                   faint={!row.address}
                   copy={row.address || undefined}
                 />
-                <FieldRow label="Company" value={company?.name || "None — homeowner / DTC"} />
+                <FieldRow
+                  label="Company"
+                  value={
+                    company
+                      ? `${company.name}${row.companyGroup ? ` · part of ${row.companyGroup}` : ""}`
+                      : "None — homeowner / DTC"
+                  }
+                />
                 <FieldRow
                   label="Book owner"
                   value={owner ? staffAssignmentLabel(owner) : "Unassigned"}

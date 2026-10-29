@@ -225,12 +225,16 @@ const partner = contact({
   title: "Realtor",
   isReferralPartner: true,
   phone: "9725550165",
+  clientId: "cl_kw_plano",
 });
 
 const rows = buildContactBook(
   {
     contacts: [past, partner, customer, lead],
-    clients: [],
+    clients: [
+      client({ id: "cl_kw", name: "Keller Williams", type: "realtor" }),
+      client({ id: "cl_kw_plano", name: "Keller Williams Plano", type: "realtor", parentClientId: "cl_kw" }),
+    ],
     jobs: [
       job({ id: "j_cust", name: "Roof replacement", code: "BJ091426-A", primaryContactId: "c_cust" }),
       job({ id: "j_past", name: "Roof replacement", code: "BJ081226-A", primaryContactId: "c_past", status: "complete" }),
@@ -277,7 +281,9 @@ assert.equal(anthony.jobs[0]?.code, "BJ091426-A");
 const chris = rows.find((row) => row.id === "c_part");
 assert.ok(chris);
 assert.equal(chris.stage, "prop");
-assert.equal(chris.typeLine, "Realtor");
+assert.equal(chris.typeLine, "Realtor · Keller Williams Plano");
+assert.equal(chris.companyGroup, "Keller Williams");
+assert.equal(anthony.companyGroup, "");
 assert.equal(chris.sourceLabel, "Referral");
 assert.match(chris.activity[0]?.title ?? "", /Proposal EST-9 sent/);
 
@@ -304,6 +310,8 @@ assert.equal(visibleContactRows(rows, "lead", "").map((row) => row.id).join(), "
 assert.equal(visibleContactRows(rows, "tasks", "").map((row) => row.id).join(), "c_cust");
 assert.equal(visibleContactRows(rows, "all", "555-0142").map((row) => row.id).join(), "c_cust");
 assert.equal(visibleContactRows(rows, "all", "flower mound").length, 2);
+// The parent brand finds people at every office under it.
+assert.equal(visibleContactRows(rows, "all", "keller williams").map((row) => row.id).join(), "c_part");
 
 const imported = parseContactCsv(`name,phone,email,title
 Sam Rogers,(469) 555-0113,sam@example.com,Homeowner
