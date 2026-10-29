@@ -6,6 +6,7 @@ import {
   defaultBdOwnerStaffId,
   defaultHubSpotContactsMapping,
   guessCompanyType,
+  hubspotCompanyParentOptions,
   hubspotContactsSkippedCsv,
   overrideHubSpotContactDraft,
   parseHubSpotContactsCsv,
@@ -280,6 +281,103 @@ assert.equal(skippedLines.length, 3);
 assert.ok(skippedLines[0].startsWith('"Line","Record ID","First Name"'));
 assert.ok(skippedLines.some((line) => line.includes("No name or email.")));
 assert.ok(skippedLines.some((line) => line.includes("Same person as line 3")));
+
+// --- parent companies -----------------------------------------------------------------
+
+const brandCsv = `First Name,Last Name,Email,Associated Company
+Amy,Hill,amy@example.com,Keller Williams
+Bo,Lane,bo@example.com,Keller Williams Realty
+Cy,Park,cy@example.com,EXP Realty LLC
+Di,Ruiz,di@example.com,eXp Realty of Texas
+Ed,Shaw,ed@example.com,Compass Real Estate
+Flo,Tran,flo@example.com,Allied Adjusters
+`;
+const brandParsed = parseHubSpotContactsCsv(brandCsv);
+const brandClients: Client[] = [
+  ...clients,
+  { id: "cl-allied", name: "Allied Adjusters", type: "insurance", city: "", state: "", notes: "" },
+];
+const brandMapping = defaultHubSpotContactsMapping(brandParsed, staff, "s-bd", brandClients);
+
+// Suggestions: the brand itself has no parent, offices point at it, known franchises are filled in.
+assert.equal(brandMapping.companyParents["Keller Williams"], "");
+assert.equal(brandMapping.companyParents["Keller Williams Realty"], "Keller Williams");
+assert.equal(brandMapping.companyParents["EXP Realty LLC"], "eXp Realty");
+assert.equal(brandMapping.companyParents["eXp Realty of Texas"], "eXp Realty");
+assert.equal(brandMapping.companyParents["Compass Real Estate"], "Compass");
+assert.equal(brandMapping.companyParents["Allied Adjusters"], "");
+assert.deepEqual(
+  hubspotCompanyParentOptions(brandMapping).map((option) => [option.name, option.count]),
+  [
+    ["eXp Realty", 2],
+    ["Compass", 1],
+    ["Keller Williams", 1],
+  ],
+);
+
+const brandDrafts = applyHubSpotContactsMapping(brandParsed, brandMapping, { staff, contacts: [], clients: brandClients });
+const [amy, bo, cy, di, ed, flo] = brandDrafts;
+// Keller Williams is a company in the file and the parent of its office; both share one key.
+assert.equal(amy.company?.parent, null);
+assert.equal(bo.company?.parent?.name, "Keller Williams");
+assert.equal(bo.company?.parent?.key, amy.company?.key);
+assert.equal(bo.company?.parent?.existingId, null);
+// A new parent that is not a row in the file.
+assert.equal(cy.company?.parent?.name, "eXp Realty");
+assert.equal(di.company?.parent?.key, cy.company?.parent?.key);
+assert.equal(ed.company?.existingId, "cl-compass");
+assert.equal(ed.company?.parent?.name, "Compass");
+assert.equal(flo.company?.parent, null);
+
+const brandSummary = summarizeHubSpotContactDrafts(brandDrafts);
+assert.equal(brandSummary.newCompanies, 4);
+assert.equal(brandSummary.matchedCompanies, 2);
+// eXp Realty and Compass are new parents; Keller Williams is added as a company, not again as a parent.
+assert.equal(brandSummary.newParents, 2);
+assert.equal(brandSummary.groupedCompanies, 4);
+assert.deepEqual(
+  brandSummary.byParent.map((parent) => [parent.name, parent.companies, parent.contacts]),
+  [
+    ["eXp Realty", ["EXP Realty LLC", "eXp Realty of Texas"], 2],
+    ["Compass", ["Compass Real Estate"], 1],
+    ["Keller Williams", ["Keller Williams Realty"], 1],
+  ],
+);
+
+// Picking a parent that is the company itself means no parent; clearing it drops the grouping.
+const selfParent = applyHubSpotContactsMapping(
+  brandParsed,
+  { ...brandMapping, companyParents: { ...brandMapping.companyParents, "Keller Williams Realty": "keller williams realty" } },
+  { staff, contacts: [], clients: brandClients },
+)[1];
+assert.equal(selfParent.company?.parent, null);
+const cleared = applyHubSpotContactsMapping(
+  brandParsed,
+  { ...brandMapping, companyParents: {} },
+  { staff, contacts: [], clients: brandClients },
+);
+assert.ok(cleared.every((draft) => draft.company?.parent === null));
+assert.equal(summarizeHubSpotContactDrafts(cleared).byParent.length, 0);
+
+// A parent already on file is reused, and a company already under a parent keeps it.
+const onFileClients: Client[] = [
+  { id: "cl-kw", name: "Keller Williams", type: "realtor", city: "", state: "", notes: "" },
+  { id: "cl-kw-plano", name: "Keller Williams Plano", type: "realtor", city: "", state: "", notes: "", parentClientId: "cl-kw" },
+];
+const onFileCsv = "First Name,Last Name,Email,Associated Company\nGus,Vale,gus@example.com,Keller Williams Plano\nHal,Wong,hal@example.com,KW Frisco\n";
+const onFileParsed = parseHubSpotContactsCsv(onFileCsv);
+const onFileMapping = defaultHubSpotContactsMapping(onFileParsed, staff, "s-bd", onFileClients);
+assert.equal(onFileMapping.companyParents["KW Frisco"], "Keller Williams");
+const [gus, hal] = applyHubSpotContactsMapping(onFileParsed, onFileMapping, { staff, contacts: [], clients: onFileClients });
+assert.equal(gus.company?.existingId, "cl-kw-plano");
+assert.equal(gus.company?.parent?.existingId, "cl-kw");
+assert.equal(gus.company?.parent?.onFile, true);
+assert.equal(hal.company?.parent?.existingId, "cl-kw");
+assert.equal(hal.company?.parent?.onFile, false);
+const onFileSummary = summarizeHubSpotContactDrafts([gus, hal]);
+assert.equal(onFileSummary.newParents, 0);
+assert.equal(onFileSummary.groupedCompanies, 2);
+assert.equal(onFileSummary.byParent[0]?.existingId, "cl-kw");
 
 // --- template ----------------------------------------------------------------------
 
