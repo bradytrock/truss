@@ -7652,11 +7652,15 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         if (!parent || parent.onFile || parent.key === company.key) return null;
         return clientByKey.get(parent.key)?.id ?? null;
       };
+      const placed = new Set<string>();
       for (const draft of ready) {
         const company = draft.company;
-        if (!company || company.type === "skip") continue;
-        if (clientByKey.has(company.key)) {
+        if (!company || company.type === "skip" || placed.has(company.key)) continue;
+        placed.add(company.key);
+        const asParent = clientByKey.get(company.key);
+        if (asParent) {
           // Already placed as a parent above; it is the brand itself, so it has no parent of its own.
+          if (clientsById.has(asParent.id)) result.companiesMatched += 1;
           continue;
         }
         const existing = company.existingId ? clientsById.get(company.existingId) : undefined;
