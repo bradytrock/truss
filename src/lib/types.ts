@@ -327,6 +327,11 @@ export interface Contact {
   isReferralPartner: boolean;
   listingWatchUrl: string;
   listingWatchEnabled: boolean;
+  /** Set when this person came in through a CRM import (HubSpot). */
+  importedAt?: string | null;
+  externalSource?: string;
+  /** The other CRM's record id, so a second upload updates instead of duplicating. */
+  externalId?: string;
 }
 
 export interface Opportunity {

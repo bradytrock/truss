@@ -1016,6 +1016,27 @@ export function missingCrmImportMessage() {
   return `Run ${CRM_IMPORT_SQL} in the SQL editor first. It adds the import columns and keeps automations off imported leads.`;
 }
 
+export const CONTACT_IMPORT_SQL = "supabase/migrations/20261029150000_contact_import_ids.sql";
+
+/** contacts.external_id is newer than the rest of the import columns. */
+export function isMissingContactImportId(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  return (
+    message.includes("external_id") &&
+    message.includes("contacts") &&
+    (message.includes("schema cache") ||
+      message.includes("does not exist") ||
+      message.includes("could not find") ||
+      error.code === "PGRST204" ||
+      error.code === "42703")
+  );
+}
+
+export function missingContactImportMessage() {
+  return `Run ${CONTACT_IMPORT_SQL} in the SQL editor first. It lets imported contacts remember their HubSpot Record ID.`;
+}
+
 export const PHOTON_SQL = "supabase/migrations/20260930120000_photon_connections.sql";
 export const PHOTON_WEBHOOK_SQL = "supabase/migrations/20261001140000_photon_company_webhooks.sql";
 

@@ -333,6 +333,9 @@ export function mapContact(row: ContactRow): Contact {
     isReferralPartner: Boolean(row.is_referral_partner),
     listingWatchUrl: row.listing_watch_url ?? "",
     listingWatchEnabled: Boolean(row.listing_watch_enabled),
+    importedAt: row.imported_at ?? null,
+    externalSource: row.external_source ?? undefined,
+    externalId: row.external_id ?? undefined,
   };
 }
 
@@ -520,6 +523,9 @@ export function contactPatch(patch: Partial<Contact>) {
   if (patch.isReferralPartner !== undefined) row.is_referral_partner = patch.isReferralPartner;
   if (patch.listingWatchUrl !== undefined) row.listing_watch_url = patch.listingWatchUrl;
   if (patch.listingWatchEnabled !== undefined) row.listing_watch_enabled = patch.listingWatchEnabled;
+  if (patch.importedAt !== undefined) row.imported_at = patch.importedAt;
+  if (patch.externalSource !== undefined) row.external_source = patch.externalSource || null;
+  if (patch.externalId !== undefined) row.external_id = patch.externalId || null;
   return row;
 }
 

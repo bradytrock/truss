@@ -131,13 +131,13 @@ export function normalizeHubSpotHeader(value: string) {
     .trim();
 }
 
-function detectColumns(headers: string[]) {
+/** Match export headers to fields. Exact aliases, in alias order, so "Client Email" wins over a generic "Email". */
+export function detectHubSpotColumns<F extends string>(headers: string[], aliases: Record<F, string[]>) {
   const normalized = headers.map(normalizeHubSpotHeader);
-  const columns: Partial<Record<HubSpotField, number>> = {};
+  const columns: Partial<Record<F, number>> = {};
   const claimed = new Set<number>();
-  // Exact aliases first, in alias order, so "Client Email" wins over a generic "Email".
-  for (const field of Object.keys(FIELD_ALIASES) as HubSpotField[]) {
-    for (const alias of FIELD_ALIASES[field]) {
+  for (const field of Object.keys(aliases) as F[]) {
+    for (const alias of aliases[field]) {
       const index = normalized.findIndex((header, at) => header === alias && !claimed.has(at));
       if (index >= 0) {
         columns[field] = index;
@@ -149,7 +149,11 @@ function detectColumns(headers: string[]) {
   return columns;
 }
 
-function tally(values: string[]) {
+function detectColumns(headers: string[]) {
+  return detectHubSpotColumns(headers, FIELD_ALIASES);
+}
+
+export function tallyHubSpotValues(values: string[]): HubSpotDistinct[] {
   const counts = new Map<string, number>();
   for (const value of values) {
     const key = value.trim();
@@ -210,12 +214,12 @@ export function parseHubSpotCsv(text: string): HubSpotParsed {
     columns: columnLabels,
     ignoredColumns,
     missingRequired,
-    pipelines: tally(rows.map((row) => row.values.pipeline ?? "")),
+    pipelines: tallyHubSpotValues(rows.map((row) => row.values.pipeline ?? "")),
     stages: [...stageCounts.entries()]
       .map(([value, entry]) => ({ value, count: entry.count, pipeline: entry.pipeline }))
       .sort((left, right) => right.count - left.count || left.value.localeCompare(right.value)),
-    owners: tally(rows.flatMap((row) => [row.values.owner ?? "", row.values.pmName ?? ""])),
-    sources: tally(rows.map((row) => row.values.source ?? "")),
+    owners: tallyHubSpotValues(rows.flatMap((row) => [row.values.owner ?? "", row.values.pmName ?? ""])),
+    sources: tallyHubSpotValues(rows.map((row) => row.values.source ?? "")),
   };
 }
 

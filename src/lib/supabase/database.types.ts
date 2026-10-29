@@ -348,6 +348,7 @@ export type Database = {
           listing_watch_enabled: boolean;
           imported_at: string | null;
           external_source: string | null;
+          external_id: string | null;
         };
         Insert: {
           id?: string;
@@ -363,6 +364,7 @@ export type Database = {
           listing_watch_enabled?: boolean;
           imported_at?: string | null;
           external_source?: string | null;
+          external_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["contacts"]["Insert"]>;
         Relationships: [];
