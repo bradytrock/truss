@@ -995,6 +995,27 @@ export function missingCompanyCamMessage() {
   return `Run ${COMPANYCAM_SQL} in the SQL editor so each company can connect its own CompanyCam account.`;
 }
 
+export const CRM_IMPORT_SQL = "supabase/migrations/20261029120000_crm_import.sql";
+
+export function isMissingCrmImport(error: { message?: string; code?: string } | null | undefined) {
+  if (!error) return false;
+  const message = (error.message ?? "").toLowerCase();
+  const mentions =
+    message.includes("imported_at") || message.includes("external_source") || message.includes("external_id");
+  return (
+    mentions &&
+    (message.includes("schema cache") ||
+      message.includes("does not exist") ||
+      message.includes("could not find") ||
+      error.code === "PGRST204" ||
+      error.code === "42703")
+  );
+}
+
+export function missingCrmImportMessage() {
+  return `Run ${CRM_IMPORT_SQL} in the SQL editor first. It adds the import columns and keeps automations off imported leads.`;
+}
+
 export const PHOTON_SQL = "supabase/migrations/20260930120000_photon_connections.sql";
 export const PHOTON_WEBHOOK_SQL = "supabase/migrations/20261001140000_photon_company_webhooks.sql";
 

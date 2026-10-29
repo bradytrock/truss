@@ -346,6 +346,8 @@ export type Database = {
           is_referral_partner: boolean;
           listing_watch_url: string;
           listing_watch_enabled: boolean;
+          imported_at: string | null;
+          external_source: string | null;
         };
         Insert: {
           id?: string;
@@ -359,6 +361,8 @@ export type Database = {
           is_referral_partner?: boolean;
           listing_watch_url?: string;
           listing_watch_enabled?: boolean;
+          imported_at?: string | null;
+          external_source?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["contacts"]["Insert"]>;
         Relationships: [];
@@ -395,6 +399,9 @@ export type Database = {
           postal_code: string;
           notes: string;
           market: string;
+          imported_at: string | null;
+          external_source: string | null;
+          external_id: string | null;
         };
         Insert: {
           id?: string;
@@ -427,6 +434,9 @@ export type Database = {
           postal_code?: string;
           notes?: string;
           market?: string;
+          imported_at?: string | null;
+          external_source?: string | null;
+          external_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["opportunities"]["Insert"]>;
         Relationships: [];
@@ -473,6 +483,9 @@ export type Database = {
           deleted_at: string | null;
           deleted_reason: string;
           deleted_by: string;
+          imported_at: string | null;
+          external_source: string | null;
+          external_id: string | null;
         };
         Insert: {
           id?: string;
@@ -514,6 +527,10 @@ export type Database = {
           deleted_at?: string | null;
           deleted_reason?: string;
           deleted_by?: string;
+          created_at?: string;
+          imported_at?: string | null;
+          external_source?: string | null;
+          external_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["jobs"]["Insert"]>;
         Relationships: [];

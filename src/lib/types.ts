@@ -359,6 +359,11 @@ export interface Opportunity {
   state?: string;
   postalCode?: string;
   notes?: string;
+  /** Set when this lead came in through a CRM import (HubSpot). Automations leave it alone. */
+  importedAt?: string | null;
+  externalSource?: string;
+  /** The other CRM's record id, so a second upload updates instead of duplicating. */
+  externalId?: string;
 }
 
 export interface JobCustomField {
@@ -413,6 +418,10 @@ export interface Job {
   deletedAt: string | null;
   deletedReason: string;
   deletedBy: string;
+  /** Set when this job came in through a CRM import (HubSpot). */
+  importedAt?: string | null;
+  externalSource?: string;
+  externalId?: string;
 }
 
 export interface Activity {

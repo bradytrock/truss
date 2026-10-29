@@ -367,6 +367,9 @@ export function mapOpportunity(row: OpportunityRow): Opportunity {
     state: row.state ?? "",
     postalCode: row.postal_code ?? "",
     notes: row.notes ?? "",
+    importedAt: row.imported_at ?? null,
+    externalSource: row.external_source ?? undefined,
+    externalId: row.external_id ?? undefined,
   };
 }
 
@@ -425,6 +428,9 @@ export function mapJob(row: JobRow): Job {
     deletedAt: row.deleted_at ?? null,
     deletedReason: row.deleted_reason ?? "",
     deletedBy: row.deleted_by ?? "",
+    importedAt: row.imported_at ?? null,
+    externalSource: row.external_source ?? undefined,
+    externalId: row.external_id ?? undefined,
   });
 }
 
