@@ -32,7 +32,7 @@ import {
 } from "@/lib/company-audit";
 import type { Database, Json } from "@/lib/supabase/database.types";
 import { retireDemoStaff, scrubNorthlineCrewFromJobs } from "@/lib/supabase/retire-demo-staff";
-import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage, isMissingCrmImport, missingCrmImportMessage } from "@/lib/supabase/schema-errors";
+import { isRequiredClientId, requiredClientIdMessage, isMissingEstimateWriter, missingEstimateWriterMessage, isMissingEstimateLinePhotos, missingEstimateLinePhotosMessage, isMissingEstimatePackages, missingEstimatePackagesMessage, isMissingEstimateTemplatePackages, missingEstimateTemplatePackagesMessage, isRestrictedEstimatePackage, restrictedEstimatePackageMessage, isMissingEstimateLumpSum, missingEstimateLumpSumMessage, isMissingEstimateMargin, missingEstimateMarginMessage, isMissingShareToken, isInvalidEnumValue, missingResidentialEnumsMessage, legacyDeliveryMethod, legacyProjectType, isMissingFinancials, missingFinancialsMessage, isMissingOriginator, missingOriginatorMessage, isMissingPrimaryContactColumn, missingPrimaryContactMessage, missingJobOverviewMessage, isMissingMarketColumn, missingMarketMessage, isMissingPrimaryPhotoColumn, missingPrimaryPhotoMessage, isMissingLogoColumn, missingLogoMessage, isMissingCompanyDocumentTermsColumns, isMissingInvoiceTermsColumn, missingDocumentTermsMessage, isMissingSignatureColumn, missingSignatureMessage, isAmbiguousSignJobId, ambiguousSignJobIdMessage, isMissingStaffPhoneColumn, missingStaffPhoneMessage, isMissingSecondSigner, missingSecondSignerMessage, isMissingOwnerSignature, missingOwnerSignatureMessage, isMissingDeletedColumn, missingDeletedColumnMessage, isMissingPhotoCreatedBy, missingPhotoCreatedByMessage, isMissingPhotoTrashcan, missingPhotoTrashcanMessage, isMissingCompanyAudit, missingCompanyAuditMessage, isUuidSyntaxError, looksLikeUuid, actorUuid, isMissingMessages, missingMessagesMessage, isMissingThreadMembers, isMissingThreadOpens, isMissingGmail, missingGmailMessage, isMissingJobFiles, missingJobFilesMessage, isMissingEstimateFiles, missingEstimateFilesMessage, isMissingInvoiceFiles, missingInvoiceFilesMessage, isMissingCompanyFiles, missingCompanyFilesMessage, isMissingSignerLinks, missingSignerLinksMessage, isMissingQbReview, missingQbReviewMessage, isMissingQbReviewMentions, missingQbReviewMentionsMessage, isMissingMaterialOrders, missingMaterialOrdersMessage, isMissingCatalogMargin, missingCatalogMarginMessage, isMissingCatalogDescription, missingCatalogDescriptionMessage, isMissingEmailSignatureColumns, missingEmailSignatureMessage, isMissingEmailTemplates, missingEmailTemplatesMessage, isMissingPriceLists, missingPriceListsMessage, missingSignatureAuditMessage, isMissingReturningClientLeads, missingReturningClientLeadsMessage, isMissingCompanySlug, isMissingCardSlug, isReservedCompanySlugError, isDuplicateCardSlug, missingBusinessCardsMessage, isMissingCardPhotoColumns, missingCardPhotoMessage, isMissingPaymentReviewColumns, missingPaymentReviewMessage, isCardSlugPrivilegeError, cardSlugPrivilegeMessage, isMissingClientPortal, missingClientPortalMessage, isMissingRealtorPortal, missingRealtorPortalMessage, isMissingTaskDeskColumns, missingTaskDeskMessage, isMissingCompanyContractTypes, isMissingEstimateContractType, missingContractTypesMessage, isMissingPaperArchive, missingPaperArchiveMessage, isMissingJobCoords, missingStormMapMessage, isMissingVendorProfiles, missingVendorProfilesMessage, isMissingForecastedExpenses, missingForecastedExpensesMessage, isMissingExpenseCategories, missingExpenseCategoriesMessage, isMissingProjectedMargin, missingProjectedMarginMessage, isMissingJobInsurance, missingJobInsuranceMessage, isMissingCommissionCloseouts, missingCommissionCloseoutsMessage, isMissingRefundRequests, missingRefundRequestsMessage, isMissingTradesColumn, missingTradesMessage, isMissingCrmImport, missingCrmImportMessage, isMissingContactImportId, missingContactImportMessage } from "@/lib/supabase/schema-errors";
 import {
   eventTimesAreInvitable,
   externalInvitees,
@@ -82,6 +82,11 @@ import {
 } from "@/lib/contract-types";
 import { matchCatalogItem, type CatalogImportDraft } from "@/lib/catalog-csv";
 import { HUBSPOT_SOURCE, isReadyHubSpotDraft, type HubSpotDealDraft, type HubSpotImportResult } from "@/lib/hubspot-import";
+import {
+  isReadyHubSpotContactDraft,
+  type HubSpotContactDraft,
+  type HubSpotContactsImportResult,
+} from "@/lib/hubspot-contacts-import";
 import {
   catalogItemDescription,
   catalogProposalUnitPrice,
@@ -1278,6 +1283,16 @@ type CrmContextValue = CrmState & {
     drafts: HubSpotDealDraft[],
     options?: { onProgress?: (done: number, total: number) => void },
   ) => Promise<HubSpotImportResult>;
+  /**
+   * Bring HubSpot contacts in as people (and the companies they work for).
+   * Every row carries the Referral partner toggle the Verify step chose, so
+   * the relationship is tracked in the owning seat's business development
+   * book. Silent: no emails, texts, tasks, or automations.
+   */
+  importHubSpotContacts: (
+    drafts: HubSpotContactDraft[],
+    options?: { onProgress?: (done: number, total: number) => void },
+  ) => Promise<HubSpotContactsImportResult>;
   addPriceList: (input: {
     name: string;
     effectiveOn: string;
@@ -7536,6 +7551,230 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       return result;
     },
     [recordCompanyAudit, state.contacts, state.jobs, state.opportunities, state.staff, user.companyId, user.name],
+  );
+
+  const importHubSpotContacts = useCallback(
+    async (
+      drafts: HubSpotContactDraft[],
+      options?: { onProgress?: (done: number, total: number) => void },
+    ): Promise<HubSpotContactsImportResult> => {
+      const ready = drafts.filter(isReadyHubSpotContactDraft);
+      const result: HubSpotContactsImportResult = {
+        created: 0,
+        updated: 0,
+        companiesCreated: 0,
+        companiesMatched: 0,
+        skipped: drafts.length - ready.length,
+      };
+      if (ready.length === 0) return result;
+
+      const importedAt = new Date().toISOString();
+      const contactsById = new Map(state.contacts.map((contact) => [contact.id, contact]));
+      const clientsById = new Map(state.clients.map((client) => [client.id, client]));
+
+      // One company per name, even when many contacts work there.
+      const clientByKey = new Map<string, Client>();
+      const newClients: Client[] = [];
+      for (const draft of ready) {
+        const company = draft.company;
+        if (!company || company.type === "skip" || clientByKey.has(company.key)) continue;
+        const existing = company.existingId ? clientsById.get(company.existingId) : undefined;
+        if (existing) {
+          clientByKey.set(company.key, existing);
+          result.companiesMatched += 1;
+          continue;
+        }
+        const client: Client = {
+          id: crypto.randomUUID(),
+          name: company.name,
+          type: company.type,
+          city: "",
+          state: "",
+          notes: "",
+        };
+        clientByKey.set(company.key, client);
+        newClients.push(client);
+        result.companiesCreated += 1;
+      }
+
+      // One contact per person, even when the file lists them twice.
+      const seenPeople = new Set<string>();
+      const newContacts: Contact[] = [];
+      const contactUpdates: Array<{ id: string; patch: Partial<Contact> }> = [];
+      for (const draft of ready) {
+        if (seenPeople.has(draft.key)) continue;
+        seenPeople.add(draft.key);
+        const client = draft.company && draft.company.type !== "skip" ? clientByKey.get(draft.company.key) : undefined;
+        const existing = draft.existingId ? contactsById.get(draft.existingId) : undefined;
+        if (existing) {
+          const keepTitle = existing.title.trim() && existing.title.trim() !== "Homeowner";
+          const patch: Partial<Contact> = {
+            name: existing.name.trim() ? existing.name : draft.name,
+            title: keepTitle ? existing.title : draft.title,
+            email: existing.email.trim() ? existing.email : draft.email,
+            phone: existing.phone.trim() ? existing.phone : draft.phone,
+            ownerStaffId: draft.ownerStaffId,
+            isReferralPartner: existing.isReferralPartner || draft.isReferralPartner,
+            clientId: existing.clientId ?? client?.id ?? null,
+            importedAt: existing.importedAt || importedAt,
+            externalSource: HUBSPOT_SOURCE,
+            externalId: draft.recordId || existing.externalId || "",
+          };
+          contactUpdates.push({ id: existing.id, patch });
+          result.updated += 1;
+          continue;
+        }
+        newContacts.push({
+          id: crypto.randomUUID(),
+          clientId: client?.id ?? null,
+          name: draft.name,
+          title: draft.title,
+          email: draft.email,
+          phone: draft.phone,
+          ownerStaffId: draft.ownerStaffId,
+          isReferralPartner: draft.isReferralPartner,
+          listingWatchUrl: "",
+          listingWatchEnabled: false,
+          importedAt,
+          externalSource: HUBSPOT_SOURCE,
+          externalId: draft.recordId || undefined,
+        });
+        result.created += 1;
+      }
+
+      const total = newClients.length + newContacts.length + contactUpdates.length + 1;
+      let done = 0;
+      const tick = (count: number) => {
+        done += count;
+        options?.onProgress?.(Math.min(done, total), total);
+      };
+
+      const applyState = () => {
+        setState((prev) => {
+          const clients = new Map(prev.clients.map((item) => [item.id, item]));
+          for (const client of newClients) clients.set(client.id, client);
+          const contacts = new Map(prev.contacts.map((item) => [item.id, item]));
+          for (const change of contactUpdates) {
+            const current = contacts.get(change.id);
+            if (current) contacts.set(change.id, { ...current, ...change.patch });
+          }
+          for (const contact of newContacts) contacts.set(contact.id, contact);
+          return { ...prev, clients: [...clients.values()], contacts: [...contacts.values()] };
+        });
+      };
+
+      const partners = [...newContacts, ...contactUpdates.map((change) => change.patch)].filter(
+        (contact) => contact.isReferralPartner,
+      ).length;
+      const auditSummary = [
+        `Imported ${result.created + result.updated} HubSpot contact${result.created + result.updated === 1 ? "" : "s"}`,
+        result.updated ? `${result.updated} updated` : "",
+        partners ? `${partners} referral partner${partners === 1 ? "" : "s"}` : "",
+        result.companiesCreated ? `${result.companiesCreated} new compan${result.companiesCreated === 1 ? "y" : "ies"}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+      const supabase = maybeClient();
+      if (!supabase) {
+        applyState();
+        void recordCompanyAudit({
+          entityType: "company_settings",
+          entityId: user.companyId,
+          action: "updated",
+          summary: auditSummary,
+        });
+        tick(total);
+        return result;
+      }
+
+      // Fail before anything is written when the import migrations have not run.
+      const preflight = await supabase.from("contacts").select("id").not("external_id", "is", null).limit(1);
+      if (preflight.error) {
+        const message = isMissingContactImportId(preflight.error)
+          ? missingContactImportMessage()
+          : isMissingCrmImport(preflight.error)
+            ? missingCrmImportMessage()
+            : preflight.error.message || "Could not reach the book.";
+        toast.error(message);
+        throw new Error(message);
+      }
+
+      const chunkSize = 80;
+      const fail = (error: { message?: string; code?: string } | null, fallback: string): never => {
+        const message = isMissingContactImportId(error)
+          ? missingContactImportMessage()
+          : isMissingCrmImport(error)
+            ? missingCrmImportMessage()
+            : error?.message || fallback;
+        toast.error(message);
+        throw new Error(message);
+      };
+
+      for (let i = 0; i < newClients.length; i += chunkSize) {
+        const chunk = newClients.slice(i, i + chunkSize).map((client) => ({
+          id: client.id,
+          company_id: user.companyId,
+          name: client.name,
+          type: client.type,
+          city: client.city,
+          state: client.state,
+          notes: client.notes,
+        }));
+        let { error } = await supabase.from("clients").insert(chunk);
+        if (error && isInvalidEnumValue(error)) {
+          // Older books do not have the realtor / insurance / trade partner company types yet.
+          const retry = await supabase.from("clients").insert(chunk.map((row) => ({ ...row, type: "owner" as const })));
+          error = retry.error;
+          if (!error) {
+            for (const client of newClients) client.type = "owner";
+            toast.message("Company types were saved as Owner / company; run the latest bootstrap to keep realtor and adjuster types.");
+          }
+        }
+        if (error) fail(error, "Could not add the imported companies.");
+        tick(chunk.length);
+      }
+
+      for (let i = 0; i < newContacts.length; i += chunkSize) {
+        const chunk = newContacts.slice(i, i + chunkSize);
+        const { error } = await supabase.from("contacts").insert(
+          chunk.map((contact) => ({
+            id: contact.id,
+            company_id: user.companyId,
+            client_id: contact.clientId,
+            name: contact.name,
+            title: contact.title,
+            email: contact.email,
+            phone: contact.phone,
+            owner_staff_id: contact.ownerStaffId || null,
+            is_referral_partner: contact.isReferralPartner,
+            listing_watch_url: "",
+            listing_watch_enabled: false,
+            imported_at: importedAt,
+            external_source: HUBSPOT_SOURCE,
+            external_id: contact.externalId ?? null,
+          })),
+        );
+        if (error) fail(error, "Could not add the imported contacts.");
+        tick(chunk.length);
+      }
+      for (const change of contactUpdates) {
+        const { error } = await supabase.from("contacts").update(contactPatch(change.patch)).eq("id", change.id);
+        if (error) fail(error, "Could not update a matched contact.");
+        tick(1);
+      }
+
+      applyState();
+      void recordCompanyAudit({
+        entityType: "company_settings",
+        entityId: user.companyId,
+        action: "updated",
+        summary: auditSummary,
+      });
+      tick(1);
+      return result;
+    },
+    [recordCompanyAudit, state.clients, state.contacts, user.companyId],
   );
 
   const addPriceList = useCallback(
@@ -15846,6 +16085,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       removeCatalogItem,
       importCatalogItems,
       importHubSpotDeals,
+      importHubSpotContacts,
       addPriceList,
       updatePriceList,
       outdatePriceList,
@@ -16065,6 +16305,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       removeCatalogItem,
       importCatalogItems,
       importHubSpotDeals,
+      importHubSpotContacts,
       addPriceList,
       updatePriceList,
       outdatePriceList,
