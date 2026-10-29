@@ -74,6 +74,15 @@ const CARDS: Connection[] = [
     admin: true,
     status: "unknown",
   },
+  {
+    id: "hubspot-contacts",
+    name: "HubSpot contacts import",
+    detail: "Bring contacts over as referral partners on a business development seat — verified row by row, with their companies.",
+    href: "/settings/integrations/hubspot-contacts",
+    mark: "HS",
+    admin: true,
+    status: "unknown",
+  },
 ];
 
 export default function IntegrationsIndexPage() {
