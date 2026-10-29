@@ -65,6 +65,15 @@ const CARDS: Connection[] = [
     mark: "QB",
     status: "unknown",
   },
+  {
+    id: "hubspot",
+    name: "HubSpot import",
+    detail: "Bring deals over as homeowners, leads, and jobs — verified row by row, with no automations firing.",
+    href: "/settings/integrations/hubspot",
+    mark: "HS",
+    admin: true,
+    status: "unknown",
+  },
 ];
 
 export default function IntegrationsIndexPage() {
