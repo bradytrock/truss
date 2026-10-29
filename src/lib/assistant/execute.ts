@@ -11,17 +11,16 @@ import { fileFromDataUrl, asBoolean, asNumber, asString, parseLocalDateTime } fr
 import { money } from "@/lib/assistant/context";
 import type { AssistantToolCall, AssistantToolResult } from "@/lib/assistant/types";
 import { toolByName } from "@/lib/assistant/tools";
+import { LEAD_SOURCES, isPickableLeadSource } from "@/lib/lead-sources";
 import { useCrm } from "@/lib/crm-store";
 import {
   EVENT_KINDS,
   EXPENSE_ACCOUNTS,
-  LEAD_SOURCES,
   PHOTO_CATEGORIES,
   type EventKind,
   type ExpenseAccount,
   type ExpenseMethod,
   type JobMarket,
-  type LeadSource,
   type PhotoCategory,
 } from "@/lib/types";
 import { canDeleteJobs, canViewProjectFinancials } from "@/lib/visibility";
@@ -165,10 +164,6 @@ function reviewOneThread(crm: Crm, thread: ReturnType<typeof inboxThreads>[numbe
     suggestedContactId: tags.contactId,
     suggestedRelatedContactIds: tags.relatedContactIds,
   };
-}
-
-function isLeadSource(value: string): value is LeadSource {
-  return (LEAD_SOURCES as readonly string[]).includes(value);
 }
 
 function isEventKind(value: string): value is EventKind {
@@ -477,7 +472,9 @@ async function runTool(
       const source = arg(args, "source");
       if (!firstName || !lastName) return fail("First and last name are required.");
       if (!phone && !email) return fail("Add a phone or email so someone can call them back.");
-      if (!isLeadSource(source)) return fail("Pick a seed (website, phone, realtor, referral, …).");
+      if (!isPickableLeadSource(source)) {
+        return fail(`Pick a seed (${LEAD_SOURCES.slice(0, 4).join(", ")}, …).`);
+      }
       const referralContactId = arg(args, "referralContactId");
       if (leadNeedsReferrer(source) && !referralContactId) {
         return fail("Realtor and referral leads need the partner who sent them.");

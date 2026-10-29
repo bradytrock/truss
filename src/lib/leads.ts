@@ -1,6 +1,6 @@
 import { phoneQueryMatches } from "@/lib/phone";
-import type { DeliveryMethod, LeadSource } from "@/lib/types";
-import { LEAD_SOURCE_LABELS, LEAD_SOURCES, LEGACY_LEAD_SOURCE_LABELS } from "@/lib/types";
+import { isLeadSource, isPickableLeadSource, LEAD_SOURCE_LABELS, LEAD_SOURCES } from "@/lib/lead-sources";
+import type { DeliveryMethod } from "@/lib/types";
 
 /** Most work is in Texas; the lead form can still change this. */
 export const DEFAULT_LEAD_STATE = "TX";
@@ -25,14 +25,19 @@ export function formatJobSite(input: {
   return [street, locality].filter(Boolean).join(", ");
 }
 
+/** Label for any stored seed, hidden ones included; unknown values print as-is. */
 export function leadSourceLabel(source: string | null | undefined) {
   if (!source) return "";
-  return LEAD_SOURCE_LABELS[source as LeadSource] ?? LEGACY_LEAD_SOURCE_LABELS[source] ?? source;
+  return isLeadSource(source) ? LEAD_SOURCE_LABELS[source] : source;
 }
 
+/**
+ * Picker choices for a record: every pickable seed, plus the record's current seed
+ * when it is hidden or unknown, so editing never silently drops it.
+ */
 export function leadSourceChoices(current?: string | null): string[] {
   const value = current?.trim() ?? "";
-  if (value && !LEAD_SOURCES.includes(value as LeadSource)) {
+  if (value && !isPickableLeadSource(value)) {
     return [value, ...LEAD_SOURCES];
   }
   return [...LEAD_SOURCES];

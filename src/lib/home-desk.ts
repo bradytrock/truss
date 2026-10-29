@@ -13,10 +13,10 @@ import { isJobCodeReviewTask, type JobCodeReviewNotice } from "@/lib/job-code";
 import { dedupeJobsByOpportunity, duplicateLeadJobs, isDeletedJob, jobAddress, jobRecordHref } from "@/lib/job-record";
 import { messagesHref } from "@/lib/job-messages";
 import { pipelinePathTotals, unweightedContractValue } from "@/lib/pipeline-path";
+import { isLeadSource } from "@/lib/lead-sources";
+import { leadSourceLabel } from "@/lib/leads";
 import { digitsOnly } from "@/lib/phone";
 import {
-  LEAD_SOURCE_LABELS,
-  LEGACY_LEAD_SOURCE_LABELS,
   isShelvedStage,
   type Activity,
   type Estimate,
@@ -949,12 +949,8 @@ function isCloseoutTask(title: string) {
 function sourceMix(opportunities: Opportunity[]) {
   const counts = new Map<string, number>();
   for (const opportunity of opportunities) {
-    const raw = opportunity.leadSource || "";
-    const label =
-      (raw && LEAD_SOURCE_LABELS[raw as keyof typeof LEAD_SOURCE_LABELS]) ||
-      LEGACY_LEAD_SOURCE_LABELS[raw] ||
-      "";
-    if (!label) continue;
+    if (!isLeadSource(opportunity.leadSource)) continue;
+    const label = leadSourceLabel(opportunity.leadSource);
     counts.set(label, (counts.get(label) ?? 0) + 1);
   }
   const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
