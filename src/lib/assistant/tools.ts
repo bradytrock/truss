@@ -1,3 +1,4 @@
+import { LEAD_SOURCES } from "@/lib/lead-sources";
 import type { StaffMember } from "@/lib/types";
 import { canDeleteJobs } from "@/lib/visibility";
 import { isBusinessDevelopment } from "@/lib/bd";
@@ -115,20 +116,7 @@ export const ASSISTANT_TOOLS: AssistantToolDef[] = [
         postalCode: str("ZIP"),
         source: {
           type: "string",
-          enum: [
-            "podium",
-            "website",
-            "google_ad",
-            "phone",
-            "angies_list",
-            "realtor",
-            "referral",
-            "sales_team",
-            "text_main_line",
-            "past_client",
-            "chatgpt",
-            "social_media",
-          ],
+          enum: [...LEAD_SOURCES],
           description: "How the lead found you (seed).",
         },
         market: { type: "string", enum: ["residential", "commercial"], description: "Default residential." },

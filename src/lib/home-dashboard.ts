@@ -8,9 +8,8 @@ import {
   wonContractAmount,
 } from "@/lib/sales-goal";
 import { jobWonAt } from "@/lib/won";
+import { leadSourceLabel } from "@/lib/leads";
 import {
-  LEAD_SOURCE_LABELS,
-  LEGACY_LEAD_SOURCE_LABELS,
   type CompanySettings,
   type Estimate,
   type EstimateLine,
@@ -28,11 +27,9 @@ export type HomeWonDeal = {
 
 function sourceLabel(raw: string) {
   if (!raw) return "Unsourced";
-  return (
-    LEAD_SOURCE_LABELS[raw as keyof typeof LEAD_SOURCE_LABELS] ??
-    LEGACY_LEAD_SOURCE_LABELS[raw] ??
-    raw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
-  );
+  const known = leadSourceLabel(raw);
+  if (known !== raw) return known;
+  return raw.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export function wonDeals(input: {
