@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCrm } from "@/lib/crm-store";
-import { formatPhone } from "@/lib/format";
+import { formatPhone, initials } from "@/lib/format";
 import { jobPaperHref } from "@/lib/job-record";
 import {
   canAddSecondHomeowner,
@@ -31,10 +31,12 @@ export function EstimateHomeowners({
   job,
   primaryId,
   disabled,
+  className,
 }: {
   job?: Job;
   primaryId?: string | null;
   disabled?: boolean;
+  className?: string;
 }) {
   const crm = useCrm();
   const [open, setOpen] = useState(false);
@@ -89,20 +91,13 @@ export function EstimateHomeowners({
   }
 
   return (
-    <section className="rounded-md border px-4 py-3">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold tracking-[0.16em] text-muted-foreground uppercase">
-            Homeowners
-          </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Pulled from the job. This proposal does not pick a different client.
-          </p>
-        </div>
+    <section className={cn("rounded-[12px] border bg-card p-4", className)}>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold">Homeowners</h2>
         {job ? (
           <Link
             href={jobPaperHref(job.id)}
-            className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
           >
             Open job
           </Link>
@@ -115,7 +110,7 @@ export function EstimateHomeowners({
             : "Attach this proposal to a job to pull the homeowner."}
         </p>
       ) : (
-        <ul className="mt-3 space-y-2">
+        <ul className="mt-3 space-y-3">
           {ordered.map((person) => (
             <HomeownerRow key={person.id} person={person} primary={person.id === primary} />
           ))}
@@ -125,7 +120,7 @@ export function EstimateHomeowners({
         <div className="mt-3">
           <Button type="button" size="sm" variant="outline" onClick={() => setOpen(true)}>
             <UserPlus data-icon="inline-start" />
-            Add second homeowner
+            Add co-signer
           </Button>
         </div>
       ) : null}
@@ -193,21 +188,26 @@ function HomeownerRow({ person, primary }: { person: Contact; primary: boolean }
     person.email.trim() || null,
   ].filter(Boolean);
   return (
-    <li className="min-w-0">
-      <p className="text-sm font-medium">
-        {person.name}
-        <span
-          className={cn(
-            "ml-2 text-xs font-normal text-muted-foreground",
-            primary && "uppercase tracking-wide",
-          )}
-        >
-          {primary ? "Primary" : "Co-owner"}
-        </span>
-      </p>
-      {bits.length > 0 ? (
-        <p className="text-xs text-muted-foreground">{bits.join(" · ")}</p>
-      ) : null}
+    <li className="flex min-w-0 items-start gap-2.5">
+      <span
+        className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-semibold text-foreground"
+        aria-hidden
+      >
+        {initials(person.name)}
+      </span>
+      <span className="min-w-0">
+        <p className="truncate text-sm font-medium">
+          {person.name}
+          <span className="ml-1.5 text-[10px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+            {primary ? "Primary" : "Co-owner"}
+          </span>
+        </p>
+        {bits.length > 0 ? (
+          <p className="truncate text-xs text-muted-foreground">{bits.join(" · ")}</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">No phone or email on file</p>
+        )}
+      </span>
     </li>
   );
 }

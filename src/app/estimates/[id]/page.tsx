@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { EstimateWriter } from "@/components/estimate-writer";
+import { EstimateBuilder } from "@/components/estimate-builder";
 import { EmptyState, LoadingScreen } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
 
@@ -27,5 +27,5 @@ export default function EstimateDetailPage() {
     );
   }
 
-  return <EstimateWriter key={estimate.id} estimate={estimate} />;
+  return <EstimateBuilder key={estimate.id} estimate={estimate} />;
 }
