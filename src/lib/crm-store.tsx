@@ -12,6 +12,11 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import {
+  allocateEstimateNumber,
+  claimEstimateNumber,
+  isDuplicateEstimateNumber,
+} from "@/lib/document-numbers";
 import { derivedInvoiceStatus, nextNumber } from "@/lib/money";
 import { isPendingPayment, roundCents } from "@/lib/payment-posting";
 import {
@@ -638,6 +643,72 @@ function scheduleEventWriteWithoutGuests(event: Omit<ScheduleEvent, "id">) {
 function maybeClient() {
   if (!isSupabaseConfigured()) return null;
   return createClient();
+}
+
+type EstimateInsert = Database["public"]["Tables"]["estimates"]["Insert"];
+
+/** Insert an estimate, dropping columns a database that is behind the app does not have yet. */
+async function insertEstimateRow(supabase: ReturnType<typeof createClient>, payload: EstimateInsert) {
+  let { data, error } = await supabase.from("estimates").insert(payload).select("*").single();
+  if (error && (isMissingSecondSigner(error) || isMissingSignerLinks(error))) {
+    const {
+      second_contact_id: _secondContact,
+      second_share_token: _secondShare,
+      ...withoutSecond
+    } = payload;
+    const retry = await supabase.from("estimates").insert(withoutSecond).select("*").single();
+    data = retry.data;
+    error = retry.error;
+    if (!error && data) toast.message(missingSecondSignerMessage());
+  }
+  if (error && isMissingEstimatePackages(error)) {
+    const { package_mode: _mode, selected_package: _pkg, ...withoutPackages } = payload;
+    const retry = await supabase.from("estimates").insert(withoutPackages).select("*").single();
+    data = retry.data;
+    error = retry.error;
+    if (!error && data) toast.message(missingEstimatePackagesMessage());
+  }
+  if (error && isMissingEstimateMargin(error)) {
+    const { margin_percent: _margin, ...withoutMargin } = payload;
+    const retry = await supabase.from("estimates").insert(withoutMargin).select("*").single();
+    data = retry.data;
+    error = retry.error;
+    if (!error && data) toast.message(missingEstimateMarginMessage());
+  }
+  if (error && isMissingEstimateLumpSum(error)) {
+    const { subtotal_override: _override, hide_line_prices: _hide, ...withoutLump } = payload;
+    const retry = await supabase.from("estimates").insert(withoutLump).select("*").single();
+    data = retry.data;
+    error = retry.error;
+    if (!error && data) toast.message(missingEstimateLumpSumMessage());
+  }
+  if (error && isMissingEstimateContractType(error)) {
+    const { contract_type_id: _contractType, ...withoutContract } = payload;
+    const retry = await supabase.from("estimates").insert(withoutContract).select("*").single();
+    data = retry.data;
+    error = retry.error;
+    if (!error && data) toast.message(missingContractTypesMessage());
+  }
+  if (error && isMissingEstimateWriter(error)) {
+    const retry = await supabase
+      .from("estimates")
+      .insert({
+        company_id: payload.company_id,
+        number: payload.number,
+        name: payload.name,
+        client_id: payload.client_id,
+        opportunity_id: payload.opportunity_id,
+        job_id: payload.job_id,
+        notes: payload.notes,
+        valid_until: payload.valid_until,
+      })
+      .select("*")
+      .single();
+    data = retry.data;
+    error = retry.error;
+    if (!error && data) toast.message(missingEstimateWriterMessage());
+  }
+  return { data, error };
 }
 
 type CatalogInsertRow = Database["public"]["Tables"]["catalog_items"]["Insert"];
@@ -5253,8 +5324,25 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       templateId?: string | null;
       contractTypeId?: string | null;
     }) => {
+      const claim = claimEstimateNumber(
+        user.companyId,
+        bookRef.current.estimates.map((estimate) => estimate.number),
+      );
+      let number = claim.number;
+      let saved = false;
+      try {
       const opportunityId = await ensureLeadForEstimate(input);
-      const number = nextNumber("EST", state.estimates.map((estimate) => estimate.number));
+      const supabase = maybeClient();
+      if (supabase && user.companyId && user.companyId !== "local") {
+        number = claim.replace(
+          await allocateEstimateNumber(
+            supabase,
+            user.companyId,
+            claim.number,
+            bookRef.current.estimates.map((estimate) => estimate.number),
+          ),
+        );
+      }
       const pipelineJobId =
         input.jobId ||
         state.jobs.find((job) => job.opportunityId === opportunityId)?.id ||
@@ -5317,7 +5405,6 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       const copiedLines = template
         ? estimateLinesFromTemplate(template.id, estimate.id, state.estimateTemplateLines)
         : [];
-      const supabase = maybeClient();
       if (!supabase) {
         setState((prev) => ({
           ...prev,
@@ -5339,9 +5426,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
             estimateLines: [...state.estimateLines, ...copiedLines],
           });
         }
+        saved = true;
         return estimate;
       }
-      const payload = {
+      let payload: EstimateInsert = {
         company_id: user.companyId,
         number,
         name: estimate.name,
@@ -5372,69 +5460,28 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         hide_line_prices: estimate.hideLinePrices,
         contract_type_id: estimate.contractTypeId,
       };
-      let { data, error } = await supabase.from("estimates").insert(payload).select("*").single();
-      if (error && (isMissingSecondSigner(error) || isMissingSignerLinks(error))) {
-        const {
-          second_contact_id: _secondContact,
-          second_share_token: _secondShare,
-          ...withoutSecond
-        } = payload;
-        const retry = await supabase.from("estimates").insert(withoutSecond).select("*").single();
-        data = retry.data;
-        error = retry.error;
-        if (!error && data) toast.message(missingSecondSignerMessage());
-      }
-      if (error && isMissingEstimatePackages(error)) {
-        const { package_mode: _mode, selected_package: _pkg, ...withoutPackages } = payload;
-        const retry = await supabase.from("estimates").insert(withoutPackages).select("*").single();
-        data = retry.data;
-        error = retry.error;
-        if (!error && data) toast.message(missingEstimatePackagesMessage());
-      }
-      if (error && isMissingEstimateMargin(error)) {
-        const { margin_percent: _margin, ...withoutMargin } = payload;
-        const retry = await supabase.from("estimates").insert(withoutMargin).select("*").single();
-        data = retry.data;
-        error = retry.error;
-        if (!error && data) toast.message(missingEstimateMarginMessage());
-      }
-      if (error && isMissingEstimateLumpSum(error)) {
-        const { subtotal_override: _override, hide_line_prices: _hide, ...withoutLump } = payload;
-        const retry = await supabase.from("estimates").insert(withoutLump).select("*").single();
-        data = retry.data;
-        error = retry.error;
-        if (!error && data) toast.message(missingEstimateLumpSumMessage());
-      }
-      if (error && isMissingEstimateContractType(error)) {
-        const { contract_type_id: _contractType, ...withoutContract } = payload;
-        const retry = await supabase.from("estimates").insert(withoutContract).select("*").single();
-        data = retry.data;
-        error = retry.error;
-        if (!error && data) toast.message(missingContractTypesMessage());
-      }
-      if (error && isMissingEstimateWriter(error)) {
-        const retry = await supabase
-          .from("estimates")
-          .insert({
-            company_id: payload.company_id,
-            number: payload.number,
-            name: payload.name,
-            client_id: payload.client_id,
-            opportunity_id: payload.opportunity_id,
-            job_id: payload.job_id,
-            notes: payload.notes,
-            valid_until: payload.valid_until,
-          })
-          .select("*")
-          .single();
-        data = retry.data;
-        error = retry.error;
-        if (!error && data) toast.message(missingEstimateWriterMessage());
+      let data: Awaited<ReturnType<typeof insertEstimateRow>>["data"] = null;
+      let error: Awaited<ReturnType<typeof insertEstimateRow>>["error"] = null;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const inserted = await insertEstimateRow(supabase, payload);
+        data = inserted.data;
+        error = inserted.error;
+        if (!error && data) break;
+        if (!isDuplicateEstimateNumber(error) || attempt === 4) break;
+        number = claim.replace(
+          await allocateEstimateNumber(supabase, user.companyId, claim.number, [
+            payload.number,
+            ...bookRef.current.estimates.map((item) => item.number),
+          ]),
+        );
+        estimate.number = number;
+        payload = { ...payload, number };
       }
       if (error || !data) {
         toast.error(error?.message ?? "Could not create the estimate.");
         throw error ?? new Error("Could not create the estimate.");
       }
+      saved = true;
       const mapped = fillEstimate({ ...estimate, ...mapEstimate(data), id: data.id, number: data.number || number });
       const lines = copiedLines.map((line) => ({ ...line, estimateId: mapped.id }));
       if (lines.length) {
@@ -5498,6 +5545,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         });
       }
       return mapped;
+      } catch (error) {
+        if (!saved) claim.release();
+        throw error;
+      }
     },
     [
       ensureLeadForEstimate,
