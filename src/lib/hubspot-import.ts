@@ -712,6 +712,51 @@ export function applyHubSpotMapping(
 }
 
 // ---------------------------------------------------------------------------
+// Row overrides from the Verify table
+
+export type HubSpotRowOverride = {
+  column?: WorkColumn;
+  ownerStaffId?: string;
+  leadSource?: LeadSource | "";
+  excluded?: boolean;
+};
+
+const OWNER_ISSUE = /owner seat|seat is locked/i;
+
+export function overrideHubSpotDraft(
+  draft: HubSpotDealDraft,
+  override: HubSpotRowOverride | undefined,
+  staff: StaffMember[],
+): HubSpotDealDraft {
+  if (!override) return draft;
+  let next = draft;
+  if (override.column && override.column !== draft.column) {
+    const patch = patchForWorkColumn(override.column);
+    next = { ...next, column: override.column, status: patch.status, stage: patch.stage };
+  }
+  if (override.ownerStaffId !== undefined && override.ownerStaffId !== draft.ownerStaffId) {
+    const owner = staff.find((member) => member.id === override.ownerStaffId);
+    const issues = next.issues.filter((issue) => !OWNER_ISSUE.test(issue));
+    if (!owner) issues.push("No owner seat. Pick a default owner.");
+    else if (owner.locked) issues.push(`${owner.name}'s seat is locked.`);
+    next = {
+      ...next,
+      ownerStaffId: owner ? owner.id : "",
+      ownerName: owner?.name ?? "",
+      issues,
+      warnings: next.warnings.filter((warning) => !/assigned to the default owner/i.test(warning)),
+    };
+  }
+  if (override.leadSource !== undefined && override.leadSource !== draft.leadSource) {
+    next = { ...next, leadSource: override.leadSource };
+  }
+  if (override.excluded !== undefined && override.excluded !== draft.excluded) {
+    next = { ...next, excluded: override.excluded };
+  }
+  return next;
+}
+
+// ---------------------------------------------------------------------------
 // Verify summary
 
 export type HubSpotSummary = {

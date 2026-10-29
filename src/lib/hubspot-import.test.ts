@@ -6,6 +6,7 @@ import {
   guessOwnerStaffId,
   guessStageTarget,
   hubspotSkippedCsv,
+  overrideHubSpotDraft,
   parseHubSpotAddress,
   parseHubSpotAmount,
   parseHubSpotCsv,
@@ -259,3 +260,22 @@ assert.ok(skipped.startsWith('"Line","Record ID"'));
 assert.equal(skipped.trim().split("\n").length, 4);
 
 console.log("hubspot-import tests passed");
+
+// --- row overrides ----------------------------------------------------------
+
+const moved = overrideHubSpotDraft(smith, { column: "in_progress" }, staff);
+assert.equal(moved.column, "in_progress");
+assert.equal(moved.status, "in_progress");
+assert.equal(moved.stage, "awarded");
+assert.equal(smith.column, "complete", "original draft is untouched");
+
+const reowned = overrideHubSpotDraft(unowned[0], { ownerStaffId: "s-sarah" }, staff);
+assert.equal(reowned.ownerStaffId, "s-sarah");
+assert.equal(reowned.ownerName, "Sarah Lee");
+assert.ok(!reowned.issues.some((issue) => /No owner seat/.test(issue)));
+
+const dropped = overrideHubSpotDraft(smith, { excluded: true }, staff);
+assert.equal(dropped.excluded, true);
+assert.equal(overrideHubSpotDraft(smith, undefined, staff), smith);
+
+console.log("hubspot-import override tests passed");
