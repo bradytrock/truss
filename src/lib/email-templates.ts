@@ -117,9 +117,9 @@ export const SYSTEM_EMAIL_DEFAULTS: Record<SystemEmailKind, SystemEmailDraft> = 
   },
   invite: {
     subject: "Join {{company}}",
-    headline: "Hi {{name}},",
+    headline: "Your invitation",
     message:
-      "{{inviter}} added you to {{company}}{{seat}}. Accept the invite to create your account.\n\nThis invite is only for you. It expires in {{days}} days. If you were not expecting this, ignore the email.",
+      "You are invited to join {{company}}.\n\nThis invitation will expire in {{days}} days.",
     button: "Accept invitation",
   },
   lead_assign: {
