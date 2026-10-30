@@ -65,6 +65,7 @@ const SHOWN_FIELDS: HubSpotField[] = [
   "closeDate",
   "owner",
   "pmName",
+  "assignees",
   "clientName",
   "clientEmail",
   "clientPhone",
@@ -439,8 +440,9 @@ function UploadStep({
             step.
           </li>
           <li>
-            <span className="font-medium text-foreground">Owners.</span> Deal owner or PM Name is matched to a seat. Every
-            card lands on someone’s book — nothing sits unassigned.
+            <span className="font-medium text-foreground">People.</span> Deal owner becomes the seat. A project manager,
+            an Also assigned column, or several names separated by semicolons are put on the job too. Nothing sits
+            unassigned.
           </li>
           <li>
             <span className="font-medium text-foreground">Quiet.</span> No texts, emails, call tasks, or automations fire
@@ -567,8 +569,8 @@ function MapStep({
           title="Deal owners → seats"
           description={
             unmatchedOwners
-              ? `${unmatchedOwners} owner${unmatchedOwners === 1 ? "" : "s"} did not match a seat and will use the default owner.`
-              : "Every owner matched a seat."
+              ? `${unmatchedOwners} name${unmatchedOwners === 1 ? "" : "s"} did not match a seat. The deal owner falls back to the default; anyone else is left off that job.`
+              : "Every name matched a seat. The deal owner is the book, and everyone else named is assigned to the job too."
           }
         />
         {parsed.owners.length === 0 ? (
@@ -731,7 +733,7 @@ function VerifyStep({
       if (filter === "updates" && !draft.existingOpportunityId) return false;
       if (filter === "excluded" && !draft.excluded) return false;
       if (columnFilter && draft.column !== columnFilter) return false;
-      if (ownerFilter && draft.ownerStaffId !== ownerFilter) return false;
+      if (ownerFilter && draft.ownerStaffId !== ownerFilter && !draft.assigneeStaffIds.includes(ownerFilter)) return false;
       if (needle) {
         const hay = `${draft.name} ${draft.contact.name} ${draft.contact.phone} ${draft.contact.email} ${draft.address.raw} ${draft.recordId}`.toLowerCase();
         if (!hay.includes(needle)) return false;
@@ -800,7 +802,7 @@ function VerifyStep({
       <SettingsCard>
         <SettingsCardHeader
           title="Every row"
-          description="Change a column, seat, or seed on a single row, or untick it to leave it out. Rows marked red cannot import until fixed."
+          description="Change a column, seat, or seed, add or remove people on a job, or untick a row to leave it out. Rows marked red cannot import until fixed."
           actions={
             summary.blocked > 0 ? (
               <Button size="sm" variant="outline" className="bg-white" onClick={onExcludeBlocked}>
@@ -865,7 +867,7 @@ function VerifyStep({
                 <th className="px-3 py-2 font-medium">Job</th>
                 <th className="px-3 py-2 font-medium">Site</th>
                 <th className="px-3 py-2 font-medium">Column</th>
-                <th className="px-3 py-2 font-medium">Seat</th>
+                <th className="px-3 py-2 font-medium">People</th>
                 <th className="px-3 py-2 font-medium">Seed</th>
                 <th className="px-3 py-2 text-right font-medium">Amount</th>
                 <th className="px-3 py-2 font-medium">Created</th>
@@ -920,9 +922,15 @@ function VerifyRow({
   onOverride: (line: number, patch: HubSpotRowOverride) => void;
 }) {
   const blocked = !draft.excluded && draft.issues.length > 0;
+  const assigned = new Set(draft.assigneeStaffIds);
   const seatOptions = people.some((member) => member.id === draft.ownerStaffId)
     ? people
     : [...people, ...staff.filter((member) => member.id === draft.ownerStaffId)];
+  const extras = draft.assigneeStaffIds
+    .filter((id) => id !== draft.ownerStaffId)
+    .map((id) => staff.find((member) => member.id === id) ?? people.find((member) => member.id === id))
+    .filter((member): member is StaffMember => Boolean(member));
+  const available = people.filter((member) => !assigned.has(member.id));
   const locality = [draft.address.city, draft.address.state].filter(Boolean).join(", ");
   return (
     <tr className={cn(draft.excluded && "opacity-50", blocked && "bg-destructive/5")}>
@@ -978,20 +986,61 @@ function VerifyRow({
         </select>
       </td>
       <td className="px-3 py-2 align-top">
-        <select
-          className={cn(selectClass, "h-7 text-xs", !draft.ownerStaffId && "border-destructive")}
-          aria-label="Seat"
-          value={draft.ownerStaffId}
-          onChange={(event) => onOverride(draft.line, { ownerStaffId: event.target.value })}
-        >
-          {!draft.ownerStaffId ? <option value="">Pick a seat…</option> : null}
-          {seatOptions.map((member) => (
-            <option key={member.id} value={member.id}>
-              {member.name}
-            </option>
+        <div className="min-w-40 space-y-1">
+          <select
+            className={cn(selectClass, "h-7 text-xs", !draft.ownerStaffId && "border-destructive")}
+            aria-label="Seat"
+            value={draft.ownerStaffId}
+            onChange={(event) => onOverride(draft.line, { ownerStaffId: event.target.value })}
+          >
+            {!draft.ownerStaffId ? <option value="">Pick a seat…</option> : null}
+            {seatOptions.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name}
+              </option>
+            ))}
+          </select>
+          {draft.ownerLabel ? <p className="text-xs text-muted-foreground">was “{draft.ownerLabel}”</p> : null}
+          {extras.map((member) => (
+            <div key={member.id} className="flex items-center justify-between gap-2 text-xs">
+              <span>
+                {member.name}
+                {member.name === draft.projectManagerName ? <span className="text-muted-foreground"> · PM</span> : null}
+              </span>
+              <button
+                type="button"
+                className="text-muted-foreground underline-offset-2 hover:underline"
+                aria-label={`Remove ${member.name} from this job`}
+                onClick={() =>
+                  onOverride(draft.line, {
+                    assigneeStaffIds: draft.assigneeStaffIds.filter((id) => id !== member.id),
+                  })
+                }
+              >
+                Remove
+              </button>
+            </div>
           ))}
-        </select>
-        {draft.ownerLabel ? <p className="mt-0.5 text-xs text-muted-foreground">was “{draft.ownerLabel}”</p> : null}
+          {available.length > 0 ? (
+            <select
+              className={cn(selectClass, "h-7 text-xs")}
+              aria-label="Add a person to this job"
+              value=""
+              onChange={(event) => {
+                const id = event.target.value;
+                if (!id) return;
+                onOverride(draft.line, { assigneeStaffIds: [...draft.assigneeStaffIds, id] });
+              }}
+            >
+              <option value="">Add a person…</option>
+              {available.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          ) : null}
+        </div>
       </td>
       <td className="px-3 py-2 align-top">
         <select
@@ -1062,7 +1111,7 @@ function SampleCard({ draft }: { draft: HubSpotDealDraft }) {
         </p>
         <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <span>{cue.label}</span>
-          <span>{draft.ownerName || "No seat"}</span>
+          <span>{draft.assigneeNames.join(", ") || "No seat"}</span>
         </div>
       </div>
       <p className="text-xs text-muted-foreground">
