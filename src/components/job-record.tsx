@@ -20,7 +20,6 @@ import {
   Plus,
   RotateCcw,
   Send,
-  Sparkles,
   Trash2,
   User,
   XIcon,
@@ -110,7 +109,6 @@ import { recommendedChapterIds } from "@/lib/training/recommend";
 import {
   ESTIMATE_STATUS_LABELS,
   JOB_MARKET_LABELS,
-  type Contact,
   type Job,
   type LeadSource,
   type PageTemplateId,
@@ -137,6 +135,7 @@ import { useStartMaterialOrder } from "@/lib/start-material-order";
 import { materialOrderLinesFor, materialOrderTotal } from "@/lib/material-orders";
 import { archivedPaper, livePaper } from "@/lib/paper-archive";
 import { MaterialOrderFromTemplateDialog } from "@/components/material-order-from-template-dialog";
+import { JobRelatedContacts } from "@/components/job-related-contacts";
 import { JobTagField } from "@/components/job-tag-field";
 import { jobTagSuggestions } from "@/lib/job-tags";
 
@@ -382,15 +381,6 @@ function PeopleChips({
   );
 }
 
-function contactKind(contact: Contact, job: Job) {
-  const title = contact.title ?? "";
-  if (job.subcontractorIds?.includes(contact.id)) return "Trade";
-  if (contact.isReferralPartner) return title.toLowerCase().includes("adjuster") ? "Adjuster" : "Referral";
-  if (title.toLowerCase().includes("adjuster")) return "Adjuster";
-  if (contact.clientId) return title || "Company";
-  return title || "Homeowner";
-}
-
 export function JobRecord({
   job,
   className,
@@ -615,24 +605,6 @@ export function JobRecord({
     .filter((message) => message.jobId === job.id)
     .sort((a, b) => b.receivedAt.localeCompare(a.receivedAt));
 
-  const related = useMemo(() => {
-    const ids = uniqueIds([
-      job.primaryContactId ?? "",
-      ...job.relatedContactIds,
-      ...job.subcontractorIds,
-    ]);
-    return ids
-      .map((id) => crm.getContact(id))
-      .filter((contact): contact is Contact => Boolean(contact));
-  }, [crm, job.primaryContactId, job.relatedContactIds, job.subcontractorIds]);
-
-  const relatedOptions = crm.contacts.filter(
-    (contact) =>
-      contact.id !== job.primaryContactId &&
-      !job.relatedContactIds.includes(contact.id) &&
-      !job.subcontractorIds.includes(contact.id)
-  );
-
   function setPrimaryHomeowner(contactId: string) {
     if (deleted) return;
     const next = primaryHomeownerPatch(job, contactId);
@@ -643,6 +615,47 @@ export function JobRecord({
     }
     const name = crm.getContact(contactId)?.name?.trim();
     toast.success(name ? `${name} is now the primary homeowner.` : "Primary homeowner updated.");
+  }
+
+  function addRelatedContact(contactId: string) {
+    return crm.updateJob(job.id, {
+      relatedContactIds: uniqueIds([...(job.relatedContactIds ?? []), contactId]),
+    });
+  }
+
+  function removeRelatedContact(contactId: string) {
+    return crm.updateJob(job.id, {
+      relatedContactIds: (job.relatedContactIds ?? []).filter((id) => id !== contactId),
+      subcontractorIds: (job.subcontractorIds ?? []).filter((id) => id !== contactId),
+    });
+  }
+
+  async function createRelatedContact(input: {
+    name: string;
+    phone: string;
+    email: string;
+    title: string;
+    isReferralPartner: boolean;
+  }) {
+    try {
+      const created = await crm.addContact({
+        clientId: null,
+        name: input.name,
+        title: input.title,
+        email: input.email,
+        phone: input.phone,
+        ownerStaffId: crm.user.staffId,
+        isReferralPartner: input.isReferralPartner,
+        listingWatchUrl: "",
+        listingWatchEnabled: false,
+      });
+      const ok = await crm.updateJob(job.id, {
+        relatedContactIds: uniqueIds([...(job.relatedContactIds ?? []), created.id]),
+      });
+      return ok ? "added" : "created";
+    } catch {
+      return "failed";
+    }
   }
 
   async function startPage(template: PageTemplateId, photoLayout: PhotoPageLayout) {
@@ -1170,6 +1183,16 @@ export function JobRecord({
                 </div>
               </section>
 
+              <JobRelatedContacts
+                job={job}
+                contacts={crm.contacts}
+                deleted={deleted}
+                onAdd={addRelatedContact}
+                onRemove={removeRelatedContact}
+                onCreate={createRelatedContact}
+                onMakePrimary={setPrimaryHomeowner}
+              />
+
               <div className="relative overflow-hidden rounded-[12px] border bg-muted">
                 {shownPhoto ? (
                   <button type="button" onClick={() => setPhotoViewOpen(true)} className="block w-full">
@@ -1640,117 +1663,6 @@ export function JobRecord({
               }}
             />
           </section>
-
-          <JobSection
-            title="Related contacts"
-            meta={related.length || undefined}
-            defaultOpen={false}
-            actions={
-              relatedOptions.length > 0 ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger render={<Button variant="ghost" size="icon" className="size-7" />}>
-                    <Plus className="size-4" />
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="max-h-64 min-w-48 overflow-auto">
-                    {relatedOptions.map((contact) => (
-                      <DropdownMenuItem
-                        key={contact.id}
-                        onClick={() =>
-                          patch({ relatedContactIds: uniqueIds([...job.relatedContactIds, contact.id]) })
-                        }
-                      >
-                        {contact.name}
-                        <span className="ml-auto text-xs text-muted-foreground">{contact.title}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null
-            }
-          >
-            {related.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No contacts on this job yet.</p>
-            ) : (
-              <ul className="space-y-2">
-                {related.map((contact) => (
-                  <li key={contact.id} className="border bg-background p-3">
-                    <div className="mb-2 flex items-start justify-between gap-2">
-                      <div className="flex flex-wrap gap-1">
-                        {contact.id === job.primaryContactId ? (
-                          <Badge variant="secondary" className="gap-1">
-                            <Sparkles className="size-3" />
-                            Primary
-                          </Badge>
-                        ) : null}
-                        <Badge variant="outline">{contactKind(contact, job)}</Badge>
-                      </div>
-                      {contact.id !== job.primaryContactId ? (
-                        <div className="flex shrink-0 items-center gap-0.5">
-                          {!deleted && !contact.isReferralPartner && !job.subcontractorIds.includes(contact.id) ? (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs"
-                              onClick={() => setPrimaryHomeowner(contact.id)}
-                            >
-                              Make primary
-                            </Button>
-                          ) : null}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="size-7"
-                            onClick={() =>
-                              patch({
-                                relatedContactIds: job.relatedContactIds.filter((id) => id !== contact.id),
-                                subcontractorIds: job.subcontractorIds.filter((id) => id !== contact.id),
-                              })
-                            }
-                            aria-label={`Remove ${contact.name}`}
-                          >
-                            <XIcon className="size-3.5" />
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                    <Link href={`/contacts?contact=${contact.id}`} className="flex items-center gap-2 text-sm font-medium hover:underline">
-                      <User className="size-3.5 text-muted-foreground" />
-                      {contact.name}
-                    </Link>
-                    {contact.phone ? (
-                      <p className="mt-1.5 flex items-center gap-2 text-sm">
-                        <Phone className="size-3.5 text-muted-foreground" />
-                        <a href={`tel:${contact.phone}`} className="hover:underline">
-                          {formatPhone(contact.phone)}
-                        </a>
-                        <button type="button" onClick={() => copyText(formatPhone(contact.phone), "Phone")} aria-label="Copy phone">
-                          <Copy className="size-3.5 text-muted-foreground" />
-                        </button>
-                        <Link
-                          href={`/messages?job=${job.id}&contact=${contact.id}`}
-                          className="text-xs font-medium hover:underline"
-                        >
-                          Text
-                        </Link>
-                      </p>
-                    ) : null}
-                    {contact.email ? (
-                      <p className="mt-1 flex items-center gap-2 text-sm">
-                        <Mail className="size-3.5 text-muted-foreground" />
-                        <a href={`mailto:${contact.email}`} className="truncate hover:underline">
-                          {contact.email}
-                        </a>
-                        <button type="button" onClick={() => copyText(contact.email, "Email")} aria-label="Copy email">
-                          <Copy className="size-3.5 text-muted-foreground" />
-                        </button>
-                      </p>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </JobSection>
 
           {showTraining ? (
             <JobSection title="Training for this job" defaultOpen={false}>
