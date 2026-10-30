@@ -36,7 +36,7 @@ const EMAIL_LINKS = [
   { href: "/marketing/campaigns", label: "Campaigns" },
   { href: "/marketing/quick-send", label: "Quick send" },
   { href: "/marketing/automations", label: "Automations" },
-  { href: "/marketing/contacts", label: "Contacts & segments" },
+  { href: "/marketing/contacts", label: "Contacts & lists" },
   { href: "/marketing/reports", label: "Reports" },
 ];
 
@@ -159,6 +159,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-44">
                   <DropdownMenuItem render={<Link href="/marketing/campaigns/design" />}>New campaign</DropdownMenuItem>
+                  <DropdownMenuItem render={<Link href="/marketing/contacts?capture=1" />}>Add to a list</DropdownMenuItem>
                   <DropdownMenuItem render={<Link href="/marketing/quick-send" />}>Quick send</DropdownMenuItem>
                   <DropdownMenuItem render={<Link href="/marketing/templates" />}>Template</DropdownMenuItem>
                   <DropdownMenuItem render={<Link href="/marketing/social/compose" />}>Social post</DropdownMenuItem>
