@@ -113,11 +113,11 @@ export function ContactsDesk() {
   );
 
   const tradeNames = useMemo(() => {
-    const ids = new Set((crm.book.jobs ?? []).flatMap((job) => job.subcontractorIds ?? []));
-    return (crm.book.contacts ?? [])
+    const ids = new Set((crm.jobs ?? []).flatMap((job) => job.subcontractorIds ?? []));
+    return (crm.contacts ?? [])
       .filter((contact) => ids.has(contact.id))
       .map((contact) => contact.name);
-  }, [crm.book.contacts, crm.book.jobs]);
+  }, [crm.contacts, crm.jobs]);
   const vendorRows = useMemo(
     () =>
       buildVendorBook(crm.book.qbVendors ?? [], {
