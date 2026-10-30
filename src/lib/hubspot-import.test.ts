@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  HUBSPOT_TEMPLATE_CSV,
   applyHubSpotMapping,
   defaultHubSpotMapping,
   guessLeadSource,
@@ -178,6 +179,9 @@ assert.equal(smith.amount, 12450);
 assert.equal(smith.createdAt.slice(0, 10), "2024-03-15");
 assert.equal(smith.closeDate, "2024-04-02");
 assert.equal(smith.ownerStaffId, "s-brady");
+assert.deepEqual(smith.assigneeStaffIds, ["s-brady"]);
+assert.deepEqual(smith.assigneeNames, ["Brady Jones"]);
+assert.equal(smith.projectManagerName, "Brady Jones");
 assert.equal(smith.leadSource, "website");
 assert.equal(smith.contact.existingId, "c-linda", "matches by phone");
 assert.equal(smith.contact.matchedBy, "phone");
@@ -278,4 +282,84 @@ const dropped = overrideHubSpotDraft(smith, { excluded: true }, staff);
 assert.equal(dropped.excluded, true);
 assert.equal(overrideHubSpotDraft(smith, undefined, staff), smith);
 
+const withCrew = overrideHubSpotDraft(smith, { assigneeStaffIds: ["s-brady", "s-sarah"] }, staff);
+assert.deepEqual(withCrew.assigneeStaffIds, ["s-brady", "s-sarah"]);
+assert.deepEqual(withCrew.assigneeNames, ["Brady Jones", "Sarah Lee"]);
+assert.equal(smith.assigneeStaffIds.length, 1, "original draft is untouched");
+
+const crewKept = overrideHubSpotDraft(withCrew, { ownerStaffId: "s-sarah" }, staff);
+assert.equal(crewKept.ownerStaffId, "s-sarah");
+assert.deepEqual(crewKept.assigneeStaffIds, ["s-sarah", "s-brady"]);
+assert.equal(crewKept.projectManagerName, "Sarah Lee");
+
+const crewTrimmed = overrideHubSpotDraft(
+  { ...withCrew, projectManagerName: "Sarah Lee" },
+  { assigneeStaffIds: ["s-brady"] },
+  staff,
+);
+assert.deepEqual(crewTrimmed.assigneeStaffIds, ["s-brady"]);
+assert.equal(crewTrimmed.projectManagerName, "Brady Jones", "removing the PM gives the seat that role");
+
+const lockedCrew = overrideHubSpotDraft(smith, { assigneeStaffIds: ["s-brady", "s-locked"] }, staff);
+assert.ok(lockedCrew.assigneeStaffIds.includes("s-locked"));
+assert.ok(lockedCrew.issues.some((issue) => /locked/.test(issue)));
+
 console.log("hubspot-import override tests passed");
+
+// --- several people on one job ---------------------------------------------
+
+const crewCsv = `Record ID,Deal Name,Deal Stage,Deal owner,PM Name,Also assigned,Client Name
+2001,Oak St,Closed won,Brady Jones,Sarah Lee,,Linda Oak
+2002,Elm St,Appointment scheduled,Brady Jones; Sarah Lee,,,Tom Elm
+2003,Pine St,Appointment scheduled,"Jones, Brady",,,Ana Pine
+2004,Ash St,Appointment scheduled,Someone Else,Sarah Lee,,Gus Ash
+2005,Birch St,Appointment scheduled,Brady Jones,Old Rep,,Nia Birch
+2006,Cedar St,Appointment scheduled,Brady Jones,Sarah Lee,Sarah Lee,Bea Cedar
+`;
+
+const crewParsed = parseHubSpotCsv(crewCsv);
+assert.equal(crewParsed.columns.assignees, "Also assigned");
+assert.ok(crewParsed.owners.some((item) => item.value === "Brady Jones"));
+assert.ok(crewParsed.owners.some((item) => item.value === "Sarah Lee"));
+assert.ok(crewParsed.owners.some((item) => item.value === "Jones, Brady"));
+assert.ok(!crewParsed.owners.some((item) => item.value.includes(";")), "a cell of several names is split before mapping");
+assert.equal(crewParsed.owners.find((item) => item.value === "Sarah Lee")?.count, 4);
+
+const crewMapping = defaultHubSpotMapping(crewParsed, staff, "s-brady");
+crewMapping.owners["Old Rep"] = "s-locked";
+const crewDrafts = applyHubSpotMapping(crewParsed, crewMapping, { staff, contacts, now });
+
+const oak = crewDrafts[0];
+assert.equal(oak.ownerStaffId, "s-brady");
+assert.deepEqual(oak.assigneeStaffIds, ["s-brady", "s-sarah"]);
+assert.equal(oak.projectManagerName, "Sarah Lee");
+assert.equal(oak.issues.length, 0);
+
+const elm = crewDrafts[1];
+assert.deepEqual(elm.assigneeStaffIds, ["s-brady", "s-sarah"]);
+assert.equal(elm.projectManagerName, "Brady Jones", "names in the owner cell are crew, not a project manager");
+assert.equal(elm.ownerLabel, "Brady Jones; Sarah Lee");
+
+const pine = crewDrafts[2];
+assert.deepEqual(pine.assigneeStaffIds, ["s-brady"], "Last, First stays one person");
+
+const ash = crewDrafts[3];
+assert.equal(ash.ownerStaffId, "s-sarah", "an unmatched deal owner gives the seat to the PM");
+assert.deepEqual(ash.assigneeStaffIds, ["s-sarah"]);
+assert.ok(ash.warnings.some((warning) => /Someone Else/.test(warning) && /left off/.test(warning)));
+
+const birch = crewDrafts[4];
+assert.equal(birch.ownerStaffId, "s-brady");
+assert.deepEqual(birch.assigneeStaffIds, ["s-brady"]);
+assert.ok(birch.warnings.some((warning) => /Old Rep/.test(warning) && /locked/.test(warning)));
+assert.equal(birch.issues.length, 0, "a locked extra does not block the row");
+
+const cedar = crewDrafts[5];
+assert.deepEqual(cedar.assigneeStaffIds, ["s-brady", "s-sarah"], "the same person is assigned once");
+
+const template = parseHubSpotCsv(HUBSPOT_TEMPLATE_CSV);
+assert.equal(template.columns.assignees, "Also assigned");
+assert.equal(template.rows[0]?.values.assignees, "Sarah Lee");
+assert.equal(template.rows[0]?.values.owner, "Brady Jones");
+
+console.log("hubspot-import multi-assign tests passed");
