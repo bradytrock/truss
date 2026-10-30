@@ -1,7 +1,7 @@
 import { preferLocalChartAccounts, preferLocalExpenseCategories } from "@/lib/expense-categories";
 import { mapPhotoAuditEvent } from "@/lib/photo-trash";
 import { mapCompanyAuditEvent } from "@/lib/company-audit";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import {
   mapActivity,
   mapCalendarAccount,
@@ -150,6 +150,38 @@ export function limitBookQuery<T>(run: () => PromiseLike<T>): Promise<T> {
   });
 }
 
+/** PostgREST's default `max-rows`. Larger results come back silently truncated to this. */
+export const BOOK_PAGE_SIZE = 1000;
+
+export type PageResult<Row> = { data: Row[] | null; error: PostgrestError | null };
+
+type PageQuery<Row> = {
+  order: (column: "id") => { range: (from: number, to: number) => PromiseLike<PageResult<Row>> };
+};
+
+/**
+ * Read a whole table one page at a time. `build` returns the filtered, ordered query; the
+ * pager adds an `id` tiebreak so ties in the caller's sort cannot leak or duplicate rows
+ * across page boundaries, then walks `range` until a short page comes back or `max` rows
+ * are in hand. Use `max` instead of `.limit()` for anything over one page.
+ */
+export async function selectAllRows<Row>(
+  build: () => PageQuery<Row>,
+  options: { max?: number } = {},
+): Promise<PageResult<Row>> {
+  const max = options.max ?? Number.POSITIVE_INFINITY;
+  const rows: Row[] = [];
+  for (let from = 0; from < max; from += BOOK_PAGE_SIZE) {
+    const to = Math.min(from + BOOK_PAGE_SIZE, max) - 1;
+    const page = await limitBookQuery(() => build().order("id").range(from, to));
+    if (page.error) return { data: null, error: page.error };
+    const batch = page.data ?? [];
+    rows.push(...batch);
+    if (batch.length < to - from + 1) break;
+  }
+  return { data: rows, error: null };
+}
+
 const DEFERRED_ID_KEYS = [
   "googleLocations",
   "estimateSignatureEvents",
@@ -215,62 +247,62 @@ function messageQuery(supabase: Client, companyId: string) {
 }
 
 async function loadMessages(supabase: Client, companyId: string) {
-  let last = await limitBookQuery(() => messageQuery(supabase, companyId));
+  let last = await selectAllRows(() => messageQuery(supabase, companyId));
   for (let attempt = 1; attempt < 3 && last.error && isTransientRequestError(last.error); attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
-    last = await limitBookQuery(() => messageQuery(supabase, companyId));
+    last = await selectAllRows(() => messageQuery(supabase, companyId));
   }
   return last;
 }
 
 function queryCore(supabase: Client, companyId: string) {
   return Promise.all([
-    limitBookQuery(() => supabase.from("clients").select("*").eq("company_id", companyId).order("name")),
-    limitBookQuery(() => supabase.from("contacts").select("*").eq("company_id", companyId).order("name")),
-    limitBookQuery(() =>
+    selectAllRows(() => supabase.from("clients").select("*").eq("company_id", companyId).order("name")),
+    selectAllRows(() => supabase.from("contacts").select("*").eq("company_id", companyId).order("name")),
+    selectAllRows(() =>
       supabase
         .from("opportunities")
         .select("*")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false }),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("jobs").select("*").eq("company_id", companyId).order("start_date", { ascending: false }),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase
         .from("activities")
         .select("*")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false }),
     ),
-    limitBookQuery(() => supabase.from("tasks").select("*").eq("company_id", companyId).order("due_at")),
-    limitBookQuery(() => supabase.from("team_members").select("*").eq("company_id", companyId).order("name")),
-    limitBookQuery(() => supabase.from("teams").select("*").eq("company_id", companyId).order("name")),
-    limitBookQuery(() => supabase.from("catalog_items").select("*").eq("company_id", companyId).order("cost_code")),
-    limitBookQuery(() =>
+    selectAllRows(() => supabase.from("tasks").select("*").eq("company_id", companyId).order("due_at")),
+    selectAllRows(() => supabase.from("team_members").select("*").eq("company_id", companyId).order("name")),
+    selectAllRows(() => supabase.from("teams").select("*").eq("company_id", companyId).order("name")),
+    selectAllRows(() => supabase.from("catalog_items").select("*").eq("company_id", companyId).order("cost_code")),
+    selectAllRows(() =>
       supabase.from("estimates").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     ),
-    limitBookQuery(() => supabase.from("estimate_lines").select("*").eq("company_id", companyId).order("sort_order")),
-    limitBookQuery(() =>
+    selectAllRows(() => supabase.from("estimate_lines").select("*").eq("company_id", companyId).order("sort_order")),
+    selectAllRows(() =>
       supabase.from("invoices").select("*").eq("company_id", companyId).order("issued_at", { ascending: false }),
     ),
-    limitBookQuery(() => supabase.from("invoice_lines").select("*").eq("company_id", companyId).order("sort_order")),
-    limitBookQuery(() =>
+    selectAllRows(() => supabase.from("invoice_lines").select("*").eq("company_id", companyId).order("sort_order")),
+    selectAllRows(() =>
       supabase.from("payments").select("*").eq("company_id", companyId).order("paid_at", { ascending: false }),
     ),
-    limitBookQuery(() => supabase.from("schedule_events").select("*").eq("company_id", companyId).order("starts_at")),
-    limitBookQuery(() =>
+    selectAllRows(() => supabase.from("schedule_events").select("*").eq("company_id", companyId).order("starts_at")),
+    selectAllRows(() =>
       supabase.from("expenses").select("*").eq("company_id", companyId).order("incurred_at", { ascending: false }),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase
         .from("returning_client_leads")
         .select("*")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false }),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("price_lists").select("*").eq("company_id", companyId).order("effective_on", { ascending: false }),
     ),
     loadAccountInvites(supabase, companyId),
@@ -307,146 +339,150 @@ function queryDeferred(
   messagesPromise: ReturnType<typeof loadMessages>,
 ) {
   return Promise.all([
-    limitBookQuery(() => supabase.from("google_locations").select("*").eq("company_id", companyId).order("name")),
-    limitBookQuery(() =>
+    selectAllRows(() => supabase.from("google_locations").select("*").eq("company_id", companyId).order("name")),
+    selectAllRows(() =>
       supabase
         .from("estimate_signature_events")
         .select("*")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false }),
     ),
-    limitBookQuery(() => supabase.from("estimate_templates").select("*").eq("company_id", companyId).order("name")),
-    limitBookQuery(() =>
+    selectAllRows(() => supabase.from("estimate_templates").select("*").eq("company_id", companyId).order("name")),
+    selectAllRows(() =>
       supabase.from("estimate_template_lines").select("*").eq("company_id", companyId).order("sort_order"),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("job_photos").select("*").eq("company_id", companyId).order("taken_at", { ascending: false }),
     ),
-    limitBookQuery(() =>
-      supabase
-        .from("photo_audit_events")
-        .select("*")
-        .eq("company_id", companyId)
-        .order("created_at", { ascending: false })
-        .limit(2000),
+    selectAllRows(
+      () =>
+        supabase
+          .from("photo_audit_events")
+          .select("*")
+          .eq("company_id", companyId)
+          .order("created_at", { ascending: false }),
+      { max: 2000 },
     ),
-    limitBookQuery(() =>
-      supabase
-        .from("company_audit_events")
-        .select("*")
-        .eq("company_id", companyId)
-        .order("created_at", { ascending: false })
-        .limit(2000),
+    selectAllRows(
+      () =>
+        supabase
+          .from("company_audit_events")
+          .select("*")
+          .eq("company_id", companyId)
+          .order("created_at", { ascending: false }),
+      { max: 2000 },
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase
         .from("forecasted_expenses")
         .select("*")
         .eq("company_id", companyId)
         .order("expected_at", { ascending: false }),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("job_insurance").select("*").eq("company_id", companyId).order("updated_at", { ascending: false }),
     ),
-    limitBookQuery(() => supabase.from("qb_vendors").select("*").eq("company_id", companyId).order("name")),
-    limitBookQuery(() => supabase.from("vendor_profiles").select("*").eq("company_id", companyId).order("name")),
-    limitBookQuery(() =>
+    selectAllRows(() => supabase.from("qb_vendors").select("*").eq("company_id", companyId).order("name")),
+    selectAllRows(() => supabase.from("vendor_profiles").select("*").eq("company_id", companyId).order("name")),
+    selectAllRows(() =>
       supabase
         .from("vendor_feedback")
         .select("*")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false }),
     ),
-    limitBookQuery(() => supabase.from("vendor_prices").select("*").eq("company_id", companyId).order("sort_order")),
-    limitBookQuery(() =>
+    selectAllRows(() => supabase.from("vendor_prices").select("*").eq("company_id", companyId).order("sort_order")),
+    selectAllRows(() =>
       supabase.from("qb_review_comments").select("*").eq("company_id", companyId).order("created_at"),
     ),
-    limitBookQuery(() => supabase.from("calendar_accounts").select("*").eq("company_id", companyId)),
-    limitBookQuery(() => supabase.from("calendar_shares").select("*").eq("company_id", companyId)),
+    selectAllRows(() => supabase.from("calendar_accounts").select("*").eq("company_id", companyId)),
+    selectAllRows(() => supabase.from("calendar_shares").select("*").eq("company_id", companyId)),
+    // training_progress has no id column to page on; it is bounded by seats × bulletins.
     limitBookQuery(() => supabase.from("training_progress").select("*").eq("company_id", companyId)),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("training_bulletins").select("*").eq("company_id", companyId).order("created_at", {
         ascending: false,
       }),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("photo_reports").select("*").eq("company_id", companyId).order("updated_at", {
         ascending: false,
       }),
     ),
     messagesPromise,
-    limitBookQuery(() => supabase.from("profiles").select("*").eq("company_id", companyId).order("full_name")),
-    limitBookQuery(() => supabase.from("message_thread_members").select("*").eq("company_id", companyId)),
-    limitBookQuery(() => supabase.from("message_thread_opens").select("*").eq("company_id", companyId)),
-    limitBookQuery(() => supabase.from("gmail_accounts").select("*").eq("company_id", companyId)),
-    limitBookQuery(() =>
+    selectAllRows(() => supabase.from("profiles").select("*").eq("company_id", companyId).order("full_name")),
+    selectAllRows(() => supabase.from("message_thread_members").select("*").eq("company_id", companyId)),
+    selectAllRows(() => supabase.from("message_thread_opens").select("*").eq("company_id", companyId)),
+    selectAllRows(() => supabase.from("gmail_accounts").select("*").eq("company_id", companyId)),
+    selectAllRows(() =>
       supabase
         .from("gmail_messages")
         .select("*")
         .eq("company_id", companyId)
         .order("received_at", { ascending: false }),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("job_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("estimate_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("invoice_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("company_files").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("material_orders").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("material_order_lines").select("*").eq("company_id", companyId).order("sort_order"),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("material_order_templates").select("*").eq("company_id", companyId).order("name"),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("material_order_template_lines").select("*").eq("company_id", companyId).order("sort_order"),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase
         .from("eagleview_orders")
         .select("*")
         .eq("company_id", companyId)
         .order("created_at", { ascending: false }),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("automations").select("*").eq("company_id", companyId).order("updated_at", { ascending: false }),
     ),
-    limitBookQuery(() =>
-      supabase
-        .from("automation_runs")
-        .select("*")
-        .eq("company_id", companyId)
-        .order("created_at", { ascending: false })
-        .limit(500),
+    selectAllRows(
+      () =>
+        supabase
+          .from("automation_runs")
+          .select("*")
+          .eq("company_id", companyId)
+          .order("created_at", { ascending: false }),
+      { max: 500 },
     ),
-    limitBookQuery(() => supabase.from("automation_templates").select("*").order("sort_order")),
-    limitBookQuery(() =>
+    selectAllRows(() => supabase.from("automation_templates").select("*").order("sort_order")),
+    selectAllRows(() =>
       supabase
         .from("commission_closeouts")
         .select("*")
         .eq("company_id", companyId)
         .order("updated_at", { ascending: false }),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase
         .from("refund_requests")
         .select("*")
         .eq("company_id", companyId)
         .order("updated_at", { ascending: false }),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("expense_categories").select("*").eq("company_id", companyId).order("sort_order"),
     ),
-    limitBookQuery(() =>
+    selectAllRows(() =>
       supabase.from("qb_chart_accounts").select("*").eq("company_id", companyId).order("account_number"),
     ),
   ]);

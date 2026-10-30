@@ -18,6 +18,7 @@ import {
 } from "@/lib/marketing/email-campaigns";
 import { formatResendFrom, isResendConfigured, sendResendEmail } from "@/lib/resend-mail";
 import { looksLikeEmail } from "@/lib/share-text";
+import { selectAllRows } from "@/lib/supabase/load-book";
 import { mapCompany, mapContact, mapJob, mapStaff } from "@/lib/supabase/mappers";
 import { createClient } from "@/lib/supabase/server";
 import type { Contact, Job } from "@/lib/types";
@@ -53,8 +54,8 @@ export async function loadCampaignBook(
   supabase: Awaited<ReturnType<typeof createClient>>,
 ): Promise<{ contacts: Contact[]; jobs: Job[]; error?: string }> {
   const [contactsRes, jobsRes] = await Promise.all([
-    supabase.from("contacts").select("*"),
-    supabase.from("jobs").select("*"),
+    selectAllRows(() => supabase.from("contacts").select("*")),
+    selectAllRows(() => supabase.from("jobs").select("*")),
   ]);
   if (contactsRes.error) return { contacts: [], jobs: [], error: contactsRes.error.message };
   if (jobsRes.error) return { contacts: [], jobs: [], error: jobsRes.error.message };
