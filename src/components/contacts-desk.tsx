@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ChevronUp,
+  ChevronsLeft,
+  ChevronsRight,
   Copy,
   FilePlus,
   Home,
@@ -54,10 +57,54 @@ import { buildVendorBook, visibleVendorRows, type VendorBookRow } from "@/lib/ve
 import { useCrm } from "@/lib/crm-store";
 import { formatDateShort, initials, localYmd } from "@/lib/format";
 import { mailHref } from "@/lib/job-emails";
+import {
+  DEFAULT_LIST_PAGE_SIZE,
+  LIST_PAGE_SIZES,
+  pageForIndex,
+  pageSlice,
+  parseListPageSize,
+  type ListPage,
+  type ListPageSize,
+} from "@/lib/paging";
 import { digitsOnly } from "@/lib/phone";
 import { useStartEstimate } from "@/lib/start-estimate";
 import { staffAssignmentLabel } from "@/lib/visibility";
 import { cn } from "@/lib/utils";
+
+const PAGE_SIZE_KEY = "contacts.pageSize";
+const PAGE_SIZE_EVENT = "contacts:page-size";
+
+/** Falls back to this when localStorage is blocked, so the choice still holds for the visit. */
+let sessionPageSize: ListPageSize | null = null;
+
+function readPageSize(): ListPageSize {
+  try {
+    const stored = window.localStorage.getItem(PAGE_SIZE_KEY);
+    if (stored) return parseListPageSize(stored);
+  } catch {
+    // Private mode or a blocked store.
+  }
+  return sessionPageSize ?? DEFAULT_LIST_PAGE_SIZE;
+}
+
+function writePageSize(size: ListPageSize) {
+  sessionPageSize = size;
+  try {
+    window.localStorage.setItem(PAGE_SIZE_KEY, String(size));
+  } catch {
+    // Covered by sessionPageSize.
+  }
+  window.dispatchEvent(new Event(PAGE_SIZE_EVENT));
+}
+
+function subscribePageSize(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  window.addEventListener(PAGE_SIZE_EVENT, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(PAGE_SIZE_EVENT, onChange);
+  };
+}
 
 export function ContactsDesk() {
   const crm = useCrm();
@@ -65,7 +112,10 @@ export function ContactsDesk() {
   const searchParams = useSearchParams();
   const searchRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const pageSize = useSyncExternalStore(subscribePageSize, readPageSize, () => DEFAULT_LIST_PAGE_SIZE);
   const [createOpen, setCreateOpen] = useState(false);
   const [jobOpen, setJobOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -143,7 +193,26 @@ export function ContactsDesk() {
     () => (showingVendors ? visibleVendorRows(vendorRows, query) : []),
     [query, showingVendors, vendorRows],
   );
+  const contactPage = useMemo(() => pageSlice(visible, page, pageSize), [page, pageSize, visible]);
+  const vendorPage = useMemo(() => pageSlice(visibleVendors, page, pageSize), [page, pageSize, visibleVendors]);
+  const listPage: ListPage<{ id: string }> = showingVendors ? vendorPage : contactPage;
   const counts = useMemo(() => contactFilterCounts(rows, vendorRows.length), [rows, vendorRows.length]);
+
+  const setPageSize = useCallback(
+    (next: ListPageSize) => {
+      // Keep the first row of the current page in view when the page size changes.
+      const firstIndex = (listPage.page - 1) * pageSize;
+      writePageSize(next);
+      setPage(pageForIndex(firstIndex, next));
+    },
+    [listPage.page, pageSize],
+  );
+
+  const goToPage = useCallback((next: number) => {
+    setPage(next);
+    listRef.current?.scrollTo({ top: 0 });
+  }, []);
+
   const openContact = !showingVendors && contactId ? crm.getContact(contactId) : undefined;
   const selected = openContact ? rows.find((row) => row.id === openContact.id) : undefined;
   const selectedVendor = showingVendors
@@ -177,6 +246,7 @@ export function ContactsDesk() {
     (next: ContactFilter) => {
       if (editsBlockLeave()) return;
       finishEditing();
+      goToPage(1);
       replaceParams((params) => {
         if (next === "all") params.delete("filter");
         else params.set("filter", next);
@@ -184,7 +254,7 @@ export function ContactsDesk() {
         else params.delete("vendor");
       });
     },
-    [editsBlockLeave, finishEditing, replaceParams],
+    [editsBlockLeave, finishEditing, goToPage, replaceParams],
   );
 
   const selectContact = useCallback(
@@ -230,33 +300,57 @@ export function ContactsDesk() {
     [editsBlockLeave, finishEditing, replaceParams],
   );
 
+  const revealRow = useCallback(
+    (attribute: "data-contact" | "data-vendor", id: string, index: number) => {
+      const target = pageForIndex(index, pageSize);
+      if (target !== page) setPage(target);
+      // The row may only exist after the page flips, so look for it on the next frame.
+      requestAnimationFrame(() => {
+        document.querySelector<HTMLElement>(`[${attribute}="${id}"]`)?.scrollIntoView({ block: "nearest" });
+      });
+    },
+    [page, pageSize],
+  );
+
   const step = useCallback(
     (delta: number) => {
       if (showingVendors) {
         if (visibleVendors.length === 0) return;
         const index = visibleVendors.findIndex((row) => row.id === vendorId);
-        const next =
-          visibleVendors[Math.min(visibleVendors.length - 1, Math.max(0, (index < 0 ? 0 : index) + delta))];
+        const nextIndex = Math.min(visibleVendors.length - 1, Math.max(0, (index < 0 ? 0 : index) + delta));
+        const next = visibleVendors[nextIndex];
         if (next) {
           selectVendor(next.id);
-          document.querySelector<HTMLElement>(`[data-vendor="${next.id}"]`)?.scrollIntoView({
-            block: "nearest",
-          });
+          revealRow("data-vendor", next.id, nextIndex);
         }
         return;
       }
       if (visible.length === 0) return;
       const index = visible.findIndex((row) => row.id === contactId);
-      const next = visible[Math.min(visible.length - 1, Math.max(0, (index < 0 ? 0 : index) + delta))];
+      const nextIndex = Math.min(visible.length - 1, Math.max(0, (index < 0 ? 0 : index) + delta));
+      const next = visible[nextIndex];
       if (next) {
         selectContact(next.id);
-        document.querySelector<HTMLElement>(`[data-contact="${next.id}"]`)?.scrollIntoView({
-          block: "nearest",
-        });
+        revealRow("data-contact", next.id, nextIndex);
       }
     },
-    [contactId, selectContact, selectVendor, showingVendors, vendorId, visible, visibleVendors],
+    [contactId, revealRow, selectContact, selectVendor, showingVendors, vendorId, visible, visibleVendors],
   );
+
+  // A deep link or a fresh selection should land on the page that holds it. Only the
+  // selection change triggers this, so paging around while a contact stays open is left alone.
+  const pagingRef = useRef({ visible, visibleVendors, pageSize });
+  useEffect(() => {
+    pagingRef.current = { visible, visibleVendors, pageSize };
+  });
+  useEffect(() => {
+    const current = pagingRef.current;
+    const list: { id: string }[] = showingVendors ? current.visibleVendors : current.visible;
+    const id = showingVendors ? vendorId : contactId;
+    if (!id) return;
+    const index = list.findIndex((row) => row.id === id);
+    if (index >= 0) setPage(pageForIndex(index, current.pageSize));
+  }, [contactId, showingVendors, vendorId]);
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -363,12 +457,12 @@ export function ContactsDesk() {
   const listCount = showingVendors ? vendorRows.length : rows.length;
 
   return (
-    <div className="space-y-5">
+    <div className="flex min-h-0 flex-1 flex-col gap-5">
       {crm.hydrateError ? (
         <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} />
       ) : null}
 
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="flex shrink-0 flex-wrap items-end gap-3">
         <h1 className="text-[2.1rem] leading-none font-semibold tracking-tight text-[#1d1d1f]">
           Contacts
           <span className="ml-2.5 text-[15px] font-normal tracking-normal text-[#6e6e73] tabular-nums">
@@ -418,14 +512,17 @@ export function ContactsDesk() {
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+      <div className="flex shrink-0 flex-col gap-3 lg:flex-row lg:items-center">
         <label className="flex min-w-[220px] flex-1 items-center gap-2 rounded-[10px] border border-[rgba(28,25,22,0.08)] bg-white px-3 max-w-[420px]">
           <Search className="size-4 text-[#a1a1a6]" aria-hidden />
           <input
             ref={searchRef}
             type="search"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              goToPage(1);
+            }}
             placeholder={
               showingVendors
                 ? "Vendor, trade, notes, or pricing"
@@ -464,21 +561,19 @@ export function ContactsDesk() {
 
       <div
         className={cn(
-          "grid items-start gap-0 transition-[grid-template-columns,gap] duration-300",
+          "grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] items-stretch gap-0 transition-[grid-template-columns,gap] duration-300",
           open && "gap-4 md:grid-cols-[minmax(0,1fr)_min(440px,42vw)]",
         )}
       >
         <div
           className={cn(
-            "overflow-hidden rounded-2xl bg-white shadow-[0_0_0_1px_rgba(28,25,22,0.08)]",
+            "flex min-h-0 flex-col overflow-hidden rounded-2xl bg-white shadow-[0_0_0_1px_rgba(28,25,22,0.08)]",
             open && "max-md:hidden",
           )}
-          role="listbox"
-          aria-label="Contacts"
         >
           <div
             className={cn(
-              "grid h-10 items-center gap-4 border-b border-[rgba(28,25,22,0.08)] px-5 text-xs font-medium text-[#6e6e73]",
+              "grid h-10 shrink-0 items-center gap-4 border-b border-[rgba(28,25,22,0.08)] px-5 text-xs font-medium text-[#6e6e73]",
               open
                 ? "grid-cols-[minmax(0,1fr)_6.875rem]"
                 : "grid-cols-[minmax(0,1fr)_6.875rem] xl:grid-cols-[minmax(12.5rem,1.4fr)_minmax(0,1.6fr)_8.125rem_7.5rem_6.875rem]",
@@ -492,51 +587,64 @@ export function ContactsDesk() {
             </span>
             <span>{showingVendors ? "Status" : "Stage"}</span>
           </div>
-          {showingVendors ? (
-            visibleVendors.length === 0 ? (
+          <div
+            ref={listRef}
+            role="listbox"
+            aria-label={showingVendors ? "Vendors" : "Contacts"}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+          >
+            {showingVendors ? (
+              visibleVendors.length === 0 ? (
+                <p className="px-5 py-12 text-center text-sm text-[#6e6e73]">
+                  {query.trim()
+                    ? `No vendors match “${query.trim()}”.`
+                    : emptyFilterCopy(filter)}
+                </p>
+              ) : (
+                vendorPage.items.map((row) => (
+                  <VendorRow
+                    key={row.id}
+                    row={row}
+                    compact={open}
+                    selected={row.id === vendorId}
+                    onOpen={() => selectVendor(row.id)}
+                  />
+                ))
+              )
+            ) : visible.length === 0 ? (
               <p className="px-5 py-12 text-center text-sm text-[#6e6e73]">
                 {query.trim()
-                  ? `No vendors match “${query.trim()}”.`
+                  ? `No contacts match “${query.trim()}”.`
                   : emptyFilterCopy(filter)}
               </p>
             ) : (
-              visibleVendors.map((row) => (
-                <VendorRow
+              contactPage.items.map((row) => (
+                <ContactRow
                   key={row.id}
                   row={row}
                   compact={open}
-                  selected={row.id === vendorId}
-                  onOpen={() => selectVendor(row.id)}
+                  selected={row.id === contactId}
+                  onOpen={() => selectContact(row.id)}
                 />
               ))
-            )
-          ) : visible.length === 0 ? (
-            <p className="px-5 py-12 text-center text-sm text-[#6e6e73]">
-              {query.trim()
-                ? `No contacts match “${query.trim()}”.`
-                : emptyFilterCopy(filter)}
-            </p>
-          ) : (
-            visible.map((row) => (
-              <ContactRow
-                key={row.id}
-                row={row}
-                compact={open}
-                selected={row.id === contactId}
-                onOpen={() => selectContact(row.id)}
-              />
-            ))
-          )}
+            )}
+          </div>
+          <ListPager
+            page={listPage}
+            pageSize={pageSize}
+            compact={open}
+            noun={showingVendors ? "vendors" : "contacts"}
+            onPage={goToPage}
+            onPageSize={setPageSize}
+          />
         </div>
 
         <aside
           aria-label="Contact details"
           aria-hidden={!open}
           className={cn(
-            "flex min-w-0 flex-col overflow-hidden rounded-2xl bg-white shadow-[0_0_0_1px_rgba(28,25,22,0.08),0_8px_24px_rgba(0,0,0,0.05)]",
-            open
-              ? "sticky top-4 h-auto md:top-[4.75rem] md:h-[calc(100vh-6rem)]"
-              : "hidden",
+            "min-h-0 min-w-0 flex-col overflow-hidden rounded-2xl bg-white shadow-[0_0_0_1px_rgba(28,25,22,0.08),0_8px_24px_rgba(0,0,0,0.05)]",
+            open ? "flex" : "hidden",
           )}
         >
           {selectedVendor ? (
@@ -657,6 +765,103 @@ function emptyFilterCopy(filter: ContactFilter) {
     return "No vendors or trades yet. Add a profile, or pull QuickBooks payees with the Web Connector.";
   }
   return "Add a contact to start the book.";
+}
+
+function ListPager({
+  page,
+  pageSize,
+  compact,
+  noun,
+  onPage,
+  onPageSize,
+}: {
+  page: ListPage<unknown>;
+  pageSize: ListPageSize;
+  compact: boolean;
+  noun: string;
+  onPage: (page: number) => void;
+  onPageSize: (size: ListPageSize) => void;
+}) {
+  const format = (value: number) => value.toLocaleString();
+  const range =
+    page.total === 0 ? `0 ${noun}` : `${format(page.from)}–${format(page.to)} of ${format(page.total)}`;
+
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-t border-[rgba(28,25,22,0.08)] px-4 py-2 text-[12.5px] text-[#6e6e73]">
+      <span className="tabular-nums">{range}</span>
+      <div className="flex items-center gap-1.5" role="group" aria-label="Rows per page">
+        <span className={cn("hidden", !compact && "sm:inline")}>Show</span>
+        <div className="flex rounded-lg bg-[#f0efec] p-[2px]">
+          {LIST_PAGE_SIZES.map((size) => {
+            const on = size === pageSize;
+            return (
+              <button
+                key={size}
+                type="button"
+                aria-pressed={on}
+                onClick={() => onPageSize(size)}
+                className={cn(
+                  "rounded-[6px] px-2 py-0.5 text-xs font-medium tabular-nums",
+                  on ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73] hover:text-[#1d1d1f]",
+                )}
+              >
+                {size}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <nav className="ml-auto flex items-center gap-0.5" aria-label="Pages">
+        <PagerBtn label="First page" disabled={page.page <= 1} onClick={() => onPage(1)}>
+          <ChevronsLeft />
+        </PagerBtn>
+        <PagerBtn label="Previous page" disabled={page.page <= 1} onClick={() => onPage(page.page - 1)}>
+          <ChevronLeft />
+        </PagerBtn>
+        <span className="min-w-[6.5rem] text-center tabular-nums" aria-live="polite">
+          Page {format(page.page)} of {format(page.pageCount)}
+        </span>
+        <PagerBtn
+          label="Next page"
+          disabled={page.page >= page.pageCount}
+          onClick={() => onPage(page.page + 1)}
+        >
+          <ChevronRight />
+        </PagerBtn>
+        <PagerBtn
+          label="Last page"
+          disabled={page.page >= page.pageCount}
+          onClick={() => onPage(page.pageCount)}
+        >
+          <ChevronsRight />
+        </PagerBtn>
+      </nav>
+    </div>
+  );
+}
+
+function PagerBtn({
+  label,
+  disabled,
+  onClick,
+  children,
+}: {
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="grid size-7 place-items-center rounded-md text-[#6e6e73] hover:bg-[#f0efec] hover:text-[#1d1d1f] disabled:pointer-events-none disabled:opacity-35 [&_svg]:size-4"
+    >
+      {children}
+    </button>
+  );
 }
 
 function vendorStatusChip(label: VendorBookRow["statusLabel"]) {

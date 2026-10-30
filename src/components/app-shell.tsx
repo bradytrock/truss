@@ -248,7 +248,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const inboxLayout = isInboxPath(pathname);
   const mapLayout = pathname === "/map";
   const measureLayout = /^\/jobs\/[^/]+\/measure$/.test(pathname);
-  const fillLayout = inboxLayout || mapLayout || measureLayout;
+  // The contact book pages and scrolls its own list, so the page itself must not scroll.
+  const contactsLayout = pathname === "/contacts";
+  const fillLayout = inboxLayout || mapLayout || measureLayout || contactsLayout;
   const marketingSuite = pathname === "/marketing" || pathname.startsWith("/marketing/");
 
   const createMenu =
@@ -393,7 +395,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                 ? "flex min-h-0 flex-1 flex-col overflow-hidden p-0"
               : inboxLayout
                 ? "flex min-h-0 flex-1 flex-col overflow-hidden"
-                : cn(
+                : contactsLayout
+                  ? "flex min-h-0 flex-1 flex-col overflow-hidden p-5 sm:p-7"
+                  : cn(
                 "flex-1 p-5 sm:p-7",
                 pathname.startsWith("/settings") &&
                   !isAutomationBuilderPath(pathname) &&
