@@ -511,6 +511,11 @@ export type HubSpotDealDraft = {
   tags: string[];
   /** Already in Truss from an earlier import; the import updates instead of adding. */
   existingOpportunityId: string | null;
+  /**
+   * The office chose to import this row even though its Record ID is repeated
+   * in the file. It becomes its own deal and is not tied back to that Record ID.
+   */
+  duplicateAllowed?: boolean;
   /** Hard problems: the row cannot be imported until it is fixed or excluded. */
   issues: string[];
   /** Soft notes shown on Verify. */
@@ -723,9 +728,24 @@ export type HubSpotRowOverride = {
   ownerStaffId?: string;
   leadSource?: LeadSource | "";
   excluded?: boolean;
+  /** Import this row even though its Record ID is repeated in the file. */
+  allowDuplicate?: boolean;
 };
 
 const OWNER_ISSUE = /owner seat|seat is locked/i;
+const DUPLICATE_RECORD_ISSUE = /appears twice in the file/i;
+const ALREADY_IMPORTED_WARNING = /^Already imported/i;
+
+export function isDuplicateRecordIssue(issue: string) {
+  return DUPLICATE_RECORD_ISSUE.test(issue);
+}
+
+/** Record ID stored on the deal. A row added despite a repeat is not linked, so a later import updates the first copy only. */
+export function hubspotDealExternalId(draft: Pick<HubSpotDealDraft, "recordId" | "duplicateAllowed">) {
+  if (draft.duplicateAllowed) return undefined;
+  const id = draft.recordId.trim();
+  return id || undefined;
+}
 
 export function overrideHubSpotDraft(
   draft: HubSpotDealDraft,
@@ -754,7 +774,19 @@ export function overrideHubSpotDraft(
   if (override.leadSource !== undefined && override.leadSource !== draft.leadSource) {
     next = { ...next, leadSource: override.leadSource };
   }
-  if (override.excluded !== undefined && override.excluded !== draft.excluded) {
+  if (override.allowDuplicate && !next.duplicateAllowed && next.issues.some(isDuplicateRecordIssue)) {
+    next = {
+      ...next,
+      issues: next.issues.filter((issue) => !isDuplicateRecordIssue(issue)),
+      duplicateAllowed: true,
+      existingOpportunityId: null,
+      warnings: [
+        ...next.warnings.filter((warning) => !ALREADY_IMPORTED_WARNING.test(warning)),
+        "Same Record ID as another row; added as its own deal. A later import updates the first copy only.",
+      ],
+    };
+  }
+  if (override.excluded !== undefined && override.excluded !== next.excluded) {
     next = { ...next, excluded: override.excluded };
   }
   return next;

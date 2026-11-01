@@ -5,7 +5,10 @@ import {
   guessLeadSource,
   guessOwnerStaffId,
   guessStageTarget,
+  hubspotDealExternalId,
   hubspotSkippedCsv,
+  isDuplicateRecordIssue,
+  isReadyHubSpotDraft,
   overrideHubSpotDraft,
   parseHubSpotAddress,
   parseHubSpotAmount,
@@ -277,5 +280,46 @@ assert.ok(!reowned.issues.some((issue) => /No owner seat/.test(issue)));
 const dropped = overrideHubSpotDraft(smith, { excluded: true }, staff);
 assert.equal(dropped.excluded, true);
 assert.equal(overrideHubSpotDraft(smith, undefined, staff), smith);
+
+const kept = overrideHubSpotDraft(dup, { allowDuplicate: true, excluded: false }, staff);
+assert.equal(kept.duplicateAllowed, true);
+assert.equal(kept.excluded, false);
+assert.equal(kept.existingOpportunityId, null);
+assert.ok(!kept.issues.some(isDuplicateRecordIssue));
+assert.ok(kept.warnings.some((warning) => /own deal/.test(warning)));
+assert.equal(isReadyHubSpotDraft(kept), true);
+assert.equal(hubspotDealExternalId(kept), undefined);
+assert.equal(hubspotDealExternalId(smith), "1001");
+assert.equal(dup.issues.some(isDuplicateRecordIssue), true, "original duplicate row stays blocked");
+
+const stillBlocked = overrideHubSpotDraft(
+  { ...dup, issues: [...dup.issues, "Amount “abc” is not a number."] },
+  { allowDuplicate: true },
+  staff,
+);
+assert.equal(stillBlocked.duplicateAllowed, true);
+assert.ok(!stillBlocked.issues.some(isDuplicateRecordIssue));
+assert.ok(stillBlocked.issues.some((issue) => /Amount/.test(issue)));
+assert.equal(isReadyHubSpotDraft(stillBlocked), false);
+
+const repeatedExisting = overrideHubSpotDraft(
+  {
+    ...dup,
+    existingOpportunityId: "opp-existing",
+    warnings: ["Already imported; this run updates it."],
+  },
+  { allowDuplicate: true },
+  staff,
+);
+assert.equal(repeatedExisting.existingOpportunityId, null);
+assert.ok(!repeatedExisting.warnings.some((warning) => /Already imported/.test(warning)));
+assert.equal(repeatedExisting.warnings.filter((warning) => /own deal/.test(warning)).length, 1);
+
+const again = overrideHubSpotDraft(kept, { allowDuplicate: true }, staff);
+assert.equal(again.warnings.filter((warning) => /own deal/.test(warning)).length, 1);
+
+const afterAllow = summarizeHubSpotDrafts(drafts.map((draft) => (draft.line === dup.line ? kept : draft)));
+assert.equal(afterAllow.ready, 3);
+assert.equal(afterAllow.blocked, 2);
 
 console.log("hubspot-import override tests passed");

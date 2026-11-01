@@ -81,7 +81,13 @@ import {
   withSyncedDefaultEstimateTerms,
 } from "@/lib/contract-types";
 import { matchCatalogItem, type CatalogImportDraft } from "@/lib/catalog-csv";
-import { HUBSPOT_SOURCE, isReadyHubSpotDraft, type HubSpotDealDraft, type HubSpotImportResult } from "@/lib/hubspot-import";
+import {
+  HUBSPOT_SOURCE,
+  hubspotDealExternalId,
+  isReadyHubSpotDraft,
+  type HubSpotDealDraft,
+  type HubSpotImportResult,
+} from "@/lib/hubspot-import";
 import {
   isReadyHubSpotContactDraft,
   type HubSpotContactDraft,
@@ -7303,7 +7309,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           notes: draft.notes,
           importedAt: existing?.importedAt || importedAt,
           externalSource: HUBSPOT_SOURCE,
-          externalId: draft.recordId || undefined,
+          externalId: hubspotDealExternalId(draft),
         };
 
         const existingJob = existing ? jobsByOpportunity.get(existing.id) : undefined;
@@ -7343,7 +7349,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           tags: draft.tags.length ? draft.tags : base.tags,
           importedAt: existingJob?.importedAt || importedAt,
           externalSource: HUBSPOT_SOURCE,
-          externalId: draft.recordId || undefined,
+          externalId: hubspotDealExternalId(draft),
         };
 
         jobCreatedAt.set(job.id, opportunity.createdAt);

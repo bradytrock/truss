@@ -20,6 +20,7 @@ import {
   applyHubSpotMapping,
   defaultHubSpotMapping,
   hubspotSkippedCsv,
+  isDuplicateRecordIssue,
   isReadyHubSpotDraft,
   overrideHubSpotDraft,
   parseHubSpotCsv,
@@ -257,6 +258,17 @@ export function HubSpotImportWizard() {
               const next = { ...current };
               for (const draft of drafts) {
                 if (!draft.excluded && draft.issues.length > 0) next[draft.line] = { ...next[draft.line], excluded: true };
+              }
+              return next;
+            })
+          }
+          onAllowDuplicates={() =>
+            setOverrides((current) => {
+              const next = { ...current };
+              for (const draft of drafts) {
+                if (draft.issues.some(isDuplicateRecordIssue)) {
+                  next[draft.line] = { ...next[draft.line], allowDuplicate: true, excluded: false };
+                }
               }
               return next;
             })
@@ -705,6 +717,7 @@ function VerifyStep({
   staff,
   onOverride,
   onExcludeBlocked,
+  onAllowDuplicates,
   onBack,
   onImport,
 }: {
@@ -714,6 +727,7 @@ function VerifyStep({
   staff: StaffMember[];
   onOverride: (line: number, patch: HubSpotRowOverride) => void;
   onExcludeBlocked: () => void;
+  onAllowDuplicates: () => void;
   onBack: () => void;
   onImport: () => void;
 }) {
@@ -742,6 +756,7 @@ function VerifyStep({
 
   const sample = drafts.find(isReadyHubSpotDraft) ?? drafts[0];
   const canImport = summary.blocked === 0 && summary.ready > 0;
+  const duplicateCount = drafts.filter((draft) => draft.issues.some(isDuplicateRecordIssue)).length;
 
   return (
     <div className="space-y-5">
@@ -800,12 +815,22 @@ function VerifyStep({
       <SettingsCard>
         <SettingsCardHeader
           title="Every row"
-          description="Change a column, seat, or seed on a single row, or untick it to leave it out. Rows marked red cannot import until fixed."
+          description="Change a column, seat, or seed on a single row, or untick it to leave it out. A Record ID that appears twice can be added anyway. Other red rows cannot import until fixed."
           actions={
-            summary.blocked > 0 ? (
-              <Button size="sm" variant="outline" className="bg-white" onClick={onExcludeBlocked}>
-                Leave out all {summary.blocked} that need a fix
-              </Button>
+            summary.blocked > 0 || duplicateCount > 0 ? (
+              <div className="flex flex-wrap justify-end gap-2">
+                {duplicateCount > 0 ? (
+                  <Button size="sm" variant="outline" className="bg-white" onClick={onAllowDuplicates}>
+                    Add anyways
+                    {duplicateCount === 1 ? "" : ` (${duplicateCount})`}
+                  </Button>
+                ) : null}
+                {summary.blocked > 0 ? (
+                  <Button size="sm" variant="outline" className="bg-white" onClick={onExcludeBlocked}>
+                    Leave out all {summary.blocked} that need a fix
+                  </Button>
+                ) : null}
+              </div>
             ) : null
           }
         />
@@ -1016,9 +1041,18 @@ function VerifyRow({
       </td>
       <td className="px-3 py-2 align-top text-xs">
         {draft.issues.map((issue) => (
-          <p key={issue} className="text-destructive">
-            {issue}
-          </p>
+          <div key={issue}>
+            <p className="text-destructive">{issue}</p>
+            {isDuplicateRecordIssue(issue) ? (
+              <button
+                type="button"
+                className="mt-1 font-medium text-foreground underline underline-offset-2"
+                onClick={() => onOverride(draft.line, { allowDuplicate: true, excluded: false })}
+              >
+                Add anyways
+              </button>
+            ) : null}
+          </div>
         ))}
         {draft.warnings.map((warning) => (
           <p key={warning} className="text-amber-700">
