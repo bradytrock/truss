@@ -1,3 +1,5 @@
+import type { HailPopupHit } from "@/lib/weather/hail-point";
+import type { HailStorm } from "@/lib/weather/sample-storms";
 import type { BBox, StormLayers, StormPoint } from "@/lib/weather/types";
 
 const CACHE_MS = 3 * 60 * 1000;
@@ -37,6 +39,43 @@ export function loadStormLayers(points: StormPoint[], states: string[], force = 
     });
   pending = { key, promise };
   return promise;
+}
+
+export async function loadHailSwaths() {
+  const response = await fetch("/api/weather/swaths");
+  const body = (await response.json()) as { source?: "database" | "sample"; storms?: HailStorm[]; error?: string };
+  if (!response.ok) throw new Error(body.error || "The hail swaths did not load.");
+  return { source: body.source ?? "sample", storms: body.storms ?? [] };
+}
+
+export async function loadHailPoint(lat: number, lng: number) {
+  const params = new URLSearchParams({ lat: String(lat), lng: String(lng), since: "90" });
+  const response = await fetch(`/api/weather/point?${params.toString()}`);
+  const body = (await response.json()) as { source?: "database" | "sample"; hits?: HailPopupHit[]; error?: string };
+  if (!response.ok) throw new Error(body.error || "The hail lookup did not finish.");
+  return { source: body.source ?? "sample", hits: body.hits ?? [] };
+}
+
+export type RadarCellReading = {
+  active: boolean;
+  approximate?: boolean;
+  dbz?: number;
+  category?: string;
+  hailChance?: string;
+  radarSite?: string;
+  error?: string;
+};
+
+export async function loadRadarCell(lat: number, lng: number, zoom: number) {
+  const params = new URLSearchParams({
+    lat: String(lat),
+    lng: String(lng),
+    zoom: String(Math.round(zoom)),
+  });
+  const response = await fetch(`/api/weather/radar-cell?${params.toString()}`);
+  const body = (await response.json()) as RadarCellReading;
+  if (!response.ok) throw new Error(body.error || "The radar cell did not load.");
+  return body;
 }
 
 export async function sendStormTexts() {

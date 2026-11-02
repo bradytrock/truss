@@ -421,6 +421,24 @@
   font-family: var(--font-plex-sans), "IBM Plex Sans", sans-serif;
 }
 
+.storm-map-leaflet .leaflet-bar a,
+.storm-map-leaflet .leaflet-bar a:hover,
+.storm-map-leaflet .leaflet-bar a:first-child,
+.storm-map-leaflet .leaflet-bar a:last-child {
+  background: #1c1f26;
+  color: #f4f4f5;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.storm-map-leaflet .leaflet-control-attribution {
+  background: rgba(14, 17, 22, 0.82);
+  color: #a1a1aa;
+}
+
+.storm-map-leaflet .leaflet-control-attribution a {
+  color: #d4d4d8;
+}
+
 .project-map-cluster-btn {
   display: flex;
   width: 36px;

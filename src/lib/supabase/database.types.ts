@@ -601,6 +601,68 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["weather_receipts"]["Insert"]>;
         Relationships: [];
       };
+      hail_storms: {
+        Row: {
+          id: string;
+          storm_date: string;
+          started_at: string;
+          ended_at: string;
+          radar_site: string;
+          storm_max_in: number;
+          source: string;
+          track: Json;
+        };
+        Insert: {
+          id?: string;
+          storm_date: string;
+          started_at: string;
+          ended_at: string;
+          radar_site?: string;
+          storm_max_in: number;
+          source?: string;
+          track: Json;
+        };
+        Update: Partial<Database["public"]["Tables"]["hail_storms"]["Insert"]>;
+        Relationships: [];
+      };
+      hail_swath_bands: {
+        Row: {
+          id: string;
+          storm_id: string;
+          band_size_in: number;
+          geom: Json;
+        };
+        Insert: {
+          id?: string;
+          storm_id: string;
+          band_size_in: number;
+          geom: Json;
+        };
+        Update: Partial<Database["public"]["Tables"]["hail_swath_bands"]["Insert"]>;
+        Relationships: [];
+      };
+      hail_storm_reports: {
+        Row: {
+          id: string;
+          storm_id: string;
+          size_in: number;
+          place: string;
+          reported_at: string;
+          lat: number;
+          lng: number;
+        };
+        Insert: {
+          id?: string;
+          storm_id: string;
+          size_in: number;
+          place: string;
+          reported_at: string;
+          lat: number;
+          lng: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["hail_storm_reports"]["Insert"]>;
+        Relationships: [];
+      };
       activities: {
         Row: {
           id: string;
@@ -4282,6 +4344,26 @@ export type Database = {
       qbwc_close: {
         Args: { p_ticket: string };
         Returns: Json;
+      };
+      hail_at_point: {
+        Args: { p_lat: number; p_lng: number; p_since_days?: number };
+        Returns: {
+          storm_id: string;
+          storm_date: string;
+          started_at: string;
+          ended_at: string;
+          radar_site: string;
+          storm_max_in: number;
+          max_band_in: number;
+          distance_to_core_mi: number;
+          passed_over_start: string;
+          passed_over_end: string;
+          estimated_passage_at: string;
+          lsr_size_in: number | null;
+          lsr_place: string | null;
+          lsr_reported_at: string | null;
+          jobs_in_swath: number;
+        }[];
       };
     };
     Enums: {

@@ -1,0 +1,552 @@
+"use client";
+
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { toast } from "sonner";
+import { HailPointPopup, type CanvassPin } from "@/components/storm-popup/hail-point-popup";
+import { JobPinPopup, type StormJobPin } from "@/components/storm-popup/job-pin-popup";
+import { RadarCellPopup } from "@/components/storm-popup/radar-popup";
+import { clusterJobPins } from "@/lib/project-map";
+import { loadHailPoint, loadHailSwaths, loadRadarCell } from "@/lib/weather/client";
+import { pointInGeometry } from "@/lib/weather/geometry";
+import { HAIL_BINS, hailBin } from "@/lib/weather/hail";
+import {
+  formatChipDate,
+  formatHailInches,
+  hailAtPoint,
+  hoverReadout,
+  outerBand,
+  popupPanDelta,
+  type HailPopupHit,
+} from "@/lib/weather/hail-point";
+import { sampleHailStorms, type HailStorm } from "@/lib/weather/sample-storms";
+import { RADAR_ATTRIBUTION, RADAR_EMPTY_TILE, RADAR_MAX_NATIVE_ZOOM, RADAR_OPACITY, radarFrames } from "@/lib/weather-radar";
+
+const STAGE_LEGEND = [
+  { label: "Lead", color: "#3b6fd4" },
+  { label: "Supplementing", color: "#0f766e" },
+  { label: "Proposal sent", color: "#c47b2b" },
+  { label: "In progress", color: "#1f7a4d" },
+  { label: "Complete", color: "#4b5563" },
+] as const;
+
+const PAD_TOP = 112;
+const PAD_BOTTOM = 72;
+
+type Catalog = { source: "sample" | "database"; storms: HailStorm[] };
+
+type OpenPopup =
+  | { kind: "loading"; lat: number; lng: number }
+  | { kind: "error"; lat: number; lng: number; message: string }
+  | { kind: "hail"; lat: number; lng: number; hits: HailPopupHit[] }
+  | { kind: "job"; id: string }
+  | { kind: "radar"; lat: number; lng: number; dbz: number; site: string; hailChance: string };
+
+export function StormMap({
+  pins,
+  showRadar,
+  focusId,
+  rotation,
+  onDropLead,
+  onLogVisit,
+}: {
+  pins: StormJobPin[];
+  showRadar: boolean;
+  focusId?: string | null;
+  rotation?: { url: string; bounds: { west: number; south: number; east: number; north: number } } | null;
+  onDropLead: (lat: number, lng: number) => Promise<void>;
+  onLogVisit: (jobId: string) => Promise<void>;
+}) {
+  const el = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const ignoreUntil = useRef(0);
+  const moveAt = useRef(0);
+  const showRadarRef = useRef(showRadar);
+  const hiddenRef = useRef<string[]>([]);
+  const stormsRef = useRef<HailStorm[]>([]);
+  const lookupRef = useRef<(lat: number, lng: number) => void>(() => undefined);
+  const [catalog, setCatalog] = useState<Catalog>(() => ({ source: "sample", storms: sampleHailStorms() }));
+  const [hidden, setHidden] = useState<string[]>([]);
+  const [zoom, setZoom] = useState(9);
+  const [hover, setHover] = useState<{ text: string; coords: string } | null>(null);
+  const [popup, setPopup] = useState<OpenPopup | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const [dropping, setDropping] = useState(false);
+  const [logging, setLogging] = useState(false);
+  const storms = catalog.storms;
+  const hiddenSet = new Set(hidden);
+  const anchor = useMemo(() => {
+    if (!popup) return null;
+    if (popup.kind === "job") return pinPoint(pins, popup.id);
+    return { lat: popup.lat, lng: popup.lng };
+  }, [pins, popup]);
+  const anchorKey = anchor ? `${anchor.lat.toFixed(5)},${anchor.lng.toFixed(5)}` : "";
+  const placeRef = useRef<() => void>(() => undefined);
+  const pannedKey = useRef("");
+  const fittedSource = useRef("");
+  const fittedFocus = useRef<string | null>(null);
+  const anchorRef = useRef(anchor);
+
+  function arm() {
+    ignoreUntil.current = Date.now() + 450;
+  }
+
+  const lookup = useCallback(async (lat: number, lng: number) => {
+    setPopup({ kind: "loading", lat, lng });
+    const zoomNow = mapRef.current?.getZoom() ?? 8;
+    const [pointResult, radar] = await Promise.all([
+      loadHailPoint(lat, lng).then(
+        (result) => ({ ok: true as const, result }),
+        (error: unknown) => ({ ok: false as const, error }),
+      ),
+      showRadarRef.current ? loadRadarCell(lat, lng, zoomNow).catch(() => null) : Promise.resolve(null),
+    ]);
+    if (!pointResult.ok) {
+      const error = pointResult.error;
+      setPopup({
+        kind: "error",
+        lat,
+        lng,
+        message: error instanceof Error ? error.message : "The hail lookup did not finish.",
+      });
+      return;
+    }
+    const hits = pointResult.result.hits;
+    const hiddenNow = new Set(hiddenRef.current);
+    const visible = hits.some((hit) => !hiddenNow.has(hit.stormId));
+    const covered = hits.some((hit) => hiddenNow.has(hit.stormId));
+    if (visible || covered || !radar?.active || radar.dbz == null) {
+      setPopup({ kind: "hail", lat, lng, hits });
+      return;
+    }
+    setPopup({
+      kind: "radar",
+      lat,
+      lng,
+      dbz: radar.dbz,
+      site: radar.radarSite || "KFWS",
+      hailChance: radar.hailChance || "Low",
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    showRadarRef.current = showRadar;
+    hiddenRef.current = hidden;
+    stormsRef.current = storms;
+    anchorRef.current = anchor;
+    lookupRef.current = lookup;
+    placeRef.current = () => {
+      const map = mapRef.current;
+      const node = popupRef.current;
+      const current = anchorRef.current;
+      if (!map || !current) return;
+      const point = map.latLngToContainerPoint([current.lat, current.lng]);
+      const size = map.getSize();
+      const width = node?.offsetWidth ?? Math.min(320, size.x - 48);
+      const height = node?.offsetHeight ?? 420;
+      let left = point.x - width / 2;
+      let top = point.y - height - 14;
+      if (top < PAD_TOP) top = point.y + 14;
+      left = Math.max(12, Math.min(left, size.x - width - 12));
+      const next = { left: Math.round(left), top: Math.round(top) };
+      setPos((currentPos) => (currentPos && currentPos.left === next.left && currentPos.top === next.top ? currentPos : next));
+    };
+  }, [anchor, hidden, lookup, showRadar, storms]);
+
+  useEffect(() => {
+    let cancel = false;
+    loadHailSwaths()
+      .then((next) => {
+        if (cancel || next.source !== "database" || !next.storms.length) return;
+        setCatalog({ source: "database", storms: next.storms });
+      })
+      .catch(() => undefined);
+    return () => {
+      cancel = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!el.current || mapRef.current) return;
+    const map = L.map(el.current, { zoomControl: false, attributionControl: true }).setView([32.9, -97.15], 9);
+    L.control.zoom({ position: "topright" }).addTo(map);
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      attribution: '&copy; OpenStreetMap &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: "abcd",
+      maxZoom: 19,
+    }).addTo(map);
+    const swathPane = map.createPane("swath");
+    swathPane.style.zIndex = "340";
+    swathPane.style.pointerEvents = "none";
+    const radarPane = map.createPane("radar");
+    radarPane.style.zIndex = "350";
+    radarPane.style.pointerEvents = "none";
+    mapRef.current = map;
+    const onZoom = () => setZoom(map.getZoom());
+    const onMove = () => placeRef.current();
+    const onClick = (event: L.LeafletMouseEvent) => {
+      if (Date.now() < ignoreUntil.current) return;
+      const target = event.originalEvent.target;
+      if (target instanceof Node && popupRef.current?.contains(target)) return;
+      lookupRef.current(event.latlng.lat, event.latlng.lng);
+    };
+    const onHover = (event: L.LeafletMouseEvent) => {
+      const now = Date.now();
+      if (now - moveAt.current < 90) return;
+      moveAt.current = now;
+      const visibleStorms = stormsRef.current.filter((storm) => !hiddenRef.current.includes(storm.id));
+      const hits = hailAtPoint(visibleStorms, event.latlng.lat, event.latlng.lng);
+      const text = hoverReadout(hits);
+      const coords = `${event.latlng.lat.toFixed(4)}, ${event.latlng.lng.toFixed(4)}`;
+      setHover((current) => (current && current.text === text && current.coords === coords ? current : { text, coords }));
+    };
+    map.on("zoomend", onZoom);
+    map.on("move", onMove);
+    map.on("click", onClick);
+    map.on("mousemove", onHover);
+    const initial = stormsRef.current.flatMap((storm) => storm.track.map((pair) => [pair[1], pair[0]] as L.LatLngTuple));
+    if (initial.length) map.fitBounds(L.latLngBounds(initial), { padding: [64, 64], maxZoom: 10, animate: false });
+    const resize = () => map.invalidateSize();
+    const timer = window.setTimeout(resize, 80);
+    const observed = el.current;
+    const observer = new ResizeObserver(resize);
+    if (observed) observer.observe(observed);
+    return () => {
+      window.clearTimeout(timer);
+      observer.disconnect();
+      map.remove();
+      mapRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || fittedSource.current === catalog.source) return;
+    const points = storms.flatMap((storm) => storm.track.map((pair) => [pair[1], pair[0]] as L.LatLngTuple));
+    if (!points.length) return;
+    fittedSource.current = catalog.source;
+    map.fitBounds(L.latLngBounds(points), { padding: [64, 64], maxZoom: 10, animate: false });
+  }, [catalog.source, storms]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const group = L.layerGroup().addTo(map);
+    const features = storms
+      .filter((storm) => !hidden.includes(storm.id))
+      .flatMap((storm) =>
+        [...storm.bands]
+          .sort((a, b) => a.sizeIn - b.sizeIn)
+          .map((band) => ({
+            type: "Feature" as const,
+            properties: { sizeIn: band.sizeIn },
+            geometry: band.geometry,
+          })),
+      );
+    if (features.length) {
+      const collection: GeoJSON.FeatureCollection = { type: "FeatureCollection", features };
+      L.geoJSON(collection, {
+        pane: "swath",
+        interactive: false,
+        style: (feature) => {
+          const size = Number(feature?.properties?.sizeIn);
+          const color = hailBin(size)?.color ?? "#dc2626";
+          return { color, weight: 1, opacity: 0.85, fillColor: color, fillOpacity: 0.5 };
+        },
+      }).addTo(group);
+    }
+    return () => {
+      map.removeLayer(group);
+    };
+  }, [storms, hidden]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const group = L.layerGroup().addTo(map);
+    const clusters = clusterJobPins(
+      pins.map((pin) => ({ id: pin.id, lat: pin.lat, lng: pin.lng })),
+      zoom,
+    );
+    for (const cluster of clusters) {
+      const members = pins.filter((pin) => cluster.jobIds.includes(pin.id));
+      if (members.length > 1) {
+        const icon = L.divIcon({
+          className: "project-map-cluster",
+          iconSize: [36, 36],
+          iconAnchor: [18, 18],
+          html: `<button type="button" class="project-map-cluster-btn" aria-label="${members.length} jobs">${members.length}</button>`,
+        });
+        const marker = L.marker([cluster.lat, cluster.lng], { icon, zIndexOffset: 200 });
+        marker.on("click", (event) => {
+          L.DomEvent.stopPropagation(event);
+          ignoreUntil.current = Date.now() + 450;
+          const bounds = L.latLngBounds(members.map((pin) => [pin.lat, pin.lng] as L.LatLngTuple));
+          map.fitBounds(bounds, { padding: [48, 48], maxZoom: 16 });
+        });
+        marker.addTo(group);
+        continue;
+      }
+      const pin = members[0];
+      if (!pin) continue;
+      const selected = popup?.kind === "job" && popup.id === pin.id;
+      const icon = L.divIcon({
+        className: "project-map-pin",
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+        html: `<button type="button" aria-label="${escapeAttr(pin.code || pin.name)}" style="width:18px;height:18px;border-radius:999px;border:${selected ? "3px solid #fff" : "2px solid #fff"};background:${pin.color};box-shadow:0 1px 4px rgba(0,0,0,.45);cursor:pointer"></button>`,
+      });
+      const marker = L.marker([pin.lat, pin.lng], { icon, zIndexOffset: selected ? 400 : 100 });
+      marker.on("click", (event) => {
+        L.DomEvent.stopPropagation(event);
+        ignoreUntil.current = Date.now() + 450;
+        setPopup({ kind: "job", id: pin.id });
+      });
+      marker.addTo(group);
+    }
+    return () => {
+      map.removeLayer(group);
+    };
+  }, [pins, zoom, popup]);
+
+  const rotationUrl = rotation?.url ?? null;
+  const rotationSouth = rotation?.bounds.south;
+  const rotationWest = rotation?.bounds.west;
+  const rotationNorth = rotation?.bounds.north;
+  const rotationEast = rotation?.bounds.east;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !rotationUrl || rotationSouth == null || rotationWest == null || rotationNorth == null || rotationEast == null) return;
+    const layer = L.imageOverlay(rotationUrl, [[rotationSouth, rotationWest], [rotationNorth, rotationEast]], {
+      pane: "swath",
+      opacity: 0.7,
+      interactive: false,
+    }).addTo(map);
+    return () => {
+      map.removeLayer(layer);
+    };
+  }, [rotationEast, rotationNorth, rotationSouth, rotationUrl, rotationWest]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !showRadar) return;
+    const motionOk = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const frames = motionOk ? radarFrames() : radarFrames().slice(-1);
+    const layers = frames.map((frame, index) => {
+      const layer = L.tileLayer(frame.url, {
+        pane: "radar",
+        opacity: index === frames.length - 1 ? RADAR_OPACITY : 0,
+        maxZoom: 19,
+        maxNativeZoom: RADAR_MAX_NATIVE_ZOOM,
+        errorTileUrl: RADAR_EMPTY_TILE,
+        ...(index === frames.length - 1 ? { attribution: RADAR_ATTRIBUTION } : {}),
+      });
+      layer.addTo(map);
+      return layer;
+    });
+    let index = frames.length - 1;
+    let timer = 0;
+    const tick = () => {
+      timer = window.setTimeout(() => {
+        const next = (index + 1) % frames.length;
+        layers[index]?.setOpacity(0);
+        layers[next]?.setOpacity(RADAR_OPACITY);
+        index = next;
+        tick();
+      }, frames[index]?.holdMs ?? 800);
+    };
+    if (frames.length > 1) tick();
+    return () => {
+      window.clearTimeout(timer);
+      for (const layer of layers) map.removeLayer(layer);
+    };
+  }, [showRadar]);
+
+  useLayoutEffect(() => {
+    const map = mapRef.current;
+    const node = popupRef.current;
+    const current = anchorRef.current;
+    const key = popup && current ? `${popup.kind}:${anchorKey}` : "";
+    if (!map || !node || !current || !key) return;
+    if (pannedKey.current !== key) {
+      pannedKey.current = key;
+      const point = map.latLngToContainerPoint([current.lat, current.lng]);
+      const size = map.getSize();
+      const delta = popupPanDelta({
+        x: point.x,
+        y: point.y,
+        mapWidth: size.x,
+        mapHeight: size.y,
+        popupWidth: node.offsetWidth,
+        popupHeight: node.offsetHeight,
+        padTop: PAD_TOP,
+        padBottom: PAD_BOTTOM,
+        padX: 16,
+      });
+      if (delta.x || delta.y) {
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        map.panBy([delta.x, delta.y], { animate: !reduce });
+      }
+    }
+    placeRef.current();
+    const observer = new ResizeObserver(() => placeRef.current());
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [popup, anchorKey]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPopup(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const pin = focusId ? pins.find((item) => item.id === focusId) : undefined;
+    if (!map || !pin || !focusId || fittedFocus.current === focusId) return;
+    fittedFocus.current = focusId;
+    map.flyTo([pin.lat, pin.lng], Math.max(map.getZoom(), 12), { duration: 0.45 });
+  }, [focusId, pins]);
+
+  const job = popup?.kind === "job" ? pins.find((pin) => pin.id === popup.id) : undefined;
+  const ordered = [...storms].sort((a, b) => b.stormDate.localeCompare(a.stormDate));
+
+  return (
+    <div className="relative h-full min-h-0 w-full bg-[#0e1116] text-white">
+      <div ref={el} className="project-map-leaflet storm-map-leaflet h-full min-h-0 w-full" />
+      <div className="pointer-events-none absolute top-3 left-3 z-20 max-w-[16rem]">
+        <p className="text-sm font-semibold">Storm Map</p>
+        <p className="text-[10px] tracking-wide text-white/60 uppercase">Hail · last 90 days</p>
+        <div className="pointer-events-none mt-3 rounded-lg bg-[#1a1d24]/95 px-3 py-2 text-xs shadow-lg">
+          <p className="font-medium">Hail swath · radar estimate</p>
+          <ul className="mt-1.5 space-y-1 text-white/75">
+            {HAIL_BINS.map((bin) => (
+              <li key={bin.label} className="flex items-center gap-2">
+                <span className="size-2.5 rounded-sm" style={{ background: bin.color }} />
+                <span>
+                  {bin.label} {formatHailInches(bin.inches)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <div className="pointer-events-auto absolute top-3 left-1/2 z-20 flex max-w-[calc(100%-9rem)] -translate-x-1/2 gap-1.5 overflow-x-auto">
+        {ordered.map((storm) => {
+          const bin = hailBin(storm.stormMaxIn);
+          const off = hidden.includes(storm.id);
+          return (
+            <button
+              key={storm.id}
+              type="button"
+              aria-pressed={!off}
+              onClick={() => setHidden((current) => (current.includes(storm.id) ? current.filter((id) => id !== storm.id) : [...current, storm.id]))}
+              className="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+              style={{ background: bin?.color ?? "#52525b", opacity: off ? 0.4 : 1 }}
+            >
+              {formatHailInches(storm.stormMaxIn)} {formatChipDate(storm.stormDate)} {bin?.label}
+            </button>
+          );
+        })}
+      </div>
+      <div className="pointer-events-none absolute top-14 right-14 z-20 hidden text-right text-xs text-white/70 sm:block">
+        <p>Click anywhere inside a swath</p>
+        {catalog.source === "sample" ? <p className="mt-1 text-white/45">Sample storms</p> : null}
+      </div>
+      <div className="pointer-events-none absolute bottom-3 left-3 z-20 rounded-full bg-[#1a1d24]/95 px-3 py-1.5 text-xs shadow-lg" aria-live="polite">
+        <span className="text-white/85">{hover?.text ?? "No hail here"}</span>
+        {hover ? <span className="ml-2 text-white/50">{hover.coords}</span> : null}
+      </div>
+      <ul className="pointer-events-none absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 gap-3 rounded-full bg-[#1a1d24]/95 px-3 py-1.5 text-[11px] text-white/80">
+        {STAGE_LEGEND.map((item) => (
+          <li key={item.label} className="flex items-center gap-1.5 whitespace-nowrap">
+            <span className="size-2 rounded-full" style={{ background: item.color }} />
+            {item.label}
+          </li>
+        ))}
+      </ul>
+      {popup && anchor ? (
+        <div ref={popupRef} className="absolute z-30" style={{ left: pos?.left ?? 16, top: pos?.top ?? 120 }}>
+          {popup.kind === "job" && job ? (
+            <JobPinPopup
+              key={job.id}
+              pin={job}
+              logging={logging}
+              onClose={() => setPopup(null)}
+              onInteract={arm}
+              onLogVisit={() => {
+                setLogging(true);
+                void onLogVisit(job.id)
+                  .catch(() => undefined)
+                  .finally(() => setLogging(false));
+              }}
+            />
+          ) : null}
+          {popup.kind === "radar" ? (
+            <RadarCellPopup
+              lat={popup.lat}
+              lng={popup.lng}
+              dbz={popup.dbz}
+              radarSite={popup.site}
+              hailChance={popup.hailChance}
+              onClose={() => setPopup(null)}
+              onInteract={arm}
+              onAlert={() => toast.message("We'll watch this cell once radar volumes are wired.")}
+            />
+          ) : null}
+          {popup.kind === "loading" || popup.kind === "error" || popup.kind === "hail" ? (
+            <HailPointPopup
+              lat={popup.lat}
+              lng={popup.lng}
+              status={popup.kind === "hail" ? "ready" : popup.kind}
+              message={popup.kind === "error" ? popup.message : ""}
+              hits={popup.kind === "hail" ? popup.hits : []}
+              hiddenIds={hiddenSet}
+              dropping={dropping}
+              pinsForStorm={(stormId) => canvassPins(storms, pins, stormId)}
+              onRetry={() => void lookup(popup.lat, popup.lng)}
+              onClose={() => setPopup(null)}
+              onInteract={arm}
+              onDropLead={() => {
+                setDropping(true);
+                void onDropLead(popup.lat, popup.lng)
+                  .then(() => setPopup(null))
+                  .catch(() => undefined)
+                  .finally(() => setDropping(false));
+              }}
+              onOpenJob={(id) => setPopup({ kind: "job", id })}
+            />
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function pinPoint(pins: StormJobPin[], id: string) {
+  const pin = pins.find((item) => item.id === id);
+  return pin ? { lat: pin.lat, lng: pin.lng } : null;
+}
+
+function canvassPins(storms: HailStorm[], pins: StormJobPin[], stormId: string): CanvassPin[] {
+  const storm = storms.find((item) => item.id === stormId);
+  if (!storm) return [];
+  const outer = outerBand(storm);
+  return pins
+    .filter((pin) => pointInGeometry(pin.lng, pin.lat, outer.geometry))
+    .map((pin) => ({ id: pin.id, code: pin.code, name: pin.name, address: pin.address, color: pin.color }));
+}
+
+function escapeAttr(value: string) {
+  return value.replace(/[&<>"']/g, (ch) => {
+    if (ch === "&") return "&amp;";
+    if (ch === "<") return "&lt;";
+    if (ch === ">") return "&gt;";
+    if (ch === '"') return "&quot;";
+    return "&#39;";
+  });
+}

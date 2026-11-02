@@ -8,15 +8,20 @@ import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome
 import { Button } from "@/components/ui/button";
 import { useCrm } from "@/lib/crm-store";
 import { isDeletedJob, jobAddress } from "@/lib/job-record";
-import { jobHasCoords, workPinColor } from "@/lib/project-map";
+import { formatCurrencyFull } from "@/lib/format";
+import { jobHasCoords, workPinColor, workPinLabel } from "@/lib/project-map";
+import { boardValue } from "@/lib/work-board";
+import { ACTIVITY_LABELS } from "@/lib/types";
+import { chicagoDaysAgoFromIso, daysAgoLabel } from "@/lib/weather/hail-point";
+import type { StormJobPin } from "@/components/storm-popup/job-pin-popup";
 import { PHOTO_PROMPT, buildStormDesk, type DeskJob, type JobStormImpact } from "@/lib/weather/desk";
 import { HAIL_SWATH_NOTE } from "@/lib/weather/hail";
 import { loadStormLayers, sendStormTexts, swathUrl } from "@/lib/weather/client";
 import type { StormLayers } from "@/lib/weather/types";
 import { isCompanyLeader } from "@/lib/visibility";
 
-const ProjectMapCanvas = dynamic(
-  () => import("@/components/project-map-canvas").then((mod) => mod.ProjectMapCanvas),
+const StormMap = dynamic(
+  () => import("@/components/storm-map").then((mod) => mod.StormMap),
   { ssr: false, loading: () => <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Loading the map…</div> },
 );
 
@@ -51,7 +56,6 @@ export function StormDesk() {
     () => [crm.company.state, ...deskJobs.map((job) => job.state)].filter(Boolean),
     [crm.company.state, deskJobs],
   );
-  const pointKey = deskJobs.map((job) => job.id).join(",");
 
   useEffect(() => {
     if (!crm.hydrated) return;
@@ -81,18 +85,12 @@ export function StormDesk() {
   );
   const selected = desk?.impacts.find((row) => row.id === selectedId) ?? desk?.impacts.find((row) => row.warning) ?? null;
   const selectedJob = selected ? deskJobs.find((job) => job.id === selected.id) : undefined;
+  const pins = useMemo(() => mapPins(crm, jobs), [crm, jobs]);
 
   if (!crm.hydrated) return <LoadingScreen />;
 
-  const stormOverlay = layers?.bounds
-    ? {
-        alerts: layers.alerts,
-        outlooks: layers.outlooks,
-        reports: layers.reports,
-        bounds: layers.bounds,
-        swathUrl: swathUrl(layers.bounds, "mesh"),
-        rotationUrl: showRotation ? swathUrl(layers.bounds, "rotation") : null,
-      }
+  const rotation = showRotation && layers?.bounds
+    ? { url: swathUrl(layers.bounds, "rotation"), bounds: layers.bounds }
     : null;
 
   return (
@@ -186,28 +184,13 @@ export function StormDesk() {
           <p className="text-xs leading-relaxed text-muted-foreground">{HAIL_SWATH_NOTE} {layers?.attribution}</p>
         </aside>
         <div className="relative min-h-[420px] overflow-hidden rounded-xl border lg:min-h-0">
-          <ProjectMapCanvas
-            jobs={jobs.map((job) => ({
-              id: job.id,
-              code: job.code,
-              name: job.name,
-              lat: job.lat as number,
-              lng: job.lng as number,
-              color: workPinColor(job, job.opportunityId ? crm.opportunities.find((item) => item.id === job.opportunityId) : undefined),
-              label: job.code || job.name,
-              address: jobAddress(job),
-              homeowner: "",
-              projectManager: job.projectManager,
-            }))}
-            crew={[]}
-            selectedJobId={selected?.id}
-            showProjects
-            showCrew={false}
-            showWeather={showRadar}
-            storm={stormOverlay}
-            fitKey={pointKey}
-            onSelectJob={setSelectedId}
-            onSelectCrew={() => undefined}
+          <StormMap
+            pins={pins}
+            showRadar={showRadar}
+            focusId={selectedId}
+            rotation={rotation}
+            onDropLead={(lat, lng) => dropLead(crm, lat, lng)}
+            onLogVisit={(jobId) => logVisit(crm, jobId)}
           />
           {loading ? (
             <p className="pointer-events-none absolute right-3 bottom-3 rounded-full bg-background/90 px-3 py-1 text-xs text-muted-foreground shadow-sm">
@@ -261,6 +244,105 @@ function StormSheet({ job, impact }: { job: DeskJob; impact: JobStormImpact }) {
       ) : null}
     </section>
   );
+}
+
+function mapPins(crm: ReturnType<typeof useCrm>, jobs: ReturnType<typeof useCrm>["jobs"]): StormJobPin[] {
+  return jobs
+    .filter((job) => jobHasCoords(job))
+    .map((job) => {
+      const opportunity = job.opportunityId ? crm.opportunities.find((item) => item.id === job.opportunityId) : undefined;
+      const claim = (crm.jobInsurance ?? []).find((item) => item.jobId === job.id);
+      const activity = (crm.activities ?? [])
+        .filter((item) => item.entityType === "job" && item.entityId === job.id)
+        .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+      const contact = crm.contacts.find((item) => item.id === job.primaryContactId);
+      return {
+        id: job.id,
+        code: job.code,
+        name: job.name,
+        customer: contact?.name?.trim() || job.name,
+        address: jobAddress(job),
+        lat: job.lat as number,
+        lng: job.lng as number,
+        color: workPinColor(job, opportunity),
+        stage: workPinLabel(job, opportunity),
+        carrier: claim?.carrier?.trim() || "",
+        valueLabel: formatCurrencyFull(boardValue(job, opportunity)),
+        rep: job.projectManager || job.salesRep || "",
+        claimFiled: Boolean(claim),
+        lastActivity: activity
+          ? `${ACTIVITY_LABELS[activity.type]} · ${daysAgoLabel(chicagoDaysAgoFromIso(activity.createdAt))}`
+          : "No activity yet",
+      };
+    });
+}
+
+async function dropLead(crm: ReturnType<typeof useCrm>, lat: number, lng: number) {
+  let place = {
+    street: "",
+    city: "",
+    state: crm.company.state || "",
+    postalCode: "",
+    label: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+  };
+  try {
+    const response = await fetch(`/api/map/reverse?lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`);
+    if (response.ok) {
+      const body = (await response.json()) as typeof place;
+      if (body.label) place = body;
+    }
+  } catch {
+    place = { ...place };
+  }
+  const created = await crm.addOpportunity({
+    name: place.street ? `Storm lead · ${place.street}` : "Storm lead",
+    clientId: null,
+    primaryContactId: "",
+    stage: "pursuing",
+    value: 0,
+    bidDueAt: null,
+    preBidWalkAt: null,
+    location: place.label,
+    projectType: "roofing",
+    market: "residential",
+    deliveryMethod: "insurance_claim",
+    estimator: crm.user.name,
+    ownerStaffId: crm.user.staffId,
+    nextStep: "Call the homeowner.",
+    leadSource: "storm",
+    referralContactId: null,
+    street: place.street,
+    city: place.city,
+    state: place.state,
+    postalCode: place.postalCode,
+    notes: `Dropped on the storm map at ${lat.toFixed(4)}, ${lng.toFixed(4)}.`,
+  });
+  if (created.costingJob) {
+    await crm.updateJob(created.costingJob.id, {
+      lat,
+      lng,
+      street: place.street,
+      city: place.city,
+      state: place.state,
+      postalCode: place.postalCode,
+      location: place.label,
+      geocodedAt: new Date().toISOString(),
+      geocodeQuery: place.label,
+      ownerStaffId: crm.user.staffId,
+      projectManager: crm.user.name,
+    });
+  }
+  toast.success("Lead dropped.");
+}
+
+async function logVisit(crm: ReturnType<typeof useCrm>, jobId: string) {
+  await crm.addActivity({
+    entityType: "job",
+    entityId: jobId,
+    type: "site_walk",
+    body: "Site visit logged from the storm map.",
+  });
+  toast.success("Visit logged.");
 }
 
 async function reload(
