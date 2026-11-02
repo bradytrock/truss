@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { alertRoute, crewWarningText, parseHailInches, parseWindMph, untilLabel } from "./alerts.ts";
+import { alertKind, alertOnMap, alertPaint, alertRoute, crewWarningText, parseHailInches, parseWindMph, shortAlertLabel, untilLabel } from "./alerts.ts";
+import { countyUgcs, geometryFromZone, mergeGeometries } from "./counties.ts";
 import { buildStormDesk, canvassScore, holdReasonFor } from "./desk.ts";
 import { decimateRing, pointInGeometry } from "./geometry.ts";
 import { geophysicalValue, hailLabel, meshInchesFromMillimeters } from "./hail.ts";
@@ -148,6 +149,43 @@ const parsed = normalizeAlert({
 });
 assert.equal(parsed?.route, "sms");
 assert.equal(parsed?.hailInches, 2);
+assert.equal(parsed?.kind, "warning");
 assert.match(parsed?.until ?? "", /7:40 PM CDT/);
+assert.equal(alertOnMap(parsed!), false);
+
+const watch = normalizeAlert({
+  properties: {
+    id: "watch-1",
+    event: "Tornado Watch",
+    headline: "Tornado Watch until 9:00 PM CST",
+    areaDesc: "Tarrant; Denton",
+    geocode: { UGC: ["TXC439", "TXZ101", "txc121"] },
+    affectedZones: ["https://api.weather.gov/zones/county/TXC113"],
+  },
+  geometry: null,
+});
+assert.equal(watch?.kind, "watch");
+assert.equal(watch?.route, "leaders");
+assert.deepEqual(watch?.ugc, ["TXC439", "TXC121", "TXC113"]);
+assert.equal(alertOnMap(watch!), true);
+assert.equal(alertPaint(watch!).county, true);
+assert.equal(alertPaint({ event: "Severe Thunderstorm Watch" }).fill, "#facc15");
+assert.equal(alertPaint({ event: "Tornado Warning" }).county, false);
+assert.equal(shortAlertLabel("Severe Thunderstorm Warning"), "SVR warning");
+assert.equal(alertKind("Special Weather Statement"), "statement");
+assert.deepEqual(countyUgcs({ geocode: { UGC: ["COC031"] }, affectedZones: ["https://api.weather.gov/zones/forecast/COZ001"] }), ["COC031"]);
+
+const county = {
+  type: "Polygon" as const,
+  coordinates: [[[-97.5, 32.6], [-97.1, 32.6], [-97.1, 33], [-97.5, 33], [-97.5, 32.6]]],
+};
+const other = {
+  type: "Polygon" as const,
+  coordinates: [[[-97.1, 32.6], [-96.7, 32.6], [-96.7, 33], [-97.1, 33], [-97.1, 32.6]]],
+};
+const merged = mergeGeometries([county, other]);
+assert.equal(merged?.type, "MultiPolygon");
+assert.equal(geometryFromZone({ type: "Feature", geometry: county })?.type, "Polygon");
+assert.equal(geometryFromZone({ type: "Feature", geometry: null }), null);
 
 console.log("weather tests passed");

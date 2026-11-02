@@ -3,10 +3,11 @@
 import dynamic from "next/dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CloudRain, LocateFixed, MapPin, Phone, X } from "lucide-react";
+import { LocateFixed, MapPin, Maximize2, Phone, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { JobRecordWindow } from "@/components/job-window";
+import { MapAlertList } from "@/components/map-alert-list";
 import {
   MapJobResultList,
   MapListToolbar,
@@ -41,8 +42,10 @@ import {
   type MapCrewPing,
 } from "@/lib/project-map";
 import { missingStormMapMessage } from "@/lib/supabase/schema-errors";
+import { alertChips, alertKind, type AlertChip } from "@/lib/weather/alerts";
 import { loadStormLayers, sendStormTexts } from "@/lib/weather/client";
-import { chicagoDaysAgoFromIso, daysAgoLabel, formatChicagoClock } from "@/lib/weather/hail-point";
+import { pointInGeometry } from "@/lib/weather/geometry";
+import { chicagoDaysAgoFromIso, daysAgoLabel, formatChicagoClock, nearestRadarSite } from "@/lib/weather/hail-point";
 import type { StormLayers } from "@/lib/weather/types";
 import { isCompanyLeader, staffForReports } from "@/lib/visibility";
 import { boardValue, WORK_COLUMN_LABELS, type WorkColumn } from "@/lib/work-board";
@@ -71,9 +74,12 @@ function MapPageInner() {
   const [crew, setCrew] = useState<MapCrewPing[]>([]);
   const [showProjects, setShowProjects] = useState(true);
   const [showCrew, setShowCrew] = useState(true);
-  const [showWeather, setShowWeather] = useState(false);
+  const [showWeather, setShowWeather] = useState(true);
   const [showHail, setShowHail] = useState(true);
   const [showOutlook, setShowOutlook] = useState(true);
+  const [showWarnings, setShowWarnings] = useState(true);
+  const [radarFull, setRadarFull] = useState(false);
+  const [listTab, setListTab] = useState<"jobs" | "warnings">("jobs");
   const [texting, setTexting] = useState(false);
   const [stormLayers, setStormLayers] = useState<StormLayers | null>(null);
   const [swathError, setSwathError] = useState("");
@@ -87,6 +93,8 @@ function MapPageInner() {
   const geocodeTried = useRef(new Set<string>());
   const shareWatch = useRef<number | null>(null);
   const lastPresenceAt = useRef<number | null>(null);
+  const popupOpen = useRef(false);
+  const radarDeskRef = useRef<HTMLDivElement>(null);
   const selectedStaffId = searchParams.get("crew");
   const jobId = searchParams.get("job");
   const [recordJobId, setRecordJobId] = useState<string | null>(null);
@@ -343,6 +351,30 @@ function MapPageInner() {
   useEffect(() => () => stopSharing(), [stopSharing]);
 
   const pins = useMemo(() => mapPins(crm, mappedJobs), [crm, mappedJobs]);
+  const radarSite = useMemo(() => {
+    const fromSwath = stormLayers?.hailSwaths?.[0]?.radarSite;
+    if (fromSwath) return fromSwath;
+    const pin = pins[0];
+    return pin ? nearestRadarSite(pin.lat, pin.lng) : "NEXRAD";
+  }, [pins, stormLayers]);
+  const alertNotes = useMemo(() => {
+    const notes = new Map<string, AlertChip[]>();
+    const alerts = stormLayers?.alerts ?? [];
+    for (const pin of pins) {
+      const hits = alerts.filter((alert) => pointInGeometry(pin.lng, pin.lat, alert.geometry));
+      const chips = alertChips(hits);
+      if (chips.length) notes.set(pin.id, chips);
+    }
+    return notes;
+  }, [pins, stormLayers]);
+  const watchWarningCount = useMemo(
+    () =>
+      (stormLayers?.alerts ?? []).filter((alert) => {
+        const kind = alert.kind ?? alertKind(alert.event);
+        return kind === "warning" || kind === "watch";
+      }).length,
+    [stormLayers],
+  );
 
   useEffect(() => {
     if (!crm.hydrated) return;
@@ -368,6 +400,34 @@ function MapPageInner() {
       cancel = true;
     };
   }, [crm.company.state, crm.hydrated, mappedJobs]);
+
+  const leaveRadar = useCallback(() => {
+    setRadarFull(false);
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+  }, []);
+
+  const enterRadar = useCallback(() => {
+    setRadarFull(true);
+    const node = radarDeskRef.current;
+    if (node?.requestFullscreen) void node.requestFullscreen().catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    if (!radarFull) return;
+    const onChange = () => {
+      if (!document.fullscreenElement) setRadarFull(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || popupOpen.current) return;
+      leaveRadar();
+    };
+    document.addEventListener("fullscreenchange", onChange);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("fullscreenchange", onChange);
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, [leaveRadar, radarFull]);
 
   if (!crm.hydrated) return <LoadingScreen />;
 
@@ -398,26 +458,16 @@ function MapPageInner() {
         <PageHeader
           eyebrow="Field"
           title="Map"
-          description="Job sites, live crew, hail swaths, and the SPC outlook."
+          description="Job sites, live radar, county watches, warning polygons, hail, and the SPC outlook."
           actions={
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant={showProjects ? "default" : "outline"} onClick={() => setShowProjects((value) => !value)}>
-                Projects {mappedJobs.length}
-              </Button>
-              <Button type="button" variant={showHail ? "default" : "outline"} aria-pressed={showHail} onClick={() => setShowHail((value) => !value)}>
-                Hail
-              </Button>
-              <Button type="button" variant={showOutlook ? "default" : "outline"} aria-pressed={showOutlook} onClick={() => setShowOutlook((value) => !value)}>
-                SPC outlook
-              </Button>
-              <Button
-                type="button"
-                variant={showWeather ? "default" : "outline"}
-                aria-pressed={showWeather}
-                onClick={() => setShowWeather((value) => !value)}
-              >
-                <CloudRain data-icon="inline-start" />
-                Weather radar
+              <span className="inline-flex items-center gap-2 rounded-full border bg-background px-3 py-1 text-xs">
+                <span className="size-1.5 rounded-full bg-[#e11d48]" />
+                LIVE · {radarSite}
+              </span>
+              <Button type="button" className="bg-[#e11d48] text-white hover:bg-[#be123c]" onClick={enterRadar}>
+                <Maximize2 data-icon="inline-start" />
+                Full-screen radar
               </Button>
               <Button variant={sharing ? "secondary" : "outline"} onClick={sharing ? stopSharing : startSharing}>
                 <MapPin data-icon="inline-start" />
@@ -433,12 +483,19 @@ function MapPageInner() {
         />
       </div>
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background lg:grid lg:grid-cols-[26rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:rounded-xl lg:border">
-        <div className="absolute inset-0 min-h-0 lg:relative lg:order-2 lg:h-full">
+        <div
+          ref={radarDeskRef}
+          className={cn(
+            "min-h-0 bg-[#070b14]",
+            radarFull ? "fixed inset-0 z-[70]" : "absolute inset-0 lg:relative lg:order-2 lg:h-full",
+          )}
+        >
           <StormMap
             pins={pins}
             showRadar={showWeather}
             showHail={showHail}
             showOutlook={showOutlook}
+            showWarnings={showWarnings}
             showPins={showProjects}
             crew={liveCrew}
             showCrew={showCrew}
@@ -451,13 +508,27 @@ function MapPageInner() {
             liveStorms={stormLayers?.hailSwaths}
             swathReady={stormLayers != null && !swathError}
             swathNote={swathCaption(stormLayers, swathError)}
-            basemap="light"
+            basemap="dark"
             embedded
+            fullscreen={radarFull}
+            radarSite={radarSite}
+            onToggleFullscreen={() => (radarFull ? leaveRadar() : enterRadar())}
+            onPopupChange={(open) => {
+              popupOpen.current = open;
+            }}
+            onLayer={(layer, next) => {
+              if (layer === "radar") setShowWeather(next);
+              else if (layer === "warnings") setShowWarnings(next);
+              else if (layer === "hail") setShowHail(next);
+              else if (layer === "pins") setShowProjects(next);
+              else setShowOutlook(next);
+            }}
             fitTo="pins"
             fitKey={`${year}|${query}|${stages.join(",")}|${showProjects}|${showCrew}|${showHail}|${pins.length}|${liveCrew.length}`}
             onDropLead={(lat, lng) => dropLead(crm, lat, lng)}
             onLogVisit={(id) => logVisit(crm, id)}
           />
+          {radarFull ? null : (
           <div className="absolute top-3 right-3 z-10 hidden items-center gap-2 lg:flex">
             <Button
               type="button"
@@ -478,10 +549,13 @@ function MapPageInner() {
               <LocateFixed />
             </Button>
           </div>
-          <div className="pointer-events-none absolute bottom-20 left-14 z-10 hidden lg:block">
+          )}
+          {radarFull ? null : (
+          <div className="pointer-events-none absolute bottom-24 left-52 z-10 hidden lg:block">
             <Legend />
           </div>
-          {selectedJob ? (
+          )}
+          {selectedJob && !radarFull ? (
             <div
               className={cn(
                 "absolute right-3 z-20",
@@ -498,16 +572,21 @@ function MapPageInner() {
               />
             </div>
           ) : null}
-          {geocoding || needGeocode.length ? (
+          {geocoding || needGeocode.length ? radarFull ? null : (
             <p className={cn("pointer-events-none absolute left-3 z-10 rounded-full bg-background/90 px-3 py-1 text-xs text-muted-foreground shadow-sm", showWeather ? "bottom-56 lg:bottom-36" : "bottom-36 lg:bottom-32")}>
               {geocoding ? "Mapping sites…" : `${needGeocode.length} still looking up`}
             </p>
           ) : null}
         </div>
 
+        {radarFull ? null : (
         <div className="absolute top-3 right-3 left-3 z-20 lg:hidden">
           <MapSearchBar variant="overlay" {...searchProps} />
-          <div className="mt-2 flex justify-end">
+          <div className="mt-2 flex justify-end gap-2">
+            <Button type="button" className="bg-[#e11d48] text-white shadow-sm hover:bg-[#be123c]" onClick={enterRadar}>
+              <Maximize2 data-icon="inline-start" />
+              Full screen
+            </Button>
             <Button
               size="icon"
               variant={sharing ? "secondary" : "outline"}
@@ -519,6 +598,7 @@ function MapPageInner() {
             </Button>
           </div>
         </div>
+        )}
 
         <aside
           className={cn(
@@ -538,19 +618,54 @@ function MapPageInner() {
           <div className="hidden shrink-0 border-b p-3 lg:block">
             <MapSearchBar variant="dock" {...searchProps} />
           </div>
+          <div className="flex shrink-0 gap-4 border-b px-3">
+            <button
+              type="button"
+              className={cn("border-b-2 py-2 text-sm", listTab === "jobs" ? "border-[#181818] font-semibold" : "border-transparent text-muted-foreground")}
+              aria-pressed={listTab === "jobs"}
+              onClick={() => setListTab("jobs")}
+            >
+              Jobs
+            </button>
+            <button
+              type="button"
+              className={cn("border-b-2 py-2 text-sm", listTab === "warnings" ? "border-[#181818] font-semibold" : "border-transparent text-muted-foreground")}
+              aria-pressed={listTab === "warnings"}
+              onClick={() => {
+                setListTab("warnings");
+                setListOpen(true);
+              }}
+            >
+              Warnings{watchWarningCount ? ` · ${watchWarningCount}` : ""}
+            </button>
+          </div>
+          {listTab === "jobs" ? (
           <div className="shrink-0 px-3 pt-2 pb-2">
             <MapListToolbar count={listedJobs.length} sort={sort} onSort={setSort} />
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3" role="region" aria-label="Jobs">
+          ) : null}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3" role="region" aria-label={listTab === "warnings" ? "Warnings" : "Jobs"}>
+            {listTab === "warnings" ? (
+              <MapAlertList
+                alerts={stormLayers?.alerts ?? []}
+                jobs={pins.map((pin) => ({ id: pin.id, title: pin.customer || pin.name, address: pin.address, lat: pin.lat, lng: pin.lng }))}
+                onSelectJob={(id) => {
+                  selectJob(id);
+                  setListOpen(false);
+                }}
+              />
+            ) : (
             <MapJobResultList
               jobs={listedJobs}
               opportunities={crm.opportunities}
               selectedJobId={jobId}
+              notes={alertNotes}
               onSelect={(id) => {
                 selectJob(id);
                 setListOpen(false);
               }}
             />
+            )}
             {selectedCrew ? (
               <div className="mt-3">
                 <CrewCard

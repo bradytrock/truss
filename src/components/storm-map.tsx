@@ -9,9 +9,11 @@ import { JobPinPopup, type StormJobPin } from "@/components/storm-popup/job-pin-
 import { RadarCellPopup } from "@/components/storm-popup/radar-popup";
 import { clusterJobPins, crewMapLabel, PROJECT_MAP_CENTER, type CrewFreshness } from "@/lib/project-map";
 import { loadRadarCell } from "@/lib/weather/client";
-import { pointInGeometry } from "@/lib/weather/geometry";
+import { alertDrawRank, alertKind, alertPaint } from "@/lib/weather/alerts";
+import { geometryBBox, pointInGeometry } from "@/lib/weather/geometry";
 import { HAIL_BINS, hailBin } from "@/lib/weather/hail";
 import type { OutlookArea, OutlookProduct, StormReport, WeatherAlert } from "@/lib/weather/types";
+import { RadarDeskChrome, type RadarAlertCard } from "@/components/radar-desk-chrome";
 import {
   formatChipDate,
   formatHailInches,
@@ -77,6 +79,7 @@ export function StormMap({
   reports = NO_REPORTS,
   showHail = true,
   showOutlook = false,
+  showWarnings = true,
   showPins = true,
   crew = NO_CREW,
   showCrew = false,
@@ -89,6 +92,11 @@ export function StormMap({
   liveStorms,
   swathNote = "",
   swathReady = false,
+  fullscreen = false,
+  onToggleFullscreen,
+  onLayer,
+  onPopupChange,
+  radarSite = "NEXRAD",
 }: {
   pins: StormJobPin[];
   showRadar: boolean;
@@ -101,6 +109,8 @@ export function StormMap({
   reports?: StormReport[];
   showHail?: boolean;
   showOutlook?: boolean;
+  /** County watches and warning polygons. Independent of the SPC outlook. */
+  showWarnings?: boolean;
   showPins?: boolean;
   crew?: MapCrewMarker[];
   showCrew?: boolean;
@@ -115,6 +125,11 @@ export function StormMap({
   liveStorms?: HailStorm[];
   swathNote?: string;
   swathReady?: boolean;
+  fullscreen?: boolean;
+  onToggleFullscreen?: () => void;
+  onLayer?: (layer: "radar" | "warnings" | "hail" | "pins" | "outlook", next: boolean) => void;
+  onPopupChange?: (open: boolean) => void;
+  radarSite?: string;
 }) {
   const el = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -131,7 +146,14 @@ export function StormMap({
   const stormsRef = useRef<HailStorm[]>([]);
   const pinsRef = useRef<StormJobPin[]>([]);
   const swathReadyRef = useRef(swathReady);
+  const onPopupChangeRef = useRef(onPopupChange);
   const lookupRef = useRef<(lat: number, lng: number) => void>(() => undefined);
+  const radarFramesMemo = useMemo(() => radarFrames(), []);
+  const [frameIndex, setFrameIndex] = useState(radarFramesMemo.length - 1);
+  const [radarPlaying, setRadarPlaying] = useState(
+    () => typeof window === "undefined" || !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+  const frameIndexRef = useRef(frameIndex);
   const [hidden, setHidden] = useState<string[]>([]);
   const [zoom, setZoom] = useState(9);
   const [hover, setHover] = useState<{ text: string; coords: string } | null>(null);
@@ -198,6 +220,8 @@ export function StormMap({
     fitToRef.current = fitTo;
     embeddedRef.current = embedded;
     onSelectCrewRef.current = onSelectCrew;
+    onPopupChangeRef.current = onPopupChange;
+    frameIndexRef.current = frameIndex;
     hiddenRef.current = hidden;
     stormsRef.current = storms;
     pinsRef.current = pins;
@@ -220,7 +244,11 @@ export function StormMap({
       const next = { left: Math.round(left), top: Math.round(top) };
       setPos((currentPos) => (currentPos && currentPos.left === next.left && currentPos.top === next.top ? currentPos : next));
     };
-  }, [anchor, basemap, embedded, fitTo, hidden, lookup, onSelectCrew, pins, showHail, showRadar, storms, swathReady]);
+  }, [anchor, basemap, embedded, fitTo, frameIndex, hidden, lookup, onPopupChange, onSelectCrew, pins, showHail, showRadar, storms, swathReady]);
+
+  useEffect(() => {
+    onPopupChangeRef.current?.(Boolean(popup));
+  }, [popup]);
 
   useEffect(() => {
     if (!el.current || mapRef.current) return;
@@ -247,6 +275,9 @@ export function StormMap({
     const outlookPane = map.createPane("outlook");
     outlookPane.style.zIndex = "345";
     outlookPane.style.pointerEvents = "none";
+    const alertPane = map.createPane("alerts");
+    alertPane.style.zIndex = "360";
+    alertPane.style.pointerEvents = "none";
     const radarPane = map.createPane("radar");
     radarPane.style.zIndex = "350";
     radarPane.style.pointerEvents = "none";
@@ -425,30 +456,6 @@ export function StormMap({
         },
       }).addTo(group);
     }
-    if (alerts.length) {
-      const warnings: GeoJSON.FeatureCollection = {
-        type: "FeatureCollection",
-        features: alerts.flatMap((alert) =>
-          alert.geometry ? [{ type: "Feature" as const, properties: alert, geometry: alert.geometry }] : [],
-        ),
-      };
-      L.geoJSON(warnings, {
-        pane: "outlook",
-        interactive: false,
-        style: (feature) => {
-          const alert = feature?.properties as WeatherAlert | undefined;
-          const tornado = alert?.event === "Tornado Warning";
-          const warning = alert?.route === "sms";
-          return {
-            color: tornado ? "#7f1d1d" : warning ? "#b91c1c" : "#c2410c",
-            weight: warning ? 2 : 1.5,
-            fillColor: tornado ? "#7f1d1d" : "#ef4444",
-            fillOpacity: warning ? 0.22 : 0.08,
-            dashArray: warning ? undefined : "6 4",
-          };
-        },
-      }).addTo(group);
-    }
     for (const report of reports) {
       const hail = report.kind === "hail";
       L.circleMarker([report.lat, report.lng], {
@@ -463,7 +470,38 @@ export function StormMap({
     return () => {
       map.removeLayer(group);
     };
-  }, [alerts, outlooks, reports, showOutlook]);
+  }, [outlooks, reports, showOutlook]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !showWarnings) return;
+    const group = L.layerGroup().addTo(map);
+    const features = alerts
+      .flatMap((alert) => (alert.geometry ? [{ type: "Feature" as const, properties: alert, geometry: alert.geometry }] : []))
+      .sort((a, b) => alertDrawRank(a.properties) - alertDrawRank(b.properties));
+    if (features.length) {
+      const warnings: GeoJSON.FeatureCollection = { type: "FeatureCollection", features };
+      L.geoJSON(warnings, {
+        pane: "alerts",
+        interactive: false,
+        style: (feature) => {
+          const alert = feature?.properties as WeatherAlert | undefined;
+          const paint = alertPaint(alert ?? { event: "" });
+          return {
+            color: paint.stroke,
+            weight: paint.weight,
+            opacity: 0.95,
+            fillColor: paint.fill,
+            fillOpacity: paint.fillOpacity,
+            dashArray: paint.dash,
+          };
+        },
+      }).addTo(group);
+    }
+    return () => {
+      map.removeLayer(group);
+    };
+  }, [alerts, showWarnings]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -510,40 +548,53 @@ export function StormMap({
     else map.setView([PROJECT_MAP_CENTER.lat, PROJECT_MAP_CENTER.lng], 8, { animate: false });
   }, [crew, fitKey, fitTo, pins, showCrew, showPins]);
 
+  const radarLayers = useRef<L.TileLayer[]>([]);
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !showRadar) return;
-    const motionOk = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const frames = motionOk ? radarFrames() : radarFrames().slice(-1);
-    const layers = frames.map((frame, index) => {
+    const layers = radarFramesMemo.map((frame, index) => {
       const layer = L.tileLayer(frame.url, {
         pane: "radar",
-        opacity: index === frames.length - 1 ? RADAR_OPACITY : 0,
+        opacity: 0,
         maxZoom: 19,
         maxNativeZoom: RADAR_MAX_NATIVE_ZOOM,
         errorTileUrl: RADAR_EMPTY_TILE,
-        ...(index === frames.length - 1 ? { attribution: RADAR_ATTRIBUTION } : {}),
+        ...(index === radarFramesMemo.length - 1 ? { attribution: RADAR_ATTRIBUTION } : {}),
       });
       layer.addTo(map);
       return layer;
     });
-    let index = frames.length - 1;
-    let timer = 0;
-    const tick = () => {
-      timer = window.setTimeout(() => {
-        const next = (index + 1) % frames.length;
-        layers[index]?.setOpacity(0);
-        layers[next]?.setOpacity(RADAR_OPACITY);
-        index = next;
-        tick();
-      }, frames[index]?.holdMs ?? 800);
-    };
-    if (frames.length > 1) tick();
+    radarLayers.current = layers;
+    const shown = Math.min(frameIndexRef.current, layers.length - 1);
+    layers[shown]?.setOpacity(RADAR_OPACITY);
     return () => {
-      window.clearTimeout(timer);
+      radarLayers.current = [];
       for (const layer of layers) map.removeLayer(layer);
     };
-  }, [showRadar]);
+  }, [radarFramesMemo, showRadar]);
+
+  useEffect(() => {
+    const layers = radarLayers.current;
+    if (!showRadar || !layers.length) return;
+    const shown = Math.min(frameIndex, layers.length - 1);
+    layers.forEach((layer, index) => layer.setOpacity(index === shown ? RADAR_OPACITY : 0));
+  }, [frameIndex, showRadar]);
+
+  useEffect(() => {
+    if (!showRadar || !radarPlaying) return;
+    const hold = radarFramesMemo[frameIndex]?.holdMs ?? 800;
+    const timer = window.setTimeout(() => {
+      setFrameIndex((current) => (current + 1) % radarFramesMemo.length);
+    }, hold);
+    return () => window.clearTimeout(timer);
+  }, [frameIndex, radarFramesMemo, radarPlaying, showRadar]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const timer = window.setTimeout(() => map.invalidateSize(), 60);
+    return () => window.clearTimeout(timer);
+  }, [fullscreen]);
 
   useLayoutEffect(() => {
     const map = mapRef.current;
@@ -597,26 +648,81 @@ export function StormMap({
     map.flyTo([pin.lat, pin.lng], Math.max(map.getZoom(), fitTo === "pins" ? 14 : 12), { duration: 0.45 });
   }, [fitTo, focusId, pins]);
 
+  const alertCards = useMemo(() => {
+    const cards: RadarAlertCard[] = [];
+    for (const alert of alerts) {
+      if (!alert.geometry) continue;
+      const kind = alert.kind ?? alertKind(alert.event);
+      if (kind === "statement") continue;
+      const jobs = pins
+        .filter((pin) => pointInGeometry(pin.lng, pin.lat, alert.geometry))
+        .map((pin) => pin.customer || pin.name);
+      cards.push({ id: alert.id, event: alert.event, until: alert.until, area: alert.areaDesc, jobs });
+    }
+    cards.sort((a, b) => alertDrawRank({ event: a.event }) - alertDrawRank({ event: b.event }));
+    return cards;
+  }, [alerts, pins]);
+
+  const focusAlert = useCallback((id: string) => {
+    const map = mapRef.current;
+    const alert = alerts.find((item) => item.id === id);
+    if (!map || !alert?.geometry) return;
+    const box = geometryBBox(alert.geometry);
+    if (!box) return;
+    map.fitBounds(
+      [
+        [box.south, box.west],
+        [box.north, box.east],
+      ],
+      { padding: [48, 48], maxZoom: 10 },
+    );
+  }, [alerts]);
+
   const job = popup?.kind === "job" ? pins.find((pin) => pin.id === popup.id) : undefined;
   const ordered = [...storms].sort((a, b) => b.stormDate.localeCompare(a.stormDate));
   const outlookRows = outlookLegend(outlooks);
+  const desk = embedded || fullscreen;
+  const hailDock = fullscreen ? "top-16 left-48" : "top-[22rem] left-3 lg:top-3 lg:left-48";
 
   return (
-    <div className={`relative h-full min-h-0 w-full ${embedded ? "" : "bg-[#0e1116] text-white"}`}>
-      <div ref={el} className={`project-map-leaflet h-full min-h-0 w-full ${embedded ? "" : "storm-map-leaflet"}`} />
+    <div className={`relative h-full min-h-0 w-full ${embedded && !fullscreen ? "" : "bg-[#0e1116] text-white"}`}>
+      <div ref={el} className={`project-map-leaflet h-full min-h-0 w-full ${embedded && !fullscreen ? "" : "storm-map-leaflet"}`} />
+      {desk && onToggleFullscreen && onLayer ? (
+        <RadarDeskChrome
+          fullscreen={fullscreen}
+          onToggleFullscreen={onToggleFullscreen}
+          showRadar={showRadar}
+          showWarnings={showWarnings}
+          showHail={showHail}
+          showPins={showPins}
+          showOutlook={showOutlook}
+          onLayer={onLayer}
+          frames={radarFramesMemo}
+          frameIndex={frameIndex}
+          playing={radarPlaying}
+          onSelectFrame={(index) => {
+            setRadarPlaying(false);
+            setFrameIndex(index);
+          }}
+          onTogglePlaying={() => setRadarPlaying((current) => !current)}
+          radarSite={radarSite}
+          alertCards={alertCards}
+          onSelectAlert={focusAlert}
+        />
+      ) : null}
       {showHail || (showOutlook && outlookRows.length) ? (
-        <div className={`pointer-events-none absolute left-3 z-20 max-w-[16rem] ${embedded ? "bottom-[12.5rem] lg:bottom-auto lg:top-3" : "top-3"}`}>
+        <div className={`pointer-events-none absolute z-20 max-w-[16rem] ${desk ? hailDock : "top-3 left-3"}`}>
           {embedded ? null : (
             <>
               <p className="text-sm font-semibold">Storm Map</p>
               <p className="text-[10px] tracking-wide text-white/60 uppercase">Hail · last 90 days</p>
             </>
           )}
-          <div className={`rounded-lg px-3 py-2 text-xs shadow-lg ${embedded ? "border bg-background/95 text-foreground" : "mt-3 bg-[#1a1d24]/95 text-white"}`}>
+          <div className={`rounded-lg px-3 py-2 text-xs shadow-lg ${desk ? "bg-[#121826]/95 text-white" : "mt-3 bg-[#1a1d24]/95 text-white"}`}>
             {showHail ? (
               <>
                 <p className="font-medium">Hail swath · last 24 hours</p>
-                <ul className={`mt-1.5 space-y-1 ${embedded ? "text-muted-foreground" : "text-white/75"}`}>
+                <ul className="mt-1.5 space-y-1 text-white/75">
                   {HAIL_BINS.map((bin) => (
                     <li key={bin.label} className="flex items-center gap-2">
                       <span className="size-2.5 rounded-sm" style={{ background: bin.color }} />
@@ -626,13 +732,13 @@ export function StormMap({
                     </li>
                   ))}
                 </ul>
-                {swathNote ? <p className={`mt-2 ${embedded ? "text-muted-foreground" : "text-white/45"}`}>{swathNote}</p> : null}
+                {swathNote ? <p className="mt-2 text-white/45">{swathNote}</p> : null}
               </>
             ) : null}
             {showOutlook && outlookRows.length ? (
               <>
                 <p className="mt-2 font-medium">SPC outlook</p>
-                <ul className={`mt-1.5 space-y-1 ${embedded ? "text-muted-foreground" : "text-white/75"}`}>
+                <ul className="mt-1.5 space-y-1 text-white/75">
                   {outlookRows.map((area) => (
                     <li key={`${area.day}-${area.product}`} className="flex items-center gap-2">
                       <span className="size-2.5 rounded-sm border border-black/20" style={{ background: area.fill }} />
@@ -648,7 +754,7 @@ export function StormMap({
         </div>
       ) : null}
       {showHail ? (
-      <div className={`pointer-events-auto absolute left-1/2 z-20 flex max-w-[calc(100%-9rem)] -translate-x-1/2 gap-1.5 overflow-x-auto ${embedded ? "top-[5.75rem] lg:top-3" : "top-3"}`}>
+      <div className={`pointer-events-auto absolute left-1/2 z-20 flex -translate-x-1/2 gap-1.5 overflow-x-auto ${desk ? "top-44 max-w-[calc(100%-2rem)] lg:top-14 lg:max-w-[calc(100%-28rem)]" : "top-3 max-w-[calc(100%-12rem)]"}`}>
         {ordered.map((storm) => {
           const bin = hailBin(storm.stormMaxIn);
           const off = hidden.includes(storm.id);
@@ -676,9 +782,9 @@ export function StormMap({
         </div>
       )}
       {showHail ? (
-      <div className={`pointer-events-none absolute z-20 max-w-[calc(100%-1.5rem)] rounded-full px-3 py-1.5 text-xs shadow-lg ${embedded ? "right-3 bottom-[12.5rem] bg-background/95 text-foreground lg:right-auto lg:bottom-3 lg:left-3" : "bottom-3 left-3 bg-[#1a1d24]/95"}`} aria-live="polite">
-        <span className={embedded ? "" : "text-white/85"}>{hover?.text ?? "No hail here"}</span>
-        {hover ? <span className={`ml-2 ${embedded ? "text-muted-foreground" : "text-white/50"}`}>{hover.coords}</span> : null}
+      <div className={`pointer-events-none absolute z-20 max-w-[calc(100%-1.5rem)] rounded-full bg-[#121826]/95 px-3 py-1.5 text-xs text-white shadow-lg ${desk ? (fullscreen ? "bottom-16 left-48" : "bottom-[16.5rem] left-3 lg:bottom-16 lg:left-48") : "bottom-3 left-3"}`} aria-live="polite">
+        <span className="text-white/85">{hover?.text ?? "No hail here"}</span>
+        {hover ? <span className="ml-2 text-white/50">{hover.coords}</span> : null}
       </div>
       ) : null}
       {embedded ? null : (

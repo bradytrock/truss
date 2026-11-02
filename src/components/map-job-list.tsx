@@ -11,6 +11,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { formatDateShort, initials } from "@/lib/format";
+import type { AlertChip } from "@/lib/weather/alerts";
 import { jobAddress } from "@/lib/job-record";
 import { PROJECT_PIN_COLORS, workPinColor, workPinLabel } from "@/lib/project-map";
 import { WORK_COLUMN_LABELS, WORK_COLUMNS, workColumnFor, type WorkColumn } from "@/lib/work-board";
@@ -260,11 +261,13 @@ export function MapJobResultList({
   jobs,
   opportunities,
   selectedJobId,
+  notes,
   onSelect,
 }: {
   jobs: Job[];
   opportunities: Opportunity[];
   selectedJobId?: string | null;
+  notes?: ReadonlyMap<string, AlertChip[]>;
   onSelect: (id: string) => void;
 }) {
   if (jobs.length === 0) {
@@ -284,6 +287,7 @@ export function MapJobResultList({
               stage={workPinLabel(job, opportunity)}
               stageColor={workPinColor(job, opportunity)}
               selected={job.id === selectedJobId}
+              notes={notes?.get(job.id)}
               onSelect={() => onSelect(job.id)}
             />
           </li>
@@ -298,12 +302,14 @@ function MapJobResultCard({
   stage,
   stageColor,
   selected,
+  notes,
   onSelect,
 }: {
   job: Job;
   stage: string;
   stageColor: string;
   selected: boolean;
+  notes?: AlertChip[];
   onSelect: () => void;
 }) {
   const address = jobAddress(job);
@@ -341,6 +347,22 @@ function MapJobResultCard({
           </span>
           {job.code ? <span className="truncate font-mono text-[11px] text-muted-foreground">{job.code}</span> : null}
         </span>
+        {notes?.length ? (
+          <span className="mt-1.5 flex flex-wrap gap-1">
+            {notes.map((note) => (
+              <span
+                key={note.label}
+                className={
+                  note.tone === "warning"
+                    ? "rounded-full bg-[#fee2e2] px-2 py-0.5 text-[11px] font-medium text-[#9f1239]"
+                    : "rounded-full bg-[#fef3c7] px-2 py-0.5 text-[11px] font-medium text-[#92400e]"
+                }
+              >
+                {note.label}
+              </span>
+            ))}
+          </span>
+        ) : null}
       </span>
     </button>
   );

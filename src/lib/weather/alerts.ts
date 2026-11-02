@@ -1,4 +1,4 @@
-import type { AlertRoute, WeatherAlert } from "./types.ts";
+import type { AlertKind, AlertRoute, WeatherAlert, WeatherGeometry } from "./types.ts";
 
 const SMS_EVENTS = new Set(["Tornado Warning", "Severe Thunderstorm Warning", "Flash Flood Warning"]);
 const LEADER_EVENTS = new Set([
@@ -13,6 +13,98 @@ export function alertRoute(event: string, hailInches: number | null): AlertRoute
   if (event === "Special Weather Statement" && (hailInches ?? 0) >= 0.75) return "sms";
   if (LEADER_EVENTS.has(event)) return "leaders";
   return "map";
+}
+
+export function alertKind(event: string): AlertKind {
+  if (/\bwatch\b/i.test(event)) return "watch";
+  if (/\bwarning\b/i.test(event)) return "warning";
+  return "statement";
+}
+
+export type AlertPaint = {
+  fill: string;
+  stroke: string;
+  fillOpacity: number;
+  weight: number;
+  dash?: string;
+  /** County fill, the way a watch is drawn on a forecast map. */
+  county: boolean;
+};
+
+/** Colors follow the NWS map: pink counties for a tornado watch, yellow for a severe watch, polygons for warnings. */
+export function alertPaint(alert: { event: string; kind?: AlertKind }): AlertPaint {
+  const kind = alert.kind ?? alertKind(alert.event);
+  if (kind === "watch") {
+    if (/tornado/i.test(alert.event)) {
+      return { fill: "#f9a8d4", stroke: "#9f1239", fillOpacity: 0.42, weight: 1, county: true };
+    }
+    if (/flood/i.test(alert.event)) {
+      return { fill: "#86efac", stroke: "#166534", fillOpacity: 0.36, weight: 1, county: true };
+    }
+    return { fill: "#facc15", stroke: "#a16207", fillOpacity: 0.4, weight: 1, county: true };
+  }
+  if (/tornado/i.test(alert.event)) {
+    return { fill: "#ef4444", stroke: "#7f1d1d", fillOpacity: 0.34, weight: 2.5, county: false };
+  }
+  if (/flood/i.test(alert.event)) {
+    return { fill: "#22c55e", stroke: "#14532d", fillOpacity: 0.28, weight: 2, county: false };
+  }
+  if (/severe thunderstorm/i.test(alert.event)) {
+    return { fill: "#fb923c", stroke: "#9a3412", fillOpacity: 0.32, weight: 2.25, county: false };
+  }
+  if (kind === "warning") {
+    return { fill: "#f97316", stroke: "#9a3412", fillOpacity: 0.24, weight: 2, county: false };
+  }
+  return { fill: "#fdba74", stroke: "#c2410c", fillOpacity: 0.12, weight: 1.5, dash: "6 4", county: false };
+}
+
+export function alertDrawRank(alert: { event: string; kind?: AlertKind }) {
+  const kind = alert.kind ?? alertKind(alert.event);
+  if (kind === "watch") return 0;
+  if (kind === "warning") return 2;
+  return 1;
+}
+
+/** Keep warnings and watches that can be drawn, including watches that only list counties. */
+export function alertOnMap(alert: {
+  event: string;
+  route: AlertRoute;
+  geometry: WeatherGeometry | null;
+  ugc?: string[];
+}) {
+  const counties = alert.ugc?.length ?? 0;
+  const hasShape = Boolean(alert.geometry) || counties > 0;
+  if (!hasShape) return false;
+  if (alert.route === "sms" || alert.route === "leaders") return true;
+  if (alert.event === "Wind Advisory" || alert.event === "Special Weather Statement") return Boolean(alert.geometry);
+  const kind = alertKind(alert.event);
+  return kind === "warning" || kind === "watch";
+}
+
+export function shortAlertLabel(event: string) {
+  if (event === "Severe Thunderstorm Warning") return "SVR warning";
+  if (event === "Severe Thunderstorm Watch") return "SVR watch";
+  if (event === "Tornado Warning") return "Tornado warning";
+  if (event === "Tornado Watch") return "Tornado watch";
+  if (event === "Flash Flood Warning") return "Flood warning";
+  if (event === "Flash Flood Watch") return "Flood watch";
+  return event;
+}
+
+export type AlertChip = { label: string; tone: "warning" | "watch" };
+
+export function alertChips(alerts: Array<{ event: string; kind?: AlertKind }>): AlertChip[] {
+  const chips: AlertChip[] = [];
+  const seen = new Set<string>();
+  for (const alert of alerts) {
+    const kind = alert.kind ?? alertKind(alert.event);
+    if (kind === "statement") continue;
+    const label = shortAlertLabel(alert.event);
+    if (seen.has(label)) continue;
+    seen.add(label);
+    chips.push({ label, tone: kind });
+  }
+  return chips;
 }
 
 export function parseHailInches(parameters: Record<string, unknown> | null | undefined) {

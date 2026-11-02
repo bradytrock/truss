@@ -1,6 +1,7 @@
-import { alertRoute, parseHailInches, parseWindMph, untilLabel } from "./alerts.ts";
+import { alertKind, alertOnMap, alertRoute, parseHailInches, parseWindMph, untilLabel } from "./alerts.ts";
+import { countyUgcs, geometryFromZone, mergeGeometries } from "./counties.ts";
 import { asGeometry, bboxesOverlap, decimateGeometry, geometryBBox, pointNearBBox } from "./geometry.ts";
-import type { BBox, OutlookArea, OutlookProduct, StormReport, WeatherAlert } from "./types.ts";
+import type { BBox, OutlookArea, OutlookProduct, StormReport, WeatherAlert, WeatherGeometry } from "./types.ts";
 
 const USER_AGENT = "TheRoofingCRM (https://myroofingtools.com; storm desk)";
 
@@ -13,28 +14,114 @@ const OUTLOOKS: Array<{ day: 1 | 2; product: OutlookProduct; file: string }> = [
   { day: 2, product: "sigHail", file: "day2otlk_cighail.nolyr.geojson" },
 ];
 
+const COUNTY_OK_MS = 30 * 60 * 1000;
+const COUNTY_MISS_MS = 2 * 60 * 1000;
+const COUNTY_CAP = 80;
+const COUNTY_BUDGET_MS = 12_000;
+
+/** Public county outlines from api.weather.gov. Not office data. */
+const countyCache = new Map<string, { until: number; geometry: WeatherGeometry | null }>();
+
 export async function fetchActiveAlerts(states: string[], bbox: BBox | null): Promise<WeatherAlert[]> {
   const areas = [...new Set(states.map((state) => state.trim().toUpperCase()).filter((state) => /^[A-Z]{2}$/.test(state)))].slice(0, 8);
   if (!areas.length) return [];
   const batches = await Promise.all(areas.map((state) => fetchJson(`https://api.weather.gov/alerts/active?area=${state}`)));
-  const alerts: WeatherAlert[] = [];
+  const pending: WeatherAlert[] = [];
   const seen = new Set<string>();
   for (const batch of batches) {
     const features = featuresOf(batch);
     for (const feature of features) {
       const alert = normalizeAlert(feature);
-      if (!alert || seen.has(alert.id) || !alert.geometry) continue;
-      if (alert.route === "map" && alert.event !== "Wind Advisory" && alert.event !== "Special Weather Statement") continue;
-      if (bbox && alert.geometry) {
-        const box = geometryBBox(alert.geometry);
-        if (box && !bboxesOverlap(box, bbox)) continue;
-      }
-      if (alert.geometry) alert.geometry = decimateGeometry(alert.geometry);
+      if (!alert || seen.has(alert.id) || !alertOnMap(alert)) continue;
       seen.add(alert.id);
-      alerts.push(alert);
+      pending.push(alert);
     }
   }
+  const hydrated = await attachCountyGeometry(pending);
+  const alerts: WeatherAlert[] = [];
+  for (const alert of hydrated) {
+    if (!alert.geometry) continue;
+    if (bbox) {
+      const box = geometryBBox(alert.geometry);
+      if (box && !bboxesOverlap(box, bbox)) continue;
+    }
+    const kind = alert.kind ?? alertKind(alert.event);
+    alerts.push({ ...alert, geometry: decimateGeometry(alert.geometry, kind === "watch" ? 200 : 280) });
+  }
   return alerts;
+}
+
+/**
+ * Tornado and severe watches usually have no polygon — only county codes.
+ * Fill those counties so the map shades them the way a forecast map does.
+ * A warning that already has a polygon keeps that polygon.
+ */
+export async function attachCountyGeometry(
+  alerts: WeatherAlert[],
+  load: (code: string) => Promise<WeatherGeometry | null> = cachedCounty,
+): Promise<WeatherAlert[]> {
+  const wanted = new Set<string>();
+  for (const alert of alerts) {
+    if (!wantsCounties(alert)) continue;
+    for (const code of alert.ugc ?? []) wanted.add(code);
+  }
+  const codes = [...wanted].slice(0, COUNTY_CAP);
+  const loaded = new Map<string, WeatherGeometry | null>();
+  const started = Date.now();
+  await pool(codes, 8, async (code) => {
+    if (Date.now() - started > COUNTY_BUDGET_MS) return;
+    try {
+      loaded.set(code, await load(code));
+    } catch {
+      loaded.set(code, null);
+    }
+  });
+  return alerts.map((alert) => {
+    if (!wantsCounties(alert)) return alert;
+    const parts: WeatherGeometry[] = [];
+    for (const code of alert.ugc ?? []) {
+      const geometry = loaded.get(code);
+      if (geometry) parts.push(geometry);
+    }
+    const merged = mergeGeometries(parts);
+    if (merged) return { ...alert, geometry: merged };
+    return alert;
+  });
+}
+
+function wantsCounties(alert: WeatherAlert) {
+  if (!alert.ugc?.length) return false;
+  const kind = alert.kind ?? alertKind(alert.event);
+  if (kind === "watch") return true;
+  return !alert.geometry;
+}
+
+async function cachedCounty(code: string): Promise<WeatherGeometry | null> {
+  const hit = countyCache.get(code);
+  if (hit && hit.until > Date.now()) return hit.geometry;
+  try {
+    const json = await fetchJson(`https://api.weather.gov/zones/county/${code}`, 8000);
+    const geometry = geometryFromZone(json);
+    countyCache.set(code, { until: Date.now() + (geometry ? COUNTY_OK_MS : COUNTY_MISS_MS), geometry });
+    return geometry;
+  } catch {
+    countyCache.set(code, { until: Date.now() + COUNTY_MISS_MS, geometry: null });
+    return null;
+  }
+}
+
+async function pool<T>(items: T[], limit: number, worker: (item: T) => Promise<void>) {
+  if (!items.length) return;
+  let next = 0;
+  const run = async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      const item = items[index];
+      if (item !== undefined) await worker(item);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => run()));
 }
 
 export async function fetchOutlooks(bbox: BBox | null): Promise<OutlookArea[]> {
@@ -144,6 +231,8 @@ export function normalizeAlert(feature: { id?: unknown; properties?: unknown; ge
     route: alertRoute(event, hailInches),
     areaDesc: String(props.areaDesc ?? ""),
     geometry,
+    ugc: countyUgcs(props),
+    kind: alertKind(event),
   };
 }
 
@@ -164,10 +253,10 @@ function reportKind(text: string): StormReport["kind"] | null {
   return null;
 }
 
-async function fetchJson(url: string) {
+async function fetchJson(url: string, timeoutMs = 20000) {
   const response = await fetch(url, {
     headers: { "User-Agent": USER_AGENT, Accept: "application/geo+json, application/json" },
-    signal: AbortSignal.timeout(20000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) throw new Error(`Weather feed answered ${response.status}.`);
   return response.json() as Promise<unknown>;

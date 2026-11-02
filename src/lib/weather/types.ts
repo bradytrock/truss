@@ -11,6 +11,9 @@ export type BBox = { west: number; south: number; east: number; north: number };
 
 export type AlertRoute = "sms" | "leaders" | "map";
 
+/** Watch products are filled by county. Warnings keep the NWS polygon. */
+export type AlertKind = "warning" | "watch" | "statement";
+
 export type WeatherAlert = {
   id: string;
   event: string;
@@ -25,6 +28,9 @@ export type WeatherAlert = {
   route: AlertRoute;
   areaDesc: string;
   geometry: WeatherGeometry | null;
+  /** County UGC codes such as TXC439. Watches use these when the alert has no polygon. */
+  ugc?: string[];
+  kind?: AlertKind;
 };
 
 export type OutlookProduct = "hail" | "wind" | "tornado" | "sigHail";
