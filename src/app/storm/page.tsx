@@ -1,7 +1,6 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { StormDesk } from "@/components/storm-desk";
-
+/** The hail map and SPC outlooks live on Map. */
 export default function StormPage() {
-  return <StormDesk />;
+  redirect("/map");
 }

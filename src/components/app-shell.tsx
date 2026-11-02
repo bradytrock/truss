@@ -109,7 +109,6 @@ function navSections(options: { bdOnly: boolean }): NavSection[] {
           { href: "/calls", label: "Calls" },
           { href: "/jobs", label: "Jobs" },
           { href: "/map", label: "Map" },
-          { href: "/storm", label: "Storm" },
           { href: "/contacts", label: "Agents & contacts" },
           { href: "/tasks", label: "Tasks" },
           { href: "/photos", label: "Photos" },
@@ -126,7 +125,6 @@ function navSections(options: { bdOnly: boolean }): NavSection[] {
         { href: "/calls", label: "Calls" },
         { href: "/jobs", label: "Jobs" },
         { href: "/map", label: "Map" },
-        { href: "/storm", label: "Storm" },
         { href: "/contacts", label: "Contacts" },
         { href: "/calendar", label: "Calendar" },
         { href: "/tasks", label: "Tasks" },
@@ -180,8 +178,7 @@ function itemIsActive(pathname: string, href: string) {
   if (href === "/accounting") return pathname === "/accounting" || pathname.startsWith("/accounting/");
   if (href === "/jobs") return pathname.startsWith("/jobs") || pathname.startsWith("/material-orders");
   if (href === "/insurance") return pathname === "/insurance" || pathname.startsWith("/insurance/");
-  if (href === "/map") return pathname === "/map" || pathname.startsWith("/map?");
-  if (href === "/storm") return pathname === "/storm" || pathname.startsWith("/storm/");
+  if (href === "/map") return pathname === "/map" || pathname.startsWith("/map?") || pathname === "/storm" || pathname.startsWith("/storm/");
   if (href === "/messages") return isInboxPath(pathname);
   if (href === "/settings") return pathname.startsWith("/settings");
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -249,12 +246,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const launcherApps = appLauncherItems();
   const inboxLayout = isInboxPath(pathname);
-  const mapLayout = pathname === "/map";
-  const stormLayout = pathname === "/storm";
+  const mapLayout = pathname === "/map" || pathname === "/storm";
   const measureLayout = /^\/jobs\/[^/]+\/measure$/.test(pathname);
   // The contact book pages and scrolls its own list, so the page itself must not scroll.
   const contactsLayout = pathname === "/contacts";
-  const fillLayout = inboxLayout || mapLayout || stormLayout || measureLayout || contactsLayout;
+  const fillLayout = inboxLayout || mapLayout || measureLayout || contactsLayout;
   const marketingSuite = pathname === "/marketing" || pathname.startsWith("/marketing/");
 
   const createMenu =
@@ -393,7 +389,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <main
           className={cn(
             "bg-background",
-            mapLayout || stormLayout
+            mapLayout
               ? "flex min-h-0 flex-1 flex-col overflow-hidden p-0 lg:p-5 xl:p-7"
               : measureLayout
                 ? "flex min-h-0 flex-1 flex-col overflow-hidden p-0"

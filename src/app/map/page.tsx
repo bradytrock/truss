@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CloudRain, LocateFixed, MapPin, Phone, X } from "lucide-react";
+import { toast } from "sonner";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { JobRecordWindow } from "@/components/job-window";
 import {
@@ -17,7 +18,7 @@ import {
 import { ErrorBanner, LoadingScreen, PageHeader } from "@/components/page-chrome";
 import { useCrm } from "@/lib/crm-store";
 import { jobAddress, isDeletedJob } from "@/lib/job-record";
-import { formatDateShort, initials } from "@/lib/format";
+import { formatCurrencyFull, formatDateShort, initials } from "@/lib/format";
 import {
   addressNeedsGeocode,
   crewFreshness,
@@ -40,15 +41,17 @@ import {
   type MapCrewPing,
 } from "@/lib/project-map";
 import { missingStormMapMessage } from "@/lib/supabase/schema-errors";
-import { loadStormLayers, swathUrl } from "@/lib/weather/client";
+import { loadStormLayers, sendStormTexts } from "@/lib/weather/client";
+import { chicagoDaysAgoFromIso, daysAgoLabel } from "@/lib/weather/hail-point";
 import type { StormLayers } from "@/lib/weather/types";
-import { staffForReports } from "@/lib/visibility";
-import { WORK_COLUMN_LABELS, type WorkColumn } from "@/lib/work-board";
-import type { Job } from "@/lib/types";
+import { isCompanyLeader, staffForReports } from "@/lib/visibility";
+import { boardValue, WORK_COLUMN_LABELS, type WorkColumn } from "@/lib/work-board";
+import { ACTIVITY_LABELS, type Job } from "@/lib/types";
+import type { StormJobPin } from "@/components/storm-popup/job-pin-popup";
 import { cn } from "@/lib/utils";
 
-const ProjectMapCanvas = dynamic(
-  () => import("@/components/project-map-canvas").then((mod) => mod.ProjectMapCanvas),
+const StormMap = dynamic(
+  () => import("@/components/storm-map").then((mod) => mod.StormMap),
   { ssr: false, loading: () => <div className="flex h-full min-h-0 items-center justify-center text-sm text-[#706e6b]">Loading the map…</div> },
 );
 
@@ -69,7 +72,9 @@ function MapPageInner() {
   const [showProjects, setShowProjects] = useState(true);
   const [showCrew, setShowCrew] = useState(true);
   const [showWeather, setShowWeather] = useState(false);
-  const [showStorm, setShowStorm] = useState(false);
+  const [showHail, setShowHail] = useState(true);
+  const [showOutlook, setShowOutlook] = useState(true);
+  const [texting, setTexting] = useState(false);
   const [stormLayers, setStormLayers] = useState<StormLayers | null>(null);
   const [sharing, setSharing] = useState(false);
   const [mapError, setMapError] = useState("");
@@ -336,28 +341,10 @@ function MapPageInner() {
 
   useEffect(() => () => stopSharing(), [stopSharing]);
 
-  const pins = useMemo(
-    () =>
-      mappedJobs.map((job) => {
-        const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
-        return {
-          id: job.id,
-          code: job.code,
-          name: job.name,
-          lat: job.lat as number,
-          lng: job.lng as number,
-          color: workPinColor(job, opportunity),
-          label: workPinLabel(job, opportunity),
-          address: jobAddress(job),
-          homeowner: crm.getContact(job.primaryContactId)?.name?.trim() || "",
-          projectManager: job.projectManager?.trim() || "",
-        };
-      }),
-    [crm, mappedJobs],
-  );
+  const pins = useMemo(() => mapPins(crm, mappedJobs), [crm, mappedJobs]);
 
   useEffect(() => {
-    if (!showStorm || !crm.hydrated) return;
+    if (!crm.hydrated) return;
     let cancel = false;
     const points = mappedJobs.map((job) => ({
       id: job.id,
@@ -375,7 +362,7 @@ function MapPageInner() {
     return () => {
       cancel = true;
     };
-  }, [crm.company.state, crm.hydrated, mappedJobs, showStorm]);
+  }, [crm.company.state, crm.hydrated, mappedJobs]);
 
   if (!crm.hydrated) return <LoadingScreen />;
 
@@ -406,11 +393,17 @@ function MapPageInner() {
         <PageHeader
           eyebrow="Field"
           title="Map"
-          description="Job sites and live crew. Turn on radar for the storm picture."
+          description="Job sites, live crew, hail swaths, and the SPC outlook."
           actions={
             <div className="flex flex-wrap items-center gap-2">
               <Button variant={showProjects ? "default" : "outline"} onClick={() => setShowProjects((value) => !value)}>
                 Projects {mappedJobs.length}
+              </Button>
+              <Button type="button" variant={showHail ? "default" : "outline"} aria-pressed={showHail} onClick={() => setShowHail((value) => !value)}>
+                Hail
+              </Button>
+              <Button type="button" variant={showOutlook ? "default" : "outline"} aria-pressed={showOutlook} onClick={() => setShowOutlook((value) => !value)}>
+                SPC outlook
               </Button>
               <Button
                 type="button"
@@ -421,47 +414,41 @@ function MapPageInner() {
                 <CloudRain data-icon="inline-start" />
                 Weather radar
               </Button>
-              <Button
-                type="button"
-                variant={showStorm ? "default" : "outline"}
-                aria-pressed={showStorm}
-                onClick={() => setShowStorm((value) => !value)}
-              >
-                Hail & warnings
-              </Button>
               <Button variant={sharing ? "secondary" : "outline"} onClick={sharing ? stopSharing : startSharing}>
                 <MapPin data-icon="inline-start" />
                 {sharing ? "Stop sharing" : "Share my location"}
               </Button>
+              {isCompanyLeader(crm.user.role) ? (
+                <Button type="button" variant="outline" disabled={texting} onClick={() => void textCrew(setTexting)}>
+                  Text the crew
+                </Button>
+              ) : null}
             </div>
           }
         />
       </div>
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background lg:grid lg:grid-cols-[26rem_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] lg:rounded-xl lg:border">
         <div className="absolute inset-0 min-h-0 lg:relative lg:order-2 lg:h-full">
-          <ProjectMapCanvas
-            jobs={showProjects ? pins : []}
-            crew={showCrew ? liveCrew : []}
-            selectedJobId={jobId}
-            selectedStaffId={selectedStaffId}
-            showProjects={showProjects}
+          <StormMap
+            pins={pins}
+            showRadar={showWeather}
+            showHail={showHail}
+            showOutlook={showOutlook}
+            showPins={showProjects}
+            crew={liveCrew}
             showCrew={showCrew}
-            showWeather={showWeather}
-            storm={
-              showStorm && stormLayers?.bounds
-                ? {
-                    alerts: stormLayers.alerts,
-                    outlooks: stormLayers.outlooks,
-                    reports: stormLayers.reports,
-                    bounds: stormLayers.bounds,
-                    swathUrl: swathUrl(stormLayers.bounds, "mesh"),
-                    rotationUrl: null,
-                  }
-                : null
-            }
-            fitKey={`${year}|${query}|${stages.join(",")}|${showProjects}|${showCrew}|${pins.length}|${liveCrew.length}`}
-            onSelectJob={selectJob}
+            selectedStaffId={selectedStaffId}
             onSelectCrew={selectCrew}
+            focusId={jobId}
+            outlooks={stormLayers?.outlooks}
+            alerts={stormLayers?.alerts}
+            reports={stormLayers?.reports}
+            basemap="light"
+            embedded
+            fitTo="pins"
+            fitKey={`${year}|${query}|${stages.join(",")}|${showProjects}|${showCrew}|${showHail}|${pins.length}|${liveCrew.length}`}
+            onDropLead={(lat, lng) => dropLead(crm, lat, lng)}
+            onLogVisit={(id) => logVisit(crm, id)}
           />
           <div className="absolute top-3 right-3 z-10 hidden items-center gap-2 lg:flex">
             <Button
@@ -699,6 +686,119 @@ function Legend() {
       </ul>
     </div>
   );
+}
+
+function mapPins(crm: ReturnType<typeof useCrm>, jobs: Job[]): StormJobPin[] {
+  return jobs.filter(jobHasCoords).map((job) => {
+    const opportunity = job.opportunityId ? crm.opportunities.find((item) => item.id === job.opportunityId) : undefined;
+    const claim = (crm.jobInsurance ?? []).find((item) => item.jobId === job.id);
+    const activity = (crm.activities ?? [])
+      .filter((item) => item.entityType === "job" && item.entityId === job.id)
+      .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+    const contact = crm.contacts.find((item) => item.id === job.primaryContactId);
+    return {
+      id: job.id,
+      code: job.code,
+      name: job.name,
+      customer: contact?.name?.trim() || job.name,
+      address: jobAddress(job),
+      lat: job.lat as number,
+      lng: job.lng as number,
+      color: workPinColor(job, opportunity),
+      stage: workPinLabel(job, opportunity),
+      carrier: claim?.carrier?.trim() || "",
+      valueLabel: formatCurrencyFull(boardValue(job, opportunity)),
+      rep: job.projectManager || job.salesRep || "",
+      claimFiled: Boolean(claim),
+      lastActivity: activity
+        ? `${ACTIVITY_LABELS[activity.type]} · ${daysAgoLabel(chicagoDaysAgoFromIso(activity.createdAt))}`
+        : "No activity yet",
+    };
+  });
+}
+
+async function dropLead(crm: ReturnType<typeof useCrm>, lat: number, lng: number) {
+  let place = {
+    street: "",
+    city: "",
+    state: crm.company.state || "",
+    postalCode: "",
+    label: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+  };
+  try {
+    const response = await fetch(`/api/map/reverse?lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`);
+    if (response.ok) {
+      const body = (await response.json()) as typeof place;
+      if (body.label) place = body;
+    }
+  } catch {
+    place = { ...place };
+  }
+  const created = await crm.addOpportunity({
+    name: place.street ? `Storm lead · ${place.street}` : "Storm lead",
+    clientId: null,
+    primaryContactId: "",
+    stage: "pursuing",
+    value: 0,
+    bidDueAt: null,
+    preBidWalkAt: null,
+    location: place.label,
+    projectType: "roofing",
+    market: "residential",
+    deliveryMethod: "insurance_claim",
+    estimator: crm.user.name,
+    ownerStaffId: crm.user.staffId,
+    nextStep: "Call the homeowner.",
+    leadSource: "storm",
+    referralContactId: null,
+    street: place.street,
+    city: place.city,
+    state: place.state,
+    postalCode: place.postalCode,
+    notes: `Dropped on the map at ${lat.toFixed(4)}, ${lng.toFixed(4)}.`,
+  });
+  if (created.costingJob) {
+    const saved = await crm.updateJob(created.costingJob.id, {
+      lat,
+      lng,
+      street: place.street,
+      city: place.city,
+      state: place.state,
+      postalCode: place.postalCode,
+      location: place.label,
+      geocodedAt: new Date().toISOString(),
+      geocodeQuery: place.label,
+      ownerStaffId: crm.user.staffId,
+      projectManager: crm.user.name,
+    });
+    if (!saved) return;
+  }
+  toast.success("Lead dropped.");
+}
+
+async function logVisit(crm: ReturnType<typeof useCrm>, jobId: string) {
+  await crm.addActivity({
+    entityType: "job",
+    entityId: jobId,
+    type: "site_walk",
+    body: "Site visit logged from the map.",
+  });
+  toast.success("Visit logged.");
+}
+
+async function textCrew(setSending: (value: boolean) => void) {
+  setSending(true);
+  try {
+    const result = await sendStormTexts();
+    if (result.skipped) toast.message(result.skipped);
+    else if ((result.texts ?? 0) === 0) toast.message("Nobody new to text. Warnings already went out, or none cover a job.");
+    else if ((result.mocked ?? 0) > 0 && result.mocked === result.texts) toast.message("Office text isn't connected, so the message was not delivered.");
+    else toast.success(`Texted ${result.texts}.`);
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : "The storm text did not send.");
+  } finally {
+    setSending(false);
+  }
 }
 
 function pinColor(column: WorkColumn) {

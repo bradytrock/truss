@@ -35,7 +35,7 @@ export async function buildStormLayers(points: StormPoint[], states: string[]): 
       mesh: [],
       lightning: [],
       swathValid: "",
-      errors: ["Map a job site on the Map page so the storm desk knows where to look."],
+      errors: ["Map a job site so the outlook knows where to look."],
       attribution: STORM_ATTRIBUTION,
     };
   }

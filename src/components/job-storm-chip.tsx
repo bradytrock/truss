@@ -98,8 +98,8 @@ function JobStormChipBody({ jobs, states, jobId }: { jobs: DeskJob[]; states: st
       {impactText.warning ? <p className="mt-1">{impactText.warning}</p> : null}
       {impactText.hold ? <p className="mt-1">{impactText.hold}</p> : null}
       {impactText.photo ? <p className="mt-1">{PHOTO_PROMPT}</p> : null}
-      <Link href="/storm" className="mt-1 inline-block text-xs underline">
-        Open the storm desk
+      <Link href={`/map?job=${encodeURIComponent(jobId)}`} className="mt-1 inline-block text-xs underline">
+        Show on the map
       </Link>
     </div>
   );

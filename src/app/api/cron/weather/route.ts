@@ -38,7 +38,7 @@ export async function GET(request: Request) {
   if (!serviceKey || !url) {
     return NextResponse.json({
       ok: true,
-      skipped: "SUPABASE_SERVICE_ROLE_KEY is not set. The storm desk still loads live. Scheduled texts wait for that key.",
+      skipped: "SUPABASE_SERVICE_ROLE_KEY is not set. The map still loads live. Scheduled texts wait for that key.",
       companies: [],
     });
   }

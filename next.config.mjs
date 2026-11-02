@@ -44,6 +44,7 @@ const nextConfig = {
   async redirects() {
     return [
       { source: "/pipeline", destination: "/jobs", permanent: false },
+      { source: "/storm", destination: "/map", permanent: false },
       { source: "/jobs/:id", destination: "/jobs?job=:id", permanent: false },
       { source: "/settings/eagleview", destination: "/settings/integrations/eagleview", permanent: false },
       { source: "/settings/companycam", destination: "/settings/integrations/companycam", permanent: false },

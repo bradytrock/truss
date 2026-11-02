@@ -7,10 +7,11 @@ import { toast } from "sonner";
 import { HailPointPopup, type CanvassPin } from "@/components/storm-popup/hail-point-popup";
 import { JobPinPopup, type StormJobPin } from "@/components/storm-popup/job-pin-popup";
 import { RadarCellPopup } from "@/components/storm-popup/radar-popup";
-import { clusterJobPins } from "@/lib/project-map";
+import { clusterJobPins, crewMapLabel, PROJECT_MAP_CENTER, type CrewFreshness } from "@/lib/project-map";
 import { loadHailPoint, loadHailSwaths, loadRadarCell } from "@/lib/weather/client";
 import { pointInGeometry } from "@/lib/weather/geometry";
 import { HAIL_BINS, hailBin } from "@/lib/weather/hail";
+import type { OutlookArea, OutlookProduct, StormReport, WeatherAlert } from "@/lib/weather/types";
 import {
   formatChipDate,
   formatHailInches,
@@ -34,6 +35,20 @@ const STAGE_LEGEND = [
 const PAD_TOP = 112;
 const PAD_BOTTOM = 72;
 
+type MapCrewMarker = {
+  staffId: string;
+  name: string;
+  lat: number;
+  lng: number;
+  freshness: CrewFreshness;
+  updatedLabel: string;
+};
+
+const NO_OUTLOOKS: OutlookArea[] = [];
+const NO_ALERTS: WeatherAlert[] = [];
+const NO_REPORTS: StormReport[] = [];
+const NO_CREW: MapCrewMarker[] = [];
+
 type Catalog = { source: "sample" | "database"; storms: HailStorm[] };
 
 type OpenPopup =
@@ -43,6 +58,13 @@ type OpenPopup =
   | { kind: "job"; id: string }
   | { kind: "radar"; lat: number; lng: number; dbz: number; site: string; hailChance: string };
 
+const OUTLOOK_NAME: Record<OutlookProduct, string> = {
+  hail: "Hail",
+  sigHail: "Sig. hail",
+  wind: "Wind",
+  tornado: "Tornado",
+};
+
 export function StormMap({
   pins,
   showRadar,
@@ -50,6 +72,20 @@ export function StormMap({
   rotation,
   onDropLead,
   onLogVisit,
+  outlooks = NO_OUTLOOKS,
+  alerts = NO_ALERTS,
+  reports = NO_REPORTS,
+  showHail = true,
+  showOutlook = false,
+  showPins = true,
+  crew = NO_CREW,
+  showCrew = false,
+  selectedStaffId = null,
+  onSelectCrew,
+  basemap = "dark",
+  embedded = false,
+  fitTo = "storms",
+  fitKey = "",
 }: {
   pins: StormJobPin[];
   showRadar: boolean;
@@ -57,6 +93,21 @@ export function StormMap({
   rotation?: { url: string; bounds: { west: number; south: number; east: number; north: number } } | null;
   onDropLead: (lat: number, lng: number) => Promise<void>;
   onLogVisit: (jobId: string) => Promise<void>;
+  outlooks?: OutlookArea[];
+  alerts?: WeatherAlert[];
+  reports?: StormReport[];
+  showHail?: boolean;
+  showOutlook?: boolean;
+  showPins?: boolean;
+  crew?: MapCrewMarker[];
+  showCrew?: boolean;
+  selectedStaffId?: string | null;
+  onSelectCrew?: (id: string) => void;
+  basemap?: "light" | "dark";
+  /** Field map: light tiles, no "Storm Map" title, fit to jobs instead of swaths. */
+  embedded?: boolean;
+  fitTo?: "storms" | "pins";
+  fitKey?: string;
 }) {
   const el = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -64,6 +115,11 @@ export function StormMap({
   const ignoreUntil = useRef(0);
   const moveAt = useRef(0);
   const showRadarRef = useRef(showRadar);
+  const showHailRef = useRef(showHail);
+  const basemapRef = useRef(basemap);
+  const fitToRef = useRef(fitTo);
+  const embeddedRef = useRef(embedded);
+  const onSelectCrewRef = useRef(onSelectCrew);
   const hiddenRef = useRef<string[]>([]);
   const stormsRef = useRef<HailStorm[]>([]);
   const lookupRef = useRef<(lat: number, lng: number) => void>(() => undefined);
@@ -87,6 +143,7 @@ export function StormMap({
   const pannedKey = useRef("");
   const fittedSource = useRef("");
   const fittedFocus = useRef<string | null>(null);
+  const fitKeyRef = useRef<string | null>(null);
   const anchorRef = useRef(anchor);
 
   function arm() {
@@ -94,6 +151,7 @@ export function StormMap({
   }
 
   const lookup = useCallback(async (lat: number, lng: number) => {
+    if (!showHailRef.current) return;
     setPopup({ kind: "loading", lat, lng });
     const zoomNow = mapRef.current?.getZoom() ?? 8;
     const [pointResult, radar] = await Promise.all([
@@ -133,6 +191,11 @@ export function StormMap({
 
   useLayoutEffect(() => {
     showRadarRef.current = showRadar;
+    showHailRef.current = showHail;
+    basemapRef.current = basemap;
+    fitToRef.current = fitTo;
+    embeddedRef.current = embedded;
+    onSelectCrewRef.current = onSelectCrew;
     hiddenRef.current = hidden;
     stormsRef.current = storms;
     anchorRef.current = anchor;
@@ -153,7 +216,7 @@ export function StormMap({
       const next = { left: Math.round(left), top: Math.round(top) };
       setPos((currentPos) => (currentPos && currentPos.left === next.left && currentPos.top === next.top ? currentPos : next));
     };
-  }, [anchor, hidden, lookup, showRadar, storms]);
+  }, [anchor, basemap, embedded, fitTo, hidden, lookup, onSelectCrew, showHail, showRadar, storms]);
 
   useEffect(() => {
     let cancel = false;
@@ -170,16 +233,29 @@ export function StormMap({
 
   useEffect(() => {
     if (!el.current || mapRef.current) return;
-    const map = L.map(el.current, { zoomControl: false, attributionControl: true }).setView([32.9, -97.15], 9);
-    L.control.zoom({ position: "topright" }).addTo(map);
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-      attribution: '&copy; OpenStreetMap &copy; <a href="https://carto.com/attributions">CARTO</a>',
-      subdomains: "abcd",
-      maxZoom: 19,
-    }).addTo(map);
+    const map = L.map(el.current, { zoomControl: false, attributionControl: true }).setView(
+      fitToRef.current === "pins" ? [PROJECT_MAP_CENTER.lat, PROJECT_MAP_CENTER.lng] : [32.9, -97.15],
+      fitToRef.current === "pins" ? 8 : 9,
+    );
+    L.control.zoom({ position: embeddedRef.current ? "bottomright" : "topright" }).addTo(map);
+    if (basemapRef.current === "light") {
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap",
+        maxZoom: 19,
+      }).addTo(map);
+    } else {
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+        attribution: '&copy; OpenStreetMap &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: "abcd",
+        maxZoom: 19,
+      }).addTo(map);
+    }
     const swathPane = map.createPane("swath");
     swathPane.style.zIndex = "340";
     swathPane.style.pointerEvents = "none";
+    const outlookPane = map.createPane("outlook");
+    outlookPane.style.zIndex = "345";
+    outlookPane.style.pointerEvents = "none";
     const radarPane = map.createPane("radar");
     radarPane.style.zIndex = "350";
     radarPane.style.pointerEvents = "none";
@@ -207,7 +283,7 @@ export function StormMap({
     map.on("click", onClick);
     map.on("mousemove", onHover);
     const initial = stormsRef.current.flatMap((storm) => storm.track.map((pair) => [pair[1], pair[0]] as L.LatLngTuple));
-    if (initial.length) map.fitBounds(L.latLngBounds(initial), { padding: [64, 64], maxZoom: 10, animate: false });
+    if (fitToRef.current === "storms" && initial.length) map.fitBounds(L.latLngBounds(initial), { padding: [64, 64], maxZoom: 10, animate: false });
     const resize = () => map.invalidateSize();
     const timer = window.setTimeout(resize, 80);
     const observed = el.current;
@@ -223,16 +299,16 @@ export function StormMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || fittedSource.current === catalog.source) return;
+    if (!map || fitTo !== "storms" || fittedSource.current === catalog.source) return;
     const points = storms.flatMap((storm) => storm.track.map((pair) => [pair[1], pair[0]] as L.LatLngTuple));
     if (!points.length) return;
     fittedSource.current = catalog.source;
     map.fitBounds(L.latLngBounds(points), { padding: [64, 64], maxZoom: 10, animate: false });
-  }, [catalog.source, storms]);
+  }, [catalog.source, fitTo, storms]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !showHail) return;
     const group = L.layerGroup().addTo(map);
     const features = storms
       .filter((storm) => !hidden.includes(storm.id))
@@ -260,12 +336,13 @@ export function StormMap({
     return () => {
       map.removeLayer(group);
     };
-  }, [storms, hidden]);
+  }, [showHail, storms, hidden]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !showPins) return;
     const group = L.layerGroup().addTo(map);
+    const pinBorder = basemap === "light" ? "#181818" : "#fff";
     const clusters = clusterJobPins(
       pins.map((pin) => ({ id: pin.id, lat: pin.lat, lng: pin.lng })),
       zoom,
@@ -296,7 +373,7 @@ export function StormMap({
         className: "project-map-pin",
         iconSize: [18, 18],
         iconAnchor: [9, 9],
-        html: `<button type="button" aria-label="${escapeAttr(pin.code || pin.name)}" style="width:18px;height:18px;border-radius:999px;border:${selected ? "3px solid #fff" : "2px solid #fff"};background:${pin.color};box-shadow:0 1px 4px rgba(0,0,0,.45);cursor:pointer"></button>`,
+          html: `<button type="button" aria-label="${escapeAttr(pin.code || pin.name)}" style="width:18px;height:18px;border-radius:999px;border:${selected ? `3px solid ${pinBorder}` : "2px solid #fff"};background:${pin.color};box-shadow:0 1px 4px rgba(0,0,0,.45);cursor:pointer"></button>`,
       });
       const marker = L.marker([pin.lat, pin.lng], { icon, zIndexOffset: selected ? 400 : 100 });
       marker.on("click", (event) => {
@@ -309,7 +386,7 @@ export function StormMap({
     return () => {
       map.removeLayer(group);
     };
-  }, [pins, zoom, popup]);
+  }, [basemap, pins, popup, showPins, zoom]);
 
   const rotationUrl = rotation?.url ?? null;
   const rotationSouth = rotation?.bounds.south;
@@ -328,6 +405,119 @@ export function StormMap({
       map.removeLayer(layer);
     };
   }, [rotationEast, rotationNorth, rotationSouth, rotationUrl, rotationWest]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !showOutlook) return;
+    const group = L.layerGroup().addTo(map);
+    if (outlooks.length) {
+      const collection: GeoJSON.FeatureCollection = {
+        type: "FeatureCollection",
+        features: outlooks.map((area) => ({
+          type: "Feature",
+          properties: area,
+          geometry: area.geometry,
+        })),
+      };
+      L.geoJSON(collection, {
+        pane: "outlook",
+        interactive: false,
+        style: (feature) => {
+          const area = feature?.properties as OutlookArea | undefined;
+          return {
+            color: area?.stroke || "#92400e",
+            weight: area?.product === "sigHail" ? 2 : 1.5,
+            fillColor: area?.fill || "#f59e0b",
+            fillOpacity: area?.product === "sigHail" ? 0.22 : 0.16,
+            dashArray: area?.product === "sigHail" ? "4 3" : undefined,
+          };
+        },
+      }).addTo(group);
+    }
+    if (alerts.length) {
+      const warnings: GeoJSON.FeatureCollection = {
+        type: "FeatureCollection",
+        features: alerts.flatMap((alert) =>
+          alert.geometry ? [{ type: "Feature" as const, properties: alert, geometry: alert.geometry }] : [],
+        ),
+      };
+      L.geoJSON(warnings, {
+        pane: "outlook",
+        interactive: false,
+        style: (feature) => {
+          const alert = feature?.properties as WeatherAlert | undefined;
+          const tornado = alert?.event === "Tornado Warning";
+          const warning = alert?.route === "sms";
+          return {
+            color: tornado ? "#7f1d1d" : warning ? "#b91c1c" : "#c2410c",
+            weight: warning ? 2 : 1.5,
+            fillColor: tornado ? "#7f1d1d" : "#ef4444",
+            fillOpacity: warning ? 0.22 : 0.08,
+            dashArray: warning ? undefined : "6 4",
+          };
+        },
+      }).addTo(group);
+    }
+    for (const report of reports) {
+      const hail = report.kind === "hail";
+      L.circleMarker([report.lat, report.lng], {
+        radius: hail ? 5 : 4,
+        color: "#181818",
+        weight: 1,
+        fillColor: hail ? "#7e22ce" : report.kind === "tornado" ? "#7f1d1d" : "#2563eb",
+        fillOpacity: 0.9,
+        interactive: false,
+      }).addTo(group);
+    }
+    return () => {
+      map.removeLayer(group);
+    };
+  }, [alerts, outlooks, reports, showOutlook]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !showCrew || !crew.length) return;
+    const group = L.layerGroup().addTo(map);
+    for (const person of crew) {
+      const selected = person.staffId === selectedStaffId;
+      const live = person.freshness === "live";
+      const label = crewMapLabel(person.name);
+      const width = Math.min(168, Math.max(72, label.length * 8 + 28));
+      const icon = L.divIcon({
+        className: "project-map-crew",
+        iconSize: [width, 28],
+        iconAnchor: [width / 2, 14],
+        html: `<button type="button" class="project-map-crew-pill${live ? " is-live" : ""}${selected ? " is-selected" : ""}" aria-label="${escapeAttr(person.name)}">${escapeHtml(label)}</button>`,
+      });
+      const marker = L.marker([person.lat, person.lng], { icon, zIndexOffset: selected ? 800 : 600 });
+      marker.on("click", (event) => {
+        L.DomEvent.stopPropagation(event);
+        ignoreUntil.current = Date.now() + 450;
+        onSelectCrewRef.current?.(person.staffId);
+      });
+      marker.bindTooltip(`${person.name} · ${person.updatedLabel}`, { direction: "top", offset: [0, -14] });
+      marker.addTo(group);
+    }
+    return () => {
+      map.removeLayer(group);
+    };
+  }, [crew, selectedStaffId, showCrew]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || fitTo !== "pins") return;
+    if (fitKeyRef.current === fitKey) return;
+    fitKeyRef.current = fitKey;
+    const points: L.LatLngTuple[] = [];
+    if (showPins) {
+      for (const pin of pins) points.push([pin.lat, pin.lng]);
+    }
+    if (showCrew) {
+      for (const person of crew) points.push([person.lat, person.lng]);
+    }
+    if (points.length) map.fitBounds(L.latLngBounds(points), { padding: [48, 48], maxZoom: 12, animate: false });
+    else map.setView([PROJECT_MAP_CENTER.lat, PROJECT_MAP_CENTER.lng], 8, { animate: false });
+  }, [crew, fitKey, fitTo, pins, showCrew, showPins]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -406,36 +596,68 @@ export function StormMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    const pin = focusId ? pins.find((item) => item.id === focusId) : undefined;
-    if (!map || !pin || !focusId || fittedFocus.current === focusId) return;
+    if (!focusId) {
+      fittedFocus.current = null;
+      return;
+    }
+    const pin = pins.find((item) => item.id === focusId);
+    if (!map || !pin || fittedFocus.current === focusId) return;
     fittedFocus.current = focusId;
-    map.flyTo([pin.lat, pin.lng], Math.max(map.getZoom(), 12), { duration: 0.45 });
-  }, [focusId, pins]);
+    map.flyTo([pin.lat, pin.lng], Math.max(map.getZoom(), fitTo === "pins" ? 14 : 12), { duration: 0.45 });
+  }, [fitTo, focusId, pins]);
 
   const job = popup?.kind === "job" ? pins.find((pin) => pin.id === popup.id) : undefined;
   const ordered = [...storms].sort((a, b) => b.stormDate.localeCompare(a.stormDate));
+  const outlookRows = outlookLegend(outlooks);
 
   return (
-    <div className="relative h-full min-h-0 w-full bg-[#0e1116] text-white">
-      <div ref={el} className="project-map-leaflet storm-map-leaflet h-full min-h-0 w-full" />
-      <div className="pointer-events-none absolute top-3 left-3 z-20 max-w-[16rem]">
-        <p className="text-sm font-semibold">Storm Map</p>
-        <p className="text-[10px] tracking-wide text-white/60 uppercase">Hail · last 90 days</p>
-        <div className="pointer-events-none mt-3 rounded-lg bg-[#1a1d24]/95 px-3 py-2 text-xs shadow-lg">
-          <p className="font-medium">Hail swath · radar estimate</p>
-          <ul className="mt-1.5 space-y-1 text-white/75">
-            {HAIL_BINS.map((bin) => (
-              <li key={bin.label} className="flex items-center gap-2">
-                <span className="size-2.5 rounded-sm" style={{ background: bin.color }} />
-                <span>
-                  {bin.label} {formatHailInches(bin.inches)}
-                </span>
-              </li>
-            ))}
-          </ul>
+    <div className={`relative h-full min-h-0 w-full ${embedded ? "" : "bg-[#0e1116] text-white"}`}>
+      <div ref={el} className={`project-map-leaflet h-full min-h-0 w-full ${embedded ? "" : "storm-map-leaflet"}`} />
+      {showHail || (showOutlook && outlookRows.length) ? (
+        <div className={`pointer-events-none absolute left-3 z-20 max-w-[16rem] ${embedded ? "bottom-[12.5rem] lg:bottom-auto lg:top-3" : "top-3"}`}>
+          {embedded ? null : (
+            <>
+              <p className="text-sm font-semibold">Storm Map</p>
+              <p className="text-[10px] tracking-wide text-white/60 uppercase">Hail · last 90 days</p>
+            </>
+          )}
+          <div className={`rounded-lg px-3 py-2 text-xs shadow-lg ${embedded ? "border bg-background/95 text-foreground" : "mt-3 bg-[#1a1d24]/95 text-white"}`}>
+            {showHail ? (
+              <>
+                <p className="font-medium">Hail swath · radar estimate</p>
+                <ul className={`mt-1.5 space-y-1 ${embedded ? "text-muted-foreground" : "text-white/75"}`}>
+                  {HAIL_BINS.map((bin) => (
+                    <li key={bin.label} className="flex items-center gap-2">
+                      <span className="size-2.5 rounded-sm" style={{ background: bin.color }} />
+                      <span>
+                        {bin.label} {formatHailInches(bin.inches)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {catalog.source === "sample" ? <p className={`mt-2 ${embedded ? "text-muted-foreground" : "text-white/45"}`}>Sample storms until the hail SQL is applied.</p> : null}
+              </>
+            ) : null}
+            {showOutlook && outlookRows.length ? (
+              <>
+                <p className="mt-2 font-medium">SPC outlook</p>
+                <ul className={`mt-1.5 space-y-1 ${embedded ? "text-muted-foreground" : "text-white/75"}`}>
+                  {outlookRows.map((area) => (
+                    <li key={`${area.day}-${area.product}`} className="flex items-center gap-2">
+                      <span className="size-2.5 rounded-sm border border-black/20" style={{ background: area.fill }} />
+                      <span>
+                        Day {area.day} {OUTLOOK_NAME[area.product]}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </div>
         </div>
-      </div>
-      <div className="pointer-events-auto absolute top-3 left-1/2 z-20 flex max-w-[calc(100%-9rem)] -translate-x-1/2 gap-1.5 overflow-x-auto">
+      ) : null}
+      {showHail ? (
+      <div className={`pointer-events-auto absolute left-1/2 z-20 flex max-w-[calc(100%-9rem)] -translate-x-1/2 gap-1.5 overflow-x-auto ${embedded ? "top-[5.75rem] lg:top-3" : "top-3"}`}>
         {ordered.map((storm) => {
           const bin = hailBin(storm.stormMaxIn);
           const off = hidden.includes(storm.id);
@@ -453,14 +675,20 @@ export function StormMap({
           );
         })}
       </div>
-      <div className="pointer-events-none absolute top-14 right-14 z-20 hidden text-right text-xs text-white/70 sm:block">
-        <p>Click anywhere inside a swath</p>
-        {catalog.source === "sample" ? <p className="mt-1 text-white/45">Sample storms</p> : null}
+      ) : null}
+      {embedded || !showHail ? null : (
+        <div className="pointer-events-none absolute top-14 right-14 z-20 hidden text-right text-xs text-white/70 sm:block">
+          <p>Click anywhere inside a swath</p>
+          {catalog.source === "sample" ? <p className="mt-1 text-white/45">Sample storms</p> : null}
+        </div>
+      )}
+      {showHail ? (
+      <div className={`pointer-events-none absolute z-20 max-w-[calc(100%-1.5rem)] rounded-full px-3 py-1.5 text-xs shadow-lg ${embedded ? "right-3 bottom-[12.5rem] bg-background/95 text-foreground lg:right-auto lg:bottom-3 lg:left-3" : "bottom-3 left-3 bg-[#1a1d24]/95"}`} aria-live="polite">
+        <span className={embedded ? "" : "text-white/85"}>{hover?.text ?? "No hail here"}</span>
+        {hover ? <span className={`ml-2 ${embedded ? "text-muted-foreground" : "text-white/50"}`}>{hover.coords}</span> : null}
       </div>
-      <div className="pointer-events-none absolute bottom-3 left-3 z-20 rounded-full bg-[#1a1d24]/95 px-3 py-1.5 text-xs shadow-lg" aria-live="polite">
-        <span className="text-white/85">{hover?.text ?? "No hail here"}</span>
-        {hover ? <span className="ml-2 text-white/50">{hover.coords}</span> : null}
-      </div>
+      ) : null}
+      {embedded ? null : (
       <ul className="pointer-events-none absolute bottom-3 left-1/2 z-20 flex -translate-x-1/2 gap-3 rounded-full bg-[#1a1d24]/95 px-3 py-1.5 text-[11px] text-white/80">
         {STAGE_LEGEND.map((item) => (
           <li key={item.label} className="flex items-center gap-1.5 whitespace-nowrap">
@@ -469,6 +697,7 @@ export function StormMap({
           </li>
         ))}
       </ul>
+      )}
       {popup && anchor ? (
         <div ref={popupRef} className="absolute z-30" style={{ left: pos?.left ?? 16, top: pos?.top ?? 120 }}>
           {popup.kind === "job" && job ? (
@@ -539,6 +768,25 @@ function canvassPins(storms: HailStorm[], pins: StormJobPin[], stormId: string):
   return pins
     .filter((pin) => pointInGeometry(pin.lng, pin.lat, outer.geometry))
     .map((pin) => ({ id: pin.id, code: pin.code, name: pin.name, address: pin.address, color: pin.color }));
+}
+
+function outlookLegend(areas: OutlookArea[]) {
+  const seen = new Map<string, OutlookArea>();
+  for (const area of areas) {
+    const key = `${area.day}-${area.product}`;
+    if (!seen.has(key)) seen.set(key, area);
+  }
+  return [...seen.values()];
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (ch) => {
+    if (ch === "&") return "&amp;";
+    if (ch === "<") return "&lt;";
+    if (ch === ">") return "&gt;";
+    if (ch === '"') return "&quot;";
+    return "&#39;";
+  });
 }
 
 function escapeAttr(value: string) {
