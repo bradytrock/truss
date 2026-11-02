@@ -12,7 +12,7 @@ export default function HubSpotImportPage() {
     >
       <IntegrationSettingsChrome
         title="HubSpot import"
-        description="Upload a HubSpot deals export. Map its stages and owners to this board, check every row, then import — quietly, with each deal on the right person's book."
+        description="Upload a HubSpot deals export. Map its stages and owners to this board, check every row, then import — quietly, with each deal on the right person's book and anyone else named on the job."
       >
         <HubSpotImportWizard />
       </IntegrationSettingsChrome>

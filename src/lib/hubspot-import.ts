@@ -32,6 +32,7 @@ export type HubSpotField =
   | "closeDate"
   | "owner"
   | "pmName"
+  | "assignees"
   | "clientName"
   | "clientEmail"
   | "clientPhone"
@@ -56,6 +57,15 @@ const FIELD_ALIASES: Record<HubSpotField, string[]> = {
   closeDate: ["close date", "closed date", "closedate", "date closed"],
   owner: ["deal owner", "owner", "hubspot owner", "sales rep", "assigned to"],
   pmName: ["pm name", "project manager", "pm"],
+  assignees: [
+    "also assigned",
+    "assigned crew",
+    "additional owners",
+    "other owners",
+    "deal collaborators",
+    "collaborators",
+    "team members",
+  ],
   clientName: ["client name", "contact name", "customer name", "homeowner", "homeowner name", "associated contact"],
   clientEmail: ["client email", "contact email", "customer email", "email", "homeowner email"],
   clientPhone: ["client phone", "contact phone", "customer phone", "phone", "phone number", "mobile", "homeowner phone"],
@@ -86,6 +96,7 @@ export const HUBSPOT_FIELD_LABELS: Record<HubSpotField, string> = {
   closeDate: "Close Date",
   owner: "Deal owner",
   pmName: "PM Name",
+  assignees: "Also assigned",
   clientName: "Client Name",
   clientEmail: "Client Email",
   clientPhone: "Client Phone",
@@ -153,6 +164,39 @@ function detectColumns(headers: string[]) {
   return detectHubSpotColumns(headers, FIELD_ALIASES);
 }
 
+/**
+ * One cell can name several people. HubSpot multi-select values are separated
+ * by semicolons. "Jones, Brady" stays one person.
+ */
+export function splitHubSpotPeople(raw: string | undefined): string[] {
+  const seen = new Set<string>();
+  const people: string[] = [];
+  for (const part of (raw ?? "").split(/[;|\n]+/)) {
+    const name = part.replace(/\s+/g, " ").trim();
+    const key = name.toLowerCase();
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    people.push(name);
+  }
+  return people;
+}
+
+function peopleOnHubSpotRow(row: HubSpotRawRow) {
+  const seen = new Set<string>();
+  const labels: string[] = [];
+  for (const label of [
+    ...splitHubSpotPeople(row.values.owner),
+    ...splitHubSpotPeople(row.values.pmName),
+    ...splitHubSpotPeople(row.values.assignees),
+  ]) {
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    labels.push(label);
+  }
+  return labels;
+}
+
 export function tallyHubSpotValues(values: string[]): HubSpotDistinct[] {
   const counts = new Map<string, number>();
   for (const value of values) {
@@ -218,7 +262,7 @@ export function parseHubSpotCsv(text: string): HubSpotParsed {
     stages: [...stageCounts.entries()]
       .map(([value, entry]) => ({ value, count: entry.count, pipeline: entry.pipeline }))
       .sort((left, right) => right.count - left.count || left.value.localeCompare(right.value)),
-    owners: tallyHubSpotValues(rows.flatMap((row) => [row.values.owner ?? "", row.values.pmName ?? ""])),
+    owners: tallyHubSpotValues(rows.flatMap((row) => peopleOnHubSpotRow(row))),
     sources: tallyHubSpotValues(rows.map((row) => row.values.source ?? "")),
   };
 }
@@ -487,6 +531,11 @@ export type HubSpotDealDraft = {
   ownerLabel: string;
   ownerStaffId: string;
   ownerName: string;
+  /** Everyone on the job, primary seat first. */
+  assigneeStaffIds: string[];
+  assigneeNames: string[];
+  /** Project manager when the file names one; otherwise the primary seat. */
+  projectManagerName: string;
   sourceLabel: string;
   leadSource: LeadSource | "";
   contact: {
@@ -550,7 +599,6 @@ export function applyHubSpotMapping(
   context: HubSpotApplyContext,
 ): HubSpotDealDraft[] {
   const now = context.now ?? new Date();
-  const staffById = new Map(context.staff.map((member) => [member.id, member]));
   const contactsByPhone = new Map<string, Contact>();
   const contactsByEmail = new Map<string, Contact>();
   for (const contact of context.contacts) {
@@ -637,16 +685,9 @@ export function applyHubSpotMapping(
     const closeIso = parseHubSpotDate(values.closeDate);
     if (values.closeDate && !closeIso) warnings.push(`Close date “${values.closeDate}” did not parse.`);
 
-    const ownerLabel = (values.owner ?? "").trim() || (values.pmName ?? "").trim();
-    const altOwnerLabel = (values.pmName ?? "").trim();
-    let ownerStaffId = mapping.owners[ownerLabel] || (altOwnerLabel ? mapping.owners[altOwnerLabel] : "") || "";
-    if (!ownerStaffId) {
-      ownerStaffId = mapping.defaultOwnerStaffId;
-      if (ownerLabel) warnings.push(`Owner “${ownerLabel}” is not a seat; assigned to the default owner.`);
-    }
-    const owner = staffById.get(ownerStaffId);
-    if (!owner) issues.push("No owner seat. Pick a default owner.");
-    else if (owner.locked) issues.push(`${owner.name}'s seat is locked.`);
+    const crew = collectHubSpotAssignees(values, mapping, context.staff);
+    issues.push(...crew.issues);
+    warnings.push(...crew.warnings);
 
     const sourceLabel = (values.source ?? "").trim();
     const leadSource = sourceLabel ? (mapping.sources[sourceLabel] ?? guessLeadSource(sourceLabel)) : "";
@@ -684,9 +725,12 @@ export function applyHubSpotMapping(
       status: patch.status,
       stage: patch.stage,
       name,
-      ownerLabel,
-      ownerStaffId: owner ? owner.id : "",
-      ownerName: owner?.name ?? "",
+      ownerLabel: crew.ownerLabel,
+      ownerStaffId: crew.ownerStaffId,
+      ownerName: crew.ownerName,
+      assigneeStaffIds: crew.assigneeStaffIds,
+      assigneeNames: crew.assigneeNames,
+      projectManagerName: crew.projectManagerName,
       sourceLabel,
       leadSource,
       contact: {
@@ -721,11 +765,127 @@ export function applyHubSpotMapping(
 export type HubSpotRowOverride = {
   column?: WorkColumn;
   ownerStaffId?: string;
+  /** Full crew, including the primary seat. The primary is kept even if omitted. */
+  assigneeStaffIds?: string[];
   leadSource?: LeadSource | "";
   excluded?: boolean;
 };
 
 const OWNER_ISSUE = /owner seat|seat is locked/i;
+
+type HubSpotCrew = {
+  ownerStaffId: string;
+  ownerName: string;
+  ownerLabel: string;
+  assigneeStaffIds: string[];
+  assigneeNames: string[];
+  projectManagerName: string;
+  issues: string[];
+  warnings: string[];
+};
+
+function lookupMappedStaff(label: string, mapping: HubSpotMapping, staffById: Map<string, StaffMember>) {
+  const id = mapping.owners[label] ?? "";
+  if (!id) return undefined;
+  return staffById.get(id);
+}
+
+/** Deal owner is the seat. A PM and any other named people are assigned too. */
+function collectHubSpotAssignees(
+  values: Partial<Record<HubSpotField, string>>,
+  mapping: HubSpotMapping,
+  staff: StaffMember[],
+): HubSpotCrew {
+  const staffById = new Map(staff.map((member) => [member.id, member]));
+  const ownerLabels = splitHubSpotPeople(values.owner);
+  const pmLabels = splitHubSpotPeople(values.pmName);
+  const extraLabels = splitHubSpotPeople(values.assignees);
+  const issues: string[] = [];
+  const warnings: string[] = [];
+  const groups = [
+    ...ownerLabels.map((label) => ({ label, kind: "owner" as const, member: lookupMappedStaff(label, mapping, staffById) })),
+    ...pmLabels.map((label) => ({ label, kind: "pm" as const, member: lookupMappedStaff(label, mapping, staffById) })),
+    ...extraLabels.map((label) => ({ label, kind: "extra" as const, member: lookupMappedStaff(label, mapping, staffById) })),
+  ];
+
+  const primary = groups.find((item) => item.member)?.member;
+  let owner = primary;
+  const named = ownerLabels.length + pmLabels.length + extraLabels.length > 0;
+  const fallbackLabel = ownerLabels[0] || pmLabels[0] || extraLabels[0] || "";
+  if (!owner) {
+    owner = mapping.defaultOwnerStaffId ? staffById.get(mapping.defaultOwnerStaffId) : undefined;
+    if (named && fallbackLabel) {
+      warnings.push(`Owner “${fallbackLabel}” is not a seat; assigned to the default owner.`);
+    }
+  }
+  if (!owner) issues.push("No owner seat. Pick a default owner.");
+  else if (owner.locked) issues.push(`${owner.name}'s seat is locked.`);
+
+  const warned = new Set<string>();
+  if (!primary && fallbackLabel) warned.add(fallbackLabel.toLowerCase());
+
+  const assigneeStaffIds: string[] = [];
+  const assigneeNames: string[] = [];
+  const push = (member: StaffMember) => {
+    if (assigneeStaffIds.includes(member.id)) return;
+    assigneeStaffIds.push(member.id);
+    assigneeNames.push(member.name);
+  };
+  if (owner) push(owner);
+
+  let projectManagerName = "";
+  for (const item of groups) {
+    if (!item.member) {
+      const key = item.label.toLowerCase();
+      if (warned.has(key)) continue;
+      warned.add(key);
+      warnings.push(`“${item.label}” is not a seat and was left off the job.`);
+      continue;
+    }
+    if (item.member.locked && item.member.id !== owner?.id) {
+      warnings.push(`${item.member.name}'s seat is locked, so they were left off the job.`);
+      continue;
+    }
+    if (item.kind === "pm" && !item.member.locked && !projectManagerName) projectManagerName = item.member.name;
+    push(item.member);
+  }
+  if (!projectManagerName) projectManagerName = owner?.name ?? "";
+
+  return {
+    ownerStaffId: owner?.id ?? "",
+    ownerName: owner?.name ?? "",
+    ownerLabel: ownerLabels.join("; ") || pmLabels.join("; ") || extraLabels.join("; "),
+    assigneeStaffIds,
+    assigneeNames,
+    projectManagerName,
+    issues,
+    warnings,
+  };
+}
+
+function crewFromIds(owner: StaffMember | undefined, ids: string[], staff: StaffMember[]) {
+  const byId = new Map(staff.map((member) => [member.id, member]));
+  const members: StaffMember[] = [];
+  const seen = new Set<string>();
+  for (const id of [owner?.id ?? "", ...ids]) {
+    if (!id || seen.has(id)) continue;
+    const member = byId.get(id);
+    if (!member) continue;
+    seen.add(id);
+    members.push(member);
+  }
+  const issues: string[] = [];
+  if (!owner) issues.push("No owner seat. Pick a default owner.");
+  else if (owner.locked) issues.push(`${owner.name}'s seat is locked.`);
+  for (const member of members) {
+    if (owner && member.id !== owner.id && member.locked) issues.push(`${member.name}'s seat is locked.`);
+  }
+  return {
+    assigneeStaffIds: members.map((member) => member.id),
+    assigneeNames: members.map((member) => member.name),
+    issues,
+  };
+}
 
 export function overrideHubSpotDraft(
   draft: HubSpotDealDraft,
@@ -740,15 +900,35 @@ export function overrideHubSpotDraft(
   }
   if (override.ownerStaffId !== undefined && override.ownerStaffId !== draft.ownerStaffId) {
     const owner = staff.find((member) => member.id === override.ownerStaffId);
-    const issues = next.issues.filter((issue) => !OWNER_ISSUE.test(issue));
-    if (!owner) issues.push("No owner seat. Pick a default owner.");
-    else if (owner.locked) issues.push(`${owner.name}'s seat is locked.`);
+    const extras = next.assigneeStaffIds.filter((id) => id !== draft.ownerStaffId);
+    // A lone seat change replaces that person. When others are already on the job, the previous seat stays with them.
+    const keepPrevious = extras.length > 0 && draft.ownerStaffId && draft.ownerStaffId !== owner?.id;
+    const crew = crewFromIds(owner, keepPrevious ? [draft.ownerStaffId, ...extras] : extras, staff);
+    const projectManagerName =
+      !next.projectManagerName || next.projectManagerName === draft.ownerName ? (owner?.name ?? "") : next.projectManagerName;
     next = {
       ...next,
       ownerStaffId: owner ? owner.id : "",
       ownerName: owner?.name ?? "",
-      issues,
+      projectManagerName,
+      assigneeStaffIds: crew.assigneeStaffIds,
+      assigneeNames: crew.assigneeNames,
+      issues: [...next.issues.filter((issue) => !OWNER_ISSUE.test(issue)), ...crew.issues],
       warnings: next.warnings.filter((warning) => !/assigned to the default owner/i.test(warning)),
+    };
+  }
+  if (override.assigneeStaffIds !== undefined) {
+    const owner = staff.find((member) => member.id === next.ownerStaffId);
+    const crew = crewFromIds(owner, override.assigneeStaffIds, staff);
+    const projectManagerName = crew.assigneeNames.includes(next.projectManagerName)
+      ? next.projectManagerName
+      : (owner?.name ?? "");
+    next = {
+      ...next,
+      projectManagerName,
+      assigneeStaffIds: crew.assigneeStaffIds,
+      assigneeNames: crew.assigneeNames,
+      issues: [...next.issues.filter((issue) => !OWNER_ISSUE.test(issue)), ...crew.issues],
     };
   }
   if (override.leadSource !== undefined && override.leadSource !== draft.leadSource) {
@@ -850,6 +1030,7 @@ export const HUBSPOT_TEMPLATE_HEADERS = [
   "Close Date",
   "Deal owner",
   "PM Name",
+  "Also assigned",
   "Client Name",
   "Client Email",
   "Client Phone",
@@ -865,5 +1046,5 @@ export const HUBSPOT_TEMPLATE_HEADERS = [
 ] as const;
 
 export const HUBSPOT_TEMPLATE_CSV = `${HUBSPOT_TEMPLATE_HEADERS.join(",")}
-1001,Smith — 123 Main St,Closed won,Sales Pipeline,"$12,450.00",2024-03-15 09:12,2024-04-02,Brady Jones,Brady Jones,Linda Smith,linda@example.com,(214) 555-0101,"123 Main St, Dallas, TX 75201",Google,Hail damage on the north slope.,,,,Roof replacement,Medium,
+1001,Smith — 123 Main St,Closed won,Sales Pipeline,"$12,450.00",2024-03-15 09:12,2024-04-02,Brady Jones,Brady Jones,Sarah Lee,Linda Smith,linda@example.com,(214) 555-0101,"123 Main St, Dallas, TX 75201",Google,Hail damage on the north slope.,,,,Roof replacement,Medium,
 `;

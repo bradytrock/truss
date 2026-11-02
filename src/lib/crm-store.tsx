@@ -55,7 +55,7 @@ import {
   realtorPortalUrl,
 } from "@/lib/realtor-portal";
 import { newShareToken, shareUrl } from "@/lib/share";
-import { fillJobRecord, jobAddress, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId, jobInsertPayload, jobsFilledFromLeads, jobPatchFromLead, leadOverviewBackfill } from "@/lib/job-record";
+import { fillJobRecord, jobAddress, jobDraftFromOpportunity, jobsFromOpenLeads, parseLocation, type JobDraft, dedupeJobsByOpportunity, duplicateLeadJobs, remapDroppedJobId, jobInsertPayload, jobsFilledFromLeads, jobPatchFromLead, leadOverviewBackfill, uniqueNames } from "@/lib/job-record";
 import { livePhotos } from "@/lib/photo-trash";
 import {
   amountForEstimate,
@@ -7311,16 +7311,20 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         const createdYmd = draft.createdAt.slice(0, 10);
         const finished = draft.column === "complete";
         const started = draft.column === "in_progress" || draft.column === "punch" || finished;
+        const projectManager = draft.projectManagerName || ownerName;
+        const crewNames = uniqueNames(draft.assigneeNames.length ? draft.assigneeNames : ownerName ? [ownerName] : []);
         const base = fillJobRecord(
           jobDraftFromOpportunity(opportunity, {
             id: existingJob?.id ?? crypto.randomUUID(),
             ownerStaffId: draft.ownerStaffId,
-            projectManager: ownerName,
+            projectManager,
           }),
           opportunity,
         );
         const job: Job = {
           ...base,
+          projectManager,
+          salesRep: ownerName || base.salesRep,
           ...(existingJob
             ? {
                 customFields: existingJob.customFields,
@@ -7332,10 +7336,10 @@ export function CrmProvider({ children }: { children: ReactNode }) {
                 trades: existingJob.trades,
                 subcontractorIds: existingJob.subcontractorIds,
                 relatedContactIds: existingJob.relatedContactIds,
-                assigned: existingJob.assigned,
+                assigned: uniqueNames([...crewNames, ...existingJob.assigned]),
                 superintendent: existingJob.superintendent,
               }
-            : {}),
+            : { assigned: crewNames }),
           status: draft.status,
           contractValue: draft.amount,
           startDate: started ? closeYmd || createdYmd : createdYmd,
@@ -7357,12 +7361,13 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           newJobs.push(job);
           result.created += 1;
         }
+        const also = draft.assigneeNames.filter((name) => name && name !== ownerName);
         activityRows.push({
           entityId: job.id,
           body: [
             `Imported from HubSpot${draft.recordId ? ` (record ${draft.recordId})` : ""}.`,
             `Stage “${draft.stageLabel || "blank"}” → ${WORK_COLUMN_LABELS[draft.column]}.`,
-            `Owner ${draft.ownerLabel ? `“${draft.ownerLabel}”` : "blank"} → ${ownerName}.`,
+            `Owner ${draft.ownerLabel ? `“${draft.ownerLabel}”` : "blank"} → ${ownerName}${also.length ? `; also ${also.join(", ")}` : ""}.`,
             draft.sourceLabel ? `Seed “${draft.sourceLabel}” → ${leadSourceLabel(draft.leadSource) || "none"}.` : "",
           ]
             .filter(Boolean)
