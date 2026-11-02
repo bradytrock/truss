@@ -815,7 +815,7 @@ function VerifyStep({
       <SettingsCard>
         <SettingsCardHeader
           title="Every row"
-          description="Change a column, seat, or seed on a single row, or untick it to leave it out. A Record ID that appears twice can be added anyway. Other red rows cannot import until fixed."
+          description="Change a column, seat, or seed on a single row, or untick it to leave it out. A row that may be a duplicate can be added anyway. Other red rows cannot import until fixed."
           actions={
             summary.blocked > 0 || duplicateCount > 0 ? (
               <div className="flex flex-wrap justify-end gap-2">

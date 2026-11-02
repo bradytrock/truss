@@ -220,8 +220,13 @@ assert.equal(blank.column, "proposal_sent");
 assert.equal(blank.createdAt, now.toISOString());
 
 const dup = drafts[4];
-assert.ok(dup.issues.some((issue) => /appears twice/.test(issue)));
+assert.equal(
+  dup.issues.find((issue) => isDuplicateRecordIssue(issue)),
+  "May be a duplicate of line 3 (same Record ID, phone, and client name).",
+);
+assert.deepEqual(dup.duplicateOf, { line: 3, points: ["record", "phone", "client"] });
 assert.equal(dup.contact.key, "phone:4695550199", "same person as the Nguyen deal");
+assert.equal(nguyen.duplicateOf, null, "the first copy of a Record ID is not flagged");
 
 const summary = summarizeHubSpotDrafts(drafts);
 assert.equal(summary.total, 5);
@@ -283,10 +288,12 @@ assert.equal(overrideHubSpotDraft(smith, undefined, staff), smith);
 
 const kept = overrideHubSpotDraft(dup, { allowDuplicate: true, excluded: false }, staff);
 assert.equal(kept.duplicateAllowed, true);
+assert.equal(kept.duplicateSharesRecordId, true);
 assert.equal(kept.excluded, false);
 assert.equal(kept.existingOpportunityId, null);
 assert.ok(!kept.issues.some(isDuplicateRecordIssue));
 assert.ok(kept.warnings.some((warning) => /own deal/.test(warning)));
+assert.ok(kept.warnings.some((warning) => /same Record ID, phone, and client name/.test(warning)));
 assert.equal(isReadyHubSpotDraft(kept), true);
 assert.equal(hubspotDealExternalId(kept), undefined);
 assert.equal(hubspotDealExternalId(smith), "1001");
@@ -323,3 +330,70 @@ assert.equal(afterAllow.ready, 3);
 assert.equal(afterAllow.blocked, 2);
 
 console.log("hubspot-import override tests passed");
+
+// --- similar rows, not only a repeated Record ID ---------------------------
+
+const similarCsv = `Record ID,Deal Name,Deal Stage,Client Name,Client Phone,Client Email,Client Address,Amount
+2001,Oak roof replacement,Appointment scheduled,Tom Nguyen,(469) 555-0199,tom@example.com,"77 Oak Ave, Plano, TX 75024",1000
+2002,Cedar siding,Appointment scheduled,Tom Nguyen,(469) 555-0199,tom@example.com,"12 Cedar Ln, Plano, TX 75024",2000
+2003,Oak roof replacement,Appointment scheduled,Tom Nguyen,2145550102,other@example.com,"77 Oak Ave, Plano, TX 75024",3000
+2004,Pine addition,Appointment scheduled,Someone Else,(469) 555-0199,else@example.com,"500 Pine Rd, Allen, TX 75002",4000
+2005,Oak roof replacement,Appointment scheduled,Pat Lee,2145550103,pat@example.com,"8 Birch St, Dallas, TX 75201",5000
+2006,Frisco roof,Appointment scheduled,Ana Garcia,9725550100,ana@example.com,"9 Elm, Frisco, TX 75034",6000
+2007,Frisco follow up,Appointment scheduled,Ana Garcia,9725550100,ana@example.com,"9 Elm, Frisco, TX 75034",7000
+3001,First roof job,Appointment scheduled,Alice Jones,2145551111,alice@example.com,"1 First St, Dallas, TX 75201",100
+3001,Completely other,Appointment scheduled,Bob Miles,4695552222,bob@example.com,"2 Second St, Plano, TX 75024",200
+`;
+
+const similarParsed = parseHubSpotCsv(similarCsv);
+const similarMapping = defaultHubSpotMapping(similarParsed, staff, "s-brady");
+const similar = applyHubSpotMapping(similarParsed, similarMapping, {
+  staff,
+  contacts,
+  importedRecordIds: new Map([["2003", "opp-2003"]]),
+  now,
+});
+const byRecord = (id: string, occurrence = 0) => similar.filter((draft) => draft.recordId === id)[occurrence];
+
+const samePerson = byRecord("2002");
+assert.equal(samePerson.duplicateOf, null, "same phone, email, and client with a different job is not a duplicate");
+assert.equal(samePerson.issues.length, 0);
+
+const sameHouse = byRecord("2003");
+assert.equal(
+  sameHouse.issues.find((issue) => isDuplicateRecordIssue(issue)),
+  "May be a duplicate of line 2 (same client name, street, and deal name).",
+);
+assert.equal(sameHouse.existingOpportunityId, "opp-2003");
+
+const phoneOnly = byRecord("2004");
+assert.equal(phoneOnly.duplicateOf, null, "a shared phone alone is the same homeowner, not a duplicate deal");
+
+const nameOnly = byRecord("2005");
+assert.equal(nameOnly.duplicateOf, null, "a shared deal name alone is not a duplicate");
+
+const frisco = byRecord("2007");
+assert.equal(
+  frisco.issues.find((issue) => isDuplicateRecordIssue(issue)),
+  "May be a duplicate of line 7 (same phone, email, client name, and street).",
+);
+
+const recordOnly = byRecord("3001", 1);
+assert.equal(recordOnly.issues.find((issue) => isDuplicateRecordIssue(issue)), "May be a duplicate of line 9 (same Record ID).");
+assert.equal(byRecord("3001").duplicateOf, null);
+
+const fuzzyKept = overrideHubSpotDraft(sameHouse, { allowDuplicate: true, excluded: false }, staff);
+assert.equal(fuzzyKept.duplicateAllowed, true);
+assert.equal(fuzzyKept.duplicateSharesRecordId, false);
+assert.equal(fuzzyKept.existingOpportunityId, "opp-2003", "a different Record ID still updates the deal already imported");
+assert.ok(fuzzyKept.warnings.some((warning) => /Already imported/.test(warning)));
+assert.ok(fuzzyKept.warnings.some((warning) => /same client name, street, and deal name/.test(warning)));
+assert.ok(fuzzyKept.warnings.some((warning) => /still updates this Record ID/.test(warning)));
+assert.equal(hubspotDealExternalId(fuzzyKept), "2003");
+assert.equal(isReadyHubSpotDraft(fuzzyKept), true);
+
+const recordKept = overrideHubSpotDraft(recordOnly, { allowDuplicate: true }, staff);
+assert.equal(recordKept.duplicateSharesRecordId, true);
+assert.equal(hubspotDealExternalId(recordKept), undefined);
+
+console.log("hubspot-import similarity tests passed");

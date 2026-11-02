@@ -512,10 +512,18 @@ export type HubSpotDealDraft = {
   /** Already in Truss from an earlier import; the import updates instead of adding. */
   existingOpportunityId: string | null;
   /**
-   * The office chose to import this row even though its Record ID is repeated
-   * in the file. It becomes its own deal and is not tied back to that Record ID.
+   * An earlier row this one may repeat. A shared Record ID is enough on its own.
+   * Other matches need two or more shared points and must include the street or
+   * the deal name, so one homeowner with two jobs is not flagged.
+   */
+  duplicateOf: HubSpotDuplicateMatch | null;
+  /**
+   * The office chose to import this row even though it may be a duplicate.
+   * When that match includes the Record ID, the deal is not tied back to it.
    */
   duplicateAllowed?: boolean;
+  /** True when an allowed duplicate shared a Record ID, so the external id is left off. */
+  duplicateSharesRecordId?: boolean;
   /** Hard problems: the row cannot be imported until it is fixed or excluded. */
   issues: string[];
   /** Soft notes shown on Verify. */
@@ -549,6 +557,88 @@ function emailKey(value: string) {
   return value.trim().toLowerCase();
 }
 
+export type HubSpotDuplicatePoint = "record" | "phone" | "email" | "client" | "street" | "deal";
+
+export type HubSpotDuplicateMatch = {
+  line: number;
+  points: HubSpotDuplicatePoint[];
+};
+
+type DealFingerprint = {
+  line: number;
+  recordId: string;
+  phone: string;
+  email: string;
+  client: string;
+  street: string;
+  deal: string;
+};
+
+const DUPLICATE_POINT_LABELS: Record<HubSpotDuplicatePoint, string> = {
+  record: "Record ID",
+  phone: "phone",
+  email: "email",
+  client: "client name",
+  street: "street",
+  deal: "deal name",
+};
+
+function comparableText(value: string, minLength: number) {
+  const key = value.replace(/\s+/g, " ").trim().toLowerCase();
+  return key.length >= minLength ? key : "";
+}
+
+/** Streets shorter than "9 Elm", or with no letters, are too generic to match on. */
+function comparableStreet(street: string) {
+  const key = street.replace(/\s+/g, " ").trim().toLowerCase();
+  if (key.length < 4 || !/[a-z]/.test(key)) return "";
+  return key;
+}
+
+function fingerprintPoints(prior: DealFingerprint, current: DealFingerprint): HubSpotDuplicatePoint[] {
+  const points: HubSpotDuplicatePoint[] = [];
+  if (current.recordId && current.recordId === prior.recordId) points.push("record");
+  if (current.phone && current.phone === prior.phone) points.push("phone");
+  if (current.email && current.email === prior.email) points.push("email");
+  if (current.client && current.client === prior.client) points.push("client");
+  if (current.street && current.street === prior.street) points.push("street");
+  if (current.deal && current.deal === prior.deal) points.push("deal");
+  return points;
+}
+
+function qualifiesAsDuplicate(points: HubSpotDuplicatePoint[]) {
+  if (points.includes("record")) return true;
+  const identifiesDeal = points.includes("street") || points.includes("deal");
+  return identifiesDeal && points.length >= 2;
+}
+
+function samePhrase(points: HubSpotDuplicatePoint[]) {
+  const labels = points.map((point) => DUPLICATE_POINT_LABELS[point]);
+  if (labels.length <= 1) return `same ${labels[0] ?? "details"}`;
+  if (labels.length === 2) return `same ${labels[0]} and ${labels[1]}`;
+  return `same ${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+}
+
+function hubspotDuplicateIssue(match: HubSpotDuplicateMatch) {
+  return `May be a duplicate of line ${match.line} (${samePhrase(match.points)}).`;
+}
+
+function findHubSpotDuplicate(prior: DealFingerprint[], current: DealFingerprint): HubSpotDuplicateMatch | null {
+  let recordMatch: HubSpotDuplicateMatch | null = null;
+  let best: HubSpotDuplicateMatch | null = null;
+  for (const earlier of prior) {
+    const points = fingerprintPoints(earlier, current);
+    if (!qualifiesAsDuplicate(points)) continue;
+    const match = { line: earlier.line, points };
+    if (points.includes("record")) {
+      if (!recordMatch) recordMatch = match;
+      continue;
+    }
+    if (!best || points.length > best.points.length) best = match;
+  }
+  return recordMatch ?? best;
+}
+
 export function applyHubSpotMapping(
   parsed: HubSpotParsed,
   mapping: HubSpotMapping,
@@ -564,7 +654,7 @@ export function applyHubSpotMapping(
     const email = emailKey(contact.email);
     if (email && !contactsByEmail.has(email)) contactsByEmail.set(email, contact);
   }
-  const seenRecordIds = new Set<string>();
+  const priorDeals: DealFingerprint[] = [];
 
   return parsed.rows.map((row) => {
     const values = row.values;
@@ -656,12 +746,19 @@ export function applyHubSpotMapping(
     const sourceLabel = (values.source ?? "").trim();
     const leadSource = sourceLabel ? (mapping.sources[sourceLabel] ?? guessLeadSource(sourceLabel)) : "";
 
-    if (recordId) {
-      if (seenRecordIds.has(recordId)) issues.push(`Record ID ${recordId} appears twice in the file.`);
-      seenRecordIds.add(recordId);
-    } else {
-      warnings.push("No Record ID; re-running this import would add the deal again.");
-    }
+    if (!recordId) warnings.push("No Record ID; re-running this import would add the deal again.");
+    const fingerprint: DealFingerprint = {
+      line: row.line,
+      recordId,
+      phone: phoneKey.length === 10 ? phoneKey : "",
+      email: email.includes("@") ? email : "",
+      client: comparableText(contactName, 6),
+      street: comparableStreet(address.street),
+      deal: comparableText(dealName, 8),
+    };
+    const duplicateOf = findHubSpotDuplicate(priorDeals, fingerprint);
+    priorDeals.push(fingerprint);
+    if (duplicateOf) issues.push(hubspotDuplicateIssue(duplicateOf));
     const existingOpportunityId = recordId ? (context.importedRecordIds?.get(recordId) ?? null) : null;
     if (existingOpportunityId) warnings.push("Already imported; this run updates it.");
 
@@ -713,6 +810,7 @@ export function applyHubSpotMapping(
       lostReason: (values.lostReason ?? "").trim(),
       tags: [...new Set(tags)],
       existingOpportunityId,
+      duplicateOf,
       issues,
       warnings,
       excluded,
@@ -728,21 +826,27 @@ export type HubSpotRowOverride = {
   ownerStaffId?: string;
   leadSource?: LeadSource | "";
   excluded?: boolean;
-  /** Import this row even though its Record ID is repeated in the file. */
+  /** Import this row even though it may be a duplicate of an earlier one. */
   allowDuplicate?: boolean;
 };
 
 const OWNER_ISSUE = /owner seat|seat is locked/i;
-const DUPLICATE_RECORD_ISSUE = /appears twice in the file/i;
+const DUPLICATE_RECORD_ISSUE = /may be a duplicate/i;
 const ALREADY_IMPORTED_WARNING = /^Already imported/i;
 
 export function isDuplicateRecordIssue(issue: string) {
   return DUPLICATE_RECORD_ISSUE.test(issue);
 }
 
-/** Record ID stored on the deal. A row added despite a repeat is not linked, so a later import updates the first copy only. */
-export function hubspotDealExternalId(draft: Pick<HubSpotDealDraft, "recordId" | "duplicateAllowed">) {
-  if (draft.duplicateAllowed) return undefined;
+/**
+ * Record ID stored on the deal. A row added despite a repeated Record ID is not
+ * linked, so a later import updates the first copy only. A row that only looked
+ * similar keeps its own Record ID.
+ */
+export function hubspotDealExternalId(
+  draft: Pick<HubSpotDealDraft, "recordId" | "duplicateAllowed" | "duplicateSharesRecordId">,
+) {
+  if (draft.duplicateAllowed && draft.duplicateSharesRecordId) return undefined;
   const id = draft.recordId.trim();
   return id || undefined;
 }
@@ -775,14 +879,22 @@ export function overrideHubSpotDraft(
     next = { ...next, leadSource: override.leadSource };
   }
   if (override.allowDuplicate && !next.duplicateAllowed && next.issues.some(isDuplicateRecordIssue)) {
+    const sharesRecordId = next.duplicateOf?.points.includes("record") ?? true;
+    const matchNote = next.duplicateOf
+      ? `May be a duplicate of line ${next.duplicateOf.line} (${samePhrase(next.duplicateOf.points)}); added as its own deal.`
+      : "May be a duplicate; added as its own deal.";
+    const later = sharesRecordId
+      ? "A later import updates the first copy only."
+      : "A later import still updates this Record ID.";
     next = {
       ...next,
       issues: next.issues.filter((issue) => !isDuplicateRecordIssue(issue)),
       duplicateAllowed: true,
-      existingOpportunityId: null,
+      duplicateSharesRecordId: sharesRecordId,
+      existingOpportunityId: sharesRecordId ? null : next.existingOpportunityId,
       warnings: [
-        ...next.warnings.filter((warning) => !ALREADY_IMPORTED_WARNING.test(warning)),
-        "Same Record ID as another row; added as its own deal. A later import updates the first copy only.",
+        ...(sharesRecordId ? next.warnings.filter((warning) => !ALREADY_IMPORTED_WARNING.test(warning)) : next.warnings),
+        `${matchNote} ${later}`,
       ],
     };
   }
