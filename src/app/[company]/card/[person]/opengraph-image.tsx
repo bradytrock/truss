@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 import { appOrigin } from "@/lib/app-origin";
 import { cardHeaderLogo } from "@/lib/card";
+import { cardWebsiteHost } from "@/lib/card-display";
 import { formatPhone } from "@/lib/format";
 import { loadSharedCard } from "@/lib/share-server";
 
@@ -10,8 +11,8 @@ export const contentType = "image/png";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const INK = "#1c1917";
-const MUTED = "#6b7280";
+const RED = "#d7182a";
+const HERO = "#1a1a1c";
 const PAPER = "#ffffff";
 
 function absolutize(url: string, origin: string) {
@@ -35,9 +36,9 @@ export default async function CardPreviewImage({
   const logo = company ? absolutize(cardHeaderLogo(company), origin) : "";
   const photo = person?.photoUrl ? absolutize(person.photoUrl, origin) : "";
   const companyName = company?.name?.trim() ?? "";
-  const phone = person?.phone?.trim() ? formatPhone(person.phone) : formatPhone(company?.phone ?? "");
-  const website = company?.website?.trim().replace(/^https?:\/\//i, "") ?? "";
-  const footer = [website, phone === "—" ? "" : phone].filter(Boolean).join("  ·  ");
+  const phone = person?.phone?.trim() ? formatPhone(person.phone) : "";
+  const phoneLabel = phone === "—" ? "" : phone;
+  const host = cardWebsiteHost(company?.website ?? "");
 
   return new ImageResponse(
     (
@@ -47,59 +48,89 @@ export default async function CardPreviewImage({
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 40,
-          padding: "70px 80px",
-          background: PAPER,
-          color: INK,
-          fontSize: 32,
+          background: HERO,
         }}
       >
-        {logo ? (
-          <img
-            src={logo}
-            alt=""
-            width={760}
-            height={190}
-            style={{ objectFit: "contain" }}
-          />
-        ) : (
-          <div style={{ display: "flex", fontSize: 64, fontWeight: 600, textAlign: "center" }}>
-            {companyName || "Digital card"}
-          </div>
-        )}
-
-        {person ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 36 }}>
-            {photo ? (
-              <img
-                src={photo}
-                alt=""
-                width={168}
-                height={168}
-                style={{ objectFit: "cover", borderRadius: 84 }}
-              />
-            ) : null}
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              <div style={{ display: "flex", fontSize: 68, fontWeight: 600 }}>{person.name}</div>
-              {person.title ? (
-                <div style={{ display: "flex", fontSize: 34, color: MUTED, marginTop: 8 }}>
-                  {person.title}
-                </div>
-              ) : null}
-              {logo && companyName ? (
-                <div style={{ display: "flex", fontSize: 30, color: MUTED, marginTop: 6 }}>
-                  {companyName}
-                </div>
-              ) : null}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: 150,
+            background: PAPER,
+          }}
+        >
+          {logo ? (
+            <img src={logo} alt="" width={520} height={110} style={{ objectFit: "contain" }} />
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                fontSize: 42,
+                fontWeight: 700,
+                letterSpacing: 4,
+                textTransform: "uppercase",
+                color: HERO,
+              }}
+            >
+              {companyName || "Digital card"}
             </div>
+          )}
+        </div>
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 48,
+            padding: "36px 80px",
+          }}
+        >
+          {person && photo ? (
+            <img
+              src={photo}
+              alt=""
+              width={250}
+              height={250}
+              style={{ objectFit: "cover", borderRadius: 125, border: `8px solid ${RED}` }}
+            />
+          ) : null}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <div
+              style={{
+                display: "flex",
+                fontSize: person ? 64 : 56,
+                fontWeight: 700,
+                color: PAPER,
+                letterSpacing: 1,
+                textTransform: "uppercase",
+              }}
+            >
+              {person?.name || companyName || "Card isn’t available"}
+            </div>
+            {person?.title ? (
+              <div
+                style={{
+                  display: "flex",
+                  marginTop: 12,
+                  fontSize: 28,
+                  fontWeight: 700,
+                  color: RED,
+                  letterSpacing: 4,
+                  textTransform: "uppercase",
+                }}
+              >
+                {person.title}
+              </div>
+            ) : null}
+            {phoneLabel || host ? (
+              <div style={{ display: "flex", marginTop: 22, fontSize: 28, color: PAPER }}>
+                {[phoneLabel, host].filter(Boolean).join("   ·   ")}
+              </div>
+            ) : null}
           </div>
-        ) : null}
-
-        {footer ? (
-          <div style={{ display: "flex", fontSize: 28, color: MUTED }}>{footer}</div>
-        ) : null}
+        </div>
       </div>
     ),
     size,
