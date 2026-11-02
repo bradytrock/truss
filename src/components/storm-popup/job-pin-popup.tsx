@@ -1,20 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { PopupSkeleton, StormPopupShell, popupButtonClass } from "@/components/storm-popup/shell";
-import { jobRecordHref } from "@/lib/job-record";
-import { loadHailPoint } from "@/lib/weather/client";
-import { hailBin } from "@/lib/weather/hail";
-import {
-  chicagoDaysAgo,
-  daysAgoLabel,
-  formatChipDate,
-  formatHailInches,
-  headerHit,
-  type HailPopupHit,
-} from "@/lib/weather/hail-point";
-import { readJobHail, writeJobHail } from "@/lib/weather/point-cache";
+import { AlertTriangle, Check, CircleDot, Radar } from "lucide-react";
+import { PopupRow, PopupSection, StormPopupShell, popupButtonClass, type PopupArrow } from "@/components/storm-popup/shell";
+import { cellThreatText, formatMotion, pointThreat } from "@/lib/weather/cells";
+import { formatChipDate, formatHailInches, fromPopupHit, headerHit, type HailPopupHit } from "@/lib/weather/hail-point";
+import { arrivalLabel, clearsByLabel, hailEventsAtLeast, jobBand, type JobBand } from "@/lib/weather/overlays";
+import type { StormCell, WeatherAlert } from "@/lib/weather/types";
 
 export type StormJobPin = {
   id: string;
@@ -22,183 +13,181 @@ export type StormJobPin = {
   name: string;
   customer: string;
   address: string;
+  city: string;
   lat: number;
   lng: number;
   color: string;
   stage: string;
-  carrier: string;
-  valueLabel: string;
-  rep: string;
-  claimFiled: boolean;
-  lastActivity: string;
+  /** Homeowner's phone, when the primary contact has one. */
+  phone: string;
 };
+
+export type CrewOnSite = { name: string; sinceLabel: string };
 
 export function JobPinPopup({
   pin,
+  warnings,
+  cells,
+  hits,
+  crewOnSite,
+  arrow,
+  busy,
   onClose,
   onInteract,
-  onLogVisit,
-  logging,
-  lookupHail,
+  onOpenJob,
+  onWarnCrew,
+  onAttachHail,
 }: {
   pin: StormJobPin;
+  /** Warnings whose polygon covers this address. */
+  warnings: WeatherAlert[];
+  cells: StormCell[];
+  /** Hail at this address from the swaths on the map. */
+  hits: HailPopupHit[];
+  crewOnSite: CrewOnSite | null;
+  arrow?: PopupArrow | null;
+  busy: boolean;
   onClose: () => void;
   onInteract: () => void;
-  onLogVisit: () => void;
-  logging: boolean;
-  /** When set, hail comes from the swaths already on the map instead of a separate lookup. */
-  lookupHail?: (lat: number, lng: number) => HailPopupHit[];
+  onOpenJob: () => void;
+  onWarnCrew: () => void;
+  onAttachHail: (hit: HailPopupHit) => void;
 }) {
-  const router = useRouter();
-  const cached = readJobHail(pin.id);
-  const liveHits = lookupHail ? lookupHail(pin.lat, pin.lng) : null;
-  const [status, setStatus] = useState<"loading" | "error" | "ready">(cached ? "ready" : "loading");
-  const [hits, setHits] = useState<HailPopupHit[]>(cached ?? []);
-  const [message, setMessage] = useState("");
-  const shownHits = liveHits ?? hits;
-  const shownStatus = liveHits ? "ready" : status;
-
-  useEffect(() => {
-    if (lookupHail) return;
-    const saved = readJobHail(pin.id);
-    if (saved) return;
-    let cancel = false;
-    loadHailPoint(pin.lat, pin.lng)
-      .then((result) => {
-        if (cancel) return;
-        writeJobHail(pin.id, result.hits);
-        setHits(result.hits);
-        setStatus("ready");
-      })
-      .catch((error: unknown) => {
-        if (cancel) return;
-        setMessage(error instanceof Error ? error.message : "The hail lookup did not finish.");
-        setStatus("error");
-      });
-    return () => {
-      cancel = true;
-    };
-  }, [lookupHail, pin.id, pin.lat, pin.lng]);
-
-  const top = headerHit(
-    shownHits.map((hit) => ({
-      storm: {
-        id: hit.stormId,
-        stormDate: hit.stormDate,
-        startedAt: hit.passageAt,
-        endedAt: hit.passageAt,
-        radarSite: hit.radarSite,
-        stormMaxIn: hit.stormMaxIn,
-        source: "",
-        track: [],
-        bands: [],
-        report: null,
-      },
-      maxBandIn: hit.maxBandIn,
-      distanceMi: hit.distanceMi,
-      passageAt: hit.passageAt,
-      passedStart: hit.passedStart,
-      passedEnd: hit.passedEnd,
-      jobsInSwath: hit.jobsInSwath,
-    })),
-  );
-  const shown = shownHits.find((hit) => hit.stormId === top?.storm.id) ?? shownHits[0] ?? null;
-  const band = shown ? hailBin(shown.maxBandIn) : null;
+  const threat = pointThreat(cells, pin.lat, pin.lng);
+  const top = headerHit(hits.map(fromPopupHit));
+  const swathHit = hits.find((hit) => hit.stormId === top?.storm.id) ?? null;
+  const band = jobBand({ warnings, threat, swathHit });
+  const history = [...hits].sort((a, b) => b.stormDate.localeCompare(a.stormDate));
+  const directions = pin.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pin.address)}` : "";
+  const tel = pin.phone.replace(/[^\d+]/g, "");
+  const underThreat = band.kind === "tornado" || band.kind === "warning" || band.kind === "overhead";
 
   return (
     <StormPopupShell
       titleId="job-pin-title"
-      label={pin.code || pin.name}
-      headerStyle={{ background: "#14161c" }}
+      label={pin.customer || pin.code || pin.name}
+      width={300}
+      arrow={arrow}
+      band={{ tone: band.tone, icon: bandIcon(band), label: band.label }}
       header={
         <div className="pr-8">
-          <div className="flex items-center gap-2">
-            <span className="rounded-full px-2 py-0.5 text-xs font-medium text-white" style={{ background: pin.color }}>
+          <p id="job-pin-title" className="text-[15px] leading-tight font-semibold">
+            {pin.customer || pin.name}
+          </p>
+          <p className="mt-0.5 text-xs text-white/60">{pin.address || "No address yet"}</p>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium">
+              <span className="size-1.5 rounded-full" style={{ background: pin.color }} />
               {pin.stage}
             </span>
-            <span id="job-pin-title" className="text-sm font-semibold">
-              {pin.code || pin.name}
-            </span>
+            {pin.code ? <span className="font-mono text-[11px] text-white/55">{pin.code}</span> : null}
           </div>
-          <p className="mt-2 text-base leading-tight font-medium">{pin.customer || pin.name}</p>
-          <p className="mt-0.5 text-sm text-white/65">{pin.address || "No address yet"}</p>
         </div>
       }
       actions={
-        <div className="grid grid-cols-2 gap-2">
-          <button type="button" className={popupButtonClass()} disabled={logging} onClick={onLogVisit}>
-            {logging ? "Saving…" : "Log visit"}
-          </button>
-          <button type="button" className={popupButtonClass(true)} onClick={() => router.push(jobRecordHref(pin.id))}>
-            Open job
-          </button>
-        </div>
+        band.kind === "clear" || band.kind === "incoming" ? (
+          <div className="grid grid-cols-2 gap-2">
+            <button type="button" className={popupButtonClass("primary")} onClick={onOpenJob}>
+              Open job
+            </button>
+            {directions ? (
+              <a href={directions} target="_blank" rel="noreferrer" className={popupButtonClass("outline")}>
+                Directions
+              </a>
+            ) : (
+              <button type="button" className={popupButtonClass("outline")} disabled title="No address to route to yet">
+                Directions
+              </button>
+            )}
+          </div>
+        ) : band.kind === "swath" && swathHit ? (
+          <>
+            <button type="button" className={popupButtonClass("primary")} disabled={busy} onClick={() => onAttachHail(swathHit)}>
+              {busy ? "Saving…" : "Attach hail report to claim"}
+            </button>
+            <button type="button" className={popupButtonClass("outline")} onClick={onOpenJob}>
+              Open job
+            </button>
+          </>
+        ) : crewOnSite ? (
+          <>
+            <button type="button" className={popupButtonClass("danger")} disabled={busy} onClick={onWarnCrew}>
+              {busy ? "Sending…" : "Warn crew: tarp & get down"}
+            </button>
+            <button type="button" className={popupButtonClass("outline")} onClick={onOpenJob}>
+              Open job
+            </button>
+          </>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {tel ? (
+              <a href={`sms:${tel}`} className={popupButtonClass("danger")}>
+                Text homeowner
+              </a>
+            ) : (
+              <button type="button" className={popupButtonClass("danger")} disabled title="No phone on the primary contact">
+                Text homeowner
+              </button>
+            )}
+            <button type="button" className={popupButtonClass("outline")} onClick={onOpenJob}>
+              Open job
+            </button>
+          </div>
+        )
       }
       onClose={onClose}
       onInteract={onInteract}
     >
-      <div className="rounded-lg bg-black/40 px-3 py-2">
-        {shownStatus === "loading" ? <PopupSkeleton /> : null}
-        {shownStatus === "error" ? (
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm text-white/75">{message}</p>
-            <button
-              type="button"
-              className="text-sm font-medium underline"
-              onClick={() => {
-                setStatus("loading");
-                (lookupHail ? Promise.resolve({ hits: lookupHail(pin.lat, pin.lng) }) : loadHailPoint(pin.lat, pin.lng))
-                  .then((result) => {
-                    writeJobHail(pin.id, result.hits);
-                    setHits(result.hits);
-                    setStatus("ready");
-                  })
-                  .catch((error: unknown) => {
-                    setMessage(error instanceof Error ? error.message : "The hail lookup did not finish.");
-                    setStatus("error");
-                  });
-              }}
-            >
-              Retry
-            </button>
-          </div>
-        ) : null}
-        {shownStatus === "ready" && shown && band ? (
-          <p className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="rounded px-1.5 py-0.5 text-xs font-semibold text-white" style={{ background: band.color }}>
-              {formatHailInches(shown.maxBandIn)}
-            </span>
-            <span>
-              {band.label} · {formatChipDate(shown.stormDate)} · {daysAgoLabel(chicagoDaysAgo(shown.stormDate))}
-            </span>
-            {shownHits.length > 1 ? <span className="text-white/55">{shownHits.length} storms total</span> : null}
-          </p>
-        ) : null}
-        {shownStatus === "ready" && !shown ? (
-          <p className="text-sm text-white/75">
-            {lookupHail ? "No hail on file — no swath over this address in the last 24 hours." : "No hail on file — no swath over this address in 90 days."}
-          </p>
-        ) : null}
-      </div>
-      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 text-sm">
-        <div>
-          <dt className="text-[10px] tracking-wide text-white/50 uppercase">Carrier</dt>
-          <dd className="font-medium">{pin.carrier || "—"}</dd>
-        </div>
-        <div>
-          <dt className="text-[10px] tracking-wide text-white/50 uppercase">Job value</dt>
-          <dd className="font-medium">{pin.valueLabel}</dd>
-        </div>
-        <div>
-          <dt className="text-[10px] tracking-wide text-white/50 uppercase">Assigned rep</dt>
-          <dd className="font-medium">{pin.rep || "—"}</dd>
-        </div>
-        <div>
-          <dt className="text-[10px] tracking-wide text-white/50 uppercase">Claim status</dt>
-          <dd className="font-medium">{pin.claimFiled ? "Filed" : "Not filed"}</dd>
-        </div>
-      </dl>
-      <p className="mt-3 text-xs text-white/55">{pin.lastActivity}</p>
+      {underThreat ? (
+        <PopupSection title="Right now" first>
+          <PopupRow
+            label="Storm cell"
+            value={threat.overhead ? `${threat.overhead.cell.id} overhead` : threat.incoming ? `${threat.incoming.cell.id} inbound` : "None tracked"}
+          />
+          <PopupRow label="Est. hail at address" value={estimatedHail(band.warning, threat.overhead?.cell ?? null)} />
+          <PopupRow
+            label="Clears by"
+            value={clearsByLabel(threat.overhead?.cell.valid ?? "", threat.overhead?.clearsInMinutes ?? null, band.warning?.ends ?? "")}
+          />
+        </PopupSection>
+      ) : null}
+      {threat.incoming ? (
+        <PopupSection title="Incoming" first={!underThreat}>
+          <PopupRow label="Storm cell" value={`${threat.incoming.cell.id} · ${formatMotion(threat.incoming.cell)}`} />
+          <PopupRow label="Arrives" value={arrivalLabel(threat.incoming.cell.valid, threat.incoming.etaMinutes)} />
+          <PopupRow label="Threat" value={cellThreatText(threat.incoming.cell)} />
+        </PopupSection>
+      ) : null}
+      {crewOnSite ? (
+        <PopupSection title="On site" first={!underThreat && !threat.incoming}>
+          <PopupRow label={crewOnSite.name} value={`Checked in · ${crewOnSite.sinceLabel}`} />
+        </PopupSection>
+      ) : null}
+      <PopupSection title="Hail history here" first={!underThreat && !threat.incoming && !crewOnSite}>
+        {history.length ? (
+          <>
+            {history.slice(0, 3).map((hit) => (
+              <PopupRow key={hit.stormId} label={hit.source === "mesh" ? `${formatChipDate(hit.stormDate)} · 24h max` : formatChipDate(hit.stormDate)} value={formatHailInches(hit.maxBandIn)} />
+            ))}
+            <PopupRow label="Events ≥ 1″" value={`${hailEventsAtLeast(history, 1)} of ${history.length}`} muted />
+          </>
+        ) : (
+          <p className="text-[13px] text-white/60">No hail on file — no swath over this address.</p>
+        )}
+      </PopupSection>
     </StormPopupShell>
   );
 }
+
+function bandIcon(band: JobBand) {
+  if (band.kind === "tornado" || band.kind === "warning" || band.kind === "overhead") return <AlertTriangle className="size-3.5" />;
+  if (band.kind === "incoming") return <Radar className="size-3.5" />;
+  if (band.kind === "swath") return <CircleDot className="size-3.5" />;
+  return <Check className="size-3.5" />;
+}
+
+function estimatedHail(warning: WeatherAlert | null, cell: StormCell | null) {
+  const inches = Math.max(cell?.meshIn ?? 0, warning?.hailInches ?? 0);
+  return inches > 0 ? formatHailInches(inches) : "None";
+}
+

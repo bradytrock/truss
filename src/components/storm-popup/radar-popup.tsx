@@ -1,78 +1,116 @@
 "use client";
 
-import { StormPopupShell, popupButtonClass } from "@/components/storm-popup/shell";
-import { formatCoord, radarCategory } from "@/lib/weather/hail-point";
+import { PopupStats, StormPopupShell, popupButtonClass, type PopupArrow } from "@/components/storm-popup/shell";
+import { cellApproach, nearestCell } from "@/lib/weather/cells";
+import { formatChicagoShortClock, formatCoord, formatHailInches, radarCategory, type HailPopupHit } from "@/lib/weather/hail-point";
+import type { StormCell, WeatherAlert } from "@/lib/weather/types";
 
 export function RadarCellPopup({
   lat,
   lng,
   dbz,
   radarSite,
-  hailChance,
+  scanAt,
+  cells,
+  hits,
+  warnings,
+  watching,
+  dropping,
+  arrow,
   onClose,
   onInteract,
-  onAlert,
+  onWatch,
+  onDropLead,
 }: {
   lat: number;
   lng: number;
   dbz: number;
   radarSite: string;
-  hailChance: string;
+  /** Time of the radar frame that was sampled. */
+  scanAt: string;
+  cells: StormCell[];
+  /** Hail already on the ground here, from the swaths on the map. */
+  hits: HailPopupHit[];
+  warnings: WeatherAlert[];
+  watching: boolean;
+  dropping: boolean;
+  arrow?: PopupArrow | null;
   onClose: () => void;
   onInteract: () => void;
-  onAlert: () => void;
+  onWatch: (cell: StormCell | null) => void;
+  onDropLead: () => void;
 }) {
+  const nearest = nearestCell(cells, lat, lng);
+  const approach = nearest ? cellApproach(nearest.cell, lat, lng) : null;
+  const meshHere = hits.reduce((max, hit) => Math.max(max, hit.maxBandIn), 0);
+  const warning = warnings[0] ?? null;
+  const heading =
+    !approach || !nearest
+      ? "No cell tracked"
+      : approach.status === "overhead"
+        ? "Overhead now"
+        : approach.status === "incoming"
+          ? `Yes · ${approach.etaMinutes} min`
+          : approach.status === "passed"
+            ? "No · passed"
+            : "No";
+
   return (
     <StormPopupShell
       titleId="radar-cell-title"
       label="Radar cell"
-      headerStyle={{ background: "linear-gradient(90deg, #16a34a 0%, #ca8a04 48%, #dc2626 100%)" }}
+      width={260}
+      arrow={arrow}
+      headerStyle={{ background: "linear-gradient(90deg, #15803d 0%, #ca8a04 50%, #dc2626 100%)" }}
       header={
         <div className="pr-8">
           <p className="text-[10px] font-semibold tracking-wide uppercase">Reflectivity</p>
-          <p id="radar-cell-title" className="mt-1 text-4xl leading-none font-semibold">
+          <p id="radar-cell-title" className="mt-1 font-mono text-4xl leading-none font-semibold">
             {Math.round(dbz)} dBZ
           </p>
-          <p className="mt-1 text-sm">{radarCategory(dbz)}</p>
+          <p className="mt-1.5 text-sm font-medium">{radarCategory(dbz)}</p>
         </div>
       }
       actions={
-        <button type="button" className={`${popupButtonClass(true)} w-full`} onClick={onAlert}>
-          Alert me if it grows
-        </button>
+        <>
+          <button type="button" className={popupButtonClass("primary")} aria-pressed={watching} onClick={() => onWatch(nearest?.cell ?? null)}>
+            {watching ? "Watching · we'll tell you" : "Alert me if it grows"}
+          </button>
+          <button type="button" className={popupButtonClass("outline")} disabled={dropping} onClick={onDropLead}>
+            {dropping ? "Adding…" : "Add lead at this point"}
+          </button>
+        </>
       }
       footer={
         <>
           <span>
             {formatCoord(lat)}, {formatCoord(lng)}
           </span>
-          <span>IEM / NWS</span>
+          <span>
+            {radarSite}
+            {scanAt ? ` · ${formatChicagoShortClock(scanAt)}` : ""}
+          </span>
         </>
       }
       onClose={onClose}
       onInteract={onInteract}
     >
-      <dl className="grid grid-cols-2 gap-x-3 gap-y-3 text-sm">
-        <div>
-          <dt className="text-[10px] tracking-wide text-white/50 uppercase">Storm motion</dt>
-          <dd className="font-medium">—</dd>
-        </div>
-        <div>
-          <dt className="text-[10px] tracking-wide text-white/50 uppercase">Echo top</dt>
-          <dd className="font-medium">—</dd>
-        </div>
-        <div>
-          <dt className="text-[10px] tracking-wide text-white/50 uppercase">Radar site</dt>
-          <dd className="font-medium">{radarSite}</dd>
-        </div>
-        <div>
-          <dt className="text-[10px] tracking-wide text-white/50 uppercase">Hail probability</dt>
-          <dd className="font-medium">{hailChance}</dd>
-        </div>
-      </dl>
-      <p className="mt-3 text-[11px] leading-relaxed text-white/45">
-        dBZ is approximated from the radar tile color. TODO: motion, echo top, and a real reflectivity grid.
-      </p>
+      <PopupStats
+        columns={2}
+        items={[
+          { label: "Nearest cell", value: nearest ? `${nearest.cell.id} · ${nearest.miles.toFixed(1)} mi` : "None" },
+          { label: "Heading here?", value: heading },
+          { label: "MESH here", value: meshHere > 0 ? formatHailInches(meshHere) : "None" },
+          { label: "Warning", value: warning ? warningCode(warning.event) : "None" },
+        ]}
+      />
     </StormPopupShell>
   );
+}
+
+function warningCode(event: string) {
+  if (/tornado/i.test(event)) return "TOR";
+  if (/severe thunderstorm/i.test(event)) return "SVR";
+  if (/flash flood/i.test(event)) return "FFW";
+  return event.replace(/ Warning$/, "");
 }
