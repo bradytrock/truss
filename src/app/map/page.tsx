@@ -508,7 +508,6 @@ function MapPageInner() {
             liveStorms={stormLayers?.hailSwaths}
             swathReady={stormLayers != null && !swathError}
             swathNote={swathCaption(stormLayers, swathError)}
-            basemap="dark"
             embedded
             fullscreen={radarFull}
             radarSite={radarSite}

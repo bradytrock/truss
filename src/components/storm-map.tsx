@@ -85,7 +85,6 @@ export function StormMap({
   showCrew = false,
   selectedStaffId = null,
   onSelectCrew,
-  basemap = "dark",
   embedded = false,
   fitTo = "storms",
   fitKey = "",
@@ -116,8 +115,7 @@ export function StormMap({
   showCrew?: boolean;
   selectedStaffId?: string | null;
   onSelectCrew?: (id: string) => void;
-  basemap?: "light" | "dark";
-  /** Field map: light tiles, no "Storm Map" title, fit to jobs instead of swaths. */
+  /** Field map: no "Storm Map" title, fit to jobs instead of swaths. */
   embedded?: boolean;
   fitTo?: "storms" | "pins";
   fitKey?: string;
@@ -138,7 +136,6 @@ export function StormMap({
   const moveAt = useRef(0);
   const showRadarRef = useRef(showRadar);
   const showHailRef = useRef(showHail);
-  const basemapRef = useRef(basemap);
   const fitToRef = useRef(fitTo);
   const embeddedRef = useRef(embedded);
   const onSelectCrewRef = useRef(onSelectCrew);
@@ -216,7 +213,6 @@ export function StormMap({
   useLayoutEffect(() => {
     showRadarRef.current = showRadar;
     showHailRef.current = showHail;
-    basemapRef.current = basemap;
     fitToRef.current = fitTo;
     embeddedRef.current = embedded;
     onSelectCrewRef.current = onSelectCrew;
@@ -244,7 +240,7 @@ export function StormMap({
       const next = { left: Math.round(left), top: Math.round(top) };
       setPos((currentPos) => (currentPos && currentPos.left === next.left && currentPos.top === next.top ? currentPos : next));
     };
-  }, [anchor, basemap, embedded, fitTo, frameIndex, hidden, lookup, onPopupChange, onSelectCrew, pins, showHail, showRadar, storms, swathReady]);
+  }, [anchor, embedded, fitTo, frameIndex, hidden, lookup, onPopupChange, onSelectCrew, pins, showHail, showRadar, storms, swathReady]);
 
   useEffect(() => {
     onPopupChangeRef.current?.(Boolean(popup));
@@ -257,18 +253,10 @@ export function StormMap({
       fitToRef.current === "pins" ? 8 : 9,
     );
     L.control.zoom({ position: embeddedRef.current ? "bottomright" : "topright" }).addTo(map);
-    if (basemapRef.current === "light") {
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap",
-        maxZoom: 19,
-      }).addTo(map);
-    } else {
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
-        attribution: '&copy; OpenStreetMap &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: "abcd",
-        maxZoom: 19,
-      }).addTo(map);
-    }
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap",
+      maxZoom: 19,
+    }).addTo(map);
     const swathPane = map.createPane("swath");
     swathPane.style.zIndex = "340";
     swathPane.style.pointerEvents = "none";
@@ -364,7 +352,7 @@ export function StormMap({
     const map = mapRef.current;
     if (!map || !showPins) return;
     const group = L.layerGroup().addTo(map);
-    const pinBorder = basemap === "light" ? "#181818" : "#fff";
+    const pinBorder = "#181818";
     const clusters = clusterJobPins(
       pins.map((pin) => ({ id: pin.id, lat: pin.lat, lng: pin.lng })),
       zoom,
@@ -408,7 +396,7 @@ export function StormMap({
     return () => {
       map.removeLayer(group);
     };
-  }, [basemap, pins, popup, showPins, zoom]);
+  }, [pins, popup, showPins, zoom]);
 
   const rotationUrl = rotation?.url ?? null;
   const rotationSouth = rotation?.bounds.south;
