@@ -17,6 +17,8 @@ import {
   RADAR_OPACITY,
   radarFrames,
 } from "@/lib/weather-radar";
+import { HAIL_BINS } from "@/lib/weather/hail";
+import type { BBox, OutlookArea, StormReport, WeatherAlert } from "@/lib/weather/types";
 
 export type ProjectMapJobPin = {
   id: string;
@@ -40,6 +42,15 @@ export type ProjectMapCrewPin = {
   updatedLabel: string;
 };
 
+export type ProjectMapStorm = {
+  alerts: WeatherAlert[];
+  outlooks: OutlookArea[];
+  reports: StormReport[];
+  bounds: BBox | null;
+  swathUrl: string | null;
+  rotationUrl: string | null;
+};
+
 export function ProjectMapCanvas({
   jobs,
   crew,
@@ -48,6 +59,7 @@ export function ProjectMapCanvas({
   showProjects,
   showCrew,
   showWeather,
+  storm,
   fitKey,
   onSelectJob,
   onSelectCrew,
@@ -59,6 +71,7 @@ export function ProjectMapCanvas({
   showProjects: boolean;
   showCrew: boolean;
   showWeather: boolean;
+  storm?: ProjectMapStorm | null;
   fitKey: string;
   onSelectJob: (id: string) => void;
   onSelectCrew: (id: string) => void;
@@ -231,9 +244,119 @@ export function ProjectMapCanvas({
     };
   }, [showWeather]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !storm) return;
+    const swathPane = map.getPane("swath") ?? map.createPane("swath");
+    swathPane.style.zIndex = "340";
+    swathPane.style.pointerEvents = "none";
+    const outlookPane = map.getPane("outlook") ?? map.createPane("outlook");
+    outlookPane.style.zIndex = "345";
+    outlookPane.style.pointerEvents = "none";
+    const group = L.layerGroup().addTo(map);
+    if (storm.bounds && storm.swathUrl) {
+      L.imageOverlay(storm.swathUrl, [[storm.bounds.south, storm.bounds.west], [storm.bounds.north, storm.bounds.east]], {
+        pane: "swath",
+        opacity: 0.88,
+        interactive: false,
+      }).addTo(group);
+    }
+    if (storm.bounds && storm.rotationUrl) {
+      L.imageOverlay(storm.rotationUrl, [[storm.bounds.south, storm.bounds.west], [storm.bounds.north, storm.bounds.east]], {
+        pane: "swath",
+        opacity: 0.7,
+        interactive: false,
+      }).addTo(group);
+    }
+    if (storm.outlooks.length) {
+      const outlooks: GeoJSON.FeatureCollection = {
+        type: "FeatureCollection",
+        features: storm.outlooks.map((area) => ({
+          type: "Feature",
+          properties: area,
+          geometry: area.geometry,
+        })),
+      };
+      L.geoJSON(
+        outlooks,
+        {
+          pane: "outlook",
+          style: (feature) => {
+            const area = feature?.properties as OutlookArea | undefined;
+            return {
+              color: area?.stroke || "#92400e",
+              weight: area?.product === "sigHail" ? 2 : 1,
+              fillColor: area?.fill || "#f59e0b",
+              fillOpacity: area?.product === "sigHail" ? 0.18 : 0.1,
+              dashArray: area?.product === "sigHail" ? "4 3" : undefined,
+            };
+          },
+        },
+      ).addTo(group);
+    }
+    if (storm.alerts.length) {
+      const warnings: GeoJSON.FeatureCollection = {
+        type: "FeatureCollection",
+        features: storm.alerts.flatMap((alert) =>
+          alert.geometry ? [{ type: "Feature" as const, properties: alert, geometry: alert.geometry }] : [],
+        ),
+      };
+      L.geoJSON(
+        warnings,
+        {
+          style: (feature) => {
+            const alert = feature?.properties as WeatherAlert | undefined;
+            const tornado = alert?.event === "Tornado Warning";
+            const warning = alert?.route === "sms";
+            return {
+              color: tornado ? "#7f1d1d" : warning ? "#b91c1c" : "#c2410c",
+              weight: warning ? 2 : 1.5,
+              fillColor: tornado ? "#7f1d1d" : "#ef4444",
+              fillOpacity: warning ? 0.28 : 0.06,
+              dashArray: warning ? undefined : "6 4",
+            };
+          },
+          onEachFeature: (feature, layer) => {
+            const alert = feature.properties as WeatherAlert | null;
+            if (!alert?.event) return;
+            layer.bindTooltip(alert.headline || alert.event, { sticky: true });
+          },
+        },
+      ).addTo(group);
+    }
+    for (const report of storm.reports) {
+      const hail = report.kind === "hail";
+      const marker = L.circleMarker([report.lat, report.lng], {
+        radius: hail ? 6 : 4,
+        color: "#181818",
+        weight: 1,
+        fillColor: hail ? "#7e22ce" : report.kind === "tornado" ? "#7f1d1d" : "#2563eb",
+        fillOpacity: 0.9,
+      });
+      marker.bindTooltip(report.label, { direction: "top" });
+      marker.addTo(group);
+    }
+    return () => {
+      map.removeLayer(group);
+    };
+  }, [storm]);
+
   return (
     <div className="relative h-full min-h-0 w-full">
       <div ref={el} className="project-map-leaflet h-full min-h-0 w-full" />
+      {storm?.swathUrl ? (
+        <div className="pointer-events-none absolute top-3 left-3 z-10 max-w-[14rem] rounded-lg border border-[#c9c9c9] bg-background/95 px-3 py-2 text-xs shadow-sm">
+          <p className="font-medium text-[#181818]">Hail swath · radar estimate</p>
+          <ul className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[#706e6b]">
+            {HAIL_BINS.map((bin) => (
+              <li key={bin.label} className="flex items-center gap-1">
+                <span className="size-2.5 rounded-sm border border-black/15" style={{ background: bin.color }} />
+                {bin.label}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {showWeather ? (
         <div className="pointer-events-none absolute bottom-36 left-3 z-10 rounded-lg border border-[#c9c9c9] bg-background/95 px-3 py-2 text-xs shadow-sm lg:bottom-3">
           <p className="font-medium text-[#181818]">Radar · {radarLabel ?? "Loading"}</p>

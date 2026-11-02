@@ -43,6 +43,7 @@ import { PhotoViewer } from "@/components/photo-viewer";
 import { JobFinancials } from "@/components/job-financials";
 import { JobCloseout } from "@/components/job-closeout";
 import { JobInsurancePanel } from "@/components/job-insurance-panel";
+import { JobStormChip } from "@/components/job-storm-chip";
 import { claimTotals } from "@/lib/insurance";
 import { AutomationRuns } from "@/components/automation-runs";
 import { PaperArchiveButton } from "@/components/paper-archive-button";
@@ -949,6 +950,7 @@ export function JobRecord({
                 </span>
               ) : null}
             </p>
+            <JobStormChip job={job} />
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {primary?.phone ? (

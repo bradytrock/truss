@@ -563,6 +563,44 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["staff_device_locations"]["Insert"]>;
         Relationships: [];
       };
+      weather_notices: {
+        Row: {
+          id: string;
+          company_id: string;
+          source_id: string;
+          channel: string;
+          headline: string;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          source_id: string;
+          channel?: string;
+          headline?: string;
+          body?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["weather_notices"]["Insert"]>;
+        Relationships: [];
+      };
+      weather_receipts: {
+        Row: {
+          notice_id: string;
+          company_id: string;
+          staff_id: string;
+          created_at: string;
+        };
+        Insert: {
+          notice_id: string;
+          company_id: string;
+          staff_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["weather_receipts"]["Insert"]>;
+        Relationships: [];
+      };
       activities: {
         Row: {
           id: string;

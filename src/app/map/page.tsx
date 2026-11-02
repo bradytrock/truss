@@ -40,6 +40,8 @@ import {
   type MapCrewPing,
 } from "@/lib/project-map";
 import { missingStormMapMessage } from "@/lib/supabase/schema-errors";
+import { loadStormLayers, swathUrl } from "@/lib/weather/client";
+import type { StormLayers } from "@/lib/weather/types";
 import { staffForReports } from "@/lib/visibility";
 import { WORK_COLUMN_LABELS, type WorkColumn } from "@/lib/work-board";
 import type { Job } from "@/lib/types";
@@ -67,6 +69,8 @@ function MapPageInner() {
   const [showProjects, setShowProjects] = useState(true);
   const [showCrew, setShowCrew] = useState(true);
   const [showWeather, setShowWeather] = useState(false);
+  const [showStorm, setShowStorm] = useState(false);
+  const [stormLayers, setStormLayers] = useState<StormLayers | null>(null);
   const [sharing, setSharing] = useState(false);
   const [mapError, setMapError] = useState("");
   const [geocoding, setGeocoding] = useState(false);
@@ -352,6 +356,27 @@ function MapPageInner() {
     [crm, mappedJobs],
   );
 
+  useEffect(() => {
+    if (!showStorm || !crm.hydrated) return;
+    let cancel = false;
+    const points = mappedJobs.map((job) => ({
+      id: job.id,
+      lat: job.lat as number,
+      lng: job.lng as number,
+      state: job.state,
+    }));
+    loadStormLayers(points, [crm.company.state, ...points.map((point) => point.state || "")])
+      .then((layers) => {
+        if (!cancel) setStormLayers(layers);
+      })
+      .catch(() => {
+        if (!cancel) setStormLayers(null);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [crm.company.state, crm.hydrated, mappedJobs, showStorm]);
+
   if (!crm.hydrated) return <LoadingScreen />;
 
   const searchProps = {
@@ -396,6 +421,14 @@ function MapPageInner() {
                 <CloudRain data-icon="inline-start" />
                 Weather radar
               </Button>
+              <Button
+                type="button"
+                variant={showStorm ? "default" : "outline"}
+                aria-pressed={showStorm}
+                onClick={() => setShowStorm((value) => !value)}
+              >
+                Hail & warnings
+              </Button>
               <Button variant={sharing ? "secondary" : "outline"} onClick={sharing ? stopSharing : startSharing}>
                 <MapPin data-icon="inline-start" />
                 {sharing ? "Stop sharing" : "Share my location"}
@@ -414,6 +447,18 @@ function MapPageInner() {
             showProjects={showProjects}
             showCrew={showCrew}
             showWeather={showWeather}
+            storm={
+              showStorm && stormLayers?.bounds
+                ? {
+                    alerts: stormLayers.alerts,
+                    outlooks: stormLayers.outlooks,
+                    reports: stormLayers.reports,
+                    bounds: stormLayers.bounds,
+                    swathUrl: swathUrl(stormLayers.bounds, "mesh"),
+                    rotationUrl: null,
+                  }
+                : null
+            }
             fitKey={`${year}|${query}|${stages.join(",")}|${showProjects}|${showCrew}|${pins.length}|${liveCrew.length}`}
             onSelectJob={selectJob}
             onSelectCrew={selectCrew}

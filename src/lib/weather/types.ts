@@ -1,0 +1,76 @@
+/** Shared storm-desk shapes. Safe to import from the browser and from route handlers. */
+
+export type LngLat = [number, number];
+export type Ring = LngLat[];
+
+export type WeatherGeometry =
+  | { type: "Polygon"; coordinates: Ring[] }
+  | { type: "MultiPolygon"; coordinates: Ring[][] };
+
+export type BBox = { west: number; south: number; east: number; north: number };
+
+export type AlertRoute = "sms" | "leaders" | "map";
+
+export type WeatherAlert = {
+  id: string;
+  event: string;
+  severity: string;
+  headline: string;
+  instruction: string;
+  onset: string;
+  ends: string;
+  until: string;
+  hailInches: number | null;
+  windMph: number | null;
+  route: AlertRoute;
+  areaDesc: string;
+  geometry: WeatherGeometry | null;
+};
+
+export type OutlookProduct = "hail" | "wind" | "tornado" | "sigHail";
+
+export type OutlookArea = {
+  day: 1 | 2;
+  product: OutlookProduct;
+  label: string;
+  /** Probability from 0 to 1. Significant-hail hatching uses 1. */
+  threshold: number;
+  fill: string;
+  stroke: string;
+  geometry: WeatherGeometry;
+};
+
+export type StormReport = {
+  id: string;
+  kind: "hail" | "wind" | "tornado";
+  lat: number;
+  lng: number;
+  inches: number | null;
+  mph: number | null;
+  label: string;
+  city: string;
+  valid: string;
+};
+
+export type StormPoint = {
+  id: string;
+  lat: number;
+  lng: number;
+  state?: string;
+};
+
+export type MeshSample = { id: string; inches: number | null };
+export type LightningSample = { id: string; percent: number | null };
+
+export type StormLayers = {
+  fetchedAt: string;
+  bounds: BBox | null;
+  alerts: WeatherAlert[];
+  outlooks: OutlookArea[];
+  reports: StormReport[];
+  mesh: MeshSample[];
+  lightning: LightningSample[];
+  swathValid: string;
+  errors: string[];
+  attribution: string;
+};
