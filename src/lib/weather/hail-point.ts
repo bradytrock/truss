@@ -15,6 +15,7 @@ export type HailPopupHit = {
   passedEnd: string;
   report: { sizeIn: number; place: string; reportedAt: string } | null;
   jobsInSwath: number | null;
+  source: string;
 };
 
 export function toPopupHit(hit: HailHit): HailPopupHit {
@@ -36,6 +37,7 @@ export function toPopupHit(hit: HailHit): HailPopupHit {
         }
       : null,
     jobsInSwath: hit.jobsInSwath,
+    source: hit.storm.source,
   };
 }
 

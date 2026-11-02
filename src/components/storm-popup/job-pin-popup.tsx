@@ -39,20 +39,27 @@ export function JobPinPopup({
   onInteract,
   onLogVisit,
   logging,
+  lookupHail,
 }: {
   pin: StormJobPin;
   onClose: () => void;
   onInteract: () => void;
   onLogVisit: () => void;
   logging: boolean;
+  /** When set, hail comes from the swaths already on the map instead of a separate lookup. */
+  lookupHail?: (lat: number, lng: number) => HailPopupHit[];
 }) {
   const router = useRouter();
   const cached = readJobHail(pin.id);
+  const liveHits = lookupHail ? lookupHail(pin.lat, pin.lng) : null;
   const [status, setStatus] = useState<"loading" | "error" | "ready">(cached ? "ready" : "loading");
   const [hits, setHits] = useState<HailPopupHit[]>(cached ?? []);
   const [message, setMessage] = useState("");
+  const shownHits = liveHits ?? hits;
+  const shownStatus = liveHits ? "ready" : status;
 
   useEffect(() => {
+    if (lookupHail) return;
     const saved = readJobHail(pin.id);
     if (saved) return;
     let cancel = false;
@@ -71,10 +78,10 @@ export function JobPinPopup({
     return () => {
       cancel = true;
     };
-  }, [pin.id, pin.lat, pin.lng]);
+  }, [lookupHail, pin.id, pin.lat, pin.lng]);
 
   const top = headerHit(
-    hits.map((hit) => ({
+    shownHits.map((hit) => ({
       storm: {
         id: hit.stormId,
         stormDate: hit.stormDate,
@@ -95,7 +102,7 @@ export function JobPinPopup({
       jobsInSwath: hit.jobsInSwath,
     })),
   );
-  const shown = hits.find((hit) => hit.stormId === top?.storm.id) ?? hits[0] ?? null;
+  const shown = shownHits.find((hit) => hit.stormId === top?.storm.id) ?? shownHits[0] ?? null;
   const band = shown ? hailBin(shown.maxBandIn) : null;
 
   return (
@@ -131,8 +138,8 @@ export function JobPinPopup({
       onInteract={onInteract}
     >
       <div className="rounded-lg bg-black/40 px-3 py-2">
-        {status === "loading" ? <PopupSkeleton /> : null}
-        {status === "error" ? (
+        {shownStatus === "loading" ? <PopupSkeleton /> : null}
+        {shownStatus === "error" ? (
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm text-white/75">{message}</p>
             <button
@@ -140,7 +147,7 @@ export function JobPinPopup({
               className="text-sm font-medium underline"
               onClick={() => {
                 setStatus("loading");
-                loadHailPoint(pin.lat, pin.lng)
+                (lookupHail ? Promise.resolve({ hits: lookupHail(pin.lat, pin.lng) }) : loadHailPoint(pin.lat, pin.lng))
                   .then((result) => {
                     writeJobHail(pin.id, result.hits);
                     setHits(result.hits);
@@ -156,7 +163,7 @@ export function JobPinPopup({
             </button>
           </div>
         ) : null}
-        {status === "ready" && shown && band ? (
+        {shownStatus === "ready" && shown && band ? (
           <p className="flex flex-wrap items-center gap-2 text-sm">
             <span className="rounded px-1.5 py-0.5 text-xs font-semibold text-white" style={{ background: band.color }}>
               {formatHailInches(shown.maxBandIn)}
@@ -164,11 +171,13 @@ export function JobPinPopup({
             <span>
               {band.label} · {formatChipDate(shown.stormDate)} · {daysAgoLabel(chicagoDaysAgo(shown.stormDate))}
             </span>
-            {hits.length > 1 ? <span className="text-white/55">{hits.length} storms total</span> : null}
+            {shownHits.length > 1 ? <span className="text-white/55">{shownHits.length} storms total</span> : null}
           </p>
         ) : null}
-        {status === "ready" && !shown ? (
-          <p className="text-sm text-white/75">No hail on file — no swath over this address in 90 days.</p>
+        {shownStatus === "ready" && !shown ? (
+          <p className="text-sm text-white/75">
+            {lookupHail ? "No hail on file — no swath over this address in the last 24 hours." : "No hail on file — no swath over this address in 90 days."}
+          </p>
         ) : null}
       </div>
       <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-3 text-sm">

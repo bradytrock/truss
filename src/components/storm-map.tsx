@@ -8,7 +8,7 @@ import { HailPointPopup, type CanvassPin } from "@/components/storm-popup/hail-p
 import { JobPinPopup, type StormJobPin } from "@/components/storm-popup/job-pin-popup";
 import { RadarCellPopup } from "@/components/storm-popup/radar-popup";
 import { clusterJobPins, crewMapLabel, PROJECT_MAP_CENTER, type CrewFreshness } from "@/lib/project-map";
-import { loadHailPoint, loadHailSwaths, loadRadarCell } from "@/lib/weather/client";
+import { loadRadarCell } from "@/lib/weather/client";
 import { pointInGeometry } from "@/lib/weather/geometry";
 import { HAIL_BINS, hailBin } from "@/lib/weather/hail";
 import type { OutlookArea, OutlookProduct, StormReport, WeatherAlert } from "@/lib/weather/types";
@@ -19,9 +19,10 @@ import {
   hoverReadout,
   outerBand,
   popupPanDelta,
+  toPopupHit,
   type HailPopupHit,
 } from "@/lib/weather/hail-point";
-import { sampleHailStorms, type HailStorm } from "@/lib/weather/sample-storms";
+import type { HailStorm } from "@/lib/weather/sample-storms";
 import { RADAR_ATTRIBUTION, RADAR_EMPTY_TILE, RADAR_MAX_NATIVE_ZOOM, RADAR_OPACITY, radarFrames } from "@/lib/weather-radar";
 
 const STAGE_LEGEND = [
@@ -44,12 +45,11 @@ type MapCrewMarker = {
   updatedLabel: string;
 };
 
+const NO_STORMS: HailStorm[] = [];
 const NO_OUTLOOKS: OutlookArea[] = [];
 const NO_ALERTS: WeatherAlert[] = [];
 const NO_REPORTS: StormReport[] = [];
 const NO_CREW: MapCrewMarker[] = [];
-
-type Catalog = { source: "sample" | "database"; storms: HailStorm[] };
 
 type OpenPopup =
   | { kind: "loading"; lat: number; lng: number }
@@ -86,6 +86,9 @@ export function StormMap({
   embedded = false,
   fitTo = "storms",
   fitKey = "",
+  liveStorms,
+  swathNote = "",
+  swathReady = false,
 }: {
   pins: StormJobPin[];
   showRadar: boolean;
@@ -108,6 +111,10 @@ export function StormMap({
   embedded?: boolean;
   fitTo?: "storms" | "pins";
   fitKey?: string;
+  /** NOAA MRMS polygons for the jobs on screen. Sample storms are never drawn. */
+  liveStorms?: HailStorm[];
+  swathNote?: string;
+  swathReady?: boolean;
 }) {
   const el = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -122,8 +129,9 @@ export function StormMap({
   const onSelectCrewRef = useRef(onSelectCrew);
   const hiddenRef = useRef<string[]>([]);
   const stormsRef = useRef<HailStorm[]>([]);
+  const pinsRef = useRef<StormJobPin[]>([]);
+  const swathReadyRef = useRef(swathReady);
   const lookupRef = useRef<(lat: number, lng: number) => void>(() => undefined);
-  const [catalog, setCatalog] = useState<Catalog>(() => ({ source: "sample", storms: sampleHailStorms() }));
   const [hidden, setHidden] = useState<string[]>([]);
   const [zoom, setZoom] = useState(9);
   const [hover, setHover] = useState<{ text: string; coords: string } | null>(null);
@@ -131,7 +139,7 @@ export function StormMap({
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const [dropping, setDropping] = useState(false);
   const [logging, setLogging] = useState(false);
-  const storms = catalog.storms;
+  const storms = liveStorms ?? NO_STORMS;
   const hiddenSet = new Set(hidden);
   const anchor = useMemo(() => {
     if (!popup) return null;
@@ -150,28 +158,22 @@ export function StormMap({
     ignoreUntil.current = Date.now() + 450;
   }
 
+  const lookupHail = useCallback((lat: number, lng: number) => {
+    return hailAtPoint(stormsRef.current, lat, lng, {
+      jobs: pinsRef.current.map((pin) => ({ lat: pin.lat, lng: pin.lng })),
+    }).map(toPopupHit);
+  }, []);
+
   const lookup = useCallback(async (lat: number, lng: number) => {
     if (!showHailRef.current) return;
-    setPopup({ kind: "loading", lat, lng });
-    const zoomNow = mapRef.current?.getZoom() ?? 8;
-    const [pointResult, radar] = await Promise.all([
-      loadHailPoint(lat, lng).then(
-        (result) => ({ ok: true as const, result }),
-        (error: unknown) => ({ ok: false as const, error }),
-      ),
-      showRadarRef.current ? loadRadarCell(lat, lng, zoomNow).catch(() => null) : Promise.resolve(null),
-    ]);
-    if (!pointResult.ok) {
-      const error = pointResult.error;
-      setPopup({
-        kind: "error",
-        lat,
-        lng,
-        message: error instanceof Error ? error.message : "The hail lookup did not finish.",
-      });
+    if (!swathReadyRef.current) {
+      setPopup({ kind: "error", lat, lng, message: "The NOAA hail grid is still loading." });
       return;
     }
-    const hits = pointResult.result.hits;
+    setPopup({ kind: "loading", lat, lng });
+    const zoomNow = mapRef.current?.getZoom() ?? 8;
+    const hits = lookupHail(lat, lng);
+    const radar = showRadarRef.current ? await loadRadarCell(lat, lng, zoomNow).catch(() => null) : null;
     const hiddenNow = new Set(hiddenRef.current);
     const visible = hits.some((hit) => !hiddenNow.has(hit.stormId));
     const covered = hits.some((hit) => hiddenNow.has(hit.stormId));
@@ -187,7 +189,7 @@ export function StormMap({
       site: radar.radarSite || "KFWS",
       hailChance: radar.hailChance || "Low",
     });
-  }, []);
+  }, [lookupHail]);
 
   useLayoutEffect(() => {
     showRadarRef.current = showRadar;
@@ -198,6 +200,8 @@ export function StormMap({
     onSelectCrewRef.current = onSelectCrew;
     hiddenRef.current = hidden;
     stormsRef.current = storms;
+    pinsRef.current = pins;
+    swathReadyRef.current = swathReady;
     anchorRef.current = anchor;
     lookupRef.current = lookup;
     placeRef.current = () => {
@@ -216,20 +220,7 @@ export function StormMap({
       const next = { left: Math.round(left), top: Math.round(top) };
       setPos((currentPos) => (currentPos && currentPos.left === next.left && currentPos.top === next.top ? currentPos : next));
     };
-  }, [anchor, basemap, embedded, fitTo, hidden, lookup, onSelectCrew, showHail, showRadar, storms]);
-
-  useEffect(() => {
-    let cancel = false;
-    loadHailSwaths()
-      .then((next) => {
-        if (cancel || next.source !== "database" || !next.storms.length) return;
-        setCatalog({ source: "database", storms: next.storms });
-      })
-      .catch(() => undefined);
-    return () => {
-      cancel = true;
-    };
-  }, []);
+  }, [anchor, basemap, embedded, fitTo, hidden, lookup, onSelectCrew, pins, showHail, showRadar, storms, swathReady]);
 
   useEffect(() => {
     if (!el.current || mapRef.current) return;
@@ -299,12 +290,12 @@ export function StormMap({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || fitTo !== "storms" || fittedSource.current === catalog.source) return;
+    if (!map || fitTo !== "storms" || fittedSource.current === "live") return;
     const points = storms.flatMap((storm) => storm.track.map((pair) => [pair[1], pair[0]] as L.LatLngTuple));
     if (!points.length) return;
-    fittedSource.current = catalog.source;
+    fittedSource.current = "live";
     map.fitBounds(L.latLngBounds(points), { padding: [64, 64], maxZoom: 10, animate: false });
-  }, [catalog.source, fitTo, storms]);
+  }, [fitTo, storms]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -624,7 +615,7 @@ export function StormMap({
           <div className={`rounded-lg px-3 py-2 text-xs shadow-lg ${embedded ? "border bg-background/95 text-foreground" : "mt-3 bg-[#1a1d24]/95 text-white"}`}>
             {showHail ? (
               <>
-                <p className="font-medium">Hail swath · radar estimate</p>
+                <p className="font-medium">Hail swath · last 24 hours</p>
                 <ul className={`mt-1.5 space-y-1 ${embedded ? "text-muted-foreground" : "text-white/75"}`}>
                   {HAIL_BINS.map((bin) => (
                     <li key={bin.label} className="flex items-center gap-2">
@@ -635,7 +626,7 @@ export function StormMap({
                     </li>
                   ))}
                 </ul>
-                {catalog.source === "sample" ? <p className={`mt-2 ${embedded ? "text-muted-foreground" : "text-white/45"}`}>Sample storms until the hail SQL is applied.</p> : null}
+                {swathNote ? <p className={`mt-2 ${embedded ? "text-muted-foreground" : "text-white/45"}`}>{swathNote}</p> : null}
               </>
             ) : null}
             {showOutlook && outlookRows.length ? (
@@ -670,7 +661,9 @@ export function StormMap({
               className="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
               style={{ background: bin?.color ?? "#52525b", opacity: off ? 0.4 : 1 }}
             >
-              {formatHailInches(storm.stormMaxIn)} {formatChipDate(storm.stormDate)} {bin?.label}
+              {storm.source === "mesh"
+                ? `${formatHailInches(storm.stormMaxIn)} 24h max`
+                : `${formatHailInches(storm.stormMaxIn)} ${formatChipDate(storm.stormDate)} ${bin?.label}`}
             </button>
           );
         })}
@@ -679,7 +672,7 @@ export function StormMap({
       {embedded || !showHail ? null : (
         <div className="pointer-events-none absolute top-14 right-14 z-20 hidden text-right text-xs text-white/70 sm:block">
           <p>Click anywhere inside a swath</p>
-          {catalog.source === "sample" ? <p className="mt-1 text-white/45">Sample storms</p> : null}
+          {swathNote ? <p className="mt-1 text-white/45">{swathNote}</p> : null}
         </div>
       )}
       {showHail ? (
@@ -713,6 +706,7 @@ export function StormMap({
                   .catch(() => undefined)
                   .finally(() => setLogging(false));
               }}
+              lookupHail={lookupHail}
             />
           ) : null}
           {popup.kind === "radar" ? (

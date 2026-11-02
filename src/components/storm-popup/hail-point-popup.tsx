@@ -106,7 +106,7 @@ export function HailPointPopup({
       <span>
         {formatCoord(lat)}, {formatCoord(lng)}
       </span>
-      <span>Radar estimate</span>
+      <span>{selected?.source === "mesh" || hits.some((hit) => hit.source === "mesh") ? "NOAA MRMS" : "Radar estimate"}</span>
     </>
   );
 
@@ -228,7 +228,9 @@ export function HailPointPopup({
             <span className="text-lg">{band?.label ?? "Hail"}</span>
           </p>
           <p className="mt-1 text-sm text-white/90">
-            {formatStormDate(selected.stormDate)} · {formatChicagoClock(selected.passageAt)} · {daysAgoLabel(days)}
+            {selected.source === "mesh"
+              ? `${formatStormDate(selected.stormDate)} · last 24 hours · through ${formatChicagoClock(selected.passageAt)}`
+              : `${formatStormDate(selected.stormDate)} · ${formatChicagoClock(selected.passageAt)} · ${daysAgoLabel(days)}`}
           </p>
         </div>
       }
@@ -258,8 +260,8 @@ export function HailPointPopup({
           <dd className="font-medium">{selected.distanceMi.toFixed(1)} mi</dd>
         </div>
         <div>
-          <dt className="text-[10px] tracking-wide text-white/50 uppercase">Passed over</dt>
-          <dd className="font-medium">{formatChicagoRange(selected.passedStart, selected.passedEnd)}</dd>
+          <dt className="text-[10px] tracking-wide text-white/50 uppercase">{selected.source === "mesh" ? "Window" : "Passed over"}</dt>
+          <dd className="font-medium">{selected.source === "mesh" ? "24-hour max" : formatChicagoRange(selected.passedStart, selected.passedEnd)}</dd>
         </div>
         <div>
           <dt className="text-[10px] tracking-wide text-white/50 uppercase">Radar</dt>

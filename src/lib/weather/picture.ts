@@ -1,8 +1,11 @@
 import { fetchActiveAlerts, fetchOutlooks, fetchStormReports } from "./feeds.ts";
 import { loadCrop, sampleCrop } from "./grib.ts";
+import { bboxOfPoints, expandBBox, pointInGeometry } from "./geometry.ts";
 import { meshInchesFromMillimeters } from "./hail.ts";
-import { bboxOfPoints, expandBBox } from "./geometry.ts";
-import type { BBox, StormLayers, StormPoint } from "./types.ts";
+import { outerBand } from "./hail-point.ts";
+import { meshSwathFromGrid } from "./mesh-swath.ts";
+import type { HailStorm } from "./sample-storms.ts";
+import type { BBox, StormLayers, StormPoint, StormReport } from "./types.ts";
 
 const MESH_DIR = "https://mrms.ncep.noaa.gov/2D/MESH_Max_1440min/";
 const MESH_FILE = /href="(MRMS_MESH_Max_1440min_[^"]+\.grib2\.gz)"/g;
@@ -34,6 +37,7 @@ export async function buildStormLayers(points: StormPoint[], states: string[]): 
       reports: [],
       mesh: [],
       lightning: [],
+      hailSwaths: [],
       swathValid: "",
       errors: ["Map a job site so the outlook knows where to look."],
       attribution: STORM_ATTRIBUTION,
@@ -60,8 +64,8 @@ export async function buildStormLayers(points: StormPoint[], states: string[]): 
     fetchStormReports(bounds).catch(() => []),
     bounds ? sampleMesh(bounds, clean).catch((error: unknown) => {
       errors.push(message(error, "The hail swath did not load."));
-      return { samples: clean.map((point) => ({ id: point.id, inches: null })), valid: "" };
-    }) : Promise.resolve({ samples: [], valid: "" }),
+      return { samples: clean.map((point) => ({ id: point.id, inches: null })), valid: "", swath: null as HailStorm | null };
+    }) : Promise.resolve({ samples: [], valid: "", swath: null as HailStorm | null }),
     bounds ? sampleLightning(bounds, clean).catch(() => clean.map((point) => ({ id: point.id, percent: null }))) : Promise.resolve([]),
   ]);
 
@@ -73,6 +77,7 @@ export async function buildStormLayers(points: StormPoint[], states: string[]): 
     reports,
     mesh: mesh.samples,
     lightning,
+    hailSwaths: mesh.swath ? [attachHailReport(mesh.swath, reports)] : [],
     swathValid: mesh.valid,
     errors,
     attribution: STORM_ATTRIBUTION,
@@ -87,6 +92,29 @@ async function sampleMesh(bounds: BBox, points: StormPoint[]) {
   return {
     valid: grid.valid,
     samples: points.map((point) => ({ id: point.id, inches: sampleCrop(grid, point.lat, point.lng) })),
+    swath: meshSwathFromGrid(grid),
+  };
+}
+
+function attachHailReport(storm: HailStorm, reports: StormReport[]): HailStorm {
+  const outer = outerBand(storm);
+  let best: StormReport | null = null;
+  for (const report of reports) {
+    if (report.kind !== "hail" || report.inches == null || report.inches < 0.75) continue;
+    if (!pointInGeometry(report.lng, report.lat, outer.geometry)) continue;
+    if (!best || report.inches > (best.inches ?? 0)) best = report;
+  }
+  if (!best || best.inches == null) return storm;
+  const reportedAt = Date.parse(best.valid) ? new Date(best.valid).toISOString() : storm.endedAt;
+  return {
+    ...storm,
+    report: {
+      sizeIn: best.inches,
+      place: best.city || best.label,
+      reportedAt,
+      lat: best.lat,
+      lng: best.lng,
+    },
   };
 }
 

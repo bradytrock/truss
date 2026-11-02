@@ -7,7 +7,7 @@ import {
   type HailPopupHit,
   type MapJobPoint,
 } from "@/lib/weather/hail-point";
-import { sampleHailStorms, type HailStorm } from "@/lib/weather/sample-storms";
+import type { HailStorm } from "@/lib/weather/sample-storms";
 import type { LngLat } from "@/lib/weather/types";
 
 type Client = SupabaseClient<Database>;
@@ -19,12 +19,12 @@ export type HailCatalog = {
 
 export async function loadHailCatalog(supabase: Client): Promise<HailCatalog> {
   const storms = await supabase.from("hail_storms").select("id, storm_date, started_at, ended_at, radar_site, storm_max_in, source, track");
-  if (storms.error || !storms.data?.length) return { source: "sample", storms: sampleHailStorms() };
+  if (storms.error || !storms.data?.length) return { source: "database", storms: [] };
   const [bands, reports] = await Promise.all([
     supabase.from("hail_swath_bands").select("storm_id, band_size_in, geom"),
     supabase.from("hail_storm_reports").select("storm_id, size_in, place, reported_at, lat, lng"),
   ]);
-  if (bands.error || reports.error) return { source: "sample", storms: sampleHailStorms() };
+  if (bands.error || reports.error) return { source: "database", storms: [] };
 
   const built: HailStorm[] = [];
   for (const row of storms.data) {
@@ -60,7 +60,7 @@ export async function loadHailCatalog(supabase: Client): Promise<HailCatalog> {
         : null,
     });
   }
-  if (!built.length) return { source: "sample", storms: sampleHailStorms() };
+  if (!built.length) return { source: "database", storms: [] };
   return { source: "database", storms: built };
 }
 
@@ -97,6 +97,7 @@ export async function lookupHailPoint(
             }
           : null,
         jobsInSwath: Number(row.jobs_in_swath) || 0,
+        source: "database",
       })),
     };
   }

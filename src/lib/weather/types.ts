@@ -62,6 +62,19 @@ export type StormPoint = {
 export type MeshSample = { id: string; inches: number | null };
 export type LightningSample = { id: string; percent: number | null };
 
+export type MeshHailSwath = {
+  id: string;
+  stormDate: string;
+  startedAt: string;
+  endedAt: string;
+  radarSite: string;
+  stormMaxIn: number;
+  source: string;
+  track: LngLat[];
+  bands: { sizeIn: number; geometry: WeatherGeometry }[];
+  report: { sizeIn: number; place: string; reportedAt: string; lat: number; lng: number } | null;
+};
+
 export type StormLayers = {
   fetchedAt: string;
   bounds: BBox | null;
@@ -70,6 +83,8 @@ export type StormLayers = {
   reports: StormReport[];
   mesh: MeshSample[];
   lightning: LightningSample[];
+  /** Radar-estimated hail polygons for the last 24 hours. Empty when MESH has none. */
+  hailSwaths?: MeshHailSwath[];
   swathValid: string;
   errors: string[];
   attribution: string;

@@ -42,7 +42,7 @@ import {
 } from "@/lib/project-map";
 import { missingStormMapMessage } from "@/lib/supabase/schema-errors";
 import { loadStormLayers, sendStormTexts } from "@/lib/weather/client";
-import { chicagoDaysAgoFromIso, daysAgoLabel } from "@/lib/weather/hail-point";
+import { chicagoDaysAgoFromIso, daysAgoLabel, formatChicagoClock } from "@/lib/weather/hail-point";
 import type { StormLayers } from "@/lib/weather/types";
 import { isCompanyLeader, staffForReports } from "@/lib/visibility";
 import { boardValue, WORK_COLUMN_LABELS, type WorkColumn } from "@/lib/work-board";
@@ -76,6 +76,7 @@ function MapPageInner() {
   const [showOutlook, setShowOutlook] = useState(true);
   const [texting, setTexting] = useState(false);
   const [stormLayers, setStormLayers] = useState<StormLayers | null>(null);
+  const [swathError, setSwathError] = useState("");
   const [sharing, setSharing] = useState(false);
   const [mapError, setMapError] = useState("");
   const [geocoding, setGeocoding] = useState(false);
@@ -354,10 +355,14 @@ function MapPageInner() {
     }));
     loadStormLayers(points, [crm.company.state, ...points.map((point) => point.state || "")])
       .then((layers) => {
-        if (!cancel) setStormLayers(layers);
+        if (cancel) return;
+        setStormLayers(layers);
+        setSwathError(layers.errors.find((item) => /hail/i.test(item)) ?? "");
       })
-      .catch(() => {
-        if (!cancel) setStormLayers(null);
+      .catch((error: unknown) => {
+        if (cancel) return;
+        setStormLayers(null);
+        setSwathError(error instanceof Error ? error.message : "The hail swath did not load.");
       });
     return () => {
       cancel = true;
@@ -443,6 +448,9 @@ function MapPageInner() {
             outlooks={stormLayers?.outlooks}
             alerts={stormLayers?.alerts}
             reports={stormLayers?.reports}
+            liveStorms={stormLayers?.hailSwaths}
+            swathReady={stormLayers != null && !swathError}
+            swathNote={swathCaption(stormLayers, swathError)}
             basemap="light"
             embedded
             fitTo="pins"
@@ -686,6 +694,16 @@ function Legend() {
       </ul>
     </div>
   );
+}
+
+function swathCaption(layers: StormLayers | null, error: string) {
+  if (!layers) return error || "Reading the NOAA hail grid…";
+  if (error && !layers.hailSwaths?.length) return error;
+  if (!layers.hailSwaths?.length) return "No penny-size hail in the last 24 hours.";
+  if (layers.swathValid && !Number.isNaN(Date.parse(layers.swathValid))) {
+    return `NOAA MRMS · last 24 hours · through ${formatChicagoClock(layers.swathValid)}`;
+  }
+  return "NOAA MRMS · last 24 hours";
 }
 
 function mapPins(crm: ReturnType<typeof useCrm>, jobs: Job[]): StormJobPin[] {
