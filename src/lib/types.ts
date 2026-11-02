@@ -187,7 +187,7 @@ export interface CompanySettings {
   paymentZelle?: string;
   paymentCashapp?: string;
   paymentPaypal?: string;
-  /** Free text under the payment options, e.g. who to make a check out to. */
+  /** Check payable line, or another note, on the digital card. */
   paymentNote?: string;
   /** Handles or profile links for the pages a homeowner can follow. */
   socialFacebook?: string;

@@ -298,9 +298,9 @@ function CompanySettingsForm() {
         <CardHeader className="border-b">
           <CardTitle>Getting paid</CardTitle>
           <CardDescription>
-            Payment options on every digital business card. Paste a handle or a profile link —
-            homeowners get a tap-through for Venmo, Cash App, and PayPal, and a copy button for
-            Zelle. Leave a row blank to hide it.
+            Payment options on every digital business card. Paste a handle or a profile link.
+            Venmo, Cash App, and PayPal open when tapped, and every handle can be copied. Zelle
+            copies, since it has no link. Leave a row blank to hide it.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 pt-4">
@@ -347,8 +347,8 @@ function CompanySettingsForm() {
               onChange={(event) => patch("paymentNote", event.target.value)}
             />
             <p className="text-xs text-muted-foreground">
-              Prints under the payment options. Do not put account or routing numbers on a public
-              card.
+              A line like “Checks payable to …” shows as the Check row. Anything else shows as a
+              note. Do not put account or routing numbers on a public card.
             </p>
           </div>
         </CardContent>
