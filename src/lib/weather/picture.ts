@@ -1,8 +1,8 @@
-import { fetchActiveAlerts, fetchOutlooks, fetchStormReports } from "./feeds.ts";
+import { fetchActiveAlerts, fetchOutlooks, fetchStormCells, fetchStormReports } from "./feeds.ts";
 import { loadCrop, sampleCrop } from "./grib.ts";
 import { bboxOfPoints, expandBBox, pointInGeometry } from "./geometry.ts";
 import { meshInchesFromMillimeters } from "./hail.ts";
-import { outerBand } from "./hail-point.ts";
+import { nearestRadarSite, outerBand } from "./hail-point.ts";
 import { meshSwathFromGrid } from "./mesh-swath.ts";
 import type { HailStorm } from "./sample-storms.ts";
 import type { BBox, StormLayers, StormPoint, StormReport } from "./types.ts";
@@ -14,7 +14,20 @@ const LIGHTNING_FILE = /href="(MRMS_LightningProbabilityNext30min[^"]+\.grib2\.g
 const ROTATION_DIR = "https://mrms.ncep.noaa.gov/2D/RotationTrack1440min/";
 const ROTATION_FILE = /href="(MRMS_RotationTrack1440min_[^"]+\.grib2\.gz)"/g;
 
-export const STORM_ATTRIBUTION = "Alerts: NWS. Outlooks: SPC. Hail swath: NOAA MRMS MESH. Reports: IEM / NWS.";
+export const STORM_ATTRIBUTION = "Alerts: NWS. Outlooks: SPC. Hail swath: NOAA MRMS MESH. Reports and storm cells: IEM / NWS NEXRAD.";
+
+/** Radar sites that cover the jobs: the nearest one to each corner and the middle of the box. */
+export function radarSitesFor(points: Array<{ lat: number; lng: number }>, bounds: BBox | null) {
+  const sites = new Set<string>();
+  for (const point of points.slice(0, 50)) sites.add(nearestRadarSite(point.lat, point.lng));
+  if (bounds) {
+    sites.add(nearestRadarSite(bounds.north, bounds.west));
+    sites.add(nearestRadarSite(bounds.north, bounds.east));
+    sites.add(nearestRadarSite(bounds.south, bounds.west));
+    sites.add(nearestRadarSite(bounds.south, bounds.east));
+  }
+  return [...sites];
+}
 
 export function stormBounds(points: Array<{ lat: number; lng: number }>): BBox | null {
   const box = bboxOfPoints(points);
@@ -38,6 +51,7 @@ export async function buildStormLayers(points: StormPoint[], states: string[]): 
       mesh: [],
       lightning: [],
       hailSwaths: [],
+      cells: [],
       swathValid: "",
       errors: ["Map a job site so the outlook knows where to look."],
       attribution: STORM_ATTRIBUTION,
@@ -52,7 +66,7 @@ export async function buildStormLayers(points: StormPoint[], states: string[]): 
     ),
   ];
   const errors: string[] = [];
-  const [alerts, outlooks, reports, mesh, lightning] = await Promise.all([
+  const [alerts, outlooks, reports, mesh, lightning, cells] = await Promise.all([
     fetchActiveAlerts(stateList, bounds).catch((error: unknown) => {
       errors.push(message(error, "Active warnings did not load."));
       return [];
@@ -67,6 +81,7 @@ export async function buildStormLayers(points: StormPoint[], states: string[]): 
       return { samples: clean.map((point) => ({ id: point.id, inches: null })), valid: "", swath: null as HailStorm | null };
     }) : Promise.resolve({ samples: [], valid: "", swath: null as HailStorm | null }),
     bounds ? sampleLightning(bounds, clean).catch(() => clean.map((point) => ({ id: point.id, percent: null }))) : Promise.resolve([]),
+    fetchStormCells(radarSitesFor(clean, bounds), bounds).catch(() => []),
   ]);
 
   return {
@@ -78,6 +93,7 @@ export async function buildStormLayers(points: StormPoint[], states: string[]): 
     mesh: mesh.samples,
     lightning,
     hailSwaths: mesh.swath ? [attachHailReport(mesh.swath, reports)] : [],
+    cells,
     swathValid: mesh.valid,
     errors,
     attribution: STORM_ATTRIBUTION,

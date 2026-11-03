@@ -14,7 +14,7 @@ export type RadarAlertCard = {
   jobs: string[];
 };
 
-type LayerName = "radar" | "warnings" | "hail" | "pins" | "outlook";
+type LayerName = "radar" | "warnings" | "hail" | "pins" | "outlook" | "cells";
 
 /** NEXRAD n0q colors at those dBZ steps. The tiles use this scale. */
 const DBZ_STOPS = [
@@ -35,6 +35,8 @@ export function RadarDeskChrome({
   showHail,
   showPins,
   showOutlook,
+  showCells,
+  cellCount,
   onLayer,
   frames,
   frameIndex,
@@ -52,6 +54,8 @@ export function RadarDeskChrome({
   showHail: boolean;
   showPins: boolean;
   showOutlook: boolean;
+  showCells: boolean;
+  cellCount: number;
   onLayer: (layer: LayerName, next: boolean) => void;
   frames: RadarFrameTick[];
   frameIndex: number;
@@ -101,7 +105,12 @@ export function RadarDeskChrome({
           checked={showWarnings}
           onChange={(next) => onLayer("warnings", next)}
         />
-        <LayerBox label="Storm tracks" checked={false} disabled title="Cell tracks are not on this feed." />
+        <LayerBox
+          label={cellCount ? `Storm cells · ${cellCount}` : "Storm cells"}
+          checked={showCells}
+          onChange={(next) => onLayer("cells", next)}
+          title="NEXRAD storm cells with +15, +30, and +45 minute forecast points."
+        />
         <LayerBox label="Hail (MESH)" checked={showHail} onChange={(next) => onLayer("hail", next)} />
         <LayerBox label="Job pins" checked={showPins} onChange={(next) => onLayer("pins", next)} />
         <LayerBox label="SPC outlook" checked={showOutlook} onChange={(next) => onLayer("outlook", next)} />

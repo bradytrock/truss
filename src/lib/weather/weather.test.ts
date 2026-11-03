@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { alertKind, alertOnMap, alertPaint, alertRoute, crewWarningText, parseHailInches, parseWindMph, shortAlertLabel, untilLabel } from "./alerts.ts";
+import { alertKind, alertOnMap, alertPaint, alertRoute, areaCount, crewWarningText, issuedLine, leadCounty, minutesLeftLabel, parseHailInches, parseThreatSource, parseWindMph, shortAlertLabel, untilLabel } from "./alerts.ts";
 import { countyUgcs, geometryFromZone, mergeGeometries } from "./counties.ts";
 import { buildStormDesk, canvassScore, holdReasonFor } from "./desk.ts";
 import { decimateRing, pointInGeometry } from "./geometry.ts";
@@ -142,8 +142,12 @@ const parsed = normalizeAlert({
     id: "urn:test",
     event: "Tornado Warning",
     headline: "Tornado Warning until 7:40 PM CDT",
-    parameters: { maxHailSize: ["2.00"] },
+    parameters: { maxHailSize: ["2.00"], tornadoDetection: ["RADAR INDICATED"] },
     areaDesc: "Travis",
+    senderName: "NWS Fort Worth TX",
+    onset: "2026-11-02T19:41:00.000Z",
+    ends: "2026-11-02T20:30:00.000Z",
+    description: "At 141 PM CDT, a severe thunderstorm capable of producing a tornado was located near Argyle.",
   },
   geometry: null,
 });
@@ -152,6 +156,19 @@ assert.equal(parsed?.hailInches, 2);
 assert.equal(parsed?.kind, "warning");
 assert.match(parsed?.until ?? "", /7:40 PM CDT/);
 assert.equal(alertOnMap(parsed!), false);
+assert.equal(parsed?.sender, "NWS Fort Worth TX");
+assert.equal(parsed?.source, "Radar indicated");
+assert.match(parsed?.description ?? "", /near Argyle/);
+assert.equal(parseThreatSource({ hailThreat: ["OBSERVED"] }), "Observed");
+assert.equal(parseThreatSource({}), "");
+assert.equal(minutesLeftLabel("2026-11-02T20:30:00.000Z", new Date("2026-11-02T19:50:00.000Z")), "40 min left");
+assert.equal(minutesLeftLabel("2026-11-02T20:30:00.000Z", new Date("2026-11-02T20:31:00.000Z")), "Expired");
+assert.equal(minutesLeftLabel("", new Date()), "");
+assert.equal(issuedLine(parsed!), "Issued 1:41 PM · expires 2:30 PM · NWS Fort Worth");
+assert.equal(leadCounty("Denton, TX; Tarrant, TX"), "Denton County, TX");
+assert.equal(leadCounty("Comanche, OK"), "Comanche County, OK");
+assert.equal(leadCounty("Orleans Parish, LA"), "Orleans Parish, LA");
+assert.equal(areaCount("Denton, TX; Tarrant, TX"), 2);
 
 const watch = normalizeAlert({
   properties: {
