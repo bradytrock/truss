@@ -6,6 +6,7 @@ import {
   desktopCanTypeSignature,
   fitTypedSignatureFontSize,
   normalizeTypedSignature,
+  readDesktopCanTypeSignature,
 } from "./typed-signature.ts";
 
 assert.equal(TYPED_SIGNATURE_PNG_MAX, SIGNATURE_MAX_CHARS);
@@ -18,7 +19,7 @@ assert.equal(
     wide: true,
     touchPoints: 0,
   }),
-  true,
+  false,
 );
 assert.equal(
   desktopCanTypeSignature({
@@ -28,7 +29,7 @@ assert.equal(
     wide: false,
     touchPoints: 0,
   }),
-  true,
+  false,
 );
 assert.equal(
   desktopCanTypeSignature({
@@ -48,7 +49,7 @@ assert.equal(
     wide: true,
     touchPoints: 0,
   }),
-  true,
+  false,
 );
 assert.equal(
   desktopCanTypeSignature({
@@ -60,6 +61,7 @@ assert.equal(
   }),
   false,
 );
+assert.equal(readDesktopCanTypeSignature(), false);
 
 assert.equal(normalizeTypedSignature("  Ada   Lovelace \n"), "Ada Lovelace");
 assert.equal(normalizeTypedSignature("A"), "A");

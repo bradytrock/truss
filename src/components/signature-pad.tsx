@@ -15,12 +15,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { parseEstimateSignature } from "@/lib/estimate-signature";
 import { ESIGN_CONSENT_TEXT } from "@/lib/estimate-signature-audit";
-import {
-  TYPED_SIGNATURE_MAX_CHARS,
-  normalizeTypedSignature,
-  readDesktopCanTypeSignature,
-  renderTypedSignaturePng,
-} from "@/lib/typed-signature";
 import { cn } from "@/lib/utils";
 
 function pointFromEvent(canvas: HTMLCanvasElement, event: PointerEvent) {
@@ -164,126 +158,6 @@ export function SignaturePad({
   );
 }
 
-function useDesktopCanTypeSignature() {
-  const [canType, setCanType] = useState(false);
-  useEffect(() => {
-    const queries = [
-      "(any-pointer: fine), (pointer: fine)",
-      "(any-hover: hover), (hover: hover)",
-      "(pointer: coarse)",
-      "(min-width: 1024px)",
-    ].map((query) => window.matchMedia(query));
-    const apply = () => setCanType(readDesktopCanTypeSignature());
-    apply();
-    for (const media of queries) media.addEventListener("change", apply);
-    return () => {
-      for (const media of queries) media.removeEventListener("change", apply);
-    };
-  }, []);
-  return canType;
-}
-
-function useTypedSignatureImage(text: string, enabled: boolean) {
-  const [shot, setShot] = useState<{ text: string; image: string | null } | null>(null);
-  useEffect(() => {
-    if (!enabled) return;
-    let cancelled = false;
-    const handle = window.setTimeout(() => {
-      void renderTypedSignaturePng(text).then((url) => {
-        if (!cancelled) setShot({ text, image: url });
-      });
-    }, 80);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(handle);
-    };
-  }, [enabled, text]);
-  if (!enabled || shot?.text !== text) return null;
-  return shot.image;
-}
-
-function SignatureMethodSwitch({
-  mode,
-  disabled,
-  onChange,
-}: {
-  mode: "draw" | "type";
-  disabled?: boolean;
-  onChange: (mode: "draw" | "type") => void;
-}) {
-  return (
-    <div role="tablist" aria-label="How to sign" className="grid w-40 grid-cols-2 rounded-md bg-muted p-[3px]">
-      {(["draw", "type"] as const).map((value) => (
-        <button
-          key={value}
-          type="button"
-          role="tab"
-          aria-selected={mode === value}
-          disabled={disabled}
-          className={cn(
-            "rounded-md px-2 py-1 text-sm font-medium capitalize",
-            mode === value ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-          )}
-          onClick={() => onChange(value)}
-        >
-          {value}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function TypedSignatureField({
-  value,
-  image,
-  disabled,
-  onChange,
-}: {
-  value: string;
-  image: string | null;
-  disabled?: boolean;
-  onChange: (value: string) => void;
-}) {
-  const preview = normalizeTypedSignature(value);
-  return (
-    <div className="space-y-2">
-      <div className="flex h-36 w-full items-center overflow-hidden rounded-md border bg-white px-4">
-        {image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={image} alt="" className="h-full w-full object-contain object-left" />
-        ) : (
-          <span
-            className={cn(
-              "truncate font-script text-5xl leading-none",
-              preview ? "text-[#1c1c1c]" : "text-[#1c1c1c]/35",
-            )}
-          >
-            {preview || "Your signature"}
-          </span>
-        )}
-      </div>
-      <Input
-        value={value}
-        disabled={disabled}
-        maxLength={TYPED_SIGNATURE_MAX_CHARS}
-        autoComplete="off"
-        autoFocus
-        aria-label="Typed signature"
-        placeholder="Type your signature"
-        onChange={(event) => onChange(event.target.value)}
-      />
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          Type the signature the way it should appear. It is saved on the proposal the same as a drawing.
-        </p>
-        <Button type="button" size="sm" variant="ghost" disabled={disabled || !preview} onClick={() => onChange("")}>
-          Clear
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 function CollectSignatureForm({
   open,
   defaultName,
@@ -301,30 +175,15 @@ function CollectSignatureForm({
 }) {
   const [name, setName] = useState(defaultName);
   const [image, setImage] = useState<string | null>(null);
-  const [requestedMode, setRequestedMode] = useState<"draw" | "type">("draw");
-  const [typed, setTyped] = useState(defaultName);
   const [consented, setConsented] = useState(false);
   const [error, setError] = useState("");
-  const typedTouched = useRef(false);
-  const canType = useDesktopCanTypeSignature();
-  const typing = canType && requestedMode === "type";
-  const typedImage = useTypedSignatureImage(typed, typing);
 
   async function handleSubmit() {
     if (!consented) {
       setError("Check the box to agree to sign electronically.");
       return;
     }
-    const signatureImage = typing ? typedImage : image;
-    if (typing && normalizeTypedSignature(typed).length < 2) {
-      setError("Type at least two characters for the signature.");
-      return;
-    }
-    if (typing && !signatureImage) {
-      setError("The typed signature is not ready yet. Wait a moment and try again.");
-      return;
-    }
-    const parsed = parseEstimateSignature({ name, image: signatureImage ?? "" });
+    const parsed = parseEstimateSignature({ name, image: image ?? "" });
     if (!parsed.ok) {
       setError(parsed.error);
       return;
@@ -350,39 +209,14 @@ function CollectSignatureForm({
               id="signer-name"
               value={name}
               disabled={pending}
-              onChange={(event) => {
-                const next = event.target.value;
-                setName(next);
-                if (!typedTouched.current) setTyped(next.slice(0, TYPED_SIGNATURE_MAX_CHARS));
-              }}
+              onChange={(event) => setName(event.target.value)}
               placeholder="Homeowner name"
               autoComplete="name"
             />
           </div>
           <div className="grid gap-1.5">
-            <div className="flex items-center justify-between gap-3">
-              <Label>Signature</Label>
-              {canType ? (
-                <SignatureMethodSwitch
-                  mode={requestedMode === "type" ? "type" : "draw"}
-                  disabled={pending}
-                  onChange={setRequestedMode}
-                />
-              ) : null}
-            </div>
-            {typing ? (
-              <TypedSignatureField
-                value={typed}
-                image={typedImage}
-                disabled={pending}
-                onChange={(next) => {
-                  typedTouched.current = true;
-                  setTyped(next);
-                }}
-              />
-            ) : (
-              <SignaturePad disabled={pending} onChange={setImage} />
-            )}
+            <Label>Signature</Label>
+            <SignaturePad disabled={pending} onChange={setImage} />
           </div>
           <label className="flex items-start gap-2 text-sm">
             <Checkbox
