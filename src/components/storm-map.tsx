@@ -280,6 +280,10 @@ export function StormMap({
         return;
       }
       setPopup(null);
+      if (!radar) {
+        setFlash({ text: "Couldn't read the radar here · try again", coords, tone: "note" });
+        return;
+      }
       setFlash({
         text: wantHail && !swathReadyRef.current ? "No precip here · hail grid still loading" : wantHail ? "No precip or hail here" : "No precip here",
         coords,

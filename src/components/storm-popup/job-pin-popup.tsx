@@ -61,6 +61,8 @@ export function JobPinPopup({
   const directions = pin.address ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(pin.address)}` : "";
   const tel = pin.phone.replace(/[^\d+]/g, "");
   const underThreat = band.kind === "tornado" || band.kind === "warning" || band.kind === "overhead";
+  // A warned address with a cell still on the way reads from the Incoming section alone.
+  const showRightNow = underThreat && (Boolean(threat.overhead) || !threat.incoming);
 
   return (
     <StormPopupShell
@@ -138,7 +140,7 @@ export function JobPinPopup({
       onClose={onClose}
       onInteract={onInteract}
     >
-      {underThreat ? (
+      {showRightNow ? (
         <PopupSection title="Right now" first>
           <PopupRow
             label="Storm cell"
@@ -152,18 +154,18 @@ export function JobPinPopup({
         </PopupSection>
       ) : null}
       {threat.incoming ? (
-        <PopupSection title="Incoming" first={!underThreat}>
+        <PopupSection title="Incoming" first={!showRightNow}>
           <PopupRow label="Storm cell" value={`${threat.incoming.cell.id} · ${formatMotion(threat.incoming.cell)}`} />
           <PopupRow label="Arrives" value={arrivalLabel(threat.incoming.cell.valid, threat.incoming.etaMinutes)} />
           <PopupRow label="Threat" value={cellThreatText(threat.incoming.cell)} />
         </PopupSection>
       ) : null}
       {crewOnSite ? (
-        <PopupSection title="On site" first={!underThreat && !threat.incoming}>
+        <PopupSection title="On site" first={!showRightNow && !threat.incoming}>
           <PopupRow label={crewOnSite.name} value={`Checked in · ${crewOnSite.sinceLabel}`} />
         </PopupSection>
       ) : null}
-      <PopupSection title="Hail history here" first={!underThreat && !threat.incoming && !crewOnSite}>
+      <PopupSection title="Hail history here" first={!showRightNow && !threat.incoming && !crewOnSite}>
         {history.length ? (
           <>
             {history.slice(0, 3).map((hit) => (

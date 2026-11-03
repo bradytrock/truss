@@ -45,7 +45,7 @@ export function StormReportPopup({
     <StormPopupShell
       titleId="storm-report-title"
       label={kindName}
-      width={260}
+      width={300}
       arrow={arrow}
       header={
         <div className="pr-8">
@@ -89,8 +89,9 @@ function fallbackCopy(text: string, done: () => void) {
   document.body.appendChild(area);
   area.select();
   try {
-    document.execCommand("copy");
-    done();
+    if (document.execCommand("copy")) done();
+  } catch {
+    // Clipboard blocked: the report text stays visible on the card to copy by hand.
   } finally {
     document.body.removeChild(area);
   }

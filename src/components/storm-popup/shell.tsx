@@ -129,7 +129,7 @@ export function PopupStats({ items, columns = 3 }: { items: Array<{ label: strin
       {items.map((item) => (
         <div key={item.label} className="min-w-0">
           <dt className="text-[10px] tracking-wide text-white/50 uppercase">{item.label}</dt>
-          <dd className="mt-0.5 truncate font-mono text-sm font-semibold">{item.value}</dd>
+          <dd className="mt-0.5 truncate font-mono text-[13px] font-semibold" title={typeof item.value === "string" ? item.value : undefined}>{item.value}</dd>
         </div>
       ))}
     </dl>
@@ -169,7 +169,8 @@ export type PopupButtonVariant = "primary" | "danger" | "outline";
 
 export function popupButtonClass(variant: PopupButtonVariant | boolean = "outline") {
   const kind: PopupButtonVariant = variant === true ? "primary" : variant === false ? "outline" : variant;
-  const base = "flex h-9 w-full items-center justify-center rounded-lg px-3 text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:opacity-60";
+  const base =
+    "flex h-9 w-full items-center justify-center gap-1.5 rounded-lg px-2 text-[13px] font-medium whitespace-nowrap focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:opacity-60";
   if (kind === "primary") return `${base} bg-white text-neutral-900 hover:bg-white/90`;
   if (kind === "danger") return `${base} bg-[#dc2626] text-white hover:bg-[#b91c1c]`;
   return `${base} border border-white/15 text-white hover:bg-white/10`;
