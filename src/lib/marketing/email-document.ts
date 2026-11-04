@@ -52,6 +52,8 @@ export type EmailDocument = {
   city: string;
   zip: string;
   includePunch: boolean;
+  /** Contacts on the resolved audience who should not receive this draft. */
+  excludedContactIds: string[];
   updatedAt: string;
   status: "draft" | "scheduled" | "sent";
   scheduledFor: string | null;
@@ -166,6 +168,7 @@ export function createDefaultEmailDocument(): EmailDocument {
     city: "",
     zip: "",
     includePunch: false,
+    excludedContactIds: [],
     updatedAt: new Date().toISOString(),
     status: "draft",
     scheduledFor: null,
@@ -197,6 +200,9 @@ function parseEmailDocuments(raw: string): EmailDocument[] {
       city: doc.city || "",
       zip: doc.zip || "",
       includePunch: Boolean(doc.includePunch),
+      excludedContactIds: Array.isArray(doc.excludedContactIds)
+        ? [...new Set(doc.excludedContactIds.filter((id) => typeof id === "string" && id.length > 0))]
+        : [],
       status: doc.status || "draft",
       scheduledFor: doc.scheduledFor ?? null,
       campaignId: doc.campaignId ?? null,
