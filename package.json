@@ -15,7 +15,7 @@
     "build": "next build --webpack && node scripts/prepare-standalone.mjs",
     "start": "node scripts/start.mjs",
     "lint": "eslint",
-    "postinstall": "node scripts/allow-dev-origins.mjs"
+    "postinstall": "node scripts/allow-dev-origins.mjs && node scripts/patch-cloudflare-resolutions.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1126.0",
