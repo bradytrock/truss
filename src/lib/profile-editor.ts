@@ -67,14 +67,17 @@ export function roleBookHelp(role: SeatRole) {
   if (role === "company_admin") {
     return "Company admin: sees every job, contact, and report. Team controls whose book they see.";
   }
+  if (role === "director") {
+    return "Director: every job and report. The full contact book stays with company admin, business development, and accounting.";
+  }
   if (role === "project_manager") {
     return "Project manager: their own leads and jobs. Team controls whose book they see.";
   }
   if (role === "business_development") {
-    return "Business development: prospecting and the business-development book. Team controls whose book they see.";
+    return "Business development: every contact in the company, plus the pipeline they sourced. Other seats do not see that book.";
   }
   if (role === "accountant") {
-    return "Accounting: paperwork and the jobs they’re assigned. Team controls whose book they see.";
+    return "Accounting: every contact, plus job books, receipts, and the QuickBooks queue.";
   }
   return `${SEAT_ROLE_LABELS[role]}: access follows this role. Team controls whose book they see.`;
 }

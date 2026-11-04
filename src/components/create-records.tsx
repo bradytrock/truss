@@ -130,15 +130,15 @@ export function CreateOpportunityDialog({
   }, [assigneeId, defaultAssignee, open, people]);
 
   const referralMatches = useMemo(
-    () => matchReferralPartners(crm.book.contacts, referralQuery),
-    [crm.book.contacts, referralQuery],
+    () => matchReferralPartners(crm.contacts, referralQuery),
+    [crm.contacts, referralQuery],
   );
   const referralPartnerCount = useMemo(
-    () => crm.book.contacts.filter((contact) => contact.isReferralPartner).length,
-    [crm.book.contacts],
+    () => crm.contacts.filter((contact) => contact.isReferralPartner).length,
+    [crm.contacts],
   );
 
-  const selectedReferral = crm.book.contacts.find((contact) => contact.id === referralId);
+  const selectedReferral = crm.contacts.find((contact) => contact.id === referralId);
 
   function reset() {
     setAssigneeId(defaultAssignee);

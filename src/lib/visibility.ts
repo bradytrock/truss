@@ -1,4 +1,6 @@
 import type {
+  Client,
+  Contact,
   CrmState,
   Job,
   Opportunity,
@@ -375,13 +377,76 @@ function visibleStaffIdsForScope(effective: StaffMember, staff: StaffMember[]) {
   return new Set([effective.id]);
 }
 
+/**
+ * The full contact directory: every person, including business development’s
+ * private book. Directors still see people on company work, not that book.
+ */
+export function canSeeAllContacts(role: SeatRole | undefined, restricted = false) {
+  if (!role || restricted) return false;
+  return role === "company_admin" || role === "business_development" || role === "accountant";
+}
+
+function developerStaffIds(staff: StaffMember[]) {
+  return new Set(staff.filter((member) => hasBusinessDevelopmentSeat(member)).map((member) => member.id));
+}
+
+function listedIds(ids: readonly string[] | null | undefined) {
+  return ids ?? [];
+}
+
+function contactOnVisibleWork(contactId: string, opportunities: Opportunity[], jobs: Job[]) {
+  for (const opportunity of opportunities) {
+    if (opportunity.primaryContactId === contactId || opportunity.referralContactId === contactId) return true;
+  }
+  for (const job of jobs) {
+    if (job.primaryContactId === contactId) return true;
+    if (listedIds(job.relatedContactIds).includes(contactId)) return true;
+    if (listedIds(job.subcontractorIds).includes(contactId)) return true;
+  }
+  return false;
+}
+
+/** Referral partners and people a business development seat owns, unless this viewer owns them. */
+function privateBdContact(contact: Contact, developers: Set<string>, viewerId: string) {
+  if (contact.ownerStaffId === viewerId) return false;
+  if (contact.isReferralPartner) return true;
+  return Boolean(contact.ownerStaffId && developers.has(contact.ownerStaffId));
+}
+
+function contactsSharedWithSeat(
+  contacts: Contact[],
+  effective: StaffMember,
+  staff: StaffMember[],
+  staffIds: Set<string>,
+  opportunities: Opportunity[],
+  jobs: Job[],
+) {
+  const developers = developerStaffIds(staff);
+  return contacts.filter((contact) => {
+    if (contactOnVisibleWork(contact.id, opportunities, jobs)) return true;
+    if (privateBdContact(contact, developers, effective.id)) return false;
+    return staffIds.has(contact.ownerStaffId);
+  });
+}
+
+function withParentClients(clients: Client[], ids: Set<string>) {
+  const shown = new Set(ids);
+  for (const client of clients) {
+    if (shown.has(client.id) && client.parentClientId) shown.add(client.parentClientId);
+  }
+  return clients.filter((client) => shown.has(client.id));
+}
+
 export function scopeBook(
   state: CrmState,
   effective: StaffMember | undefined
 ): CrmState {
   if (!effective) return state;
   const scope = accessScope(effective.role, effective.restricted);
-  if (scope === "company") return state;
+  if (scope === "company") {
+    if (canSeeAllContacts(effective.role, effective.restricted)) return state;
+    return scopeCompanyContacts(state, effective);
+  }
 
   const staffIds = visibleStaffIdsForScope(effective, state.staff);
   const names = new Set(
@@ -413,7 +478,7 @@ export function scopeBook(
         });
   const opportunityIds = new Set(opportunities.map((opportunity) => opportunity.id));
 
-  const contacts =
+  const workContacts =
     scope === "bd"
       ? state.contacts.filter((contact) => {
           if (contact.isReferralPartner) return true;
@@ -424,20 +489,16 @@ export function scopeBook(
               opportunity.primaryContactId === contact.id || opportunity.referralContactId === contact.id,
           );
         })
-      : state.contacts.filter((contact) => {
-          if (contact.isReferralPartner) return true;
-          if (staffIds.has(contact.ownerStaffId)) return true;
-          return opportunities.some(
-            (opportunity) =>
-              opportunity.primaryContactId === contact.id || opportunity.referralContactId === contact.id,
-          );
-        });
+      : contactsSharedWithSeat(state.contacts, effective, state.staff, staffIds, opportunities, jobs);
+  const contacts = canSeeAllContacts(effective.role, effective.restricted) ? state.contacts : workContacts;
 
   const clientIds = new Set<string>();
   for (const job of jobs) if (job.clientId) clientIds.add(job.clientId);
   for (const opportunity of opportunities) if (opportunity.clientId) clientIds.add(opportunity.clientId);
-  for (const contact of contacts) if (contact.clientId) clientIds.add(contact.clientId);
-  const clients = state.clients.filter((client) => clientIds.has(client.id));
+  for (const contact of workContacts) if (contact.clientId) clientIds.add(contact.clientId);
+  const shownClientIds = new Set(clientIds);
+  for (const contact of contacts) if (contact.clientId) shownClientIds.add(contact.clientId);
+  const clients = withParentClients(state.clients, shownClientIds);
 
   const estimates = state.estimates.filter((estimate) => {
     if (estimate.jobId && jobIds.has(estimate.jobId)) return true;
@@ -542,12 +603,12 @@ export function scopeBook(
       if (!message.jobId && !message.opportunityId && !message.contactId) return true;
       if (message.jobId && jobIds.has(message.jobId)) return true;
       if (message.opportunityId && opportunityIds.has(message.opportunityId)) return true;
-      if (message.contactId && contacts.some((contact) => contact.id === message.contactId)) return true;
+      if (message.contactId && workContacts.some((contact) => contact.id === message.contactId)) return true;
       return false;
     }),
     gmailMessages: (state.gmailMessages ?? []).filter((message) => {
       if (message.jobId && jobIds.has(message.jobId)) return true;
-      if (message.contactId && contacts.some((contact) => contact.id === message.contactId)) return true;
+      if (message.contactId && workContacts.some((contact) => contact.id === message.contactId)) return true;
       if (!message.jobId && !message.contactId) return true;
       return false;
     }),
@@ -580,20 +641,49 @@ export function scopeDescription(
   const scope = accessScope(viewer.role, viewer.restricted);
   if (scope === "company") {
     if (effective.role === "accountant") {
-      return "Accounting — every job’s books, receipts, and the QuickBooks entry queue.";
+      return "Accounting — every contact, every job’s books, receipts, and the QuickBooks entry queue.";
     }
     if (effective.role === "director") {
-      return "Director — every job, contact, and report in the company. Business settings and the Accounting Suite stay with a company admin.";
+      return "Director — every job and report in the company. The full contact book stays with company admin, business development, and accounting. Business settings and the Accounting Suite stay with a company admin.";
     }
     return "Company admin — every job, contact, and report in the company.";
   }
   if (scope === "bd") {
-    return "Business development — pipeline you sourced, jobs from the agents you brought in, and company BD ROI. Assign the work; estimates, invoices, Paper, insurance, closeout, and training stay with ops.";
+    return "Business development — every contact in the company, pipeline you sourced, jobs from the agents you brought in, and company BD ROI. Assign the work; estimates, invoices, Paper, insurance, closeout, and training stay with ops.";
   }
   if (scope === "team") {
-    return `${team?.name ?? "Your team"} — every job and contact owned by people on this team. Login As a teammate to inspect their book.`;
+    return `${team?.name ?? "Your team"} — every job and contact owned by people on this team, except the business development book. Login As a teammate to inspect their book.`;
   }
-  return "Your jobs and contact book only.";
+  return "Your jobs and contact book only. Business development contacts stay with company admin, business development, and accounting.";
+}
+
+function scopeCompanyContacts(state: CrmState, effective: StaffMember): CrmState {
+  const contacts = contactsSharedWithSeat(
+    state.contacts,
+    effective,
+    state.staff,
+    new Set(state.staff.map((member) => member.id)),
+    state.opportunities,
+    state.jobs,
+  );
+  const contactIds = new Set(contacts.map((contact) => contact.id));
+  const clientIds = new Set<string>();
+  for (const job of state.jobs) if (job.clientId) clientIds.add(job.clientId);
+  for (const opportunity of state.opportunities) if (opportunity.clientId) clientIds.add(opportunity.clientId);
+  for (const contact of contacts) if (contact.clientId) clientIds.add(contact.clientId);
+  return {
+    ...state,
+    contacts,
+    clients: withParentClients(state.clients, clientIds),
+    messages: state.messages.filter((message) => {
+      if (!message.contactId || message.jobId || message.opportunityId) return true;
+      return contactIds.has(message.contactId);
+    }),
+    gmailMessages: (state.gmailMessages ?? []).filter((message) => {
+      if (message.jobId || !message.contactId) return true;
+      return contactIds.has(message.contactId);
+    }),
+  };
 }
 
 const SEAT_SHORT: Record<SeatRole, string> = {

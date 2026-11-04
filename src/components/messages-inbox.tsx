@@ -248,12 +248,12 @@ export function MessagesInbox() {
   }, [allThreads, jobs, members, opportunities, profiles, staff, viewer]);
   const textable = useMemo(() => {
     try {
-      return contactsForTexting(contacts);
+      return contactsForTexting(crm.contacts);
     } catch (error) {
       console.error(error);
       return [];
     }
-  }, [contacts]);
+  }, [crm.contacts]);
 
   const wantedJob = params?.get("job") ?? null;
   const wantedContact = params?.get("contact") ?? null;

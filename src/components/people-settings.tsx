@@ -81,7 +81,7 @@ const ROLE_SUMMARIES = [
   },
   {
     title: "Business development",
-    body: "Prospecting, referral partners, and lead intake. Sees the business-development book.",
+    body: "Prospecting, referral partners, and lead intake. Sees every contact in the company. Other seats do not see the business development book.",
   },
   {
     title: "Office / Production",
