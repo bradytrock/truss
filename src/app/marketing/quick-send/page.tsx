@@ -17,9 +17,11 @@ import {
   EMAIL_CAMPAIGN_AUDIENCES,
   EMAIL_CAMPAIGN_SEND_CAP,
   resolveEmailCampaignAudience,
+  resolveListAudience,
   type EmailCampaignAudience,
   type EmailCampaignRecord,
 } from "@/lib/marketing/email-campaigns";
+import { useMarketingLists } from "@/lib/marketing/lists-store";
 import { cappedContactIds, loadGuardrails, quietHoursBlockNow, rememberSends } from "@/lib/marketing/suite-prefs";
 import { cn } from "@/lib/utils";
 
@@ -28,11 +30,14 @@ const FIELDS = ["{{firstName}}", "{{jobCity}}", "{{repName}}", "{{repPhone}}", "
 function QuickSend() {
   const crm = useCrm();
   const params = useSearchParams();
-  const [audience, setAudience] = useState<EmailCampaignAudience>("storm");
+  const lists = useMarketingLists(crm.user.companyId || "local");
+  const initialListId = params.get("list") || "";
+  const [audience, setAudience] = useState<EmailCampaignAudience>(initialListId ? "list" : "storm");
+  const [listId, setListId] = useState(initialListId);
   const [city, setCity] = useState(params.get("city") || "");
   const [zip, setZip] = useState(params.get("zip") || "");
   const [includePunch, setIncludePunch] = useState(false);
-  const copy = defaultEmailCampaignCopy(audience);
+  const copy = defaultEmailCampaignCopy(initialListId ? "list" : "storm");
   const [subject, setSubject] = useState(copy.subject);
   const [body, setBody] = useState(copy.body);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -47,10 +52,11 @@ function QuickSend() {
       .catch(() => undefined);
   }, []);
 
-  const recipients = useMemo(
-    () => resolveEmailCampaignAudience(audience, crm.contacts, crm.jobs, { city, zip, includePunch }),
-    [audience, city, crm.contacts, crm.jobs, includePunch, zip],
-  );
+  const selectedList = lists.find((list) => list.id === listId) ?? null;
+  const recipients = useMemo(() => {
+    if (audience === "list") return resolveListAudience(selectedList?.contactIds ?? [], crm.contacts);
+    return resolveEmailCampaignAudience(audience, crm.contacts, crm.jobs, { city, zip, includePunch });
+  }, [audience, city, crm.contacts, crm.jobs, includePunch, selectedList, zip]);
   const preview = recipients[Math.min(previewIndex, Math.max(0, recipients.length - 1))] ?? null;
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const merge = preview
@@ -79,6 +85,10 @@ function QuickSend() {
       toast.error("Add a city or ZIP for the storm list");
       return;
     }
+    if (audience === "list" && !listId) {
+      toast.error("Pick a list to send to");
+      return;
+    }
     const capped = new Set(guard.frequencyCap ? cappedContactIds(crm.user.companyId || "local", recipients.map((row) => row.contactId)) : []);
     const contactIds = recipients
       .filter((row) => !capped.has(row.contactId))
@@ -99,6 +109,7 @@ function QuickSend() {
           city,
           zip,
           includePunch,
+          listId,
           subject,
           body,
           contactIds,
@@ -160,6 +171,29 @@ function QuickSend() {
               <span className="text-sm">{counts[kind]}</span>
             </label>
           ))}
+          <p className="pt-1 text-[11px] tracking-[0.14em] text-[#8a8680] uppercase">Your lists</p>
+          {lists.length === 0 ? <p className="text-xs text-[#8a8680]">Create a list from Contacts & lists, then send it from here.</p> : null}
+          {lists.map((list) => (
+            <label key={list.id} className={cn("flex cursor-pointer items-start gap-2 rounded-lg border px-3 py-2", audience === "list" && listId === list.id ? "border-[#1c1b1a]" : "border-[#eee]")}>
+              <input
+                type="radio"
+                className="mt-1"
+                checked={audience === "list" && listId === list.id}
+                onChange={() => {
+                  setAudience("list");
+                  setListId(list.id);
+                  const next = defaultEmailCampaignCopy(list.role === "realtor" ? "realtors" : "list");
+                  setSubject(next.subject);
+                  setBody(next.body);
+                }}
+              />
+              <span className="flex-1">
+                <span className="block text-sm font-medium">{list.name}</span>
+                <span className="text-xs text-[#8a8680]">{list.contactIds.length} people</span>
+              </span>
+              <span className="text-sm">{resolveListAudience(list.contactIds, crm.contacts).length}</span>
+            </label>
+          ))}
           {audience === "storm" ? (
             <div className="space-y-2">
               <Input placeholder="City" value={city} onChange={(event) => setCity(event.target.value)} />
@@ -188,7 +222,7 @@ function QuickSend() {
               </label>
               <label className="text-xs text-[#6f6a64]">
                 Start from
-                <Input className="mt-1" readOnly value={EMAIL_CAMPAIGN_AUDIENCE_LABELS[audience]} />
+                <Input className="mt-1" readOnly value={audience === "list" ? selectedList?.name || "List" : EMAIL_CAMPAIGN_AUDIENCE_LABELS[audience]} />
               </label>
             </div>
             <Input value={subject} onChange={(event) => setSubject(event.target.value)} />

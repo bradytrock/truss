@@ -49,6 +49,7 @@ export type EmailDocument = {
   subject: string;
   blocks: EmailBlock[];
   audienceKind: EmailCampaignAudience;
+  listId: string | null;
   city: string;
   zip: string;
   includePunch: boolean;
@@ -130,7 +131,7 @@ export function createEmailBlock(type: EmailBlockType): EmailBlock {
   }
 }
 
-export function createDefaultEmailDocument(): EmailDocument {
+export function createDefaultEmailDocument(preset?: { listId?: string; name?: string }): EmailDocument {
   const headline = createEmailBlock("text");
   if (headline.type === "text") {
     headline.role = "headline";
@@ -150,7 +151,7 @@ export function createDefaultEmailDocument(): EmailDocument {
   if (photo.type === "image") photo.alt = "Job photo · hail damage close-up";
   return {
     id: emailBlockId(),
-    name: "Hail check",
+    name: preset?.name?.trim() || "Hail check",
     subject: "Hail hit {{jobCity}} — free roof check this week",
     blocks: [
       photo,
@@ -162,7 +163,8 @@ export function createDefaultEmailDocument(): EmailDocument {
       createEmailBlock("review"),
       createEmailBlock("rep_card"),
     ],
-    audienceKind: "storm",
+    audienceKind: preset?.listId ? "list" : "storm",
+    listId: preset?.listId || null,
     city: "",
     zip: "",
     includePunch: false,
@@ -194,6 +196,7 @@ function parseEmailDocuments(raw: string): EmailDocument[] {
       ...doc,
       blocks: doc.blocks.filter(isBlock),
       audienceKind: doc.audienceKind || "storm",
+      listId: doc.listId ?? null,
       city: doc.city || "",
       zip: doc.zip || "",
       includePunch: Boolean(doc.includePunch),
