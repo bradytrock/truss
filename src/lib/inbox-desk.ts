@@ -179,9 +179,78 @@ export function formatInboxDay(iso: string | null | undefined, now = new Date())
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return "";
   if (localYmd(date) === localYmd(now)) return "Today";
-  return date
-    .toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })
-    .toUpperCase();
+  return date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
+
+const AVATAR_TONES = [
+  "bg-rose-100 text-rose-800",
+  "bg-sky-100 text-sky-800",
+  "bg-emerald-100 text-emerald-800",
+  "bg-amber-100 text-amber-900",
+  "bg-violet-100 text-violet-800",
+  "bg-stone-200 text-stone-700",
+];
+
+export function avatarTone(name: string | null | undefined) {
+  const value = (name || "").trim().toLowerCase();
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) hash = (hash + value.charCodeAt(index) * (index + 1)) % AVATAR_TONES.length;
+  return AVATAR_TONES[hash] || AVATAR_TONES[0];
+}
+
+export function smsSegmentLabel(text: string) {
+  const chars = text.length;
+  if (chars === 0) return "";
+  const texts = Math.ceil(chars / 160);
+  return `${chars} chars · ${texts} text${texts === 1 ? "" : "s"}`;
+}
+
+export function daysSinceLabel(iso: string | null | undefined, now = new Date()) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const days = Math.max(0, Math.round((now.getTime() - date.getTime()) / 86_400_000));
+  if (days <= 0) return "Today";
+  if (days === 1) return "1 day";
+  return `${days} days`;
+}
+
+export const QUICK_REPLIES = [
+  { id: "omw", label: "On my way" },
+  { id: "adjuster", label: "Adjuster reminder" },
+  { id: "recap", label: "Inspection recap" },
+  { id: "estimate", label: "Estimate ready" },
+] as const;
+
+export function quickReplyBody(id: string, name: string | null | undefined) {
+  const who = firstName(name || "") || "there";
+  if (id === "omw") return `On my way, ${who}. I'll text you when I'm close.`;
+  if (id === "adjuster") return `Hi ${who}, a reminder that the adjuster is coming out. I'll be there to walk the roof with you.`;
+  if (id === "recap") return `Hi ${who}, inspection's done. I'll send photos and the next step tonight.`;
+  if (id === "estimate") return `Hi ${who}, the estimate is ready. I can walk you through it whenever you have a minute.`;
+  return "";
+}
+
+export function cassioTextDraft(name: string | null | undefined, lastInbound: string | null | undefined) {
+  const who = firstName(name || "") || "there";
+  const last = (lastInbound || "").trim();
+  if (!last) return `Hi ${who}, checking in from the crew. What time works for a quick look?`;
+  if (/\b(when|time|schedule|thursday|tomorrow|today|come out)\b/i.test(last)) {
+    return `Hi ${who}, I'll confirm the time and text you back shortly.`;
+  }
+  if (/\b(home|there|gate|code)\b/i.test(last)) {
+    return `No need to be home, ${who}. I'll text you when I'm on site.`;
+  }
+  return `Hi ${who}, thanks for the message. I'm on it and I'll text you as soon as I have an update.`;
+}
+
+export function jobProgress(status: JobStatus | null | undefined) {
+  if (status === "complete") return 100;
+  if (status === "punch") return 82;
+  if (status === "in_progress") return 58;
+  if (status === "on_hold") return 40;
+  if (status === "precon") return 28;
+  return 16;
 }
 
 export function textStatusLabel(status: string | null | undefined, direction: "inbound" | "outbound") {
