@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { BdRoiPanel } from "@/components/bd-roi";
+import { FieldHome } from "@/components/field-home";
 import { HomeDesk } from "@/components/home-desk";
 import { AutomationConfirmations } from "@/components/automation-confirmations";
 import { FirstWeek } from "@/components/first-week";
@@ -174,7 +175,9 @@ export default function HomePage() {
   const showBd = Boolean(crm.viewer && isBusinessDevelopment(crm.viewer.role));
 
   return (
-    <div className="space-y-4">
+    <>
+      <FieldHome />
+      <div className="hidden space-y-4 md:block">
       {crm.hydrateError ? <ErrorBanner message={crm.hydrateError} onRetry={() => void crm.reload()} /> : null}
       <AutomationConfirmations />
       <FirstWeek />
@@ -190,5 +193,6 @@ export default function HomePage() {
       )}
       {hasLeads && showBd && crm.viewer ? <BdRoiPanel state={crm.book} viewer={crm.viewer} /> : null}
     </div>
+    </>
   );
 }

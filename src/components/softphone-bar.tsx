@@ -50,7 +50,7 @@ export function SoftphoneBar() {
   return (
     <div
       className={cn(
-        "pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center p-3 sm:p-4",
+        "pointer-events-none fixed inset-x-0 bottom-[4.75rem] z-40 flex justify-center p-3 sm:p-4 md:bottom-0",
         idleOnly && "md:hidden",
       )}
     >
