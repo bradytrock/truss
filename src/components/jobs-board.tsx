@@ -432,7 +432,13 @@ function JobCard({
       return Boolean(staffName) && (staffName === job.projectManager || staffName === job.salesRep);
     });
   const mark = (owner?.initials || initials(owner?.name || job.projectManager || job.salesRep)).slice(0, 2);
-  const source = leadSourceLabel(job.leadSource || opportunity?.leadSource);
+  const sourceKey = job.leadSource || opportunity?.leadSource || "";
+  const source = [
+    leadSourceLabel(sourceKey),
+    sourceKey === "referral" || sourceKey === "realtor" ? opportunity?.referralName?.trim() : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const showFooter = Boolean(mark || source || market === "commercial");
 
   return (

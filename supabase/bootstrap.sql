@@ -23979,4 +23979,10 @@ values (
 )
 on conflict (storm_id, band_size_in) do update set geom = excluded.geom;
 
+-- ========== 20261108180000_opportunity_referral_name.sql ==========
+-- A referral seed can name a person or group that is not a contact.
+
+alter table public.opportunities
+  add column if not exists referral_name text not null default '';
+
 notify pgrst, 'reload schema';

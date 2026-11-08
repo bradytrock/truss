@@ -54,9 +54,42 @@ export function leadName(first: string, last: string, site: string) {
   return full || "New lead";
 }
 
-/** Realtor and referral seeds name the partner who sent the lead. */
+/** Realtor and referral seeds name who sent the lead. */
 export function leadNeedsReferrer(source: string | null | undefined) {
   return source === "realtor" || source === "referral";
+}
+
+/**
+ * Referral seeds can name a person or a group that is not in the contact book.
+ * Realtor seeds still pick a partner.
+ */
+export function leadReferrerAllowsFreeText(source: string | null | undefined) {
+  return source === "referral";
+}
+
+export type LeadReferrer = { contactId: string | null; name: string } | { error: string };
+
+/**
+ * Realtor leads keep a contact from the book.
+ * Referral leads accept that contact, or any typed name or group.
+ */
+export function resolveLeadReferrer(input: {
+  source: string | null | undefined;
+  contactId?: string | null;
+  contactName?: string | null;
+  text?: string | null;
+}): LeadReferrer {
+  if (!leadNeedsReferrer(input.source)) return { contactId: null, name: "" };
+  const contactId = input.contactId?.trim() || "";
+  const contactName = input.contactName?.trim() || "";
+  const text = input.text?.trim() || "";
+  if (input.source === "realtor") {
+    if (!contactId) return { error: "Choose the referral partner who sent this lead." };
+    return { contactId, name: contactName };
+  }
+  const name = contactId ? contactName || text : text;
+  if (!contactId && !name) return { error: "Enter who sent this referral." };
+  return { contactId: contactId || null, name };
 }
 
 export function referralPartners<T extends { isReferralPartner?: boolean; name: string }>(contacts: T[]) {

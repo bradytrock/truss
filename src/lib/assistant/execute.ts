@@ -1,4 +1,4 @@
-import { defaultDeliveryForSource, formatJobSite, leadName, leadNeedsReferrer, leadStateOrDefault } from "@/lib/leads";
+import { defaultDeliveryForSource, formatJobSite, leadName, leadStateOrDefault, resolveLeadReferrer } from "@/lib/leads";
 import { localYmd } from "@/lib/format";
 import { isDeletedJob } from "@/lib/job-record";
 import { estimateTotals, allPackageTotals, jobSoldAmount } from "@/lib/estimate-totals";
@@ -475,10 +475,6 @@ async function runTool(
       if (!isPickableLeadSource(source)) {
         return fail(`Pick a seed (${LEAD_SOURCES.slice(0, 4).join(", ")}, …).`);
       }
-      const referralContactId = arg(args, "referralContactId");
-      if (leadNeedsReferrer(source) && !referralContactId) {
-        return fail("Realtor and referral leads need the partner who sent them.");
-      }
       const market = (arg(args, "market") === "commercial" ? "commercial" : "residential") as JobMarket;
       const street = arg(args, "street");
       const city = arg(args, "city");
@@ -487,6 +483,17 @@ async function runTool(
       const site = formatJobSite({ street, city, state, postalCode });
       const fullName = `${firstName} ${lastName}`;
       const book = crm.book;
+      const referralContactId = arg(args, "referralContactId");
+      const referralPartner = referralContactId
+        ? book.contacts.find((contact) => contact.id === referralContactId)
+        : undefined;
+      const referral = resolveLeadReferrer({
+        source,
+        contactId: referralContactId,
+        contactName: referralPartner?.name,
+        text: arg(args, "referralName"),
+      });
+      if ("error" in referral) return fail(referral.error);
       const returning = findReturningClient({
         phone,
         email,
@@ -547,7 +554,8 @@ async function runTool(
         originatorStaffId: crm.user.staffId,
         nextStep: "Call back within 5 minutes.",
         leadSource: source,
-        referralContactId: leadNeedsReferrer(source) ? referralContactId : null,
+        referralContactId: referral.contactId,
+        referralName: referral.name,
         street,
         city,
         state,

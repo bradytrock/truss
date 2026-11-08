@@ -937,6 +937,10 @@ function isMissingLeadIntake(error: { message?: string; code?: string }) {
   );
 }
 
+function isMissingReferralName(error: { message?: string; code?: string } | null | undefined) {
+  return /referral_name/i.test(error?.message ?? "");
+}
+
 function isMissingStaffLink(error: { message?: string; code?: string } | null) {
   if (!error) return false;
   const message = error.message ?? "";
@@ -3423,7 +3427,14 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         }
         return true;
       }
-      const { error } = await supabase.from("opportunities").update(opportunityPatch(patch)).eq("id", id);
+      let opportunityRow = opportunityPatch(patch);
+      let { error } = await supabase.from("opportunities").update(opportunityRow).eq("id", id);
+      if (error && isMissingReferralName(error) && opportunityRow.referral_name !== undefined) {
+        const { referral_name: _referralName, ...withoutReferralName } = opportunityRow;
+        opportunityRow = withoutReferralName;
+        const retry = await supabase.from("opportunities").update(opportunityRow).eq("id", id);
+        error = retry.error;
+      }
       if (error) {
         if (isMissingMarketColumn(error)) {
           apply();
@@ -3775,6 +3786,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           leadSource: input.leadSource ?? "",
           market: parseMarket(input.market, input.projectType),
           referralContactId: input.referralContactId ?? null,
+          referralName: input.referralName?.trim() ?? "",
           street: input.street ?? "",
           city: input.city ?? "",
           state: input.state ?? "",
@@ -3809,7 +3821,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         queueLeadCreated(opportunity, pipelineJob);
         return Object.assign(opportunity, { costingJob: pipelineJob });
       }
-      const base = {
+      const built = {
         company_id: user.companyId,
         name: input.name,
         client_id: input.clientId || null,
@@ -3830,13 +3842,27 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         code,
         lead_source: input.leadSource ?? "",
         referral_contact_id: input.referralContactId || null,
+        referral_name: input.referralName?.trim() ?? "",
         street: input.street ?? "",
         city: input.city ?? "",
         state: input.state ?? "",
         postal_code: input.postalCode ?? "",
         notes: input.notes ?? "",
       };
+      let base: typeof built | Omit<typeof built, "referral_name"> = built;
       let { data, error } = await supabase.from("opportunities").insert(base).select("*").single();
+      if (error && isMissingReferralName(error)) {
+        const { referral_name: _referralName, ...withoutReferralName } = built;
+        base = withoutReferralName;
+        const retry = await supabase.from("opportunities").insert(base).select("*").single();
+        data = retry.data;
+        error = retry.error;
+        if (!error) {
+          toast.message(
+            "Saved. Run supabase/migrations/20261108180000_opportunity_referral_name.sql in the SQL editor so the referral name stays on the lead.",
+          );
+        }
+      }
       if (error && isInvalidEnumValue(error)) {
         const retry = await supabase
           .from("opportunities")
@@ -3944,6 +3970,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
         ...mapOpportunity(data),
         code: data.code || code,
         originatorStaffId: data.originator_staff_id || originatorStaffId,
+        referralName: data.referral_name ?? input.referralName?.trim() ?? "",
       };
       const pipelineJob =
         isShelvedStage(opportunity.stage)
@@ -7302,6 +7329,7 @@ export function CrmProvider({ children }: { children: ReactNode }) {
           originatorStaffId: draft.ownerStaffId,
           leadSource: draft.leadSource,
           referralContactId: existing?.referralContactId ?? null,
+          referralName: existing?.referralName ?? "",
           street: draft.address.street,
           city: draft.address.city,
           state: draft.address.state,

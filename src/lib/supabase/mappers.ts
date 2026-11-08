@@ -377,6 +377,7 @@ export function mapOpportunity(row: OpportunityRow): Opportunity {
     createdBy: row.created_by ?? undefined,
     leadSource: (row.lead_source ?? "") as Opportunity["leadSource"],
     referralContactId: row.referral_contact_id,
+    referralName: row.referral_name ?? "",
     street: row.street ?? "",
     city: row.city ?? "",
     state: row.state ?? "",
@@ -516,6 +517,7 @@ export function opportunityPatch(patch: Partial<Opportunity>) {
   if (patch.code !== undefined) row.code = patch.code;
   if (patch.leadSource !== undefined) row.lead_source = patch.leadSource ?? "";
   if (patch.referralContactId !== undefined) row.referral_contact_id = patch.referralContactId || null;
+  if (patch.referralName !== undefined) row.referral_name = patch.referralName ?? "";
   if (patch.street !== undefined) row.street = patch.street;
   if (patch.city !== undefined) row.city = patch.city;
   if (patch.state !== undefined) row.state = patch.state;

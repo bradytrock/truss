@@ -339,9 +339,9 @@ export default function OpportunityDetailPage() {
                   {leadSourceLabel(opportunity.leadSource)}
                 </RecordProperty>
               ) : null}
-              {opportunity.referralContactId ? (
-                <RecordProperty label="Referred by">
-                  {crm.getContact(opportunity.referralContactId) ? (
+              {opportunity.referralContactId || opportunity.referralName ? (
+                <RecordProperty label={opportunity.leadSource === "referral" ? "Referral" : "Referred by"}>
+                  {opportunity.referralContactId && crm.getContact(opportunity.referralContactId) ? (
                     <Link
                       href={`/contacts?contact=${opportunity.referralContactId}`}
                       className="hover:underline"
@@ -349,7 +349,7 @@ export default function OpportunityDetailPage() {
                       {crm.getContact(opportunity.referralContactId)?.name}
                     </Link>
                   ) : (
-                    "Contact not in this seat’s book"
+                    opportunity.referralName || "Contact not in this seat’s book"
                   )}
                 </RecordProperty>
               ) : null}

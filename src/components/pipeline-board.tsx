@@ -274,9 +274,11 @@ function OpportunityCard({
             {details.showCustomer ? (
               <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{details.customer}</p>
             ) : null}
-            {opportunity.leadSource ? (
+            {opportunity.leadSource || opportunity.referralName ? (
               <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                {leadSourceLabel(opportunity.leadSource)}
+                {[leadSourceLabel(opportunity.leadSource), opportunity.referralName?.trim()]
+                  .filter(Boolean)
+                  .join(" · ")}
               </p>
             ) : null}
           </div>

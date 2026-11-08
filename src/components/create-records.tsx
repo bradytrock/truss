@@ -50,7 +50,9 @@ import {
   formatJobSite,
   leadName,
   leadNeedsReferrer,
+  leadReferrerAllowsFreeText,
   matchReferralPartners,
+  resolveLeadReferrer,
 } from "@/lib/leads";
 import { projectTypeForMarket } from "@/lib/market";
 import {
@@ -176,6 +178,16 @@ export function CreateOpportunityDialog({
     const fullName = `${first} ${last}`;
     const owner = people.find((member) => member.id === ownerStaffId) ?? crm.viewer;
     const match = returning;
+    const referral = resolveLeadReferrer({
+      source,
+      contactId: referralId,
+      contactName: selectedReferral?.name,
+      text: referralQuery,
+    });
+    if ("error" in referral) {
+      toast.error(referral.error);
+      return;
+    }
     setSaving(true);
     try {
       const existingContact =
@@ -224,7 +236,8 @@ export function CreateOpportunityDialog({
         originatorStaffId: crm.user.staffId,
         nextStep: "Call back within 5 minutes.",
         leadSource: source,
-        referralContactId: leadNeedsReferrer(source) ? referralId : null,
+        referralContactId: referral.contactId,
+        referralName: referral.name,
         street: street.trim(),
         city: city.trim(),
         state: region.trim(),
@@ -234,7 +247,6 @@ export function CreateOpportunityDialog({
       if (trades.length && opportunity.costingJob?.id) {
         void crm.updateJob(opportunity.costingJob.id, { trades }).catch(() => undefined);
       }
-      const referrer = leadNeedsReferrer(source) ? selectedReferral : undefined;
       const returningNote = match
         ? match.job
           ? ` Returning client: ${match.contact.name}. ${match.previousStaffName || "Previous project manager"} ran ${match.job.code}. ${returningClientWhen(match)}.`
@@ -246,7 +258,7 @@ export function CreateOpportunityDialog({
         type: "note",
         body: [
           `Lead opened for ${fullName}. Seed: ${LEAD_SOURCE_LABELS[source]}.`,
-          referrer ? `Referred by ${referrer.name}.` : "",
+          referral.name ? `Referred by ${referral.name}.` : "",
           notes.trim() ? notes.trim() : "",
           returningNote.trim(),
         ]
@@ -298,10 +310,6 @@ export function CreateOpportunityDialog({
     }
     if (!source) {
       toast.error("Pick a seed.");
-      return;
-    }
-    if (leadNeedsReferrer(source) && !referralId) {
-      toast.error("Choose the referral partner who sent this lead.");
       return;
     }
     const owner = assignee ?? crm.viewer;
@@ -476,6 +484,8 @@ export function CreateOpportunityDialog({
                   if (!leadNeedsReferrer(next)) {
                     setReferralId("");
                     setReferralQuery("");
+                  } else if (!leadReferrerAllowsFreeText(next) && !referralId) {
+                    setReferralQuery("");
                   }
                 }}
                 items={LEAD_SOURCES.map((item) => ({
@@ -515,7 +525,9 @@ export function CreateOpportunityDialog({
 
             {leadNeedsReferrer(source) ? (
               <div>
-                <QuickLabel htmlFor="lead-referral" required>Who sent this referral</QuickLabel>
+                <QuickLabel htmlFor="lead-referral" required>
+                  {leadReferrerAllowsFreeText(source) ? "Referral" : "Who sent this referral"}
+                </QuickLabel>
                 {selectedReferral ? (
                   <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/40 px-2.5 py-2">
                     <div className="min-w-0">
@@ -537,6 +549,50 @@ export function CreateOpportunityDialog({
                       Change
                     </Button>
                   </div>
+                ) : leadReferrerAllowsFreeText(source) ? (
+                  <>
+                    <Input
+                      id="lead-referral"
+                      className={quickFieldClass}
+                      value={referralQuery}
+                      onChange={(event) => {
+                        setReferralQuery(event.target.value);
+                        setReferralId("");
+                      }}
+                      placeholder="Name, company, or group"
+                    />
+                    {referralQuery.trim() && referralMatches.length > 0 ? (
+                      <>
+                        <QuickHint>Pick a contact, or keep what you typed.</QuickHint>
+                        <ul className="mt-2 max-h-52 divide-y overflow-y-auto rounded-lg border">
+                          {referralMatches.map((contact) => (
+                            <li key={contact.id}>
+                              <button
+                                type="button"
+                                className="flex w-full flex-col items-start px-2.5 py-2 text-left hover:bg-muted/60"
+                                onClick={() => {
+                                  setReferralId(contact.id);
+                                  setReferralQuery(contact.name);
+                                }}
+                              >
+                                <span className="text-sm font-medium">{contact.name}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {contact.title || "Referral partner"}
+                                  {contact.phone ? ` · ${formatPhone(contact.phone)}` : ""}
+                                </span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    ) : (
+                      <QuickHint>
+                        {referralQuery.trim()
+                          ? "Saved as typed. It does not have to be a contact."
+                          : "Type a person or a group. Pick a contact if they are already in the book."}
+                      </QuickHint>
+                    )}
+                  </>
                 ) : (
                   <>
                     <InputGroup className="h-10 rounded-lg bg-white">

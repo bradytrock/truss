@@ -397,6 +397,7 @@ export type Database = {
           code: string;
           lead_source: string;
           referral_contact_id: string | null;
+          referral_name: string;
           street: string;
           city: string;
           state: string;
@@ -432,6 +433,7 @@ export type Database = {
           code?: string;
           lead_source?: string;
           referral_contact_id?: string | null;
+          referral_name?: string;
           street?: string;
           city?: string;
           state?: string;

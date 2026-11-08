@@ -497,6 +497,12 @@ export function JobRecord({
   }
 
   const opportunity = job.opportunityId ? crm.getOpportunity(job.opportunityId) : undefined;
+  const referralSource = job.leadSource || opportunity?.leadSource || "";
+  const referralLabel =
+    referralSource === "referral" || referralSource === "realtor"
+      ? opportunity?.referralName?.trim() ||
+        (opportunity?.referralContactId ? (crm.getContact(opportunity.referralContactId)?.name ?? "") : "")
+      : "";
   const claim = (crm.jobInsurance ?? []).find((item) => item.jobId === job.id);
   const claimMath = claim ? claimTotals(claim) : null;
   const client = crm.getClient(job.clientId);
@@ -1261,6 +1267,11 @@ export function JobRecord({
                     </SelectContent>
                   </Select>
                 </DetailRow>
+                {referralLabel ? (
+                  <DetailRow label="Referral">
+                    <span className="block truncate">{referralLabel}</span>
+                  </DetailRow>
+                ) : null}
                 <DetailRow label="Project manager">
                   <Select
                     value={job.projectManager || undefined}

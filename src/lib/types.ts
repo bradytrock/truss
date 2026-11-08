@@ -351,6 +351,8 @@ export interface Opportunity {
   createdBy?: string;
   leadSource?: LeadSource | "";
   referralContactId?: string | null;
+  /** Typed referral when the sender is not a contact — a person or a group. */
+  referralName?: string;
   street?: string;
   city?: string;
   state?: string;
