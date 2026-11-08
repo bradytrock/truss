@@ -333,6 +333,9 @@ export function MessagesInbox() {
   const [jobFocus, setJobFocus] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  /** Sync lock — `sending` state alone cannot stop a second Enter before React re-renders. */
+  const sendingLock = useRef(false);
+  const webSendingLock = useRef(false);
 
   const showCompose = composeParam || (!wantedThread && Boolean(queryContact) && !queryThread);
   const webChatId = wantedThread?.startsWith("web:") ? wantedThread.slice(4) : "";
@@ -647,35 +650,46 @@ export function MessagesInbox() {
 
   const send = useCallback(async () => {
     const text = body.trim();
-    if (!looksLikePhone(sendTo) || !text) return;
+    if (!looksLikePhone(sendTo) || !text || sendingLock.current) return;
+    sendingLock.current = true;
     setSending(true);
+    setBody("");
+    setEffect("");
+    const pendingReply = replyTo;
+    setReplyTo(null);
     try {
       const ok = await crm.sendTextMessage({
         to: sendTo,
         content: text,
         effect,
-        replyToHandle: replyTo?.handle,
+        replyToHandle: pendingReply?.handle,
         jobId: jobHint || undefined,
         contactId: contactHint || undefined,
         name: selected?.contact?.name || composeContact?.name || queryContact?.name,
       });
       if (ok) {
-        setBody("");
-        setEffect("");
-        setReplyTo(null);
         const key = conversationThreadKey({
           contactId: contactHint || composeContact?.id,
           phone: sendTo,
         });
         if (key) router.replace(messagesHref({ thread: key }), { scroll: false });
+      } else {
+        setBody(text);
+        setEffect(effect);
+        setReplyTo(pendingReply);
       }
+    } catch {
+      setBody(text);
+      setEffect(effect);
+      setReplyTo(pendingReply);
     } finally {
+      sendingLock.current = false;
       setSending(false);
     }
   }, [
     body,
     effect,
-    replyTo?.handle,
+    replyTo,
     sendTo,
     crm,
     jobHint,
@@ -689,7 +703,7 @@ export function MessagesInbox() {
 
   const saveNote = useCallback(async () => {
     const text = body.trim();
-    if (!text) return;
+    if (!text || sendingLock.current) return;
     const target = panelJob
       ? { entityType: "job" as const, entityId: panelJob.id }
       : selected?.opportunityId
@@ -698,11 +712,15 @@ export function MessagesInbox() {
           ? { entityType: "client" as const, entityId: activeContact.clientId }
           : null;
     if (!target) return;
+    sendingLock.current = true;
     setSending(true);
+    setBody("");
     try {
       await crm.addActivity({ ...target, type: "note", body: text });
-      setBody("");
+    } catch {
+      setBody(text);
     } finally {
+      sendingLock.current = false;
       setSending(false);
     }
   }, [activeContact?.clientId, body, crm, panelJob, selected?.opportunityId]);
@@ -716,8 +734,10 @@ export function MessagesInbox() {
 
   async function replyToWebsite() {
     const text = webBody.trim();
-    if (!selectedWeb || !text) return;
+    if (!selectedWeb || !text || webSendingLock.current) return;
+    webSendingLock.current = true;
     setWebSending(true);
+    setWebBody("");
     try {
       const response = await fetch("/api/chat/office", {
         method: "POST",
@@ -726,7 +746,6 @@ export function MessagesInbox() {
       });
       const data = (await response.json()) as { ok?: boolean };
       if (data.ok) {
-        setWebBody("");
         setSuggestions([]);
         const sent = {
           id: `local-${Date.now()}`,
@@ -746,8 +765,13 @@ export function MessagesInbox() {
               : chat,
           ),
         );
+      } else {
+        setWebBody(text);
       }
+    } catch {
+      setWebBody(text);
     } finally {
+      webSendingLock.current = false;
       setWebSending(false);
     }
   }
@@ -772,7 +796,8 @@ export function MessagesInbox() {
 
   const react = useCallback(
     async (message: TextMessage, emoji: string) => {
-      if (!message.handle || !looksLikePhone(sendTo) || sending) return;
+      if (!message.handle || !looksLikePhone(sendTo) || sendingLock.current) return;
+      sendingLock.current = true;
       setSending(true);
       try {
         await crm.reactToText({
@@ -785,24 +810,27 @@ export function MessagesInbox() {
           name: selected?.contact?.name || composeContact?.name || queryContact?.name,
         });
       } finally {
+        sendingLock.current = false;
         setSending(false);
       }
     },
-    [sendTo, sending, crm, jobHint, contactHint, selected?.contact?.name, composeContact?.name, queryContact?.name],
+    [sendTo, crm, jobHint, contactHint, selected?.contact?.name, composeContact?.name, queryContact?.name],
   );
 
   const unsend = useCallback(
     async (message: TextMessage) => {
-      if (!message.handle || !looksLikePhone(sendTo) || sending) return;
+      if (!message.handle || !looksLikePhone(sendTo) || sendingLock.current) return;
       if (!window.confirm("Unsend this text? It leaves the phone when Apple still allows it.")) return;
+      sendingLock.current = true;
       setSending(true);
       try {
         await crm.unsendText({ to: sendTo, handle: message.handle });
       } finally {
+        sendingLock.current = false;
         setSending(false);
       }
     },
-    [sendTo, sending, crm],
+    [sendTo, crm],
   );
 
   useEffect(() => {

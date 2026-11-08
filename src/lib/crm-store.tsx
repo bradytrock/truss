@@ -45,6 +45,7 @@ import {
   missingScheduleGuestInvitesMessage,
 } from "@/lib/supabase/schema-errors";
 import { distinctMessageHandle, isDuplicateMessageHandle, outboundMessageHandle } from "@/lib/message-handle";
+import { outboundSendKey, withOutboundSendGuard } from "@/lib/outbound-send-guard";
 import { companySlugIsReserved, mintCompanySlug, mintPersonCardSlug, normalizeCompanySlug, normalizePersonCardSlug } from "@/lib/card-slug";
 import { serializeCardSlugAliases, takenCardSlugs } from "@/lib/profile-editor";
 import { insertJobRowsWithFallbacks, insertJobWithFallbacks, jobInsertError, omitPrimaryContact } from "@/lib/supabase/job-insert";
@@ -2814,44 +2815,49 @@ export function CrmProvider({ children }: { children: ReactNode }) {
       effect?: string;
       replyToHandle?: string;
     }) => {
-      const effectId = input.effect?.trim() ? imessageEffectId(input.effect) : "";
-      const replyToHandle = input.replyToHandle?.trim() ?? "";
-      const response = await fetch("/api/messages/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          to: input.to,
-          content: input.content,
-          effect: effectId,
-          replyToHandle,
-        }),
+      const content = input.content.trim();
+      if (!content) return false;
+      return withOutboundSendGuard(outboundSendKey(input.to, content), async () => {
+        const effectId = input.effect?.trim() ? imessageEffectId(input.effect) : "";
+        const replyToHandle = input.replyToHandle?.trim() ?? "";
+        const response = await fetch("/api/messages/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: input.to,
+            content,
+            effect: effectId,
+            replyToHandle,
+          }),
+        });
+        const data = (await response.json().catch(() => null)) as
+          | { ok?: boolean; mocked?: boolean; error?: string; handle?: string; to?: string }
+          | null;
+        if (!response.ok || !data?.ok) {
+          toast.error(data?.error || "Could not send that text.");
+          return false;
+        }
+        const detail = [effectId ? imessageEffectLabel(effectId) : "", replyToHandle ? "Reply" : ""]
+          .filter(Boolean)
+          .join(" · ");
+        const kind = effectId ? "effect" : replyToHandle ? "reply" : "text";
+        await logOutboundText({
+          ...input,
+          content,
+          to: data.to || input.to,
+          handle: outboundMessageHandle({ returned: data.handle, occupied: replyToHandle, kind }),
+          kind,
+          detail,
+        });
+        if (data.mocked) {
+          toast.message(
+            "Photon is not connected for this company. The text is logged on the job. Add this office's Photon project under Settings → Photon.",
+          );
+        } else {
+          toast.success("Text sent.");
+        }
+        return true;
       });
-      const data = (await response.json().catch(() => null)) as
-        | { ok?: boolean; mocked?: boolean; error?: string; handle?: string; to?: string }
-        | null;
-      if (!response.ok || !data?.ok) {
-        toast.error(data?.error || "Could not send that text.");
-        return false;
-      }
-      const detail = [effectId ? imessageEffectLabel(effectId) : "", replyToHandle ? "Reply" : ""]
-        .filter(Boolean)
-        .join(" · ");
-      const kind = effectId ? "effect" : replyToHandle ? "reply" : "text";
-      await logOutboundText({
-        ...input,
-        to: data.to || input.to,
-        handle: outboundMessageHandle({ returned: data.handle, occupied: replyToHandle, kind }),
-        kind,
-        detail,
-      });
-      if (data.mocked) {
-        toast.message(
-          "Photon is not connected for this company. The text is logged on the job. Add this office's Photon project under Settings → Photon.",
-        );
-      } else {
-        toast.success("Text sent.");
-      }
-      return true;
     },
     [logOutboundText],
   );
