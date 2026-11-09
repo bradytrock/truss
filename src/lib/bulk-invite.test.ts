@@ -17,6 +17,7 @@ function row(partial: Partial<BulkInviteDraft> & Pick<BulkInviteDraft, "key">): 
     role: "superintendent",
     title: "Superintendent",
     teamId: "",
+    teamIds: [],
     ...partial,
   };
 }
@@ -126,6 +127,19 @@ assert.equal(reordered.rows[0]?.teamId, "team_office");
 assert.equal(reordered.rows[0]?.role, "estimator");
 assert.equal(reordered.rows[1]?.role, "project_manager");
 assert.equal(reordered.rows[1]?.teamId, "");
+
+const several = parseBulkInviteCsv(
+  "name,email,team\nAlex Rivera,alex@company.com,Field; Front Office\n",
+  teams,
+);
+assert.deepEqual(several.rows[0]?.teamIds, ["team_field", "team_office"]);
+assert.equal(several.issues.length, 0);
+const mixed = parseBulkInviteCsv(
+  "name,email,team\nAlex Rivera,alex@company.com,Field; Night Shift\n",
+  teams,
+);
+assert.deepEqual(mixed.rows[0]?.teamIds, ["team_field"]);
+assert.match(mixed.issues[0]?.message ?? "", /Night Shift/);
 assert.deepEqual(
   reordered.issues.map((issue) => issue.line),
   [3, 3],

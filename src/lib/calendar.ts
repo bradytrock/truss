@@ -1,3 +1,4 @@
+import { sharesAnyTeam, staffTeamNames } from "@/lib/teams";
 import type { CalendarAccount, CalendarShare, StaffMember, Team } from "@/lib/types";
 import { isCompanyLeader } from "@/lib/visibility";
 
@@ -38,14 +39,7 @@ export function canSeeStaffCalendar(
   if (viewer.id === owner.id) return true;
   if (isCompanyLeader(viewer.role)) return true;
   if (!account?.linked) return false;
-  if (
-    account.shareWithTeam &&
-    viewer.teamId &&
-    owner.teamId &&
-    viewer.teamId === owner.teamId
-  ) {
-    return true;
-  }
+  if (account.shareWithTeam && sharesAnyTeam(viewer, owner)) return true;
   return shares.some(
     (share) => share.ownerStaffId === owner.id && share.viewerStaffId === viewer.id,
   );
@@ -73,9 +67,8 @@ export function calendarShareSummary(
 ) {
   if (!account?.linked) return "Not linked";
   const names: string[] = [];
-  if (account.shareWithTeam && owner.teamId) {
-    const team = teams.find((item) => item.id === owner.teamId);
-    names.push(team ? `Team · ${team.name}` : "Team");
+  if (account.shareWithTeam) {
+    for (const name of staffTeamNames(teams, owner)) names.push(`Team · ${name}`);
   }
   for (const share of shares.filter((item) => item.ownerStaffId === owner.id)) {
     const member = staff.find((item) => item.id === share.viewerStaffId);

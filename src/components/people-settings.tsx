@@ -41,7 +41,7 @@ import { BulkInviteDialog } from "@/components/bulk-invite-dialog";
 import { EmptyState } from "@/components/page-chrome";
 import { SettingsCard, SettingsPageHeader } from "@/components/settings-chrome";
 import { TeamPeopleTabs } from "@/components/people-settings-chrome";
-import { staffTeamLabel, TeamSelect } from "@/components/teams-settings";
+import { staffTeamLabel, TeamMultiSelect } from "@/components/teams-settings";
 import { requestInviteEmails } from "@/lib/invite-email";
 import {
   defaultTitleForRole,
@@ -59,7 +59,7 @@ import { copyText } from "@/lib/share";
 import { cardUrl } from "@/lib/card";
 import { ProfileEditor } from "@/components/profile-editor";
 import { mintPersonCardSlug } from "@/lib/card-slug";
-import { NO_TEAM, parseTeamSelect } from "@/lib/teams";
+import { normalizeTeamIds } from "@/lib/teams";
 import type { GoogleLocation, SeatRole, StaffMember, Team } from "@/lib/types";
 import { SEAT_ROLE_LABELS, SEAT_ROLES } from "@/lib/types";
 import { isCompanyLeader } from "@/lib/visibility";
@@ -138,6 +138,7 @@ export function PeopleSettings({
     title?: string;
     phone?: string;
     teamId?: string | null;
+    teamIds?: string[] | null;
   }) => Promise<{ member: StaffMember; inviteUrl: string | null } | null>;
   onInviteMany: (
     rows: Array<{
@@ -146,6 +147,7 @@ export function PeopleSettings({
       role: SeatRole;
       title?: string;
       teamId?: string | null;
+      teamIds?: string[] | null;
     }>,
   ) => Promise<Array<{ member: StaffMember; inviteUrl: string | null }>>;
   onUpdate: (
@@ -163,6 +165,7 @@ export function PeopleSettings({
         | "restricted"
         | "manageAutomations"
         | "teamId"
+        | "teamIds"
         | "cardSlug"
         | "cardSlugAliases"
         | "googleLocationId"
@@ -427,7 +430,7 @@ export function PeopleSettings({
                     <TableHead className="pl-4 text-[11px] tracking-wide text-muted-foreground uppercase">Person</TableHead>
                     <TableHead className="text-[11px] tracking-wide text-muted-foreground uppercase">Contact</TableHead>
                     <TableHead className="text-[11px] tracking-wide text-muted-foreground uppercase">Role</TableHead>
-                    <TableHead className="text-[11px] tracking-wide text-muted-foreground uppercase">Team</TableHead>
+                    <TableHead className="text-[11px] tracking-wide text-muted-foreground uppercase">Teams</TableHead>
                     <TableHead className="text-[11px] tracking-wide text-muted-foreground uppercase">Status</TableHead>
                     <TableHead className="w-12 pr-4 text-right">
                       <span className="sr-only">Account</span>
@@ -910,6 +913,7 @@ function AddTeammateDialog({
     title?: string;
     phone?: string;
     teamId?: string | null;
+    teamIds?: string[] | null;
   }) => Promise<boolean>;
 }) {
   const [name, setName] = useState("");
@@ -917,7 +921,7 @@ function AddTeammateDialog({
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<SeatRole>("project_manager");
   const [title, setTitle] = useState(defaultTitleForRole("project_manager"));
-  const [teamId, setTeamId] = useState(NO_TEAM);
+  const [teamIds, setTeamIds] = useState<string[]>([]);
   const [pending, setPending] = useState(false);
 
   function reset() {
@@ -926,14 +930,14 @@ function AddTeammateDialog({
     setPhone("");
     setRole("project_manager");
     setTitle(defaultTitleForRole("project_manager"));
-    setTeamId(NO_TEAM);
+    setTeamIds([]);
   }
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     setPending(true);
     try {
-      const ok = await onInvite({ name, email, role, title, phone, teamId: parseTeamSelect(teamId) });
+      const ok = await onInvite({ name, email, role, title, phone, teamIds: normalizeTeamIds(teamIds) });
       if (ok) reset();
     } finally {
       setPending(false);
@@ -1024,8 +1028,8 @@ function AddTeammateDialog({
               </div>
             </div>
             <div className="grid gap-1.5">
-              <Label htmlFor="seat-team">Team</Label>
-              <TeamSelect id="seat-team" value={teamId} teams={teams} onChange={setTeamId} full />
+              <Label htmlFor="seat-teams">Teams</Label>
+              <TeamMultiSelect id="seat-teams" value={teamIds} teams={teams} onChange={setTeamIds} />
             </div>
           </div>
           <DialogFooter>

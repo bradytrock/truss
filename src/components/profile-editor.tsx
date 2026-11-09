@@ -35,7 +35,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { Textarea } from "@/components/ui/textarea";
 import { GoogleLocationSelect } from "@/components/google-locations-settings";
 import { PhoneInput } from "@/components/phone-input";
-import { TeamSelect } from "@/components/teams-settings";
+import { TeamMultiSelect } from "@/components/teams-settings";
 import { inviteExpiry, seatInviteStatus, staffStatusLabel } from "@/lib/accounts";
 import { cardUrl } from "@/lib/card";
 import { normalizePersonCardSlug } from "@/lib/card-slug";
@@ -70,7 +70,6 @@ import {
 import { effectiveMonthlyQuota, soldThisMonth } from "@/lib/sales-goal";
 import { copyText } from "@/lib/share";
 import { toast } from "sonner";
-import { parseTeamSelect } from "@/lib/teams";
 import type { GoogleLocation, SeatRole, StaffMember, Team } from "@/lib/types";
 import { SEAT_ROLE_LABELS, SEAT_ROLES } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -93,7 +92,7 @@ export type ProfileSavePatch = {
   email: string;
   phone: string;
   role: SeatRole;
-  teamId: string | null;
+  teamIds: string[];
   cardSlug: string;
   cardSlugAliases: string[];
   googleLocationId: string | null;
@@ -262,7 +261,7 @@ export function ProfileEditor({
         email: draft.email.trim(),
         phone: draft.phone.trim(),
         role: draft.role,
-        teamId: parseTeamSelect(draft.teamId),
+        teamIds: draft.teamIds,
         cardSlug: normalizePersonCardSlug(draft.cardSlug),
         cardSlugAliases: cardSlugAliasesAfterSave({
           previousSlug: baseline?.cardSlug ?? member.cardSlug,
@@ -879,15 +878,13 @@ function DetailsTab({
           </Select>
         </div>
         <div className="grid gap-1.5">
-          <Label htmlFor="profile-team">Team</Label>
-          <TeamSelect
-            id="profile-team"
-            value={draft.teamId}
+          <Label htmlFor="profile-teams">Teams</Label>
+          <TeamMultiSelect
+            id="profile-teams"
+            value={draft.teamIds}
             teams={teams}
-            onChange={(teamId) => onChange({ teamId })}
-            full
+            onChange={(teamIds) => onChange({ teamIds })}
             disabled={limited}
-            triggerClassName="h-10 rounded-lg"
           />
         </div>
       </div>

@@ -1,5 +1,6 @@
 import { acceptedAmountForJob } from "@/lib/estimate-totals";
 import { isDeletedJob } from "@/lib/job-record";
+import { memberTeamIds, sharesAnyTeam } from "@/lib/teams";
 import type {
   CompanySettings,
   Estimate,
@@ -136,10 +137,8 @@ export function canViewTeamGoal(role: SeatRole | undefined) {
 export function goalRoster(viewer: StaffMember, staff: StaffMember[]): StaffMember[] {
   const pool = staff.filter(staffCountsTowardQuota);
   if (viewer.role === "company_admin" || viewer.role === "director") return pool;
-  if ((viewer.role === "team_lead" || viewer.role === "team_admin") && viewer.teamId) {
-    return pool.filter(
-      (member) => member.teamId === viewer.teamId || member.id === viewer.id,
-    );
+  if ((viewer.role === "team_lead" || viewer.role === "team_admin") && memberTeamIds(viewer).length > 0) {
+    return pool.filter((member) => member.id === viewer.id || sharesAnyTeam(viewer, member));
   }
   return pool.filter((member) => member.id === viewer.id);
 }

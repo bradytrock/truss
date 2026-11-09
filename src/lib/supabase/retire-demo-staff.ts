@@ -99,6 +99,14 @@ export async function retireDemoStaff(
     .select("team_id")
     .eq("company_id", companyId);
   const usedTeams = new Set((remaining ?? []).map((row) => row.team_id).filter(Boolean));
+  const { data: memberships, error: membershipError } = await supabase
+    .from("team_memberships")
+    .select("team_id")
+    .eq("company_id", companyId);
+  if (membershipError && !ignoreMissing(membershipError)) throw membershipError;
+  for (const row of memberships ?? []) {
+    if (row.team_id) usedTeams.add(row.team_id);
+  }
   const { data: teams } = await supabase.from("teams").select("id, name").eq("company_id", companyId);
   const unusedSeed = (teams ?? []).filter(
     (team) => seedTeamNames.has(team.name.toLowerCase()) && !usedTeams.has(team.id),

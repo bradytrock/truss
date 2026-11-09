@@ -179,6 +179,22 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["teams"]["Insert"]>;
         Relationships: [];
       };
+      team_memberships: {
+        Row: {
+          staff_id: string;
+          team_id: string;
+          company_id: string;
+          created_at: string;
+        };
+        Insert: {
+          staff_id: string;
+          team_id: string;
+          company_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["team_memberships"]["Insert"]>;
+        Relationships: [];
+      };
       google_locations: {
         Row: {
           id: string;

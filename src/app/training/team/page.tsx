@@ -16,7 +16,8 @@ import { EmptyState, ErrorBanner, LoadingScreen, PageHeader } from "@/components
 import { BulletinList, PostBulletinDialog, ProgressBar } from "@/components/training-ui";
 import { useCrm } from "@/lib/crm-store";
 import { COURSE, chapterPassed, examUnlocked, overallProgress, staffProgress } from "@/lib/training/engine";
-import { accessScope, canPostTrainingBulletin, canViewTeamTraining, teamMemberIds } from "@/lib/visibility";
+import { sharesAnyTeam } from "@/lib/teams";
+import { accessScope, canPostTrainingBulletin, canViewTeamTraining } from "@/lib/visibility";
 
 export default function TeamTrainingPage() {
   const crm = useCrm();
@@ -31,7 +32,7 @@ export default function TeamTrainingPage() {
       scope === "company"
         ? crm.book.staff
         : scope === "team"
-          ? crm.book.staff.filter((member) => teamMemberIds(viewer.teamId, crm.book.staff).has(member.id))
+          ? crm.book.staff.filter((member) => member.id === viewer.id || sharesAnyTeam(viewer, member))
           : crm.book.staff.filter((member) => member.id === viewer.id);
     return [...visible]
       .map((member) => {

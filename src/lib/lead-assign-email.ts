@@ -1,3 +1,5 @@
+import { memberTeamIds } from "@/lib/teams";
+
 export type LeadAssignRole = "assignee" | "team_lead";
 
 export type LeadAssignFields = {
@@ -14,6 +16,7 @@ export type LeadAssignStaff = {
   name: string;
   email: string;
   teamId: string | null;
+  teamIds?: string[];
   role: string;
   locked?: boolean;
 };
@@ -156,15 +159,17 @@ export function leadAssignRecipients(input: {
 
   add("assignee", assignee);
 
-  const teamId = assignee.teamId?.trim() ?? "";
-  if (!teamId) return out;
+  const teamIds = memberTeamIds(assignee);
+  if (teamIds.length === 0) return out;
 
-  const team = input.teams.find((item) => item.id === teamId);
   const leadIds = new Set<string>();
-  const namedLead = team?.leadStaffId?.trim() ?? "";
-  if (namedLead) leadIds.add(namedLead);
-  for (const member of input.staff) {
-    if (member.teamId === teamId && member.role === "team_lead") leadIds.add(member.id);
+  for (const teamId of teamIds) {
+    const team = input.teams.find((item) => item.id === teamId);
+    const namedLead = team?.leadStaffId?.trim() ?? "";
+    if (namedLead) leadIds.add(namedLead);
+    for (const member of input.staff) {
+      if (member.role === "team_lead" && memberTeamIds(member).includes(teamId)) leadIds.add(member.id);
+    }
   }
 
   for (const id of leadIds) {
@@ -204,11 +209,16 @@ function parseStaffList(raw: unknown): LeadAssignStaff[] {
     const row = item as Record<string, unknown>;
     const id = asText(row.id ?? row.staffId).trim();
     if (!id) continue;
+    const rawTeams = row.teamIds ?? row.team_ids;
+    const teamIds = Array.isArray(rawTeams)
+      ? rawTeams.map((entry) => asText(entry).trim()).filter(Boolean)
+      : undefined;
     staff.push({
       id,
       name: asText(row.name),
       email: asText(row.email),
       teamId: asText(row.teamId ?? row.team_id) || null,
+      teamIds,
       role: asText(row.role),
       locked: Boolean(row.locked),
     });

@@ -3,7 +3,7 @@ import { formatCurrencyFull } from "./format.ts";
 import { digitsOnly, formatPhoneInput, looksLikePhone } from "./phone.ts";
 import type { GoogleLocation, SeatRole, StaffMember, Team } from "./types.ts";
 import { SEAT_ROLE_LABELS } from "./types.ts";
-import { NO_TEAM } from "./teams.ts";
+import { memberTeamIds, normalizeTeamIds, teamName } from "./teams.ts";
 
 export const PROFILE_TABS = [
   { id: "details", label: "Details" },
@@ -21,7 +21,7 @@ export type ProfileDraft = {
   email: string;
   phone: string;
   role: SeatRole;
-  teamId: string;
+  teamIds: string[];
   cardSlug: string;
   locationId: string | null;
   signature: string;
@@ -55,7 +55,7 @@ export function draftFromMember(member: StaffMember): ProfileDraft {
     email: member.email,
     phone: formatPhoneInput(member.phone),
     role: member.role,
-    teamId: member.teamId?.trim() ? member.teamId : "",
+    teamIds: memberTeamIds(member),
     cardSlug: member.cardSlug,
     locationId: member.googleLocationId ?? null,
     signature: member.emailSignature ?? "",
@@ -153,9 +153,12 @@ export function cardSlugAliasesAfterSave(input: {
   return aliases;
 }
 
-function teamLabel(teams: Team[], teamId: string) {
-  if (!teamId || teamId === NO_TEAM) return "No team";
-  return teams.find((team) => team.id === teamId)?.name.trim() || "No team";
+function teamsLabel(teams: Team[], teamIds: readonly string[]) {
+  const names = normalizeTeamIds(teamIds)
+    .map((id) => teamName(teams, id))
+    .filter(Boolean)
+    .sort((left, right) => left.localeCompare(right));
+  return names.join(", ") || "No team";
 }
 
 function locationLabel(locations: GoogleLocation[], id: string | null) {
@@ -204,7 +207,7 @@ export function profileChanges(
     draft.email.trim().toLowerCase() || "No email",
   );
   push("role", "Role", SEAT_ROLE_LABELS[baseline.role], SEAT_ROLE_LABELS[draft.role]);
-  push("team", "Team", teamLabel(context.teams, baseline.teamId), teamLabel(context.teams, draft.teamId));
+  push("team", "Teams", teamsLabel(context.teams, baseline.teamIds), teamsLabel(context.teams, draft.teamIds));
   push(
     "card",
     "Card URL",

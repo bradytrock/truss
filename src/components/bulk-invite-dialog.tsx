@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { TeamSelect } from "@/components/teams-settings";
+import { TeamMultiSelect } from "@/components/teams-settings";
 import { defaultTitleForRole, INVITE_DAYS } from "@/lib/accounts";
 import {
   BULK_INVITE_CSV_TEMPLATE,
@@ -36,7 +36,7 @@ import {
 } from "@/lib/bulk-invite";
 import { downloadCatalogCsv } from "@/lib/catalog-csv";
 import { copyText } from "@/lib/share";
-import { NO_TEAM, parseTeamSelect } from "@/lib/teams";
+import { normalizeTeamIds } from "@/lib/teams";
 import type { SeatRole, StaffMember, Team } from "@/lib/types";
 import { SEAT_ROLE_LABELS, SEAT_ROLES } from "@/lib/types";
 
@@ -63,6 +63,7 @@ export function BulkInviteDialog({
       role: SeatRole;
       title?: string;
       teamId?: string | null;
+      teamIds?: string[] | null;
     }>,
   ) => Promise<Array<{ member: StaffMember; inviteUrl: string | null }>>;
 }) {
@@ -151,7 +152,8 @@ export function BulkInviteDialog({
           email: row.email,
           role: row.role,
           title: row.title,
-          teamId: parseTeamSelect(row.teamId),
+          teamId: row.teamIds[0] ?? "",
+          teamIds: normalizeTeamIds(row.teamIds),
         })),
       );
       if (!created.length) return;
@@ -262,7 +264,8 @@ export function BulkInviteDialog({
                 Template
               </Button>
               <p className="text-xs text-muted-foreground">
-                Columns: name, email, role, team, title. Role and team can be blank.
+                Columns: name, email, role, team, title. Role and team can be blank. Separate
+                several teams with a semicolon, like Field; Office.
               </p>
             </div>
             {csvIssues.length ? (
@@ -340,12 +343,13 @@ export function BulkInviteDialog({
                           </Select>
                         </TableCell>
                         <TableCell className="align-top">
-                          <TeamSelect
+                          <TeamMultiSelect
                             id={`bulk-team-${row.key}`}
-                            value={row.teamId || NO_TEAM}
+                            value={row.teamIds}
                             teams={teams}
-                            onChange={(teamId) => patchRow(row.key, { teamId })}
-                            full
+                            onChange={(teamIds) =>
+                              patchRow(row.key, { teamIds, teamId: teamIds[0] ?? "" })
+                            }
                           />
                         </TableCell>
                         <TableCell className="align-top">
@@ -382,7 +386,7 @@ export function BulkInviteDialog({
                   const last = rows[rows.length - 1];
                   setRows((current) => [
                     ...current,
-                    emptyBulkInviteRow(last?.role ?? "project_manager", last?.teamId ?? ""),
+                    emptyBulkInviteRow(last?.role ?? "project_manager", last?.teamId ?? "", last?.teamIds),
                   ]);
                 }}
               >
